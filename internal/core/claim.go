@@ -357,10 +357,7 @@ WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim AND c.ended_at IS
 // sees it without waiting for someone to meet it. It is for visibility only: a lapsed Claim is
 // already takeable whether or not it has run (ADR 0004).
 func (s *Service) Sweep(ctx context.Context) (int, error) {
-	orgs, err := collect(ctx, s.store, func(row interface{ Scan(...any) error }) (string, error) {
-		var id string
-		return id, row.Scan(&id)
-	}, `SELECT id FROM organisations ORDER BY id`)
+	orgs, err := s.organisations(ctx)
 	if err != nil {
 		return 0, err
 	}

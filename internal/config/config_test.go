@@ -6,23 +6,24 @@ import (
 	"testing"
 )
 
+func env(m map[string]string) func(string) string {
+	return func(k string) string { return m[k] }
+}
+
 func TestLoadServe(t *testing.T) {
-	env := func(m map[string]string) func(string) string {
-		return func(k string) string { return m[k] }
-	}
 	cases := []struct {
 		name string
 		args []string
 		env  map[string]string
 		want Serve
 	}{
-		{"defaults", nil, nil, Serve{DefaultListen, ".", filepath.Join(".", "darkory.db")}},
+		{"defaults", nil, nil, Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")}}},
 		{"environment", nil,
-			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory"},
-			Serve{":8080", "/var/lib/darkory", "/var/lib/darkory/darkory.db"}},
-		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y"},
+			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory", "DARKORY_PUBLIC_URL": "https://dk.example.com", "DARKORY_NO_BROWSER": "1"},
+			Serve{":8080", Store{"/var/lib/darkory", "/var/lib/darkory/darkory.db"}, "https://dk.example.com", true}},
+		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser"},
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DB": "other.db"},
-			Serve{":9000", ".", "postgres://x/y"}},
+			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -37,5 +38,29 @@ func TestLoadServe(t *testing.T) {
 	}
 	if _, err := LoadServe([]string{"extra"}, env(nil), io.Discard); err == nil {
 		t.Fatal("accepted a stray argument")
+	}
+}
+
+func TestLoadInit(t *testing.T) {
+	got, err := LoadInit([]string{"--org", "Acme", "--data", "/d"}, env(map[string]string{"USER": "ada"}), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Init{Store: Store{"/d", "/d/darkory.db"}, Listen: DefaultListen, Org: "Acme", Name: "ada"}
+	if got != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestBaseURL(t *testing.T) {
+	for _, c := range []struct{ public, listen, want string }{
+		{"", "127.0.0.1:7357", "http://127.0.0.1:7357"},
+		{"", ":8080", "http://127.0.0.1:8080"},
+		{"", "0.0.0.0:80", "http://127.0.0.1:80"},
+		{"https://dk.example.com", ":8080", "https://dk.example.com"},
+	} {
+		if got := BaseURL(c.public, c.listen); got != c.want {
+			t.Errorf("BaseURL(%q, %q) = %q, want %q", c.public, c.listen, got, c.want)
+		}
 	}
 }

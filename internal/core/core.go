@@ -126,6 +126,32 @@ WHERE org_id = $1 AND member_id = $2 AND idempotency_key = $3 AND created_at > $
 	return &Replay{Status: status, Body: []byte(body)}
 }
 
+// PurgeIdempotencyKeys deletes responses kept longer than IdempotencyTTL. It is housekeeping, not
+// a change to the record, so it takes no sequence number and records no Activity.
+func (s *Service) PurgeIdempotencyKeys(ctx context.Context) error {
+	orgs, err := s.organisations(ctx)
+	if err != nil {
+		return err
+	}
+	cutoff := s.clock.Now().Add(-IdempotencyTTL).UnixMilli()
+	for _, org := range orgs {
+		if err := s.store.WriteBatchNoSeq(ctx, store.Stmt{
+			SQL:  `DELETE FROM idempotency_keys WHERE org_id = $1 AND created_at <= $2`,
+			Args: []any{org, cutoff},
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) organisations(ctx context.Context) ([]string, error) {
+	return collect(ctx, s.store, func(row interface{ Scan(...any) error }) (string, error) {
+		var id string
+		return id, row.Scan(&id)
+	}, `SELECT id FROM organisations ORDER BY id`)
+}
+
 // idemStmts keeps result under idem's key, in a batch write. An expired row under the same key
 // is removed first. A concurrent request under the same key makes the insert fail, which rolls
 // the batch back; the caller then finds the winner's response with Lookup.
