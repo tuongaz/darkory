@@ -6,7 +6,7 @@ import { keys, useDirectory } from "../api/queries";
 import { useNow } from "../clock";
 import { EvidenceSection, ObservationItems } from "../components/records";
 import { Badge, ConfirmButton, Loaded, Refusal, RelativeTime, Time } from "../components/ui";
-import { Holder, MemberName, Needs, SkillName, TaskLink, TaskStateBadges } from "../components/work";
+import { MemberName, Needs, SkillName, TaskLink, TaskStateBadges } from "../components/work";
 import { isOnReportingLine, useCurrentMe } from "../me";
 import { boundTo, liveClaim } from "../work";
 
@@ -620,12 +620,7 @@ function ClaimHistory({ claims }: { claims: Claim[] }) {
                       {c.how_ended && <> · {howEnded[c.how_ended] ?? c.how_ended}</>}
                     </>
                   ) : (
-                    c.expires_at && (
-                      <>
-                        {" "}
-                        · <Holder claim={c} />
-                      </>
-                    )
+                    " · holding"
                   )}
                 </div>
               </div>
