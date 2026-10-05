@@ -57,6 +57,9 @@ type Keeper struct {
 	claims   map[string]*kept // by Task id
 	memberID string
 	wake     chan struct{}
+	// shortest is the shortest heartbeat timeout this Session's Claims are known to take: its
+	// token's default and every Claim kept so far. Zero while none is known.
+	shortest time.Duration
 }
 
 type kept struct {
@@ -77,6 +80,7 @@ func (k *Keeper) Track(t client.Task) {
 	k.mu.Lock()
 	k.init()
 	timeout := time.Duration(*c.HeartbeatTimeoutSeconds) * time.Second
+	k.noteTimeout(timeout)
 	if h, ok := k.claims[t.ID]; !ok || h.claimID != c.ID {
 		k.claims[t.ID] = &kept{taskID: t.ID, key: t.Key, claimID: c.ID, timeout: timeout, next: time.Now().Add(k.every(timeout))}
 	}
@@ -133,15 +137,35 @@ func (k *Keeper) every(timeout time.Duration) time.Duration {
 	return max(d, 50*time.Millisecond)
 }
 
+// noteTimeout records a heartbeat timeout a Claim of this Session takes. Call with k.mu held.
+func (k *Keeper) noteTimeout(d time.Duration) {
+	if d > 0 && (k.shortest == 0 || d < k.shortest) {
+		k.shortest = d
+	}
+}
+
+// listEvery is how often to look for Claims made elsewhere in this Session: ListEvery, or more
+// often when a Claim may take a shorter timeout, so a Claim made after one list is found and
+// heartbeated well before it can lapse.
+func (k *Keeper) listEvery() time.Duration {
+	d := k.ListEvery
+	if d <= 0 {
+		d = 5 * time.Second
+	}
+	k.mu.Lock()
+	shortest := k.shortest
+	k.mu.Unlock()
+	if shortest > 0 {
+		d = min(d, k.every(shortest))
+	}
+	return d
+}
+
 // Run keeps Claims alive until ctx ends. It returns ErrStopped when the token is revoked.
 func (k *Keeper) Run(ctx context.Context) error {
 	k.mu.Lock()
 	k.init()
 	k.mu.Unlock()
-	listEvery := k.ListEvery
-	if listEvery <= 0 {
-		listEvery = 5 * time.Second
-	}
 	var nextList time.Time
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -154,7 +178,7 @@ func (k *Keeper) Run(ctx context.Context) error {
 				}
 				k.report(err)
 			}
-			nextList = time.Now().Add(listEvery)
+			nextList = time.Now().Add(k.listEvery())
 		}
 		for _, h := range k.due(time.Now()) {
 			if err := k.beat(ctx, h); err != nil {
@@ -241,9 +265,10 @@ func (k *Keeper) list(ctx context.Context) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	for _, t := range found {
+		timeout := time.Duration(*t.Claim.HeartbeatTimeoutSeconds) * time.Second
+		k.noteTimeout(timeout)
 		if h, ok := k.claims[t.ID]; !ok || h.claimID != t.Claim.ID {
-			k.claims[t.ID] = &kept{taskID: t.ID, key: t.Key, claimID: t.Claim.ID,
-				timeout: time.Duration(*t.Claim.HeartbeatTimeoutSeconds) * time.Second, next: now}
+			k.claims[t.ID] = &kept{taskID: t.ID, key: t.Key, claimID: t.Claim.ID, timeout: timeout, next: now}
 		}
 	}
 	for id, h := range k.claims {
@@ -265,8 +290,28 @@ func (k *Keeper) member(ctx context.Context) error {
 	if err := k.check(res, err); err != nil {
 		return err
 	}
+	me := res.JSON200
+	// The token's default timeout is what `next` and `claim` give a Claim unless told otherwise;
+	// knowing it, the first Claim made after a list is found in time.
+	if tokenID := me.Session.TokenID; tokenID != nil {
+		tokens, err := k.Conn.ListTokensWithResponse(ctx, me.Member.ID)
+		if err := k.check(tokens, err); err != nil {
+			if errors.Is(err, ErrStopped) {
+				return err
+			}
+			k.report(fmt.Errorf("reading this token's default heartbeat timeout: %w", err))
+		} else {
+			for _, tk := range tokens.JSON200.Items {
+				if tk.ID == *tokenID && tk.DefaultHeartbeatTimeoutSeconds != nil {
+					k.mu.Lock()
+					k.noteTimeout(time.Duration(*tk.DefaultHeartbeatTimeoutSeconds) * time.Second)
+					k.mu.Unlock()
+				}
+			}
+		}
+	}
 	k.mu.Lock()
-	k.memberID = res.JSON200.Member.ID
+	k.memberID = me.Member.ID
 	k.mu.Unlock()
 	return nil
 }

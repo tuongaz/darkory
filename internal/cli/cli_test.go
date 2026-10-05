@@ -362,6 +362,42 @@ func TestHeartbeatRunKeepsAClaimAlive(t *testing.T) {
 	})
 }
 
+// heartbeat run started first, as the rules say, finds a Claim made after it by another process
+// of the Session in time, though the Claim takes the token's 2 s default timeout and the run lists
+// the Session's Claims only every 5 s by default: it lists at a third of the token's default.
+func TestHeartbeatRunFindsALaterClaimInTime(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		in := newInstall(t, st)
+		in.setup()
+		var issued client.IssuedToken
+		in.as("ada", "ada-cli").json(&issued, "token", "issue", "bob", "--name", "short", "--timeout", "2s")
+		in.tokens["bob-short"] = issued.Secret
+		bob := in.as("bob-short", "bob-1")
+		bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
+		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "Build")
+
+		ctx, cancel := context.WithCancel(t.Context())
+		out := &lockedBuffer{}
+		done := make(chan result, 1)
+		go func() { done <- bob.runTo(ctx, out, &lockedBuffer{}, "heartbeat", "run") }()
+		eventually(t, 5*time.Second, "heartbeat run to start", func() bool {
+			return strings.Contains(out.String(), "keeping this Session's Claims alive")
+		})
+		time.Sleep(300 * time.Millisecond) // past its first list
+		var claimed client.TaskDetail
+		bob.json(&claimed, "claim", "WEB-3")
+		if *claimed.Task.Claim.HeartbeatTimeoutSeconds != 2 {
+			t.Fatalf("bob took %+v", claimed.Task)
+		}
+		time.Sleep(6 * time.Second)
+		assertHeldOr(t, bob, "WEB-3", out.String())
+		cancel()
+		if res := <-done; res.code != ExitOK {
+			t.Fatalf("heartbeat run: %+v", res)
+		}
+	})
+}
+
 // assertHeld fails unless task's Claim is live, read without sending a Heartbeat.
 func assertHeld(t *testing.T, r *runner, task string) {
 	t.Helper()
