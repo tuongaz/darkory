@@ -14,8 +14,8 @@ import (
 // Retrospective, which may propose a new version of a company Skill; a Member with skill-review,
 // other than the author, publishes it by completing the review while its base is still current.
 
-// ProposeSkillVersion writes a proposed new version of a company Skill on a Task the caller holds,
-// against basedOn, which must be the Skill's current version. The caller then hands the Task over
+// ProposeSkillVersion writes a proposed new version of a company Skill on a Retrospective the
+// caller holds (ADR 0010), against basedOn, which must be the Skill's current version. The caller then hands the Task over
 // to skill-review. A Task carries one pending proposal: a new one supersedes it.
 func (s *Service) ProposeSkillVersion(ctx context.Context, c *auth.Caller, taskRef, skillRef string, basedOn int64, body string, idem Idem) (SkillProposal, error) {
 	if strings.TrimSpace(body) == "" {
@@ -32,6 +32,9 @@ func (s *Service) ProposeSkillVersion(ctx context.Context, c *auth.Caller, taskR
 		}
 		if err := holds(c, task); err != nil {
 			return nil, err
+		}
+		if task.Kind != "retrospective" {
+			return nil, refuse(CodeForbidden, "only a Retrospective proposes a Skill version, and %s is a %s Task", task.Key, task.Kind)
 		}
 		skillID, err := resolveSkill(ctx, t, c.OrgID, skillRef)
 		if err != nil {

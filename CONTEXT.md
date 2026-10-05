@@ -53,7 +53,7 @@ A signal from the Member holding a Claim that it is still working the Task. A mi
 _Avoid_: Ping, keepalive
 
 **Takeable**:
-A Task is takeable by a Member when it is open, not blocked, not claimed, and one of these holds: it is aimed at that Member by name; it needs a Skill the Member has and belongs to a Feature in one of the Member's Teams; it needs the skill-review Skill, which the Member has, in any Team; or the Member owns its Feature and no Member of that Feature's Team has the Skill it needs. A Member who has held a Task under one Skill can take it again only under that Skill: no one judges their own work.
+A Task is takeable by a Member when it is open, not blocked, not claimed, and one of these holds: it is aimed at that Member by name; it needs a Skill the Member has and belongs to a Feature in one of the Member's Teams; it needs the skill-review Skill, which the Member has, in any Team; or the Member owns its Feature and no Member could take it by its Skill: none in that Feature's Team has the Skill it needs, or, for skill-review, none in the Organisation has it. A Member who has held a Task under one Skill can take it again only under that Skill: no one judges their own work.
 _Avoid_: Available, ready, free
 
 **Handover**:
@@ -73,7 +73,7 @@ How a Task ends when it will not be done, decided by the Feature owner or brough
 _Avoid_: Cancelled, won't-do, abandoned
 
 **Feature owner**:
-The one Member, human or agent, with authority over a Feature: deciding to ship or drop it, dropping its Tasks, answering escalations about it, and taking any of its Tasks that no Member of its Team has the Skill for. Ownership is not a Claim and can be passed on.
+The one Member, human or agent, with authority over a Feature: deciding to ship or drop it, dropping its Tasks, answering escalations about it, and taking any of its Tasks that no Member could take by its Skill. Ownership is not a Claim and can be passed on.
 _Avoid_: Assignee, lead, PM
 
 **Shipped**:
@@ -105,7 +105,7 @@ The Task Darkory files on a Feature when it ships or drops, needing the retro Sk
 _Avoid_: Retro meeting, post-mortem, review
 
 **Skill version**:
-One published revision of a company Skill. A change is proposed by a Retrospective against the current version, and published only when a Member with the skill-review Skill, from any Team and other than its author, completes the review while that version is still current. Every Claim records the version it worked under.
+One published revision of a company Skill. A change is proposed by a Retrospective against the current version, and published only when a Member with the skill-review Skill, from any Team and other than its author, completes the review while that version is still current; when no Member of the Organisation has skill-review, the Feature owner may complete it instead, unless they wrote it. Every Claim records the version it worked under.
 _Avoid_: Revision, edit
 
 **Model label**:

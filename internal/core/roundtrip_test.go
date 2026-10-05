@@ -79,6 +79,8 @@ func TestHotPathWritesAreOneRoundTripOnPostgres(t *testing.T) {
 		{"propose", func(task core.Task) error {
 			// Not measured: a new Task, written up for review by the builder.
 			review := f.task(lead, feature, "Review "+task.Key, "build")
+			// Only a Retrospective proposes; stand this one in for it rather than ship the Feature.
+			f.exec(`UPDATE tasks SET kind = 'retrospective' WHERE id = $1`, review.ID)
 			if _, err := f.svc.Claim(ctx, c, review.ID, noTimeout, core.Idem{}); err != nil {
 				return err
 			}

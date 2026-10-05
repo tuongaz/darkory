@@ -13,9 +13,10 @@ import (
 // caller) and @now. A Task is takeable by the caller when it is open; has no live Claim (none, or
 // one whose expiry has passed); has no open blocker; and is aimed at the caller, or needs a Skill
 // the caller has and belongs to a Feature in one of the caller's Teams, or needs skill-review,
-// which the caller has, from any Team, or belongs to a Feature the caller owns whose Team has no
-// Member with the Skill it needs. Whoever has held it under one Skill may take it again only
-// under that Skill: no one judges their own work.
+// which the caller has, from any Team, or belongs to a Feature the caller owns and no Member
+// could take it by its Skill: none in the Feature's Team has the Skill, or, for skill-review,
+// which any Team may take, none in the Organisation has it. Whoever has held it under one Skill
+// may take it again only under that Skill: no one judges their own work.
 const takeableSQL = `t.org_id = @org
 AND t.state = 'open'
 AND (t.claim_holder_id IS NULL OR (t.claim_expires_at IS NOT NULL AND t.claim_expires_at <= @now))
@@ -30,8 +31,9 @@ AND (
 			OR EXISTS (SELECT 1 FROM skills sr WHERE sr.org_id = @org AND sr.id = t.skill_id AND sr.builtin = TRUE AND sr.name = 'skill-review')))
 	OR (t.aimed_at_id IS NULL
 		AND EXISTS (SELECT 1 FROM features f WHERE f.org_id = @org AND f.id = t.feature_id AND f.owner_id = @member
-			AND NOT EXISTS (SELECT 1 FROM team_members tm JOIN member_skills ms ON ms.member_id = tm.member_id
-				WHERE tm.org_id = @org AND tm.team_id = f.team_id AND ms.skill_id = t.skill_id)))
+			AND NOT EXISTS (SELECT 1 FROM member_skills ms WHERE ms.org_id = @org AND ms.skill_id = t.skill_id
+				AND (EXISTS (SELECT 1 FROM team_members tm WHERE tm.org_id = @org AND tm.team_id = f.team_id AND tm.member_id = ms.member_id)
+					OR EXISTS (SELECT 1 FROM skills sr WHERE sr.org_id = @org AND sr.id = t.skill_id AND sr.builtin = TRUE AND sr.name = 'skill-review')))))
 )
 AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.org_id = @org AND pc.task_id = t.id AND pc.holder_id = @member
 	AND pc.skill_id IS DISTINCT FROM t.skill_id)`
