@@ -5,7 +5,16 @@ LDFLAGS := -X github.com/tuongaz/darkory/internal/version.Version=$(VERSION)
 TEST_POSTGRES_URL ?= postgres://dk@localhost:54329/postgres?sslmode=disable
 GENERATED := client/client.gen.go internal/server/gen/server.gen.go
 
-.PHONY: gen gen-check build vet test test-pg check e2e e2e-pg web web-gen web-check
+# Local settings for dev and serve, such as PUBLIC_URL; local.mk is not committed.
+-include local.mk
+# Where dev and serve keep their Install.
+DEV_DATA ?= .dev
+# The address browsers use. Set it to the HTTPS name a proxy gives the Install (for example
+# PUBLIC_URL = https://<machine>.<tailnet>.ts.net with `tailscale serve --bg --https=443
+# http://127.0.0.1:7357`), so login links and the Origin check of writes use it.
+PUBLIC_URL ?= http://127.0.0.1:7357
+
+.PHONY: gen gen-check build vet test test-pg check e2e e2e-pg web web-gen web-check dev dev-api dev-web dev-init serve
 
 ## gen: regenerate the Go client and the server interface from api/openapi.yaml
 gen:
@@ -57,3 +66,32 @@ e2e:
 ## e2e-pg: the end-to-end suite and the soak on Postgres, with two server processes too
 e2e-pg:
 	DARKORY_E2E=1 DARKORY_E2E_POSTGRES_URL='$(TEST_POSTGRES_URL)' $(GO) test -count=1 -v -timeout 30m ./e2e/
+
+## dev: work on the server and the web app without rebuilding by hand. The web app runs on 7357
+## (Vite: changes show on save) and proxies /v1 to the server on 7358, which is rebuilt and
+## restarted when Go code changes. Ctrl-C stops both. The Install lives in $(DEV_DATA).
+dev: dev-init
+	@test -d web/node_modules || (cd web && npm ci)
+	@trap 'kill 0' INT TERM; \
+	$(MAKE) --no-print-directory dev-api & \
+	$(MAKE) --no-print-directory dev-web & \
+	wait
+
+## dev-api: the server alone on 7358, rebuilt and restarted when Go code changes
+dev-api: dev-init
+	DARKORY_PUBLIC_URL='$(PUBLIC_URL)' DARKORY_NO_UPDATE_CHECK=1 \
+		$(GO) run ./tools/devrun -o $(DEV_DATA)/bin/darkory -pkg ./cmd/darkory -- \
+		serve --data $(DEV_DATA) --listen 127.0.0.1:7358 --no-browser
+
+## dev-web: the web app alone on 7357, proxying /v1 to the server on 7358
+dev-web:
+	cd web && VITE_PORT=7357 DARKORY_URL=http://127.0.0.1:7358 npm run dev
+
+## dev-init: create the Install in $(DEV_DATA) once; its token and first login link are kept in $(DEV_DATA)/init.txt
+dev-init:
+	@test -f $(DEV_DATA)/darkory.db || { mkdir -p $(DEV_DATA) && umask 077 && \
+		$(GO) run ./cmd/darkory init --data $(DEV_DATA) | tee $(DEV_DATA)/init.txt; }
+
+## serve: build bin/darkory and run it on 7357 with the Install in $(DEV_DATA) (run make web first for the real web app)
+serve: build dev-init
+	DARKORY_PUBLIC_URL='$(PUBLIC_URL)' bin/darkory serve --data $(DEV_DATA)

@@ -42,6 +42,13 @@ Storage, the Evidence store and sign-in are settings of an Install: SQLite or Po
 ## Developing
 
 ```sh
+make dev        # web app on http://127.0.0.1:7357 (reloads on save), server behind it on 7358 (restarts when Go code changes)
+make serve      # the built binary on 7357, with the same Install (.dev/)
+```
+
+`make dev` creates its Install in `.dev/` the first time and keeps the token and first login link in `.dev/init.txt`. The server prints a fresh login link each time it restarts. To reach it through a proxy such as `tailscale serve`, put `PUBLIC_URL = https://<name>` in a `local.mk` file (not committed): login links and the Origin check of browser writes then use that address.
+
+```sh
 make check      # generated code is current, vet, tests on SQLite, and on Postgres when DARKORY_TEST_POSTGRES_URL is set
 make e2e        # the real binary end to end, and a soak (DARKORY_E2E=1)
 make web-check  # the web app
