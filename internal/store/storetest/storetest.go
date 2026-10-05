@@ -47,10 +47,20 @@ func Open(t testing.TB, engine store.Engine) *store.Store {
 	return s
 }
 
-// OpenUnmigrated returns a fresh, empty database on engine, closed and removed when the test ends.
-func OpenUnmigrated(t testing.TB, engine store.Engine) *store.Store {
+// OpenWith returns a fresh, migrated database on engine, opened with opts.
+func OpenWith(t testing.TB, engine store.Engine, opts ...store.Option) *store.Store {
 	t.Helper()
-	s, err := store.Open(t.Context(), DSN(t, engine))
+	s := OpenUnmigrated(t, engine, opts...)
+	if _, err := s.Migrate(t.Context()); err != nil {
+		t.Fatalf("migrate %s: %v", engine, err)
+	}
+	return s
+}
+
+// OpenUnmigrated returns a fresh, empty database on engine, closed and removed when the test ends.
+func OpenUnmigrated(t testing.TB, engine store.Engine, opts ...store.Option) *store.Store {
+	t.Helper()
+	s, err := store.Open(t.Context(), DSN(t, engine), opts...)
 	if err != nil {
 		t.Fatalf("open %s: %v", engine, err)
 	}

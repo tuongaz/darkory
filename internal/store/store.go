@@ -17,8 +17,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" driver
-	_ "modernc.org/sqlite"             // registers the "sqlite" driver
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib" // also registers the "pgx" driver
+	_ "modernc.org/sqlite"           // registers the "sqlite" driver
 )
 
 // Engine names a database engine.
@@ -62,21 +63,46 @@ const sqliteParams = "_txlock=immediate" +
 	"&_pragma=foreign_keys(1)" +
 	"&_pragma=synchronous(NORMAL)"
 
+// Option changes how Open connects.
+type Option func(*options)
+
+type options struct {
+	maxConns   int
+	postgresFn func(*pgx.ConnConfig)
+}
+
+// WithMaxConns bounds the connection pool at n instead of the engine's default.
+func WithMaxConns(n int) Option { return func(o *options) { o.maxConns = n } }
+
+// WithPostgresConfig lets fn adjust the pgx connection settings before connecting, as the
+// round-trip tests do to count what crosses the wire. It has no effect on SQLite.
+func WithPostgresConfig(fn func(*pgx.ConnConfig)) Option {
+	return func(o *options) { o.postgresFn = fn }
+}
+
 // Open opens the database dsn names, without migrating it; call Migrate next.
 //
 // A dsn starting postgres:// or postgresql:// is a Postgres connection URL. Anything else is the
 // path of a SQLite file, optionally prefixed sqlite: or file:, which is created if missing.
-func Open(ctx context.Context, dsn string) (*Store, error) {
+func Open(ctx context.Context, dsn string, opts ...Option) (*Store, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	var s *Store
 	if EngineOf(dsn) == Postgres {
-		db, err := sql.Open("pgx", dsn)
+		cfg, err := pgx.ParseConfig(dsn)
 		if err != nil {
-			return nil, fmt.Errorf("store: open postgres: %w", err)
+			return nil, fmt.Errorf("store: open postgres: %w", redact(dsn, err))
 		}
+		if o.postgresFn != nil {
+			o.postgresFn(cfg)
+		}
+		db := stdlib.OpenDB(*cfg)
 		// Writes to one Organisation queue on its counter row while holding a connection, so the
 		// pool is bounded rather than left to Postgres' connection limit.
-		db.SetMaxOpenConns(20)
-		db.SetMaxIdleConns(10)
+		db.SetMaxOpenConns(or(o.maxConns, 20))
+		db.SetMaxIdleConns(min(or(o.maxConns, 20), 10))
 		db.SetConnMaxIdleTime(5 * time.Minute)
 		s = &Store{db: db, engine: Postgres}
 	} else {
@@ -94,8 +120,8 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		}
 		// Bounded so that writers mostly queue in the pool rather than in SQLite's busy handler;
 		// idle connections are kept so the pragmas above are not rerun on churn.
-		db.SetMaxOpenConns(16)
-		db.SetMaxIdleConns(16)
+		db.SetMaxOpenConns(or(o.maxConns, 16))
+		db.SetMaxIdleConns(or(o.maxConns, 16))
 		s = &Store{db: db, engine: SQLite, path: abs}
 	}
 	if err := s.db.PingContext(ctx); err != nil {
@@ -103,6 +129,13 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		return nil, fmt.Errorf("store: connect %s: %w", s.engine, redact(dsn, err))
 	}
 	return s, nil
+}
+
+func or(n, fallback int) int {
+	if n > 0 {
+		return n
+	}
+	return fallback
 }
 
 // EngineOf reports which engine Open would use for dsn.
