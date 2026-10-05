@@ -366,6 +366,15 @@ func cmdAttach(c *call) error {
 	if err != nil {
 		return err
 	}
+	// Show what is about to be sent, so a person sees which file leaves the machine.
+	shown, err := filepath.Abs(args[1])
+	if err != nil {
+		return err
+	}
+	if real, err := filepath.EvalSymlinks(shown); err == nil && real != shown {
+		shown += " -> " + real
+	}
+	fmt.Fprintf(c.errOut(), "Attaching %s (%d bytes, %s) as %s.\n", shown, len(content), ct, filename)
 	ev, body, err := conn.Attach(c.ctx, args[0], filename, ct, content, *toFeature)
 	if err != nil {
 		return err
@@ -418,7 +427,7 @@ func cmdEvidenceGet(c *call) error {
 		return err
 	}
 	if !c.g.json {
-		fmt.Fprintf(c.env.Stdout, "Saved %d bytes to %s.\n", n, *out)
+		fmt.Fprintf(c.out(), "Saved %d bytes to %s.\n", n, *out)
 	}
 	return nil
 }

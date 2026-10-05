@@ -185,7 +185,7 @@ func Run(ctx context.Context, args []string, env Env) error {
 	err := cmd.run(c)
 	code := c.report(err)
 	if !cmd.long {
-		update.PrintNotice(context.WithoutCancel(ctx), env.Stderr, c.g.noUpdateCheck)
+		update.PrintNotice(context.WithoutCancel(ctx), c.errOut(), c.g.noUpdateCheck)
 	}
 	if code != ExitOK {
 		return &ExitError{code}
@@ -227,11 +227,11 @@ func (c *call) report(err error) int {
 	)
 	switch {
 	case errors.As(err, &ue):
-		fmt.Fprintf(c.env.Stderr, "darkory %s: %s\nUsage: darkory %s %s (see --help)\n", c.cmd.path, ue.msg, c.cmd.path, c.cmd.args)
+		fmt.Fprintf(c.errOut(), "darkory %s: %s\nUsage: darkory %s %s (see --help)\n", c.cmd.path, ue.msg, c.cmd.path, c.cmd.args)
 		return ExitUsage
 	case errors.As(err, &no):
 		if !c.g.json {
-			fmt.Fprintln(c.env.Stderr, no.msg)
+			fmt.Fprintln(c.errOut(), no.msg)
 		}
 		return ExitNothing
 	case errors.As(err, &rf):
@@ -265,12 +265,12 @@ func (c *call) printError(code, msg string, details map[string]any) {
 			out["details"] = details
 		}
 		b, _ := json.Marshal(out)
-		fmt.Fprintf(c.env.Stderr, "%s\n", b)
+		fmt.Fprintf(c.env.Stderr, "%s\n", remote.CleanJSON(b))
 		return
 	}
 	if code != "" {
-		fmt.Fprintf(c.env.Stderr, "darkory: %s: %s\n", code, msg)
+		fmt.Fprintf(c.errOut(), "darkory: %s: %s\n", one(code), msg)
 		return
 	}
-	fmt.Fprintf(c.env.Stderr, "darkory: %s\n", msg)
+	fmt.Fprintf(c.errOut(), "darkory: %s\n", msg)
 }

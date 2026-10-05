@@ -314,3 +314,31 @@ func TestALapsedClaimIsReported(t *testing.T) {
 		t.Fatalf("after claiming again, keeping %v alive", held)
 	}
 }
+
+// Tool text is safe to show in a terminal, with what other Members wrote escaped; the structured
+// content carries it exactly.
+func TestToolTextEscapesTerminalControls(t *testing.T) {
+	const hostile = "ok\x1b]52;c;ZXZpbA==\x07\x1b[2J\u009b\u202e"
+	f := newFixture(t, storetest.Open(t, store.SQLite), server.Options{})
+	bob := dial(t, f.url, f.bob, "bob-setup")
+	must(t)(bob.FileTaskWithResponse(t.Context(), &client.FileTaskParams{}, client.FileTaskBody{Feature: ptr("WEB-1"), Skill: ptr("build"), Title: hostile}))
+	_, cs := f.connect("bob-mcp", Options{})
+	actable := func(s string) bool {
+		return strings.ContainsFunc(s, func(r rune) bool {
+			return (r < 0x20 && r != '\n' && r != '\t') || (r >= 0x7f && r <= 0x9f) || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
+		})
+	}
+	var shown client.TaskDetail
+	res := ok(t, cs, &shown, "show_task", map[string]any{"task": "WEB-4"})
+	if actable(text(res)) || shown.Task.Title != hostile {
+		t.Fatalf("text %q, structured title %q", text(res), shown.Task.Title)
+	}
+	var back client.TaskDetail
+	if err := json.Unmarshal([]byte(strings.TrimSpace(text(res))), &back); err != nil || back.Task.Title != hostile {
+		t.Fatalf("the text is not the structured content: %v", err)
+	}
+	res = call(t, cs, "show_task", map[string]any{"task": "WEB-\x1b[2J9"})
+	if !res.IsError || actable(text(res)) {
+		t.Fatalf("error text %q", text(res))
+	}
+}

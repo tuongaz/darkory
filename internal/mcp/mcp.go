@@ -32,14 +32,23 @@ type Options struct {
 	ListEvery time.Duration
 	// Log receives what the agent need not see, such as a Heartbeat that will be tried again.
 	Log *slog.Logger
+	// EvidenceRoot is the only directory attach_evidence reads from; "" means the working
+	// directory.
+	EvidenceRoot string
+	// EvidenceAllowHidden lets attach_evidence send files whose path has a name starting with a dot.
+	EvidenceAllowHidden bool
+	// EvidenceMaxMB is the largest file attach_evidence sends, in MiB; zero means
+	// DefaultEvidenceMaxMB.
+	EvidenceMaxMB int64
 }
 
 // Server is the MCP server for one Member and Session.
 type Server struct {
-	conn   *remote.Conn
-	keeper *remote.Keeper
-	mcp    *sdk.Server
-	log    *slog.Logger
+	conn     *remote.Conn
+	keeper   *remote.Keeper
+	mcp      *sdk.Server
+	log      *slog.Logger
+	evidence evidenceRules
 
 	mu      sync.Mutex
 	notices []string
@@ -63,11 +72,15 @@ func New(o Options) (*Server, error) {
 	if o.Log == nil {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
+	rules, err := newEvidenceRules(o.EvidenceRoot, o.EvidenceAllowHidden, o.EvidenceMaxMB)
+	if err != nil {
+		return nil, err
+	}
 	conn, err := remote.Dial(o.Settings)
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{conn: conn, log: o.Log}
+	s := &Server{conn: conn, log: o.Log, evidence: rules}
 	listEvery := o.ListEvery
 	if listEvery <= 0 {
 		listEvery = 30 * time.Second
@@ -165,7 +178,8 @@ func tool[In, Out any](s *Server, name, description string, fn func(context.Cont
 			if err != nil {
 				return nil, nil, err
 			}
-			res := &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(b)}}}
+			// The text is the structured output as JSON, with what a terminal could act on escaped.
+			res := &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(remote.CleanJSON(b))}}}
 			withNotices(res, notices)
 			return res, v, nil
 		})
@@ -187,7 +201,7 @@ func failure(err error, notices []string) *sdk.CallToolResult {
 			text += "\n(The record refused this on one of its rules; read the message rather than retrying.)"
 		}
 	}
-	res := &sdk.CallToolResult{IsError: true, Content: []sdk.Content{&sdk.TextContent{Text: text}}, Meta: sdk.Meta{"darkory/error": e}}
+	res := &sdk.CallToolResult{IsError: true, Content: []sdk.Content{&sdk.TextContent{Text: remote.Clean(text)}}, Meta: sdk.Meta{"darkory/error": e}}
 	withNotices(res, notices)
 	return res
 }
@@ -196,7 +210,7 @@ func withNotices(res *sdk.CallToolResult, notices []string) {
 	if len(notices) == 0 {
 		return
 	}
-	res.Content = append(res.Content, &sdk.TextContent{Text: "Claim notice: " + strings.Join(notices, "\nClaim notice: ")})
+	res.Content = append(res.Content, &sdk.TextContent{Text: remote.Clean("Claim notice: " + strings.Join(notices, "\nClaim notice: "))})
 	if res.Meta == nil {
 		res.Meta = sdk.Meta{}
 	}

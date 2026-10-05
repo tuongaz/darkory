@@ -63,7 +63,7 @@ func (c *call) follow(conn *remote.Conn, after int64) error {
 			return err
 		}
 		if err != nil && !c.g.json {
-			fmt.Fprintf(c.env.Stderr, "darkory: the Activity stream dropped (%v); reopening after %d\n", err, after)
+			fmt.Fprintf(c.errOut(), "darkory: the Activity stream dropped (%v); reopening after %d\n", err, after)
 		}
 		select {
 		case <-c.ctx.Done():
@@ -119,13 +119,13 @@ func (c *call) stream(conn *remote.Conn, after int64) (int64, error) {
 
 func (c *call) emitEvent(data string) error {
 	if c.g.json {
-		_, err := fmt.Fprintln(c.env.Stdout, data)
+		_, err := fmt.Fprintf(c.env.Stdout, "%s\n", remote.CleanJSON([]byte(data)))
 		return err
 	}
 	var a client.Activity
 	if err := json.Unmarshal([]byte(data), &a); err != nil {
 		return fmt.Errorf("an Activity event that is not an Activity: %w", err)
 	}
-	c.printActivity(c.env.Stdout, a)
+	c.printActivity(c.out(), a)
 	return nil
 }

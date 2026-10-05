@@ -135,12 +135,20 @@ func (c *call) show(body []byte, human func(w io.Writer)) error {
 	if c.g.json {
 		return printJSON(c.env.Stdout, body)
 	}
-	human(c.env.Stdout)
+	human(c.out())
 	return nil
 }
 
+// out is standard output for text, with what other Members wrote made safe for a terminal.
+func (c *call) out() io.Writer { return cleanWriter{c.env.Stdout} }
+
+// errOut is standard error for text, made safe the same way.
+func (c *call) errOut() io.Writer { return cleanWriter{c.env.Stderr} }
+
+// printJSON prints a /v1 body indented, with the characters a terminal could act on that JSON
+// leaves raw written as \u escapes (remote.CleanJSON), so it decodes exactly as the server sent it.
 func printJSON(w io.Writer, body []byte) error {
-	body = bytes.TrimSpace(body)
+	body = remote.CleanJSON(bytes.TrimSpace(body))
 	if len(body) == 0 {
 		body = []byte("{}")
 	}
@@ -254,9 +262,9 @@ func (c *call) member(id string) string {
 		}
 	}
 	if n, ok := c.members[id]; ok {
-		return n
+		return one(n)
 	}
-	return id
+	return one(id)
 }
 
 // skill returns a Skill's name for human output, or the id when it cannot be found.
@@ -271,9 +279,9 @@ func (c *call) skill(id string) string {
 		}
 	}
 	if n, ok := c.skills[id]; ok {
-		return n
+		return one(n)
 	}
-	return id
+	return one(id)
 }
 
 // team returns a Team's key for human output, or the id when it cannot be found.
@@ -288,9 +296,9 @@ func (c *call) team(id string) string {
 		}
 	}
 	if n, ok := c.teams[id]; ok {
-		return n
+		return one(n)
 	}
-	return id
+	return one(id)
 }
 
 // me returns the caller's Member id.

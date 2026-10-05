@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"net/http"
-	"os"
 	"path/filepath"
 
 	"github.com/tuongaz/darkory/client"
@@ -63,7 +62,7 @@ type observeIn struct {
 
 type attachIn struct {
 	Target      string `json:"target" jsonschema:"the Task or Feature to attach to, by display key or id; a Task is looked for first"`
-	Path        string `json:"path" jsonschema:"the local file to attach"`
+	Path        string `json:"path" jsonschema:"the local file to attach, under the evidence root; a relative path is taken from it"`
 	Filename    string `json:"filename,omitempty" jsonschema:"the name to show and download it as (default: the file's own)"`
 	ContentType string `json:"content_type,omitempty" jsonschema:"the file's content type (default: from its extension, else its content)"`
 	Feature     bool   `json:"feature,omitempty" jsonschema:"attach to the Feature without looking for a Task first"`
@@ -225,15 +224,16 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON201, nil
 		}, enum("outcome", "worked", "didnt_work"))
-	tool(s, "attach_evidence", "Attach a local file as Evidence (a report, log or screenshot) to a Task, or to a Feature.",
+	tool(s, "attach_evidence", "Attach a local file as Evidence (a report, log or screenshot) to a Task, or to a Feature. "+
+		"Every Member of the Organisation can read what is attached. "+s.evidence.describe(),
 		func(ctx context.Context, in attachIn) (client.Evidence, error) {
-			content, err := os.ReadFile(in.Path)
+			real, content, err := s.evidence.read(in.Path)
 			if err != nil {
 				return client.Evidence{}, err
 			}
 			name := in.Filename
 			if name == "" {
-				name = filepath.Base(in.Path)
+				name = filepath.Base(real)
 			}
 			ct := in.ContentType
 			if ct == "" {

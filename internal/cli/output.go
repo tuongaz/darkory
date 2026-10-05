@@ -9,7 +9,24 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/cli/remote"
 )
+
+// Human output goes through a cleanWriter, which escapes terminal controls and bidi overrides in
+// whatever other Members wrote (remote.Clean). Fields printed on one line — titles, names, keys,
+// filenames — also pass through one, so that a newline in them cannot pass for another line.
+var one = remote.CleanLine
+
+// cleanWriter writes text with terminal controls and bidi overrides escaped. Each Write is one
+// whole formatted string, so no character is split between writes.
+type cleanWriter struct{ w io.Writer }
+
+func (cw cleanWriter) Write(p []byte) (int, error) {
+	if _, err := io.WriteString(cw.w, remote.Clean(string(p))); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
 
 func stamp(t time.Time) string { return t.UTC().Format(time.RFC3339) }
 
@@ -33,7 +50,7 @@ func (c *call) needsOf(t client.Task) string {
 }
 
 func stateOf(t client.Task) string {
-	s := string(t.State)
+	s := one(string(t.State))
 	if t.Blocked && t.State == client.TaskStateOpen {
 		s += ",blocked"
 	}
@@ -65,7 +82,7 @@ func (c *call) printTasks(w io.Writer, ts []client.Task, next *string) {
 }
 
 func (c *call) printTaskLine(w io.Writer, t client.Task) {
-	line := fmt.Sprintf("%-9s %-13s %-14s %s", t.Key, stateOf(t), c.needsOf(t), t.Title)
+	line := fmt.Sprintf("%-9s %-13s %-14s %s", one(t.Key), stateOf(t), c.needsOf(t), one(t.Title))
 	if h := c.claimOf(t.Claim); h != "" {
 		line += "  [" + h + "]"
 	}
@@ -74,16 +91,16 @@ func (c *call) printTaskLine(w io.Writer, t client.Task) {
 
 func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 	t := d.Task
-	fmt.Fprintf(w, "%s  %s\n", t.Key, t.Title)
-	fmt.Fprintf(w, "  Feature    %s %s\n", d.Feature.Key, d.Feature.Title)
-	fmt.Fprintf(w, "  State      %s (%s)\n", stateOf(t), t.Kind)
+	fmt.Fprintf(w, "%s  %s\n", one(t.Key), one(t.Title))
+	fmt.Fprintf(w, "  Feature    %s %s\n", one(d.Feature.Key), one(d.Feature.Title))
+	fmt.Fprintf(w, "  State      %s (%s)\n", stateOf(t), one(string(t.Kind)))
 	if t.AimedAtID != nil {
 		fmt.Fprintf(w, "  Aimed at   %s\n", c.member(*t.AimedAtID))
 	} else if t.SkillID != nil {
 		fmt.Fprintf(w, "  Needs      %s\n", c.skill(*t.SkillID))
 	}
 	if cl := t.Claim; cl != nil {
-		fmt.Fprintf(w, "  Claim      %s, Session %s", c.member(cl.HolderID), cl.SessionID)
+		fmt.Fprintf(w, "  Claim      %s, Session %s", c.member(cl.HolderID), one(cl.SessionID))
 		if cl.SkillID != nil {
 			fmt.Fprintf(w, ", %s v%d", c.skill(*cl.SkillID), deref(cl.SkillVersion))
 		}
@@ -93,7 +110,7 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 			fmt.Fprint(w, ", no heartbeat timeout")
 		}
 		if cl.ModelLabel != nil {
-			fmt.Fprintf(w, ", model %s", *cl.ModelLabel)
+			fmt.Fprintf(w, ", model %s", one(*cl.ModelLabel))
 		}
 		fmt.Fprintln(w)
 	}
@@ -146,7 +163,7 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 		for _, cl := range d.Claims {
 			how := "live"
 			if cl.HowEnded != nil {
-				how = string(*cl.HowEnded)
+				how = one(string(*cl.HowEnded))
 			}
 			fmt.Fprintf(w, "  %s %s (%s)\n", stamp(cl.StartedAt), c.member(cl.HolderID), how)
 		}
@@ -170,22 +187,22 @@ func (c *call) printObservation(w io.Writer, o client.Observation) {
 	if o.ReviewedAt != nil {
 		reviewed = " (reviewed)"
 	}
-	fmt.Fprintf(w, "  %-11s %s, %s%s: %s\n", o.Outcome, who, stamp(o.CreatedAt), reviewed, o.Body)
+	fmt.Fprintf(w, "  %-11s %s, %s%s: %s\n", one(string(o.Outcome)), who, stamp(o.CreatedAt), reviewed, one(o.Body))
 }
 
 func (c *call) printEvidence(w io.Writer, e client.Evidence) {
-	fmt.Fprintf(w, "  %s  %s  %s  %d bytes  by %s at %s\n", e.ID, e.Filename, e.ContentType, e.Size, c.member(e.AttachedBy), stamp(e.CreatedAt))
+	fmt.Fprintf(w, "  %s  %s  %s  %d bytes  by %s at %s\n", one(e.ID), one(e.Filename), one(e.ContentType), e.Size, c.member(e.AttachedBy), stamp(e.CreatedAt))
 }
 
 func (c *call) printFeatureLine(w io.Writer, f client.Feature) {
-	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s\n", f.Key, f.Rank, f.State, c.member(f.OwnerID), f.Title)
+	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s\n", one(f.Key), f.Rank, one(string(f.State)), c.member(f.OwnerID), one(f.Title))
 }
 
 func (c *call) printFeatureDetail(w io.Writer, d client.FeatureDetail) {
 	f := d.Feature
-	fmt.Fprintf(w, "%s  %s\n", f.Key, f.Title)
+	fmt.Fprintf(w, "%s  %s\n", one(f.Key), one(f.Title))
 	fmt.Fprintf(w, "  Team       %s, Rank %d\n", c.team(f.TeamID), f.Rank)
-	fmt.Fprintf(w, "  State      %s\n", f.State)
+	fmt.Fprintf(w, "  State      %s\n", one(string(f.State)))
 	fmt.Fprintf(w, "  Owner      %s\n", c.member(f.OwnerID))
 	fmt.Fprintf(w, "  Filed      by %s at %s\n", c.member(f.FiledBy), stamp(f.CreatedAt))
 	if f.EndedAt != nil {
@@ -213,18 +230,18 @@ func (c *call) printMemberLine(w io.Writer, m client.Member) {
 		extra += " admin"
 	}
 	if m.Email != nil {
-		extra += " " + *m.Email
+		extra += " " + one(*m.Email)
 	}
 	if m.ManagerID != nil {
 		extra += " reports to " + c.member(*m.ManagerID)
 	}
-	fmt.Fprintf(w, "%-16s %-6s%s\n", m.Name, m.Kind, extra)
+	fmt.Fprintf(w, "%-16s %-6s%s\n", one(m.Name), one(string(m.Kind)), extra)
 }
 
 func names[T any](items []T, name func(T) string) string {
 	var out []string
 	for _, it := range items {
-		out = append(out, name(it))
+		out = append(out, one(name(it)))
 	}
 	if len(out) == 0 {
 		return "-"
@@ -241,7 +258,7 @@ func (c *call) printSkillLine(w io.Writer, s client.Skill) {
 	if s.Builtin {
 		extra += " (built in)"
 	}
-	fmt.Fprintf(w, "%-20s %-8s v%d%s\n", s.Name, s.Kind, s.CurrentVersion, extra)
+	fmt.Fprintf(w, "%-20s %-8s v%d%s\n", one(s.Name), one(string(s.Kind)), s.CurrentVersion, extra)
 }
 
 func (c *call) printToken(w io.Writer, t client.Token) {
@@ -253,7 +270,7 @@ func (c *call) printToken(w io.Writer, t client.Token) {
 	if t.DefaultHeartbeatTimeoutSeconds != nil {
 		timeout = fmt.Sprintf("default timeout %ds", *t.DefaultHeartbeatTimeoutSeconds)
 	}
-	fmt.Fprintf(w, "%s  %-16s %s…  %s, %s\n", t.ID, t.Name, t.Prefix, timeout, state)
+	fmt.Fprintf(w, "%s  %-16s %s…  %s, %s\n", one(t.ID), one(t.Name), one(t.Prefix), timeout, state)
 }
 
 func (c *call) printActivity(w io.Writer, a client.Activity) {
@@ -266,5 +283,5 @@ func (c *call) printActivity(w io.Writer, a client.Activity) {
 		b, _ := json.Marshal(a.Payload)
 		payload = " " + string(b)
 	}
-	fmt.Fprintf(w, "%6d %s %-12s %-22s %s%s\n", a.Seq, stamp(a.At), actor, a.Kind, a.SubjectID, payload)
+	fmt.Fprintf(w, "%6d %s %-12s %-22s %s%s\n", a.Seq, stamp(a.At), actor, one(a.Kind), one(a.SubjectID), one(payload))
 }

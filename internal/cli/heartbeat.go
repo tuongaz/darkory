@@ -59,7 +59,7 @@ func cmdHeartbeatRun(c *call) error {
 	logf := func(format string, a ...any) {
 		mu.Lock()
 		defer mu.Unlock()
-		fmt.Fprintf(c.env.Stdout, "%s "+format+"\n", append([]any{time.Now().UTC().Format(time.RFC3339)}, a...)...)
+		fmt.Fprintf(c.out(), "%s "+format+"\n", append([]any{time.Now().UTC().Format(time.RFC3339)}, a...)...)
 	}
 	k := &remote.Keeper{
 		Conn:     conn,
@@ -124,7 +124,7 @@ func running(files bgFiles) int {
 
 func (c *call) startBackground(s remote.Settings, files bgFiles, watch int) error {
 	if pid := running(files); pid != 0 {
-		fmt.Fprintf(c.env.Stdout, "This Session's heartbeat already runs in the background (pid %d); log: %s\n", pid, files.log)
+		fmt.Fprintf(c.out(), "This Session's heartbeat already runs in the background (pid %d); log: %s\n", pid, files.log)
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(files.pid), 0o700); err != nil {
@@ -161,7 +161,7 @@ func (c *call) startBackground(s remote.Settings, files bgFiles, watch int) erro
 		return err
 	}
 	_ = cmd.Process.Release()
-	fmt.Fprintf(c.env.Stdout, "Heartbeats for Session %s run in the background (pid %d); log: %s\nStop them with darkory heartbeat stop, or darkory session close.\n",
+	fmt.Fprintf(c.out(), "Heartbeats for Session %s run in the background (pid %d); log: %s\nStop them with darkory heartbeat stop, or darkory session close.\n",
 		s.Session, pid, files.log)
 	return nil
 }
@@ -179,10 +179,10 @@ func cmdHeartbeatStop(c *call) error {
 		return err
 	}
 	if stopped == 0 {
-		fmt.Fprintln(c.env.Stdout, "No background heartbeat runs for this Session.")
+		fmt.Fprintln(c.out(), "No background heartbeat runs for this Session.")
 		return nil
 	}
-	fmt.Fprintf(c.env.Stdout, "Stopped this Session's background heartbeat (pid %d).\n", stopped)
+	fmt.Fprintf(c.out(), "Stopped this Session's background heartbeat (pid %d).\n", stopped)
 	return nil
 }
 
