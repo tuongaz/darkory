@@ -1,11 +1,13 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
@@ -31,7 +33,8 @@ const streamPage = 500
 // StreamActivity sends Activity as Server-Sent Events, each with its sequence number as the event
 // id, from after Last-Event-ID (or `after`). It wakes when a write to the Organisation commits,
 // sends a comment every keep-alive interval while idle, and ends when the client goes away (ADR
-// 0006).
+// 0006) — or when its token is revoked or its Session closed: before sending anything it checks
+// the caller again, after reading, so nothing committed after a revocation goes out.
 func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params gen.StreamActivityParams) {
 	c := caller(r)
 	flusher, ok := w.(http.Flusher)
@@ -69,6 +72,9 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 			}
 			return
 		}
+		if !s.stillValid(ctx, c) {
+			return
+		}
 		for _, a := range page.Items {
 			data, err := json.Marshal(activityOut(a))
 			if err != nil {
@@ -90,6 +96,9 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 		select {
 		case <-woken:
 		case <-keepAlive.C:
+			if !s.stillValid(ctx, c) {
+				return
+			}
 			if _, err := fmt.Fprint(w, ": keep-alive\n\n"); err != nil {
 				return
 			}
@@ -98,4 +107,14 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 			return
 		}
 	}
+}
+
+// stillValid reports whether a long request's caller may still act: its Session open, its token
+// unrevoked.
+func (s *Server) stillValid(ctx context.Context, c *auth.Caller) bool {
+	ok, err := s.core.CallerValid(ctx, c)
+	if err != nil && ctx.Err() == nil {
+		s.log.Error("activity stream: check the caller", "err", err)
+	}
+	return err == nil && ok
 }

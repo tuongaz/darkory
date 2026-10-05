@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/tuongaz/darkory/internal/auth"
@@ -61,8 +63,62 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			s.fail(w, r, err)
 			return
 		}
+		if cr.Bearer == "" && !s.sameOrigin(r) {
+			writeError(w, http.StatusForbidden, gen.ErrorCodeForbidden,
+				"a write signed in by the browser cookie must come from this Install's own pages")
+			return
+		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, c)))
 	})
+}
+
+// sameOrigin reports whether a request signed in by the cookie may proceed: a safe method, or a
+// write a page of this Install sent. A browser attaches the cookie to a form a page on another
+// origin posts here, and SameSite=Lax does not stop one from a sibling port on the same host, so
+// a write needs Sec-Fetch-Site, when sent, to say same-origin, and its Origin — or its Referer
+// when the browser sent no Origin — to be this Install's. Bearer requests carry no ambient
+// credential and skip this.
+func (s *Server) sameOrigin(r *http.Request) bool {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	switch r.Header.Get("Sec-Fetch-Site") {
+	case "", "same-origin", "none":
+	default:
+		return false
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		ref, err := url.Parse(r.Header.Get("Referer"))
+		if err != nil || ref.Scheme == "" || ref.Host == "" {
+			return false
+		}
+		origin = ref.Scheme + "://" + ref.Host
+	}
+	got := normalOrigin(origin)
+	if got == "" {
+		return false
+	}
+	self := "http://" + r.Host
+	if r.TLS != nil {
+		self = "https://" + r.Host
+	}
+	return got == normalOrigin(self) || (s.publicURL != "" && got == normalOrigin(s.publicURL))
+}
+
+// normalOrigin reduces a URL to its scheme and host, lower-cased and without a default port; ""
+// when it has none (as the Origin "null" has none).
+func normalOrigin(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	scheme, host := strings.ToLower(u.Scheme), strings.ToLower(u.Host)
+	if (scheme == "http" && strings.HasSuffix(host, ":80")) || (scheme == "https" && strings.HasSuffix(host, ":443")) {
+		host = host[:strings.LastIndex(host, ":")]
+	}
+	return scheme + "://" + host
 }
 
 func caller(r *http.Request) *auth.Caller {
@@ -97,6 +153,11 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request, key *string, body
 		return nil, core.Idem{}, false
 	}
 	if body != nil && len(strings.TrimSpace(string(raw))) > 0 {
+		// Only JSON: a form a browser can post across origins without asking cannot be one.
+		if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+			writeError(w, http.StatusBadRequest, gen.ErrorCodeInvalid, "send the body as Content-Type: application/json")
+			return nil, core.Idem{}, false
+		}
 		if err := json.Unmarshal(raw, body); err != nil {
 			writeError(w, http.StatusBadRequest, gen.ErrorCodeInvalid, "the body is not valid JSON for this operation: "+err.Error())
 			return nil, core.Idem{}, false

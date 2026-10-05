@@ -29,7 +29,7 @@ const usage = `darkory: management for a software factory of agents and humans.
 
 Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
-  darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser]
+  darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                                                                        run the server
   darkory version                                                      print the version
 `
@@ -165,7 +165,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine())
 
 	go housekeeping(ctx, api.Core(), log)
-	printStartupLink(ctx, api.Core(), base, !cfg.NoBrowser, stdout, log)
+	announceSignIn(ctx, api.Core(), cfg, base, stdout, log)
 
 	select {
 	case err := <-errc:
@@ -176,6 +176,16 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// announceSignIn prints the startup login link unless --no-login-link says not to issue one, as
+// for a container whose output is shipped to logs others read.
+func announceSignIn(ctx context.Context, svc *core.Service, cfg config.Serve, base string, stdout io.Writer, log *slog.Logger) {
+	if cfg.NoLoginLink {
+		log.Info("not issuing a startup login link (--no-login-link); an admin issues one with POST /v1/members/{member}/login-links")
+		return
+	}
+	printStartupLink(ctx, svc, base, !cfg.NoBrowser, stdout, log)
 }
 
 // printStartupLink prints a one-time login link for the Member `darkory init` created, and opens

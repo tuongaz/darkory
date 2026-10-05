@@ -64,6 +64,8 @@ func claimStmts(c *auth.Caller, taskID, claimID string, pre Task, version *int64
 	outgoingOpen := `FROM tasks ot JOIN claims oc ON oc.id = ot.outgoing_claim_id
 WHERE ot.org_id = @org AND ot.id = @task AND oc.org_id = @org AND oc.ended_at IS NULL`
 	return []store.Stmt{
+		// The Session claiming is still open: a claim cannot outlive a revocation or close it races.
+		withGuard(store.S(sessionOpenGuard, args)),
 		store.S(`UPDATE tasks AS t SET outgoing_claim_id = claim_id, outgoing_holder_id = claim_holder_id,
 outgoing_expires_at = claim_expires_at, claim_id = @claim, claim_holder_id = @member, claim_session_id = @session,
 claim_skill_id = skill_id, claim_timeout_ms = @timeout, claim_expires_at = @expires
@@ -85,6 +87,10 @@ FROM tasks t LEFT JOIN skills s ON s.org_id = @org AND s.id = t.skill_id WHERE t
 		activityStmt(c.OrgID, &c.MemberID, "task.claimed", taskID, payload, now),
 	}
 }
+
+// sessionOpenGuard holds while the Session @session is open and its token, if any, unrevoked.
+const sessionOpenGuard = `SELECT 1 / COUNT(*) FROM sessions s LEFT JOIN tokens tk ON tk.id = s.token_id
+WHERE s.org_id = @org AND s.id = @session AND s.closed_at IS NULL AND (s.token_id IS NULL OR tk.revoked_at IS NULL)`
 
 func withGuard(st store.Stmt) store.Stmt {
 	st.Guard = true
@@ -173,6 +179,9 @@ func (s *Service) Claim(ctx context.Context, c *auth.Caller, ref string, o Claim
 // whyNotClaimed reads, after a refused claim, why it was refused. It asks for a retry when the
 // Task is still takeable: the Task changed between the read and the write.
 func (s *Service) whyNotClaimed(ctx context.Context, c *auth.Caller, taskID string) (bool, error) {
+	if err := s.mustBeValid(ctx, c); err != nil {
+		return false, err
+	}
 	now := s.clock.Now()
 	t, err := getTask(ctx, s.store, c.OrgID, taskID, now)
 	if err != nil {
@@ -219,6 +228,10 @@ func (s *Service) Next(ctx context.Context, c *auth.Caller, wait time.Duration, 
 		woken := s.wake.Wait(c.OrgID)
 		// Read again at once after losing every candidate, a few times, before waiting.
 		for range 5 {
+			// A token revoked or a Session closed while this call waited stops it before it claims.
+			if err := s.mustBeValid(ctx, c); err != nil {
+				return TaskDetail{}, false, err
+			}
 			ids, err := s.takeableIDs(ctx, c, s.clock.Now(), nextCandidates)
 			if err != nil {
 				return TaskDetail{}, false, err

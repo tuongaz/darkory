@@ -40,6 +40,9 @@ type Serve struct {
 	// NoBrowser stops `serve` opening the startup login link in a browser (DARKORY_NO_BROWSER,
 	// --no-browser).
 	NoBrowser bool
+	// NoLoginLink stops `serve` issuing and printing the startup login link at all, for a
+	// container whose output goes to shipped logs (DARKORY_NO_LOGIN_LINK, --no-login-link).
+	NoLoginLink bool
 }
 
 // Init holds the settings of `darkory init`.
@@ -78,6 +81,8 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	storeFlags(fs, getenv, &c.Store)
 	noBrowser, _ := strconv.ParseBool(getenv("DARKORY_NO_BROWSER"))
 	fs.BoolVar(&c.NoBrowser, "no-browser", noBrowser, "do not open the startup login link in a browser (DARKORY_NO_BROWSER)")
+	noLink, _ := strconv.ParseBool(getenv("DARKORY_NO_LOGIN_LINK"))
+	fs.BoolVar(&c.NoLoginLink, "no-login-link", noLink, "do not issue or print a startup login link (DARKORY_NO_LOGIN_LINK)")
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
 	}

@@ -325,3 +325,54 @@ func mustJSON(t *testing.T, v any) []byte {
 	}
 	return b
 }
+
+// A waiting `next` stops when its Session is closed or its token revoked, before it claims
+// anything; a claim from such a Session is refused even when its caller was read before.
+func TestRevocationStopsLongRequestsAndClaims(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newClaimFixture(t, st)
+		ctx := t.Context()
+		if _, err := f.svc.Claim(ctx, f.a, f.task.Key, noTimeout, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		// bob waits: nothing is takeable for him.
+		done := make(chan error, 1)
+		go func() {
+			_, _, err := f.svc.Next(ctx, f.b, 20*time.Second, noTimeout, core.Idem{})
+			done <- err
+		}()
+		time.Sleep(100 * time.Millisecond)
+		if _, err := f.svc.CloseSession(ctx, f.admin, "bob-1", ptrStr("bob"), core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case err := <-done:
+			wantCode(t, err, core.CodeUnauthenticated)
+		case <-time.After(5 * time.Second):
+			t.Fatal("next kept waiting after its Session was closed")
+		}
+		task := f.fixture.task(f.a, f.task.FeatureID, "Arrives later", "build")
+		_, err := f.svc.Claim(ctx, f.b, task.Key, noTimeout, core.Idem{})
+		wantCode(t, err, core.CodeUnauthenticated)
+		_, _, err = f.svc.Next(ctx, f.b, 0, noTimeout, core.Idem{})
+		wantCode(t, err, core.CodeUnauthenticated)
+		if ok, err := f.svc.CallerValid(ctx, f.b); err != nil || ok {
+			t.Fatalf("a closed Session is still valid: %v %v", ok, err)
+		}
+
+		// alice's token is revoked: her Session, read before, can no longer claim.
+		tokens, err := f.svc.ListTokens(ctx, f.admin, "alice")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.svc.RevokeToken(ctx, f.admin, tokens[0].ID, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.svc.Claim(ctx, f.a, task.Key, noTimeout, core.Idem{})
+		wantCode(t, err, core.CodeUnauthenticated)
+		if n := f.count(`SELECT COUNT(*) FROM claims WHERE task_id = $1`, task.ID); n != 0 {
+			t.Fatalf("%d Claims made by ended Sessions", n)
+		}
+		f.checkActivity()
+	})
+}

@@ -19,11 +19,12 @@ func TestLoadServe(t *testing.T) {
 	}{
 		{"defaults", nil, nil, Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")}}},
 		{"environment", nil,
-			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory", "DARKORY_PUBLIC_URL": "https://dk.example.com", "DARKORY_NO_BROWSER": "1"},
-			Serve{":8080", Store{"/var/lib/darkory", "/var/lib/darkory/darkory.db"}, "https://dk.example.com", true}},
-		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser"},
+			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory", "DARKORY_PUBLIC_URL": "https://dk.example.com",
+				"DARKORY_NO_BROWSER": "1", "DARKORY_NO_LOGIN_LINK": "1"},
+			Serve{":8080", Store{"/var/lib/darkory", "/var/lib/darkory/darkory.db"}, "https://dk.example.com", true, true}},
+		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser", "--no-login-link"},
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DB": "other.db"},
-			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true}},
+			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true, NoLoginLink: true}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

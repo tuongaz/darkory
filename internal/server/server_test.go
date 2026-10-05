@@ -27,18 +27,28 @@ type harness struct {
 	// adminSecret is ada's token.
 	adminSecret string
 	adminID     string
+	// secrets holds the token of each agent the test made, by name.
+	secrets map[string]string
 }
 
 func newHarness(t *testing.T, st *store.Store) *harness {
 	t.Helper()
-	srv := New(st, Options{KeepAlive: 100 * time.Millisecond})
+	return newHarnessWith(t, st, Options{})
+}
+
+func newHarnessWith(t *testing.T, st *store.Store, o Options) *harness {
+	t.Helper()
+	if o.KeepAlive == 0 {
+		o.KeepAlive = 100 * time.Millisecond
+	}
+	srv := New(st, o)
 	init, err := srv.Core().Init(t.Context(), "Acme", "ada")
 	if err != nil {
 		t.Fatal(err)
 	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	h := &harness{t: t, srv: srv, ts: ts, adminSecret: init.Token.Secret, adminID: init.Member.ID}
+	h := &harness{t: t, srv: srv, ts: ts, adminSecret: init.Token.Secret, adminID: init.Member.ID, secrets: map[string]string{}}
 	h.admin = h.client(init.Token.Secret, "ada-cli")
 	return h
 }

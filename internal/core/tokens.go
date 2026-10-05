@@ -182,6 +182,29 @@ ORDER BY t.id`, t.caller.OrgID, sessionID)
 	return ended, nil
 }
 
+// CallerValid reports whether the caller's Session is still open and its token unrevoked. A
+// request is authenticated when it arrives; one that lasts — the Activity stream, a waiting
+// `next` — asks this before it acts, so a revocation or a close stops it at once.
+func (s *Service) CallerValid(ctx context.Context, c *auth.Caller) (bool, error) {
+	q, args := store.Bind(`SELECT COUNT(*) FROM sessions s LEFT JOIN tokens tk ON tk.id = s.token_id
+WHERE s.org_id = @org AND s.id = @session AND s.member_id = @member AND s.closed_at IS NULL
+AND (s.token_id IS NULL OR tk.revoked_at IS NULL)`, map[string]any{"org": c.OrgID, "session": c.SessionID, "member": c.MemberID})
+	var n int
+	err := s.store.QueryRow(ctx, q, args...).Scan(&n)
+	return n > 0, err
+}
+
+func (s *Service) mustBeValid(ctx context.Context, c *auth.Caller) error {
+	ok, err := s.CallerValid(ctx, c)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return refuse(CodeUnauthenticated, "this request's Session was closed or its token revoked")
+	}
+	return nil
+}
+
 // clearClaimSQL leaves a Task with no current Claim.
 const clearClaimSQL = `UPDATE tasks SET claim_id = NULL, claim_holder_id = NULL, claim_session_id = NULL,
 claim_skill_id = NULL, claim_timeout_ms = NULL, claim_expires_at = NULL`

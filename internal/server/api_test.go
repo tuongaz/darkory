@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,7 +61,17 @@ func (h *harness) agent(name string, defaultTimeout *int, skills ...string) (*cl
 	}
 	tok := got(h.admin.IssueTokenWithResponse(ctx, name, &client.IssueTokenParams{},
 		client.IssueTokenBody{Name: "main", DefaultHeartbeatTimeoutSeconds: defaultTimeout})).want(t, http.StatusCreated)
+	h.secrets[name] = tok.JSON201.Secret
 	return h.client(tok.JSON201.Secret, name+"-1"), m.JSON201.ID
+}
+
+func (h *harness) secretOf(t *testing.T, name string) string {
+	t.Helper()
+	secret, ok := h.secrets[name]
+	if !ok {
+		t.Fatalf("no token made for %s", name)
+	}
+	return secret
 }
 
 // The claim path end to end through the generated client: the admin sets up a Team and an agent,
@@ -210,6 +221,7 @@ func TestLoginLinkSignsInABrowser(t *testing.T) {
 		withCookie := func(method, path string) *http.Response {
 			req, _ := http.NewRequest(method, h.ts.URL+path, nil)
 			req.AddCookie(cookie)
+			req.Header.Set("Origin", h.ts.URL) // as the web app's own pages send
 			res, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Fatal(err)
@@ -274,9 +286,14 @@ type sseStream struct {
 
 func (h *harness) openStream(t *testing.T, lastEventID string) *sseStream {
 	t.Helper()
+	return h.openStreamAs(t, h.adminSecret, "ada-stream", lastEventID)
+}
+
+func (h *harness) openStreamAs(t *testing.T, secret, session, lastEventID string) *sseStream {
+	t.Helper()
 	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, h.ts.URL+"/v1/activity/stream", nil)
-	req.Header.Set("Authorization", "Bearer "+h.adminSecret)
-	req.Header.Set("Darkory-Session", "ada-stream")
+	req.Header.Set("Authorization", "Bearer "+secret)
+	req.Header.Set("Darkory-Session", session)
 	if lastEventID != "" {
 		req.Header.Set("Last-Event-ID", lastEventID)
 	}
@@ -335,6 +352,29 @@ func (s *sseStream) keepAlive(t *testing.T) bool {
 }
 
 func (s *sseStream) close() { s.res.Body.Close() }
+
+// rest reads until the server ends the stream and returns the ids of the events it sent; it fails
+// the test when the stream is still open after five seconds.
+func (s *sseStream) rest(t *testing.T) []int64 {
+	t.Helper()
+	var timedOut atomic.Bool
+	deadline := time.AfterFunc(5*time.Second, func() { timedOut.Store(true); s.res.Body.Close() })
+	defer deadline.Stop()
+	var ids []int64
+	for {
+		line, err := s.r.ReadString('\n')
+		if err != nil {
+			if timedOut.Load() {
+				t.Fatalf("the stream is still open after five seconds, having sent %v", ids)
+			}
+			return ids
+		}
+		if strings.HasPrefix(line, "id: ") {
+			id, _ := strconv.ParseInt(strings.TrimSpace(line[4:]), 10, 64)
+			ids = append(ids, id)
+		}
+	}
+}
 
 func ptrInt(n int) *int { return &n }
 
