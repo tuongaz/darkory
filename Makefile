@@ -5,11 +5,23 @@ LDFLAGS := -X github.com/tuongaz/darkory/internal/version.Version=$(VERSION)
 TEST_POSTGRES_URL ?= postgres://dk@localhost:54329/postgres?sslmode=disable
 GENERATED := client/client.gen.go internal/server/gen/server.gen.go
 
-.PHONY: gen gen-check build vet test test-pg check
+.PHONY: gen gen-check build vet test test-pg check web web-gen web-check
 
 ## gen: regenerate the Go client and the server interface from api/openapi.yaml
 gen:
 	$(GO) generate ./client ./internal/server/gen
+
+## web: build the web app into web/dist/app, which the next build embeds (needs node)
+web:
+	cd web && npm ci && npm run build
+
+## web-gen: regenerate the web app's TypeScript client from api/openapi.yaml (needs node)
+web-gen:
+	cd web && npm run gen
+
+## web-check: typecheck, lint and test the web app (needs node)
+web-check:
+	cd web && npm run typecheck && npm run lint && npm test
 
 ## gen-check: fail when the committed generated code differs from what gen produces
 gen-check: gen
