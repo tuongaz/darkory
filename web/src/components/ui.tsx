@@ -81,16 +81,19 @@ export function ConfirmButton({
   confirm,
   onConfirm,
   disabled,
+  label,
 }: {
   children: ReactNode;
   confirm: ReactNode;
   onConfirm: () => void;
   disabled?: boolean;
+  /** The first button's accessible name, when its text alone would be ambiguous. */
+  label?: string;
 }) {
   const [asking, setAsking] = useState(false);
   if (!asking) {
     return (
-      <button type="button" className="danger" disabled={disabled} onClick={() => setAsking(true)}>
+      <button type="button" className="danger" aria-label={label} disabled={disabled} onClick={() => setAsking(true)}>
         {children}
       </button>
     );

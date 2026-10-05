@@ -1,9 +1,10 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Activity, type Member, type Skill, type Team } from "./client";
+import { api, call, type Member, type Skill, type SubjectType, type Team } from "./client";
 
 // The first element of every query key names what it reads; live updates invalidate by it.
 export const keys = {
+  health: ["health"] as const,
   me: ["me"] as const,
   members: ["members"] as const,
   member: (ref: string) => ["member", ref] as const,
@@ -16,7 +17,6 @@ export const keys = {
   features: (team: string) => ["features", team] as const,
   feature: (ref: string) => ["feature", ref] as const,
   featureObservations: (ref: string) => ["feature-observations", ref] as const,
-  teamTasks: (team: string) => ["tasks", { team }] as const,
   heldTasks: (member: string) => ["tasks", { holder: member }] as const,
   task: (ref: string) => ["task", ref] as const,
   takeable: ["takeable"] as const,
@@ -24,6 +24,7 @@ export const keys = {
 };
 
 type Root =
+  | "health"
   | "me"
   | "members"
   | "member"
@@ -44,44 +45,50 @@ type Root =
 const work: Root[] = ["features", "feature", "feature-observations", "tasks", "task", "takeable"];
 const organisation: Root[] = ["me", "members", "member", "tokens", "teams", "team", "skills", "skill", "skill-versions", "takeable"];
 
-// Which queries an Activity entry can change, by the area its kind names (`task.claimed` is a
-// Task's). The spec does not list the kinds, so an unknown area refreshes everything.
-const affected: Record<string, Root[]> = {
+// Which queries an Activity entry can change, by its subject type: the part of its kind before
+// the dot (`task.claimed` is about a Task). A kind added later with a new subject type refreshes
+// everything.
+const affected: Record<SubjectType, Root[]> = {
   task: work,
-  claim: work,
   feature: work,
-  note: ["task"],
-  observation: ["task", "feature-observations"],
-  evidence: ["task", "feature"],
   member: [...organisation, "task", "feature"],
   team: organisation,
   skill: [...organisation, "task"],
   token: [...organisation, ...work],
   session: [...organisation, ...work],
+  login_link: [],
 };
 
 /** The query roots an Activity entry may have changed. */
 export function affectedBy(kind: string): Root[] | "all" {
-  return affected[kind.split(".")[0]] ?? "all";
+  return affected[kind.split(".")[0] as SubjectType] ?? "all";
 }
 
 /** Marks stale whatever the Activity entry may have changed; open views refetch. */
-export function invalidateFor(qc: QueryClient, entry: Pick<Activity, "kind">) {
+export function invalidateFor(qc: QueryClient, entry: { kind: string }) {
   invalidate(qc, affectedBy(entry.kind));
 }
 
-/** Marks every query but Activity history stale, as after the caller's own write. */
+/** Marks every query but Activity history and health stale, as after the caller's own write. */
 export function invalidateAll(qc: QueryClient) {
   invalidate(qc, "all");
 }
+
+// Neither is changed by a write: Activity history only grows, and the stream brings what is new.
+const untouched: Root[] = ["activity", "health"];
 
 function invalidate(qc: QueryClient, roots: Root[] | "all") {
   void qc.invalidateQueries({
     predicate: (q) => {
       const root = q.queryKey[0] as Root;
-      return root !== "activity" && (roots === "all" || roots.includes(root));
+      return !untouched.includes(root) && (roots === "all" || roots.includes(root));
     },
   });
+}
+
+/** The Install's health: how humans sign in, and whether a newer release exists. Needs no credential. */
+export function useHealth() {
+  return useQuery({ queryKey: keys.health, queryFn: () => call(api.GET("/v1/health")), staleTime: 5 * 60_000 });
 }
 
 export function useMe() {

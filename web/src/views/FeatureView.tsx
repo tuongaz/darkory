@@ -6,7 +6,7 @@ import { keys, useDirectory } from "../api/queries";
 import { useNow } from "../clock";
 import { EvidenceSection, ObservationItems } from "../components/records";
 import { ConfirmButton, Loaded, Refusal, Time } from "../components/ui";
-import { FeatureStateBadge, Holder, MemberName, Needs, TaskLink, TaskStateBadges } from "../components/work";
+import { FeatureStateBadge, Holder, MemberName, Needs, OpenBlockers, TaskLink, TaskStateBadges } from "../components/work";
 import { isOnReportingLine, useCurrentMe } from "../me";
 import { liveClaim } from "../work";
 
@@ -159,6 +159,7 @@ export function TaskList({ tasks }: { tasks: Task[] }) {
                     · <Holder claim={claim} />
                   </>
                 )}
+                <OpenBlockers task={t} />
               </div>
             </div>
           </li>

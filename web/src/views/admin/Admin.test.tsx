@@ -12,7 +12,7 @@ const secret = "dk_7f3a9c0ffee0123456789abcdef";
 
 describe("admin", () => {
   it("is hidden from Members who are not admins", async () => {
-    mockApi({ ...signedIn(bob), "GET /v1/features": { items: [] }, "GET /v1/tasks": { items: [] } });
+    mockApi({ ...signedIn(bob), "GET /v1/features": { items: [] } });
     renderApp("/");
 
     const nav = await screen.findByRole("navigation", { name: "Main" });
@@ -29,7 +29,7 @@ describe("admin", () => {
   });
 
   it("is shown to admins", async () => {
-    mockApi({ ...signedIn(ada), "GET /v1/features": { items: [] }, "GET /v1/tasks": { items: [] } });
+    mockApi({ ...signedIn(ada), "GET /v1/features": { items: [] } });
     renderApp("/");
 
     const nav = await screen.findByRole("navigation", { name: "Main" });

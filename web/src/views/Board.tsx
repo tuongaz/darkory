@@ -1,16 +1,14 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, call, type Feature, type FeatureDetail, type Task } from "../api/client";
+import { api, call, type Feature, type FeatureDetail, type TaskCounts } from "../api/client";
 import { allPages } from "../api/pages";
 import { keys, useDirectory, useTeams } from "../api/queries";
-import { useNow } from "../clock";
 import { Loaded, Refusal } from "../components/ui";
 import { FeatureStateBadge, MemberName } from "../components/work";
 import { useCurrentMe } from "../me";
-import { liveClaim } from "../work";
 
-/** A Team's Features in Rank order, with their Task counts. */
+/** A Team's Features in Rank order, with their Task counts, ranked by dragging or with the arrow buttons. */
 export function Board() {
   const me = useCurrentMe();
   const teams = useTeams();
@@ -59,18 +57,16 @@ function TeamBoard({ teamKey }: { teamKey: string }) {
     queryFn: () =>
       allPages((cursor) => call(api.GET("/v1/features", { params: { query: { team: teamKey, limit: 500, cursor } } }))),
   });
-  // A Feature carries no Task counts, so the board counts the Team's Tasks itself.
-  const tasks = useQuery({
-    queryKey: keys.teamTasks(teamKey),
-    queryFn: () =>
-      allPages((cursor) => call(api.GET("/v1/tasks", { params: { query: { team: teamKey, limit: 500, cursor } } }))),
-  });
-  const now = useNow();
-  const counts = useMemo(() => countByFeature(tasks.data ?? [], now), [tasks.data, now]);
   const rank = useMutation({
     mutationFn: ({ feature, position }: { feature: Feature; position: number }) =>
       call(api.POST("/v1/features/{feature}/rank", { params: { path: { feature: feature.id } }, body: { position } })),
   });
+  const [dragging, setDragging] = useState<Feature | null>(null);
+  const [over, setOver] = useState<string | null>(null);
+  const endDrag = () => {
+    setDragging(null);
+    setOver(null);
+  };
 
   return (
     <>
@@ -91,17 +87,51 @@ function TeamBoard({ teamKey }: { teamKey: string }) {
               ) : (
                 <ol className="list board">
                   {shown.map((f, i) => (
-                    <li key={f.id} className={f.state !== "open" ? "ended" : undefined}>
+                    <li
+                      key={f.id}
+                      className={rowClass(f, dragging, over)}
+                      // Dropping a Feature on another moves it to that one's place, as the buttons do.
+                      onDragOver={(e) => {
+                        if (!dragging || dragging.id === f.id) return;
+                        e.preventDefault();
+                        if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+                        setOver(f.id);
+                      }}
+                      onDragLeave={() => setOver((id) => (id === f.id ? null : id))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragging && dragging.id !== f.id) rank.mutate({ feature: dragging, position: f.rank });
+                        endDrag();
+                      }}
+                    >
+                      <span
+                        className="drag-handle"
+                        draggable={!rank.isPending}
+                        aria-hidden="true"
+                        title={`Drag ${f.key} to another place in the Rank`}
+                        onDragStart={(e) => {
+                          setDragging(f);
+                          if (e.dataTransfer) {
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", f.key);
+                            const row = e.currentTarget.closest("li");
+                            if (row) e.dataTransfer.setDragImage(row, 16, 16);
+                          }
+                        }}
+                        onDragEnd={endDrag}
+                      >
+                        ⠿
+                      </span>
                       <span className="rank" aria-label={`Rank ${f.rank}`}>
                         {f.rank}
                       </span>
                       <div className="grow">
-                        <Link to={`/features/${f.key}`}>
+                        <Link to={`/features/${f.key}`} draggable={false}>
                           <span className="key">{f.key}</span> {f.title}
                         </Link>
                         <div className="meta">
                           <FeatureStateBadge state={f.state} /> owned by <MemberName id={f.owner_id} />
-                          <Counts counts={counts.get(f.id)} />
+                          <Counts counts={f.task_counts} />
                         </div>
                       </div>
                       <div className="rank-buttons">
@@ -130,29 +160,21 @@ function TeamBoard({ teamKey }: { teamKey: string }) {
           );
         }}
       </Loaded>
-      <Refusal error={tasks.error} />
       <FileFeature teamKey={teamKey} />
     </>
   );
 }
 
-type TaskCounts = { open: number; claimed: number; done: number; dropped: number };
-
-function countByFeature(tasks: Task[], now: number): Map<string, TaskCounts> {
-  const m = new Map<string, TaskCounts>();
-  for (const t of tasks) {
-    const c = m.get(t.feature_id) ?? { open: 0, claimed: 0, done: 0, dropped: 0 };
-    if (t.state === "open") c[liveClaim(t, now) ? "claimed" : "open"]++;
-    else c[t.state]++;
-    m.set(t.feature_id, c);
-  }
-  return m;
+// A Feature dropped on one below it lands after it, and on one above it lands before it.
+function rowClass(f: Feature, dragging: Feature | null, over: string | null): string | undefined {
+  const drop = dragging && over === f.id && (dragging.rank < f.rank ? "drop-after" : "drop-before");
+  const c = [f.state !== "open" && "ended", dragging?.id === f.id && "dragging", drop];
+  return c.filter(Boolean).join(" ") || undefined;
 }
 
-function Counts({ counts }: { counts: TaskCounts | undefined }) {
-  const c = counts ?? { open: 0, claimed: 0, done: 0, dropped: 0 };
-  const parts = [`${c.open} open`, `${c.claimed} claimed`, `${c.done} done`];
-  if (c.dropped) parts.push(`${c.dropped} dropped`);
+function Counts({ counts }: { counts: TaskCounts }) {
+  const parts = [`${counts.open} open${counts.claimed ? ` (${counts.claimed} claimed)` : ""}`, `${counts.done} done`];
+  if (counts.dropped) parts.push(`${counts.dropped} dropped`);
   return <span className="counts"> · Tasks: {parts.join(" · ")}</span>;
 }
 

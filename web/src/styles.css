@@ -179,6 +179,21 @@ pre {
   background: var(--warn);
 }
 
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--warn);
+  background: var(--surface);
+}
+
+.banner p {
+  margin: 0;
+}
+
 /* Page */
 
 .page {
@@ -275,9 +290,9 @@ pre {
   opacity: 0.65;
 }
 
-.list > li.gap {
+.more {
+  display: flex;
   justify-content: center;
-  background: var(--bg);
 }
 
 .grow {
@@ -301,6 +316,25 @@ pre {
 .rank-buttons {
   display: flex;
   gap: 0.25rem;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  user-select: none;
+  padding: 0 0.15rem;
+}
+
+.board > li.dragging {
+  opacity: 0.5;
+}
+
+.board > li.drop-before {
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.board > li.drop-after {
+  box-shadow: inset 0 -3px 0 var(--accent);
 }
 
 .rank-buttons button {

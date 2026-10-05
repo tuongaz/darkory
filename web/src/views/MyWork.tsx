@@ -4,7 +4,7 @@ import { allPages } from "../api/pages";
 import { keys } from "../api/queries";
 import { useNow } from "../clock";
 import { Loaded } from "../components/ui";
-import { Holder, Needs, TaskLink, TaskStateBadges } from "../components/work";
+import { Holder, Needs, OpenBlockers, TaskLink, TaskStateBadges } from "../components/work";
 import { useCurrentMe } from "../me";
 import { liveClaim } from "../work";
 import { ClaimButton } from "./TaskView";
@@ -49,6 +49,7 @@ export function MyWork() {
                               · <Holder claim={claim} />
                             </>
                           )}
+                          <OpenBlockers task={t} />
                         </div>
                       </div>
                     </li>

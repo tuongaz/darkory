@@ -3,10 +3,11 @@ import { useState, type ReactNode } from "react";
 import { NavLink, Outlet, Route, Routes } from "react-router";
 import { api, call, isUnauthenticated } from "./api/client";
 import { LiveActivity, LiveActivityContext, useActivityStream, useStreamState } from "./api/live";
-import { useMe } from "./api/queries";
+import { useHealth, useMe } from "./api/queries";
 import { Refusal } from "./components/ui";
 import { MeContext, useCurrentMe } from "./me";
 import { newQueryClient } from "./queryClient";
+import { Account } from "./views/Account";
 import { ActivityView } from "./views/ActivityView";
 import { AdminRoutes } from "./views/admin/AdminRoutes";
 import { Board } from "./views/Board";
@@ -58,6 +59,7 @@ export function Root() {
           <Route path="tasks/:task" element={<TaskView />} />
           <Route path="my-work" element={<MyWork />} />
           <Route path="activity" element={<ActivityView />} />
+          <Route path="account" element={<Account />} />
           <Route path="admin/*" element={<AdminRoutes />} />
           <Route path="*" element={<NotFound />} />
         </Route>
@@ -86,6 +88,7 @@ function Shell() {
           <NavLink to="/my-work">My work</NavLink>
           <NavLink to="/activity">Activity</NavLink>
           {me.member.admin && <NavLink to="/admin">Admin</NavLink>}
+          <NavLink to="/account">My account</NavLink>
         </nav>
         <div className="who">
           <StreamIndicator />
@@ -93,10 +96,52 @@ function Shell() {
           <SignOut />
         </div>
       </header>
+      <UpdateBanner />
       <main id="main" className="page">
         <Outlet />
       </main>
     </>
+  );
+}
+
+const dismissedKey = "darkory.update-dismissed";
+
+function readDismissed(): string | null {
+  try {
+    return localStorage.getItem(dismissedKey);
+  } catch {
+    return null;
+  }
+}
+
+/** Says when a newer release exists, until dismissed; this browser remembers the dismissed version. */
+function UpdateBanner() {
+  const health = useHealth();
+  const [dismissed, setDismissed] = useState(readDismissed);
+  const h = health.data;
+  if (!h?.update_available || !h.latest_version || h.latest_version === dismissed) return null;
+  const latest = h.latest_version;
+  return (
+    <aside className="banner" aria-label="Update available">
+      <p>
+        Update available: <strong>{latest}</strong>. This server runs {h.version}; run <code>darkory update</code> where
+        it runs.
+      </p>
+      <button
+        type="button"
+        className="link"
+        onClick={() => {
+          try {
+            localStorage.setItem(dismissedKey, latest);
+          } catch {
+            // Dismissed for this page load only.
+          }
+          setDismissed(latest);
+        }}
+      >
+        Dismiss
+      </button>
+    </aside>
   );
 }
 
