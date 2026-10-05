@@ -1,0 +1,2044 @@
+openapi: 3.0.3
+info:
+  title: Darkory
+  version: 0.1.0
+  description: |
+    The canonical contract between Members and a Darkory Install. The CLI, the MCP server and the
+    web app use only these operations; humans and agents call the same ones.
+
+    **Versioning.** Paths are versioned (`/v1`). Changes within `/v1` are additive only.
+
+    **Credentials.** Every operation except `getHealth`, `redeemLoginLink` and
+    `requestEmailSignIn` needs a credential: a bearer token (`dk_…`) together with a
+    `Darkory-Session` header naming the Session making the request, or the browser cookie
+    `darkory_session`. A bearer request without `Darkory-Session` is refused with
+    `session_required`. A request with no credential is never a Member.
+
+    **References.** Path parameters and request-body references take an id, or the natural key
+    where one exists: a Task or Feature display key (`WEB-42`), a Team key (`WEB`), a Skill name
+    (`qa`), a Member name. Tokens, Evidence and Sessions are referenced by id only. Responses
+    always carry ids, plus display keys where they exist.
+
+    **Retries.** Every write accepts an `Idempotency-Key` header. The first response is kept for
+    24 hours per Member and key; a retry with the same key returns it unchanged. Reusing a key
+    for a different request is refused with `idempotency_key_reused`.
+
+    **Errors.** Every failure has the `Error` body. `code` is stable and meant for programs;
+    `message` is for people. Each operation lists the codes it can return beyond the common ones
+    (`invalid`, `unauthenticated`, `session_required`, `forbidden`, `not_found`, `internal`).
+
+    **Values.** Times are RFC 3339 in UTC. Durations are whole seconds. Fields with no value are
+    omitted.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: http://127.0.0.1:7357
+    description: A Local Install on its default listen address
+security:
+  - bearerAuth: []
+    sessionHeader: []
+  - cookieAuth: []
+tags:
+  - name: install
+  - name: sign-in
+  - name: tokens
+  - name: members
+  - name: teams
+  - name: skills
+  - name: features
+  - name: tasks
+  - name: evidence
+  - name: activity
+
+paths:
+  # ---------------------------------------------------------------- install
+  /v1/health:
+    get:
+      operationId: getHealth
+      tags: [install]
+      summary: Report that the Install is up
+      security: []
+      responses:
+        "200":
+          description: The Install is up.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Health"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/me:
+    get:
+      operationId: getMe
+      tags: [install]
+      summary: The calling Member, their Teams and Skills, and the Session making the request
+      responses:
+        "200":
+          description: The caller.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Me"}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- sign-in and Sessions
+  /v1/members/{member}/login-links:
+    post:
+      operationId: issueLoginLink
+      tags: [sign-in]
+      summary: Issue a one-time login link for a named Member (admin)
+      description: |
+        The link signs a browser in as the Member once, then stops working. `darkory login
+        <member>` and the web app both call this. Errors: `forbidden` (not an admin).
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "201":
+          description: The link.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/LoginLink"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/login-links/{code}:
+    get:
+      operationId: redeemLoginLink
+      tags: [sign-in]
+      summary: Redeem a login link
+      description: |
+        Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
+        redirects to `/`. Errors: `not_found` (unknown, used or expired link).
+      security: []
+      parameters:
+        - {$ref: "#/components/parameters/LoginCode"}
+      responses:
+        "303":
+          description: Signed in; redirects to the web app.
+          headers:
+            Location:
+              schema: {type: string}
+            Set-Cookie:
+              description: The `darkory_session` cookie.
+              schema: {type: string}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/sign-in/email:
+    post:
+      operationId: requestEmailSignIn
+      tags: [sign-in]
+      summary: Ask for a login link by email
+      description: |
+        When the Install has email sign-in set up and the address belongs to a Member, a login
+        link is emailed. The reply is the same either way, so it reveals nothing about Members.
+      security: []
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EmailSignInBody"}
+      responses:
+        "202":
+          description: Accepted.
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/logout:
+    post:
+      operationId: logout
+      tags: [sign-in]
+      summary: End the browser Session and clear its cookie
+      description: Closes the cookie's Session, which ends the Claims bound to it.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: Signed out.
+          headers:
+            Set-Cookie:
+              schema: {type: string}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/sessions/{session}/close:
+    post:
+      operationId: closeSession
+      tags: [sign-in]
+      summary: Close one of the caller's Sessions
+      description: |
+        Ends every Claim bound to the Session (those made with a heartbeat timeout) and records it
+        in Activity. `{session}` is the id the running copy chose; an admin may close another
+        Member's Session by naming `member`.
+      parameters:
+        - {$ref: "#/components/parameters/SessionID"}
+        - name: member
+          in: query
+          description: The Member whose Session to close (admin). Defaults to the caller.
+          schema: {type: string}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: The closed Session.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ClosedSession"}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- tokens
+  /v1/members/{member}/tokens:
+    post:
+      operationId: issueToken
+      tags: [tokens]
+      summary: Issue a token for a Member (admin)
+      description: |
+        The secret is returned once and stored only as a hash. Errors: `forbidden`, `conflict`
+        (the Member already has a live token with this name).
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/IssueTokenBody"}
+      responses:
+        "201":
+          description: The token and its secret.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/IssuedToken"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listTokens
+      tags: [tokens]
+      summary: List a Member's tokens
+      description: A Member may list their own tokens; an admin may list anyone's. Secrets are never shown.
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+      responses:
+        "200":
+          description: The tokens, newest first.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TokenList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tokens/{token}/revoke:
+    post:
+      operationId: revokeToken
+      tags: [tokens]
+      summary: Revoke a token
+      description: |
+        Ends every Claim bound to a Session of the token, and records it in Activity. A Member may
+        revoke their own tokens; an admin may revoke anyone's.
+      parameters:
+        - {$ref: "#/components/parameters/TokenID"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: The revoked token.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Token"}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- members
+  /v1/members:
+    post:
+      operationId: createMember
+      tags: [members]
+      summary: Create a Member (admin)
+      description: "Errors: `forbidden`, `conflict` (name or email taken)."
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateMemberBody"}
+      responses:
+        "201":
+          description: The new Member.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Member"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listMembers
+      tags: [members]
+      summary: List the Organisation's Members
+      parameters:
+        - name: team
+          in: query
+          description: Only Members of this Team.
+          schema: {type: string}
+        - name: kind
+          in: query
+          schema: {$ref: "#/components/schemas/MemberKind"}
+      responses:
+        "200":
+          description: The Members, by name.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MemberList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/members/{member}:
+    get:
+      operationId: getMember
+      tags: [members]
+      summary: Get a Member with their Teams, Skills and Reporting line
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+      responses:
+        "200":
+          description: The Member.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/MemberDetail"}
+        default: {$ref: "#/components/responses/Error"}
+    patch:
+      operationId: updateMember
+      tags: [members]
+      summary: Change a Member's name, email or admin mark (admin)
+      description: "Errors: `forbidden`, `conflict` (name or email taken; removing the last admin)."
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/UpdateMemberBody"}
+      responses:
+        "200":
+          description: The Member.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Member"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/members/{member}/skills/{skill}:
+    put:
+      operationId: grantSkill
+      tags: [members]
+      summary: Grant a Skill to a Member (admin)
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/SkillRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Member has the Skill.
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: revokeSkill
+      tags: [members]
+      summary: Take a Skill away from a Member (admin)
+      description: Claims the Member holds under the Skill are not ended.
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/SkillRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Member no longer has the Skill.
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/members/{member}/manager:
+    put:
+      operationId: setManager
+      tags: [members]
+      summary: Set the Member who directs this Member (admin)
+      description: "Errors: `forbidden`, `cycle` (the Reporting line would loop)."
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SetManagerBody"}
+      responses:
+        "204":
+          description: The Reporting line is set.
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: clearManager
+      tags: [members]
+      summary: Remove the Member's Reporting line (admin)
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Member reports to no one.
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- teams
+  /v1/teams:
+    post:
+      operationId: createTeam
+      tags: [teams]
+      summary: Create a Team (admin)
+      description: "Errors: `forbidden`, `conflict` (key or name taken)."
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateTeamBody"}
+      responses:
+        "201":
+          description: The new Team.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Team"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listTeams
+      tags: [teams]
+      summary: List the Organisation's Teams
+      responses:
+        "200":
+          description: The Teams, by name.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TeamList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/teams/{team}:
+    get:
+      operationId: getTeam
+      tags: [teams]
+      summary: Get a Team and its Members
+      parameters:
+        - {$ref: "#/components/parameters/TeamRef"}
+      responses:
+        "200":
+          description: The Team.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TeamDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/teams/{team}/members/{member}:
+    put:
+      operationId: addTeamMember
+      tags: [teams]
+      summary: Add a Member to a Team (admin)
+      parameters:
+        - {$ref: "#/components/parameters/TeamRef"}
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Member is in the Team.
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: removeTeamMember
+      tags: [teams]
+      summary: Remove a Member from a Team (admin)
+      description: Claims the Member holds on the Team's Tasks are not ended.
+      parameters:
+        - {$ref: "#/components/parameters/TeamRef"}
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Member is not in the Team.
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- skills
+  /v1/skills:
+    post:
+      operationId: createSkill
+      tags: [skills]
+      summary: Create a generic or company Skill (admin)
+      description: |
+        Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+        on. Errors: `forbidden`, `conflict` (name taken).
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateSkillBody"}
+      responses:
+        "201":
+          description: The new Skill and its first version.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillDetail"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listSkills
+      tags: [skills]
+      summary: List the Organisation's Skills
+      parameters:
+        - name: kind
+          in: query
+          schema: {$ref: "#/components/schemas/SkillKind"}
+      responses:
+        "200":
+          description: The Skills, by name.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/skills/{skill}:
+    get:
+      operationId: getSkill
+      tags: [skills]
+      summary: Get a Skill with its current version
+      parameters:
+        - {$ref: "#/components/parameters/SkillRef"}
+      responses:
+        "200":
+          description: The Skill.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/skills/{skill}/versions:
+    get:
+      operationId: listSkillVersions
+      tags: [skills]
+      summary: List a Skill's published versions
+      parameters:
+        - {$ref: "#/components/parameters/SkillRef"}
+      responses:
+        "200":
+          description: The versions, newest first.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillVersionList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- features
+  /v1/features:
+    post:
+      operationId: fileFeature
+      tags: [features]
+      summary: File a Feature
+      description: |
+        Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
+        the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
+        by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FileFeatureBody"}
+      responses:
+        "201":
+          description: The Feature with its Break down Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeatureDetail"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listFeatures
+      tags: [features]
+      summary: List Features
+      description: Ordered by Team, then Rank.
+      parameters:
+        - name: team
+          in: query
+          schema: {type: string}
+        - name: state
+          in: query
+          schema: {$ref: "#/components/schemas/FeatureState"}
+        - name: owner
+          in: query
+          schema: {type: string}
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          description: The Features.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeatureList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}:
+    get:
+      operationId: getFeature
+      tags: [features]
+      summary: Get a Feature with its Tasks and Evidence
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+      responses:
+        "200":
+          description: The Feature.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeatureDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}/rank:
+    post:
+      operationId: rankFeature
+      tags: [features]
+      summary: Move a Feature to a position in its Team's Rank
+      description: |
+        Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
+        (not in the Team).
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RankFeatureBody"}
+      responses:
+        "200":
+          description: The Feature in its new place.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Feature"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}/ship:
+    post:
+      operationId: shipFeature
+      tags: [features]
+      summary: Ship a Feature (Feature owner)
+      description: |
+        Needs every Task of the Feature to have ended. Files the Retrospective Task in the same
+        write. Errors: `forbidden` (not the owner), `tasks_open`, `ended`.
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: The shipped Feature with its Retrospective Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeatureDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}/drop:
+    post:
+      operationId: dropFeature
+      tags: [features]
+      summary: Drop a Feature (Feature owner)
+      description: |
+        Drops its open Tasks, ends their Claims, and files the Retrospective Task in the same
+        write. Errors: `forbidden` (not the owner), `ended`.
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: The dropped Feature with its Retrospective Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FeatureDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}/owner:
+    post:
+      operationId: passFeatureOwnership
+      tags: [features]
+      summary: Pass a Feature's ownership to another Member
+      description: |
+        By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PassFeatureOwnershipBody"}
+      responses:
+        "200":
+          description: The Feature under its new owner.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Feature"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}/observations:
+    get:
+      operationId: listFeatureObservations
+      tags: [features]
+      summary: List the Observations recorded on a Feature's Tasks
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+        - name: reviewed
+          in: query
+          description: true for only reviewed Observations, false for only unreviewed ones. Omitted for all.
+          schema: {type: boolean}
+      responses:
+        "200":
+          description: The Observations, oldest first.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ObservationList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/features/{feature}/evidence:
+    post:
+      operationId: attachFeatureEvidence
+      tags: [evidence]
+      summary: Attach Evidence to a Feature
+      description: |
+        The request body is the file itself, sent with its own `Content-Type`. Errors:
+        `too_large`.
+      parameters:
+        - {$ref: "#/components/parameters/FeatureRef"}
+        - {$ref: "#/components/parameters/EvidenceFilename"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema: {type: string, format: binary}
+      responses:
+        "201":
+          description: The Evidence record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Evidence"}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- tasks
+  /v1/tasks:
+    post:
+      operationId: fileTask
+      tags: [tasks]
+      summary: File a Task
+      description: |
+        A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
+        question or Escalation: the new Task joins the Feature of the Task it blocks (which must
+        then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
+        Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FileTaskBody"}
+      responses:
+        "201":
+          description: The new Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskDetail"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List Tasks
+      description: Ordered by Feature Rank, then by how long each Task has waited.
+      parameters:
+        - name: feature
+          in: query
+          schema: {type: string}
+        - name: team
+          in: query
+          schema: {type: string}
+        - name: state
+          in: query
+          schema: {$ref: "#/components/schemas/TaskState"}
+        - name: skill
+          in: query
+          description: Only Tasks that need this Skill now.
+          schema: {type: string}
+        - name: aimed_at
+          in: query
+          description: Only Tasks aimed at this Member.
+          schema: {type: string}
+        - name: holder
+          in: query
+          description: Only Tasks this Member holds a live Claim on.
+          schema: {type: string}
+        - {$ref: "#/components/parameters/Limit"}
+        - {$ref: "#/components/parameters/Cursor"}
+      responses:
+        "200":
+          description: The Tasks.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/takeable:
+    get:
+      operationId: listTakeableTasks
+      tags: [tasks]
+      summary: List the Tasks the caller can take now, in the order `next` would offer them
+      parameters:
+        - {$ref: "#/components/parameters/Limit"}
+      responses:
+        "200":
+          description: The takeable Tasks.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/next:
+    post:
+      operationId: nextTask
+      tags: [tasks]
+      summary: Wait for a takeable Task and claim it
+      description: |
+        Claims the first Task takeable by the caller, in Rank order across the caller's Teams
+        (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
+        another come first). When none is takeable, holds the request open for up to
+        `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
+        ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
+        token's default.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NextTaskBody"}
+      responses:
+        "200":
+          description: The claimed Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskDetail"}
+        "204":
+          description: Nothing became takeable before the wait ended.
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get a Task with its Claims, Notes, Evidence, blockers and Observations
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+      responses:
+        "200":
+          description: The Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/claim:
+    post:
+      operationId: claimTask
+      tags: [tasks]
+      summary: Claim a Task
+      description: |
+        One conditional write: it succeeds only when the Task is takeable by the caller. The
+        Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
+        bound to the calling Session, without one to the Member. Errors: `already_claimed`
+        (someone holds it; stop rather than retry), `not_takeable`.
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ClaimTaskBody"}
+      responses:
+        "200":
+          description: The claimed Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TaskDetail"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/heartbeat:
+    post:
+      operationId: heartbeat
+      tags: [tasks]
+      summary: Tell Darkory the caller is still working a Task
+      description: |
+        Extends a Claim that carries a heartbeat timeout. A Heartbeat that arrives after the
+        timeout is refused and the reply says `lapsed`; the Member may claim again if the Task is
+        still takeable. Writes no Activity. Repeating a Heartbeat is harmless, so its
+        `Idempotency-Key` is accepted but not stored: a retry reports the Claim as it is now.
+        Errors: `not_holder` (the caller never held this Claim).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: What became of the caller's Claim.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/HeartbeatReply"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/release:
+    post:
+      operationId: releaseTask
+      tags: [tasks]
+      summary: Give up the caller's Claim, leaving the Task needing the same Skill
+      description: "Errors: `not_holder`."
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ReleaseTaskBody"}
+      responses:
+        "200":
+          description: The Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/handover:
+    post:
+      operationId: handoverTask
+      tags: [tasks]
+      summary: End the caller's Claim and set the Skill the Task needs next
+      description: "Errors: `not_holder`."
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/HandoverTaskBody"}
+      responses:
+        "200":
+          description: The Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/complete:
+    post:
+      operationId: completeTask
+      tags: [tasks]
+      summary: Complete a Task the caller holds
+      description: |
+        Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
+        completing a Retrospective marks its Feature's Observations reviewed. Errors:
+        `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
+        current; nothing changes).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CompleteTaskBody"}
+      responses:
+        "200":
+          description: The Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/drop:
+    post:
+      operationId: dropTask
+      tags: [tasks]
+      summary: Drop a Task (Feature owner)
+      description: "Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`."
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DropTaskBody"}
+      responses:
+        "200":
+          description: The Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/take-back:
+    post:
+      operationId: takeBackTask
+      tags: [tasks]
+      summary: End another Member's Claim on a Task
+      description: |
+        By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
+        takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/TakeBackTaskBody"}
+      responses:
+        "200":
+          description: The Task.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/notes:
+    post:
+      operationId: addNote
+      tags: [tasks]
+      summary: Add a Note to a Task's running log
+      description: "Errors: `not_holder` (the Task is held by someone else)."
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/AddNoteBody"}
+      responses:
+        "201":
+          description: The Note.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Note"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/observations:
+    post:
+      operationId: observe
+      tags: [tasks]
+      summary: Record an Observation on a Task
+      description: "Errors: `not_holder` (the Task is held by someone else)."
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ObserveBody"}
+      responses:
+        "201":
+          description: The Observation.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Observation"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/blockers/{blocker}:
+    put:
+      operationId: addBlocker
+      tags: [tasks]
+      summary: Let one Task block another
+      description: |
+        `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended.
+        Errors: `forbidden`, `not_holder`, `cycle`.
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/BlockerRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Task is blocked by the blocker.
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: removeBlocker
+      tags: [tasks]
+      summary: Stop one Task blocking another
+      description: "Errors: `forbidden`, `not_holder`."
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/BlockerRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Task is no longer blocked by the blocker.
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/skill-proposals:
+    post:
+      operationId: proposeSkillVersion
+      tags: [skills]
+      summary: Propose a new version of a company Skill from the Task the caller holds
+      description: |
+        Written against `based_on_version`, which must be the current version. The caller then
+        hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProposeSkillVersionBody"}
+      responses:
+        "201":
+          description: The proposal.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillProposal"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/evidence:
+    post:
+      operationId: attachTaskEvidence
+      tags: [evidence]
+      summary: Attach Evidence to a Task
+      description: |
+        The request body is the file itself, sent with its own `Content-Type`. Errors:
+        `not_holder` (the Task is held by someone else), `too_large`.
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/EvidenceFilename"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema: {type: string, format: binary}
+      responses:
+        "201":
+          description: The Evidence record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Evidence"}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- evidence
+  /v1/evidence/{evidence}:
+    get:
+      operationId: getEvidence
+      tags: [evidence]
+      summary: Get an Evidence record
+      parameters:
+        - {$ref: "#/components/parameters/EvidenceID"}
+      responses:
+        "200":
+          description: The Evidence record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Evidence"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/evidence/{evidence}/content:
+    get:
+      operationId: downloadEvidence
+      tags: [evidence]
+      summary: Download an Evidence file
+      description: Served with the content type it was attached with.
+      parameters:
+        - {$ref: "#/components/parameters/EvidenceID"}
+      responses:
+        "200":
+          description: The file.
+          headers:
+            Content-Disposition:
+              schema: {type: string}
+          content:
+            "*/*":
+              schema: {type: string, format: binary}
+        default: {$ref: "#/components/responses/Error"}
+
+  # ---------------------------------------------------------------- activity
+  /v1/activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      summary: Read Activity after a sequence number
+      description: |
+        Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
+        `after` to read the next.
+      parameters:
+        - name: after
+          in: query
+          description: Return entries with a sequence number greater than this. Defaults to 0.
+          schema: {type: integer, format: int64, minimum: 0}
+        - {$ref: "#/components/parameters/Limit"}
+      responses:
+        "200":
+          description: The entries, in sequence order.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ActivityPage"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/activity/stream:
+    get:
+      operationId: streamActivity
+      tags: [activity]
+      summary: Stream Activity as Server-Sent Events
+      description: |
+        Each entry is one event: `id` is its sequence number, `event` is `activity` and `data` is
+        the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
+        clients that cannot set headers) and receives every entry after it.
+      parameters:
+        - name: Last-Event-ID
+          in: header
+          schema: {type: integer, format: int64, minimum: 0}
+        - name: after
+          in: query
+          description: Used when `Last-Event-ID` is absent.
+          schema: {type: integer, format: int64, minimum: 0}
+      responses:
+        "200":
+          description: The event stream.
+          content:
+            text/event-stream:
+              schema: {type: string}
+        default: {$ref: "#/components/responses/Error"}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: A Member token, `dk_…`. Sent together with `Darkory-Session`.
+    sessionHeader:
+      type: apiKey
+      in: header
+      name: Darkory-Session
+      description: The id the running copy chose for its Session. Required with a bearer token.
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: darkory_session
+      description: The browser Session, set by redeeming a login link.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: A key unique to this write. A retry with the same key returns the first response.
+      schema: {type: string, minLength: 1, maxLength: 255}
+    MemberRef:
+      name: member
+      in: path
+      required: true
+      description: Member id or name.
+      schema: {type: string}
+    TeamRef:
+      name: team
+      in: path
+      required: true
+      description: Team id or key, such as `WEB`.
+      schema: {type: string}
+    SkillRef:
+      name: skill
+      in: path
+      required: true
+      description: Skill id or name.
+      schema: {type: string}
+    FeatureRef:
+      name: feature
+      in: path
+      required: true
+      description: Feature id or display key, such as `WEB-1`.
+      schema: {type: string}
+    TaskRef:
+      name: task
+      in: path
+      required: true
+      description: Task id or display key, such as `WEB-42`.
+      schema: {type: string}
+    BlockerRef:
+      name: blocker
+      in: path
+      required: true
+      description: Id or display key of the blocking Task.
+      schema: {type: string}
+    TokenID:
+      name: token
+      in: path
+      required: true
+      schema: {type: string}
+    EvidenceID:
+      name: evidence
+      in: path
+      required: true
+      schema: {type: string}
+    SessionID:
+      name: session
+      in: path
+      required: true
+      description: The id the running copy chose for its Session.
+      schema: {type: string}
+    LoginCode:
+      name: code
+      in: path
+      required: true
+      schema: {type: string}
+    EvidenceFilename:
+      name: filename
+      in: query
+      required: true
+      description: The file's name, as it should be shown and downloaded.
+      schema: {type: string, minLength: 1, maxLength: 255}
+    Limit:
+      name: limit
+      in: query
+      description: At most this many items. Defaults to 100.
+      schema: {type: integer, minimum: 1, maximum: 500}
+    Cursor:
+      name: cursor
+      in: query
+      description: The `next_cursor` of the previous page.
+      schema: {type: string}
+
+  responses:
+    Error:
+      description: The request failed.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+
+  schemas:
+    # ------------------------------------------------------------ errors
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: {$ref: "#/components/schemas/ErrorCode"}
+        message:
+          type: string
+          description: For people; may change between releases.
+        details:
+          type: object
+          additionalProperties: true
+          description: Extra facts about the failure, by code.
+    ErrorCode:
+      type: string
+      description: |
+        Stable reason for a failure, with its HTTP status:
+        `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
+        `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
+        `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
+        `too_large` 413 · `idempotency_key_reused` 422 · `internal` 500 · `not_implemented` 501.
+      enum:
+        - invalid
+        - unauthenticated
+        - session_required
+        - forbidden
+        - not_found
+        - conflict
+        - already_claimed
+        - not_takeable
+        - not_holder
+        - ended
+        - tasks_open
+        - cycle
+        - proposal_stale
+        - too_large
+        - idempotency_key_reused
+        - internal
+        - not_implemented
+
+    # ------------------------------------------------------------ install
+    Health:
+      type: object
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+          description: The server's release version.
+    Organisation:
+      type: object
+      required: [id, name, created_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        created_at: {type: string, format: date-time}
+    Me:
+      type: object
+      required: [organisation, member, teams, skills, session]
+      properties:
+        organisation: {$ref: "#/components/schemas/Organisation"}
+        member: {$ref: "#/components/schemas/Member"}
+        teams:
+          type: array
+          items: {$ref: "#/components/schemas/Team"}
+        skills:
+          type: array
+          items: {$ref: "#/components/schemas/Skill"}
+        session: {$ref: "#/components/schemas/Session"}
+
+    # ------------------------------------------------------------ sign-in and Sessions
+    Session:
+      type: object
+      required: [id, member_id, kind, started_at, last_seen_at]
+      properties:
+        id:
+          type: string
+          description: The id the running copy chose.
+        member_id: {type: string}
+        kind: {$ref: "#/components/schemas/SessionKind"}
+        token_id:
+          type: string
+          description: The token the Session presents. Absent for browser Sessions.
+        started_at: {type: string, format: date-time}
+        last_seen_at: {type: string, format: date-time}
+        closed_at: {type: string, format: date-time}
+    SessionKind:
+      type: string
+      enum: [token, browser]
+    ClosedSession:
+      type: object
+      required: [session, claims_ended]
+      properties:
+        session: {$ref: "#/components/schemas/Session"}
+        claims_ended:
+          type: integer
+          description: How many Claims bound to the Session were ended.
+    LoginLink:
+      type: object
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          description: Open once in a browser to sign in.
+        expires_at: {type: string, format: date-time}
+    EmailSignInBody:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+
+    # ------------------------------------------------------------ tokens
+    Token:
+      type: object
+      required: [id, member_id, name, prefix, created_at]
+      properties:
+        id: {type: string}
+        member_id: {type: string}
+        name: {type: string}
+        prefix:
+          type: string
+          description: The first characters of the secret, to tell tokens apart.
+        default_heartbeat_timeout_seconds:
+          type: integer
+          description: The heartbeat timeout `claim` and `next` use when the call names none. Absent when Claims have none by default.
+        created_at: {type: string, format: date-time}
+        last_used_at: {type: string, format: date-time}
+        revoked_at: {type: string, format: date-time}
+    IssuedToken:
+      type: object
+      required: [token, secret]
+      properties:
+        token: {$ref: "#/components/schemas/Token"}
+        secret:
+          type: string
+          description: The bearer credential, `dk_…`. Shown only in this reply.
+    TokenList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Token"}
+    IssueTokenBody:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        default_heartbeat_timeout_seconds:
+          type: integer
+          minimum: 1
+          maximum: 86400
+
+    # ------------------------------------------------------------ members
+    Member:
+      type: object
+      required: [id, name, kind, admin, created_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {$ref: "#/components/schemas/MemberKind"}
+        email: {type: string}
+        admin:
+          type: boolean
+          description: Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
+        manager_id:
+          type: string
+          description: The Member who directs this one. Absent when there is no Reporting line.
+        created_at: {type: string, format: date-time}
+    MemberKind:
+      type: string
+      enum: [human, agent]
+    MemberDetail:
+      type: object
+      required: [member, teams, skills, reports]
+      properties:
+        member: {$ref: "#/components/schemas/Member"}
+        teams:
+          type: array
+          items: {$ref: "#/components/schemas/Team"}
+        skills:
+          type: array
+          items: {$ref: "#/components/schemas/Skill"}
+        reports:
+          type: array
+          description: The Members this Member directs.
+          items: {$ref: "#/components/schemas/Member"}
+    MemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Member"}
+    CreateMemberBody:
+      type: object
+      required: [name, kind]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        kind: {$ref: "#/components/schemas/MemberKind"}
+        email: {type: string, format: email}
+        admin: {type: boolean}
+    UpdateMemberBody:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        email: {type: string, format: email}
+        admin: {type: boolean}
+    SetManagerBody:
+      type: object
+      required: [manager]
+      properties:
+        manager:
+          type: string
+          description: Member id or name.
+
+    # ------------------------------------------------------------ teams
+    Team:
+      type: object
+      required: [id, key, name, created_at]
+      properties:
+        id: {type: string}
+        key:
+          type: string
+          description: The prefix of the Team's display keys, such as `WEB` in `WEB-42`.
+        name: {type: string}
+        created_at: {type: string, format: date-time}
+    TeamDetail:
+      type: object
+      required: [team, members]
+      properties:
+        team: {$ref: "#/components/schemas/Team"}
+        members:
+          type: array
+          items: {$ref: "#/components/schemas/Member"}
+    TeamList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Team"}
+    CreateTeamBody:
+      type: object
+      required: [key, name]
+      properties:
+        key:
+          type: string
+          pattern: "^[A-Z][A-Z0-9]{1,9}$"
+        name: {type: string, minLength: 1, maxLength: 100}
+
+    # ------------------------------------------------------------ skills
+    Skill:
+      type: object
+      required: [id, name, kind, builtin, current_version, created_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        kind: {$ref: "#/components/schemas/SkillKind"}
+        base_skill_id:
+          type: string
+          description: The generic Skill a company Skill builds on.
+        builtin:
+          type: boolean
+          description: True for `breakdown`, `retro` and `skill-review`, which Darkory relies on.
+        current_version:
+          type: integer
+          format: int64
+        created_at: {type: string, format: date-time}
+    SkillKind:
+      type: string
+      enum: [generic, company]
+    SkillVersion:
+      type: object
+      required: [skill_id, version, body, published_at]
+      properties:
+        skill_id: {type: string}
+        version:
+          type: integer
+          format: int64
+        body: {type: string}
+        proposal_id:
+          type: string
+          description: The proposal this version was published from. Absent for version 1.
+        published_by:
+          type: string
+          description: The Member who completed the review, or who created the Skill.
+        published_at: {type: string, format: date-time}
+    SkillDetail:
+      type: object
+      required: [skill, current]
+      properties:
+        skill: {$ref: "#/components/schemas/Skill"}
+        current: {$ref: "#/components/schemas/SkillVersion"}
+    SkillList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Skill"}
+    SkillVersionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/SkillVersion"}
+    CreateSkillBody:
+      type: object
+      required: [name, kind, body]
+      properties:
+        name:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{0,62}$"
+        kind: {$ref: "#/components/schemas/SkillKind"}
+        base_skill:
+          type: string
+          description: Required for a company Skill. Id or name of a generic Skill.
+        body:
+          type: string
+          description: The Skill's text, published as version 1.
+    SkillProposal:
+      type: object
+      required: [id, skill_id, task_id, based_on_version, body, author_id, state, created_at]
+      properties:
+        id: {type: string}
+        skill_id: {type: string}
+        task_id: {type: string}
+        based_on_version:
+          type: integer
+          format: int64
+        body: {type: string}
+        author_id: {type: string}
+        state: {$ref: "#/components/schemas/ProposalState"}
+        published_version:
+          type: integer
+          format: int64
+        created_at: {type: string, format: date-time}
+    ProposalState:
+      type: string
+      enum: [pending, published, superseded]
+    ProposeSkillVersionBody:
+      type: object
+      required: [skill, based_on_version, body]
+      properties:
+        skill:
+          type: string
+          description: Id or name of a company Skill.
+        based_on_version:
+          type: integer
+          format: int64
+        body: {type: string}
+
+    # ------------------------------------------------------------ features
+    Feature:
+      type: object
+      required: [id, key, team_id, title, description, owner_id, state, rank, filed_by, created_at]
+      properties:
+        id: {type: string}
+        key:
+          type: string
+          description: Display key, such as `WEB-1`.
+        team_id: {type: string}
+        title: {type: string}
+        description: {type: string}
+        owner_id: {type: string}
+        state: {$ref: "#/components/schemas/FeatureState"}
+        rank:
+          type: integer
+          format: int64
+          description: Position in the Team's Rank, 1 first. An ended Feature keeps its place.
+        from_retrospective_task_id:
+          type: string
+          description: The Retrospective that filed this Feature.
+        filed_by: {type: string}
+        created_at: {type: string, format: date-time}
+        ended_at: {type: string, format: date-time}
+    FeatureState:
+      type: string
+      enum: [open, shipped, dropped]
+    FeatureDetail:
+      type: object
+      required: [feature, tasks, evidence]
+      properties:
+        feature: {$ref: "#/components/schemas/Feature"}
+        tasks:
+          type: array
+          items: {$ref: "#/components/schemas/Task"}
+        evidence:
+          type: array
+          items: {$ref: "#/components/schemas/Evidence"}
+    FeatureList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Feature"}
+        next_cursor:
+          type: string
+          description: Pass as `cursor` for the next page. Absent on the last page.
+    FileFeatureBody:
+      type: object
+      required: [team, title]
+      properties:
+        team:
+          type: string
+          description: Team id or key.
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string}
+        owner:
+          type: string
+          description: Member id or name. Defaults to the caller.
+        from_retrospective:
+          type: string
+          description: Id or display key of the Retrospective Task filing this Feature.
+    RankFeatureBody:
+      type: object
+      required: [position]
+      properties:
+        position:
+          type: integer
+          format: int64
+          minimum: 1
+    PassFeatureOwnershipBody:
+      type: object
+      required: [owner]
+      properties:
+        owner:
+          type: string
+          description: Member id or name.
+
+    # ------------------------------------------------------------ tasks
+    Task:
+      type: object
+      required: [id, key, feature_id, kind, title, description, state, blocked, filed_by, waiting_since, created_at]
+      properties:
+        id: {type: string}
+        key:
+          type: string
+          description: Display key, such as `WEB-42`.
+        feature_id: {type: string}
+        kind: {$ref: "#/components/schemas/TaskKind"}
+        title: {type: string}
+        description: {type: string}
+        state: {$ref: "#/components/schemas/TaskState"}
+        skill_id:
+          type: string
+          description: The Skill the Task needs now. Absent when it is aimed at a Member.
+        aimed_at_id:
+          type: string
+          description: The Member the Task is aimed at by name.
+        claim:
+          $ref: "#/components/schemas/Claim"
+        blocked:
+          type: boolean
+          description: True while any Task blocking this one is open.
+        filed_by: {type: string}
+        waiting_since:
+          type: string
+          format: date-time
+          description: When the Task was filed or last handed over.
+        created_at: {type: string, format: date-time}
+        ended_at: {type: string, format: date-time}
+    TaskState:
+      type: string
+      description: Claimed and lapsed are not states; they follow from the Task's Claim.
+      enum: [open, done, dropped]
+    TaskKind:
+      type: string
+      description: "`breakdown` and `retrospective` Tasks are filed by Darkory."
+      enum: [work, breakdown, retrospective]
+    Claim:
+      type: object
+      required: [id, task_id, holder_id, session_id, started_at]
+      properties:
+        id: {type: string}
+        task_id: {type: string}
+        holder_id: {type: string}
+        session_id:
+          type: string
+          description: The Session that made the Claim.
+        skill_id:
+          type: string
+          description: The Skill the Claim was made under. Absent for a Task aimed at a Member.
+        skill_version:
+          type: integer
+          format: int64
+          description: The version of the Skill the Claim was worked under.
+        model_label:
+          type: string
+          description: The AI model the holder said it used. Stored, never interpreted.
+        heartbeat_timeout_seconds:
+          type: integer
+          description: Absent when the Claim never lapses on its own.
+        started_at: {type: string, format: date-time}
+        expires_at:
+          type: string
+          format: date-time
+          description: When the Claim lapses unless a Heartbeat arrives.
+        ended_at: {type: string, format: date-time}
+        how_ended: {$ref: "#/components/schemas/ClaimEnd"}
+    ClaimEnd:
+      type: string
+      enum: [released, handed_over, completed, lapsed, taken_back, dropped, token_revoked, session_closed]
+    TaskDetail:
+      type: object
+      required: [task, feature, claims, notes, evidence, blockers, blocking, observations]
+      properties:
+        task: {$ref: "#/components/schemas/Task"}
+        feature: {$ref: "#/components/schemas/Feature"}
+        claims:
+          type: array
+          description: Every Claim on the Task, oldest first.
+          items: {$ref: "#/components/schemas/Claim"}
+        notes:
+          type: array
+          description: The running log, oldest first.
+          items: {$ref: "#/components/schemas/Note"}
+        evidence:
+          type: array
+          items: {$ref: "#/components/schemas/Evidence"}
+        blockers:
+          type: array
+          description: The Tasks blocking this one.
+          items: {$ref: "#/components/schemas/Task"}
+        blocking:
+          type: array
+          description: The Tasks this one blocks.
+          items: {$ref: "#/components/schemas/Task"}
+        observations:
+          type: array
+          items: {$ref: "#/components/schemas/Observation"}
+    TaskList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Task"}
+        next_cursor:
+          type: string
+          description: Pass as `cursor` for the next page. Absent on the last page.
+    FileTaskBody:
+      type: object
+      required: [title]
+      properties:
+        feature:
+          type: string
+          description: Feature id or display key. May be left out when `blocks` is given.
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: string}
+        skill:
+          type: string
+          description: Skill id or name the Task needs. Give this or `aimed_at`.
+        aimed_at:
+          type: string
+          description: Member id or name the Task is aimed at. Give this or `skill`.
+        blocks:
+          type: string
+          description: Id or display key of a Task the new one blocks (a question or Escalation).
+    ClaimTaskBody:
+      type: object
+      properties:
+        heartbeat_timeout_seconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          description: Seconds without a Heartbeat before the Claim lapses. 0 for none. Defaults to the token's default.
+        model_label:
+          type: string
+          maxLength: 200
+    NextTaskBody:
+      type: object
+      properties:
+        wait_seconds:
+          type: integer
+          minimum: 0
+          maximum: 60
+          description: How long to wait for a takeable Task. Defaults to 30; 0 returns at once.
+        heartbeat_timeout_seconds:
+          type: integer
+          minimum: 0
+          maximum: 86400
+          description: Seconds without a Heartbeat before the Claim lapses. 0 for none. Defaults to the token's default.
+        model_label:
+          type: string
+          maxLength: 200
+    HeartbeatReply:
+      type: object
+      required: [status]
+      properties:
+        status: {$ref: "#/components/schemas/HeartbeatStatus"}
+        expires_at:
+          type: string
+          format: date-time
+          description: The Claim's new expiry, when `status` is `ok`.
+    HeartbeatStatus:
+      type: string
+      description: |
+        `ok`: the Claim is extended. `lapsed`: it ran out before this Heartbeat. `taken_back`:
+        someone on the Reporting line or the Feature owner took it back. `ended`: it ended some
+        other way (released, handed over, completed, dropped, revoked).
+      enum: [ok, lapsed, taken_back, ended]
+    ReleaseTaskBody:
+      type: object
+      properties:
+        note:
+          type: string
+          description: Added to the Task's Notes in the same write.
+    HandoverTaskBody:
+      type: object
+      required: [skill]
+      properties:
+        skill:
+          type: string
+          description: Skill id or name the Task needs next.
+        note:
+          type: string
+          description: Added to the Task's Notes in the same write.
+    CompleteTaskBody:
+      type: object
+      properties:
+        note:
+          type: string
+          description: Added to the Task's Notes in the same write.
+    DropTaskBody:
+      type: object
+      properties:
+        reason: {type: string}
+    TakeBackTaskBody:
+      type: object
+      properties:
+        reason: {type: string}
+
+    # ------------------------------------------------------------ Notes, Observations, Evidence
+    Note:
+      type: object
+      required: [id, task_id, author_id, body, created_at]
+      properties:
+        id: {type: string}
+        task_id: {type: string}
+        author_id: {type: string}
+        skill_id:
+          type: string
+          description: The Skill the author was working under.
+        body: {type: string}
+        created_at: {type: string, format: date-time}
+    AddNoteBody:
+      type: object
+      required: [body]
+      properties:
+        body: {type: string, minLength: 1}
+    Observation:
+      type: object
+      required: [id, task_id, feature_id, author_id, outcome, body, created_at]
+      properties:
+        id: {type: string}
+        task_id: {type: string}
+        feature_id: {type: string}
+        author_id: {type: string}
+        skill_id:
+          type: string
+          description: The Skill the author was working under.
+        outcome: {$ref: "#/components/schemas/ObservationOutcome"}
+        body: {type: string}
+        created_at: {type: string, format: date-time}
+        reviewed_by_task_id:
+          type: string
+          description: The Retrospective that reviewed it. Absent until reviewed.
+        reviewed_at: {type: string, format: date-time}
+    ObservationOutcome:
+      type: string
+      enum: [worked, didnt_work]
+    ObservationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Observation"}
+    ObserveBody:
+      type: object
+      required: [outcome, body]
+      properties:
+        outcome: {$ref: "#/components/schemas/ObservationOutcome"}
+        body: {type: string, minLength: 1}
+    Evidence:
+      type: object
+      required: [id, feature_id, filename, content_type, size, sha256, attached_by, created_at]
+      properties:
+        id: {type: string}
+        feature_id: {type: string}
+        task_id:
+          type: string
+          description: Absent when attached to the Feature itself.
+        filename: {type: string}
+        content_type: {type: string}
+        size:
+          type: integer
+          format: int64
+        sha256: {type: string}
+        attached_by: {type: string}
+        created_at: {type: string, format: date-time}
+
+    # ------------------------------------------------------------ activity
+    Activity:
+      type: object
+      required: [seq, at, kind, subject_id, payload]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          description: Per-Organisation sequence number, in commit order.
+        at: {type: string, format: date-time}
+        actor_id:
+          type: string
+          description: The Member who acted. Absent when Darkory acted, as when recording a lapse.
+        kind:
+          type: string
+          description: What happened, such as `task.claimed` or `feature.shipped`.
+        subject_id:
+          type: string
+          description: The id of the record the entry is about.
+        payload:
+          type: object
+          additionalProperties: true
+    ActivityPage:
+      type: object
+      required: [items, last_seq]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Activity"}
+        last_seq:
+          type: integer
+          format: int64
+          description: The sequence number of the last entry returned, or `after` when none were. Pass it as `after` next time.

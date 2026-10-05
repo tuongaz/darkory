@@ -1,0 +1,10 @@
+# Generates the server interface (net/http, non-strict) and its types from api/openapi.yaml.
+# Handlers own the http.ResponseWriter, which the SSE stream and the long-poll `next` need.
+# Run `make gen`.
+package: gen
+output: server.gen.go
+generate:
+  models: true
+  std-http-server: true
+output-options:
+  name-normalizer: ToCamelCaseWithInitialisms

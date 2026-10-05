@@ -1,0 +1,8 @@
+# Generates the Go client and its types from api/openapi.yaml. Run `make gen`.
+package: client
+output: client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  name-normalizer: ToCamelCaseWithInitialisms
