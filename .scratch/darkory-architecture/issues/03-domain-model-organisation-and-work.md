@@ -51,3 +51,5 @@ Resolved by grilling with the human, 2026-10-04. Terms are defined in [`CONTEXT.
 - **Task states.** A Task stores open, done or dropped. "Claimed" is derived from the Claim and is not a stored state.
 - **Endings.** A Feature ships only when every one of its Tasks has ended. Dropping a Feature drops its open Tasks.
 - **Breakdown.** Darkory files a "Break down" Task with every Feature ([ADR 0010](../../../docs/adr/0010-retrospectives-observations-skill-versions.md)).
+- **Takeable, exceptions.** The Feature owner can take a Task of their Feature when no Member of its Team has the Skill it needs, and Skill review can be taken from any Team.
+- **Rank.** An ended Feature keeps its place in the order.

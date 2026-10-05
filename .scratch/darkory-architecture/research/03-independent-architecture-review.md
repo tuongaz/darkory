@@ -252,6 +252,19 @@ The human noted that Members will not share one AI model, and that the model can
 | Darkory holds a model setting on the Member, Skill or Task | Only advice, since Darkory never runs the agent, and close to "launching or supervising agent runs", which the map rules out. |
 | Darkory knows nothing about models | Nothing to build; retrospectives stay blind to the model, and past Claims can never be labelled afterwards. |
 
+### The eight rules first left open
+
+| Rule | Chosen | Declined |
+|---|---|---|
+| Rank of an ended Feature | It keeps its place. No special case in the sort. | Retrospectives first (delivery waits); Retrospectives last (the loop can starve). |
+| Order of `next` | Rank position across Teams; within a Feature, Tasks that block another Task first. | The caller names the Team; oldest first within a Feature (a question waits behind older Tasks). |
+| Late Heartbeat | Refused, so expiry always means the same thing. | Revive the Claim (the Task was takeable in between, and the silence leaves no trace). |
+| Reach of the owner's fallback | Every Task whose Skill nobody in the Team has. One rule, no special cases in the claim. | Only the Tasks Darkory files; only the Retrospective. |
+| Two proposals for one Skill | Publishing a proposal written against a superseded version is refused. | One open proposal at a time; the last one wins. |
+| Who reviews a Skill version | Any Member with `skill-review`, in any Team, because company Skills belong to the Organisation. | The Team first and then an admin; the Team only. |
+| Login links | An admin operation in `/v1` for a named Member. | The first Member only; any Member, but only on the host. |
+| Migrations | A variant per engine under one number, with a schema-equality test. | Shared statements only (table rebuilds on Cloud). |
+
 ---
 
 ## Experiments

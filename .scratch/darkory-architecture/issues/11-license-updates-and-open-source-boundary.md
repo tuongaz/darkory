@@ -32,3 +32,4 @@ ADR: [AGPL core, closed Cloud operations, embedded migrations](../../../docs/adr
 
 - **License.** `openapi.yaml` and the generated clients carry a permissive license such as Apache-2.0. The server stays AGPL-3.0.
 - **Boundary.** The Postgres row-level security policies live in the private repo and are not part of the embedded migration set.
+- **Migrations.** A migration may hold a SQLite variant and a Postgres variant under one number; a test checks that both engines end with the same schema.

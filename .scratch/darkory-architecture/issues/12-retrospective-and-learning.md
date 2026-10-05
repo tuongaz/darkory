@@ -34,3 +34,4 @@ ADR: [Retrospectives are Tasks fed by Observations; Skill changes are reviewed v
 - **Breakdown.** Darkory also files a "Break down" Task, needing the `breakdown` Skill, when a Feature is filed.
 - **Feature end.** A Feature ships only when every one of its Tasks has ended. Dropping a Feature drops its open Tasks and ends their Claims.
 - **Model label.** A Claim can carry an optional model label, reported by the Member, so that a retrospective can tell a Skill change from a model change.
+- **Settled later the same day.** An ended Feature keeps its Rank. The Feature owner's fallback covers every Task whose Skill nobody in the Team has. Skill review can come from any Team. A proposal written against a superseded Skill version is refused.

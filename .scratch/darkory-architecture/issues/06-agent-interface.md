@@ -45,3 +45,5 @@ ADR: [HTTP is the canonical agent contract, with a long-poll claim](../../../doc
 - **Pull.** `next` and `claim` use the token's default heartbeat timeout unless the call names one. `darkory mcp` sends Heartbeats for its Session's Claims; the CLI has a background heartbeat command.
 - **Operation set, added.** Take-back. Pass Feature ownership. `observe`, and read a Feature's Observations. Read a company Skill and its versions; propose a version. Issue and revoke tokens. Admin of Members, Teams, Skills and Reporting lines; grant a Skill to a Member.
 - **Claim guard, exceptions.** The Feature owner's `drop`, and take-back by the Reporting line or the Feature owner.
+- **Order of `next`.** Across a Member's Teams by Rank position, a tie going to the Task that has waited longest; within a Feature, Tasks that block another Task first.
+- **Operation set, added later the same day.** Issue a one-time login link for a named Member (admin).

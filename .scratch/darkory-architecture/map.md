@@ -51,22 +51,13 @@ A locked set of architecture decisions for Darkory: the hard-to-reverse choices 
 - [Human surface: what human Members use](issues/08-human-surface.md) — a web app embedded in the `darkory` binary, calling the same `/v1` operations; nothing is UI-only (bootstrap via `darkory init` or Cloud signup); live updates over an SSE stream of Activity.
 - [Language and runtime](issues/09-language-and-runtime.md) — Go core as one static binary (pure-Go SQLite, pgx, oapi-codegen, official MCP SDK); React + Vite + TypeScript web app embedded; binaries for six platforms plus a container image (revised by Independent architecture review: Python weighed and declined; Cloud builds its own image).
 - [Member identity and auth across cloud and local](issues/07-member-identity-and-auth.md) — one Member runs many Sessions, timed Claims bind to the Session; agents use `dk_` tokens, humans a login code or link (none on Local localhost); domain relations plus one admin mark; everyone reads the Organisation, works only in own Teams (revised by Independent architecture review: a Session is an id sent with the token, with no exchange; localhost needs a startup link; a named relation outranks the Team limit).
-- [License, updates, and the open-source boundary](issues/11-license-updates-and-open-source-boundary.md) — AGPL-3.0 core with a CLA; billing, signup, multi-Organisation hosting and ops tooling closed; no auto-update (`darkory update`, verified); embedded portable migrations, backed up and run at startup on Local (revised by Independent architecture review: the spec and generated clients are permissive; row-level security policies are closed).
+- [License, updates, and the open-source boundary](issues/11-license-updates-and-open-source-boundary.md) — AGPL-3.0 core with a CLA; billing, signup, multi-Organisation hosting and ops tooling closed; no auto-update (`darkory update`, verified); embedded portable migrations, backed up and run at startup on Local (revised by Independent architecture review: the spec and generated clients are permissive; row-level security policies are closed; a migration may carry a variant per engine).
 - [Retrospective and learning: how the factory improves itself](issues/12-retrospective-and-learning.md) — retro is an auto-filed Task on an ended Feature; Members log Observations while working, marked reviewed after the retro; Skill changes are reviewed versions via Handover; problems become new Features (revised by Independent architecture review: Darkory also files a Breakdown Task with each Feature; the Feature owner can take an unstaffed Retrospective; a Feature ships only when its Tasks have ended; a Claim can carry a model label).
-- [Independent architecture review](issues/13-independent-architecture-review.md) — fifteen decisions at the seams between earlier ones: a Session is an id sent with the token; a startup link on localhost; a named relation outranks Team; Install settings instead of fixed editions; writes within an Organisation run one at a time; Breakdown Task; Feature-end rules; an optional model label on Claims; Go and SQLite kept. Eight small rules are still open, listed under Not yet specified.
+- [Independent architecture review](issues/13-independent-architecture-review.md) — fifteen decisions at the seams between earlier ones: a Session is an id sent with the token; a startup link on localhost; a named relation outranks Team; Install settings instead of fixed editions; writes within an Organisation run one at a time; Breakdown Task; Feature-end rules; an optional model label on Claims; Go and SQLite kept. The eight small rules it first left open were settled the same day.
 
 ## Not yet specified
 
-Small rules the [Independent architecture review](issues/13-independent-architecture-review.md) found and nobody has decided. Its research file holds a suggestion for most of them.
-
-- Whether an ended Feature keeps its Rank, which orders its Retrospective in `next`.
-- The order of `next` for a Member in two Teams, and among the Tasks of one Feature.
-- What happens when two Retrospectives each propose the next version of the same company Skill.
-- Whether a Heartbeat that arrives after expiry, when nobody has re-claimed, revives the Claim.
-- Which Member a link printed by `darkory login` signs in.
-- Whether the Feature owner's fallback also covers a Break down Task that nobody in the Team can take.
-- Who publishes a Skill version when the Feature owner wrote the proposal and no other Member of the Team has `skill-review`.
-- Whether the embedded migration set may carry per-engine statements where SQLite's `ALTER TABLE` cannot do what an expand-then-contract change needs.
+_Nothing left in the fog._
 
 ## Out of scope
 

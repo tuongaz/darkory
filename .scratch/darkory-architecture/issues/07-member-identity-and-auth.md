@@ -40,3 +40,4 @@ ADR: [Members act through Sessions; one admin mark](../../../docs/adr/0008-membe
 - **Sessions.** A Session is an id the running copy chooses and sends with the token on every request. There is no exchange and no short-lived credential. A token may carry a default heartbeat timeout.
 - **Humans.** `darkory serve` prints and opens a one-time link at start. A request with no credential is never a Member, on `localhost` too. Whether the link is printed, emailed, or replaced by GitHub or Google sign-in is a setting of the Install.
 - **Teams.** A named relation (a Task aimed at the Member, Feature ownership, a Reporting line) outranks the limit to one's own Teams.
+- **Login links.** Issuing a one-time link for a named Member is an admin operation in `/v1`; `darkory login <member>` and the web app both call it.

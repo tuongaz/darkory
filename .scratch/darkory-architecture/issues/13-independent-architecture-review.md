@@ -31,7 +31,7 @@ The review found the core choices sound and no decision that breaks a fixed rule
 - **Local's database.** SQLite stays. Postgres through Docker and Postgres started by the binary were both priced and declined. (ADR 0004)
 - **Writes.** Writes within one Organisation run one at a time: every write transaction first increments a counter row on the Organisation, which also numbers Activity in commit order. (ADR 0011)
 - **Row-level security.** The policies live in the private Cloud repo. The open core filters every query by `org_id`, and the Cloud repo tests that every table carrying `org_id` has a policy. (ADR 0009, ADR 0004)
-- **Retrospective.** When no Member of the Feature's Team has the Skill a Retrospective needs, the Feature owner can take it. (ADR 0010)
+- **Unstaffed Tasks.** When no Member of a Feature's Team has the Skill one of its Tasks needs, the Feature owner can take it. First decided for the Retrospective, then widened to every Task. (ADR 0010)
 - **Breakdown.** Filing a Feature also files a "Break down" Task needing the `breakdown` Skill. (ADR 0010)
 - **Heartbeats.** `next` and `claim` use a default timeout stored on the token unless the call names one. `darkory mcp` sends Heartbeats for its Session; the CLI has a background heartbeat command. (ADR 0005, ADR 0008)
 - **Feature end.** A Feature ships only when every one of its Tasks has ended. Dropping a Feature drops its open Tasks and ends their Claims. (ADR 0010)
@@ -52,15 +52,19 @@ The review found the core choices sound and no decision that breaks a fixed rule
 - The Retrospective is the only open Task an ended Feature can hold. (`CONTEXT.md`, ADR 0010)
 - The operation set and the Claim guard in ticket 06 are extended there.
 
+**Rules settled the same day**
+
+Eight small rules the review found were first left open, then decided:
+
+- **Rank of an ended Feature.** It keeps its place, so its Retrospective sorts as its other Tasks did. (ADR 0010)
+- **Order of `next`.** Across a Member's Teams by Rank position, a tie going to the Task that has waited longest. Within a Feature, Tasks that block another Task first. (ADR 0005)
+- **Late Heartbeat.** Refused, even when nobody has re-claimed; the lapse is recorded and the Member may claim again. (ADR 0003)
+- **Reach of the owner's fallback.** Every Task whose Skill nobody in the Team has, not only the Retrospective. (ADR 0010)
+- **Two proposals for one Skill.** A proposal records the version it was written against, and publishing a stale one is refused. (ADR 0010)
+- **Who reviews a Skill version.** Any Member with `skill-review`, in any Team, other than the author. (ADR 0010)
+- **Login links.** Issuing a one-time link for a named Member is an admin operation in `/v1`; `darkory login <member>` and the web app both call it. (ADR 0008)
+- **Migrations.** A migration may hold a SQLite variant and a Postgres variant under one number; a test checks that both engines end with the same schema. (ADR 0009)
+
 **Still open**
 
-Small rules the review found and nobody has decided. Each has a suggestion in the research file.
-
-- Whether an ended Feature keeps its Rank, which orders its Retrospective in `next`.
-- The order of `next` for a Member in two Teams, and among the Tasks of one Feature.
-- What happens when two Retrospectives each propose the next version of the same company Skill.
-- Whether a Heartbeat that arrives after expiry, when nobody has re-claimed, revives the Claim.
-- Which Member a link printed by `darkory login` signs in.
-- Whether the Feature owner's fallback also covers a Break down Task that nobody in the Team can take.
-- Who publishes a Skill version when the Feature owner wrote the proposal and no other Member of the Team has `skill-review`.
-- Whether the embedded migration set may carry per-engine statements where SQLite's `ALTER TABLE` cannot do what an expand-then-contract change needs.
+Nothing.

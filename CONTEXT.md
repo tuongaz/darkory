@@ -15,7 +15,7 @@ A human or an agent in an Organisation, belonging to one or more Teams. Both kin
 _Avoid_: User, bot, worker, assignee
 
 **Team**:
-A group of Members, mixing agents and humans, that shares a body of work. Every Feature belongs to exactly one Team, and only its Members can take its Tasks by Skill; a Task aimed at a Member by name can be taken from any Team.
+A group of Members, mixing agents and humans, that shares a body of work. Every Feature belongs to exactly one Team, and its Tasks are taken by that Team's Members, with the exceptions listed under Takeable.
 _Avoid_: Workspace
 
 **Skill**:
@@ -49,11 +49,11 @@ One running copy of a Member, known by an id that copy chooses and presents with
 _Avoid_: Run, instance, connection
 
 **Heartbeat**:
-A signal from the Member holding a Claim that it is still working the Task. A missed Heartbeat ends a Claim that carries a timeout; the lapse is recorded.
+A signal from the Member holding a Claim that it is still working the Task. A missed Heartbeat ends a Claim that carries a timeout, and a late one does not restore it; the lapse is recorded.
 _Avoid_: Ping, keepalive
 
 **Takeable**:
-A Task is takeable by a Member when it is open, not blocked, not claimed, and either is aimed at that Member by name or needs a Skill the Member has and belongs to a Feature in one of the Member's Teams. A Member who has held a Task under one Skill can take it again only under that Skill: no one judges their own work.
+A Task is takeable by a Member when it is open, not blocked, not claimed, and one of these holds: it is aimed at that Member by name; it needs a Skill the Member has and belongs to a Feature in one of the Member's Teams; it needs the skill-review Skill, which the Member has, in any Team; or the Member owns its Feature and no Member of that Feature's Team has the Skill it needs. A Member who has held a Task under one Skill can take it again only under that Skill: no one judges their own work.
 _Avoid_: Available, ready, free
 
 **Handover**:
@@ -73,7 +73,7 @@ How a Task ends when it will not be done, decided by the Feature owner or brough
 _Avoid_: Cancelled, won't-do, abandoned
 
 **Feature owner**:
-The one Member, human or agent, with authority over a Feature: deciding to ship or drop it, dropping its Tasks, and answering escalations about it. Ownership is not a Claim and can be passed on.
+The one Member, human or agent, with authority over a Feature: deciding to ship or drop it, dropping its Tasks, answering escalations about it, and taking any of its Tasks that no Member of its Team has the Skill for. Ownership is not a Claim and can be passed on.
 _Avoid_: Assignee, lead, PM
 
 **Shipped**:
@@ -85,7 +85,7 @@ A report, screenshot, or log attached to a Task or Feature, recording who attach
 _Avoid_: Artifact, attachment, proof
 
 **Rank**:
-The single order of Features within a Team; a Task sorts by its Feature's Rank. It is the only notion of priority.
+The single order of Features within a Team, in which an ended Feature keeps its place; a Task sorts by its Feature's Rank. It is the only notion of priority.
 _Avoid_: Priority, urgency, severity
 
 **Note**:
@@ -101,11 +101,11 @@ An entry on a Task, marked worked or didn't work, recording who wrote it and the
 _Avoid_: Lesson, learning, feedback
 
 **Retrospective**:
-The Task Darkory files on a Feature when it ships or drops, needing the retro Skill. It reads the Feature's Observations, may propose a new Skill version, and files new Features for problems found. It is the only open Task an ended Feature can hold, apart from questions that block it; when no Member of the Team has the Skill it needs, the Feature owner can take it.
+The Task Darkory files on a Feature when it ships or drops, needing the retro Skill. It reads the Feature's Observations, may propose a new Skill version, and files new Features for problems found. It is the only open Task an ended Feature can hold, apart from questions that block it.
 _Avoid_: Retro meeting, post-mortem, review
 
 **Skill version**:
-One published revision of a company Skill. A change is proposed by a Retrospective and published only when a Member with the skill-review Skill, other than its author, completes the review. Every Claim records the version it worked under.
+One published revision of a company Skill. A change is proposed by a Retrospective against the current version, and published only when a Member with the skill-review Skill, from any Team and other than its author, completes the review while that version is still current. Every Claim records the version it worked under.
 _Avoid_: Revision, edit
 
 **Model label**:
