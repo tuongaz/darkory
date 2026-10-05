@@ -41,7 +41,7 @@ func TestServePrintsAStartupLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := t.Context()
-	st, err := openStore(ctx, config.Store{DataDir: dir, Database: filepath.Join(dir, "darkory.db")}, slog.New(slog.DiscardHandler))
+	st, err := openStore(ctx, config.Store{DataDir: dir, Database: filepath.Join(dir, "darkory.db")}, true, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatal(err)
 	}
