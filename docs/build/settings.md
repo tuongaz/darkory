@@ -71,4 +71,4 @@ These are settings of a client, not of the Install: `DARKORY_URL` (`--url`, defa
 
 ## Tests
 
-`DARKORY_TEST_POSTGRES_URL` runs the Postgres tests ([testing.md](testing.md)). `DARKORY_TEST_S3=1` runs the S3 store against MinIO in Docker (`DARKORY_TEST_S3_IMAGE` names another image). `DARKORY_TEST_SMTP=1` runs emailed sign-in through Mailpit in Docker.
+`DARKORY_TEST_POSTGRES_URL` runs the Postgres tests ([testing.md](testing.md)). `DARKORY_TEST_S3=1` runs the S3 store against MinIO in Docker (`DARKORY_TEST_S3_IMAGE` names another image). `DARKORY_TEST_SMTP=1` runs emailed sign-in through Mailpit in Docker. `DARKORY_E2E=1` runs the end-to-end suite in `e2e/` against a freshly built binary, on Postgres when `DARKORY_E2E_POSTGRES_URL` is set; `DARKORY_E2E_SOAK`, `DARKORY_E2E_SOAK_TASKS` and `DARKORY_E2E_RACE` tune its soak ([testing.md](testing.md)).

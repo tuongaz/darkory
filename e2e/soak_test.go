@@ -703,7 +703,7 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 			}
 		case client.TaskStateDone:
 			if d.Task.Claim != nil || d.Task.EndedAt == nil || len(cs) == 0 || cs[len(cs)-1].HowEnded == nil || *cs[len(cs)-1].HowEnded != client.ClaimEndCompleted {
-				r.problem("%s is done, but its last Claim ended %v", tk.Key, cs[len(cs)-1].HowEnded)
+				r.problem("%s is done with Claim %+v, ended %v, and Claims %+v", tk.Key, d.Task.Claim, d.Task.EndedAt, cs)
 			}
 		default:
 			r.problem("%s is %s; nothing in the soak drops a Task", tk.Key, d.Task.State)
