@@ -3,7 +3,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/tuongaz/darkory/internal/version.Version=$(VERSION)
 # The Postgres that test-pg runs against; its role must be able to create databases.
 TEST_POSTGRES_URL ?= postgres://dk@localhost:54329/postgres?sslmode=disable
-GENERATED := client internal/server/gen
+GENERATED := client/client.gen.go internal/server/gen/server.gen.go
 
 .PHONY: gen gen-check build vet test test-pg check
 
