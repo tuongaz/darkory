@@ -33,3 +33,5 @@ ADR: [The human surface is a web app embedded in the binary, live over SSE](../.
   - Activity gets a per-Organisation sequence number (UUIDv7 order is not commit order), used as the SSE event id; resume with `Last-Event-ID`.
   - Fallback: `GET /v1/activity?after=<cursor>`.
   - Several Cloud processes need a cross-process wake for streams and `next` long-polls (for example Postgres `LISTEN/NOTIFY`); in-process on Local.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):** the Activity sequence number comes from a counter row on the Organisation, taken first in every write transaction, so it follows commit order ([ADR 0011](../../../docs/adr/0011-organisation-writes-run-one-at-a-time.md)). The login link in the bootstrap line is also printed by `darkory serve` at every start.

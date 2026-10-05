@@ -37,3 +37,11 @@ ADR: [HTTP is the canonical agent contract, with a long-poll claim](../../../doc
   - Two settings: `DARKORY_URL` and `DARKORY_TOKEN` (opaque; shape decided by identity).
   - `darkory prime` prints the working rules for an agent's session start.
   - curl against the HTTP API where no binary can be installed.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):**
+
+- **Canonical.** The CLI and MCP server are written on the Go client that is generated from the spec; they are not generated themselves.
+- **Setup.** Every request also carries a Session id. The CLI reads it from `DARKORY_SESSION`, and `darkory prime` prints a fresh one ([ADR 0008](../../../docs/adr/0008-members-act-through-sessions.md)).
+- **Pull.** `next` and `claim` use the token's default heartbeat timeout unless the call names one. `darkory mcp` sends Heartbeats for its Session's Claims; the CLI has a background heartbeat command.
+- **Operation set, added.** Take-back. Pass Feature ownership. `observe`, and read a Feature's Observations. Read a company Skill and its versions; propose a version. Issue and revoke tokens. Admin of Members, Teams, Skills and Reporting lines; grant a Skill to a Member.
+- **Claim guard, exceptions.** The Feature owner's `drop`, and take-back by the Reporting line or the Feature owner.

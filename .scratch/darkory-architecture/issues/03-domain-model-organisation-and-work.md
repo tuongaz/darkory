@@ -42,3 +42,12 @@ Resolved by grilling with the human, 2026-10-04. Terms are defined in [`CONTEXT.
 - **Evidence.** Reports, screenshots, logs attached to a Task or Feature, recording who attached them. Darkory stores (including binary files) but does not judge; the owner does. Consequence for ticket 05: binary storage.
 - **Organisation and Teams.** An Organisation holds Teams, Members, company Skills, and Reporting lines. A Member can belong to several Teams; a Feature belongs to exactly one Team and only its Members take its Tasks; Reporting lines cross Teams.
 - **Boundary.** Kept: **Rank** (single order of Features within a Team; Tasks sort by it) and **Notes** (running log on a Task). Left out: priority levels, estimates, due dates, labels, custom fields, custom Task states (fixed: open, claimed, done, dropped), sprints, cycles, roadmaps, triage, threaded comments, watchers.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):**
+
+- **Claim.** It may lapse on a missed heartbeat ([ADR 0003](../../../docs/adr/0003-claims-can-lapse-on-missed-heartbeat.md)). Take-back is by the Reporting line or the Feature owner.
+- **Takeable.** A Skill-matched Task is takeable only within the Member's Teams; a Task aimed at a Member by name is takeable from any Team.
+- **No self-review.** One Skill per Member per Task: a Member who has held a Task under one Skill can take it again only under that Skill. This replaces "cannot take it at the next stage".
+- **Task states.** A Task stores open, done or dropped. "Claimed" is derived from the Claim and is not a stored state.
+- **Endings.** A Feature ships only when every one of its Tasks has ended. Dropping a Feature drops its open Tasks.
+- **Breakdown.** Darkory files a "Break down" Task with every Feature ([ADR 0010](../../../docs/adr/0010-retrospectives-observations-skill-versions.md)).

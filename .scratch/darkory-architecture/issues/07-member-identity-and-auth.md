@@ -34,3 +34,9 @@ ADR: [Members act through Sessions; one admin mark](../../../docs/adr/0008-membe
   - Local exposed beyond `localhost`: link printed by `darkory login`.
 - **Authority:** domain relations (Claim holder, Feature owner, Team membership) plus one admin mark any Member can carry. Admins create Members, Teams, Skills, Reporting lines and tokens; an admin agent may add agents. `darkory init` makes the first human an admin.
 - **Teams:** admins add Members to Teams; a token carries all its Member's Teams. Every Member reads the whole Organisation; takes and shapes work only in its own Teams; may file Tasks for any Team.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):**
+
+- **Sessions.** A Session is an id the running copy chooses and sends with the token on every request. There is no exchange and no short-lived credential. A token may carry a default heartbeat timeout.
+- **Humans.** `darkory serve` prints and opens a one-time link at start. A request with no credential is never a Member, on `localhost` too. Whether the link is printed, emailed, or replaced by GitHub or Google sign-in is a setting of the Install.
+- **Teams.** A named relation (a Task aimed at the Member, Feature ownership, a Reporting line) outranks the limit to one's own Teams.

@@ -27,3 +27,10 @@ ADR: [Retrospectives are Tasks fed by Observations; Skill changes are reviewed v
 - **Observation:** an entry on a Task marked *worked* or *didn't work*, recording author and Skill. Any Member writes them while working. The retro reads all of a Feature's Observations; completing it marks them reviewed (hidden, never reused, kept for tracing).
 - **Skill changes:** the retro proposes a new company Skill version and hands over to `skill-review` (no self-review). Completing review publishes version N+1. Each Claim records the Skill version it worked under.
 - **Loop back:** problems become new Features in the Team, ranked as usual, linked "from retrospective of <Feature>".
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):**
+
+- **Retrospective.** It is the only open Task an ended Feature can hold, apart from question Tasks that block it. When no Member of the Team has the Skill it needs, the Feature owner can take it.
+- **Breakdown.** Darkory also files a "Break down" Task, needing the `breakdown` Skill, when a Feature is filed.
+- **Feature end.** A Feature ships only when every one of its Tasks has ended. Dropping a Feature drops its open Tasks and ends their Claims.
+- **Model label.** A Claim can carry an optional model label, reported by the Member, so that a retrospective can tell a Skill change from a model change.

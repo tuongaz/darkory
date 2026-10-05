@@ -27,3 +27,8 @@ ADR: [AGPL core, closed Cloud operations, embedded migrations](../../../docs/adr
 - **Migrations:** one numbered set embedded in the binary, portable across SQLite and Postgres.
   - Local: back up the SQLite file and migrate at startup; refuse an older binary on a newer database.
   - Cloud: `darkory migrate` as its own step before rollout; expand-then-contract.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):**
+
+- **License.** `openapi.yaml` and the generated clients carry a permissive license such as Apache-2.0. The server stays AGPL-3.0.
+- **Boundary.** The Postgres row-level security policies live in the private repo and are not part of the embedded migration set.

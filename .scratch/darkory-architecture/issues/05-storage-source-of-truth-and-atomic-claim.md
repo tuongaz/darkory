@@ -34,3 +34,11 @@ Resolved by grilling with the human, 2026-10-04. Recorded in [ADR 0004](../../..
 - **Evidence.** Metadata in the database. Files go to S3 on Cloud and to local disk on Local.
 - **Tenancy.** An `org_id` on every row, enforced by Postgres row-level security on Cloud.
 - **History.** Current-state tables are the source of truth. An Activity row is written in the same transaction as each change.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):**
+
+- **Engines.** SQLite is the default for a self-hosted Install, and Postgres can be set instead.
+- **Writes.** Writes within one Organisation run one at a time, which also numbers Activity in commit order ([ADR 0011](../../../docs/adr/0011-organisation-writes-run-one-at-a-time.md)).
+- **Atomic claim.** The claim also checks the Team for Skill-matched Tasks. A Task stores open, done or dropped; every Claim leaves a row of its own.
+- **Lapse.** The claiming `UPDATE` copies the outgoing holder into a column, and the lapse record is written from it.
+- **Tenancy.** Every query filters by `org_id`. The row-level security policies live in the private Cloud repo.

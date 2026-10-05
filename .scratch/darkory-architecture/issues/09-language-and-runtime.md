@@ -32,3 +32,5 @@ ADR: [Go core, React web app, delivered as one binary](../../../docs/adr/0007-go
   - Web bundle compiled in with `embed`.
 - **Web app:** React + Vite + TypeScript SPA, TypeScript client generated from `openapi.yaml`. Does not share the core's language.
 - **Delivery:** binaries for macOS, Linux, Windows on arm64 and amd64 via release page, install script and Homebrew; a container image of the same binary for servers and Cloud.
+
+**Revised 2026-10-05 by [Independent architecture review](13-independent-architecture-review.md):** the container image of the same binary is for self-hosted servers; Cloud builds its own from the private repo. Python was weighed against Go and declined.

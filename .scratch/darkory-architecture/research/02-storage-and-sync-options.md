@@ -2,6 +2,8 @@
 
 Research date: 2026-10-04. Sources: official docs, repos, release pages, changelogs, issues, and maintainer posts only. Versions and dates are given where read (GitHub releases/commits and npm/crates.io as of 2026-10-04). "Unverified" means I could not confirm the point from a primary source. Evidence about how earlier tools broke (Beads, Backlog.md, Taskmaster, Vibe Kanban, Paperclip) comes from [01-agent-workforce-tools.md](./01-agent-workforce-tools.md) and the primary sources it cites.
 
+Note, 2026-10-05: this file predates [ADR 0003](../../../docs/adr/0003-claims-can-lapse-on-missed-heartbeat.md). Where it says a Claim never lapses, a Claim may now lapse on a missed heartbeat. The text below is left as written.
+
 ## How to read the claim column
 
 Darkory's Claim is exclusive (at most one holder) and never lapses on its own ([CONTEXT.md](../../../CONTEXT.md)). For every option, the question is **where the compare-and-swap (CAS) lives**:
