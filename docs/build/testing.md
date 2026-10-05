@@ -8,6 +8,7 @@ Every store and core test runs on SQLite, and on Postgres as well when `DARKORY_
 make test       # every test, SQLite only; Postgres tests skip
 make test-pg    # every test on SQLite and Postgres
 make check      # generated code up to date, go vet, then both of the above
+make web-check  # the web app: typecheck, eslint, vitest (needs node; run `npm ci` in web/ first)
 ```
 
 `make test-pg` sets `DARKORY_TEST_POSTGRES_URL=postgres://dk@localhost:54329/postgres?sslmode=disable`. Point it elsewhere with `make test-pg TEST_POSTGRES_URL=…`, or set the variable yourself for a single package:
@@ -66,3 +67,4 @@ Write queries once, with `$1, $2…` placeholders; both drivers accept them, rep
 - `internal/store`: `Write` numbers Activity without gaps in commit order under 50 concurrent writers, with no "database is locked" on SQLite; the migration runner, its SQLite backup and its refusal of a newer database; `TestSchemaIsTheSameOnBothEngines` compares tables, columns, nullability, primary keys, indexes and foreign keys after migrating each engine (it skips without Postgres, having nothing to compare with); `TestEveryTableCarriesOrgID`.
 - `internal/server/gen`: `TestSpecKeepsTheConventions` validates `api/openapi.yaml` and checks every operation for `Idempotency-Key` on writes, the credential requirement, and the `Error` default response.
 - `internal/server`: health, the 501 answer of every operation not yet built, JSON 404s under `/v1`, and the web app at `/`, through the generated Go client where it applies.
+- `web/src/**/*.test.ts(x)`: the web app against a stubbed `fetch` (`src/test/api.ts`) and a fake `EventSource` (`src/test/eventSource.ts`): the signed-out page on 401, the board in Rank order, refusals shown with their code, admin hidden from non-admins, a token's secret shown once, and Activity events refetching open views.

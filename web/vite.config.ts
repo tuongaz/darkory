@@ -11,7 +11,7 @@ export default defineConfig({
   },
   server: {
     // `npm run dev` beside `darkory serve`: same origin for the API, so the cookie rides along.
-    proxy: { "/v1": "http://127.0.0.1:7357" },
+    proxy: { "/v1": process.env.DARKORY_URL ?? "http://127.0.0.1:7357" },
   },
   test: {
     environment: "jsdom",

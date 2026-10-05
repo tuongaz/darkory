@@ -217,6 +217,11 @@ pre {
   margin: 1.5rem 0;
 }
 
+.panel > h2:first-child,
+.panel > h3:first-child {
+  margin-top: 0.75rem;
+}
+
 .record-header .crumbs {
   margin: 0;
   font-size: 0.9rem;
@@ -281,9 +286,14 @@ pre {
   overflow-wrap: anywhere;
 }
 
-.rank,
-.seq {
+.rank {
   min-width: 2rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.seq {
+  min-width: 3.5rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
