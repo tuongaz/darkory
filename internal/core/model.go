@@ -18,6 +18,8 @@ type Member struct {
 	Admin     bool
 	ManagerID *string
 	CreatedAt time.Time
+	// DeactivatedAt is when an admin deactivated the Member; nil while active.
+	DeactivatedAt *time.Time
 }
 
 type MemberDetail struct {
@@ -237,7 +239,9 @@ type Session struct {
 	TokenID    *string
 	StartedAt  time.Time
 	LastSeenAt time.Time
-	ClosedAt   *time.Time
+	// ExpiresAt is when an open browser Session expires unless used; nil for token Sessions.
+	ExpiresAt *time.Time
+	ClosedAt  *time.Time
 }
 
 type ClosedSession struct {

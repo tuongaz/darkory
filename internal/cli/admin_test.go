@@ -143,8 +143,35 @@ func TestAdminCommands(t *testing.T) {
 		}
 		// Not an admin: refused.
 		in.agent("eve", "")
-		if res := in.as("eve", "eve-1").fails(ExitRefused, "member", "create", "x", "--kind", "agent"); !strings.Contains(res.stderr, "forbidden") {
+		eve := in.as("eve", "eve-1")
+		if res := eve.fails(ExitRefused, "member", "create", "x", "--kind", "agent"); !strings.Contains(res.stderr, "forbidden") {
 			t.Fatalf("member create by a non-admin: %q", res.stderr)
+		}
+
+		// Sessions: listed by their Member or an admin; deactivating a Member ends them all.
+		var sessions client.SessionList
+		eve.json(&sessions, "session", "list")
+		if len(sessions.Items) != 1 || sessions.Items[0].ID != "eve-1" || sessions.Items[0].Kind != client.SessionKindToken {
+			t.Fatalf("session list: %+v", sessions)
+		}
+		if out := ada.ok("session", "list", "eve"); !strings.Contains(out, "eve-1") || !strings.Contains(out, "token") {
+			t.Fatalf("session list eve: %q", out)
+		}
+		eve.fails(ExitRefused, "session", "list", "ada")
+		eve.fails(ExitRefused, "member", "deactivate", "ada")
+		if out := ada.ok("member", "deactivate", "eve"); !strings.Contains(out, "eve") || !strings.Contains(out, "deactivated") {
+			t.Fatalf("member deactivate printed %q", out)
+		}
+		if res := eve.fails(ExitFailed, "me"); !strings.Contains(res.stderr, "unauthenticated") {
+			t.Fatalf("a deactivated Member: %q", res.stderr)
+		}
+		ada.json(&sessions, "session", "list", "eve")
+		if len(sessions.Items) != 0 {
+			t.Fatalf("a deactivated Member's Sessions: %+v", sessions)
+		}
+		ada.json(&m, "member", "reactivate", "eve")
+		if m.Name != "eve" || m.DeactivatedAt != nil {
+			t.Fatalf("member reactivate: %+v", m)
 		}
 	})
 }

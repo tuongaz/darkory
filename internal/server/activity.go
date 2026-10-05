@@ -56,6 +56,10 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 		writeError(w, http.StatusInternalServerError, gen.ErrorCodeInternal, "this connection cannot stream")
 		return
 	}
+	if !s.streams.enter(w, c) {
+		return
+	}
+	defer s.streams.leave(c)
 	var after int64
 	switch {
 	case params.LastEventID != nil:
@@ -93,7 +97,9 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 			}
 			return
 		}
-		if !s.stillValid(ctx, c) {
+		// Checked only when there is something to send, so a wake with nothing new costs one read;
+		// the keep-alive tick checks an idle stream.
+		if len(page.Items) > 0 && !s.stillValid(ctx, c) {
 			return
 		}
 		for _, a := range page.Items {

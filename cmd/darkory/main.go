@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/clock"
@@ -208,7 +209,8 @@ func serve(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender,
-		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20})
+		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20,
+		BrowserSessions: auth.BrowserLimits{Idle: cfg.SessionIdle, Lifetime: cfg.SessionLifetime}, MaxWaiting: cfg.MaxWaiting})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())

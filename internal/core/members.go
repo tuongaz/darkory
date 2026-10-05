@@ -125,11 +125,11 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 		}
 		if m.Admin && !admin {
 			var n int
-			if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM members WHERE org_id = $1 AND admin = TRUE AND id <> $2`, c.OrgID, id).Scan(&n); err != nil {
+			if err := otherActiveAdmins(t, id, &n); err != nil {
 				return nil, err
 			}
 			if n == 0 {
-				return nil, refuse(CodeConflict, "%s is the last admin", m.Name)
+				return nil, refuse(CodeConflict, "%s is the last active admin", m.Name)
 			}
 		}
 		if _, err := t.Exec(ctx, `UPDATE members SET name = $1, email = $2, admin = $3, updated_at = $4 WHERE org_id = $5 AND id = $6`,
@@ -301,4 +301,122 @@ func (s *Service) RevokeSkill(ctx context.Context, c *auth.Caller, memberRef, sk
 		return nil, t.recordByCaller("member.skill_revoked", member, map[string]any{"skill_id": skill})
 	})
 	return err
+}
+
+// otherActiveAdmins counts the active admins other than except into n.
+func otherActiveAdmins(t *tx, except string, n *int) error {
+	return t.QueryRow(t.ctx, `SELECT COUNT(*) FROM members WHERE org_id = $1 AND admin = TRUE AND deactivated_at IS NULL AND id <> $2`,
+		t.caller.OrgID, except).Scan(n)
+}
+
+// mustBeActive refuses to issue a credential for a deactivated Member.
+func mustBeActive(t *tx, memberID string) error {
+	m, err := getMember(t.ctx, t, t.caller.OrgID, memberID)
+	if err != nil {
+		return err
+	}
+	if m.DeactivatedAt != nil {
+		return refuse(CodeConflict, "%s is deactivated; an admin reactivates them first", m.Name)
+	}
+	return nil
+}
+
+// DeactivateMember stops every credential of a Member at once (admin): it revokes their tokens,
+// closes their Sessions and ends every Claim they hold, bound to a Session or to the Member,
+// recording each in Activity; from then on authentication refuses them. The Member stays in the
+// record. An admin cannot deactivate themselves, nor the last active admin.
+func (s *Service) DeactivateMember(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Member, error) {
+	if err := mustAdmin(c); err != nil {
+		return Member{}, err
+	}
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		id, err := resolveMember(ctx, t, c.OrgID, ref)
+		if err != nil {
+			return nil, err
+		}
+		m, err := getMember(ctx, t, c.OrgID, id)
+		if err != nil || m.DeactivatedAt != nil {
+			return m, err
+		}
+		if id == c.MemberID {
+			return nil, refuse(CodeForbidden, "you cannot deactivate yourself; another admin can")
+		}
+		if m.Admin {
+			var n int
+			if err := otherActiveAdmins(t, id, &n); err != nil {
+				return nil, err
+			}
+			if n == 0 {
+				return nil, refuse(CodeConflict, "%s is the last active admin", m.Name)
+			}
+		}
+		if _, err := t.Exec(ctx, `UPDATE members SET deactivated_at = $1, updated_at = $1 WHERE org_id = $2 AND id = $3`, ms(t.now), c.OrgID, id); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("member.deactivated", id, nil); err != nil {
+			return nil, err
+		}
+		tokens, err := collect(ctx, t, func(row interface{ Scan(...any) error }) (string, error) {
+			var tok string
+			return tok, row.Scan(&tok)
+		}, `SELECT id FROM tokens WHERE org_id = $1 AND member_id = $2 AND revoked_at IS NULL ORDER BY id`, c.OrgID, id)
+		if err != nil {
+			return nil, err
+		}
+		for _, tok := range tokens {
+			if _, err := t.Exec(ctx, `UPDATE tokens SET revoked_at = $1 WHERE org_id = $2 AND id = $3`, ms(t.now), c.OrgID, tok); err != nil {
+				return nil, err
+			}
+			if err := t.recordByCaller("token.revoked", tok, map[string]any{"member_id": id}); err != nil {
+				return nil, err
+			}
+		}
+		sessions, err := openSessions(t, `member_id = $2`, id)
+		if err != nil {
+			return nil, err
+		}
+		for _, sess := range sessions {
+			if _, err := closeSession(t, sess, "member_deactivated", &c.MemberID); err != nil {
+				return nil, err
+			}
+		}
+		// What is left is bound to the Member, which no Session's close ends.
+		if _, err := endClaims(t, `t.claim_holder_id = $2`, id, "member_deactivated", &c.MemberID); err != nil {
+			return nil, err
+		}
+		return getMember(ctx, t, c.OrgID, id)
+	})
+	if err != nil {
+		return Member{}, err
+	}
+	return res.(Member), nil
+}
+
+// ReactivateMember lets a deactivated Member sign in and be issued tokens again (admin). What the
+// deactivation revoked and closed stays so.
+func (s *Service) ReactivateMember(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Member, error) {
+	if err := mustAdmin(c); err != nil {
+		return Member{}, err
+	}
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		id, err := resolveMember(ctx, t, c.OrgID, ref)
+		if err != nil {
+			return nil, err
+		}
+		m, err := getMember(ctx, t, c.OrgID, id)
+		if err != nil || m.DeactivatedAt == nil {
+			return m, err
+		}
+		if _, err := t.Exec(ctx, `UPDATE members SET deactivated_at = NULL, updated_at = $1 WHERE org_id = $2 AND id = $3`, ms(t.now), c.OrgID, id); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("member.reactivated", id, nil); err != nil {
+			return nil, err
+		}
+		return getMember(ctx, t, c.OrgID, id)
+	})
+	if err != nil {
+		return Member{}, err
+	}
+	return res.(Member), nil
 }

@@ -28,7 +28,7 @@ type EmailedLink struct {
 // hash is.
 func (s *Service) MembersByEmail(ctx context.Context, address string) ([]EmailMember, error) {
 	rows, err := s.store.Query(ctx, `SELECT m.org_id, m.id, o.name FROM members m JOIN organisations o ON o.id = m.org_id
-WHERE m.email IS NOT NULL AND lower(m.email) = lower($1) ORDER BY m.created_at, m.id`, address)
+WHERE m.email IS NOT NULL AND lower(m.email) = lower($1) AND m.deactivated_at IS NULL ORDER BY m.created_at, m.id`, address)
 	if err != nil {
 		return nil, fmt.Errorf("core: find Members by email: %w", err)
 	}

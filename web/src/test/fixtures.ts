@@ -35,6 +35,7 @@ export function feature(n: number, rank: number, extra: Partial<Feature> = {}): 
     rank,
     filed_by: ada.id,
     created_at: at,
+    task_counts: { open: 0, claimed: 0, done: 0, dropped: 0 },
     ...extra,
   };
 }

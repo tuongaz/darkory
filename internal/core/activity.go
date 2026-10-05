@@ -16,6 +16,7 @@ var ActivityKinds = []string{
 	"task.evidence_attached", "task.skill_proposed",
 	"skill.created", "skill.version_published",
 	"member.created", "member.updated", "member.manager_set", "member.manager_cleared", "member.skill_granted", "member.skill_revoked",
+	"member.deactivated", "member.reactivated",
 	"team.created", "team.member_added", "team.member_removed",
 	"token.issued", "token.revoked",
 	"session.closed",

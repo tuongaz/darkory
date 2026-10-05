@@ -107,7 +107,7 @@ func (s *Service) StartupLink(ctx context.Context) (Member, LoginLink, error) {
 		return m, LoginLink{}, err
 	}
 	m, err = scanMember(s.store.QueryRow(ctx, `SELECT `+memberCols+` FROM `+memberFrom+`
-WHERE m.org_id = $1 AND m.kind = 'human' ORDER BY m.admin DESC, m.created_at, m.id LIMIT 1`, orgID))
+WHERE m.org_id = $1 AND m.kind = 'human' AND m.deactivated_at IS NULL ORDER BY m.admin DESC, m.created_at, m.id LIMIT 1`, orgID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, LoginLink{}, fmt.Errorf("core: the Organisation has no human Member to sign in")
 	}
@@ -145,5 +145,6 @@ func (s *Service) GetMe(ctx context.Context, c *auth.Caller) (Me, error) {
 		return me, err
 	}
 	me.Session, err = getSession(ctx, s.store, c.OrgID, c.SessionID)
+	s.expiry(&me.Session)
 	return me, err
 }

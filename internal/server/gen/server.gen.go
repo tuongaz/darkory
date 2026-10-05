@@ -26,8 +26,10 @@ const (
 	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
 	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
 	ActivityKindMemberCreated           ActivityKind = "member.created"
+	ActivityKindMemberDeactivated       ActivityKind = "member.deactivated"
 	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
 	ActivityKindMemberManagerSet        ActivityKind = "member.manager_set"
+	ActivityKindMemberReactivated       ActivityKind = "member.reactivated"
 	ActivityKindMemberSkillGranted      ActivityKind = "member.skill_granted"
 	ActivityKindMemberSkillRevoked      ActivityKind = "member.skill_revoked"
 	ActivityKindMemberUpdated           ActivityKind = "member.updated"
@@ -77,9 +79,13 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindMemberCreated:
 		return true
+	case ActivityKindMemberDeactivated:
+		return true
 	case ActivityKindMemberManagerCleared:
 		return true
 	case ActivityKindMemberManagerSet:
+		return true
+	case ActivityKindMemberReactivated:
 		return true
 	case ActivityKindMemberSkillGranted:
 		return true
@@ -140,14 +146,15 @@ func (e ActivityKind) Valid() bool {
 
 // Defines values for ClaimEnd.
 const (
-	ClaimEndCompleted     ClaimEnd = "completed"
-	ClaimEndDropped       ClaimEnd = "dropped"
-	ClaimEndHandedOver    ClaimEnd = "handed_over"
-	ClaimEndLapsed        ClaimEnd = "lapsed"
-	ClaimEndReleased      ClaimEnd = "released"
-	ClaimEndSessionClosed ClaimEnd = "session_closed"
-	ClaimEndTakenBack     ClaimEnd = "taken_back"
-	ClaimEndTokenRevoked  ClaimEnd = "token_revoked"
+	ClaimEndCompleted         ClaimEnd = "completed"
+	ClaimEndDropped           ClaimEnd = "dropped"
+	ClaimEndHandedOver        ClaimEnd = "handed_over"
+	ClaimEndLapsed            ClaimEnd = "lapsed"
+	ClaimEndMemberDeactivated ClaimEnd = "member_deactivated"
+	ClaimEndReleased          ClaimEnd = "released"
+	ClaimEndSessionClosed     ClaimEnd = "session_closed"
+	ClaimEndTakenBack         ClaimEnd = "taken_back"
+	ClaimEndTokenRevoked      ClaimEnd = "token_revoked"
 )
 
 // Valid indicates whether the value is a known member of the ClaimEnd enum.
@@ -160,6 +167,8 @@ func (e ClaimEnd) Valid() bool {
 	case ClaimEndHandedOver:
 		return true
 	case ClaimEndLapsed:
+		return true
+	case ClaimEndMemberDeactivated:
 		return true
 	case ClaimEndReleased:
 		return true
@@ -192,6 +201,7 @@ const (
 	ErrorCodeSessionRequired      ErrorCode = "session_required"
 	ErrorCodeTasksOpen            ErrorCode = "tasks_open"
 	ErrorCodeTooLarge             ErrorCode = "too_large"
+	ErrorCodeTooManyRequests      ErrorCode = "too_many_requests"
 	ErrorCodeUnauthenticated      ErrorCode = "unauthenticated"
 )
 
@@ -229,6 +239,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTasksOpen:
 		return true
 	case ErrorCodeTooLarge:
+		return true
+	case ErrorCodeTooManyRequests:
 		return true
 	case ErrorCodeUnauthenticated:
 		return true
@@ -618,7 +630,8 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `too_large` 413 · `idempotency_key_reused` 422 · `internal` 500 · `not_implemented` 501.
+	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `not_implemented` 501.
 	Code ErrorCode `json:"code"`
 
 	// Details Extra facts about the failure, by code.
@@ -632,7 +645,8 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `too_large` 413 · `idempotency_key_reused` 422 · `internal` 500 · `not_implemented` 501.
+// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `not_implemented` 501.
 type ErrorCode string
 
 // Evidence defines model for Evidence.
@@ -803,11 +817,14 @@ type Me struct {
 // Member defines model for Member.
 type Member struct {
 	// Admin Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
-	Admin     bool       `json:"admin"`
-	CreatedAt time.Time  `json:"created_at"`
-	Email     *string    `json:"email,omitempty"`
-	ID        string     `json:"id"`
-	Kind      MemberKind `json:"kind"`
+	Admin     bool      `json:"admin"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+	Email         *string    `json:"email,omitempty"`
+	ID            string     `json:"id"`
+	Kind          MemberKind `json:"kind"`
 
 	// ManagerID The Member who directs this one. Absent when there is no Reporting line.
 	ManagerID *string `json:"manager_id,omitempty"`
@@ -928,6 +945,11 @@ type ReleaseTaskBody struct {
 type Session struct {
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
 
+	// ExpiresAt When an open browser Session ends unless it is used before: after a time unused, and
+	// at the latest a time after it started. Absent for token Sessions, which end when
+	// closed or when their token is revoked.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
 	// ID The id the running copy chose.
 	ID         string      `json:"id"`
 	Kind       SessionKind `json:"kind"`
@@ -941,6 +963,14 @@ type Session struct {
 
 // SessionKind defines model for SessionKind.
 type SessionKind string
+
+// SessionList defines model for SessionList.
+type SessionList struct {
+	Items []Session `json:"items"`
+
+	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
 
 // SetManagerBody defines model for SetManagerBody.
 type SetManagerBody struct {
@@ -1245,13 +1275,15 @@ type ListFeaturesParams struct {
 
 // FileFeatureParams defines parameters for FileFeature.
 type FileFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DropFeatureParams defines parameters for DropFeature.
 type DropFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1260,7 +1292,8 @@ type AttachFeatureEvidenceParams struct {
 	// Filename The file's name, as it should be shown and downloaded.
 	Filename EvidenceFilename `form:"filename" json:"filename"`
 
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1273,25 +1306,36 @@ type ListFeatureObservationsParams struct {
 
 // PassFeatureOwnershipParams defines parameters for PassFeatureOwnership.
 type PassFeatureOwnershipParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RankFeatureParams defines parameters for RankFeature.
 type RankFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ShipFeatureParams defines parameters for ShipFeature.
 type ShipFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RedeemLoginLinkParams defines parameters for RedeemLoginLink.
+type RedeemLoginLinkParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1304,49 +1348,80 @@ type ListMembersParams struct {
 
 // CreateMemberParams defines parameters for CreateMember.
 type CreateMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // UpdateMemberParams defines parameters for UpdateMember.
 type UpdateMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeactivateMemberParams defines parameters for DeactivateMember.
+type DeactivateMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // IssueLoginLinkParams defines parameters for IssueLoginLink.
 type IssueLoginLinkParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ClearManagerParams defines parameters for ClearManager.
 type ClearManagerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // SetManagerParams defines parameters for SetManager.
 type SetManagerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ReactivateMemberParams defines parameters for ReactivateMember.
+type ReactivateMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListSessionsParams defines parameters for ListSessions.
+type ListSessionsParams struct {
+	// Limit At most this many items. Defaults to 100.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The `next_cursor` of the previous page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // RevokeSkillParams defines parameters for RevokeSkill.
 type RevokeSkillParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // GrantSkillParams defines parameters for GrantSkill.
 type GrantSkillParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // IssueTokenParams defines parameters for IssueToken.
 type IssueTokenParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1355,13 +1430,15 @@ type CloseSessionParams struct {
 	// Member The Member whose Session to close (admin). Defaults to the caller.
 	Member *string `form:"member,omitempty" json:"member,omitempty"`
 
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RequestEmailSignInParams defines parameters for RequestEmailSignIn.
 type RequestEmailSignInParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1372,7 +1449,8 @@ type ListSkillsParams struct {
 
 // CreateSkillParams defines parameters for CreateSkill.
 type CreateSkillParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1400,13 +1478,15 @@ type ListTasksParams struct {
 
 // FileTaskParams defines parameters for FileTask.
 type FileTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // NextTaskParams defines parameters for NextTask.
 type NextTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1418,31 +1498,36 @@ type ListTakeableTasksParams struct {
 
 // RemoveBlockerParams defines parameters for RemoveBlocker.
 type RemoveBlockerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // AddBlockerParams defines parameters for AddBlocker.
 type AddBlockerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ClaimTaskParams defines parameters for ClaimTask.
 type ClaimTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // CompleteTaskParams defines parameters for CompleteTask.
 type CompleteTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DropTaskParams defines parameters for DropTask.
 type DropTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1451,73 +1536,85 @@ type AttachTaskEvidenceParams struct {
 	// Filename The file's name, as it should be shown and downloaded.
 	Filename EvidenceFilename `form:"filename" json:"filename"`
 
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // HandoverTaskParams defines parameters for HandoverTask.
 type HandoverTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // HeartbeatParams defines parameters for Heartbeat.
 type HeartbeatParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // AddNoteParams defines parameters for AddNote.
 type AddNoteParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ObserveParams defines parameters for Observe.
 type ObserveParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ReleaseTaskParams defines parameters for ReleaseTask.
 type ReleaseTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ProposeSkillVersionParams defines parameters for ProposeSkillVersion.
 type ProposeSkillVersionParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // TakeBackTaskParams defines parameters for TakeBackTask.
 type TakeBackTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // CreateTeamParams defines parameters for CreateTeam.
 type CreateTeamParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RemoveTeamMemberParams defines parameters for RemoveTeamMember.
 type RemoveTeamMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // AddTeamMemberParams defines parameters for AddTeamMember.
 type AddTeamMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RevokeTokenParams defines parameters for RevokeToken.
 type RevokeTokenParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1628,9 +1725,12 @@ type ServerInterface interface {
 	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	// (GET /v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
-	// RedeemLoginLink Redeem a login link
+	// ShowLoginLink Show a login link's sign-in page
 	// (GET /v1/login-links/{code})
-	RedeemLoginLink(w http.ResponseWriter, r *http.Request, code LoginCode)
+	ShowLoginLink(w http.ResponseWriter, r *http.Request, code LoginCode)
+	// RedeemLoginLink Redeem a login link
+	// (POST /v1/login-links/{code})
+	RedeemLoginLink(w http.ResponseWriter, r *http.Request, code LoginCode, params RedeemLoginLinkParams)
 	// Logout End the browser Session and clear its cookie
 	// (POST /v1/logout)
 	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
@@ -1649,6 +1749,9 @@ type ServerInterface interface {
 	// UpdateMember Change a Member's name, email or admin mark (admin)
 	// (PATCH /v1/members/{member})
 	UpdateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params UpdateMemberParams)
+	// DeactivateMember Deactivate a Member (admin)
+	// (POST /v1/members/{member}/deactivate)
+	DeactivateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params DeactivateMemberParams)
 	// IssueLoginLink Issue a one-time login link for a named Member (admin)
 	// (POST /v1/members/{member}/login-links)
 	IssueLoginLink(w http.ResponseWriter, r *http.Request, member MemberRef, params IssueLoginLinkParams)
@@ -1658,6 +1761,12 @@ type ServerInterface interface {
 	// SetManager Set the Member who directs this Member (admin)
 	// (PUT /v1/members/{member}/manager)
 	SetManager(w http.ResponseWriter, r *http.Request, member MemberRef, params SetManagerParams)
+	// ReactivateMember Reactivate a deactivated Member (admin)
+	// (POST /v1/members/{member}/reactivate)
+	ReactivateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params ReactivateMemberParams)
+	// ListSessions List a Member's open Sessions
+	// (GET /v1/members/{member}/sessions)
+	ListSessions(w http.ResponseWriter, r *http.Request, member MemberRef, params ListSessionsParams)
 	// RevokeSkill Take a Skill away from a Member (admin)
 	// (DELETE /v1/members/{member}/skills/{skill})
 	RevokeSkill(w http.ResponseWriter, r *http.Request, member MemberRef, skill SkillRef, params RevokeSkillParams)
@@ -2410,6 +2519,32 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ShowLoginLink operation middleware
+func (siw *ServerInterfaceWrapper) ShowLoginLink(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "code" -------------
+	var code LoginCode
+
+	err = runtime.BindStyledParameterWithOptions("simple", "code", r.PathValue("code"), &code, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ShowLoginLink(w, r, code)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RedeemLoginLink operation middleware
 func (siw *ServerInterfaceWrapper) RedeemLoginLink(w http.ResponseWriter, r *http.Request) {
 
@@ -2425,8 +2560,32 @@ func (siw *ServerInterfaceWrapper) RedeemLoginLink(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RedeemLoginLinkParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RedeemLoginLink(w, r, code)
+		siw.Handler.RedeemLoginLink(w, r, code, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2654,6 +2813,56 @@ func (siw *ServerInterfaceWrapper) UpdateMember(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DeactivateMember operation middleware
+func (siw *ServerInterfaceWrapper) DeactivateMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeactivateMemberParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeactivateMember(w, r, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // IssueLoginLink operation middleware
 func (siw *ServerInterfaceWrapper) IssueLoginLink(w http.ResponseWriter, r *http.Request) {
 
@@ -2795,6 +3004,111 @@ func (siw *ServerInterfaceWrapper) SetManager(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetManager(w, r, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReactivateMember operation middleware
+func (siw *ServerInterfaceWrapper) ReactivateMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReactivateMemberParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReactivateMember(w, r, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSessionsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSessions(w, r, member, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4572,10 +4886,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/login-links", wrapper.IssueLoginLink)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/login-links/{code}", wrapper.RedeemLoginLink)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/login-links/{code}", wrapper.ShowLoginLink)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/login-links/{code}", wrapper.RedeemLoginLink)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sign-in/email", wrapper.RequestEmailSignIn)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/sessions/{session}/close", wrapper.CloseSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/members/{member}/sessions", wrapper.ListSessions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/members/{member}/tokens", wrapper.ListTokens)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/tokens", wrapper.IssueToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tokens/{token}/revoke", wrapper.RevokeToken)
@@ -4583,6 +4899,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members", wrapper.CreateMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/members/{member}", wrapper.GetMember)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/members/{member}", wrapper.UpdateMember)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/deactivate", wrapper.DeactivateMember)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/reactivate", wrapper.ReactivateMember)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/members/{member}/skills/{skill}", wrapper.RevokeSkill)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/members/{member}/skills/{skill}", wrapper.GrantSkill)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/members/{member}/manager", wrapper.ClearManager)

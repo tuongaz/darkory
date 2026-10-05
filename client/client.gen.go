@@ -29,8 +29,10 @@ const (
 	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
 	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
 	ActivityKindMemberCreated           ActivityKind = "member.created"
+	ActivityKindMemberDeactivated       ActivityKind = "member.deactivated"
 	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
 	ActivityKindMemberManagerSet        ActivityKind = "member.manager_set"
+	ActivityKindMemberReactivated       ActivityKind = "member.reactivated"
 	ActivityKindMemberSkillGranted      ActivityKind = "member.skill_granted"
 	ActivityKindMemberSkillRevoked      ActivityKind = "member.skill_revoked"
 	ActivityKindMemberUpdated           ActivityKind = "member.updated"
@@ -80,9 +82,13 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindMemberCreated:
 		return true
+	case ActivityKindMemberDeactivated:
+		return true
 	case ActivityKindMemberManagerCleared:
 		return true
 	case ActivityKindMemberManagerSet:
+		return true
+	case ActivityKindMemberReactivated:
 		return true
 	case ActivityKindMemberSkillGranted:
 		return true
@@ -143,14 +149,15 @@ func (e ActivityKind) Valid() bool {
 
 // Defines values for ClaimEnd.
 const (
-	ClaimEndCompleted     ClaimEnd = "completed"
-	ClaimEndDropped       ClaimEnd = "dropped"
-	ClaimEndHandedOver    ClaimEnd = "handed_over"
-	ClaimEndLapsed        ClaimEnd = "lapsed"
-	ClaimEndReleased      ClaimEnd = "released"
-	ClaimEndSessionClosed ClaimEnd = "session_closed"
-	ClaimEndTakenBack     ClaimEnd = "taken_back"
-	ClaimEndTokenRevoked  ClaimEnd = "token_revoked"
+	ClaimEndCompleted         ClaimEnd = "completed"
+	ClaimEndDropped           ClaimEnd = "dropped"
+	ClaimEndHandedOver        ClaimEnd = "handed_over"
+	ClaimEndLapsed            ClaimEnd = "lapsed"
+	ClaimEndMemberDeactivated ClaimEnd = "member_deactivated"
+	ClaimEndReleased          ClaimEnd = "released"
+	ClaimEndSessionClosed     ClaimEnd = "session_closed"
+	ClaimEndTakenBack         ClaimEnd = "taken_back"
+	ClaimEndTokenRevoked      ClaimEnd = "token_revoked"
 )
 
 // Valid indicates whether the value is a known member of the ClaimEnd enum.
@@ -163,6 +170,8 @@ func (e ClaimEnd) Valid() bool {
 	case ClaimEndHandedOver:
 		return true
 	case ClaimEndLapsed:
+		return true
+	case ClaimEndMemberDeactivated:
 		return true
 	case ClaimEndReleased:
 		return true
@@ -195,6 +204,7 @@ const (
 	ErrorCodeSessionRequired      ErrorCode = "session_required"
 	ErrorCodeTasksOpen            ErrorCode = "tasks_open"
 	ErrorCodeTooLarge             ErrorCode = "too_large"
+	ErrorCodeTooManyRequests      ErrorCode = "too_many_requests"
 	ErrorCodeUnauthenticated      ErrorCode = "unauthenticated"
 )
 
@@ -232,6 +242,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTasksOpen:
 		return true
 	case ErrorCodeTooLarge:
+		return true
+	case ErrorCodeTooManyRequests:
 		return true
 	case ErrorCodeUnauthenticated:
 		return true
@@ -621,7 +633,8 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `too_large` 413 · `idempotency_key_reused` 422 · `internal` 500 · `not_implemented` 501.
+	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `not_implemented` 501.
 	Code ErrorCode `json:"code"`
 
 	// Details Extra facts about the failure, by code.
@@ -635,7 +648,8 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `too_large` 413 · `idempotency_key_reused` 422 · `internal` 500 · `not_implemented` 501.
+// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `not_implemented` 501.
 type ErrorCode string
 
 // Evidence defines model for Evidence.
@@ -806,11 +820,14 @@ type Me struct {
 // Member defines model for Member.
 type Member struct {
 	// Admin Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
-	Admin     bool       `json:"admin"`
-	CreatedAt time.Time  `json:"created_at"`
-	Email     *string    `json:"email,omitempty"`
-	ID        string     `json:"id"`
-	Kind      MemberKind `json:"kind"`
+	Admin     bool      `json:"admin"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+	Email         *string    `json:"email,omitempty"`
+	ID            string     `json:"id"`
+	Kind          MemberKind `json:"kind"`
 
 	// ManagerID The Member who directs this one. Absent when there is no Reporting line.
 	ManagerID *string `json:"manager_id,omitempty"`
@@ -931,6 +948,11 @@ type ReleaseTaskBody struct {
 type Session struct {
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
 
+	// ExpiresAt When an open browser Session ends unless it is used before: after a time unused, and
+	// at the latest a time after it started. Absent for token Sessions, which end when
+	// closed or when their token is revoked.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
 	// ID The id the running copy chose.
 	ID         string      `json:"id"`
 	Kind       SessionKind `json:"kind"`
@@ -944,6 +966,14 @@ type Session struct {
 
 // SessionKind defines model for SessionKind.
 type SessionKind string
+
+// SessionList defines model for SessionList.
+type SessionList struct {
+	Items []Session `json:"items"`
+
+	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
+	NextCursor *string `json:"next_cursor,omitempty"`
+}
 
 // SetManagerBody defines model for SetManagerBody.
 type SetManagerBody struct {
@@ -1248,13 +1278,15 @@ type ListFeaturesParams struct {
 
 // FileFeatureParams defines parameters for FileFeature.
 type FileFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DropFeatureParams defines parameters for DropFeature.
 type DropFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1263,7 +1295,8 @@ type AttachFeatureEvidenceParams struct {
 	// Filename The file's name, as it should be shown and downloaded.
 	Filename EvidenceFilename `form:"filename" json:"filename"`
 
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1276,25 +1309,36 @@ type ListFeatureObservationsParams struct {
 
 // PassFeatureOwnershipParams defines parameters for PassFeatureOwnership.
 type PassFeatureOwnershipParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RankFeatureParams defines parameters for RankFeature.
 type RankFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ShipFeatureParams defines parameters for ShipFeature.
 type ShipFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RedeemLoginLinkParams defines parameters for RedeemLoginLink.
+type RedeemLoginLinkParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // LogoutParams defines parameters for Logout.
 type LogoutParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1307,49 +1351,80 @@ type ListMembersParams struct {
 
 // CreateMemberParams defines parameters for CreateMember.
 type CreateMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // UpdateMemberParams defines parameters for UpdateMember.
 type UpdateMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeactivateMemberParams defines parameters for DeactivateMember.
+type DeactivateMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // IssueLoginLinkParams defines parameters for IssueLoginLink.
 type IssueLoginLinkParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ClearManagerParams defines parameters for ClearManager.
 type ClearManagerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // SetManagerParams defines parameters for SetManager.
 type SetManagerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ReactivateMemberParams defines parameters for ReactivateMember.
+type ReactivateMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// ListSessionsParams defines parameters for ListSessions.
+type ListSessionsParams struct {
+	// Limit At most this many items. Defaults to 100.
+	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor The `next_cursor` of the previous page.
+	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // RevokeSkillParams defines parameters for RevokeSkill.
 type RevokeSkillParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // GrantSkillParams defines parameters for GrantSkill.
 type GrantSkillParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // IssueTokenParams defines parameters for IssueToken.
 type IssueTokenParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1358,13 +1433,15 @@ type CloseSessionParams struct {
 	// Member The Member whose Session to close (admin). Defaults to the caller.
 	Member *string `form:"member,omitempty" json:"member,omitempty"`
 
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RequestEmailSignInParams defines parameters for RequestEmailSignIn.
 type RequestEmailSignInParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1375,7 +1452,8 @@ type ListSkillsParams struct {
 
 // CreateSkillParams defines parameters for CreateSkill.
 type CreateSkillParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1403,13 +1481,15 @@ type ListTasksParams struct {
 
 // FileTaskParams defines parameters for FileTask.
 type FileTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // NextTaskParams defines parameters for NextTask.
 type NextTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1421,31 +1501,36 @@ type ListTakeableTasksParams struct {
 
 // RemoveBlockerParams defines parameters for RemoveBlocker.
 type RemoveBlockerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // AddBlockerParams defines parameters for AddBlocker.
 type AddBlockerParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ClaimTaskParams defines parameters for ClaimTask.
 type ClaimTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // CompleteTaskParams defines parameters for CompleteTask.
 type CompleteTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // DropTaskParams defines parameters for DropTask.
 type DropTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1454,73 +1539,85 @@ type AttachTaskEvidenceParams struct {
 	// Filename The file's name, as it should be shown and downloaded.
 	Filename EvidenceFilename `form:"filename" json:"filename"`
 
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // HandoverTaskParams defines parameters for HandoverTask.
 type HandoverTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // HeartbeatParams defines parameters for Heartbeat.
 type HeartbeatParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // AddNoteParams defines parameters for AddNote.
 type AddNoteParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ObserveParams defines parameters for Observe.
 type ObserveParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ReleaseTaskParams defines parameters for ReleaseTask.
 type ReleaseTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // ProposeSkillVersionParams defines parameters for ProposeSkillVersion.
 type ProposeSkillVersionParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // TakeBackTaskParams defines parameters for TakeBackTask.
 type TakeBackTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // CreateTeamParams defines parameters for CreateTeam.
 type CreateTeamParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RemoveTeamMemberParams defines parameters for RemoveTeamMember.
 type RemoveTeamMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // AddTeamMemberParams defines parameters for AddTeamMember.
 type AddTeamMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RevokeTokenParams defines parameters for RevokeToken.
 type RevokeTokenParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response.
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1678,7 +1775,8 @@ type ClientInterface interface {
 	// the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 	// clients that cannot set headers) and receives every entry after it; `0` sends the whole
 	// history. With neither, the stream starts from now: it sends only entries written after
-	// it opened.
+	// it opened. A Member may have a limited number of streams open at once (an Install
+	// setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Corresponds with GET /v1/activity/stream (the `StreamActivity` operationId).
 	StreamActivity(ctx context.Context, params *StreamActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1808,13 +1906,29 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ShowLoginLink Show a login link's sign-in page
+	//
+	// An HTML page naming the Member and Organisation the link signs in as, with a button that
+	// posts to the same address (`redeemLoginLink`). Opening the link signs nobody in, so a
+	// page elsewhere cannot sign a browser in by sending it here, and a mail scanner fetching
+	// the link does not use it up. An unknown, used or expired link gets an HTML page saying
+	// so, with status 404.
+	//
+	// Corresponds with GET /v1/login-links/{code} (the `ShowLoginLink` operationId).
+	ShowLoginLink(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RedeemLoginLink Redeem a login link
 	//
 	// Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
-	// redirects to `/`. Errors: `not_found` (unknown, used or expired link).
+	// redirects to `/`. The request must come from the Install's own sign-in page, as a cookie
+	// write must: `Sec-Fetch-Site`, when sent, says `same-origin` or `none`, and the `Origin`
+	// (or `Referer`) is the Install's. A cookie the browser already held has its Session
+	// closed. The `Idempotency-Key` is accepted and not stored: a link works once. Errors:
+	// `not_found` (unknown, used or expired link), `forbidden` (not sent from the Install's
+	// own page).
 	//
-	// Corresponds with GET /v1/login-links/{code} (the `RedeemLoginLink` operationId).
-	RedeemLoginLink(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/login-links/{code} (the `RedeemLoginLink` operationId).
+	RedeemLoginLink(ctx context.Context, code LoginCode, params *RedeemLoginLinkParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Logout End the browser Session and clear its cookie
 	//
@@ -1874,6 +1988,18 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMember(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeactivateMember Deactivate a Member (admin)
+	//
+	// Revokes the Member's tokens, closes their Sessions and ends every Claim they hold, bound
+	// to a Session or to the Member, recording each in Activity. From then on every credential
+	// of theirs is refused, and no token or login link can be issued for them. The Member stays
+	// in the record, with everything they did. Deactivating a deactivated Member changes
+	// nothing. Errors: `forbidden` (not an admin, or deactivating yourself), `conflict` (the
+	// last active admin).
+	//
+	// Corresponds with POST /v1/members/{member}/deactivate (the `DeactivateMember` operationId).
+	DeactivateMember(ctx context.Context, member MemberRef, params *DeactivateMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// IssueLoginLink Issue a one-time login link for a named Member (admin)
 	//
 	// The link signs a browser in as the Member once, then stops working. `darkory login
@@ -1904,6 +2030,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/members/{member}/manager (the `SetManager` operationId).
 	SetManager(ctx context.Context, member MemberRef, params *SetManagerParams, body SetManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReactivateMember Reactivate a deactivated Member (admin)
+	//
+	// The Member may sign in and be issued tokens again. Tokens revoked and Sessions closed by
+	// the deactivation stay so. Reactivating an active Member changes nothing. Errors:
+	// `forbidden` (not an admin).
+	//
+	// Corresponds with POST /v1/members/{member}/reactivate (the `ReactivateMember` operationId).
+	ReactivateMember(ctx context.Context, member MemberRef, params *ReactivateMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListSessions List a Member's open Sessions
+	//
+	// The Member's Sessions that are open and, for a browser Session, not yet expired, most
+	// recently seen first. A Member may list their own; an admin anyone's. Close one with
+	// `closeSession` and `member`, or close them all with `deactivateMember`.
+	//
+	// Corresponds with GET /v1/members/{member}/sessions (the `ListSessions` operationId).
+	ListSessions(ctx context.Context, member MemberRef, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeSkill Take a Skill away from a Member (admin)
 	//
@@ -2057,7 +2201,8 @@ type ClientInterface interface {
 	// another come first). When none is takeable, holds the request open for up to
 	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default.
+	// token's default. A Member may have a limited number of `next` calls waiting at once
+	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2071,7 +2216,8 @@ type ClientInterface interface {
 	// another come first). When none is takeable, holds the request open for up to
 	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default.
+	// token's default. A Member may have a limited number of `next` calls waiting at once
+	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2277,9 +2423,10 @@ type ClientInterface interface {
 	// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Task the caller holds
 	//
 	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-	// a company Skill).
+	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// company Skill).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2289,9 +2436,10 @@ type ClientInterface interface {
 	// ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
 	//
 	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-	// a company Skill).
+	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// company Skill).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2394,7 +2542,8 @@ func (c *Client) ListActivity(ctx context.Context, params *ListActivityParams, r
 // the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 // clients that cannot set headers) and receives every entry after it; `0` sends the whole
 // history. With neither, the stream starts from now: it sends only entries written after
-// it opened.
+// it opened. A Member may have a limited number of streams open at once (an Install
+// setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Corresponds with GET /v1/activity/stream (the `StreamActivity` operationId).
 func (c *Client) StreamActivity(ctx context.Context, params *StreamActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2684,14 +2833,40 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
+// ShowLoginLink Show a login link's sign-in page
+//
+// An HTML page naming the Member and Organisation the link signs in as, with a button that
+// posts to the same address (`redeemLoginLink`). Opening the link signs nobody in, so a
+// page elsewhere cannot sign a browser in by sending it here, and a mail scanner fetching
+// the link does not use it up. An unknown, used or expired link gets an HTML page saying
+// so, with status 404.
+//
+// Corresponds with GET /v1/login-links/{code} (the `ShowLoginLink` operationId).
+func (c *Client) ShowLoginLink(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewShowLoginLinkRequest(c.Server, code)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // RedeemLoginLink Redeem a login link
 //
 // Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
-// redirects to `/`. Errors: `not_found` (unknown, used or expired link).
+// redirects to `/`. The request must come from the Install's own sign-in page, as a cookie
+// write must: `Sec-Fetch-Site`, when sent, says `same-origin` or `none`, and the `Origin`
+// (or `Referer`) is the Install's. A cookie the browser already held has its Session
+// closed. The `Idempotency-Key` is accepted and not stored: a link works once. Errors:
+// `not_found` (unknown, used or expired link), `forbidden` (not sent from the Install's
+// own page).
 //
-// Corresponds with GET /v1/login-links/{code} (the `RedeemLoginLink` operationId).
-func (c *Client) RedeemLoginLink(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRedeemLoginLinkRequest(c.Server, code)
+// Corresponds with POST /v1/login-links/{code} (the `RedeemLoginLink` operationId).
+func (c *Client) RedeemLoginLink(ctx context.Context, code LoginCode, params *RedeemLoginLinkParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRedeemLoginLinkRequest(c.Server, code, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2840,6 +3015,28 @@ func (c *Client) UpdateMember(ctx context.Context, member MemberRef, params *Upd
 	return c.Client.Do(req)
 }
 
+// DeactivateMember Deactivate a Member (admin)
+//
+// Revokes the Member's tokens, closes their Sessions and ends every Claim they hold, bound
+// to a Session or to the Member, recording each in Activity. From then on every credential
+// of theirs is refused, and no token or login link can be issued for them. The Member stays
+// in the record, with everything they did. Deactivating a deactivated Member changes
+// nothing. Errors: `forbidden` (not an admin, or deactivating yourself), `conflict` (the
+// last active admin).
+//
+// Corresponds with POST /v1/members/{member}/deactivate (the `DeactivateMember` operationId).
+func (c *Client) DeactivateMember(ctx context.Context, member MemberRef, params *DeactivateMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeactivateMemberRequest(c.Server, member, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // IssueLoginLink Issue a one-time login link for a named Member (admin)
 //
 // The link signs a browser in as the Member once, then stops working. `darkory login
@@ -2901,6 +3098,44 @@ func (c *Client) SetManagerWithBody(ctx context.Context, member MemberRef, param
 // Corresponds with PUT /v1/members/{member}/manager (the `SetManager` operationId).
 func (c *Client) SetManager(ctx context.Context, member MemberRef, params *SetManagerParams, body SetManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSetManagerRequest(c.Server, member, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReactivateMember Reactivate a deactivated Member (admin)
+//
+// The Member may sign in and be issued tokens again. Tokens revoked and Sessions closed by
+// the deactivation stay so. Reactivating an active Member changes nothing. Errors:
+// `forbidden` (not an admin).
+//
+// Corresponds with POST /v1/members/{member}/reactivate (the `ReactivateMember` operationId).
+func (c *Client) ReactivateMember(ctx context.Context, member MemberRef, params *ReactivateMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReactivateMemberRequest(c.Server, member, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListSessions List a Member's open Sessions
+//
+// The Member's Sessions that are open and, for a browser Session, not yet expired, most
+// recently seen first. A Member may list their own; an admin anyone's. Close one with
+// `closeSession` and `member`, or close them all with `deactivateMember`.
+//
+// Corresponds with GET /v1/members/{member}/sessions (the `ListSessions` operationId).
+func (c *Client) ListSessions(ctx context.Context, member MemberRef, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListSessionsRequest(c.Server, member, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3233,7 +3468,8 @@ func (c *Client) FileTask(ctx context.Context, params *FileTaskParams, body File
 // another come first). When none is takeable, holds the request open for up to
 // `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 // ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default.
+// token's default. A Member may have a limited number of `next` calls waiting at once
+// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3257,7 +3493,8 @@ func (c *Client) NextTaskWithBody(ctx context.Context, params *NextTaskParams, c
 // another come first). When none is takeable, holds the request open for up to
 // `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 // ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default.
+// token's default. A Member may have a limited number of `next` calls waiting at once
+// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3673,9 +3910,10 @@ func (c *Client) ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseT
 // ProposeSkillVersionWithBody Propose a new version of a company Skill from the Task the caller holds
 //
 // Written against `based_on_version`, which must be the current version, for a company
-// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-// a company Skill).
+// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// company Skill).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3695,9 +3933,10 @@ func (c *Client) ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, 
 // ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
 //
 // Written against `based_on_version`, which must be the current version, for a company
-// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-// a company Skill).
+// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// company Skill).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4662,8 +4901,8 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewRedeemLoginLinkRequest constructs an http.Request for the RedeemLoginLink method
-func NewRedeemLoginLinkRequest(server string, code LoginCode) (*http.Request, error) {
+// NewShowLoginLinkRequest constructs an http.Request for the ShowLoginLink method
+func NewShowLoginLinkRequest(server string, code LoginCode) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4691,6 +4930,55 @@ func NewRedeemLoginLinkRequest(server string, code LoginCode) (*http.Request, er
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRedeemLoginLinkRequest constructs an http.Request for the RedeemLoginLink method
+func NewRedeemLoginLinkRequest(server string, code LoginCode, params *RedeemLoginLinkParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "code", code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/login-links/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -4982,6 +5270,55 @@ func NewUpdateMemberRequestWithBody(server string, member MemberRef, params *Upd
 	return req, nil
 }
 
+// NewDeactivateMemberRequest constructs an http.Request for the DeactivateMember method
+func NewDeactivateMemberRequest(server string, member MemberRef, params *DeactivateMemberParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/members/%s/deactivate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewIssueLoginLinkRequest constructs an http.Request for the IssueLoginLink method
 func NewIssueLoginLinkRequest(server string, member MemberRef, params *IssueLoginLinkParams) (*http.Request, error) {
 	var err error
@@ -5137,6 +5474,128 @@ func NewSetManagerRequestWithBody(server string, member MemberRef, params *SetMa
 			req.Header.Set("Idempotency-Key", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewReactivateMemberRequest constructs an http.Request for the ReactivateMember method
+func NewReactivateMemberRequest(server string, member MemberRef, params *ReactivateMemberParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/members/%s/reactivate", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListSessionsRequest constructs an http.Request for the ListSessions method
+func NewListSessionsRequest(server string, member MemberRef, params *ListSessionsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/members/%s/sessions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -7161,7 +7620,8 @@ type ClientWithResponsesInterface interface {
 	// the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 	// clients that cannot set headers) and receives every entry after it; `0` sends the whole
 	// history. With neither, the stream starts from now: it sends only entries written after
-	// it opened.
+	// it opened. A Member may have a limited number of streams open at once (an Install
+	// setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -7309,15 +7769,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/health (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
 
-	// RedeemLoginLinkWithResponse Redeem a login link
+	// ShowLoginLinkWithResponse Show a login link's sign-in page
 	//
-	// Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
-	// redirects to `/`. Errors: `not_found` (unknown, used or expired link).
+	// An HTML page naming the Member and Organisation the link signs in as, with a button that
+	// posts to the same address (`redeemLoginLink`). Opening the link signs nobody in, so a
+	// page elsewhere cannot sign a browser in by sending it here, and a mail scanner fetching
+	// the link does not use it up. An unknown, used or expired link gets an HTML page saying
+	// so, with status 404.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with GET /v1/login-links/{code} (the `RedeemLoginLink` operationId).
-	RedeemLoginLinkWithResponse(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*RedeemLoginLinkResponse, error)
+	// Corresponds with GET /v1/login-links/{code} (the `ShowLoginLink` operationId).
+	ShowLoginLinkWithResponse(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*ShowLoginLinkResponse, error)
+
+	// RedeemLoginLinkWithResponse Redeem a login link
+	//
+	// Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
+	// redirects to `/`. The request must come from the Install's own sign-in page, as a cookie
+	// write must: `Sec-Fetch-Site`, when sent, says `same-origin` or `none`, and the `Origin`
+	// (or `Referer`) is the Install's. A cookie the browser already held has its Session
+	// closed. The `Idempotency-Key` is accepted and not stored: a link works once. Errors:
+	// `not_found` (unknown, used or expired link), `forbidden` (not sent from the Install's
+	// own page).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/login-links/{code} (the `RedeemLoginLink` operationId).
+	RedeemLoginLinkWithResponse(ctx context.Context, code LoginCode, params *RedeemLoginLinkParams, reqEditors ...RequestEditorFn) (*RedeemLoginLinkResponse, error)
 
 	// LogoutWithResponse End the browser Session and clear its cookie
 	//
@@ -7385,6 +7863,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMemberWithResponse(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberResponse, error)
 
+	// DeactivateMemberWithResponse Deactivate a Member (admin)
+	//
+	// Revokes the Member's tokens, closes their Sessions and ends every Claim they hold, bound
+	// to a Session or to the Member, recording each in Activity. From then on every credential
+	// of theirs is refused, and no token or login link can be issued for them. The Member stays
+	// in the record, with everything they did. Deactivating a deactivated Member changes
+	// nothing. Errors: `forbidden` (not an admin, or deactivating yourself), `conflict` (the
+	// last active admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/members/{member}/deactivate (the `DeactivateMember` operationId).
+	DeactivateMemberWithResponse(ctx context.Context, member MemberRef, params *DeactivateMemberParams, reqEditors ...RequestEditorFn) (*DeactivateMemberResponse, error)
+
 	// IssueLoginLinkWithResponse Issue a one-time login link for a named Member (admin)
 	//
 	// The link signs a browser in as the Member once, then stops working. `darkory login
@@ -7419,6 +7911,28 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/members/{member}/manager (the `SetManager` operationId).
 	SetManagerWithResponse(ctx context.Context, member MemberRef, params *SetManagerParams, body SetManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*SetManagerResponse, error)
+
+	// ReactivateMemberWithResponse Reactivate a deactivated Member (admin)
+	//
+	// The Member may sign in and be issued tokens again. Tokens revoked and Sessions closed by
+	// the deactivation stay so. Reactivating an active Member changes nothing. Errors:
+	// `forbidden` (not an admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/members/{member}/reactivate (the `ReactivateMember` operationId).
+	ReactivateMemberWithResponse(ctx context.Context, member MemberRef, params *ReactivateMemberParams, reqEditors ...RequestEditorFn) (*ReactivateMemberResponse, error)
+
+	// ListSessionsWithResponse List a Member's open Sessions
+	//
+	// The Member's Sessions that are open and, for a browser Session, not yet expired, most
+	// recently seen first. A Member may list their own; an admin anyone's. Close one with
+	// `closeSession` and `member`, or close them all with `deactivateMember`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/members/{member}/sessions (the `ListSessions` operationId).
+	ListSessionsWithResponse(ctx context.Context, member MemberRef, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*ListSessionsResponse, error)
 
 	// RevokeSkillWithResponse Take a Skill away from a Member (admin)
 	//
@@ -7590,7 +8104,8 @@ type ClientWithResponsesInterface interface {
 	// another come first). When none is takeable, holds the request open for up to
 	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default.
+	// token's default. A Member may have a limited number of `next` calls waiting at once
+	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7604,7 +8119,8 @@ type ClientWithResponsesInterface interface {
 	// another come first). When none is takeable, holds the request open for up to
 	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default.
+	// token's default. A Member may have a limited number of `next` calls waiting at once
+	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7820,9 +8336,10 @@ type ClientWithResponsesInterface interface {
 	// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Task the caller holds
 	//
 	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-	// a company Skill).
+	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// company Skill).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7832,9 +8349,10 @@ type ClientWithResponsesInterface interface {
 	// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Task the caller holds
 	//
 	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-	// a company Skill).
+	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// company Skill).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8586,6 +9104,47 @@ func (r GetHealthResponse) ContentType() string {
 	return ""
 }
 
+type ShowLoginLinkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ShowLoginLinkResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ShowLoginLinkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ShowLoginLinkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ShowLoginLinkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ShowLoginLinkResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // RedeemLoginLinkResponse303Headers the declared response headers of an HTTP 303 response for RedeemLoginLink
 type RedeemLoginLinkResponse303Headers struct {
 	Location  *string
@@ -8923,6 +9482,54 @@ func (r UpdateMemberResponse) ContentType() string {
 	return ""
 }
 
+type DeactivateMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Member
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeactivateMemberResponse) GetJSON200() *Member {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeactivateMemberResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeactivateMemberResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeactivateMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeactivateMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeactivateMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type IssueLoginLinkResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9047,6 +9654,102 @@ func (r SetManagerResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SetManagerResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ReactivateMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Member
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ReactivateMemberResponse) GetJSON200() *Member {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ReactivateMemberResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ReactivateMemberResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReactivateMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReactivateMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReactivateMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListSessionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SessionList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListSessionsResponse) GetJSON200() *SessionList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListSessionsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListSessionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListSessionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListSessionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListSessionsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -10709,7 +11412,8 @@ func (c *ClientWithResponses) ListActivityWithResponse(ctx context.Context, para
 // the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 // clients that cannot set headers) and receives every entry after it; `0` sends the whole
 // history. With neither, the stream starts from now: it sends only entries written after
-// it opened.
+// it opened. A Member may have a limited number of streams open at once (an Install
+// setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10953,16 +11657,40 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 	return ParseGetHealthResponse(rsp)
 }
 
-// RedeemLoginLinkWithResponse Redeem a login link
+// ShowLoginLinkWithResponse Show a login link's sign-in page
 //
-// Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
-// redirects to `/`. Errors: `not_found` (unknown, used or expired link).
+// An HTML page naming the Member and Organisation the link signs in as, with a button that
+// posts to the same address (`redeemLoginLink`). Opening the link signs nobody in, so a
+// page elsewhere cannot sign a browser in by sending it here, and a mail scanner fetching
+// the link does not use it up. An unknown, used or expired link gets an HTML page saying
+// so, with status 404.
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with GET /v1/login-links/{code} (the `RedeemLoginLink` operationId).
-func (c *ClientWithResponses) RedeemLoginLinkWithResponse(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*RedeemLoginLinkResponse, error) {
-	rsp, err := c.RedeemLoginLink(ctx, code, reqEditors...)
+// Corresponds with GET /v1/login-links/{code} (the `ShowLoginLink` operationId).
+func (c *ClientWithResponses) ShowLoginLinkWithResponse(ctx context.Context, code LoginCode, reqEditors ...RequestEditorFn) (*ShowLoginLinkResponse, error) {
+	rsp, err := c.ShowLoginLink(ctx, code, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseShowLoginLinkResponse(rsp)
+}
+
+// RedeemLoginLinkWithResponse Redeem a login link
+//
+// Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
+// redirects to `/`. The request must come from the Install's own sign-in page, as a cookie
+// write must: `Sec-Fetch-Site`, when sent, says `same-origin` or `none`, and the `Origin`
+// (or `Referer`) is the Install's. A cookie the browser already held has its Session
+// closed. The `Idempotency-Key` is accepted and not stored: a link works once. Errors:
+// `not_found` (unknown, used or expired link), `forbidden` (not sent from the Install's
+// own page).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/login-links/{code} (the `RedeemLoginLink` operationId).
+func (c *ClientWithResponses) RedeemLoginLinkWithResponse(ctx context.Context, code LoginCode, params *RedeemLoginLinkParams, reqEditors ...RequestEditorFn) (*RedeemLoginLinkResponse, error) {
+	rsp, err := c.RedeemLoginLink(ctx, code, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -11083,6 +11811,26 @@ func (c *ClientWithResponses) UpdateMemberWithResponse(ctx context.Context, memb
 	return ParseUpdateMemberResponse(rsp)
 }
 
+// DeactivateMemberWithResponse Deactivate a Member (admin)
+//
+// Revokes the Member's tokens, closes their Sessions and ends every Claim they hold, bound
+// to a Session or to the Member, recording each in Activity. From then on every credential
+// of theirs is refused, and no token or login link can be issued for them. The Member stays
+// in the record, with everything they did. Deactivating a deactivated Member changes
+// nothing. Errors: `forbidden` (not an admin, or deactivating yourself), `conflict` (the
+// last active admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/members/{member}/deactivate (the `DeactivateMember` operationId).
+func (c *ClientWithResponses) DeactivateMemberWithResponse(ctx context.Context, member MemberRef, params *DeactivateMemberParams, reqEditors ...RequestEditorFn) (*DeactivateMemberResponse, error) {
+	rsp, err := c.DeactivateMember(ctx, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeactivateMemberResponse(rsp)
+}
+
 // IssueLoginLinkWithResponse Issue a one-time login link for a named Member (admin)
 //
 // The link signs a browser in as the Member once, then stops working. `darkory login
@@ -11140,6 +11888,40 @@ func (c *ClientWithResponses) SetManagerWithResponse(ctx context.Context, member
 		return nil, err
 	}
 	return ParseSetManagerResponse(rsp)
+}
+
+// ReactivateMemberWithResponse Reactivate a deactivated Member (admin)
+//
+// The Member may sign in and be issued tokens again. Tokens revoked and Sessions closed by
+// the deactivation stay so. Reactivating an active Member changes nothing. Errors:
+// `forbidden` (not an admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/members/{member}/reactivate (the `ReactivateMember` operationId).
+func (c *ClientWithResponses) ReactivateMemberWithResponse(ctx context.Context, member MemberRef, params *ReactivateMemberParams, reqEditors ...RequestEditorFn) (*ReactivateMemberResponse, error) {
+	rsp, err := c.ReactivateMember(ctx, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReactivateMemberResponse(rsp)
+}
+
+// ListSessionsWithResponse List a Member's open Sessions
+//
+// The Member's Sessions that are open and, for a browser Session, not yet expired, most
+// recently seen first. A Member may list their own; an admin anyone's. Close one with
+// `closeSession` and `member`, or close them all with `deactivateMember`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/members/{member}/sessions (the `ListSessions` operationId).
+func (c *ClientWithResponses) ListSessionsWithResponse(ctx context.Context, member MemberRef, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*ListSessionsResponse, error) {
+	rsp, err := c.ListSessions(ctx, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListSessionsResponse(rsp)
 }
 
 // RevokeSkillWithResponse Take a Skill away from a Member (admin)
@@ -11414,7 +12196,8 @@ func (c *ClientWithResponses) FileTaskWithResponse(ctx context.Context, params *
 // another come first). When none is takeable, holds the request open for up to
 // `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 // ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default.
+// token's default. A Member may have a limited number of `next` calls waiting at once
+// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11434,7 +12217,8 @@ func (c *ClientWithResponses) NextTaskWithBodyWithResponse(ctx context.Context, 
 // another come first). When none is takeable, holds the request open for up to
 // `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
 // ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default.
+// token's default. A Member may have a limited number of `next` calls waiting at once
+// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11776,9 +12560,10 @@ func (c *ClientWithResponses) ReleaseTaskWithResponse(ctx context.Context, task 
 // ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Task the caller holds
 //
 // Written against `based_on_version`, which must be the current version, for a company
-// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-// a company Skill).
+// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// company Skill).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11794,9 +12579,10 @@ func (c *ClientWithResponses) ProposeSkillVersionWithBodyWithResponse(ctx contex
 // ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Task the caller holds
 //
 // Written against `based_on_version`, which must be the current version, for a company
-// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-// a company Skill).
+// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// company Skill).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12409,6 +13195,32 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	return response, nil
 }
 
+// ParseShowLoginLinkResponse parses an HTTP response from a ShowLoginLinkWithResponse call
+func ParseShowLoginLinkResponse(rsp *http.Response) (*ShowLoginLinkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ShowLoginLinkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRedeemLoginLinkResponse parses an HTTP response from a RedeemLoginLinkWithResponse call
 func ParseRedeemLoginLinkResponse(rsp *http.Response) (*RedeemLoginLinkResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -12665,6 +13477,39 @@ func ParseUpdateMemberResponse(rsp *http.Response) (*UpdateMemberResponse, error
 	return response, nil
 }
 
+// ParseDeactivateMemberResponse parses an HTTP response from a DeactivateMemberWithResponse call
+func ParseDeactivateMemberResponse(rsp *http.Response) (*DeactivateMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeactivateMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Member
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseIssueLoginLinkResponse parses an HTTP response from a IssueLoginLinkWithResponse call
 func ParseIssueLoginLinkResponse(rsp *http.Response) (*IssueLoginLinkResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -12743,6 +13588,72 @@ func ParseSetManagerResponse(rsp *http.Response) (*SetManagerResponse, error) {
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReactivateMemberResponse parses an HTTP response from a ReactivateMemberWithResponse call
+func ParseReactivateMemberResponse(rsp *http.Response) (*ReactivateMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReactivateMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Member
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListSessionsResponse parses an HTTP response from a ListSessionsWithResponse call
+func ParseListSessionsResponse(rsp *http.Response) (*ListSessionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListSessionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SessionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

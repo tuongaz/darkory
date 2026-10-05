@@ -18,6 +18,8 @@ var adminCommands = []command{
 	{path: "member list", args: "[--team t] [--kind k]", short: "list Members", run: cmdMemberList},
 	{path: "member show", args: "<member>", short: "show a Member with their Teams, Skills and reports", run: cmdMemberShow},
 	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false]", short: "change a Member (admin)", run: cmdMemberUpdate},
+	{path: "member deactivate", args: "<member>", short: "revoke a Member's tokens, close their Sessions, end their Claims, refuse them from now on (admin)", run: cmdMemberDeactivate},
+	{path: "member reactivate", args: "<member>", short: "let a deactivated Member sign in and be issued tokens again (admin)", run: cmdMemberReactivate},
 	{path: "team create", args: "<KEY> <name>", short: "create a Team (admin)", run: cmdTeamCreate},
 	{path: "team list", short: "list Teams", run: cmdTeamList},
 	{path: "team show", args: "<team>", short: "show a Team and its Members", run: cmdTeamShow},
@@ -36,6 +38,7 @@ var adminCommands = []command{
 	{path: "login", args: "<member> | --email address", short: "issue a one-time login link for a Member (admin), or ask for one by email", run: cmdLogin},
 	{path: "logout", short: "close this Session, ending the Claims bound to it", run: cmdLogout},
 	{path: "session close", args: "[session id] [--member m]", short: "close a Session (default this one), ending its Claims", run: cmdSessionClose},
+	{path: "session list", args: "[member] [--limit n]", short: "list a Member's open Sessions (default yours; another's needs admin)", run: cmdSessionList},
 }
 
 func cmdMe(c *call) error {
@@ -161,6 +164,38 @@ func cmdMemberUpdate(c *call) error {
 		return err
 	}
 	res, err := conn.UpdateMemberWithResponse(c.ctx, args[0], &client.UpdateMemberParams{}, body)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printMemberLine(w, *res.JSON200) })
+}
+
+func cmdMemberDeactivate(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.DeactivateMemberWithResponse(c.ctx, args[0], &client.DeactivateMemberParams{})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printMemberLine(w, *res.JSON200) })
+}
+
+func cmdMemberReactivate(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.ReactivateMemberWithResponse(c.ctx, args[0], &client.ReactivateMemberParams{})
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
@@ -569,6 +604,40 @@ func cmdLogout(c *call) error {
 		fmt.Fprintf(w, "Closed Session %s.\n", conn.Settings.Session)
 		if stopped != 0 {
 			fmt.Fprintf(w, "Stopped its background heartbeat (pid %d).\n", stopped)
+		}
+	})
+}
+
+func cmdSessionList(c *call) error {
+	limit := c.fs.Int("limit", 0, "at most this many Sessions (default 100)")
+	args, err := c.args(0, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	member := ""
+	if len(args) == 1 {
+		member = args[0]
+	} else if member, err = c.me(); err != nil {
+		return err
+	}
+	params := &client.ListSessionsParams{}
+	if *limit > 0 {
+		params.Limit = limit
+	}
+	res, err := conn.ListSessionsWithResponse(c.ctx, member, params)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		for _, s := range res.JSON200.Items {
+			c.printSession(w, s)
+		}
+		if res.JSON200.NextCursor != nil {
+			fmt.Fprintln(w, "… more; raise --limit to see them")
 		}
 	})
 }

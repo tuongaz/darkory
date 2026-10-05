@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -201,4 +202,172 @@ func TestEvidenceFilenamesShowAsTheyAre(t *testing.T) {
 	if csp := dl.HTTPResponse.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "sandbox") || !strings.Contains(csp, "frame-ancestors 'none'") {
 		t.Fatalf("download CSP %q", csp)
 	}
+}
+
+// Opening a login link signs nobody in: it shows a page naming whom it signs in as, and only the
+// page's own button, posting from this Install's origin, redeems it. A page elsewhere sending a
+// browser to mallory's link — the review's login CSRF — leaves the browser signed in as before
+// (security review L1).
+func TestLoginLinkSignsInOnlyFromItsPage(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		got(h.admin.CreateMemberWithResponse(ctx, &client.CreateMemberParams{}, client.CreateMemberBody{Name: "<b>mallory</b>", Kind: client.Human})).want(t, http.StatusCreated)
+		link := got(h.admin.IssueLoginLinkWithResponse(ctx, "<b>mallory</b>", &client.IssueLoginLinkParams{})).want(t, http.StatusCreated).JSON201
+		path := strings.TrimPrefix(link.URL, h.ts.URL)
+
+		res, err := http.Get(link.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		hd := res.Header
+		if res.StatusCode != http.StatusOK || len(res.Cookies()) != 0 || !strings.Contains(string(page), "Sign in as &lt;b&gt;mallory&lt;/b&gt;") ||
+			!strings.Contains(string(page), "Acme") || !strings.Contains(string(page), `<form method="post">`) ||
+			hd.Get("Content-Security-Policy") != loginCSP || hd.Get("X-Frame-Options") != "DENY" || hd.Get("Cache-Control") != "no-store" {
+			t.Fatalf("the sign-in page: %d %v\n%s", res.StatusCode, hd, page)
+		}
+
+		ada := h.signIn(t, "ada")
+		post := func(headers map[string]string) *http.Response {
+			req, _ := http.NewRequest(http.MethodPost, link.URL, nil)
+			req.AddCookie(ada)
+			for k, v := range headers {
+				req.Header.Set(k, v)
+			}
+			res, err := (&http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res.Body.Close()
+			return res
+		}
+		for name, headers := range map[string]map[string]string{
+			"a sibling port":       {"Origin": "http://127.0.0.1:18080", "Sec-Fetch-Site": "same-site"},
+			"another site":         {"Origin": "http://localhost:18080", "Sec-Fetch-Site": "cross-site"},
+			"a cross-site referer": {"Referer": "http://localhost:18080/attack.html"},
+			"no origin at all":     nil,
+		} {
+			if res := post(headers); res.StatusCode != http.StatusForbidden || len(res.Cookies()) != 0 {
+				t.Errorf("%s: %d %v", name, res.StatusCode, res.Cookies())
+			}
+		}
+		me := h.browserRequest(t, ada, http.MethodGet, "/v1/me", "", nil)
+		var body client.Me
+		decode(t, me, &body)
+		if body.Member.Name != "ada" {
+			t.Fatalf("the browser is signed in as %q", body.Member.Name)
+		}
+
+		// From the page itself it signs in, and the Session of the cookie the browser held ends.
+		res = redeem(t, h.ts, path, ada)
+		if res.StatusCode != http.StatusSeeOther || len(res.Cookies()) != 1 {
+			t.Fatalf("from the page: %d %v", res.StatusCode, res.Cookies())
+		}
+		if me := h.browserRequest(t, ada, http.MethodGet, "/v1/me", "", nil); me.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("the replaced cookie answers %d", me.StatusCode)
+		}
+	})
+}
+
+// A browser Session's cookie stops working on the server after the Session's lifetime, though
+// the browser would still send it; the review's proof found it working a year on (security
+// review M4). An admin lists a Member's Sessions and deactivates the Member, which ends their
+// Activity stream at once; the Member cannot do either to others.
+func TestBrowserSessionsEndAndMembersDeactivate(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		fake := clock.NewFake(time.Now())
+		h := newHarnessWith(t, st, Options{Clock: fake})
+		ctx := t.Context()
+		ck := h.signIn(t, "ada")
+		fake.Advance(365 * 24 * time.Hour)
+		if res := h.browserRequest(t, ck, http.MethodGet, "/v1/me", "", nil); res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("a year later the cookie answers %d", res.StatusCode)
+		}
+
+		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		bob, _ := h.agent("bob", nil)
+		got(bob.GetMeWithResponse(ctx)).want(t, http.StatusOK)
+		sessions := got(h.admin.ListSessionsWithResponse(ctx, "bob", &client.ListSessionsParams{})).want(t, http.StatusOK).JSON200
+		if len(sessions.Items) != 1 || sessions.Items[0].ID != "bob-1" || sessions.Items[0].Kind != client.SessionKindToken {
+			t.Fatalf("bob's Sessions %+v", sessions.Items)
+		}
+		got(bob.ListSessionsWithResponse(ctx, "ada", &client.ListSessionsParams{})).want(t, http.StatusForbidden)
+		got(bob.DeactivateMemberWithResponse(ctx, "ada", &client.DeactivateMemberParams{})).want(t, http.StatusForbidden)
+
+		stream := h.openStreamAs(t, h.secrets["bob"], "bob-stream", "")
+		m := got(h.admin.DeactivateMemberWithResponse(ctx, "bob", &client.DeactivateMemberParams{})).want(t, http.StatusOK).JSON200
+		if m.DeactivatedAt == nil {
+			t.Fatalf("deactivated %+v", m)
+		}
+		if ids := stream.rest(t); len(ids) != 0 {
+			t.Fatalf("the stream sent %v after the deactivation", ids)
+		}
+		got(bob.GetMeWithResponse(ctx)).want(t, http.StatusUnauthorized)
+		got(h.admin.IssueTokenWithResponse(ctx, "bob", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "again"})).want(t, http.StatusConflict)
+		got(h.admin.ReactivateMemberWithResponse(ctx, "bob", &client.ReactivateMemberParams{})).want(t, http.StatusOK)
+		got(h.admin.IssueTokenWithResponse(ctx, "bob", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "again"})).want(t, http.StatusCreated)
+	})
+}
+
+// builder0 is the key the builder's long requests are counted under.
+func builder0(t *testing.T, h *harness) string {
+	me := got(h.client(h.secrets["builder"], "builder-1").GetMeWithResponse(t.Context())).want(t, http.StatusOK).JSON200
+	return me.Organisation.ID + "/" + me.Member.ID
+}
+
+// A Member may hold only so many Activity streams and waiting `next` calls at once; one more is
+// refused with too_many_requests, and ending one makes room (security review L4).
+func TestLongRequestsAreCappedPerMember(t *testing.T) {
+	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{MaxWaiting: 2})
+	ctx := t.Context()
+	h.webAndBuild()
+	streams := []*sseStream{h.openStream(t, ""), h.openStreamAs(t, h.adminSecret, "ada-other", "")}
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, h.ts.URL+"/v1/activity/stream", nil)
+	req.Header.Set("Authorization", "Bearer "+h.adminSecret)
+	req.Header.Set("Darkory-Session", "ada-third")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertError(t, res, http.StatusTooManyRequests, "too_many_requests")
+	// Another Member is not counted against ada.
+	builder, _ := h.agent("builder", nil, "build")
+	h.openStreamAs(t, h.secrets["builder"], "builder-stream", "").close()
+	streams[0].close()
+	waitFor(t, func() bool {
+		s, err := http.DefaultClient.Do(req.Clone(ctx))
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.Body.Close()
+		return s.StatusCode == http.StatusOK
+	})
+	streams[1].close()
+
+	key := builder0(t, h)
+	waiting := make(chan int, 2)
+	for range 2 {
+		go func() {
+			res, err := builder.NextTaskWithResponse(ctx, &client.NextTaskParams{}, client.NextTaskBody{WaitSeconds: ptrInt(2)})
+			if err != nil {
+				waiting <- 0
+				return
+			}
+			waiting <- res.StatusCode()
+		}()
+	}
+	waitFor(t, func() bool {
+		h.srv.nexts.mu.Lock()
+		defer h.srv.nexts.mu.Unlock()
+		return h.srv.nexts.open[key] == 2
+	})
+	got(builder.NextTaskWithResponse(ctx, &client.NextTaskParams{}, client.NextTaskBody{WaitSeconds: ptrInt(0)})).want(t, http.StatusTooManyRequests)
+	for range 2 {
+		if code := <-waiting; code != http.StatusNoContent {
+			t.Fatalf("a waiting next answered %d", code)
+		}
+	}
+	got(builder.NextTaskWithResponse(ctx, &client.NextTaskParams{}, client.NextTaskBody{WaitSeconds: ptrInt(0)})).want(t, http.StatusNoContent)
 }

@@ -38,6 +38,9 @@ func (s *Service) IssueToken(ctx context.Context, c *auth.Caller, memberRef, nam
 		if err != nil {
 			return nil, err
 		}
+		if err := mustBeActive(t, member); err != nil {
+			return nil, err
+		}
 		return issueToken(t, member, name, defaultTimeout)
 	})
 	if err != nil {
@@ -113,7 +116,7 @@ func (s *Service) RevokeToken(ctx context.Context, c *auth.Caller, tokenID strin
 			return nil, err
 		}
 		for _, sess := range sessions {
-			if _, err := closeSession(t, sess, "token_revoked"); err != nil {
+			if _, err := closeSession(t, sess, "token_revoked", &c.MemberID); err != nil {
 				return nil, err
 			}
 		}
@@ -133,34 +136,49 @@ func openSessions(t *tx, where string, arg any) ([]string, error) {
 }
 
 // closeSession closes a Session and ends the Claims bound to it — those made with a heartbeat
-// timeout — recording each in Activity. It returns how many Claims it ended.
-func closeSession(t *tx, sessionID, how string) (int, error) {
+// timeout — recording each in Activity with by as the actor (nil when Darkory acts). It returns
+// how many Claims it ended.
+func closeSession(t *tx, sessionID, how string, by *string) (int, error) {
 	if _, err := t.Exec(t.ctx, `UPDATE sessions SET closed_at = $1 WHERE org_id = $2 AND id = $3 AND closed_at IS NULL`,
 		ms(t.now), t.caller.OrgID, sessionID); err != nil {
 		return 0, err
 	}
+	ended, err := endClaims(t, `c.session_id = $2 AND c.timeout_ms IS NOT NULL AND t.claim_expires_at IS NOT NULL`, sessionID, how, by)
+	if err != nil {
+		return 0, err
+	}
+	if err := t.record(by, "session.closed", sessionID, map[string]any{"how": how, "claims_ended": ended}); err != nil {
+		return 0, err
+	}
+	return ended, nil
+}
+
+// endClaims ends the live Claims picked by where (over the Task t and its Claim c, binding $2 to
+// arg) as how, by by, clearing each Task's Claim and recording task.claim_ended. A Claim whose
+// expiry had already passed ended at its expiry: it is recorded as lapsed, with no actor. It
+// returns how many Claims it ended that had not lapsed.
+func endClaims(t *tx, where string, arg any, how string, by *string) (int, error) {
 	type bound struct {
 		task, claim, holder string
-		expires             int64
+		expires             sql.NullInt64
 	}
 	claims, err := collect(t.ctx, t, func(row interface{ Scan(...any) error }) (bound, error) {
 		var b bound
 		return b, row.Scan(&b.task, &b.claim, &b.holder, &b.expires)
 	}, `SELECT t.id, c.id, c.holder_id, t.claim_expires_at FROM tasks t JOIN claims c ON c.id = t.claim_id
-WHERE t.org_id = $1 AND c.session_id = $2 AND c.ended_at IS NULL AND c.timeout_ms IS NOT NULL AND t.claim_expires_at IS NOT NULL
-ORDER BY t.id`, t.caller.OrgID, sessionID)
+WHERE t.org_id = $1 AND c.ended_at IS NULL AND `+where+`
+ORDER BY t.id`, t.caller.OrgID, arg)
 	if err != nil {
 		return 0, err
 	}
 	ended := 0
 	for _, b := range claims {
-		// A Claim that had already lapsed ended at its expiry; record that rather than the close.
-		endedAt, endedHow, by := ms(t.now), how, &t.caller.MemberID
-		if b.expires <= ms(t.now) {
-			endedAt, endedHow, by = b.expires, "lapsed", nil
+		endedAt, endedHow, actor := ms(t.now), how, by
+		if b.expires.Valid && b.expires.Int64 <= ms(t.now) {
+			endedAt, endedHow, actor = b.expires.Int64, "lapsed", nil
 		}
 		if _, err := t.Exec(t.ctx, `UPDATE claims SET ended_at = $1, how_ended = $2, ended_by = $3 WHERE org_id = $4 AND id = $5`,
-			endedAt, endedHow, by, t.caller.OrgID, b.claim); err != nil {
+			endedAt, endedHow, actor, t.caller.OrgID, b.claim); err != nil {
 			return 0, err
 		}
 		if _, err := t.Exec(t.ctx, clearClaimSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, t.caller.OrgID, b.task, b.claim); err != nil {
@@ -172,25 +190,25 @@ ORDER BY t.id`, t.caller.OrgID, sessionID)
 		} else {
 			ended++
 		}
-		if err := t.record(by, kind, b.task, map[string]any{"claim_id": b.claim, "holder_id": b.holder, "how_ended": endedHow}); err != nil {
+		if err := t.record(actor, kind, b.task, map[string]any{"claim_id": b.claim, "holder_id": b.holder, "how_ended": endedHow}); err != nil {
 			return 0, err
 		}
-	}
-	if err := t.recordByCaller("session.closed", sessionID, map[string]any{"how": how, "claims_ended": ended}); err != nil {
-		return 0, err
 	}
 	return ended, nil
 }
 
-// CallerValid reports whether the caller's Session is still open and its token unrevoked. A
-// request is authenticated when it arrives; one that lasts — the Activity stream, a waiting
-// `next` — asks this before it acts, so a revocation or a close stops it at once.
+// CallerValid reports whether the caller's Session is still open and unexpired, its token
+// unrevoked and its Member active. A request is authenticated when it arrives; one that lasts —
+// the Activity stream, a waiting `next` — asks this before it acts, so a revocation, a close or a
+// deactivation stops it at once.
 func (s *Service) CallerValid(ctx context.Context, c *auth.Caller) (bool, error) {
-	q, args := store.Bind(`SELECT COUNT(*) FROM sessions s LEFT JOIN tokens tk ON tk.id = s.token_id
+	args := s.browser.Args(s.clock.Now())
+	args["org"], args["session"], args["member"] = c.OrgID, c.SessionID, c.MemberID
+	q, qa := store.Bind(`SELECT COUNT(*) FROM sessions s JOIN members m ON m.id = s.member_id LEFT JOIN tokens tk ON tk.id = s.token_id
 WHERE s.org_id = @org AND s.id = @session AND s.member_id = @member AND s.closed_at IS NULL
-AND (s.token_id IS NULL OR tk.revoked_at IS NULL)`, map[string]any{"org": c.OrgID, "session": c.SessionID, "member": c.MemberID})
+AND (s.token_id IS NULL OR tk.revoked_at IS NULL) AND m.deactivated_at IS NULL AND `+auth.LiveSessionSQL, args)
 	var n int
-	err := s.store.QueryRow(ctx, q, args...).Scan(&n)
+	err := s.store.QueryRow(ctx, q, qa...).Scan(&n)
 	return n > 0, err
 }
 
@@ -219,6 +237,43 @@ func scanSession(row interface{ Scan(...any) error }) (Session, error) {
 	err := row.Scan(&s.ID, &s.MemberID, &s.Kind, &token, &created, &seen, &closed)
 	s.TokenID, s.StartedAt, s.LastSeenAt, s.ClosedAt = nullString(token), fromMS(created), fromMS(seen), nullTime(closed)
 	return s, err
+}
+
+// expiry fills in when an open browser Session expires unless used.
+func (s *Service) expiry(sess *Session) {
+	if sess.Kind == "browser" && sess.ClosedAt == nil {
+		sess.ExpiresAt = ptr(s.browser.ExpiresAt(sess.StartedAt, sess.LastSeenAt).UTC())
+	}
+}
+
+// ListSessions lists a Member's open Sessions that have not expired, most recently seen first. A
+// Member sees their own; an admin anyone's.
+func (s *Service) ListSessions(ctx context.Context, c *auth.Caller, memberRef string, limit int, cursor string) (Page[Session], error) {
+	member, err := resolveMember(ctx, s.store, c.OrgID, memberRef)
+	if err != nil {
+		return Page[Session]{}, err
+	}
+	if member != c.MemberID && !c.Admin {
+		return Page[Session]{}, refuse(CodeForbidden, "only an admin may list another Member's Sessions")
+	}
+	offset, err := decodeCursor(cursor)
+	if err != nil {
+		return Page[Session]{}, err
+	}
+	n := limitOf(limit)
+	args := s.browser.Args(s.clock.Now())
+	args["org"], args["member"], args["limit"], args["offset"] = c.OrgID, member, n+1, offset
+	q, qa := store.Bind(`SELECT `+sessionCols+` FROM sessions s
+WHERE s.org_id = @org AND s.member_id = @member AND s.closed_at IS NULL AND `+auth.LiveSessionSQL+`
+ORDER BY s.last_seen_at DESC, s.id LIMIT @limit OFFSET @offset`, args)
+	items, err := collect(ctx, s.store, scanSession, q, qa...)
+	if err != nil {
+		return Page[Session]{}, err
+	}
+	for i := range items {
+		s.expiry(&items[i])
+	}
+	return page(items, offset, n), nil
 }
 
 func getSession(ctx context.Context, r store.Reader, orgID, id string) (Session, error) {
@@ -253,7 +308,7 @@ func (s *Service) CloseSession(ctx context.Context, c *auth.Caller, chosenID str
 		if err != nil {
 			return nil, err
 		}
-		n, err := closeSession(t, id, "session_closed")
+		n, err := closeSession(t, id, "session_closed", &c.MemberID)
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +324,7 @@ func (s *Service) CloseSession(ctx context.Context, c *auth.Caller, chosenID str
 // Logout closes the Session the caller calls through, ending the Claims bound to it.
 func (s *Service) Logout(ctx context.Context, c *auth.Caller, idem Idem) error {
 	_, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		_, err := closeSession(t, c.SessionID, "session_closed")
+		_, err := closeSession(t, c.SessionID, "session_closed", &c.MemberID)
 		return nil, err
 	})
 	return err
@@ -283,6 +338,9 @@ func (s *Service) IssueLoginLink(ctx context.Context, c *auth.Caller, memberRef 
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		member, err := resolveMember(ctx, t, c.OrgID, memberRef)
 		if err != nil {
+			return nil, err
+		}
+		if err := mustBeActive(t, member); err != nil {
 			return nil, err
 		}
 		return issueLoginLink(t, member, &c.MemberID)
@@ -313,11 +371,26 @@ type BrowserSession struct {
 	MemberID string
 }
 
+// LoginLinkFor names whom a login link signs in, without using it: the Member's name and their
+// Organisation's. An unknown, used or expired link, or one for a deactivated Member, is not_found.
+func (s *Service) LoginLinkFor(ctx context.Context, code string) (member, organisation string, err error) {
+	err = s.store.QueryRow(ctx, `SELECT m.name, o.name FROM login_links l JOIN members m ON m.id = l.member_id JOIN organisations o ON o.id = l.org_id
+WHERE l.code_hash = $1 AND l.used_at IS NULL AND l.expires_at > $2 AND m.deactivated_at IS NULL`, auth.Hash(code), ms(s.clock.Now())).
+		Scan(&member, &organisation)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", refuse(CodeNotFound, "this login link is unknown, used or expired")
+	}
+	return member, organisation, err
+}
+
 // RedeemLoginLink uses a login link once: it starts a browser Session for the link's Member and
-// returns the cookie that maps to it. An unknown, used or expired link is not_found.
-func (s *Service) RedeemLoginLink(ctx context.Context, code string) (BrowserSession, error) {
+// returns the cookie that maps to it. An unknown, used or expired link, or one for a deactivated
+// Member, is not_found. The Session of the cookie the browser held before, if any, is closed: the
+// browser no longer has it.
+func (s *Service) RedeemLoginLink(ctx context.Context, code, oldCookie string) (BrowserSession, error) {
 	var linkID, orgID, memberID string
-	err := s.store.QueryRow(ctx, `SELECT id, org_id, member_id FROM login_links WHERE code_hash = $1`, auth.Hash(code)).
+	err := s.store.QueryRow(ctx, `SELECT l.id, l.org_id, l.member_id FROM login_links l JOIN members m ON m.id = l.member_id
+WHERE l.code_hash = $1 AND m.deactivated_at IS NULL`, auth.Hash(code)).
 		Scan(&linkID, &orgID, &memberID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return BrowserSession{}, refuse(CodeNotFound, "this login link is unknown, used or expired")
@@ -346,5 +419,28 @@ VALUES ($1, $2, $3, $4, 'browser', $5, $6, $6)`, sessionID, orgID, memberID, "br
 	if err != nil {
 		return BrowserSession{}, err
 	}
+	if oldCookie != "" {
+		if err := s.closeCookieSession(ctx, oldCookie); err != nil {
+			s.log.Error("closing the browser Session a sign-in replaced", "err", err)
+		}
+	}
 	return BrowserSession{Cookie: cookie, MemberID: memberID}, nil
+}
+
+// closeCookieSession closes the open browser Session a cookie maps to, if any, with no actor.
+func (s *Service) closeCookieSession(ctx context.Context, cookie string) error {
+	var id, orgID, memberID string
+	err := s.store.QueryRow(ctx, `SELECT id, org_id, member_id FROM sessions WHERE cookie_hash = $1 AND kind = 'browser' AND closed_at IS NULL`,
+		auth.Hash(cookie)).Scan(&id, &orgID, &memberID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	_, err = s.write(ctx, &auth.Caller{OrgID: orgID, MemberID: memberID}, Idem{}, func(t *tx) (any, error) {
+		_, err := closeSession(t, id, "session_closed", nil)
+		return nil, err
+	})
+	return err
 }
