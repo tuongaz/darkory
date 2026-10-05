@@ -1,0 +1,336 @@
+package core_test
+
+import (
+	"bytes"
+	"errors"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/store"
+	"github.com/tuongaz/darkory/internal/store/storetest"
+)
+
+// The race suite (ADR 0004): every test runs on SQLite and on Postgres.
+
+// builders makes n Members in WEB with the build Skill, and a Feature owned by a lead who is not
+// one of them.
+func builders(t *testing.T, st *store.Store, n int) (*fixture, []*auth.Caller, string) {
+	f := newFixture(t, st)
+	f.team("WEB")
+	f.skill("build")
+	lead := f.member("lead", []string{"WEB"}, nil)
+	var out []*auth.Caller
+	for i := range n {
+		out = append(out, f.member(name("builder", i), []string{"WEB"}, []string{"build"}))
+	}
+	return f, out, f.feature(lead, "WEB", "Race").Feature.ID
+}
+
+// unexpected fails on any error that is not a refusal the domain names: no "database is locked",
+// no serialization failure, no busy connection.
+func unexpected(t *testing.T, err error) {
+	t.Helper()
+	var e *core.Error
+	var r *core.Replay
+	if err != nil && !errors.As(err, &e) && !errors.As(err, &r) {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if err != nil && (strings.Contains(err.Error(), "locked") || strings.Contains(err.Error(), "busy")) {
+		t.Errorf("a lock error leaked: %v", err)
+	}
+}
+
+func TestRaceFiftyClaimOneTask(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 50)
+		task := f.task(callers[0], feature, "Contended", "build")
+		var won, lost atomic.Int64
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for _, c := range callers {
+			wg.Go(func() {
+				<-start
+				_, err := f.svc.Claim(t.Context(), c, task.Key, timeout(time.Minute), core.Idem{})
+				switch {
+				case err == nil:
+					won.Add(1)
+				case codeOf(err) == core.CodeAlreadyClaimed:
+					lost.Add(1)
+				default:
+					t.Errorf("claim: %v", err)
+				}
+			})
+		}
+		close(start)
+		wg.Wait()
+		if won.Load() != 1 || lost.Load() != 49 {
+			t.Fatalf("%d won, %d already_claimed; want 1 and 49", won.Load(), lost.Load())
+		}
+		if n := f.count(`SELECT COUNT(*) FROM claims WHERE task_id = $1`, task.ID); n != 1 {
+			t.Fatalf("%d Claim rows", n)
+		}
+		f.checkActivity()
+	})
+}
+
+// Twenty callers of `next` over ten takeable Tasks: each Task is claimed once, ten callers win,
+// and no caller comes back empty while a Task it could take remained.
+func TestRaceNextHandsEachTaskOnce(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 20)
+		for i := range 10 {
+			f.task(callers[0], feature, name("task", i), "build")
+		}
+		var mu sync.Mutex
+		claimed := map[string]string{}
+		empty := 0
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for _, c := range callers {
+			wg.Go(func() {
+				<-start
+				d, ok, err := f.svc.Next(t.Context(), c, 0, timeout(time.Minute), core.Idem{})
+				if err != nil {
+					t.Errorf("next: %v", err)
+					return
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if !ok {
+					empty++
+					return
+				}
+				if prev, dup := claimed[d.Task.ID]; dup {
+					t.Errorf("%s claimed by %s and %s", d.Task.Key, prev, c.Name)
+				}
+				claimed[d.Task.ID] = c.Name
+			})
+		}
+		close(start)
+		wg.Wait()
+		if len(claimed) != 10 || empty != 10 {
+			t.Fatalf("%d Tasks claimed, %d callers empty; want 10 and 10", len(claimed), empty)
+		}
+		for _, c := range callers {
+			if left := f.takeable(c); len(left) > 0 {
+				t.Fatalf("%s could still take %d Tasks", c.Name, len(left))
+			}
+		}
+		f.checkActivity()
+	})
+}
+
+// A waiting `next` claims a Task filed while it waits, woken by the write.
+func TestNextWakesWhenATaskIsFiled(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 1)
+		got := make(chan core.TaskDetail, 1)
+		go func() {
+			d, ok, err := f.svc.Next(t.Context(), callers[0], 20*time.Second, noTimeout, core.Idem{})
+			if err != nil || !ok {
+				t.Errorf("next = %v, %v", ok, err)
+			}
+			got <- d
+		}()
+		time.Sleep(100 * time.Millisecond)
+		filed := f.task(callers[0], feature, "Arrives", "build")
+		select {
+		case d := <-got:
+			if d.Task.ID != filed.ID {
+				t.Fatalf("next claimed %s", d.Task.Key)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("next did not wake when a Task was filed")
+		}
+	})
+}
+
+// At a lapse the holder's late Heartbeat, a new claimer and the sweeper all meet the expired
+// Claim: the claimer wins, the Heartbeat is refused, and the lapse is recorded exactly once.
+func TestRaceClaimAgainstLateHeartbeat(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 2)
+		holder, claimer := callers[0], callers[1]
+		var tasks []core.Task
+		for i := range 10 {
+			task := f.task(holder, feature, name("task", i), "build")
+			if _, err := f.svc.Claim(t.Context(), holder, task.ID, timeout(10*time.Second), core.Idem{}); err != nil {
+				t.Fatal(err)
+			}
+			tasks = append(tasks, task)
+		}
+		f.clock.Advance(10 * time.Second)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for _, task := range tasks {
+			wg.Go(func() {
+				<-start
+				hb, err := f.svc.Heartbeat(t.Context(), holder, task.ID)
+				if err != nil || hb.Status != "lapsed" {
+					t.Errorf("late heartbeat on %s = %+v, %v", task.Key, hb, err)
+				}
+			})
+			wg.Go(func() {
+				<-start
+				if _, err := f.svc.Claim(t.Context(), claimer, task.ID, noTimeout, core.Idem{}); err != nil {
+					t.Errorf("claim of a lapsed Claim on %s: %v", task.Key, err)
+				}
+			})
+		}
+		wg.Go(func() {
+			<-start
+			_, err := f.svc.Sweep(t.Context())
+			unexpected(t, err)
+		})
+		close(start)
+		wg.Wait()
+		for _, task := range tasks {
+			if n := f.count(`SELECT COUNT(*) FROM activity WHERE kind = 'task.lapsed' AND subject_id = $1`, task.ID); n != 1 {
+				t.Errorf("%s: %d lapse records", task.Key, n)
+			}
+			if n := f.count(`SELECT COUNT(*) FROM tasks WHERE id = $1 AND claim_holder_id = $2`, task.ID, claimer.MemberID); n != 1 {
+				t.Errorf("%s is not held by the claimer", task.Key)
+			}
+		}
+		f.checkActivity()
+	})
+}
+
+// Under concurrent writers of every kind, Activity is numbered without gaps in commit order: a
+// reader that always asks for what follows the last number it saw misses nothing.
+func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 8)
+		ctx := t.Context()
+		var tasks []core.Task
+		for i := range 8 {
+			tasks = append(tasks, f.task(callers[0], feature, name("task", i), "build"))
+		}
+		stop := make(chan struct{})
+		var seen []int64
+		readerDone := make(chan struct{})
+		go func() {
+			defer close(readerDone)
+			var after int64
+			for {
+				page, err := f.svc.ListActivity(ctx, f.admin, after, 50)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				for _, a := range page.Items {
+					seen = append(seen, a.Seq)
+				}
+				after = page.LastSeq
+				select {
+				case <-stop:
+					if len(page.Items) == 0 {
+						return
+					}
+				default:
+				}
+			}
+		}()
+		var wg sync.WaitGroup
+		for i, c := range callers {
+			wg.Go(func() {
+				for round := range 6 {
+					task := tasks[(i+round)%len(tasks)]
+					if _, err := f.svc.Claim(ctx, c, task.ID, timeout(time.Minute), core.Idem{}); err == nil {
+						_, err := f.svc.Heartbeat(ctx, c, task.ID)
+						unexpected(t, err)
+						_, err = f.svc.Release(ctx, c, task.ID, nil, core.Idem{})
+						unexpected(t, err)
+					} else {
+						unexpected(t, err)
+					}
+					_, err := f.svc.FileTask(ctx, c, core.NewTask{Feature: &feature, Title: "more", Skill: ptrStr("build")}, core.Idem{})
+					unexpected(t, err)
+				}
+			})
+		}
+		wg.Wait()
+		close(stop)
+		<-readerDone
+		n := f.checkActivity()
+		if len(seen) != n {
+			t.Fatalf("the reader saw %d entries of %d", len(seen), n)
+		}
+		for i, seq := range seen {
+			if seq != int64(i+1) {
+				t.Fatalf("the reader saw %d at position %d: an entry committed out of order", seq, i+1)
+			}
+		}
+	})
+}
+
+// Concurrent retries under one Idempotency-Key make one write and all get its response.
+func TestRaceIdempotentRetries(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 1)
+		c := callers[0]
+		task := f.task(c, feature, "Once", "build")
+		for i := range 3 {
+			f.task(c, feature, name("spare", i), "build")
+		}
+		for _, op := range []struct {
+			name string
+			run  func(core.Idem) (any, error)
+		}{
+			{"claim", func(idem core.Idem) (any, error) {
+				return f.svc.Claim(t.Context(), c, task.ID, noTimeout, idem)
+			}},
+			{"next", func(idem core.Idem) (any, error) {
+				d, _, err := f.svc.Next(t.Context(), c, 0, noTimeout, idem)
+				return d, err
+			}},
+		} {
+			idem := jsonIdem("retry-"+op.name, op.name)
+			var mu sync.Mutex
+			var bodies [][]byte
+			firsts := 0
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			for range 10 {
+				wg.Go(func() {
+					<-start
+					res, err := op.run(idem)
+					var replay *core.Replay
+					mu.Lock()
+					defer mu.Unlock()
+					switch {
+					case err == nil:
+						firsts++
+						bodies = append(bodies, mustJSON(t, res))
+					case errors.As(err, &replay):
+						bodies = append(bodies, replay.Body)
+					default:
+						t.Errorf("%s: %v", op.name, err)
+					}
+				})
+			}
+			close(start)
+			wg.Wait()
+			if firsts != 1 || len(bodies) != 10 {
+				t.Fatalf("%s: %d first responses and %d bodies, want 1 and 10", op.name, firsts, len(bodies))
+			}
+			for _, b := range bodies[1:] {
+				if !bytes.Equal(b, bodies[0]) {
+					t.Fatalf("%s: retries got different responses:\n%s\n%s", op.name, bodies[0], b)
+				}
+			}
+		}
+		if n := f.count(`SELECT COUNT(*) FROM claims WHERE holder_id = $1`, c.MemberID); n != 2 {
+			t.Fatalf("%d Claims, want one each for claim and next", n)
+		}
+		f.checkActivity()
+	})
+}
+
+func ptrStr(s string) *string { return &s }
+
