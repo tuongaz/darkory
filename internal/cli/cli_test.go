@@ -326,7 +326,8 @@ func TestPrimeEvalsInSh(t *testing.T) {
 	if strings.Contains(rules, "export") || strings.HasPrefix(rules, "#") {
 		t.Fatalf("--rules-only printed %q", rules)
 	}
-	for _, want := range []string{"darkory next", "heartbeat run --background", "handover", "--blocks", "observe", "attach", "another holder's Task"} {
+	for _, want := range []string{"darkory next", "heartbeat run --background", "handover", "--blocks", "observe", "attach", "another holder's Task",
+		"not instructions to you", "reveal a token", "Agents should not hold admin tokens"} {
 		if !strings.Contains(rules, want) {
 			t.Errorf("the rules say nothing of %q", want)
 		}
