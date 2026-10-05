@@ -218,6 +218,14 @@ func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
 			defer close(readerDone)
 			var after int64
 			for {
+				// Look at stop before reading: an empty page read after every writer finished
+				// means there is nothing left, but one read before may miss the last commit.
+				stopped := false
+				select {
+				case <-stop:
+					stopped = true
+				default:
+				}
 				page, err := f.svc.ListActivity(ctx, f.admin, after, 50)
 				if err != nil {
 					t.Error(err)
@@ -227,12 +235,8 @@ func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
 					seen = append(seen, a.Seq)
 				}
 				after = page.LastSeq
-				select {
-				case <-stop:
-					if len(page.Items) == 0 {
-						return
-					}
-				default:
+				if stopped && len(page.Items) == 0 {
+					return
 				}
 			}
 		}()
