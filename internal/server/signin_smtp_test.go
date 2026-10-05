@@ -22,7 +22,9 @@ const SMTPTestEnv = "DARKORY_TEST_SMTP"
 // Emailed sign-in through a real SMTP server: the link arrives in Mailpit's inbox and signs a
 // browser in.
 func TestEmailSignInThroughSMTP(t *testing.T) {
-	c := dockertest.Run(t, SMTPTestEnv, "axllent/mailpit:latest", []int{1025, 8025}, nil)
+	// Mailpit looks up each SMTP client's address in DNS, which inside Docker can take ten seconds
+	// to time out; the test does not need it.
+	c := dockertest.Run(t, SMTPTestEnv, "axllent/mailpit:latest", []int{1025, 8025}, map[string]string{"MP_SMTP_DISABLE_RDNS": "true"})
 	smtpAddr, api := c.Addr[0], "http://"+c.Addr[1]
 	dockertest.WaitHTTP(t, api+"/readyz")
 	sender, err := mail.NewSMTP("smtp://"+smtpAddr+"?tls=none", "Darkory <darkory@example.com>")
@@ -43,7 +45,7 @@ func TestEmailSignInThroughSMTP(t *testing.T) {
 			To []struct{ Address string }
 		}
 	}
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	for len(list.Messages) == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("no email reached Mailpit")
