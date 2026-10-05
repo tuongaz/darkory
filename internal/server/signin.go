@@ -221,6 +221,8 @@ func (s *Server) RequestEmailSignIn(w http.ResponseWriter, r *http.Request, _ ge
 // request checks the limits and, within them, issues and sends the links in the background.
 func (e *emailSignIn) request(s *Server, r *http.Request, address string) {
 	client := clientAddress(r, e.proxyHops)
+	// The client's limit comes first, so one client cycling through addresses is stopped before
+	// it can fill the address limiter.
 	if !e.byClient.Allow(client) {
 		s.log.Warn("email sign-in: over the limit for a client address; sending nothing", "client", client)
 		return
