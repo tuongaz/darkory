@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
@@ -75,12 +76,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 // with pending migrations (ADR 0009: Cloud runs `darkory migrate` as its own step). Either way it
 // refuses a database newer than the binary.
 func openStore(ctx context.Context, cfg config.Store, migrate bool, log *slog.Logger) (*store.Store, error) {
-	if store.EngineOf(cfg.Database) == store.SQLite {
-		if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
-			return nil, err
-		}
-	}
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := openDatabase(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +171,14 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	}
 	defer st.Close()
 
+	if cfg.Evidence.S3 != nil {
+		// A bucket that cannot be reached stops the start, rather than the first upload.
+		if _, err := blob.Open(ctx, cfg.Evidence, nil); err != nil {
+			return err
+		}
+		log.Info("Evidence is kept in S3-compatible storage", "bucket", cfg.Evidence.S3.String())
+	}
+
 	n := wake.New()
 	if st.Engine() == store.Postgres {
 		// Other server processes on this database wake this one's waiters, and it theirs (ADR 0006).
@@ -221,6 +225,16 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	return srv.Shutdown(shutdownCtx)
 }
 
+// openDatabase opens the record cfg names, creating the data directory for SQLite.
+func openDatabase(ctx context.Context, cfg config.Store) (*store.Store, error) {
+	if store.EngineOf(cfg.Database) == store.SQLite {
+		if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
+			return nil, err
+		}
+	}
+	return store.Open(ctx, cfg.Database)
+}
+
 // migrateAtStart says whether serve migrates as it starts: always on SQLite, after a backup, and
 // on Postgres only when asked, since Cloud migrates as its own step before a rollout (ADR 0009).
 func migrateAtStart(cfg config.Serve) bool {
@@ -236,7 +250,7 @@ func migrate(args []string, stdout, stderr io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	st, err := store.Open(ctx, cfg.Database)
+	st, err := openDatabase(ctx, cfg.Store)
 	if err != nil {
 		return err
 	}

@@ -194,7 +194,7 @@ func TestEmailSignInIsRateLimited(t *testing.T) {
 		t.Helper()
 		var n int
 		for {
-			if _, ok := fake.Next(300 * time.Millisecond); !ok {
+			if _, ok := fake.Next(time.Second); !ok {
 				return n
 			}
 			n++

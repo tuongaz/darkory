@@ -66,6 +66,15 @@ func TestMigrate(t *testing.T) {
 	}
 }
 
+// migrate creates the data directory of a new SQLite Install, as serve does.
+func TestMigrateCreatesTheDataDirectory(t *testing.T) {
+	dir := t.TempDir() + "/new/data"
+	var out bytes.Buffer
+	if err := run([]string{"migrate", "--data", dir}, &out, io.Discard); err != nil || !strings.Contains(out.String(), "Applied 0001_init") {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+}
+
 // serve on Postgres refuses to start while migrations are pending, unless told to apply them.
 func TestServeOnPostgresRefusesPendingMigrations(t *testing.T) {
 	dsn := storetest.DSN(t, store.Postgres)

@@ -41,7 +41,7 @@ darkory migrate --db "$DARKORY_DB"             # apply them and exit
 | `DARKORY_S3_SECRET_KEY` | (environment only) | `AWS_SECRET_ACCESS_KEY` | Required for S3. Never logged. |
 | `DARKORY_S3_PATH_STYLE` | (environment only) | `false` | `true` puts the bucket in the path (`endpoint/bucket/key`), which MinIO and most S3-compatible services need. |
 
-Each object is written with one streamed `PUT` of known length, so an upload is never held in memory. A failed upload leaves nothing behind. One object can be at most 5 GiB.
+`serve` checks that the bucket can be reached before it starts. Each object is written with one streamed `PUT` of known length, so an upload is never held in memory. A failed upload leaves nothing behind. One object can be at most 5 GiB.
 
 ## Sign-in
 
