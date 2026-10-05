@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"github.com/tuongaz/darkory/internal/auth"
 )
 
@@ -15,6 +17,21 @@ func validName(what, name string) error {
 		return refuse(CodeInvalid, "%s must be 1 to 100 characters", what)
 	}
 	return nil
+}
+
+// looksLikeID reports whether a name is spelled as an id is, which would make a reference to it
+// ambiguous: references take an id or a name (decisions.md).
+func looksLikeID(name string) bool {
+	u, err := uuid.Parse(name)
+	return err == nil && u.String() == name
+}
+
+// validMemberName is validName, refusing a name spelled as an id.
+func validMemberName(what, name string) error {
+	if looksLikeID(name) {
+		return refuse(CodeInvalid, "%s cannot be spelled as an id", what)
+	}
+	return validName(what, name)
 }
 
 // NewMember is a Member to create.
@@ -30,7 +47,7 @@ func (s *Service) CreateMember(ctx context.Context, c *auth.Caller, nm NewMember
 	if err := mustAdmin(c); err != nil {
 		return Member{}, err
 	}
-	if err := validName("name", nm.Name); err != nil {
+	if err := validMemberName("name", nm.Name); err != nil {
 		return Member{}, err
 	}
 	if nm.Kind != "human" && nm.Kind != "agent" {
@@ -91,7 +108,7 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 		return Member{}, err
 	}
 	if ch.Name != nil {
-		if err := validName("name", *ch.Name); err != nil {
+		if err := validMemberName("name", *ch.Name); err != nil {
 			return Member{}, err
 		}
 	}

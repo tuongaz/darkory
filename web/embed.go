@@ -16,6 +16,7 @@ var dist embed.FS
 
 // Handler serves the built web app, or the placeholder when it was not built. A path that names
 // no file and has no extension gets index.html, so the app's own routes load when opened directly.
+// A directory is not listed.
 func Handler() http.Handler {
 	root, err := fs.Sub(dist, "dist")
 	if err != nil {
@@ -38,7 +39,12 @@ func Handler() http.Handler {
 			files.ServeHTTP(w, r)
 			return
 		}
-		if _, err := fs.Stat(root, name); err != nil {
+		info, err := fs.Stat(root, name)
+		if err == nil && info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
 			if strings.Contains(path.Base(name), ".") {
 				http.NotFound(w, r)
 				return

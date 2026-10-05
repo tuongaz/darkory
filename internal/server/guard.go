@@ -12,8 +12,9 @@ import (
 // Security headers on every response (security review M3). No page of the Install may be framed,
 // so a page elsewhere cannot lay a decoy over its buttons; nothing is sniffed; and the address of
 // a page, which may hold a login code, never goes to another origin. Referrer-Policy is
-// same-origin rather than no-referrer: under no-referrer a browser sends `Origin: null` on its
-// own same-origin writes, which the cookie-write check refuses (decisions.md).
+// same-origin rather than no-referrer: under no-referrer a browser posts a form with
+// `Origin: null`, which the origin check refuses, and the sign-in page's button is such a form
+// (decisions.md).
 const (
 	// appCSP lets the web app load only its own scripts, styles and data; it has no inline script
 	// or style.

@@ -56,7 +56,7 @@ func (s *Service) Init(ctx context.Context, orgName, memberName string) (Initial
 	if err := validName("Organisation name", orgName); err != nil {
 		return out, err
 	}
-	if err := validName("Member name", memberName); err != nil {
+	if err := validMemberName("Member name", memberName); err != nil {
 		return out, err
 	}
 	now := s.clock.Now()

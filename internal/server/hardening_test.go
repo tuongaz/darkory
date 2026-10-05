@@ -371,3 +371,19 @@ func TestLongRequestsAreCappedPerMember(t *testing.T) {
 	}
 	got(builder.NextTaskWithResponse(ctx, &client.NextTaskParams{}, client.NextTaskBody{WaitSeconds: ptrInt(0)})).want(t, http.StatusNoContent)
 }
+
+// The web app's static files are served without listing a directory (security review, Info).
+func TestNoDirectoryListing(t *testing.T) {
+	h := newHarness(t, storetest.Open(t, store.SQLite))
+	for _, path := range []string{"/assets/", "/assets"} {
+		res, err := http.Get(h.ts.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if strings.Contains(string(body), "<pre>") || (res.StatusCode != http.StatusNotFound && !strings.Contains(string(body), "<!doctype html>")) {
+			t.Errorf("%s: %d\n%s", path, res.StatusCode, body)
+		}
+	}
+}
