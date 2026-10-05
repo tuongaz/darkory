@@ -51,6 +51,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return initInstall(args[1:], stdout, stderr)
 	case "serve":
 		return serve(args[1:], stdout, stderr)
+	case "update":
+		return runUpdate(args[1:], stdout, stderr)
 	case "version", "--version":
 		fmt.Fprintln(stdout, version.Version)
 		return nil

@@ -5,3 +5,4 @@
 *.bak
 /web/node_modules/
 /web/dist/app/
+/dist/
