@@ -26,6 +26,7 @@ internal/cli/           CLI commands, written on client/
 internal/mcp/           MCP server (stdio), written on client/
 internal/config/        Install settings: storage, Evidence store, sign-in, listen address, public URL
 web/                    React app; web/dist is embedded (a placeholder index.html is committed so `go build` works without node)
+e2e/                    the end-to-end suite and soak against the built binary, run with DARKORY_E2E=1 (make e2e, make e2e-pg)
 docs/build/             this plan, decisions.md, testing.md
 ```
 
