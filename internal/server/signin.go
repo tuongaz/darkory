@@ -11,9 +11,11 @@ import (
 	netmail "net/mail"
 	"net/netip"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/mail"
@@ -143,8 +145,10 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, token gen.T
 }
 
 // Email sign-in limits, per server process (decisions.md): each address may ask three times, then
-// once every five minutes; each client address ten times, then once a minute. Sends in flight are
-// bounded too; a request over any limit is answered like any other and sends nothing.
+// once every five minutes; each client address ten times, then once a minute; and all of them
+// together are sent at most MailPerHour emails an hour. Sends in flight are bounded too. A request
+// over any limit is answered like any other and sends nothing, and each limit's warning is logged
+// at most once a minute.
 const (
 	signInPerAddress      = 3
 	signInPerAddressEvery = 5 * time.Minute
@@ -152,6 +156,9 @@ const (
 	signInPerClientEvery  = time.Minute
 	signInInFlight        = 16
 	signInSendTimeout     = time.Minute
+	// DefaultMailPerHour is the cap on emails sent when Options.MailPerHour is zero.
+	DefaultMailPerHour = 300
+	warnEvery          = time.Minute
 )
 
 // emailSignIn sends login links to Members who ask by email (ADR 0008).
@@ -162,7 +169,15 @@ type emailSignIn struct {
 	proxyHops int
 	byAddress *auth.Limiter
 	byClient  *auth.Limiter
-	inFlight  chan struct{}
+	// sent is one bucket for every email this process sends, so a flood spread over many
+	// addresses and clients cannot spend the SMTP account's reputation.
+	sent     *auth.Limiter
+	perHour  int
+	inFlight chan struct{}
+	clock    clock.Clock
+
+	mu     sync.Mutex
+	warned map[string]time.Time
 }
 
 func newEmailSignIn(o Options) *emailSignIn {
@@ -174,14 +189,36 @@ func newEmailSignIn(o Options) *emailSignIn {
 		o.Log.Error("email sign-in is off: emailed login links need the public URL (DARKORY_PUBLIC_URL)")
 		return nil
 	}
+	perHour := o.MailPerHour
+	if perHour <= 0 {
+		perHour = DefaultMailPerHour
+	}
 	return &emailSignIn{
 		mail:      o.Mail,
 		base:      strings.TrimRight(o.PublicURL, "/"),
 		proxyHops: o.ProxyHops,
 		byAddress: auth.NewLimiter(signInPerAddress, signInPerAddressEvery, o.Clock),
 		byClient:  auth.NewLimiter(signInPerClient, signInPerClientEvery, o.Clock),
+		sent:      auth.NewLimiter(perHour, time.Hour/time.Duration(perHour), o.Clock),
+		perHour:   perHour,
 		inFlight:  make(chan struct{}, signInInFlight),
+		clock:     o.Clock,
+		warned:    map[string]time.Time{},
 	}
+}
+
+// warn logs msg unless it was logged within the last minute, so a flood cannot flood the log.
+func (e *emailSignIn) warn(s *Server, msg string, args ...any) {
+	now := e.clock.Now()
+	e.mu.Lock()
+	last, ok := e.warned[msg]
+	if ok && now.Sub(last) < warnEvery {
+		e.mu.Unlock()
+		return
+	}
+	e.warned[msg] = now
+	e.mu.Unlock()
+	s.log.Warn(msg, args...)
 }
 
 // SignInModes lists how humans sign in to this Install, for the health reply: always the printed
@@ -224,17 +261,17 @@ func (e *emailSignIn) request(s *Server, r *http.Request, address string) {
 	// The client's limit comes first, so one client cycling through addresses is stopped before
 	// it can fill the address limiter.
 	if !e.byClient.Allow(client) {
-		s.log.Warn("email sign-in: over the limit for a client address; sending nothing", "client", client)
+		e.warn(s, "email sign-in: a client address is over its limit; sending it nothing", "client", client)
 		return
 	}
 	if !e.byAddress.Allow(strings.ToLower(address)) {
-		s.log.Warn("email sign-in: over the limit for an address; sending nothing", "client", client)
+		e.warn(s, "email sign-in: an address is over its limit; sending it nothing", "client", client)
 		return
 	}
 	select {
 	case e.inFlight <- struct{}{}:
 	default:
-		s.log.Warn("email sign-in: too many emails being sent; sending nothing", "client", client)
+		e.warn(s, "email sign-in: too many emails being sent; sending nothing", "client", client)
 		return
 	}
 	go func() {
@@ -246,11 +283,23 @@ func (e *emailSignIn) request(s *Server, r *http.Request, address string) {
 }
 
 func (e *emailSignIn) send(ctx context.Context, s *Server, address string) {
-	links, err := s.core.EmailLoginLinks(ctx, address)
+	found, err := s.core.MembersByEmail(ctx, address)
 	if err != nil {
-		s.log.Error("email sign-in: issuing login links", "err", err)
+		s.log.Error("email sign-in: finding Members by email", "err", err)
+		return
 	}
-	for _, l := range links {
+	for _, f := range found {
+		// Taken before the link is issued, so a capped request writes nothing either.
+		if !e.sent.Allow("") {
+			e.warn(s, "email sign-in: this server has sent its cap of emails for the hour; sending nothing until it refills. "+
+				"Printed links still work (DARKORY_SMTP_MAX_PER_HOUR)", "per_hour", e.perHour)
+			return
+		}
+		l, err := s.core.IssueEmailLink(ctx, f)
+		if err != nil {
+			s.log.Error("email sign-in: issuing a login link", "member", f.MemberID, "err", err)
+			continue
+		}
 		minutes := int(core.LoginLinkTTL.Minutes())
 		m := mail.Message{
 			To:      *l.Member.Email,

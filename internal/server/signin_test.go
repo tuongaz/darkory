@@ -2,11 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -231,6 +234,98 @@ func TestEmailSignInIsRateLimited(t *testing.T) {
 	if n := sent(); n != 1 {
 		t.Fatalf("sent %d a minute later, want 1", n)
 	}
+}
+
+// Two IPv6 addresses in one /64 are one client, sharing a bucket; another /64 is another client.
+func TestEmailSignInLimitsAnIPv6ClientByItsNetwork(t *testing.T) {
+	fake := mail.NewFake()
+	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{Mail: fake, PublicURL: publicURL, ProxyHops: 1})
+	email := "bob@example.com"
+	got(h.admin.CreateMemberWithResponse(t.Context(), &client.CreateMemberParams{},
+		client.CreateMemberBody{Name: "bob", Kind: client.Human, Email: (*openapi_types.Email)(&email)})).want(t, http.StatusCreated)
+	ask := func(from, email string) {
+		t.Helper()
+		if s := askByEmail(t, h.ts, `{"email":"`+email+`"}`, map[string]string{"X-Forwarded-For": from}); s != http.StatusAccepted {
+			t.Fatalf("status %d", s)
+		}
+	}
+	for i := range signInPerClient {
+		ask("2001:db8:1:2::"+strconv.Itoa(i+1), "nobody"+strconv.Itoa(i)+"@example.com")
+	}
+	ask("2001:db8:1:2:ffff:ffff:ffff:ffff", email)
+	if m, ok := fake.Next(time.Second); ok {
+		t.Fatalf("another address in the same /64 got past its limit: %+v", m)
+	}
+	ask("2001:db8:1:3::1", email)
+	if _, ok := fake.Next(5 * time.Second); !ok {
+		t.Fatal("a client in another /64 was limited")
+	}
+}
+
+// Past the cap on emails sent, requests still answer 202, nothing is sent or issued, and the
+// warning is logged once a minute; the cap refills over the hour.
+func TestEmailSignInCapsEmailsSent(t *testing.T) {
+	fake := mail.NewFake()
+	clk := clock.NewFake(time.Now())
+	st := storetest.Open(t, store.SQLite)
+	var logs syncBuffer
+	h := newHarnessWith(t, st, Options{Mail: fake, PublicURL: publicURL, Clock: clk, ProxyHops: 1, MailPerHour: 2,
+		Log: slog.New(slog.NewTextHandler(&logs, nil))})
+	names := []string{"bob", "carol", "dave", "erin"}
+	for _, name := range names {
+		email := name + "@example.com"
+		got(h.admin.CreateMemberWithResponse(t.Context(), &client.CreateMemberParams{},
+			client.CreateMemberBody{Name: name, Kind: client.Human, Email: (*openapi_types.Email)(&email)})).want(t, http.StatusCreated)
+	}
+	// Each from its own client, so only the cap on sending can stop them.
+	ask := func(i int) {
+		t.Helper()
+		from := "198.51.100." + strconv.Itoa(i+1)
+		if s := askByEmail(t, h.ts, `{"email":"`+names[i]+`@example.com"}`, map[string]string{"X-Forwarded-For": from}); s != http.StatusAccepted {
+			t.Fatalf("status %d", s)
+		}
+	}
+	for i := range 2 {
+		ask(i)
+		if _, ok := fake.Next(5 * time.Second); !ok {
+			t.Fatalf("email %d within the cap was not sent", i+1)
+		}
+	}
+	links := countLinks(t, st)
+	ask(2)
+	ask(3)
+	if m, ok := fake.Next(time.Second); ok {
+		t.Fatalf("sent past the cap: %+v", m)
+	}
+	if countLinks(t, st) != links {
+		t.Fatal("issued a link past the cap")
+	}
+	if n := strings.Count(logs.String(), "sent its cap of emails"); n != 1 {
+		t.Fatalf("the cap's warning was logged %d times, want once a minute", n)
+	}
+	// Two an hour refill one each half hour.
+	clk.Advance(30 * time.Minute)
+	ask(2)
+	if m, ok := fake.Next(5 * time.Second); !ok || m.To != "dave@example.com" {
+		t.Fatalf("after half an hour: %+v, %v", m, ok)
+	}
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }
 
 // Without email set up, the request is answered the same and does nothing.

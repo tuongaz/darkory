@@ -23,24 +23,24 @@ func TestLoadServe(t *testing.T) {
 		want Serve
 	}{
 		{"defaults", nil, nil, Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")},
-			Evidence: blob.Settings{Dir: "evidence"}}},
+			Evidence: blob.Settings{Dir: "evidence"}, SMTP: SMTP{MaxPerHour: 300}}},
 		{"environment", nil,
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory", "DARKORY_PUBLIC_URL": "https://dk.example.com",
 				"DARKORY_NO_BROWSER": "1", "DARKORY_NO_LOGIN_LINK": "1", "DARKORY_DB": "postgres://pgbouncer/dk",
 				"DARKORY_DB_LISTEN": "postgres://db/dk", "DARKORY_MIGRATE": "true", "DARKORY_PROXY_HOPS": "1",
 				"DARKORY_EVIDENCE": "s3://bucket/install/1/", "DARKORY_S3_ENDPOINT": "http://minio:9000", "DARKORY_S3_ACCESS_KEY": "ak",
 				"DARKORY_S3_SECRET_KEY": "sk", "DARKORY_S3_PATH_STYLE": "1",
-				"DARKORY_SMTP_URL": "smtp://u:p@mail:587", "DARKORY_SMTP_FROM": "Darkory <dk@example.com>"},
+				"DARKORY_SMTP_URL": "smtp://u:p@mail:587", "DARKORY_SMTP_FROM": "Darkory <dk@example.com>", "DARKORY_SMTP_MAX_PER_HOUR": "50"},
 			Serve{Listen: ":8080", Store: Store{"/var/lib/darkory", "postgres://pgbouncer/dk"}, PublicURL: "https://dk.example.com",
 				NoBrowser: true, NoLoginLink: true, DatabaseListen: "postgres://db/dk", Migrate: true, ProxyHops: 1,
 				Evidence: blob.Settings{S3: &blob.S3Settings{Bucket: "bucket", Prefix: "install/1", Endpoint: "http://minio:9000",
 					Region: "us-east-1", AccessKey: "ak", SecretKey: "sk", PathStyle: true}},
-				SMTP: SMTP{URL: "smtp://u:p@mail:587", From: "Darkory <dk@example.com>"}}},
+				SMTP: SMTP{URL: "smtp://u:p@mail:587", From: "Darkory <dk@example.com>", MaxPerHour: 50}}},
 		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser", "--no-login-link", "--migrate",
 			"--proxy-hops", "2", "--evidence", "/srv/evidence"},
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DB": "other.db", "DARKORY_PROXY_HOPS": "1", "DARKORY_EVIDENCE": "/elsewhere"},
 			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true, NoLoginLink: true, Migrate: true,
-				ProxyHops: 2, Evidence: blob.Settings{Dir: "/srv/evidence"}}},
+				ProxyHops: 2, Evidence: blob.Settings{Dir: "/srv/evidence"}, SMTP: SMTP{MaxPerHour: 300}}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -70,6 +70,8 @@ func TestLoadServeRefusesIncompleteSettings(t *testing.T) {
 		{map[string]string{"DARKORY_EVIDENCE": "s3://b", "DARKORY_S3_ACCESS_KEY": "a", "DARKORY_S3_SECRET_KEY": "s",
 			"DARKORY_S3_ENDPOINT": "minio:9000"}, "http://"},
 		{map[string]string{"DARKORY_PROXY_HOPS": "-1"}, "DARKORY_PROXY_HOPS"},
+		{map[string]string{"DARKORY_SMTP_MAX_PER_HOUR": "0"}, "DARKORY_SMTP_MAX_PER_HOUR"},
+		{map[string]string{"DARKORY_SMTP_MAX_PER_HOUR": "lots"}, "DARKORY_SMTP_MAX_PER_HOUR"},
 	} {
 		_, err := LoadServe(nil, env(c.env), io.Discard)
 		if err == nil || !strings.Contains(err.Error(), c.want) {

@@ -47,6 +47,8 @@ type Options struct {
 	KeepAlive time.Duration
 	// Mail, when set, sends login links to Members who ask by email; it needs PublicURL.
 	Mail mail.Sender
+	// MailPerHour caps the emails this server sends an hour; zero means DefaultMailPerHour.
+	MailPerHour int
 	// ProxyHops is how many proxies in front append to X-Forwarded-For, to find the client's
 	// address for rate limits; zero uses the connection's.
 	ProxyHops int

@@ -193,7 +193,8 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender, ProxyHops: cfg.ProxyHops})
+	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender,
+		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())

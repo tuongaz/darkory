@@ -42,82 +42,69 @@ func TestLimiterAllowsABurstThenOneAnInterval(t *testing.T) {
 	}
 }
 
-func TestLimiterForgetsFullBuckets(t *testing.T) {
+// A flood of new keys keeps the Limiter at its cap by evicting the keys used least recently; it
+// never refuses a key for want of room, and the most recent keys stay.
+func TestLimiterEvictsTheLeastRecentlyUsed(t *testing.T) {
 	c := clock.NewFake(time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC))
 	l := NewLimiter(2, time.Minute, c)
-	for i := range maxKeys - 1 {
-		l.Allow(strconv.Itoa(i))
-	}
-	l.Allow("busy")
-	l.Allow("busy")
-	// A minute on, the others are full again and "busy" is not.
-	c.Advance(time.Minute)
-	if !l.Allow("new") {
-		t.Fatal("no room made for a new key")
-	}
-	if n := len(l.buckets); n != 2 {
-		t.Fatalf("holds %d keys, want the two it saw last", n)
-	}
-	// Forgetting a full bucket changes nothing for its key.
-	if !l.Allow("0") || !l.Allow("0") || l.Allow("0") {
-		t.Fatal("a forgotten key did not start with a full burst")
-	}
-}
-
-// A flood of new keys never grows the Limiter past its cap, refuses the keys it has no room for,
-// and scans for room at most once every pruneEvery, not on every call.
-func TestLimiterHoldsAtMostItsCap(t *testing.T) {
-	c := clock.NewFake(time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC))
-	l := NewLimiter(2, time.Minute, c)
-	refused := 0
 	for i := range 10 * maxKeys {
 		if !l.Allow(strconv.Itoa(i)) {
-			refused++
+			t.Fatalf("new key %d refused", i)
 		}
 	}
-	if n := len(l.buckets); n > maxKeys {
-		t.Fatalf("holds %d keys, cap %d", n, maxKeys)
+	if n, m := l.recent.Len(), len(l.byKey); n != maxKeys || m != maxKeys {
+		t.Fatalf("holds %d keys (%d in the map), want the cap %d", n, m, maxKeys)
 	}
-	if refused != 9*maxKeys {
-		t.Fatalf("refused %d new keys past the cap, want %d", refused, 9*maxKeys)
+	for _, i := range []int{10*maxKeys - 1, 9 * maxKeys} {
+		if _, ok := l.byKey[strconv.Itoa(i)]; !ok {
+			t.Fatalf("recent key %d was evicted", i)
+		}
 	}
-	if l.prunes != 1 {
-		t.Fatalf("scanned %d times for %d keys past the cap in one interval, want once", l.prunes, 9*maxKeys)
+	if _, ok := l.byKey[strconv.Itoa(9*maxKeys-1)]; ok {
+		t.Fatal("an old key was kept over a newer one")
 	}
-
-	// A second on, it looks again, but nothing has refilled: still no room.
-	c.Advance(pruneEvery)
-	if l.Allow("late") || len(l.buckets) > maxKeys {
-		t.Fatal("a key was let in before any bucket refilled")
-	}
-	if l.Allow("later") || l.prunes != 2 {
-		t.Fatalf("scanned %d times, want 2", l.prunes)
-	}
-
-	// Once the buckets have refilled, a scan makes room again.
-	c.Advance(time.Minute)
-	if !l.Allow("after") {
-		t.Fatal("a new key was refused after the buckets refilled")
-	}
-	if n := len(l.buckets); n != 1 {
-		t.Fatalf("holds %d keys after the refill, want 1", n)
+	// The last one used still has its bucket: one token left of two.
+	last := strconv.Itoa(10*maxKeys - 1)
+	if !l.Allow(last) || l.Allow(last) {
+		t.Fatal("a kept key lost its bucket")
 	}
 }
 
-// Adding a key to a full Limiter costs about as much as checking a known one: no scan per call.
+// A limited key that keeps trying stays at the front, so a flood of other keys cannot evict it
+// and hand it a fresh bucket.
+func TestLimiterKeepsAHotLimitedKey(t *testing.T) {
+	c := clock.NewFake(time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC))
+	l := NewLimiter(2, time.Minute, c)
+	l.Allow("hot")
+	l.Allow("hot")
+	for i := range 10 * maxKeys {
+		l.Allow(strconv.Itoa(i))
+		if i%(maxKeys/2) == 0 && l.Allow("hot") {
+			t.Fatalf("the limited key was let through after %d other keys", i)
+		}
+	}
+	if l.Allow("hot") {
+		t.Fatal("the limited key was let through after the flood")
+	}
+	// Left alone long enough, it is evicted, and comes back with a full bucket.
+	for i := range maxKeys {
+		l.Allow("later-" + strconv.Itoa(i))
+	}
+	if _, ok := l.byKey["hot"]; ok {
+		t.Fatal("a key left alone through a cap's worth of others was kept")
+	}
+}
+
+// Adding a key to a full Limiter costs about as much as checking a known one.
 func BenchmarkLimiterFull(b *testing.B) {
 	c := clock.NewFake(time.Date(2026, 10, 6, 9, 0, 0, 0, time.UTC))
 	l := NewLimiter(2, time.Minute, c)
 	for i := range maxKeys {
 		l.Allow(strconv.Itoa(i))
 	}
-	keys := make([]string, 1000)
-	for i := range keys {
-		keys[i] = "new-" + strconv.Itoa(i)
-	}
 	i := 0
 	for b.Loop() {
-		l.Allow(keys[i%len(keys)])
+		l.Allow("new-" + strconv.Itoa(i))
 		i++
 	}
 }

@@ -75,7 +75,13 @@ type SMTP struct {
 	URL string
 	// From is the sender, such as "Darkory <darkory@example.com>" (DARKORY_SMTP_FROM).
 	From string
+	// MaxPerHour caps the emails a server process sends an hour, to protect the SMTP account's
+	// reputation under a flood (DARKORY_SMTP_MAX_PER_HOUR, default 300).
+	MaxPerHour int
 }
+
+// DefaultSMTPMaxPerHour is the default cap on emails sent an hour.
+const DefaultSMTPMaxPerHour = 300
 
 // DatabaseListenURL is where the LISTEN connection goes: DatabaseListen, or Database.
 func (c Serve) DatabaseListenURL() string {
@@ -171,7 +177,14 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	if c.Evidence, err = loadEvidence(evidence, c.DataDir, getenv); err != nil {
 		return Serve{}, err
 	}
-	c.SMTP = SMTP{URL: getenv("DARKORY_SMTP_URL"), From: getenv("DARKORY_SMTP_FROM")}
+	c.SMTP = SMTP{URL: getenv("DARKORY_SMTP_URL"), From: getenv("DARKORY_SMTP_FROM"), MaxPerHour: DefaultSMTPMaxPerHour}
+	if v := getenv("DARKORY_SMTP_MAX_PER_HOUR"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return Serve{}, fmt.Errorf("DARKORY_SMTP_MAX_PER_HOUR is a number of emails above zero, got %q", v)
+		}
+		c.SMTP.MaxPerHour = n
+	}
 	if c.SMTP.URL != "" {
 		// A link in an email must never be built on the Host a request names, which anyone can set.
 		if c.PublicURL == "" {
