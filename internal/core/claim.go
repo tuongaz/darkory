@@ -66,6 +66,11 @@ WHERE ot.org_id = @org AND ot.id = @task AND oc.org_id = @org AND oc.ended_at IS
 	return []store.Stmt{
 		// The Session claiming is still open: a claim cannot outlive a revocation or close it races.
 		withGuard(store.S(sessionOpenGuard, args)),
+		// No earlier Claim on the Task ended after @now. A claim read before another write ended
+		// the Task's Claim, and run after it, would otherwise start before that Claim ended; it is
+		// refused, and tried again at a fresh time.
+		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task
+AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.org_id = @org AND pc.task_id = @task AND pc.ended_at > @now)`, args)),
 		store.S(`UPDATE tasks AS t SET outgoing_claim_id = claim_id, outgoing_holder_id = claim_holder_id,
 outgoing_expires_at = claim_expires_at, claim_id = @claim, claim_holder_id = @member, claim_session_id = @session,
 claim_skill_id = skill_id, claim_timeout_ms = @timeout, claim_expires_at = @expires

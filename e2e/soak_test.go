@@ -36,7 +36,8 @@ import (
 // Activity has no gaps and every stream saw all of it in order; no 5xx and no busy database
 // anywhere; every Task's state agrees with its Claims; retries wrote nothing twice.
 //
-// DARKORY_E2E_SOAK sets how long the agents work (default 2m).
+// DARKORY_E2E_SOAK sets how long the agents work (default 2m), and DARKORY_E2E_SOAK_TASKS how
+// many Tasks the humans file (default 360), a quarter of them at once.
 func TestSoak(t *testing.T) {
 	needE2E(t)
 	t.Run(engine(), func(t *testing.T) { soak(t, 1) })
@@ -47,9 +48,20 @@ func TestSoak(t *testing.T) {
 
 const (
 	soakSessionsPerMember = 10
-	soakTasks             = 360 // filed in all, at least
-	soakClaimTimeout      = 3   // seconds
+	soakClaimTimeout      = 3 // seconds
 )
+
+// soakTasks is how many Tasks the humans file in all.
+func soakTasks(t *testing.T) int {
+	if v := os.Getenv("DARKORY_E2E_SOAK_TASKS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 2 {
+			t.Fatalf("DARKORY_E2E_SOAK_TASKS: %q", v)
+		}
+		return n
+	}
+	return 360
+}
 
 var soakSkills = []string{"s-a", "s-b", "s-c", "s-d"}
 
@@ -262,7 +274,9 @@ func soak(t *testing.T, procs int) {
 	var wg sync.WaitGroup
 	var filed atomic.Int64
 	for i, f := range filers {
-		wg.Go(func() { r.file(ctx, rand.New(rand.NewPCG(uint64(i), 1)), f.name, f.team, f.c, duration, &filed) })
+		wg.Go(func() {
+			r.file(ctx, rand.New(rand.NewPCG(uint64(i), 1)), f.name, f.team, f.c, duration, soakTasks(t)/len(filers), &filed)
+		})
 	}
 	for i, s := range sessions {
 		wg.Go(func() { r.agent(ctx, rand.New(rand.NewPCG(uint64(i), 2)), s.skills, s.c) })
@@ -288,8 +302,8 @@ func soak(t *testing.T, procs int) {
 	tasks := r.checkTasks(bg, check)
 	r.checkTables(in, last)
 	r.report(t, procs, elapsed, filed.Load(), len(tasks))
-	if n := len(tasks); n < soakTasks {
-		t.Errorf("only %d Tasks were filed, want %d or more", n, soakTasks)
+	if n := len(tasks); n < soakTasks(t) {
+		t.Errorf("only %d Tasks were filed, want %d or more", n, soakTasks(t))
 	}
 	if len(r.problems) > 0 {
 		t.Errorf("%d problems, the first:\n%s", len(r.problems), strings.Join(r.problems[:min(len(r.problems), 30)], "\n"))
@@ -298,8 +312,8 @@ func soak(t *testing.T, procs int) {
 
 // file is a human filing Features and Tasks for the length of the soak: a quarter of its share
 // at once, the rest spread out, shipping its Features whose Tasks have all ended.
-func (r *soakRun) file(ctx context.Context, rng *rand.Rand, name, team string, c *client.ClientWithResponses, duration time.Duration, filed *atomic.Int64) {
-	share := soakTasks/2 + 10
+func (r *soakRun) file(ctx context.Context, rng *rand.Rand, name, team string, c *client.ClientWithResponses, duration time.Duration, share int, filed *atomic.Int64) {
+	share += 10
 	pace := (duration - 20*time.Second) / time.Duration(share)
 	var feature string
 	inFeature := 0

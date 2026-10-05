@@ -47,6 +47,34 @@ func (f claimFixture) activityKinds(subject string) []string {
 	return out
 }
 
+// A Claim never starts before the Task's previous Claim ended. The e2e soak found a claim read
+// before another Member's release committed, and run after it, recorded as starting before the
+// release: its time is taken when it reads. Here the clock stands back to that moment; the claim
+// is refused rather than recorded overlapping, and a claim at a later time takes the Task.
+func TestClaimNeverStartsBeforeThePreviousClaimEnded(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newClaimFixture(t, st)
+		ctx := t.Context()
+		f.claim(f.a, f.task.Key, noTimeout)
+		f.clock.Advance(10 * time.Second)
+		if _, err := f.svc.Release(ctx, f.a, f.task.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		f.clock.Advance(-5 * time.Second)
+		_, err := f.svc.Claim(ctx, f.b, f.task.Key, noTimeout, core.Idem{})
+		wantCode(t, err, core.CodeNotTakeable)
+		if _, found, err := f.svc.Next(ctx, f.b, 0, noTimeout, core.Idem{}); err != nil || found {
+			t.Fatalf("next at the earlier time: found %v, %v", found, err)
+		}
+		f.clock.Advance(10 * time.Second)
+		d := f.claim(f.b, f.task.Key, noTimeout)
+		if len(d.Claims) != 2 || d.Claims[1].StartedAt.Before(*d.Claims[0].EndedAt) {
+			t.Fatalf("Claims %+v", d.Claims)
+		}
+		f.checkActivity()
+	})
+}
+
 func TestClaimRecordsTheClaim(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newClaimFixture(t, st)
