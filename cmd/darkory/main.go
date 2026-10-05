@@ -115,12 +115,12 @@ First Member: %s (human, admin)
 Token for %s, shown once; keep it safe:
   %s
 
-Sign in with a browser within %s, once darkory serve is running:
+Sign in with a browser within %d minutes, once darkory serve is running:
   %s
 
 darkory serve prints a fresh login link every time it starts.
 `, out.Organisation.Name, cfg.Database, out.Member.Name, out.Member.Name, out.Token.Secret,
-		core.LoginLinkTTL, link)
+		int(core.LoginLinkTTL.Minutes()), link)
 	return nil
 }
 
@@ -191,7 +191,7 @@ func printStartupLink(ctx context.Context, svc *core.Service, base string, open 
 		return
 	}
 	url := server.LoginURL(base, link.Code)
-	fmt.Fprintf(stdout, "Sign in as %s within %s (the link works once):\n  %s\n", m.Name, core.LoginLinkTTL, url)
+	fmt.Fprintf(stdout, "Sign in as %s within %d minutes (the link works once):\n  %s\n", m.Name, int(core.LoginLinkTTL.Minutes()), url)
 	if open {
 		if err := openBrowser(url); err != nil {
 			log.Info("could not open a browser; open the link yourself", "err", err)
