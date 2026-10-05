@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -137,43 +136,6 @@ func TestCredentials(t *testing.T) {
 			t.Fatalf("me: status %d body %s", me.StatusCode(), me.Body)
 		}
 	})
-}
-
-// The generated client sees an unbuilt operation's 501 as the Error body.
-func TestUnbuiltOperationsAnswer501ThroughTheClient(t *testing.T) {
-	_, c := newTestServer(t)
-	res, err := c.RequestEmailSignInWithResponse(t.Context(), &client.RequestEmailSignInParams{}, client.EmailSignInBody{Email: "ada@example.com"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.StatusCode() != http.StatusNotImplemented || res.JSONDefault == nil || res.JSONDefault.Code != client.ErrorCodeNotImplemented {
-		t.Fatalf("requestEmailSignIn: status %d body %s", res.StatusCode(), res.Body)
-	}
-}
-
-// unbuilt lists the operations still answering 501 from stubs.go.
-var unbuilt = []string{"RequestEmailSignIn"}
-
-// Every operation not yet built answers 501 with the Error body.
-func TestEveryUnbuiltOperationAnswers501(t *testing.T) {
-	srv := New(nil, Options{})
-	iface := reflect.TypeFor[gen.ServerInterface]()
-	for _, name := range unbuilt {
-		m, ok := iface.MethodByName(name)
-		if !ok {
-			t.Fatalf("%s is not an operation", name)
-		}
-		t.Run(name, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/"+name, nil)
-			args := []reflect.Value{reflect.ValueOf(rec), reflect.ValueOf(req)}
-			for j := 2; j < m.Type.NumIn(); j++ {
-				args = append(args, reflect.Zero(m.Type.In(j)))
-			}
-			reflect.ValueOf(srv).MethodByName(m.Name).Call(args)
-			assertError(t, rec.Result(), http.StatusNotImplemented, gen.ErrorCodeNotImplemented)
-		})
-	}
 }
 
 func TestUnknownAPIPathsAnswerJSON404(t *testing.T) {

@@ -1,4 +1,4 @@
-// Command darkory is the Darkory server, and later its CLI and MCP server, in one binary.
+// Command darkory is the Darkory server, its CLI and its MCP server, in one binary.
 package main
 
 import (
@@ -12,48 +12,58 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/blob"
+	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/version"
 	"github.com/tuongaz/darkory/internal/wake"
 )
 
-const usage = `darkory: management for a software factory of agents and humans.
+var usage = `darkory: management for a software factory of agents and humans.
 
 Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
-                [--evidence-max-mb n]
+                [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
                                                                        run the server
+  darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
+  darkory mcp                                                          serve the agent operations to an MCP client over stdio
+  darkory update [--check] [--version v]                               replace this binary with a newer release
   darkory version                                                      print the version
-`
+` + cli.Usage()
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "darkory:", err)
-		os.Exit(1)
+		var ex *cli.ExitError
+		if !errors.As(err, &ex) {
+			fmt.Fprintln(os.Stderr, "darkory:", err)
+		}
+		os.Exit(exitCode(err))
 	}
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
-		return errors.New("no command")
+		return &cli.ExitError{Code: cli.ExitUsage}
 	}
 	switch args[0] {
 	case "init":
 		return initInstall(args[1:], stdout, stderr)
 	case "serve":
 		return serve(args[1:], stdout, stderr)
+	case "migrate":
+		return migrate(args[1:], stdout, stderr)
 	case "update":
 		return runUpdate(args[1:], stdout, stderr)
 	case "version", "--version":
@@ -62,21 +72,36 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return nil
+	case "mcp":
+		return runMCP(args[1:], stderr)
 	}
-	fmt.Fprint(stderr, usage)
-	return fmt.Errorf("unknown command %q", args[0])
+	if cli.Handles(args) {
+		return runCLI(args, stdout, stderr)
+	}
+	fmt.Fprintf(stderr, "darkory: unknown command %q\n%s", args[0], usage)
+	return &cli.ExitError{Code: cli.ExitUsage}
 }
 
-// openStore opens and migrates the record cfg names, creating the data directory for SQLite.
-func openStore(ctx context.Context, cfg config.Store, log *slog.Logger) (*store.Store, error) {
-	if store.EngineOf(cfg.Database) == store.SQLite {
-		if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
-			return nil, err
-		}
-	}
-	st, err := store.Open(ctx, cfg.Database)
+// openStore opens the record cfg names, creating the data directory for SQLite. With migrate it
+// brings the schema up to date, backing up a SQLite file first; without, it refuses a database
+// with pending migrations (ADR 0009: Cloud runs `darkory migrate` as its own step). Either way it
+// refuses a database newer than the binary.
+func openStore(ctx context.Context, cfg config.Store, migrate bool, log *slog.Logger) (*store.Store, error) {
+	st, err := openDatabase(ctx, cfg)
 	if err != nil {
 		return nil, err
+	}
+	if !migrate {
+		pending, err := st.Pending(ctx)
+		if err == nil && len(pending) > 0 {
+			err = fmt.Errorf("the database needs migrations %s; run darkory migrate before starting this release, or serve --migrate",
+				migrationList(pending))
+		}
+		if err != nil {
+			st.Close()
+			return nil, err
+		}
+		return st, nil
 	}
 	res, err := st.Migrate(ctx)
 	if err != nil {
@@ -100,7 +125,7 @@ func initInstall(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	ctx := context.Background()
-	st, err := openStore(ctx, cfg.Store, slog.New(slog.NewTextHandler(stderr, nil)))
+	st, err := openStore(ctx, cfg.Store, true, slog.New(slog.NewTextHandler(stderr, nil)))
 	if err != nil {
 		return err
 	}
@@ -141,21 +166,48 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	st, err := openStore(ctx, cfg.Store, log)
+	var sender mail.Sender
+	if cfg.SMTP.URL != "" {
+		smtp, err := mail.NewSMTP(cfg.SMTP.URL, cfg.SMTP.From)
+		if err != nil {
+			return err
+		}
+		sender = smtp
+		log.Info("emailed sign-in is on", "smtp", smtp.String())
+	}
+
+	st, err := openStore(ctx, cfg.Store, migrateAtStart(cfg), log)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
 
+	// Evidence on disk by default; a bucket that cannot be reached stops the start, rather than
+	// the first upload.
+	blobs, err := blob.Open(ctx, cfg.Evidence, nil)
+	if err != nil {
+		return err
+	}
+	if cfg.Evidence.S3 != nil {
+		log.Info("Evidence is kept in S3-compatible storage", "bucket", cfg.Evidence.S3.String())
+	}
+
+	n := wake.New()
+	if st.Engine() == store.Postgres {
+		// Other server processes on this database wake this one's waiters, and it theirs (ADR 0006).
+		pg, err := wake.ListenPostgres(ctx, n, st, cfg.DatabaseListenURL(), log)
+		if err != nil {
+			return err
+		}
+		defer pg.Close()
+	}
+
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return err
 	}
-	blobs, err := blob.NewDisk(filepath.Join(cfg.DataDir, "evidence"))
-	if err != nil {
-		return err
-	}
-	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20})
+	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender,
+		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
@@ -171,7 +223,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	base := config.BaseURL(cfg.PublicURL, ln.Addr().String())
-	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine())
+	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine(), "sign_in", api.SignInModes())
 
 	go housekeeping(ctx, api.Core(), log)
 	go api.WatchForUpdates(ctx)
@@ -186,6 +238,73 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// openDatabase opens the record cfg names, creating the data directory for SQLite.
+func openDatabase(ctx context.Context, cfg config.Store) (*store.Store, error) {
+	if store.EngineOf(cfg.Database) == store.SQLite {
+		if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
+			return nil, err
+		}
+	}
+	return store.Open(ctx, cfg.Database)
+}
+
+// migrateAtStart says whether serve migrates as it starts: always on SQLite, after a backup, and
+// on Postgres only when asked, since Cloud migrates as its own step before a rollout (ADR 0009).
+func migrateAtStart(cfg config.Serve) bool {
+	return store.EngineOf(cfg.Database) == store.SQLite || cfg.Migrate
+}
+
+// migrate applies the pending migrations to the database and exits, for a Cloud rollout, or with
+// --dry-run lists them (ADR 0009). It backs up a SQLite file first, as serve does.
+func migrate(args []string, stdout, stderr io.Writer) error {
+	cfg, err := config.LoadMigrate(args, os.Getenv, stderr)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	st, err := openDatabase(ctx, cfg.Store)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	pending, err := st.Pending(ctx)
+	if err != nil {
+		return err
+	}
+	if len(pending) == 0 {
+		fmt.Fprintln(stdout, "No pending migrations.")
+		return nil
+	}
+	if cfg.DryRun {
+		fmt.Fprintf(stdout, "%d pending migration(s), not applied:\n", len(pending))
+		for _, m := range pending {
+			fmt.Fprintf(stdout, "  %s\n", m)
+		}
+		return nil
+	}
+	res, err := st.Migrate(ctx)
+	if res.Backup != "" {
+		fmt.Fprintf(stdout, "Backed up the database to %s\n", res.Backup)
+	}
+	names := map[int]string{}
+	for _, m := range pending {
+		names[m.Version] = m.String()
+	}
+	for _, v := range res.Applied {
+		fmt.Fprintf(stdout, "Applied %s\n", names[v])
+	}
+	return err
+}
+
+func migrationList(ms []store.Migration) string {
+	names := make([]string, len(ms))
+	for i, m := range ms {
+		names[i] = m.String()
+	}
+	return strings.Join(names, ", ")
 }
 
 // announceSignIn prints the startup login link unless --no-login-link says not to issue one, as

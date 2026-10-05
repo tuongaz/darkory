@@ -17,6 +17,7 @@ import (
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 	"github.com/tuongaz/darkory/internal/update"
@@ -46,7 +47,7 @@ func TestActivityKindsMatchTheSpec(t *testing.T) {
 
 // Health says how humans sign in and, once the server has checked, whether a newer release exists.
 func TestHealthReportsSignInAndUpdates(t *testing.T) {
-	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{EmailSignIn: true})
+	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{Mail: mail.NewFake(), PublicURL: publicURL})
 	anon := h.client("", "")
 	res := got(anon.GetHealthWithResponse(t.Context())).want(t, http.StatusOK).JSON200
 	if !slices.Equal(res.SignInModes, []client.SignInMode{client.SignInPrintedLink, client.SignInEmailLink}) ||

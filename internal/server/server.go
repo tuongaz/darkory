@@ -13,6 +13,7 @@ import (
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/update"
@@ -30,12 +31,12 @@ type Server struct {
 	// publicURL is where the Install is reached, for login links; empty to use the request's host.
 	publicURL string
 	keepAlive time.Duration
+	// signIn sends login links by email; nil when the Install has no email set up.
+	signIn *emailSignIn
 	// blobs keeps Evidence files; nil when the Install has no Evidence store.
 	blobs blob.Store
 	// maxEvidence bounds one Evidence file, in bytes.
 	maxEvidence int64
-	// emailSignIn says the Install emails login links on request.
-	emailSignIn bool
 	// update is the last check for a newer release, for /v1/health; nil until one ran.
 	updateStatus atomic.Pointer[update.Status]
 }
@@ -52,13 +53,18 @@ type Options struct {
 	PublicURL string
 	// KeepAlive is how often an idle Activity stream sends a comment. Defaults to 15 s.
 	KeepAlive time.Duration
+	// Mail, when set, sends login links to Members who ask by email; it needs PublicURL.
+	Mail mail.Sender
+	// MailPerHour caps the emails this server sends an hour; zero means DefaultMailPerHour.
+	MailPerHour int
+	// ProxyHops is how many proxies in front append to X-Forwarded-For, to find the client's
+	// address for rate limits; zero uses the connection's.
+	ProxyHops int
 	// Blobs keeps Evidence files: on disk under the data directory by default. Without one,
 	// Evidence cannot be attached or downloaded.
 	Blobs blob.Store
 	// MaxEvidenceSize bounds one Evidence file, in bytes. Defaults to DefaultMaxEvidenceSize.
 	MaxEvidenceSize int64
-	// EmailSignIn says the Install emails login links on request, which /v1/health reports.
-	EmailSignIn bool
 }
 
 // DefaultMaxEvidenceSize is the largest Evidence file an Install takes unless set otherwise.
@@ -89,9 +95,9 @@ func New(st *store.Store, o Options) *Server {
 		log:         o.Log,
 		publicURL:   o.PublicURL,
 		keepAlive:   o.KeepAlive,
+		signIn:      newEmailSignIn(o),
 		blobs:       o.Blobs,
 		maxEvidence: o.MaxEvidenceSize,
-		emailSignIn: o.EmailSignIn,
 	}
 }
 
