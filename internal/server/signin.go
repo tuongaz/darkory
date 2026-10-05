@@ -1,13 +1,24 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"mime"
+	"net"
 	"net/http"
+	netmail "net/mail"
+	"net/netip"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/clock"
+	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
@@ -131,4 +142,221 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, token gen.T
 	}
 	t, err := s.core.RevokeToken(r.Context(), c, token, idem)
 	s.respond(w, r, out, t, err)
+}
+
+// Email sign-in limits, per server process (decisions.md), checked in this order: each client
+// address ten times, then once a minute, before the 202; then, in the background and only for an
+// address that belongs to a Member, each Member three times, then once every five minutes; then
+// at most MailPerHour emails an hour for all of them together. An address no Member has spends
+// nothing but its client's token and one read. Lookups in flight are bounded too. A request over
+// any limit is answered like any other and sends nothing, and each limit's warning is logged at
+// most once a minute.
+const (
+	signInPerMember      = 3
+	signInPerMemberEvery = 5 * time.Minute
+	signInPerClient      = 10
+	signInPerClientEvery = time.Minute
+	signInInFlight       = 16
+	signInSendTimeout    = time.Minute
+	// DefaultMailPerHour is the cap on emails sent when Options.MailPerHour is zero.
+	DefaultMailPerHour = 300
+	warnEvery          = time.Minute
+)
+
+// emailSignIn sends login links to Members who ask by email (ADR 0008).
+type emailSignIn struct {
+	mail mail.Sender
+	// base is the public URL the links are built on; never the Host a request names.
+	base      string
+	proxyHops int
+	byClient  *auth.Limiter
+	// byMember is keyed by Member id, so its keys are bounded by the Members there are.
+	byMember *auth.Limiter
+	// sent is one bucket for every email this process sends, so a flood spread over many
+	// Members and clients cannot spend the SMTP account's reputation.
+	sent     *auth.Limiter
+	perHour  int
+	inFlight chan struct{}
+	clock    clock.Clock
+
+	mu     sync.Mutex
+	warned map[string]time.Time
+}
+
+func newEmailSignIn(o Options) *emailSignIn {
+	if o.Mail == nil {
+		return nil
+	}
+	if o.PublicURL == "" {
+		// A link built on the request's Host would go wherever the requester says.
+		o.Log.Error("email sign-in is off: emailed login links need the public URL (DARKORY_PUBLIC_URL)")
+		return nil
+	}
+	perHour := o.MailPerHour
+	if perHour <= 0 {
+		perHour = DefaultMailPerHour
+	}
+	return &emailSignIn{
+		mail:      o.Mail,
+		base:      strings.TrimRight(o.PublicURL, "/"),
+		proxyHops: o.ProxyHops,
+		byClient:  auth.NewLimiter(signInPerClient, signInPerClientEvery, o.Clock),
+		byMember:  auth.NewLimiter(signInPerMember, signInPerMemberEvery, o.Clock),
+		sent:      auth.NewLimiter(perHour, time.Hour/time.Duration(perHour), o.Clock),
+		perHour:   perHour,
+		inFlight:  make(chan struct{}, signInInFlight),
+		clock:     o.Clock,
+		warned:    map[string]time.Time{},
+	}
+}
+
+// warn logs msg unless it was logged within the last minute, so a flood cannot flood the log.
+func (e *emailSignIn) warn(s *Server, msg string, args ...any) {
+	now := e.clock.Now()
+	e.mu.Lock()
+	last, ok := e.warned[msg]
+	if ok && now.Sub(last) < warnEvery {
+		e.mu.Unlock()
+		return
+	}
+	e.warned[msg] = now
+	e.mu.Unlock()
+	s.log.Warn(msg, args...)
+}
+
+// SignInModes lists how humans sign in to this Install, for the health reply: always the printed
+// link, and the emailed link when email is set up.
+func (s *Server) SignInModes() []string { return config.SignInModes(s.signIn != nil) }
+
+// RequestEmailSignIn emails a login link when the address belongs to a Member. It answers 202
+// whatever happens next — no Member, no email set up, a rate limit — and before any of it, so
+// neither the reply nor its timing says which addresses belong to Members. Its Idempotency-Key is
+// accepted and not stored: there is no Member to keep it under, and a repeat is rate limited.
+func (s *Server) RequestEmailSignIn(w http.ResponseWriter, r *http.Request, _ gen.RequestEmailSignInParams) {
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, gen.ErrorCodeTooLarge, "the request body is over 4 KiB")
+		return
+	}
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		invalid(w, "send the body as Content-Type: application/json")
+		return
+	}
+	var body gen.EmailSignInBody
+	if err := json.Unmarshal(raw, &body); err != nil {
+		invalid(w, "the body is not valid JSON for this operation: "+err.Error())
+		return
+	}
+	addr, err := netmail.ParseAddress(string(body.Email))
+	if err != nil || addr.Name != "" || addr.Address != strings.TrimSpace(string(body.Email)) || len(addr.Address) > 254 {
+		invalid(w, "email is not an email address")
+		return
+	}
+	if s.signIn != nil {
+		s.signIn.request(s, r, addr.Address)
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+// request checks the client's limit and, within it, looks the address up and sends in the
+// background, so nothing the reply or its timing shows depends on whether a Member has it.
+func (e *emailSignIn) request(s *Server, r *http.Request, address string) {
+	client := clientAddress(r, e.proxyHops)
+	if !e.byClient.Allow(client) {
+		e.warn(s, "email sign-in: a client address is over its limit; sending it nothing", "client", client)
+		return
+	}
+	select {
+	case e.inFlight <- struct{}{}:
+	default:
+		e.warn(s, "email sign-in: too many emails being sent; sending nothing", "client", client)
+		return
+	}
+	go func() {
+		defer func() { <-e.inFlight }()
+		ctx, cancel := context.WithTimeout(context.Background(), signInSendTimeout)
+		defer cancel()
+		e.send(ctx, s, address)
+	}()
+}
+
+// send emails a login link to each Member who has address, within each Member's limit and the
+// cap on emails sent. An address no Member has creates no limiter key and takes no token, so a
+// flood of made-up addresses cannot reset a Member's bucket or spend the cap.
+func (e *emailSignIn) send(ctx context.Context, s *Server, address string) {
+	found, err := s.core.MembersByEmail(ctx, address)
+	if err != nil {
+		s.log.Error("email sign-in: finding Members by email", "err", err)
+		return
+	}
+	for _, f := range found {
+		if !e.byMember.Allow(f.MemberID) {
+			e.warn(s, "email sign-in: a Member is over their limit; sending them nothing", "member", f.MemberID)
+			continue
+		}
+		// Taken before the link is issued, so a capped request writes nothing either.
+		if !e.sent.Allow("") {
+			e.warn(s, "email sign-in: this server has sent its cap of emails for the hour; sending nothing until it refills. "+
+				"Printed links still work (DARKORY_SMTP_MAX_PER_HOUR)", "per_hour", e.perHour)
+			return
+		}
+		l, err := s.core.IssueEmailLink(ctx, f)
+		if err != nil {
+			s.log.Error("email sign-in: issuing a login link", "member", f.MemberID, "err", err)
+			continue
+		}
+		minutes := int(core.LoginLinkTTL.Minutes())
+		m := mail.Message{
+			To:      *l.Member.Email,
+			Subject: "Sign in to Darkory",
+			Text: fmt.Sprintf(`Someone asked to sign in to Darkory as %s, in %s, with this email address.
+
+Open this link within %d minutes to sign in. It works once:
+
+%s
+
+If you did not ask, ignore this email: nobody can sign in without the link.
+`, l.Member.Name, l.Organisation, minutes, LoginURL(e.base, l.Link.Code)),
+		}
+		if err := e.mail.Send(ctx, m); err != nil {
+			s.log.Error("email sign-in: sending a login link", "member", l.Member.ID, "err", err)
+			continue
+		}
+		s.log.Info("email sign-in: sent a login link", "member", l.Member.ID)
+	}
+}
+
+// clientAddress is the address a request came from, for rate limits: the connection's, or, behind
+// hops proxies that each append to X-Forwarded-For, the entry that many from its end. An IPv6
+// address counts by its /64, which one client usually holds whole.
+func clientAddress(r *http.Request, hops int) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	if hops > 0 {
+		var chain []string
+		for _, h := range r.Header.Values("X-Forwarded-For") {
+			for _, a := range strings.Split(h, ",") {
+				if a = strings.TrimSpace(a); a != "" {
+					chain = append(chain, a)
+				}
+			}
+		}
+		switch {
+		case len(chain) >= hops:
+			host = chain[len(chain)-hops]
+		case len(chain) > 0:
+			host = chain[0]
+		}
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil {
+		return host
+	}
+	if ip = ip.Unmap(); ip.Is6() {
+		p, _ := ip.Prefix(64)
+		return p.String()
+	}
+	return ip.String()
 }

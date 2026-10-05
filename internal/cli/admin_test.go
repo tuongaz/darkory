@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/mail"
+	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -147,24 +151,32 @@ func TestAdminCommands(t *testing.T) {
 
 // health and the emailed login link need no token.
 func TestPublicCommands(t *testing.T) {
-	in := newInstall(t, storetest.Open(t, store.SQLite))
+	sent := mail.NewFake()
+	in := newInstallWith(t, storetest.Open(t, store.SQLite), server.Options{Mail: sent, PublicURL: "http://darkory.test"})
+	in.as("ada", "ada-1").ok("member", "update", "ada", "--email", "ada@example.com")
 	anon := &runner{t: t, env: map[string]string{"DARKORY_URL": in.ts.URL}}
 	var h client.Health
 	anon.json(&h, "health")
-	if h.Status != client.HealthStatusOk || h.Version == "" || len(h.SignInModes) == 0 {
+	if h.Status != client.HealthStatusOk || h.Version == "" || !slices.Contains(h.SignInModes, client.SignInEmailLink) {
 		t.Fatalf("health: %+v", h)
 	}
-	if out := anon.ok("health"); !strings.Contains(out, "Sign-in  printed_link") {
+	if out := anon.ok("health"); !strings.Contains(out, "email_link") {
 		t.Fatalf("health printed %q", out)
 	}
 	anon.fails(ExitUsage, "login")
 	anon.fails(ExitUsage, "login", "ada", "--email", "ada@example.com")
-	// Emailed sign-in is built with the other Install settings (Phase 3c).
-	res := anon.run("login", "--email", "nobody@example.com")
-	if strings.Contains(res.stderr, "not_implemented") {
-		t.Skipf("the server has not built emailed sign-in yet: %s", strings.TrimSpace(res.stderr))
+
+	// The reply is the same whether or not a Member has the address; only a Member is emailed.
+	for _, addr := range []string{"nobody@example.com", "ada@example.com"} {
+		if out := anon.ok("login", "--email", addr); !strings.Contains(out, "a login link is on its way") {
+			t.Fatalf("login --email %s: %q", addr, out)
+		}
 	}
-	if res.code != ExitOK || !strings.Contains(res.stdout, "a login link is on its way") {
-		t.Fatalf("login --email: %+v", res)
+	m, ok := sent.Next(5 * time.Second)
+	if !ok || m.To != "ada@example.com" || !strings.Contains(m.Text, "http://darkory.test/v1/login-links/") {
+		t.Fatalf("emailed %+v, %v", m, ok)
+	}
+	if len(sent.Sent()) != 1 {
+		t.Fatalf("sent %d emails", len(sent.Sent()))
 	}
 }

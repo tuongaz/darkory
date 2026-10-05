@@ -1,15 +1,22 @@
-// Package config reads the Install settings: where the server listens, where it keeps its data,
-// and the address browsers reach it at. A flag wins over its environment variable, which wins
-// over the default.
+// Package config reads the Install settings: where the server listens, where it keeps its data
+// and Evidence, the address browsers reach it at, and how humans sign in (ADR 0002). A flag wins
+// over its environment variable, which wins over the default. Settings that usually carry a
+// secret are read from the environment only, so they never show in a process list.
+// docs/build/settings.md lists them all.
 package config
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
+
+	"github.com/tuongaz/darkory/internal/blob"
 )
 
 // Defaults for a Local Install.
@@ -43,9 +50,68 @@ type Serve struct {
 	// NoLoginLink stops `serve` issuing and printing the startup login link at all, for a
 	// container whose output goes to shipped logs (DARKORY_NO_LOGIN_LINK, --no-login-link).
 	NoLoginLink bool
+	// DatabaseListen is where the Postgres LISTEN connection that wakes this process for other
+	// processes' writes goes (DARKORY_DB_LISTEN; environment only). Empty: Database. It must reach
+	// Postgres directly or through session pooling, never a transaction-pooling PgBouncer.
+	DatabaseListen string
+	// Migrate lets `serve` apply pending migrations to a Postgres database at start (DARKORY_MIGRATE,
+	// --migrate). Without it, Postgres is migrated by `darkory migrate` as its own step, and `serve`
+	// refuses to start while migrations are pending. SQLite always migrates at start, after a backup.
+	Migrate bool
+	// ProxyHops is how many proxies in front of the server append to X-Forwarded-For, so the
+	// client's address is found that many entries from its end (DARKORY_PROXY_HOPS, --proxy-hops).
+	// Zero: the connection's own address. Only rate limits use it.
+	ProxyHops int
+	// Evidence is where Evidence files are kept (DARKORY_EVIDENCE, --evidence; DARKORY_S3_*).
+	Evidence blob.Settings
+	// SMTP sends emailed sign-in links; unset, email sign-in is off.
+	SMTP SMTP
 	// EvidenceMaxMB bounds one Evidence file, in MiB (DARKORY_EVIDENCE_MAX_MB, --evidence-max-mb).
 	EvidenceMaxMB int64
 }
+
+// SMTP names the server that sends email (environment only).
+type SMTP struct {
+	// URL is smtp://user:pass@host:587 (STARTTLS, required), smtps://user:pass@host:465 (TLS from
+	// the start), or smtp://host:25?tls=none for a relay on a trusted network (DARKORY_SMTP_URL).
+	URL string
+	// From is the sender, such as "Darkory <darkory@example.com>" (DARKORY_SMTP_FROM).
+	From string
+	// MaxPerHour caps the emails a server process sends an hour, to protect the SMTP account's
+	// reputation under a flood (DARKORY_SMTP_MAX_PER_HOUR, default 300).
+	MaxPerHour int
+}
+
+// DefaultSMTPMaxPerHour is the default cap on emails sent an hour.
+const DefaultSMTPMaxPerHour = 300
+
+// DatabaseListenURL is where the LISTEN connection goes: DatabaseListen, or Database.
+func (c Serve) DatabaseListenURL() string {
+	if c.DatabaseListen != "" {
+		return c.DatabaseListen
+	}
+	return c.Database
+}
+
+// How humans sign in to an Install (ADR 0008). An Install always has the printed link — `serve`
+// prints one at start, and an admin issues them through /v1 — and has the emailed link when SMTP
+// is set. GitHub and Google sign-in are not built yet.
+const (
+	SignInPrintedLink = "printed_link"
+	SignInEmailLink   = "email_link"
+)
+
+// SignInModes lists the sign-in modes of an Install with or without email set up, for the health
+// reply and the startup log.
+func SignInModes(email bool) []string {
+	if email {
+		return []string{SignInPrintedLink, SignInEmailLink}
+	}
+	return []string{SignInPrintedLink}
+}
+
+// SignInModes lists how humans sign in to this Install.
+func (c Serve) SignInModes() []string { return SignInModes(c.SMTP.URL != "") }
 
 // DefaultEvidenceMaxMB is the largest Evidence file, in MiB, unless set otherwise.
 const DefaultEvidenceMaxMB = 100
@@ -88,6 +154,19 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	fs.BoolVar(&c.NoBrowser, "no-browser", noBrowser, "do not open the startup login link in a browser (DARKORY_NO_BROWSER)")
 	noLink, _ := strconv.ParseBool(getenv("DARKORY_NO_LOGIN_LINK"))
 	fs.BoolVar(&c.NoLoginLink, "no-login-link", noLink, "do not issue or print a startup login link (DARKORY_NO_LOGIN_LINK)")
+	migrate, _ := strconv.ParseBool(getenv("DARKORY_MIGRATE"))
+	fs.BoolVar(&c.Migrate, "migrate", migrate, "on Postgres, apply pending migrations at start instead of refusing to start (DARKORY_MIGRATE)")
+	hops := 0
+	if v := getenv("DARKORY_PROXY_HOPS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			return Serve{}, fmt.Errorf("DARKORY_PROXY_HOPS is a count of proxies, got %q", v)
+		}
+		hops = n
+	}
+	fs.IntVar(&c.ProxyHops, "proxy-hops", hops, "proxies in front that append to X-Forwarded-For (DARKORY_PROXY_HOPS)")
+	var evidence string
+	fs.StringVar(&evidence, "evidence", getenv("DARKORY_EVIDENCE"), "directory for Evidence, or s3://bucket/prefix; default evidence in the data directory (DARKORY_EVIDENCE)")
 	maxMB, err := strconv.ParseInt(or(getenv("DARKORY_EVIDENCE_MAX_MB"), strconv.Itoa(DefaultEvidenceMaxMB)), 10, 64)
 	if err != nil {
 		return Serve{}, fmt.Errorf("DARKORY_EVIDENCE_MAX_MB: %w", err)
@@ -101,6 +180,89 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	}
 	if fs.NArg() > 0 {
 		return Serve{}, fmt.Errorf("serve takes no arguments, got %q", fs.Args())
+	}
+	if c.ProxyHops < 0 {
+		return Serve{}, errors.New("--proxy-hops is not negative")
+	}
+	c.finish()
+	c.DatabaseListen = getenv("DARKORY_DB_LISTEN")
+	if c.Evidence, err = loadEvidence(evidence, c.DataDir, getenv); err != nil {
+		return Serve{}, err
+	}
+	c.SMTP = SMTP{URL: getenv("DARKORY_SMTP_URL"), From: getenv("DARKORY_SMTP_FROM"), MaxPerHour: DefaultSMTPMaxPerHour}
+	if v := getenv("DARKORY_SMTP_MAX_PER_HOUR"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return Serve{}, fmt.Errorf("DARKORY_SMTP_MAX_PER_HOUR is a number of emails above zero, got %q", v)
+		}
+		c.SMTP.MaxPerHour = n
+	}
+	if c.SMTP.URL != "" {
+		// A link in an email must never be built on the Host a request names, which anyone can set.
+		if c.PublicURL == "" {
+			return Serve{}, errors.New("DARKORY_SMTP_URL needs DARKORY_PUBLIC_URL: emailed login links are built on it")
+		}
+		if c.SMTP.From == "" {
+			return Serve{}, errors.New("DARKORY_SMTP_URL needs DARKORY_SMTP_FROM, the address emails are sent from")
+		}
+	}
+	return c, nil
+}
+
+// loadEvidence reads where Evidence is kept: a directory, by default evidence in the data
+// directory, or an S3-compatible bucket named s3://bucket/prefix and set up by DARKORY_S3_*.
+func loadEvidence(location, dataDir string, getenv func(string) string) (blob.Settings, error) {
+	if !strings.HasPrefix(location, "s3://") {
+		if location == "" {
+			location = filepath.Join(dataDir, "evidence")
+		}
+		return blob.Settings{Dir: location}, nil
+	}
+	u, err := url.Parse(location)
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" {
+		return blob.Settings{}, fmt.Errorf("DARKORY_EVIDENCE: want s3://bucket or s3://bucket/prefix, got %q", location)
+	}
+	pathStyle, err := strconv.ParseBool(or(getenv("DARKORY_S3_PATH_STYLE"), "false"))
+	if err != nil {
+		return blob.Settings{}, fmt.Errorf("DARKORY_S3_PATH_STYLE is true or false, got %q", getenv("DARKORY_S3_PATH_STYLE"))
+	}
+	s3 := &blob.S3Settings{
+		Bucket:    u.Host,
+		Prefix:    strings.Trim(u.Path, "/"),
+		Endpoint:  getenv("DARKORY_S3_ENDPOINT"),
+		Region:    or(getenv("DARKORY_S3_REGION"), or(getenv("AWS_REGION"), "us-east-1")),
+		AccessKey: or(getenv("DARKORY_S3_ACCESS_KEY"), getenv("AWS_ACCESS_KEY_ID")),
+		SecretKey: or(getenv("DARKORY_S3_SECRET_KEY"), getenv("AWS_SECRET_ACCESS_KEY")),
+		PathStyle: pathStyle,
+	}
+	if s3.AccessKey == "" || s3.SecretKey == "" {
+		return blob.Settings{}, errors.New("DARKORY_EVIDENCE names an S3 bucket: set DARKORY_S3_ACCESS_KEY and DARKORY_S3_SECRET_KEY")
+	}
+	if s3.Endpoint != "" && !strings.HasPrefix(s3.Endpoint, "http://") && !strings.HasPrefix(s3.Endpoint, "https://") {
+		return blob.Settings{}, fmt.Errorf("DARKORY_S3_ENDPOINT needs http:// or https://, got %q", s3.Endpoint)
+	}
+	return blob.Settings{S3: s3}, nil
+}
+
+// Migrate holds the settings of `darkory migrate`.
+type Migrate struct {
+	Store
+	// DryRun lists the pending migrations without applying them (--dry-run).
+	DryRun bool
+}
+
+// LoadMigrate reads the settings of `darkory migrate` from args and the environment.
+func LoadMigrate(args []string, getenv func(string) string, usage io.Writer) (Migrate, error) {
+	var c Migrate
+	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	fs.SetOutput(usage)
+	storeFlags(fs, getenv, &c.Store)
+	fs.BoolVar(&c.DryRun, "dry-run", false, "list the pending migrations without applying them")
+	if err := fs.Parse(args); err != nil {
+		return Migrate{}, err
+	}
+	if fs.NArg() > 0 {
+		return Migrate{}, fmt.Errorf("migrate takes no arguments, got %q", fs.Args())
 	}
 	c.finish()
 	return c, nil

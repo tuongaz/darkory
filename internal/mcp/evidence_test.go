@@ -147,12 +147,8 @@ func TestAttachEvidenceTool(t *testing.T) {
 			t.Errorf("%s: %q", path, text(res))
 		}
 	}
-	// A file under the root is sent. Evidence is built in Phase 2; until then the Install answers
-	// 501, which still shows the file was sent.
+	// A file under the root is sent.
 	res := call(t, cs, "attach_evidence", map[string]any{"target": "WEB-3", "path": "report.txt"})
-	if res.IsError && strings.HasPrefix(text(res), "not_implemented: ") {
-		return
-	}
 	if res.IsError {
 		t.Fatalf("report.txt: %q", text(res))
 	}

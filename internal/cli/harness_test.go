@@ -48,11 +48,24 @@ type install struct {
 
 func newInstall(t *testing.T, st *store.Store) *install {
 	t.Helper()
-	disk, err := blob.NewDisk(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
+	return newInstallWith(t, st, server.Options{})
+}
+
+// newInstallWith is newInstall with server options; a disk Evidence store and a short keep-alive
+// are filled in.
+func newInstallWith(t *testing.T, st *store.Store, o server.Options) *install {
+	t.Helper()
+	if o.Blobs == nil {
+		disk, err := blob.NewDisk(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.Blobs = disk
 	}
-	srv := server.New(st, server.Options{KeepAlive: 100 * time.Millisecond, Blobs: disk})
+	if o.KeepAlive == 0 {
+		o.KeepAlive = 100 * time.Millisecond
+	}
+	srv := server.New(st, o)
 	init, err := srv.Core().Init(t.Context(), "Acme", "ada")
 	if err != nil {
 		t.Fatal(err)
