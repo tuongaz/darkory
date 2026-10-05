@@ -1,4 +1,4 @@
-// Command darkory is the Darkory server, and later its CLI and MCP server, in one binary.
+// Command darkory is the Darkory server, its CLI and its MCP server, in one binary.
 package main
 
 import (
@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
@@ -25,26 +26,31 @@ import (
 	"github.com/tuongaz/darkory/internal/wake"
 )
 
-const usage = `darkory: management for a software factory of agents and humans.
+var usage = `darkory: management for a software factory of agents and humans.
 
 Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                                                                        run the server
+  darkory mcp                                                          serve the agent operations to an MCP client over stdio
+  darkory update [--check] [--version v]                               replace this binary with a newer release
   darkory version                                                      print the version
-`
+` + cli.Usage()
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, "darkory:", err)
-		os.Exit(1)
+		var ex *cli.ExitError
+		if !errors.As(err, &ex) {
+			fmt.Fprintln(os.Stderr, "darkory:", err)
+		}
+		os.Exit(exitCode(err))
 	}
 }
 
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
-		return errors.New("no command")
+		return &cli.ExitError{Code: cli.ExitUsage}
 	}
 	switch args[0] {
 	case "init":
@@ -59,9 +65,14 @@ func run(args []string, stdout, stderr io.Writer) error {
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return nil
+	case "mcp":
+		return runMCP(args[1:], stderr)
 	}
-	fmt.Fprint(stderr, usage)
-	return fmt.Errorf("unknown command %q", args[0])
+	if cli.Handles(args) {
+		return runCLI(args, stdout, stderr)
+	}
+	fmt.Fprintf(stderr, "darkory: unknown command %q\n%s", args[0], usage)
+	return &cli.ExitError{Code: cli.ExitUsage}
 }
 
 // openStore opens and migrates the record cfg names, creating the data directory for SQLite.

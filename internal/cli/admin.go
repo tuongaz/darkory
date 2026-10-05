@@ -1,0 +1,567 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
+	"github.com/tuongaz/darkory/client"
+)
+
+var adminCommands = []command{
+	{path: "me", short: "show who you are: your Member, Teams, Skills and Session", run: cmdMe},
+	{path: "member create", args: "<name> --kind human|agent [--email e] [--admin]", short: "create a Member (admin)", run: cmdMemberCreate},
+	{path: "member list", args: "[--team t] [--kind k]", short: "list Members", run: cmdMemberList},
+	{path: "member show", args: "<member>", short: "show a Member with their Teams, Skills and reports", run: cmdMemberShow},
+	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false]", short: "change a Member (admin)", run: cmdMemberUpdate},
+	{path: "team create", args: "<KEY> <name>", short: "create a Team (admin)", run: cmdTeamCreate},
+	{path: "team list", short: "list Teams", run: cmdTeamList},
+	{path: "team show", args: "<team>", short: "show a Team and its Members", run: cmdTeamShow},
+	{path: "team add", args: "<team> <member>", short: "add a Member to a Team (admin)", run: cmdTeamAdd},
+	{path: "team remove", args: "<team> <member>", short: "remove a Member from a Team (admin)", run: cmdTeamRemove},
+	{path: "skill create", args: "<name> --kind generic|company [--base skill] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
+	{path: "skill list", args: "[--kind k]", short: "list Skills", run: cmdSkillList},
+	{path: "skill show", args: "<skill>", short: "show a Skill and its current version's text", run: cmdSkillShow},
+	{path: "skill versions", args: "<skill>", short: "list a Skill's published versions", run: cmdSkillVersions},
+	{path: "grant", args: "<member> <skill>", short: "grant a Skill to a Member (admin)", run: cmdGrant},
+	{path: "ungrant", args: "<member> <skill>", short: "take a Skill away from a Member (admin)", run: cmdUngrant},
+	{path: "report-to", args: "<member> <manager> | <member> --none", short: "set or clear a Member's Reporting line (admin)", run: cmdReportTo},
+	{path: "token issue", args: "<member> --name n [--timeout d]", short: "issue a token; its secret is shown once (admin)", run: cmdTokenIssue},
+	{path: "token list", args: "[member]", short: "list a Member's tokens (default yours)", run: cmdTokenList},
+	{path: "token revoke", args: "<token id>", short: "revoke a token, ending its Sessions' Claims", run: cmdTokenRevoke},
+	{path: "login", args: "<member>", short: "issue a one-time login link for a Member (admin)", run: cmdLogin},
+	{path: "logout", short: "close this Session, ending the Claims bound to it", run: cmdLogout},
+	{path: "session close", args: "[session id] [--member m]", short: "close a Session (default this one), ending its Claims", run: cmdSessionClose},
+}
+
+func cmdMe(c *call) error {
+	if _, err := c.args(0, 0); err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.GetMeWithResponse(c.ctx)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		me := res.JSON200
+		fmt.Fprintf(w, "%s (%s%s) in %s\n", me.Member.Name, me.Member.Kind, map[bool]string{true: ", admin"}[me.Member.Admin], me.Organisation.Name)
+		fmt.Fprintf(w, "  Teams    %s\n", names(me.Teams, func(t client.Team) string { return t.Key }))
+		fmt.Fprintf(w, "  Skills   %s\n", names(me.Skills, func(s client.Skill) string { return s.Name }))
+		session := me.Session.ID
+		if conn.Settings.OneOff {
+			session += " (made up for this command; DARKORY_SESSION is not set)"
+		}
+		fmt.Fprintf(w, "  Session  %s\n", session)
+	})
+}
+
+func email(s string) *openapi_types.Email {
+	if s == "" {
+		return nil
+	}
+	return ptr(openapi_types.Email(s))
+}
+
+func cmdMemberCreate(c *call) error {
+	kind := c.fs.String("kind", "", "human or agent")
+	mail := c.fs.String("email", "", "the Member's email address")
+	admin := c.fs.Bool("admin", false, "give the Member the admin mark")
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	if *kind == "" {
+		return usagef("needs --kind human or --kind agent")
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	body := client.CreateMemberBody{Name: args[0], Kind: client.MemberKind(*kind), Email: email(*mail)}
+	if *admin {
+		body.Admin = admin
+	}
+	res, err := conn.CreateMemberWithResponse(c.ctx, &client.CreateMemberParams{}, body)
+	if err := check(res, err, http.StatusCreated); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printMemberLine(w, *res.JSON201) })
+}
+
+func cmdMemberList(c *call) error {
+	team := c.fs.String("team", "", "only Members of this Team")
+	kind := c.fs.String("kind", "", "only human or agent Members")
+	if _, err := c.args(0, 0); err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	params := &client.ListMembersParams{Team: opt(*team)}
+	if *kind != "" {
+		params.Kind = ptr(client.MemberKind(*kind))
+	}
+	res, err := conn.ListMembersWithResponse(c.ctx, params)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		for _, m := range res.JSON200.Items {
+			c.printMemberLine(w, m)
+		}
+	})
+}
+
+func cmdMemberShow(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.GetMemberWithResponse(c.ctx, args[0])
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		d := res.JSON200
+		c.printMemberLine(w, d.Member)
+		fmt.Fprintf(w, "  Teams    %s\n", names(d.Teams, func(t client.Team) string { return t.Key }))
+		fmt.Fprintf(w, "  Skills   %s\n", names(d.Skills, func(s client.Skill) string { return s.Name }))
+		fmt.Fprintf(w, "  Reports  %s\n", names(d.Reports, func(m client.Member) string { return m.Name }))
+	})
+}
+
+func cmdMemberUpdate(c *call) error {
+	name := c.fs.String("name", "", "the Member's new name")
+	mail := c.fs.String("email", "", "the Member's new email address")
+	var admin optBool
+	c.fs.Var(&admin, "admin", "set (--admin or --admin=true) or clear (--admin=false) the admin mark")
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	body := client.UpdateMemberBody{Name: opt(*name), Email: email(*mail), Admin: admin.v}
+	if body.Name == nil && body.Email == nil && body.Admin == nil {
+		return usagef("nothing to change: give --name, --email or --admin")
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.UpdateMemberWithResponse(c.ctx, args[0], &client.UpdateMemberParams{}, body)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printMemberLine(w, *res.JSON200) })
+}
+
+func cmdTeamCreate(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.CreateTeamWithResponse(c.ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: args[0], Name: args[1]})
+	if err := check(res, err, http.StatusCreated); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { fmt.Fprintf(w, "%-8s %s\n", res.JSON201.Key, res.JSON201.Name) })
+}
+
+func cmdTeamList(c *call) error {
+	if _, err := c.args(0, 0); err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.ListTeamsWithResponse(c.ctx)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		for _, t := range res.JSON200.Items {
+			fmt.Fprintf(w, "%-8s %s\n", t.Key, t.Name)
+		}
+	})
+}
+
+func cmdTeamShow(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.GetTeamWithResponse(c.ctx, args[0])
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		fmt.Fprintf(w, "%s  %s\n", res.JSON200.Team.Key, res.JSON200.Team.Name)
+		for _, m := range res.JSON200.Members {
+			fmt.Fprint(w, "  ")
+			c.printMemberLine(w, m)
+		}
+	})
+}
+
+func cmdTeamAdd(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.AddTeamMemberWithResponse(c.ctx, args[0], args[1], &client.AddTeamMemberParams{})
+	if err := check(res, err, http.StatusNoContent); err != nil {
+		return err
+	}
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s is in %s.\n", args[1], args[0]) })
+}
+
+func cmdTeamRemove(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.RemoveTeamMemberWithResponse(c.ctx, args[0], args[1], &client.RemoveTeamMemberParams{})
+	if err := check(res, err, http.StatusNoContent); err != nil {
+		return err
+	}
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s is no longer in %s.\n", args[1], args[0]) })
+}
+
+func cmdSkillCreate(c *call) error {
+	kind := c.fs.String("kind", "", "generic or company")
+	base := c.fs.String("base", "", "the generic Skill a company Skill builds on")
+	file := c.fs.String("file", "", "the Skill's text; - reads standard input")
+	text := c.fs.String("body", "", "the Skill's text")
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	if *kind == "" {
+		return usagef("needs --kind generic or --kind company")
+	}
+	if (*file == "") == (*text == "") {
+		return usagef("give the Skill's text with --file or --body")
+	}
+	body := *text
+	if *file == "-" {
+		body, err = c.text("-")
+	} else if *file != "" {
+		var b []byte
+		b, err = os.ReadFile(*file)
+		body = string(b)
+	}
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.CreateSkillWithResponse(c.ctx, &client.CreateSkillParams{}, client.CreateSkillBody{
+		Name: args[0], Kind: client.SkillKind(*kind), BaseSkill: opt(*base), Body: body})
+	if err := check(res, err, http.StatusCreated); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printSkillLine(w, res.JSON201.Skill) })
+}
+
+func cmdSkillList(c *call) error {
+	kind := c.fs.String("kind", "", "only generic or company Skills")
+	if _, err := c.args(0, 0); err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	params := &client.ListSkillsParams{}
+	if *kind != "" {
+		params.Kind = ptr(client.SkillKind(*kind))
+	}
+	res, err := conn.ListSkillsWithResponse(c.ctx, params)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		for _, s := range res.JSON200.Items {
+			c.printSkillLine(w, s)
+		}
+	})
+}
+
+func cmdSkillShow(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.GetSkillWithResponse(c.ctx, args[0])
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		c.printSkillLine(w, res.JSON200.Skill)
+		fmt.Fprintf(w, "\n%s\n", res.JSON200.Current.Body)
+	})
+}
+
+func cmdSkillVersions(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.ListSkillVersionsWithResponse(c.ctx, args[0])
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		for _, v := range res.JSON200.Items {
+			by := ""
+			if v.PublishedBy != nil {
+				by = " by " + c.member(*v.PublishedBy)
+			}
+			fmt.Fprintf(w, "v%-4d published %s%s\n", v.Version, stamp(v.PublishedAt), by)
+		}
+	})
+}
+
+func cmdGrant(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.GrantSkillWithResponse(c.ctx, args[0], args[1], &client.GrantSkillParams{})
+	if err := check(res, err, http.StatusNoContent); err != nil {
+		return err
+	}
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s has the Skill %s.\n", args[0], args[1]) })
+}
+
+func cmdUngrant(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.RevokeSkillWithResponse(c.ctx, args[0], args[1], &client.RevokeSkillParams{})
+	if err := check(res, err, http.StatusNoContent); err != nil {
+		return err
+	}
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s no longer has the Skill %s.\n", args[0], args[1]) })
+}
+
+func cmdReportTo(c *call) error {
+	none := c.fs.Bool("none", false, "remove the Member's Reporting line")
+	args, err := c.args(1, 2)
+	if err != nil {
+		return err
+	}
+	if *none == (len(args) == 2) {
+		return usagef("give a manager or --none")
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	if *none {
+		res, err := conn.ClearManagerWithResponse(c.ctx, args[0], &client.ClearManagerParams{})
+		if err := check(res, err, http.StatusNoContent); err != nil {
+			return err
+		}
+		return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s reports to no one.\n", args[0]) })
+	}
+	res, err := conn.SetManagerWithResponse(c.ctx, args[0], &client.SetManagerParams{}, client.SetManagerBody{Manager: args[1]})
+	if err := check(res, err, http.StatusNoContent); err != nil {
+		return err
+	}
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s reports to %s.\n", args[0], args[1]) })
+}
+
+func cmdTokenIssue(c *call) error {
+	name := c.fs.String("name", "", "the token's name, unique among the Member's live tokens")
+	timeout := c.fs.String("timeout", "", "the default heartbeat timeout of Claims made with it, such as 5m (default: none)")
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	if *name == "" {
+		return usagef("needs --name")
+	}
+	body := client.IssueTokenBody{Name: *name}
+	if *timeout != "" {
+		n, err := seconds(*timeout)
+		if err != nil || n < 1 {
+			return usagef("--timeout is a duration of at least 1s")
+		}
+		body.DefaultHeartbeatTimeoutSeconds = &n
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.IssueTokenWithResponse(c.ctx, args[0], &client.IssueTokenParams{}, body)
+	if err := check(res, err, http.StatusCreated); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		c.printToken(w, res.JSON201.Token)
+		fmt.Fprintf(w, "\nSecret, shown once; keep it safe:\n  %s\n", res.JSON201.Secret)
+	})
+}
+
+func cmdTokenList(c *call) error {
+	args, err := c.args(0, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	member := ""
+	if len(args) == 1 {
+		member = args[0]
+	} else if member, err = c.me(); err != nil {
+		return err
+	}
+	res, err := conn.ListTokensWithResponse(c.ctx, member)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		for _, t := range res.JSON200.Items {
+			c.printToken(w, t)
+		}
+	})
+}
+
+func cmdTokenRevoke(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.RevokeTokenWithResponse(c.ctx, args[0], &client.RevokeTokenParams{})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printToken(w, *res.JSON200) })
+}
+
+func cmdLogin(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.IssueLoginLinkWithResponse(c.ctx, args[0], &client.IssueLoginLinkParams{})
+	if err := check(res, err, http.StatusCreated); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		fmt.Fprintf(w, "Open this link once in a browser to sign in as %s, before %s:\n  %s\n", args[0], stamp(res.JSON201.ExpiresAt), res.JSON201.URL)
+	})
+}
+
+func cmdLogout(c *call) error {
+	if _, err := c.args(0, 0); err != nil {
+		return err
+	}
+	conn, err := c.dial(lasting)
+	if err != nil {
+		return err
+	}
+	res, err := conn.LogoutWithResponse(c.ctx, &client.LogoutParams{})
+	if err := check(res, err, http.StatusNoContent); err != nil {
+		return err
+	}
+	stopped, _ := stopBackground(conn.Settings)
+	return c.show(nil, func(w io.Writer) {
+		fmt.Fprintf(w, "Closed Session %s.\n", conn.Settings.Session)
+		if stopped != 0 {
+			fmt.Fprintf(w, "Stopped its background heartbeat (pid %d).\n", stopped)
+		}
+	})
+}
+
+func cmdSessionClose(c *call) error {
+	member := c.fs.String("member", "", "the Member whose Session to close (admin; default you)")
+	args, err := c.args(0, 1)
+	if err != nil {
+		return err
+	}
+	need := lasting
+	if len(args) == 1 {
+		need = oneOff
+	}
+	conn, err := c.dial(need)
+	if err != nil {
+		return err
+	}
+	id := conn.Settings.Session
+	if len(args) == 1 {
+		id = args[0]
+	}
+	res, err := conn.CloseSessionWithResponse(c.ctx, id, &client.CloseSessionParams{Member: opt(*member)})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	stopped := 0
+	if id == conn.Settings.Session && *member == "" {
+		stopped, _ = stopBackground(conn.Settings)
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		fmt.Fprintf(w, "Closed Session %s; %d Claims bound to it ended.\n", id, res.JSON200.ClaimsEnded)
+		if stopped != 0 {
+			fmt.Fprintf(w, "Stopped its background heartbeat (pid %d).\n", stopped)
+		}
+	})
+}
