@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { Link } from "react-router";
 import type { Claim, FeatureState, Task } from "../api/client";
 import { useDirectory } from "../api/queries";
@@ -81,5 +82,25 @@ export function TaskLink({ task }: { task: Pick<Task, "key" | "title"> }) {
     <Link to={`/tasks/${task.key}`}>
       <span className="key">{task.key}</span> {task.title}
     </Link>
+  );
+}
+
+/** The open Tasks blocking this one, by display key, each linked; nothing when none is open. */
+export function OpenBlockers({ task }: { task: Pick<Task, "open_blockers"> }) {
+  const open = task.open_blockers ?? [];
+  if (open.length === 0) return null;
+  return (
+    <span className="blockers">
+      {" "}
+      · blocked by{" "}
+      {open.map((b, i) => (
+        <Fragment key={b.id}>
+          {i > 0 && ", "}
+          <Link to={`/tasks/${b.key}`}>
+            <span className="key">{b.key}</span>
+          </Link>
+        </Fragment>
+      ))}
+    </span>
   );
 }

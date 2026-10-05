@@ -14,6 +14,8 @@ export default defineConfig({
     proxy: { "/v1": process.env.DARKORY_URL ?? "http://127.0.0.1:7357" },
   },
   test: {
+    // The Playwright suite in e2e/ runs against the real binary with `npm run e2e`.
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["src/test/setup.ts"],
     restoreMocks: true,

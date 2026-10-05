@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
-import { api, call, fileBody, type Claim, type Note, type Task, type TaskDetail } from "../api/client";
+import { api, call, fileBody, type Claim, type Note, type SkillProposal, type Task, type TaskDetail } from "../api/client";
 import { keys, useDirectory } from "../api/queries";
 import { useNow } from "../clock";
 import { EvidenceSection, ObservationItems } from "../components/records";
@@ -55,6 +55,7 @@ function TaskPage({ detail }: { detail: TaskDetail }) {
         {task.state === "open" && <Actions detail={detail} claim={claim} />}
       </section>
 
+      {detail.proposal && <Proposal proposal={detail.proposal} />}
       <Blockers detail={detail} />
       <Notes notes={detail.notes} />
       <section aria-labelledby="task-observations">
@@ -131,7 +132,7 @@ function Actions({ detail, claim }: { detail: TaskDetail; claim: Claim | undefin
       {!claim && <ClaimButton task={task} />}
       {mine && (
         <>
-          <Complete task={task} />
+          <Complete detail={detail} />
           <Handover task={task} />
           <Release task={task} />
           {task.kind === "retrospective" && <ProposeSkillVersion task={task} />}
@@ -174,7 +175,10 @@ function NoteField({ value, onChange, label = "Note (optional)" }: { value: stri
   );
 }
 
-function Complete({ task }: { task: Task }) {
+function Complete({ detail }: { detail: TaskDetail }) {
+  const { task, proposal } = detail;
+  const { skills } = useDirectory();
+  const publishes = proposal?.state === "pending" && skills.get(task.skill_id ?? "")?.name === "skill-review";
   const [note, setNote] = useState("");
   const complete = useMutation({
     mutationFn: () =>
@@ -190,6 +194,12 @@ function Complete({ task }: { task: Task }) {
       }}
     >
       <h3>Complete</h3>
+      {publishes && proposal && (
+        <p className="muted">
+          Completing this review publishes the proposal as version {proposal.based_on_version + 1} of{" "}
+          <SkillName id={proposal.skill_id} />.
+        </p>
+      )}
       <NoteField value={note} onChange={setNote} />
       <div>
         <button type="submit" disabled={complete.isPending}>
@@ -461,6 +471,67 @@ function ProposeSkillVersion({ task }: { task: Task }) {
         </p>
       )}
     </form>
+  );
+}
+
+const proposalTone: Record<SkillProposal["state"], string> = { pending: "open", published: "shipped", superseded: "dropped" };
+
+/** The latest Skill proposal written on the Task, laid out for whoever reviews it. */
+function Proposal({ proposal }: { proposal: SkillProposal }) {
+  const { skills } = useDirectory();
+  const current = useQuery({
+    queryKey: keys.skill(proposal.skill_id),
+    queryFn: () => call(api.GET("/v1/skills/{skill}", { params: { path: { skill: proposal.skill_id } } })),
+  });
+  const currentVersion = current.data?.current.version ?? skills.get(proposal.skill_id)?.current_version;
+  const stale = proposal.state === "pending" && currentVersion !== undefined && currentVersion !== proposal.based_on_version;
+  return (
+    <section aria-labelledby="proposal-heading" className="panel">
+      <h2 id="proposal-heading">Skill proposal</h2>
+      <dl className="facts">
+        <dt>Skill</dt>
+        <dd>
+          <SkillName id={proposal.skill_id} />
+        </dd>
+        <dt>Based on</dt>
+        <dd>
+          version {proposal.based_on_version}
+          {stale && ` (version ${currentVersion} is current)`}
+        </dd>
+        <dt>Author</dt>
+        <dd>
+          <MemberName id={proposal.author_id} /> <Time at={proposal.created_at} />
+        </dd>
+        <dt>State</dt>
+        <dd>
+          <Badge tone={proposalTone[proposal.state]}>{proposal.state}</Badge>
+          {proposal.published_version !== undefined && ` as version ${proposal.published_version}`}
+          {proposal.decided_at && (
+            <>
+              {" "}
+              <Time at={proposal.decided_at} />
+            </>
+          )}
+        </dd>
+      </dl>
+      {stale && (
+        <p className="refusal">
+          Written against version {proposal.based_on_version}, but version {currentVersion} is current: completing the
+          review would be refused with <code>proposal_stale</code>. Hand the Task back to <code>retro</code>.
+        </p>
+      )}
+      <h3>Proposed text</h3>
+      <pre className="skill-body" aria-label="Proposed text">
+        {proposal.body}
+      </pre>
+      {current.data && (
+        <details>
+          <summary>Current text, version {current.data.current.version}</summary>
+          <pre className="skill-body">{current.data.current.body}</pre>
+        </details>
+      )}
+      <Refusal error={current.error} />
+    </section>
   );
 }
 

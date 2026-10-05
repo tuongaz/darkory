@@ -3,6 +3,7 @@ import { Fragment, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api, call, type IssuedToken, type LoginLink, type Member, type MemberDetail } from "../../api/client";
 import { keys, useDirectory, useMembers } from "../../api/queries";
+import { TokenList } from "../../components/tokens";
 import { Badge, CopyField, Loaded, Refusal, Time } from "../../components/ui";
 import { MemberName } from "../../components/work";
 
@@ -206,63 +207,10 @@ function IssueLoginLink({ member }: { member: Member }) {
 }
 
 function Tokens({ member }: { member: Member }) {
-  const tokens = useQuery({
-    queryKey: keys.tokens(member.id),
-    queryFn: () => call(api.GET("/v1/members/{member}/tokens", { params: { path: { member: member.id } } })).then((r) => r.items),
-  });
-  const revoke = useMutation({
-    mutationFn: (token: string) => call(api.POST("/v1/tokens/{token}/revoke", { params: { path: { token } } })),
-  });
   return (
     <section aria-labelledby="tokens-heading" className="panel">
       <h3 id="tokens-heading">Tokens</h3>
-      <Loaded query={tokens}>
-        {(list) =>
-          list.length === 0 ? (
-            <p className="muted">No tokens.</p>
-          ) : (
-            <ul className="list" aria-label="Tokens">
-              {list.map((t) => (
-                <li key={t.id} className={t.revoked_at ? "ended" : undefined}>
-                  <div className="grow">
-                    {t.name} <code>{t.prefix}…</code>
-                    <div className="meta">
-                      issued <Time at={t.created_at} />
-                      {t.default_heartbeat_timeout_seconds !== undefined && (
-                        <> · Heartbeat timeout {t.default_heartbeat_timeout_seconds}s by default</>
-                      )}
-                      {t.last_used_at && (
-                        <>
-                          {" "}
-                          · last used <Time at={t.last_used_at} />
-                        </>
-                      )}
-                      {t.revoked_at && (
-                        <>
-                          {" "}
-                          · revoked <Time at={t.revoked_at} />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {!t.revoked_at && (
-                    <button
-                      type="button"
-                      className="danger"
-                      aria-label={`Revoke token ${t.name}`}
-                      onClick={() => revoke.mutate(t.id)}
-                      disabled={revoke.isPending}
-                    >
-                      Revoke
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )
-        }
-      </Loaded>
-      <Refusal error={revoke.error} />
+      <TokenList member={member} />
       <IssueToken member={member} />
     </section>
   );

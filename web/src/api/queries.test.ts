@@ -7,6 +7,8 @@ describe("live invalidation", () => {
     expect(affectedBy("task.claimed")).toEqual(expect.arrayContaining(["task", "tasks", "takeable", "feature", "features"]));
     expect(affectedBy("feature.ranked")).toEqual(expect.arrayContaining(["features", "takeable"]));
     expect(affectedBy("member.created")).toEqual(expect.arrayContaining(["members", "me"]));
+    expect(affectedBy("token.revoked")).toEqual(expect.arrayContaining(["tokens", "task"]));
+    expect(affectedBy("login_link.redeemed")).toEqual([]);
     expect(affectedBy("something.new")).toBe("all");
   });
 

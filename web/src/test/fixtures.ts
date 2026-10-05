@@ -1,4 +1,4 @@
-import type { Feature, Me, Member, Skill, Task, Team } from "../api/client";
+import type { Feature, Health, Me, Member, Skill, Task, Team } from "../api/client";
 import type { Handler } from "./api";
 
 const at = "2026-10-01T09:00:00Z";
@@ -35,6 +35,7 @@ export function feature(n: number, rank: number, extra: Partial<Feature> = {}): 
     rank,
     filed_by: ada.id,
     created_at: at,
+    task_counts: { open: 1, claimed: 0, done: 0, dropped: 0 },
     ...extra,
   };
 }
@@ -57,9 +58,14 @@ export function task(n: number, featureId: string, extra: Partial<Task> = {}): T
   };
 }
 
-/** What every signed-in page reads: the caller, and the Members, Teams and Skills for names. */
+export function health(extra: Partial<Health> = {}): Health {
+  return { status: "ok", version: "v1.2.0", sign_in_modes: ["printed_link"], ...extra };
+}
+
+/** What every signed-in page reads: health, the caller, and the Members, Teams and Skills for names. */
 export function signedIn(member: Member = ada): Record<string, Handler> {
   return {
+    "GET /v1/health": health(),
     "GET /v1/me": me(member),
     "GET /v1/members": { items: [ada, bob, builder] },
     "GET /v1/teams": { items: [ops, web] },
