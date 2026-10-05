@@ -151,13 +151,20 @@ func TestPublicCommands(t *testing.T) {
 	anon := &runner{t: t, env: map[string]string{"DARKORY_URL": in.ts.URL}}
 	var h client.Health
 	anon.json(&h, "health")
-	if h.Status != client.HealthStatusOk || h.Version == "" {
+	if h.Status != client.HealthStatusOk || h.Version == "" || len(h.SignInModes) == 0 {
 		t.Fatalf("health: %+v", h)
+	}
+	if out := anon.ok("health"); !strings.Contains(out, "Sign-in  printed_link") {
+		t.Fatalf("health printed %q", out)
 	}
 	anon.fails(ExitUsage, "login")
 	anon.fails(ExitUsage, "login", "ada", "--email", "ada@example.com")
 	// Emailed sign-in is built with the other Install settings (Phase 3c).
-	if out := try(t, anon, "login", "--email", "nobody@example.com"); !strings.Contains(out, "a login link is on its way") {
-		t.Fatalf("login --email: %q", out)
+	res := anon.run("login", "--email", "nobody@example.com")
+	if strings.Contains(res.stderr, "not_implemented") {
+		t.Skipf("the server has not built emailed sign-in yet: %s", strings.TrimSpace(res.stderr))
+	}
+	if res.code != ExitOK || !strings.Contains(res.stdout, "a login link is on its way") {
+		t.Fatalf("login --email: %+v", res)
 	}
 }

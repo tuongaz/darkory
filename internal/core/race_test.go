@@ -226,7 +226,7 @@ func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
 					stopped = true
 				default:
 				}
-				page, err := f.svc.ListActivity(ctx, f.admin, after, 50)
+				page, err := f.svc.ListActivity(ctx, f.admin, core.ActivityQuery{After: after, Limit: 50})
 				if err != nil {
 					t.Error(err)
 					return

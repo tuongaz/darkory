@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -99,8 +101,13 @@ type listTasksIn struct {
 }
 
 type observationsIn struct {
-	Feature  string `json:"feature" jsonschema:"the Feature's display key or id"`
-	Reviewed *bool  `json:"reviewed,omitempty" jsonschema:"true for only reviewed Observations, false for only unreviewed; omit for all"`
+	Feature string `json:"feature" jsonschema:"the Feature's display key or id"`
+	All     bool   `json:"all,omitempty" jsonschema:"every Observation, reviewed by a Retrospective or not; by default only those not yet reviewed"`
+}
+
+type proposalIn struct {
+	Task     string `json:"task,omitempty" jsonschema:"the Task whose latest Skill proposal to read, by display key or id; give this or proposal"`
+	Proposal string `json:"proposal,omitempty" jsonschema:"the proposal's id; give this or task"`
 }
 
 type proposeIn struct {
@@ -117,8 +124,9 @@ type skillIn struct {
 type empty struct{}
 
 type activityIn struct {
-	After int64 `json:"after,omitempty" jsonschema:"only entries after this sequence number; pass the last_seq of the previous page"`
-	Limit int   `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
+	After  *int64 `json:"after,omitempty" jsonschema:"the entries after this sequence number, oldest first; pass the last_seq of the previous page. 0 reads from the start"`
+	Before *int64 `json:"before,omitempty" jsonschema:"the entries just before this sequence number; pass the first_seq of a page to read the one before it"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
 }
 
 func opt(s string) *string {
@@ -309,7 +317,13 @@ func (s *Server) addTools() {
 		})
 	tool(s, "observations", "List the Observations recorded on a Feature's Tasks, oldest first: what a Retrospective reads.",
 		func(ctx context.Context, in observationsIn) (client.ObservationList, error) {
-			res, err := c.ListFeatureObservationsWithResponse(ctx, in.Feature, &client.ListFeatureObservationsParams{Reviewed: in.Reviewed})
+			params := &client.ListFeatureObservationsParams{}
+			if in.All {
+				// The contract's reviewed=true means every Observation.
+				all := true
+				params.Reviewed = &all
+			}
+			res, err := c.ListFeatureObservationsWithResponse(ctx, in.Feature, params)
 			if err := check(res, err, http.StatusOK); err != nil {
 				return client.ObservationList{}, err
 			}
@@ -332,6 +346,27 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON201, nil
 		})
+	tool(s, "show_proposal", "Read a proposed Skill version: the latest one written on a Task (as a skill-review holder reads the proposal it reviews), or one by id.",
+		func(ctx context.Context, in proposalIn) (client.SkillProposal, error) {
+			if (in.Task == "") == (in.Proposal == "") {
+				return client.SkillProposal{}, errors.New("give task or proposal")
+			}
+			if in.Proposal != "" {
+				res, err := c.GetSkillProposalWithResponse(ctx, in.Proposal)
+				if err := check(res, err, http.StatusOK); err != nil {
+					return client.SkillProposal{}, err
+				}
+				return *res.JSON200, nil
+			}
+			res, err := c.GetTaskWithResponse(ctx, in.Task)
+			if err := check(res, err, http.StatusOK); err != nil {
+				return client.SkillProposal{}, err
+			}
+			if res.JSON200.Proposal == nil {
+				return client.SkillProposal{}, fmt.Errorf("no Skill proposal has been written on %s", res.JSON200.Task.Key)
+			}
+			return *res.JSON200.Proposal, nil
+		})
 	tool(s, "me", "Who you are: your Member, Organisation, Teams, Skills and this Session.",
 		func(ctx context.Context, _ empty) (client.Me, error) {
 			res, err := c.GetMeWithResponse(ctx)
@@ -340,9 +375,16 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON200, nil
 		})
-	tool(s, "activity", "Read Activity, the trail of every change, after a sequence number.",
+	tool(s, "activity", "Read Activity, the trail of every change: the latest page by default, or after or before a sequence number.",
 		func(ctx context.Context, in activityIn) (client.ActivityPage, error) {
-			params := &client.ListActivityParams{After: &in.After}
+			if in.After != nil && in.Before != nil {
+				return client.ActivityPage{}, errors.New("give after or before, not both")
+			}
+			params := &client.ListActivityParams{After: in.After, Before: in.Before}
+			if in.After == nil && in.Before == nil {
+				latest := int64(9007199254740991)
+				params.Before = &latest
+			}
 			if in.Limit > 0 {
 				params.Limit = &in.Limit
 			}

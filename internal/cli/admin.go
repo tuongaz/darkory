@@ -507,7 +507,12 @@ func cmdHealth(c *call) error {
 		return err
 	}
 	return c.show(res.Body, func(w io.Writer) {
-		fmt.Fprintf(w, "%s is up: darkory %s\n", conn.Settings.URL, res.JSON200.Version)
+		h := res.JSON200
+		fmt.Fprintf(w, "%s is up: darkory %s\n", conn.Settings.URL, one(h.Version))
+		fmt.Fprintf(w, "  Sign-in  %s\n", names(h.SignInModes, func(m client.SignInMode) string { return string(m) }))
+		if deref(h.UpdateAvailable) {
+			fmt.Fprintf(w, "  Update   darkory %s is available\n", one(deref(h.LatestVersion)))
+		}
 	})
 }
 

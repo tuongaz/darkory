@@ -108,6 +108,7 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 		"POST /v1/tasks/WEB-9/skill-proposals":  {201, `{"id":"p1","skill_id":"s1","task_id":"t9","based_on_version":3,"body":"x","author_id":"m1","state":"pending","created_at":"2026-10-06T00:00:00Z"}`},
 		"POST /v1/tasks":                        {201, detail},
 		"POST /v1/sign-in/email":                {202, ""},
+		"GET /v1/skill-proposals/p1":            {200, `{"id":"p1","skill_id":"s1","task_id":"t9","based_on_version":3,"body":"x","author_id":"m1","state":"pending","created_at":"2026-10-06T00:00:00Z"}`},
 	}}
 	ts := httptest.NewServer(rc)
 	defer ts.Close()
@@ -157,8 +158,12 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 		{name: "feature drop", args: []string{"feature", "drop", "WEB-1"}, method: "POST", path: "/v1/features/WEB-1/drop"},
 		{name: "feature owner", args: []string{"feature", "owner", "WEB-1", "carol"},
 			method: "POST", path: "/v1/features/WEB-1/owner", body: `{"owner":"carol"}`},
-		{name: "feature observations", args: []string{"feature", "observations", "WEB-1", "--unreviewed"},
-			method: "GET", path: "/v1/features/WEB-1/observations", query: "reviewed=false"},
+		{name: "feature observations", args: []string{"feature", "observations", "WEB-1"},
+			method: "GET", path: "/v1/features/WEB-1/observations"},
+		{name: "feature observations, all", args: []string{"feature", "observations", "WEB-1", "--all"},
+			method: "GET", path: "/v1/features/WEB-1/observations", query: "reviewed=true"},
+		{name: "proposal show by id", args: []string{"proposal", "show", "p1"}, before: []string{"GET /v1/tasks/p1"},
+			method: "GET", path: "/v1/skill-proposals/p1"},
 		{name: "propose", args: []string{"propose", "WEB-9", "--skill", "qa-acme", "--base", "3", "--file", proposal},
 			method: "POST", path: "/v1/tasks/WEB-9/skill-proposals", body: `{"skill":"qa-acme","based_on_version":3,"body":"Test the edges.\n"}`},
 		{name: "file a question", args: []string{"file", "--blocks", "WEB-3", "--aim", "ada", "--title", "Which index?"},
@@ -221,45 +226,19 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 	}
 }
 
-// skipIfNotBuilt skips the rest of a test when the server answered an operation 501, as Phase 2
-// operations do until they are built.
-func skipIfNotBuilt(t *testing.T, res result) {
-	t.Helper()
-	if strings.Contains(res.stderr, "not_implemented") {
-		t.Skipf("the server has not built this yet: %s", strings.TrimSpace(res.stderr))
-	}
-}
-
-// try runs a command that must succeed, skipping the test when the server has not built it.
-func try(t *testing.T, r *runner, args ...string) string {
-	t.Helper()
-	res := r.run(args...)
-	skipIfNotBuilt(t, res)
-	if res.code != 0 {
-		t.Fatalf("darkory %s: exit %d\n%s%s", strings.Join(args, " "), res.code, res.stdout, res.stderr)
-	}
-	return res.stdout
-}
-
-func tryJSON(t *testing.T, r *runner, v any, args ...string) {
-	t.Helper()
-	out := try(t, r, append(args, "--json")...)
-	if err := json.Unmarshal([]byte(out), v); err != nil {
-		t.Fatalf("darkory %s --json printed %q: %v", strings.Join(args, " "), out, err)
-	}
-}
-
-// The Phase 2 flow against the real server: Handover with Notes, Observations and Evidence, a
-// question that blocks, block and unblock, take-back, rank, ownership, and shipping. Each step
-// skips the test while the server answers it 501, so this runs in full once Phase 2 merges.
+// The Phase 2 flow against the real server on both engines: Notes, Observations and Evidence; a
+// question that blocks; block and unblock; Handover and no self-review; take-back; rank and
+// ownership; shipping, which files the Retrospective; a proposed Skill version read with
+// proposal show, reviewed by another Member and published; and dropping a Feature.
 func TestPhase2Flow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		in := newInstall(t, st)
 		in.setup()
 		ada := in.as("ada", "ada-1")
 		ada.ok("skill", "create", "review", "--kind", "generic", "--body", "Review it.")
+		ada.ok("skill", "create", "build-acme", "--kind", "company", "--base", "build", "--body", "Build it the Acme way.")
 		ada.ok("team", "add", "WEB", "ada")
-		in.agent("rita", "WEB", "review")
+		in.agent("rita", "WEB", "review", "skill-review")
 		ada.ok("report-to", "bob", "ada")
 		bob, rita := in.as("bob", "bob-1"), in.as("rita", "rita-1")
 		bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
@@ -268,36 +247,47 @@ func TestPhase2Flow(t *testing.T) {
 		task := "WEB-5"
 		bob.ok("claim", task, "--timeout", "60")
 
-		try(t, bob, "note", task, "indexing", "done")
-		try(t, bob, "observe", task, "--worked", "small commits")
+		bob.ok("note", task, "indexing", "done")
+		bob.ok("observe", task, "--worked", "small commits")
 		report := filepath.Join(t.TempDir(), "report.txt")
 		os.WriteFile(report, []byte("all green\n"), 0o600)
 		var ev client.Evidence
-		tryJSON(t, bob, &ev, "attach", task, report)
+		bob.json(&ev, "attach", task, report)
 		if ev.Filename != "report.txt" || ev.Size != 10 || deref(ev.TaskID) == "" {
 			t.Fatalf("attach: %+v", ev)
 		}
 		out := filepath.Join(t.TempDir(), "back.txt")
-		try(t, bob, "evidence", "get", ev.ID, "-o", out)
+		bob.ok("evidence", "get", ev.ID, "-o", out)
 		if b, _ := os.ReadFile(out); string(b) != "all green\n" {
 			t.Fatalf("downloaded %q", b)
+		}
+		var onFeature client.Evidence
+		bob.json(&onFeature, "attach", "WEB-1", report, "--name", "plan.txt")
+		if onFeature.TaskID != nil || onFeature.Filename != "plan.txt" {
+			t.Fatalf("attach to the Feature: %+v", onFeature)
 		}
 
 		// A question aimed at ada blocks the Task until it ends.
 		var q client.TaskDetail
-		tryJSON(t, bob, &q, "file", "--blocks", task, "--aim", "ada", "--title", "Which index?")
+		bob.json(&q, "file", "--blocks", task, "--aim", "ada", "--title", "Which index?")
 		var blocked client.TaskDetail
 		bob.json(&blocked, "show", task)
-		if !blocked.Task.Blocked || len(blocked.Blockers) != 1 {
+		if !blocked.Task.Blocked || len(blocked.Blockers) != 1 || len(deref(blocked.Task.OpenBlockers)) != 1 {
 			t.Fatalf("after the question: %+v", blocked.Task)
 		}
-		try(t, bob, "unblock", task, "--by", q.Task.Key)
-		try(t, bob, "block", task, "--by", q.Task.Key)
+		if out := bob.ok("tasks", "--feature", "WEB-1"); !strings.Contains(out, "[blocked by "+q.Task.Key+"]") {
+			t.Fatalf("tasks does not say what blocks %s:\n%s", task, out)
+		}
+		bob.ok("unblock", task, "--by", q.Task.Key)
+		bob.ok("block", task, "--by", q.Task.Key)
+		if res := bob.fails(ExitRefused, "block", q.Task.Key, "--by", task); !strings.Contains(res.stderr, "cycle") {
+			t.Fatalf("a blocking loop: %q", res.stderr)
+		}
 		ada.ok("claim", q.Task.Key, "--timeout", "0")
 		ada.ok("complete", q.Task.Key, "--note", "Use the trigram index.")
 
 		var handed client.Task
-		tryJSON(t, bob, &handed, "handover", task, "--skill", "review", "--note", "ready for review")
+		bob.json(&handed, "handover", task, "--skill", "review", "--note", "ready for review")
 		if handed.Claim != nil {
 			t.Fatalf("handover left a Claim: %+v", handed.Claim)
 		}
@@ -305,32 +295,89 @@ func TestPhase2Flow(t *testing.T) {
 		bob.fails(ExitRefused, "claim", task, "--timeout", "60")
 		rita.ok("claim", task, "--timeout", "60")
 		var taken client.Task
-		tryJSON(t, bob, &taken, "take-back", task, "--reason", "reassigning")
+		bob.json(&taken, "take-back", task, "--reason", "reassigning")
 		rita.fails(ExitRefused, "heartbeat", task)
 		rita.ok("claim", task, "--timeout", "60")
 		rita.ok("complete", task)
 
 		var ranked client.Feature
-		tryJSON(t, bob, &ranked, "feature", "rank", "WEB-3", "1")
+		bob.json(&ranked, "feature", "rank", "WEB-3", "1")
 		if ranked.Rank != 1 {
 			t.Fatalf("rank: %+v", ranked)
 		}
 		var passed client.Feature
-		tryJSON(t, bob, &passed, "feature", "owner", "WEB-1", "ada")
-		var obs client.ObservationList
-		tryJSON(t, ada, &obs, "feature", "observations", "WEB-1", "--unreviewed")
-		if len(obs.Items) != 1 || obs.Items[0].Body != "small commits" {
-			t.Fatalf("observations: %+v", obs)
+		bob.json(&passed, "feature", "owner", "WEB-1", "ada")
+		if out := ada.ok("feature", "list"); !strings.Contains(out, "Search  [1 open (0 claimed), 2 done]") {
+			t.Fatalf("feature list:\n%s", out)
 		}
 		ada.ok("claim", "WEB-2", "--timeout", "0")
 		ada.ok("complete", "WEB-2")
 		var shipped client.FeatureDetail
-		tryJSON(t, ada, &shipped, "feature", "ship", "WEB-1")
+		ada.json(&shipped, "feature", "ship", "WEB-1")
 		if shipped.Feature.State != client.FeatureStateShipped {
 			t.Fatalf("ship: %+v", shipped.Feature)
 		}
+		retro := ""
+		for _, tk := range shipped.Tasks {
+			if tk.Kind == client.Retrospective {
+				retro = tk.Key
+			}
+		}
+		if retro == "" {
+			t.Fatalf("shipping filed no Retrospective: %+v", shipped.Tasks)
+		}
+
+		// The Retrospective: the owner takes it, as no one in WEB has retro, reads the
+		// Observations, and proposes a new version of the company Skill for review.
+		ada.ok("claim", retro, "--timeout", "0")
+		var obs client.ObservationList
+		ada.json(&obs, "feature", "observations", "WEB-1")
+		if len(obs.Items) != 1 || obs.Items[0].Body != "small commits" {
+			t.Fatalf("observations: %+v", obs)
+		}
+		ada.stdin = "Build it the Acme way, in small commits.\n"
+		var proposed client.SkillProposal
+		ada.json(&proposed, "propose", retro, "--skill", "build-acme", "--base", "1", "--file", "-")
+		ada.stdin = ""
+		if proposed.State != client.Pending || proposed.BasedOnVersion != 1 {
+			t.Fatalf("propose: %+v", proposed)
+		}
+		if res := ada.fails(ExitRefused, "propose", retro, "--skill", "build-acme", "--base", "9", "--file", report); !strings.Contains(res.stderr, "proposal_stale") {
+			t.Fatalf("a proposal against a version that is not current: %q", res.stderr)
+		}
+		ada.ok("handover", retro, "--skill", "skill-review")
+		rita.ok("claim", retro, "--timeout", "60")
+		var shown client.SkillProposal
+		rita.json(&shown, "proposal", "show", retro)
+		if shown.ID != proposed.ID || shown.Body != "Build it the Acme way, in small commits.\n" {
+			t.Fatalf("proposal show %s: %+v", retro, shown)
+		}
+		if out := rita.ok("proposal", "show", retro); !strings.Contains(out, "build-acme, written against v1") || !strings.Contains(out, "in small commits") {
+			t.Fatalf("proposal show printed:\n%s", out)
+		}
+		rita.ok("complete", retro)
+		var published client.SkillProposal
+		rita.json(&published, "proposal", "show", proposed.ID)
+		if published.State != client.Published || deref(published.PublishedVersion) != 2 {
+			t.Fatalf("after the review: %+v", published)
+		}
+		var skill client.SkillDetail
+		rita.json(&skill, "skill", "show", "build-acme")
+		if skill.Current.Version != 2 || skill.Current.Body != "Build it the Acme way, in small commits.\n" {
+			t.Fatalf("the published version: %+v", skill.Current)
+		}
+		ada.json(&obs, "feature", "observations", "WEB-1")
+		var everything client.ObservationList
+		ada.json(&everything, "feature", "observations", "WEB-1", "--all")
+		if len(obs.Items) != 0 || len(everything.Items) != 1 || everything.Items[0].ReviewedAt == nil {
+			t.Fatalf("after the Retrospective: unreviewed %+v, all %+v", obs.Items, everything.Items)
+		}
+		if res := rita.fails(ExitFailed, "proposal", "show", "WEB-3"); !strings.Contains(res.stderr, "no Skill proposal") {
+			t.Fatalf("proposal show of a Feature: %q", res.stderr)
+		}
+
 		var dropped client.FeatureDetail
-		tryJSON(t, bob, &dropped, "feature", "drop", "WEB-3")
+		bob.json(&dropped, "feature", "drop", "WEB-3")
 		if dropped.Feature.State != client.FeatureStateDropped {
 			t.Fatalf("drop: %+v", dropped.Feature)
 		}

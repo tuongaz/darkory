@@ -54,7 +54,7 @@ func (s *Service) ListTakeable(ctx context.Context, c *auth.Caller, limit int) (
 	args := takeableArgs(c, now)
 	args["limit"] = limitOf(limit)
 	q, a := store.Bind(takeableSQL+nextOrder+` LIMIT @limit`, args)
-	return tasksWhere(ctx, s.store, now, q, a...)
+	return tasksWhere(ctx, s.store, c.OrgID, now, q, a...)
 }
 
 // takeableIDs lists the ids of up to limit Tasks takeable by the caller, in `next`'s order.

@@ -13,17 +13,31 @@ import (
 )
 
 func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request, params gen.ListActivityParams) {
-	var after int64
+	var q core.ActivityQuery
 	if params.After != nil {
-		after = *params.After
+		q.After = *params.After
 	}
-	limit := 0
+	if params.Before != nil {
+		q.Before = *params.Before
+		if q.Before < 1 {
+			invalid(w, "before is 1 or more")
+			return
+		}
+	}
+	if q.After < 0 {
+		invalid(w, "after is not negative")
+		return
+	}
 	if params.Limit != nil {
-		limit = *params.Limit
+		q.Limit = *params.Limit
 	}
-	p, err := s.core.ListActivity(r.Context(), caller(r), after, limit)
+	p, err := s.core.ListActivity(r.Context(), caller(r), q)
 	s.respond(w, r, as(http.StatusOK, func(p core.ActivityPage) any {
-		return gen.ActivityPage{Items: each(p.Items, activityOut), LastSeq: p.LastSeq}
+		out := gen.ActivityPage{Items: each(p.Items, activityOut), LastSeq: p.LastSeq}
+		if p.FirstSeq > 0 {
+			out.FirstSeq = &p.FirstSeq
+		}
+		return out
 	}), p, err)
 }
 
@@ -31,7 +45,7 @@ func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request, params gen
 const streamPage = 500
 
 // StreamActivity sends Activity as Server-Sent Events, each with its sequence number as the event
-// id, from after Last-Event-ID (or `after`). It wakes when a write to the Organisation commits,
+// id, from after Last-Event-ID (or `after`), or from now when neither is sent. It wakes when a write to the Organisation commits,
 // sends a comment every keep-alive interval while idle, and ends when the client goes away (ADR
 // 0006) — or when its token is revoked or its Session closed: before sending anything it checks
 // the caller again, after reading, so nothing committed after a revocation goes out.
@@ -48,6 +62,13 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 		after = *params.LastEventID
 	case params.After != nil:
 		after = *params.After
+	default:
+		latest, err := s.core.LatestSeq(r.Context(), c)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		after = latest
 	}
 	if after < 0 {
 		invalid(w, "Last-Event-ID and after are not negative")
@@ -65,7 +86,7 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 	defer keepAlive.Stop()
 	for {
 		woken := s.wake.Wait(c.OrgID)
-		page, err := s.core.ListActivity(ctx, c, after, streamPage)
+		page, err := s.core.ListActivity(ctx, c, core.ActivityQuery{After: after, Limit: streamPage})
 		if err != nil {
 			if ctx.Err() == nil {
 				s.log.Error("activity stream", "err", err)

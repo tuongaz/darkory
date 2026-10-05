@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,21 +16,52 @@ import (
 	"github.com/tuongaz/darkory/internal/cli/remote"
 )
 
+// latestSeq is past every sequence number, so `before` it reads the latest page (JavaScript's
+// largest safe integer, as the contract suggests).
+const latestSeq = 9007199254740991
+
 func cmdActivity(c *call) error {
-	after := c.fs.Int64("after", 0, "only entries after this sequence number")
+	after := c.fs.Int64("after", 0, "the entries after this sequence number, oldest first")
+	before := c.fs.Int64("before", 0, "the entries just before this sequence number")
+	all := c.fs.Bool("all", false, "from the first entry: the first page, or with --follow the whole history")
 	limit := c.fs.Int("limit", 0, "at most this many entries (default 100); not with --follow")
-	follow := c.fs.Bool("follow", false, "keep printing entries as they happen, until stopped")
+	follow := c.fs.Bool("follow", false, "keep printing entries as they are written, from now unless --after or --all, until stopped")
 	if _, err := c.args(0, 0); err != nil {
 		return err
+	}
+	set := map[string]bool{}
+	c.fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	switch {
+	case set["after"] && set["before"], *all && (set["after"] || set["before"]):
+		return usagef("give one of --after, --before and --all")
+	case *follow && set["before"]:
+		return usagef("--follow reads forwards; use --after or --all")
+	case *follow && set["limit"]:
+		return usagef("--limit does not apply to --follow")
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {
 		return err
 	}
 	if *follow {
-		return c.follow(conn, *after)
+		from := *after
+		if !set["after"] && !*all {
+			// From now, as the stream does by itself, but known, so a reconnect misses nothing.
+			if from, err = c.lastSeq(conn); err != nil {
+				return err
+			}
+		}
+		return c.follow(conn, from)
 	}
-	params := &client.ListActivityParams{After: after}
+	params := &client.ListActivityParams{}
+	switch {
+	case set["after"] || *all:
+		params.After = after
+	case set["before"]:
+		params.Before = before
+	default:
+		params.Before = ptr(int64(latestSeq))
+	}
 	if *limit > 0 {
 		params.Limit = limit
 	}
@@ -38,11 +70,27 @@ func cmdActivity(c *call) error {
 		return err
 	}
 	return c.show(res.Body, func(w io.Writer) {
-		for _, a := range res.JSON200.Items {
+		p := res.JSON200
+		if len(p.Items) == 0 {
+			fmt.Fprintln(w, "No Activity.")
+		}
+		for _, a := range p.Items {
 			c.printActivity(w, a)
 		}
-		fmt.Fprintf(w, "Last: %d (pass --after %d for what follows)\n", res.JSON200.LastSeq, res.JSON200.LastSeq)
+		if p.FirstSeq != nil && *p.FirstSeq > 1 {
+			fmt.Fprintf(w, "Earlier: --before %d. ", *p.FirstSeq)
+		}
+		fmt.Fprintf(w, "Later: --after %d.\n", p.LastSeq)
 	})
+}
+
+// lastSeq is the sequence number of the latest Activity entry, or 0 when there is none.
+func (c *call) lastSeq(conn *remote.Conn) (int64, error) {
+	res, err := conn.ListActivityWithResponse(c.ctx, &client.ListActivityParams{Before: ptr(int64(latestSeq)), Limit: ptr(1)})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return 0, err
+	}
+	return res.JSON200.LastSeq, nil
 }
 
 // follow prints the Activity stream from after, one entry per line (one JSON object per line

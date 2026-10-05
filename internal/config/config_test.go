@@ -17,14 +17,14 @@ func TestLoadServe(t *testing.T) {
 		env  map[string]string
 		want Serve
 	}{
-		{"defaults", nil, nil, Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")}}},
+		{"defaults", nil, nil, Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")}, EvidenceMaxMB: 100}},
 		{"environment", nil,
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory", "DARKORY_PUBLIC_URL": "https://dk.example.com",
-				"DARKORY_NO_BROWSER": "1", "DARKORY_NO_LOGIN_LINK": "1"},
-			Serve{":8080", Store{"/var/lib/darkory", "/var/lib/darkory/darkory.db"}, "https://dk.example.com", true, true}},
-		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser", "--no-login-link"},
-			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DB": "other.db"},
-			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true, NoLoginLink: true}},
+				"DARKORY_NO_BROWSER": "1", "DARKORY_NO_LOGIN_LINK": "1", "DARKORY_EVIDENCE_MAX_MB": "20"},
+			Serve{":8080", Store{"/var/lib/darkory", "/var/lib/darkory/darkory.db"}, "https://dk.example.com", true, true, 20}},
+		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser", "--no-login-link", "--evidence-max-mb", "5"},
+			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DB": "other.db", "DARKORY_EVIDENCE_MAX_MB": "20"},
+			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true, NoLoginLink: true, EvidenceMaxMB: 5}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -39,6 +39,9 @@ func TestLoadServe(t *testing.T) {
 	}
 	if _, err := LoadServe([]string{"extra"}, env(nil), io.Discard); err == nil {
 		t.Fatal("accepted a stray argument")
+	}
+	if _, err := LoadServe([]string{"--evidence-max-mb", "0"}, env(nil), io.Discard); err == nil {
+		t.Fatal("accepted an Evidence limit of nothing")
 	}
 }
 

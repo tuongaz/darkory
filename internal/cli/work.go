@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,7 +38,8 @@ var workCommands = []command{
 	{path: "show", args: "<task>", short: "show a Task with its Claims, Notes, Evidence and Observations", run: cmdShow},
 	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--skill s] [--aimed-at m] [--holder m | --mine]", short: "list Tasks", run: cmdTasks},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
-	{path: "activity", args: "[--after n] [--limit n] [--follow]", short: "read Activity, or follow it as it happens", run: cmdActivity, long: true},
+	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposal written on a Task, or one by id", run: cmdProposalShow},
+	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
 }
 
 // maxWait is the longest one `next` request waits; longer waits are made of several.
@@ -599,4 +601,39 @@ func cmdPropose(c *call) error {
 		fmt.Fprintf(w, "Proposed a new version of %s against v%d (%s). Hand %s over to skill-review for review.\n",
 			c.skill(p.SkillID), p.BasedOnVersion, p.State, args[0])
 	})
+}
+
+func cmdProposalShow(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	// A Task carries its latest proposal; anything else is taken as a proposal's id.
+	res, err := conn.GetTaskWithResponse(c.ctx, args[0])
+	err = check(res, err, http.StatusOK)
+	switch {
+	case err == nil:
+		p := res.JSON200.Proposal
+		if p == nil {
+			return fmt.Errorf("no Skill proposal has been written on %s", res.JSON200.Task.Key)
+		}
+		var raw struct {
+			Proposal json.RawMessage `json:"proposal"`
+		}
+		if err := json.Unmarshal(res.Body, &raw); err != nil {
+			return err
+		}
+		return c.show(raw.Proposal, func(w io.Writer) { c.printProposal(w, *p, res.JSON200.Task.Key) })
+	case remote.CodeOf(err) != client.ErrorCodeNotFound:
+		return err
+	}
+	pres, err := conn.GetSkillProposalWithResponse(c.ctx, args[0])
+	if err := check(pres, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(pres.Body, func(w io.Writer) { c.printProposal(w, *pres.JSON200, "") })
 }

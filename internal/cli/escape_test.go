@@ -47,7 +47,7 @@ func TestOutputEscapesTerminalControls(t *testing.T) {
 	defer cancel()
 	followed := &lockedBuffer{}
 	done := make(chan result, 1)
-	go func() { done <- ada.runTo(ctx, followed, &lockedBuffer{}, "activity", "--follow") }()
+	go func() { done <- ada.runTo(ctx, followed, &lockedBuffer{}, "activity", "--follow", "--all") }()
 	eventually(t, 10*time.Second, "the stream to reach the Task", func() bool { return strings.Contains(followed.String(), "task.filed") })
 	cancel()
 	<-done
@@ -86,7 +86,7 @@ func TestOutputEscapesTerminalControls(t *testing.T) {
 	ctx, cancel = context.WithCancel(t.Context())
 	defer cancel()
 	stream := &lockedBuffer{}
-	go func() { done <- ada.runTo(ctx, stream, &lockedBuffer{}, "activity", "--follow", "--json") }()
+	go func() { done <- ada.runTo(ctx, stream, &lockedBuffer{}, "activity", "--follow", "--json", "--all") }()
 	eventually(t, 10*time.Second, "the JSON stream", func() bool { return strings.Contains(stream.String(), "task.claimed") })
 	cancel()
 	<-done

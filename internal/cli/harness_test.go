@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
@@ -47,7 +48,11 @@ type install struct {
 
 func newInstall(t *testing.T, st *store.Store) *install {
 	t.Helper()
-	srv := server.New(st, server.Options{KeepAlive: 100 * time.Millisecond})
+	disk, err := blob.NewDisk(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := server.New(st, server.Options{KeepAlive: 100 * time.Millisecond, Blobs: disk})
 	init, err := srv.Core().Init(t.Context(), "Acme", "ada")
 	if err != nil {
 		t.Fatal(err)

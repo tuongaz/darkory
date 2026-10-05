@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/server"
@@ -25,12 +26,20 @@ import (
 type fixture struct {
 	t   *testing.T
 	url string
+	ada string // ada's token
 	bob string // bob's token
 }
 
 func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	t.Helper()
 	ctx := t.Context()
+	if o.Blobs == nil {
+		disk, err := blob.NewDisk(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.Blobs = disk
+	}
 	srv := server.New(st, o)
 	init, err := srv.Core().Init(ctx, "Acme", "ada")
 	if err != nil {
@@ -49,7 +58,7 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	bob := dial(t, ts.URL, tok.JSON201.Secret, "bob-setup")
 	must(t)(bob.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Search"}))
 	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: ptr("WEB-1"), Skill: ptr("build"), Title: "Build search"}))
-	return &fixture{t: t, url: ts.URL, bob: tok.JSON201.Secret}
+	return &fixture{t: t, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -156,7 +165,7 @@ func TestToolsAndRules(t *testing.T) {
 	}
 	for _, want := range []string{"next", "takeable", "claim", "heartbeat", "release", "handover", "complete", "note", "observe",
 		"attach_evidence", "file_task", "block", "unblock", "show_task", "list_tasks", "feature_show", "observations",
-		"skill_show", "propose_skill_version", "me", "activity"} {
+		"skill_show", "propose_skill_version", "show_proposal", "me", "activity"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("no tool %s in %v", want, names)
 		}
@@ -341,4 +350,67 @@ func TestToolTextEscapesTerminalControls(t *testing.T) {
 	if !res.IsError || actable(text(res)) {
 		t.Fatalf("error text %q", text(res))
 	}
+}
+
+// A Retrospective through MCP: Observations, a proposed Skill version, and show_proposal by Task
+// and by id.
+func TestRetrospectiveTools(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st, server.Options{})
+		ctx := t.Context()
+		ada := dial(t, f.url, f.ada, "ada-1")
+		must(t)(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build-acme", Kind: client.Company, BaseSkill: ptr("build"), Body: "v1"}))
+		_, cs := f.connect("bob-mcp", Options{})
+		var d client.TaskDetail
+		ok(t, cs, &d, "claim", map[string]any{"task": "WEB-3", "heartbeat_timeout_seconds": 60})
+		var o client.Observation
+		ok(t, cs, &o, "observe", map[string]any{"task": "WEB-3", "outcome": "didnt_work", "body": "flaky fixture"})
+		var done client.Task
+		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-3"})
+		ok(t, cs, &d, "claim", map[string]any{"task": "WEB-2", "heartbeat_timeout_seconds": 0})
+		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-2"})
+		bob := dial(t, f.url, f.bob, "bob-setup")
+		ship, err := bob.ShipFeatureWithResponse(ctx, "WEB-1", &client.ShipFeatureParams{})
+		must(t)(ship, err)
+		retro := ""
+		for _, tk := range ship.JSON200.Tasks {
+			if tk.Kind == client.Retrospective {
+				retro = tk.Key
+			}
+		}
+
+		var obs client.ObservationList
+		ok(t, cs, &obs, "observations", map[string]any{"feature": "WEB-1"})
+		if len(obs.Items) != 1 || obs.Items[0].Body != "flaky fixture" {
+			t.Fatalf("observations: %+v", obs)
+		}
+		res := call(t, cs, "show_proposal", map[string]any{"task": retro})
+		if !res.IsError || !strings.Contains(text(res), "no Skill proposal") {
+			t.Fatalf("show_proposal before any: %q", text(res))
+		}
+		ok(t, cs, &d, "claim", map[string]any{"task": retro, "heartbeat_timeout_seconds": 0})
+		var p client.SkillProposal
+		ok(t, cs, &p, "propose_skill_version", map[string]any{"task": retro, "skill": "build-acme", "based_on_version": 1, "body": "v2: fix the fixture"})
+		var byTask, byID client.SkillProposal
+		ok(t, cs, &byTask, "show_proposal", map[string]any{"task": retro})
+		ok(t, cs, &byID, "show_proposal", map[string]any{"proposal": p.ID})
+		if byTask.ID != p.ID || byID.Body != "v2: fix the fixture" || byID.State != client.Pending {
+			t.Fatalf("show_proposal: %+v / %+v", byTask, byID)
+		}
+		if res := call(t, cs, "show_proposal", map[string]any{}); !res.IsError {
+			t.Fatal("show_proposal with neither task nor proposal")
+		}
+
+		// activity reads the latest page by default, and pages backwards with before.
+		var latest client.ActivityPage
+		ok(t, cs, &latest, "activity", map[string]any{"limit": 2})
+		if len(latest.Items) != 2 || latest.Items[1].Kind != client.ActivityKindTaskSkillProposed || latest.FirstSeq == nil {
+			t.Fatalf("activity: %+v", latest)
+		}
+		var earlier client.ActivityPage
+		ok(t, cs, &earlier, "activity", map[string]any{"before": *latest.FirstSeq, "limit": 2})
+		if len(earlier.Items) != 2 || earlier.LastSeq != *latest.FirstSeq-1 {
+			t.Fatalf("activity before %d: %+v", *latest.FirstSeq, earlier)
+		}
+	})
 }

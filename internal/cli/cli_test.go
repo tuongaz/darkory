@@ -115,7 +115,7 @@ func TestClaimPath(t *testing.T) {
 		bob.json(&page, "activity")
 		kinds := map[string]int{}
 		for _, a := range page.Items {
-			kinds[a.Kind]++
+			kinds[string(a.Kind)]++
 		}
 		if kinds["task.claimed"] != 2 || kinds["task.released"] != 1 || kinds["task.completed"] != 1 || page.LastSeq == 0 {
 			t.Fatalf("activity kinds %v", kinds)
@@ -475,16 +475,30 @@ func TestActivityFollow(t *testing.T) {
 			last = a.Seq
 		}
 
-		// Text output, from the start.
+		// Text output, from the first entry.
 		ctx2, cancel2 := context.WithCancel(t.Context())
 		defer cancel2()
 		text := &lockedBuffer{}
-		go func() { done <- ada.runTo(ctx2, text, &lockedBuffer{}, "activity", "--follow") }()
+		go func() { done <- ada.runTo(ctx2, text, &lockedBuffer{}, "activity", "--follow", "--all") }()
 		eventually(t, 10*time.Second, "the text stream", func() bool {
 			return strings.Contains(text.String(), "bob") && strings.Contains(text.String(), "feature.filed")
 		})
 		cancel2()
 		<-done
+
+		// Without --after or --all, following starts from now.
+		ctx3, cancel3 := context.WithCancel(t.Context())
+		defer cancel3()
+		now := &lockedBuffer{}
+		go func() { done <- ada.runTo(ctx3, now, &lockedBuffer{}, "activity", "--follow", "--json") }()
+		time.Sleep(300 * time.Millisecond)
+		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "After")
+		eventually(t, 10*time.Second, "the new Task on the stream", func() bool { return strings.Contains(now.String(), `"task.filed"`) })
+		cancel3()
+		<-done
+		if strings.Contains(now.String(), `"feature.filed"`) {
+			t.Fatalf("following from now sent history:\n%s", now.String())
+		}
 	})
 }
 

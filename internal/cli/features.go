@@ -17,7 +17,7 @@ var featureCommands = []command{
 	{path: "feature ship", args: "<feature>", short: "ship a Feature whose Tasks have all ended (owner)", run: cmdFeatureShip},
 	{path: "feature drop", args: "<feature>", short: "drop a Feature and its open Tasks (owner)", run: cmdFeatureDrop},
 	{path: "feature owner", args: "<feature> <member>", short: "pass a Feature's ownership", run: cmdFeatureOwner},
-	{path: "feature observations", args: "<feature> [--reviewed | --unreviewed]", short: "list the Observations on a Feature's Tasks", run: cmdFeatureObservations},
+	{path: "feature observations", args: "<feature> [--all]", short: "list the Observations on a Feature's Tasks not yet reviewed", run: cmdFeatureObservations},
 }
 
 func cmdFeatureCreate(c *call) error {
@@ -171,20 +171,15 @@ func cmdFeatureOwner(c *call) error {
 }
 
 func cmdFeatureObservations(c *call) error {
-	reviewed := c.fs.Bool("reviewed", false, "only Observations a Retrospective has reviewed")
-	unreviewed := c.fs.Bool("unreviewed", false, "only Observations not yet reviewed")
+	all := c.fs.Bool("all", false, "every Observation, reviewed by a Retrospective or not")
 	args, err := c.args(1, 1)
 	if err != nil {
 		return err
 	}
+	// The contract's reviewed=true means every Observation; leaving it out, only unreviewed ones.
 	params := &client.ListFeatureObservationsParams{}
-	switch {
-	case *reviewed && *unreviewed:
-		return usagef("give --reviewed or --unreviewed, not both")
-	case *reviewed:
+	if *all {
 		params.Reviewed = ptr(true)
-	case *unreviewed:
-		params.Reviewed = ptr(false)
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {

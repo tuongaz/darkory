@@ -86,6 +86,9 @@ func (c *call) printTaskLine(w io.Writer, t client.Task) {
 	if h := c.claimOf(t.Claim); h != "" {
 		line += "  [" + h + "]"
 	}
+	if bs := deref(t.OpenBlockers); len(bs) > 0 {
+		line += "  [blocked by " + names(bs, func(b client.TaskBrief) string { return b.Key }) + "]"
+	}
 	fmt.Fprintln(w, line)
 }
 
@@ -159,6 +162,10 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 			c.printEvidence(w, e)
 		}
 	}
+	if p := d.Proposal; p != nil {
+		fmt.Fprintln(w)
+		c.printProposal(w, *p, "")
+	}
 	if section("Claims", len(d.Claims)) {
 		for _, cl := range d.Claims {
 			how := "live"
@@ -195,7 +202,7 @@ func (c *call) printEvidence(w io.Writer, e client.Evidence) {
 }
 
 func (c *call) printFeatureLine(w io.Writer, f client.Feature) {
-	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s\n", one(f.Key), f.Rank, one(string(f.State)), c.member(f.OwnerID), one(f.Title))
+	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s  [%s]\n", one(f.Key), f.Rank, one(string(f.State)), c.member(f.OwnerID), one(f.Title), counts(f.TaskCounts))
 }
 
 func (c *call) printFeatureDetail(w io.Writer, d client.FeatureDetail) {
@@ -204,6 +211,7 @@ func (c *call) printFeatureDetail(w io.Writer, d client.FeatureDetail) {
 	fmt.Fprintf(w, "  Team       %s, Rank %d\n", c.team(f.TeamID), f.Rank)
 	fmt.Fprintf(w, "  State      %s\n", one(string(f.State)))
 	fmt.Fprintf(w, "  Owner      %s\n", c.member(f.OwnerID))
+	fmt.Fprintf(w, "  Tasks      %s, %d dropped\n", counts(f.TaskCounts), f.TaskCounts.Dropped)
 	fmt.Fprintf(w, "  Filed      by %s at %s\n", c.member(f.FiledBy), stamp(f.CreatedAt))
 	if f.EndedAt != nil {
 		fmt.Fprintf(w, "  Ended      %s\n", stamp(*f.EndedAt))
@@ -283,5 +291,27 @@ func (c *call) printActivity(w io.Writer, a client.Activity) {
 		b, _ := json.Marshal(a.Payload)
 		payload = " " + string(b)
 	}
-	fmt.Fprintf(w, "%6d %s %-12s %-22s %s%s\n", a.Seq, stamp(a.At), actor, one(a.Kind), one(a.SubjectID), one(payload))
+	fmt.Fprintf(w, "%6d %s %-12s %-22s %s%s\n", a.Seq, stamp(a.At), actor, one(string(a.Kind)), one(a.SubjectID), one(payload))
+}
+
+// counts says how far a Feature's Tasks have got.
+func counts(n client.TaskCounts) string {
+	return fmt.Sprintf("%d open (%d claimed), %d done", n.Open, n.Claimed, n.Done)
+}
+
+// printProposal prints a Skill proposal; task names its Task when known.
+func (c *call) printProposal(w io.Writer, p client.SkillProposal, task string) {
+	if task == "" {
+		task = p.TaskID
+	}
+	fmt.Fprintf(w, "Proposal %s on %s: %s\n", one(p.ID), one(task), one(string(p.State)))
+	fmt.Fprintf(w, "  Skill      %s, written against v%d", c.skill(p.SkillID), p.BasedOnVersion)
+	if p.PublishedVersion != nil {
+		fmt.Fprintf(w, ", published as v%d", *p.PublishedVersion)
+	}
+	fmt.Fprintf(w, "\n  By         %s at %s", c.member(p.AuthorID), stamp(p.CreatedAt))
+	if p.DecidedAt != nil {
+		fmt.Fprintf(w, ", decided %s", stamp(*p.DecidedAt))
+	}
+	fmt.Fprintf(w, "\n\n%s\n", indent(p.Body))
 }
