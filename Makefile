@@ -5,7 +5,7 @@ LDFLAGS := -X github.com/tuongaz/darkory/internal/version.Version=$(VERSION)
 TEST_POSTGRES_URL ?= postgres://dk@localhost:54329/postgres?sslmode=disable
 GENERATED := client/client.gen.go internal/server/gen/server.gen.go
 
-.PHONY: gen gen-check build vet test test-pg check web web-gen web-check
+.PHONY: gen gen-check build vet test test-pg check e2e e2e-pg web web-gen web-check
 
 ## gen: regenerate the Go client and the server interface from api/openapi.yaml
 gen:
@@ -48,3 +48,12 @@ test-pg:
 
 ## check: what every phase ends green on
 check: gen-check vet test test-pg
+
+## e2e: build the binary and run the end-to-end suite and the soak against it, on SQLite
+## (DARKORY_E2E_SOAK=2m sets the soak's length, DARKORY_E2E_RACE=1 builds the binary with -race)
+e2e:
+	DARKORY_E2E=1 $(GO) test -count=1 -v -timeout 30m ./e2e/
+
+## e2e-pg: the end-to-end suite and the soak on Postgres, with two server processes too
+e2e-pg:
+	DARKORY_E2E=1 DARKORY_E2E_POSTGRES_URL='$(TEST_POSTGRES_URL)' $(GO) test -count=1 -v -timeout 30m ./e2e/

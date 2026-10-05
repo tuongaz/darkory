@@ -375,6 +375,7 @@ func (in *install) agent(name string, teams, skills []string, tokenArgs ...strin
 // mcpAgent is `darkory mcp` running as a Member, reached over its standard input and output.
 type mcpAgent struct {
 	t   *testing.T
+	cmd *exec.Cmd
 	cs  *sdk.ClientSession
 	log *logBuffer
 }
@@ -386,7 +387,7 @@ func (m *member) mcp(dir string) *mcpAgent {
 	cmd := exec.Command(bin, "mcp")
 	cmd.Env = m.env()
 	cmd.Dir = dir
-	a := &mcpAgent{t: t, log: &logBuffer{}}
+	a := &mcpAgent{t: t, cmd: cmd, log: &logBuffer{}}
 	cmd.Stderr = a.log
 	cs, err := sdk.NewClient(&sdk.Implementation{Name: "e2e-agent", Version: "1"}, nil).
 		Connect(t.Context(), &sdk.CommandTransport{Command: cmd}, nil)

@@ -122,6 +122,48 @@ func TestLapseAndRecovery(t *testing.T) {
 	}
 }
 
+// darkory mcp keeps the Claims its Session makes alive with Heartbeats for as long as it runs;
+// once it is killed, the Claim lapses and is recorded.
+func TestMCPKeepsItsClaimsAlive(t *testing.T) {
+	in := newInstall(t)
+	ada := in.ada
+	ada.ok("team", "create", "WEB", "Web")
+	ada.ok("team", "add", "WEB", "ada")
+	ada.ok("skill", "create", "build", "--kind", "generic", "--body", "Build it.")
+	agent := in.agent("agent", []string{"WEB"}, []string{"build"})
+	var feature client.FeatureDetail
+	ada.json(&feature, "feature", "create", "--team", "WEB", "--title", "Search")
+	var task client.TaskDetail
+	ada.json(&task, "file", "--feature", feature.Feature.Key, "--title", "Index the catalogue", "--skill", "build")
+
+	mcp := agent.mcp(t.TempDir())
+	var took struct {
+		Claimed bool              `json:"claimed"`
+		Task    client.TaskDetail `json:"task"`
+	}
+	mcp.call("next", map[string]any{"wait_seconds": 5, "heartbeat_timeout_seconds": 3}, &took)
+	if !took.Claimed || took.Task.Task.Key != task.Task.Key {
+		t.Fatalf("the MCP agent took %+v", took)
+	}
+	time.Sleep(8 * time.Second)
+	var shown client.TaskDetail
+	ada.json(&shown, "show", task.Task.Key)
+	if c := shown.Task.Claim; c == nil || c.ID != took.Task.Task.Claim.ID || !c.ExpiresAt.After(time.Now()) {
+		t.Fatalf("darkory mcp did not keep its Claim: %+v\n%s", shown.Claims, mcp.log)
+	}
+
+	if err := mcp.cmd.Process.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 6*time.Second, "the lapse", func() bool {
+		ada.json(&shown, "show", task.Task.Key)
+		return shown.Task.Claim == nil && len(shown.Claims) == 1 && shown.Claims[0].HowEnded != nil
+	})
+	if *shown.Claims[0].HowEnded != client.ClaimEndLapsed {
+		t.Fatalf("the Claim ended %s", *shown.Claims[0].HowEnded)
+	}
+}
+
 // heartbeatLog returns what the background heartbeats of an Install logged.
 func heartbeatLog(t *testing.T, in *install) string {
 	t.Helper()
