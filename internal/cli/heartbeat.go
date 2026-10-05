@@ -43,9 +43,17 @@ func cmdHeartbeatRun(c *call) error {
 		ctx, cancel = watchProcess(ctx, *watch)
 		defer cancel()
 	}
-	// The detached copy owns the pid file its starter wrote, and removes it as it ends.
-	if pid, err := readPid(files.pid); err == nil && pid == os.Getpid() {
-		defer os.Remove(files.pid)
+	// A detached copy owns its pid file: its starter wrote it too, so that a second --background
+	// sees it at once, and the copy removes it as it ends unless another has taken it.
+	if path := c.env.Getenv(envPidFile); path != "" {
+		if err := os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
+			return err
+		}
+		defer func() {
+			if pid, err := readPid(path); err == nil && pid == os.Getpid() {
+				os.Remove(path)
+			}
+		}()
 	}
 	var mu sync.Mutex
 	logf := func(format string, a ...any) {
@@ -67,6 +75,9 @@ func cmdHeartbeatRun(c *call) error {
 	}
 	return nil
 }
+
+// envPidFile tells a detached `heartbeat run` which pid file is its own.
+const envPidFile = "DARKORY_HEARTBEAT_PIDFILE"
 
 // heartbeatEvery is a third of the timeout (tests shorten it).
 var heartbeatEvery func(time.Duration) time.Duration
@@ -138,7 +149,7 @@ func (c *call) startBackground(s remote.Settings, files bgFiles, watch int) erro
 	cmd := exec.Command(exe, args...)
 	// The settings go by the environment, which other users cannot read, rather than arguments.
 	cmd.Env = append(os.Environ(), remote.EnvURL+"="+s.URL, remote.EnvToken+"="+s.Token,
-		remote.EnvSession+"="+s.Session, "DARKORY_NO_UPDATE_CHECK=1")
+		remote.EnvSession+"="+s.Session, envPidFile+"="+files.pid, "DARKORY_NO_UPDATE_CHECK=1")
 	cmd.Stdout, cmd.Stderr = logf, logf
 	detach(cmd)
 	if err := cmd.Start(); err != nil {

@@ -414,6 +414,20 @@ func TestHeartbeatRunInTheBackground(t *testing.T) {
 	}
 	time.Sleep(2500 * time.Millisecond)
 	bob.fails(ExitRefused, "heartbeat", "WEB-3")
+
+	// A copy that ends on its own, here when its Session is closed and its token revoked, removes
+	// its pid file.
+	bob.ok("heartbeat", "run", "--background")
+	var tokens client.TokenList
+	bob.json(&tokens, "token", "list")
+	in.as("ada", "ada-1").ok("token", "revoke", tokens.Items[0].ID)
+	eventually(t, 15*time.Second, "the copy to remove its pid file", func() bool {
+		_, err := os.Stat(files.pid)
+		return os.IsNotExist(err)
+	})
+	if logged, _ := os.ReadFile(files.log); !strings.Contains(string(logged), "no longer accepts this token") {
+		t.Fatalf("the copy logged:\n%s", logged)
+	}
 }
 
 func assertHeldOr(t *testing.T, r *runner, task, log string) {
