@@ -35,8 +35,22 @@ func ArchiveName(version, goos, goarch string) string {
 	return "darkory_" + strings.TrimPrefix(version, "v") + "_" + goos + "_" + goarch + ext
 }
 
-// ErrNoRelease is returned when the release asked for does not exist.
-var ErrNoRelease = errors.New("no such release")
+// Refusals of what a releases API answered.
+var (
+	// ErrNoRelease is returned when the release asked for does not exist.
+	ErrNoRelease = errors.New("no such release")
+	// ErrBadTag is returned for a release whose tag is not a version (ValidTag).
+	ErrBadTag = errors.New("the release's tag is not a version such as v1.2.3")
+	// ErrPrerelease is returned when the latest release offered is a prerelease, which GitHub
+	// never offers as the latest; a prerelease installs only when named.
+	ErrPrerelease = errors.New("the latest release offered is a prerelease, which installs only when named")
+)
+
+// badTag refuses tag without printing it raw: at most 40 of its runes, quoted in ASCII, so a
+// terminal never sees the escape sequences a hostile mirror could send.
+func badTag(tag string) error {
+	return fmt.Errorf("%w: %+.40q", ErrBadTag, tag)
+}
 
 // Release is a published release.
 type Release struct {
@@ -62,14 +76,27 @@ type Client struct {
 
 var defaultHTTP = &http.Client{Timeout: 5 * time.Minute}
 
-// Latest returns the newest release that is neither a draft nor a prerelease.
+// Latest returns the newest release that is neither a draft nor a prerelease. GitHub never
+// answers with a prerelease; a mirror that does is refused with ErrPrerelease.
 func (c *Client) Latest(ctx context.Context) (Release, error) {
-	return c.lookup(ctx, "releases/latest")
+	rel, err := c.lookup(ctx, "releases/latest")
+	if err == nil && IsPrerelease(rel.Version) {
+		return Release{}, fmt.Errorf("%w: %s", ErrPrerelease, rel.Version)
+	}
+	return rel, err
 }
 
-// Release returns the release tagged version (v1.2.3, or 1.2.3).
+// Release returns the release tagged version (v1.2.3, or 1.2.3), prerelease or not. An answer
+// for another version is refused.
 func (c *Client) Release(ctx context.Context, version string) (Release, error) {
-	return c.lookup(ctx, "releases/tags/"+url.PathEscape(canonical(version)))
+	if !ValidTag(canonical(version)) {
+		return Release{}, badTag(version)
+	}
+	rel, err := c.lookup(ctx, "releases/tags/"+url.PathEscape(canonical(version)))
+	if err == nil && !SameVersion(rel.Version, version) {
+		return Release{}, fmt.Errorf("asked for release %s and was sent %s", canonical(version), rel.Version)
+	}
+	return rel, err
 }
 
 func (c *Client) lookup(ctx context.Context, path string) (Release, error) {
@@ -103,6 +130,9 @@ func (c *Client) lookup(ctx context.Context, path string) (Release, error) {
 	}
 	if body.TagName == "" {
 		return Release{}, errors.New("reading the release: no tag_name")
+	}
+	if !ValidTag(body.TagName) {
+		return Release{}, badTag(body.TagName)
 	}
 	rel := Release{Version: body.TagName, URL: body.HTMLURL, Assets: make(map[string]string, len(body.Assets))}
 	for _, a := range body.Assets {

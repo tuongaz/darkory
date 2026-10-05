@@ -14,9 +14,14 @@ project_name: darkory
 
 before:
   hooks:
-    # Build the web app into web/dist when the Makefile has a web target; otherwise the
-    # web/dist in the tree is embedded as it is.
-    - sh -c 'if grep -q "^web:" Makefile; then make web; else echo "no make web target; embedding web/dist as it is"; fi'
+    # The web app in web/dist/app is embedded as it is when already built. The release workflow
+    # builds it in a job with no secrets and hands it over: npm must never run in this process,
+    # whose environment holds the signing key, so on GitHub Actions a missing app stops the
+    # release. Elsewhere (a local snapshot) it is built with `make web` when missing.
+    - >-
+      sh -c 'if [ -f web/dist/app/index.html ]; then echo "embedding the web app already in web/dist/app";
+      elif [ "$GITHUB_ACTIONS" = true ]; then echo "web/dist/app is missing: the workflow web job builds it, never this one" >&2; exit 1;
+      else make web; fi'
 
 builds:
   - id: darkory

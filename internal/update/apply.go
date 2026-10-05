@@ -56,6 +56,9 @@ func (u *Updater) Apply(ctx context.Context, rel Release) error {
 	if len(u.PublicKey) == 0 {
 		return ErrNoKey
 	}
+	if !ValidTag(rel.Version) {
+		return badTag(rel.Version)
+	}
 	if SameVersion(rel.Version, u.Current) {
 		return ErrUpToDate
 	}
