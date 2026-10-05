@@ -207,7 +207,7 @@ func fillOpenBlockers(ctx context.Context, r store.Reader, orgID string, ts []Ta
 		return nil
 	}
 	rows, err := r.Query(ctx, `SELECT b.task_id, bt.id, bt.display_key FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
-WHERE b.org_id = $1 AND bt.state = 'open' AND b.task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY bt.created_at, bt.id`, args...)
+WHERE b.org_id = $1 AND bt.org_id = $1 AND bt.state = 'open' AND b.task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY bt.created_at, bt.id`, args...)
 	if err != nil {
 		return err
 	}

@@ -207,7 +207,7 @@ WHERE org_id = $2 AND task_id = $3 AND state = 'pending'`, ms(t.now), t.caller.O
 func endClaimOf(t *tx, taskID, how string) (claimID, holderID string, live bool, err error) {
 	var expires sql.NullInt64
 	err = t.QueryRow(t.ctx, `SELECT c.id, c.holder_id, tk.claim_expires_at FROM tasks tk JOIN claims c ON c.id = tk.claim_id
-WHERE tk.org_id = $1 AND tk.id = $2 AND c.ended_at IS NULL`, t.caller.OrgID, taskID).Scan(&claimID, &holderID, &expires)
+WHERE tk.org_id = $1 AND tk.id = $2 AND c.org_id = $1 AND c.ended_at IS NULL`, t.caller.OrgID, taskID).Scan(&claimID, &holderID, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", "", false, nil
 	}
