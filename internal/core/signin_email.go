@@ -45,10 +45,14 @@ WHERE m.email IS NOT NULL AND lower(m.email) = lower($1) AND m.deactivated_at IS
 }
 
 // IssueEmailLink issues a one-time login link for m, with the expiry and single use of every
-// login link, to be emailed.
+// login link, to be emailed. A Member deactivated since the lookup is refused with conflict: the
+// check runs in the write, which an admin's deactivation cannot interleave with (ADR 0011).
 func (s *Service) IssueEmailLink(ctx context.Context, m EmailMember) (EmailedLink, error) {
 	c := &auth.Caller{OrgID: m.OrgID, MemberID: m.MemberID}
 	res, err := s.write(ctx, c, Idem{}, func(t *tx) (any, error) {
+		if err := mustBeActive(t, m.MemberID); err != nil {
+			return nil, err
+		}
 		return issueLoginLink(t, m.MemberID, nil)
 	})
 	if err != nil {

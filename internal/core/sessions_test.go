@@ -148,6 +148,11 @@ func TestDeactivatingAMemberStopsEverythingTheyHold(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// An emailed sign-in looked her up before the deactivation and sends after it.
+		pending, err := f.svc.MembersByEmail(ctx, email)
+		if err != nil || len(pending) != 1 {
+			t.Fatalf("email lookup %+v, %v", pending, err)
+		}
 
 		_, err = f.svc.DeactivateMember(ctx, f.b, "alice", core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
@@ -182,6 +187,12 @@ func TestDeactivatingAMemberStopsEverythingTheyHold(t *testing.T) {
 		wantCode(t, err, core.CodeConflict)
 		_, err = f.svc.IssueLoginLink(ctx, f.admin, "alice", core.Idem{})
 		wantCode(t, err, core.CodeConflict)
+		links := f.count(`SELECT COUNT(*) FROM login_links WHERE member_id = $1`, f.a.MemberID)
+		_, err = f.svc.IssueEmailLink(ctx, pending[0])
+		wantCode(t, err, core.CodeConflict)
+		if n := f.count(`SELECT COUNT(*) FROM login_links WHERE member_id = $1`, f.a.MemberID); n != links {
+			t.Fatal("an emailed link was issued for a deactivated Member")
+		}
 		if found, err := f.svc.MembersByEmail(ctx, email); err != nil || len(found) != 0 {
 			t.Fatalf("email sign-in finds %+v, %v", found, err)
 		}
@@ -207,6 +218,20 @@ func TestDeactivatingAMemberStopsEverythingTheyHold(t *testing.T) {
 		}
 		if m, err := f.svc.ReactivateMember(ctx, f.admin, "alice", core.Idem{}); err != nil || m.DeactivatedAt != nil {
 			t.Fatalf("reactivate = %+v, %v", m, err)
+		}
+		// Reactivation revives nothing: the old token, cookie and link stay dead, the link within
+		// its 15 minutes too.
+		if _, err := f.auth.Authenticate(ctx, auth.Credentials{Bearer: f.secrets[f.a.MemberID], Session: "alice-back"}); !errors.Is(err, auth.ErrUnauthenticated) {
+			t.Fatalf("the old token after reactivation: %v", err)
+		}
+		if f.cookieWorks(cookie) {
+			t.Fatal("the old cookie works after reactivation")
+		}
+		if _, _, err := f.svc.LoginLinkFor(ctx, unused.Code); codeOf(err) != core.CodeNotFound {
+			t.Fatalf("the old link shows its page after reactivation: %v", err)
+		}
+		if _, err := f.svc.RedeemLoginLink(ctx, unused.Code, ""); codeOf(err) != core.CodeNotFound {
+			t.Fatalf("the old link signs in after reactivation: %v", err)
 		}
 		tok, err := f.svc.IssueToken(ctx, f.admin, "alice", "again", 0, core.Idem{})
 		if err != nil {

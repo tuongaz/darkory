@@ -351,6 +351,11 @@ func (e *emailSignIn) send(ctx context.Context, s *Server, address string) {
 			return
 		}
 		l, err := s.core.IssueEmailLink(ctx, f)
+		var refusal *core.Error
+		if errors.As(err, &refusal) && refusal.Code == core.CodeConflict {
+			s.log.Info("email sign-in: the Member was deactivated; sending nothing", "member", f.MemberID)
+			continue
+		}
 		if err != nil {
 			s.log.Error("email sign-in: issuing a login link", "member", f.MemberID, "err", err)
 			continue

@@ -387,3 +387,68 @@ func TestNoDirectoryListing(t *testing.T) {
 		}
 	}
 }
+
+// Deactivating a Member ends at once everything they have open — an Activity stream and a waiting
+// `next` within a keep-alive tick (100 ms here), their cookie at its next request — and
+// reactivating them revives none of it: the old token, cookie and login link stay refused.
+func TestDeactivationEndsEverythingAndReactivationRevivesNothing(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		h.webAndBuild()
+		bob, _ := h.agent("bob", nil, "build")
+		cookie := h.signIn(t, "bob")
+		link := got(h.admin.IssueLoginLinkWithResponse(ctx, "bob", &client.IssueLoginLinkParams{})).want(t, http.StatusCreated).JSON201
+		key := func() string {
+			me := got(bob.GetMeWithResponse(ctx)).want(t, http.StatusOK).JSON200
+			return me.Organisation.ID + "/" + me.Member.ID
+		}()
+		stream := h.openStreamAs(t, h.secrets["bob"], "bob-stream", "")
+		waiting := make(chan int, 1)
+		go func() {
+			res, err := bob.NextTaskWithResponse(ctx, &client.NextTaskParams{}, client.NextTaskBody{WaitSeconds: ptrInt(30)})
+			if err != nil {
+				waiting <- 0
+				return
+			}
+			waiting <- res.StatusCode()
+		}()
+		waitFor(t, func() bool {
+			h.srv.nexts.mu.Lock()
+			defer h.srv.nexts.mu.Unlock()
+			return h.srv.nexts.open[key] == 1
+		})
+
+		start := time.Now()
+		got(h.admin.DeactivateMemberWithResponse(ctx, "bob", &client.DeactivateMemberParams{})).want(t, http.StatusOK)
+		select {
+		case code := <-waiting:
+			if code != http.StatusUnauthorized {
+				t.Fatalf("the waiting next answered %d", code)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("the waiting next is still waiting a second after the deactivation")
+		}
+		if ids := stream.rest(t); len(ids) != 0 {
+			t.Fatalf("the stream sent %v after the deactivation", ids)
+		}
+		if took := time.Since(start); took > time.Second {
+			t.Fatalf("the stream and next ended %v after the deactivation", took)
+		}
+		if res := h.browserRequest(t, cookie, http.MethodGet, "/v1/me", "", nil); res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("the cookie after deactivation answers %d", res.StatusCode)
+		}
+
+		got(h.admin.ReactivateMemberWithResponse(ctx, "bob", &client.ReactivateMemberParams{})).want(t, http.StatusOK)
+		got(bob.GetMeWithResponse(ctx)).want(t, http.StatusUnauthorized)
+		if res := h.browserRequest(t, cookie, http.MethodGet, "/v1/me", "", nil); res.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("the cookie after reactivation answers %d", res.StatusCode)
+		}
+		if res := redeem(t, h.ts, strings.TrimPrefix(link.URL, h.ts.URL)); res.StatusCode != http.StatusNotFound || len(res.Cookies()) != 0 {
+			t.Fatalf("the link issued before the deactivation: %d %v", res.StatusCode, res.Cookies())
+		}
+		// A new token works.
+		tok := got(h.admin.IssueTokenWithResponse(ctx, "bob", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "again"})).want(t, http.StatusCreated).JSON201
+		got(h.client(tok.Secret, "bob-again").GetMeWithResponse(ctx)).want(t, http.StatusOK)
+	})
+}

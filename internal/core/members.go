@@ -339,8 +339,9 @@ func mustBeActive(t *tx, memberID string) error {
 }
 
 // DeactivateMember stops every credential of a Member at once (admin): it revokes their tokens,
-// closes their Sessions and ends every Claim they hold, bound to a Session or to the Member,
-// recording each in Activity; from then on authentication refuses them. The Member stays in the
+// expires their unused login links, closes their Sessions and ends every Claim they hold, bound to
+// a Session or to the Member, recording each in Activity; from then on authentication refuses
+// them, and no token or link is issued for them, emailed ones included. The Member stays in the
 // record. An admin cannot deactivate themselves, nor the last active admin.
 func (s *Service) DeactivateMember(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Member, error) {
 	if err := mustAdmin(c); err != nil {
@@ -388,6 +389,11 @@ func (s *Service) DeactivateMember(ctx context.Context, c *auth.Caller, ref stri
 				return nil, err
 			}
 		}
+		// A link issued before must not sign them in after a reactivation either.
+		if _, err := t.Exec(ctx, `UPDATE login_links SET expires_at = $1 WHERE org_id = $2 AND member_id = $3 AND used_at IS NULL AND expires_at > $1`,
+			ms(t.now), c.OrgID, id); err != nil {
+			return nil, err
+		}
 		sessions, err := openSessions(t, `member_id = $2`, id)
 		if err != nil {
 			return nil, err
@@ -409,8 +415,9 @@ func (s *Service) DeactivateMember(ctx context.Context, c *auth.Caller, ref stri
 	return res.(Member), nil
 }
 
-// ReactivateMember lets a deactivated Member sign in and be issued tokens again (admin). What the
-// deactivation revoked and closed stays so.
+// ReactivateMember lets a deactivated Member sign in and be issued tokens again (admin). It
+// revives nothing: the tokens, login links and Sessions the deactivation ended stay ended, so the
+// Member needs a new token or link.
 func (s *Service) ReactivateMember(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Member, error) {
 	if err := mustAdmin(c); err != nil {
 		return Member{}, err
