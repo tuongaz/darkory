@@ -374,14 +374,14 @@ func (e SessionKind) Valid() bool {
 
 // Defines values for SignInMode.
 const (
-	SignInEmail       SignInMode = "email"
+	SignInEmailLink   SignInMode = "email_link"
 	SignInPrintedLink SignInMode = "printed_link"
 )
 
 // Valid indicates whether the value is a known member of the SignInMode enum.
 func (e SignInMode) Valid() bool {
 	switch e {
-	case SignInEmail:
+	case SignInEmailLink:
 		return true
 	case SignInPrintedLink:
 		return true
@@ -739,9 +739,9 @@ type Health struct {
 	// LatestVersion The newest release the server knows of. Absent when it has not checked.
 	LatestVersion *string `json:"latest_version,omitempty"`
 
-	// SignIn How humans sign in to this Install.
-	SignIn []SignInMode `json:"sign_in"`
-	Status HealthStatus `json:"status"`
+	// SignInModes How humans sign in to this Install.
+	SignInModes []SignInMode `json:"sign_in_modes"`
+	Status      HealthStatus `json:"status"`
 
 	// UpdateAvailable True when a newer release than `version` exists. Absent when the server has not
 	// checked: a development build, or checks turned off with DARKORY_NO_UPDATE_CHECK.
@@ -949,7 +949,7 @@ type SetManagerBody struct {
 }
 
 // SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
-// `email`: login links emailed on request.
+// `email_link`: login links emailed on request. More modes may be added within `/v1`.
 type SignInMode string
 
 // Skill defines model for Skill.

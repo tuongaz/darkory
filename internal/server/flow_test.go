@@ -49,7 +49,7 @@ func TestHealthReportsSignInAndUpdates(t *testing.T) {
 	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{EmailSignIn: true})
 	anon := h.client("", "")
 	res := got(anon.GetHealthWithResponse(t.Context())).want(t, http.StatusOK).JSON200
-	if !slices.Equal(res.SignIn, []client.SignInMode{client.SignInPrintedLink, client.SignInEmail}) ||
+	if !slices.Equal(res.SignInModes, []client.SignInMode{client.SignInPrintedLink, client.SignInEmailLink}) ||
 		res.UpdateAvailable != nil || res.LatestVersion != nil {
 		t.Fatalf("health %+v", res)
 	}
@@ -61,8 +61,8 @@ func TestHealthReportsSignInAndUpdates(t *testing.T) {
 
 	plain := newHarness(t, storetest.Open(t, store.SQLite))
 	res = got(plain.client("", "").GetHealthWithResponse(t.Context())).want(t, http.StatusOK).JSON200
-	if !slices.Equal(res.SignIn, []client.SignInMode{client.SignInPrintedLink}) {
-		t.Fatalf("sign-in without email %v", res.SignIn)
+	if !slices.Equal(res.SignInModes, []client.SignInMode{client.SignInPrintedLink}) {
+		t.Fatalf("sign-in without email %v", res.SignInModes)
 	}
 }
 

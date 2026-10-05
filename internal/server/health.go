@@ -14,15 +14,23 @@ import (
 // GetHealth reports that the Install is up, how humans sign in to it, and whether a newer release
 // exists. It needs no credential.
 func (s *Server) GetHealth(w http.ResponseWriter, r *http.Request) {
-	h := gen.Health{Status: gen.HealthStatusOk, Version: version.Version, SignIn: []gen.SignInMode{gen.SignInPrintedLink}}
-	if s.emailSignIn {
-		h.SignIn = append(h.SignIn, gen.SignInEmail)
-	}
+	h := gen.Health{Status: gen.HealthStatusOk, Version: version.Version,
+		SignInModes: each(s.signInModes(), func(m string) gen.SignInMode { return gen.SignInMode(m) })}
 	if st := s.updateStatus.Load(); st != nil && st.Latest != "" {
 		available, latest := st.Available(), st.Latest
 		h.UpdateAvailable, h.LatestVersion = &available, &latest
 	}
 	writeJSON(w, http.StatusOK, h)
+}
+
+// signInModes lists how humans sign in to this Install: printed login links always, and emailed
+// ones when email sign-in is set up.
+func (s *Server) signInModes() []string {
+	modes := []string{"printed_link"}
+	if s.emailSignIn {
+		modes = append(modes, "email_link")
+	}
+	return modes
 }
 
 // updateCheckTimeout bounds one check for a newer release. Nothing waits on it, so it is longer

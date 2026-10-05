@@ -1398,7 +1398,7 @@ components:
     # ------------------------------------------------------------ install
     Health:
       type: object
-      required: [status, version, sign_in]
+      required: [status, version, sign_in_modes]
       properties:
         status:
           type: string
@@ -1406,7 +1406,7 @@ components:
         version:
           type: string
           description: The server's release version.
-        sign_in:
+        sign_in_modes:
           type: array
           description: How humans sign in to this Install.
           items: {$ref: "#/components/schemas/SignInMode"}
@@ -1422,9 +1422,9 @@ components:
       type: string
       description: |
         `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
-        `email`: login links emailed on request.
-      enum: [printed_link, email]
-      x-enum-varnames: [SignInPrintedLink, SignInEmail]
+        `email_link`: login links emailed on request. More modes may be added within `/v1`.
+      enum: [printed_link, email_link]
+      x-enum-varnames: [SignInPrintedLink, SignInEmailLink]
     Organisation:
       type: object
       required: [id, name, created_at]
