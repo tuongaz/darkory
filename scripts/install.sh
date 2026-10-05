@@ -10,7 +10,7 @@
 #                         otherwise ~/.local/bin
 #   DARKORY_DOWNLOAD_URL  where releases are downloaded from; default
 #                         https://github.com/tuongaz/darkory/releases (for mirrors and tests)
-#   DARKORY_INSECURE      1 to allow a DARKORY_DOWNLOAD_URL that is plain http
+#   DARKORY_INSECURE      1 (any value but empty, 0 or false) to allow a plain http DARKORY_DOWNLOAD_URL
 #
 # What this checks, and what it does not. The archive's SHA-256 must match checksums.txt from
 # the same release, which catches a corrupt or truncated download. It cannot show that the
@@ -31,13 +31,15 @@ die() {
 	exit 1
 }
 
-# Downloads go over https only, redirects included, unless DARKORY_INSECURE=1 allows a plain
-# http mirror: the checksums come from the same place as the binaries.
+# Downloads go over https only, redirects included, unless DARKORY_INSECURE allows a plain http
+# mirror: the checksums come from the same place as the binaries.
 proto='=https'
 case "$releases" in
 https://*) ;;
 *)
-	[ "${DARKORY_INSECURE:-}" = 1 ] || die "DARKORY_DOWNLOAD_URL is not https ($releases); set DARKORY_INSECURE=1 to allow it"
+	case "${DARKORY_INSECURE:-}" in
+	"" | 0 | false) die "DARKORY_DOWNLOAD_URL is not https ($releases); set DARKORY_INSECURE=1 to allow it" ;;
+	esac
 	proto='=http,https'
 	;;
 esac

@@ -8,6 +8,9 @@ Authority comes from domain relations (Claim holder, Feature owner, Team members
 
 Revised 2026-10-05 by the [independent architecture review](../../.scratch/darkory-architecture/issues/13-independent-architecture-review.md). Three things changed. A Session was first opened by exchanging the token for a short-lived credential that renewed while in use; the CLI is a new process for every command and had nowhere to keep one, and the credential's lifetime had no stated relation to a Claim's heartbeat timeout. `localhost` first needed no login; the server cannot tell the browser from any other local process, so an agent that left out its token would have acted as the admin. And the Team limit first had no exceptions, which left a Task aimed at a manager in another Team untakeable. Settled the same day: a login link for a named Member is an admin operation.
 
+
+Revised 2026-10-06 after the [security review](../build/security-review.md) (M4, L1). A browser Session now ends on the server after a time unused and a time in all, both settings of the Install, while a token Session still lasts until it is closed or its token revoked. An admin can list a Member's Sessions and deactivate a Member, which revokes their tokens, closes their Sessions, ends their Claims and refuses their credentials; the Member stays in the record. Opening a login link no longer signs a browser in: it shows whom the link signs in as, and a button on that page does it.
+
 ## Considered Options
 
 - **One Member per running copy.** Simple, but the org chart fills with throwaway Members.
