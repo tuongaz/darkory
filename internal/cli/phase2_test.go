@@ -107,6 +107,7 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 		"GET /v1/features/WEB-1/observations":   {200, `{"items":[]}`},
 		"POST /v1/tasks/WEB-9/skill-proposals":  {201, `{"id":"p1","skill_id":"s1","task_id":"t9","based_on_version":3,"body":"x","author_id":"m1","state":"pending","created_at":"2026-10-06T00:00:00Z"}`},
 		"POST /v1/tasks":                        {201, detail},
+		"POST /v1/sign-in/email":                {202, ""},
 	}}
 	ts := httptest.NewServer(rc)
 	defer ts.Close()
@@ -162,6 +163,8 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 			method: "POST", path: "/v1/tasks/WEB-9/skill-proposals", body: `{"skill":"qa-acme","based_on_version":3,"body":"Test the edges.\n"}`},
 		{name: "file a question", args: []string{"file", "--blocks", "WEB-3", "--aim", "ada", "--title", "Which index?"},
 			method: "POST", path: "/v1/tasks", body: `{"blocks":"WEB-3","aimed_at":"ada","title":"Which index?"}`},
+		{name: "login by email", args: []string{"login", "--email", "ada@example.com"},
+			method: "POST", path: "/v1/sign-in/email", body: `{"email":"ada@example.com"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &runner{t: t, stdin: tc.stdin, env: map[string]string{

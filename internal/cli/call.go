@@ -82,8 +82,8 @@ const (
 	lasting
 )
 
-// dial connects with the settings from the flags, else the environment.
-func (c *call) dial(need session) (*remote.Conn, error) {
+// settings are the flags' settings, else the environment's.
+func (c *call) settings() remote.Settings {
 	s := remote.FromEnv(c.env.Getenv)
 	if c.g.url != "" {
 		s.URL = c.g.url
@@ -94,6 +94,14 @@ func (c *call) dial(need session) (*remote.Conn, error) {
 	if c.g.session != "" {
 		s.Session = c.g.session
 	}
+	s.HTTPClient = c.env.HTTPClient
+	return s
+}
+
+// dial connects as the Member the token names, in the Session the settings name — or, for a
+// command that need not outlive it, in one made up for it.
+func (c *call) dial(need session) (*remote.Conn, error) {
+	s := c.settings()
 	if s.Token == "" {
 		return nil, usagef("no token: set DARKORY_TOKEN or pass --token (an admin issues one with darkory token issue)")
 	}
@@ -104,7 +112,13 @@ func (c *call) dial(need session) (*remote.Conn, error) {
 		}
 		s.Session, s.OneOff = remote.NewSessionID(), true
 	}
-	s.HTTPClient = c.env.HTTPClient
+	return c.connect(s)
+}
+
+// dialPublic connects for an operation that needs no credential.
+func (c *call) dialPublic() (*remote.Conn, error) { return c.connect(c.settings()) }
+
+func (c *call) connect(s remote.Settings) (*remote.Conn, error) {
 	conn, err := remote.Dial(s)
 	if err != nil {
 		return nil, err

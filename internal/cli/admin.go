@@ -12,6 +12,7 @@ import (
 )
 
 var adminCommands = []command{
+	{path: "health", short: "check that the Install is up, and its version (needs no token)", run: cmdHealth},
 	{path: "me", short: "show who you are: your Member, Teams, Skills and Session", run: cmdMe},
 	{path: "member create", args: "<name> --kind human|agent [--email e] [--admin]", short: "create a Member (admin)", run: cmdMemberCreate},
 	{path: "member list", args: "[--team t] [--kind k]", short: "list Members", run: cmdMemberList},
@@ -32,7 +33,7 @@ var adminCommands = []command{
 	{path: "token issue", args: "<member> --name n [--timeout d]", short: "issue a token; its secret is shown once (admin)", run: cmdTokenIssue},
 	{path: "token list", args: "[member]", short: "list a Member's tokens (default yours)", run: cmdTokenList},
 	{path: "token revoke", args: "<token id>", short: "revoke a token, ending its Sessions' Claims", run: cmdTokenRevoke},
-	{path: "login", args: "<member>", short: "issue a one-time login link for a Member (admin)", run: cmdLogin},
+	{path: "login", args: "<member> | --email address", short: "issue a one-time login link for a Member (admin), or ask for one by email", run: cmdLogin},
 	{path: "logout", short: "close this Session, ending the Claims bound to it", run: cmdLogout},
 	{path: "session close", args: "[session id] [--member m]", short: "close a Session (default this one), ending its Claims", run: cmdSessionClose},
 }
@@ -493,10 +494,45 @@ func cmdTokenRevoke(c *call) error {
 	return c.show(res.Body, func(w io.Writer) { c.printToken(w, *res.JSON200) })
 }
 
-func cmdLogin(c *call) error {
-	args, err := c.args(1, 1)
+func cmdHealth(c *call) error {
+	if _, err := c.args(0, 0); err != nil {
+		return err
+	}
+	conn, err := c.dialPublic()
 	if err != nil {
 		return err
+	}
+	res, err := conn.GetHealthWithResponse(c.ctx)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		fmt.Fprintf(w, "%s is up: darkory %s\n", conn.Settings.URL, res.JSON200.Version)
+	})
+}
+
+func cmdLogin(c *call) error {
+	byEmail := c.fs.String("email", "", "ask for a login link to be emailed to this address, when the Install sends email (needs no token)")
+	args, err := c.args(0, 1)
+	if err != nil {
+		return err
+	}
+	if (*byEmail == "") != (len(args) == 1) {
+		return usagef("give a Member, or --email")
+	}
+	if *byEmail != "" {
+		conn, err := c.dialPublic()
+		if err != nil {
+			return err
+		}
+		res, err := conn.RequestEmailSignInWithResponse(c.ctx, &client.RequestEmailSignInParams{},
+			client.EmailSignInBody{Email: openapi_types.Email(*byEmail)})
+		if err := check(res, err, http.StatusAccepted); err != nil {
+			return err
+		}
+		return c.show(nil, func(w io.Writer) {
+			fmt.Fprintf(w, "If %s belongs to a Member and this Install sends email, a login link is on its way.\n", *byEmail)
+		})
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {
