@@ -27,6 +27,8 @@ type call struct {
 	g    globals
 	rest []string
 	conn *remote.Conn
+	// warned is set once the --token warning has been printed.
+	warned bool
 
 	members, skills, teams map[string]string
 }
@@ -94,6 +96,9 @@ func (c *call) settings() remote.Settings {
 	if c.g.session != "" {
 		s.Session = c.g.session
 	}
+	if c.g.insecure {
+		s.Insecure = true
+	}
 	s.HTTPClient = c.env.HTTPClient
 	return s
 }
@@ -115,10 +120,21 @@ func (c *call) dial(need session) (*remote.Conn, error) {
 	return c.connect(s)
 }
 
+// tokenFlagWarning follows a command given --token: its arguments show in the process list.
+const tokenFlagWarning = "darkory: warning: --token shows the token to other processes on this machine, which can read a " +
+	"command's arguments; set DARKORY_TOKEN instead"
+
 // dialPublic connects for an operation that needs no credential.
 func (c *call) dialPublic() (*remote.Conn, error) { return c.connect(c.settings()) }
 
 func (c *call) connect(s remote.Settings) (*remote.Conn, error) {
+	if err := s.CheckURL(); err != nil {
+		return nil, usageError{err.Error()}
+	}
+	if c.g.token != "" && !c.warned {
+		fmt.Fprintln(c.env.Stderr, tokenFlagWarning)
+		c.warned = true
+	}
 	conn, err := remote.Dial(s)
 	if err != nil {
 		return nil, err

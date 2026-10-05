@@ -150,6 +150,9 @@ func (c *call) startBackground(s remote.Settings, files bgFiles, watch int) erro
 	// The settings go by the environment, which other users cannot read, rather than arguments.
 	cmd.Env = append(os.Environ(), remote.EnvURL+"="+s.URL, remote.EnvToken+"="+s.Token,
 		remote.EnvSession+"="+s.Session, envPidFile+"="+files.pid, "DARKORY_NO_UPDATE_CHECK=1")
+	if s.Insecure {
+		cmd.Env = append(cmd.Env, remote.EnvInsecure+"=1")
+	}
 	cmd.Stdout, cmd.Stderr = logf, logf
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
