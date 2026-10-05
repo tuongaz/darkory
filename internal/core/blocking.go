@@ -84,7 +84,10 @@ func (s *Service) AddBlocker(ctx context.Context, c *auth.Caller, taskRef, block
 	return err
 }
 
-// RemoveBlocker stops blockerRef blocking taskRef. It needs the same authority as adding it.
+// RemoveBlocker stops blockerRef blocking taskRef. It needs the same authority as adding it. An
+// open question on an ended Feature may not be left blocking no open Task, since an ended Feature
+// holds no open Task but its Retrospective and the questions blocking its Tasks (ADR 0010): the
+// question is completed or dropped instead.
 func (s *Service) RemoveBlocker(ctx context.Context, c *auth.Caller, taskRef, blockerRef string, idem Idem) error {
 	_, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		task, blocker, f, err := blockEdge(t, taskRef, blockerRef)
@@ -101,9 +104,40 @@ func (s *Service) RemoveBlocker(ctx context.Context, c *auth.Caller, taskRef, bl
 		if n, _ := res.RowsAffected(); n == 0 {
 			return nil, nil
 		}
+		if err := questionStillBlocks(t, blocker, f); err != nil {
+			return nil, err
+		}
 		return nil, t.recordByCaller("task.blocker_removed", task.ID, map[string]any{"blocker_id": blocker.ID, "blocker_key": blocker.Key})
 	})
 	return err
+}
+
+// questionStillBlocks refuses, once an edge from blocker is gone, to leave blocker open on an ended
+// Feature blocking no open Task. f is the Feature of the Task the edge blocked, which a question
+// joined when it was filed; the refusal rolls the removal back.
+func questionStillBlocks(t *tx, blocker Task, f Feature) error {
+	if blocker.State != "open" || blocker.Kind == "retrospective" {
+		return nil
+	}
+	if blocker.FeatureID != f.ID {
+		var err error
+		if f, err = getFeature(t.ctx, t, t.caller.OrgID, blocker.FeatureID, t.now); err != nil {
+			return err
+		}
+	}
+	if f.State == "open" {
+		return nil
+	}
+	var n int
+	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM blocks b JOIN tasks bt ON bt.org_id = b.org_id AND bt.id = b.task_id
+WHERE b.org_id = $1 AND b.blocker_task_id = $2 AND bt.state = 'open'`, t.caller.OrgID, blocker.ID).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	return refuse(CodeEnded, "Feature %s has %s, and %s may stay open on it only while it blocks an open Task: complete or drop %s instead",
+		f.Key, f.State, blocker.Key, blocker.Key)
 }
 
 // blockEdge reads the two Tasks of an edge and the blocked Task's Feature.

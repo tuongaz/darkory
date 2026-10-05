@@ -1085,7 +1085,7 @@ paths:
       operationId: removeBlocker
       tags: [tasks]
       summary: Stop one Task blocking another
-      description: "Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`."
+      description: "Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`."
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/BlockerRef"}

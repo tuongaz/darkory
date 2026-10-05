@@ -60,7 +60,7 @@ An Install always has the **printed link**. `serve` prints a link at every start
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DARKORY_NO_UPDATE_CHECK` | off | Turns off the update notice. The CLI also has `--no-update-check`. |
+| `DARKORY_NO_UPDATE_CHECK` | off | Turns off the update notice, and `serve`'s daily check for a newer release (so health never reports one). The CLI and `serve` also take `--no-update-check`. |
 | `DARKORY_UPDATE_URL` | GitHub's releases API | Another releases API for `darkory update` and the notice. Signatures are still checked against the key compiled into the binary. |
 | `DARKORY_CONTAINER` | set in the image | Makes `darkory update` point at a newer image instead of replacing the binary. |
 | `DARKORY_VERSION`, `DARKORY_INSTALL_DIR`, `DARKORY_DOWNLOAD_URL` | latest, `/usr/local/bin`, GitHub | Settings of `install.sh` ([release.md](release.md)). |

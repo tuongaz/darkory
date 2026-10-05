@@ -2090,7 +2090,7 @@ type ClientInterface interface {
 
 	// RemoveBlocker Stop one Task blocking another
 	//
-	// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
+	// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
 	//
 	// Corresponds with DELETE /v1/tasks/{task}/blockers/{blocker} (the `RemoveBlocker` operationId).
 	RemoveBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *RemoveBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3306,7 +3306,7 @@ func (c *Client) GetTask(ctx context.Context, task TaskRef, reqEditors ...Reques
 
 // RemoveBlocker Stop one Task blocking another
 //
-// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
+// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
 //
 // Corresponds with DELETE /v1/tasks/{task}/blockers/{blocker} (the `RemoveBlocker` operationId).
 func (c *Client) RemoveBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *RemoveBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7627,7 +7627,7 @@ type ClientWithResponsesInterface interface {
 
 	// RemoveBlockerWithResponse Stop one Task blocking another
 	//
-	// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
+	// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11475,7 +11475,7 @@ func (c *ClientWithResponses) GetTaskWithResponse(ctx context.Context, task Task
 
 // RemoveBlockerWithResponse Stop one Task blocking another
 //
-// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
+// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
 //
 // Returns a wrapper object for the known response body format(s).
 //

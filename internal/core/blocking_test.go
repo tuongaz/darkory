@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -168,6 +169,68 @@ func TestQuestionsAndEscalations(t *testing.T) {
 		_, err = f.svc.FileTask(ctx, builder, core.NewTask{Title: "Q", Skill: ptrStr("build"), Blocks: &q.Task.Key}, core.Idem{})
 		wantCode(t, err, core.CodeEnded)
 		if got := f.kinds(task.ID); got != "task.filed task.claimed task.blocker_added" {
+			t.Fatalf("Activity: %s", got)
+		}
+		f.checkActivity()
+	})
+}
+
+// A question on an ended Feature stays open only while it blocks an open Task (ADR 0010): removing
+// its last such edge is refused with ended, and the question is completed or dropped instead. While
+// it still blocks another open Task, or once it has ended, its edges come off as any other.
+func TestUnblockingAQuestionOnAnEndedFeature(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.team("WEB")
+		f.skill("build")
+		owner := f.member("owner", []string{"WEB"}, []string{core.SkillBreakdown, "build"})
+		retro := f.member("retro", []string{"WEB"}, []string{core.SkillRetro})
+		f.member("builder", []string{"WEB"}, []string{"build"})
+		fd := f.feature(owner, "WEB", "Search")
+		f.claim(owner, fd.Tasks[0].Key, noTimeout)
+		f.complete(owner, fd.Tasks[0].Key)
+		shipped, err := f.svc.ShipFeature(ctx, owner, fd.Feature.Key, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := shipped.Tasks[len(shipped.Tasks)-1]
+		f.claim(retro, r.Key, noTimeout)
+		q, err := f.svc.FileTask(ctx, retro, core.NewTask{Title: "Why was search slow?", AimedAt: ptrStr("builder"), Blocks: &r.Key}, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// The question's one edge: removing it would leave an open Task on a shipped Feature that
+		// blocks nothing.
+		err = f.svc.RemoveBlocker(ctx, retro, r.Key, q.Task.Key, core.Idem{})
+		wantCode(t, err, core.CodeEnded)
+		if !strings.Contains(err.Error(), "complete or drop "+q.Task.Key) {
+			t.Fatalf("the refusal does not say what to do instead: %v", err)
+		}
+		if got := f.get(r.Key); !got.Task.Blocked || len(got.Blockers) != 1 {
+			t.Fatalf("the refused unblock changed the Retrospective: %+v", got.Task)
+		}
+
+		// While it also blocks an open Task elsewhere, the edge to the Retrospective comes off; the
+		// last one does not.
+		other := f.task(owner, f.feature(owner, "WEB", "Next").Feature.ID, "Other", "build")
+		if err := f.svc.AddBlocker(ctx, owner, other.Key, q.Task.Key, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.RemoveBlocker(ctx, retro, r.Key, q.Task.Key, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		wantCode(t, f.svc.RemoveBlocker(ctx, owner, other.Key, q.Task.Key, core.Idem{}), core.CodeEnded)
+
+		// Once the question has ended, its edges come off freely.
+		if _, err := f.svc.DropTask(ctx, owner, q.Task.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.RemoveBlocker(ctx, owner, other.Key, q.Task.Key, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.kinds(q.Task.ID); got != "task.filed task.dropped" {
 			t.Fatalf("Activity: %s", got)
 		}
 		f.checkActivity()

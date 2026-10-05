@@ -35,6 +35,7 @@ Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                 [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
+                [--no-update-check]
                                                                        run the server
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
   darkory mcp                                                          serve the agent operations to an MCP client over stdio
@@ -226,7 +227,9 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine(), "sign_in", api.SignInModes())
 
 	go housekeeping(ctx, api.Core(), log)
-	go api.WatchForUpdates(ctx)
+	if !cfg.NoUpdateCheck {
+		go api.WatchForUpdates(ctx)
+	}
 	announceSignIn(ctx, api.Core(), cfg, base, stdout, log)
 
 	select {

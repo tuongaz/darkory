@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -50,6 +51,9 @@ type Serve struct {
 	// NoLoginLink stops `serve` issuing and printing the startup login link at all, for a
 	// container whose output goes to shipped logs (DARKORY_NO_LOGIN_LINK, --no-login-link).
 	NoLoginLink bool
+	// NoUpdateCheck stops `serve` asking for a newer release, so health never reports one
+	// (DARKORY_NO_UPDATE_CHECK, --no-update-check).
+	NoUpdateCheck bool
 	// DatabaseListen is where the Postgres LISTEN connection that wakes this process for other
 	// processes' writes goes (DARKORY_DB_LISTEN; environment only). Empty: Database. It must reach
 	// Postgres directly or through session pooling, never a transaction-pooling PgBouncer.
@@ -154,6 +158,9 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	fs.BoolVar(&c.NoBrowser, "no-browser", noBrowser, "do not open the startup login link in a browser (DARKORY_NO_BROWSER)")
 	noLink, _ := strconv.ParseBool(getenv("DARKORY_NO_LOGIN_LINK"))
 	fs.BoolVar(&c.NoLoginLink, "no-login-link", noLink, "do not issue or print a startup login link (DARKORY_NO_LOGIN_LINK)")
+	// Any value but empty, 0 or false turns the check off, as for the CLI's notice.
+	noUpdate := !slices.Contains([]string{"", "0", "false"}, getenv("DARKORY_NO_UPDATE_CHECK"))
+	fs.BoolVar(&c.NoUpdateCheck, "no-update-check", noUpdate, "do not ask for a newer release (DARKORY_NO_UPDATE_CHECK)")
 	migrate, _ := strconv.ParseBool(getenv("DARKORY_MIGRATE"))
 	fs.BoolVar(&c.Migrate, "migrate", migrate, "on Postgres, apply pending migrations at start instead of refusing to start (DARKORY_MIGRATE)")
 	hops := 0
