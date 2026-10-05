@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -344,14 +342,6 @@ func cmdObserve(c *call) error {
 	return c.show(res.Body, func(w io.Writer) { fmt.Fprintf(w, "Observed on %s (%s).\n", args[0], body.Outcome) })
 }
 
-// ContentType names a file's content type from its extension, else from its first bytes.
-func ContentType(name string, content []byte) string {
-	if t := mime.TypeByExtension(filepath.Ext(name)); t != "" {
-		return t
-	}
-	return http.DetectContentType(content)
-}
-
 func cmdAttach(c *call) error {
 	typ := c.fs.String("type", "", "the file's content type (default: from its extension, else its content)")
 	name := c.fs.String("name", "", "the name to show and download it as (default: the file's own)")
@@ -370,49 +360,19 @@ func cmdAttach(c *call) error {
 	}
 	ct := *typ
 	if ct == "" {
-		ct = ContentType(filename, content)
+		ct = remote.ContentType(filename, content)
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {
 		return err
 	}
-	onTask := false
-	if !*toFeature {
-		// Display keys share one counter per Team across Features and Tasks, so WEB-1 may be either.
-		res, err := conn.GetTaskWithResponse(c.ctx, args[0])
-		err = check(res, err, http.StatusOK)
-		switch remote.CodeOf(err) {
-		case "":
-			if err != nil {
-				return err
-			}
-			onTask = true
-		case client.ErrorCodeNotFound:
-		default:
-			return err
-		}
-	}
-	var (
-		body []byte
-		ev   *client.Evidence
-	)
-	// A *bytes.Reader lets a retry resend the body.
-	if onTask {
-		res, err := conn.AttachTaskEvidenceWithBodyWithResponse(c.ctx, args[0], &client.AttachTaskEvidenceParams{Filename: filename}, ct, bytes.NewReader(content))
-		if err := check(res, err, http.StatusCreated); err != nil {
-			return err
-		}
-		body, ev = res.Body, res.JSON201
-	} else {
-		res, err := conn.AttachFeatureEvidenceWithBodyWithResponse(c.ctx, args[0], &client.AttachFeatureEvidenceParams{Filename: filename}, ct, bytes.NewReader(content))
-		if err := check(res, err, http.StatusCreated); err != nil {
-			return err
-		}
-		body, ev = res.Body, res.JSON201
+	ev, body, err := conn.Attach(c.ctx, args[0], filename, ct, content, *toFeature)
+	if err != nil {
+		return err
 	}
 	return c.show(body, func(w io.Writer) {
 		fmt.Fprintf(w, "Attached %s to %s.\n", filename, args[0])
-		c.printEvidence(w, *ev)
+		c.printEvidence(w, ev)
 	})
 }
 

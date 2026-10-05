@@ -559,7 +559,7 @@ func cmdSessionClose(c *call) error {
 		stopped, _ = stopBackground(conn.Settings)
 	}
 	return c.show(res.Body, func(w io.Writer) {
-		fmt.Fprintf(w, "Closed Session %s; %d Claims bound to it ended.\n", id, res.JSON200.ClaimsEnded)
+		fmt.Fprintf(w, "Closed Session %s. Claims bound to it that ended: %d.\n", id, res.JSON200.ClaimsEnded)
 		if stopped != 0 {
 			fmt.Fprintf(w, "Stopped its background heartbeat (pid %d).\n", stopped)
 		}

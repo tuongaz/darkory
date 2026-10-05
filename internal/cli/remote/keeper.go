@@ -84,12 +84,16 @@ func (k *Keeper) Track(t client.Task) {
 	k.poke()
 }
 
-// Forget stops keeping the Claim on a Task, as after this Session released, handed over or
-// completed it.
-func (k *Keeper) Forget(taskID string) {
+// Forget stops keeping the Claim on a Task, named by id or display key, as after this Session
+// released, handed over or completed it.
+func (k *Keeper) Forget(task string) {
 	k.mu.Lock()
 	k.init()
-	delete(k.claims, taskID)
+	for id, h := range k.claims {
+		if id == task || h.key == task {
+			delete(k.claims, id)
+		}
+	}
 	k.mu.Unlock()
 }
 
