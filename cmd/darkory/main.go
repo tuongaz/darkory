@@ -228,7 +228,10 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	base := config.BaseURL(cfg.PublicURL, ln.Addr().String())
-	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine(), "sign_in", api.SignInModes())
+	log.Info("darkory is serving", "version", version.Version, "url", base, "listen", ln.Addr().String(), "engine", st.Engine(), "sign_in", api.SignInModes())
+	if host, _, _ := net.SplitHostPort(ln.Addr().String()); net.ParseIP(host).IsUnspecified() {
+		log.Info("listening on every network interface, so other machines can reach this Install; every request still needs a token or a signed-in browser (--listen 127.0.0.1:7357 keeps it to this machine)")
+	}
 
 	go housekeeping(ctx, api.Core(), log)
 	if !cfg.NoUpdateCheck {

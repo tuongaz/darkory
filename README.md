@@ -9,7 +9,7 @@ The words used here (Member, Feature, Task, Claim, Handover, Takeable, Retrospec
 ```sh
 make build                 # or: go build -o bin/darkory ./cmd/darkory   (Go 1.26.8 downloads itself)
 bin/darkory init           # creates the Organisation and you, prints your token and a login link
-bin/darkory serve          # http://127.0.0.1:7357, prints a fresh login link and opens it
+bin/darkory serve          # listens on 0.0.0.0:7357, prints a fresh login link and opens it
 ```
 
 The web app needs node for its build (`make web`); without it the binary serves a placeholder page and everything else works.

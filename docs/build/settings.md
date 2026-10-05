@@ -6,7 +6,7 @@ An Install's storage, Evidence store and sign-in are independent settings ([ADR 
 
 | Variable | Flag | Default | Meaning |
 |---|---|---|---|
-| `DARKORY_LISTEN` | `--listen` | `127.0.0.1:7357` (the image: `0.0.0.0:7357`) | Address `serve` listens on. |
+| `DARKORY_LISTEN` | `--listen` | `0.0.0.0:7357` (every interface) | Address `serve` listens on. `127.0.0.1:7357` keeps the Install to this machine. Printed links use `127.0.0.1` when it listens on every interface, unless `DARKORY_PUBLIC_URL` is set. |
 | `DARKORY_PUBLIC_URL` | `--public-url` | none: `http://` and the address a request came to | Address browsers reach the Install at, such as `https://darkory.example.com`. Login links are built on it, and the browser-cookie origin check accepts it. Set it behind a proxy that ends TLS. Emailed sign-in requires it. |
 | `DARKORY_PROXY_HOPS` | `--proxy-hops` | `0` | How many proxies in front append to `X-Forwarded-For`. The client's address is that many entries from the end; with `0` it is the connection's address. A chain shorter than that is ignored and the connection's address counts. Only the email sign-in rate limit uses it. Leave it at `0` unless every request passes through that many proxies you run, or clients can choose their own address. |
 | `DARKORY_MAX_WAITING` | `--max-waiting` | `16` | How many Activity streams, and separately how many waiting `next` calls, one Member may have open on a server process at once. One more is refused with `too_many_requests` (429). |

@@ -23,7 +23,7 @@ import (
 
 // Defaults for a Local Install.
 const (
-	DefaultListen = "127.0.0.1:7357"
+	DefaultListen = "0.0.0.0:7357"
 	DefaultData   = "."
 	DefaultOrg    = "My Organisation"
 	databaseFile  = "darkory.db"
