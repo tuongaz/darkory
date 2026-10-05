@@ -37,7 +37,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 
 ## Running it elsewhere
 
-Storage, the Evidence store and sign-in are settings of an Install: SQLite or Postgres, local disk or S3-compatible storage, a printed link or an emailed one. Every setting is in [`docs/build/settings.md`](docs/build/settings.md). The container image is built from [`Dockerfile`](Dockerfile), and releases from [`docs/build/release.md`](docs/build/release.md).
+Storage, the Evidence store and sign-in are settings of an Install: SQLite or Postgres, local disk or S3-compatible storage, a printed link or an emailed one. Every setting is in [`docs/build/settings.md`](docs/build/settings.md). The container image is built from [`Dockerfile`](Dockerfile); it serves on port 7357 with its data in `/data`, and you create the Organisation once with `docker exec <container> /darkory init`. Releases are described in [`docs/build/release.md`](docs/build/release.md).
 
 ## Developing
 

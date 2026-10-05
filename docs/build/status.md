@@ -40,6 +40,23 @@ State on 2026-10-06, at the end of the first build. The plan is [`plan.md`](plan
 - A separate signing job behind a GitHub Environment.
 - `darkory update` on Windows has been cross-compiled but never run.
 
+## Decisions made during the build that change product rules
+
+These were made while you were away; each has its line in [`decisions.md`](decisions.md), and you may want to revisit them.
+
+- **Skill review fallback.** A skill-review Task falls to the Feature owner only when no Member of the whole Organisation has skill-review (security review M1). Only a Retrospective Task can carry a Skill proposal. ADR 0010 and `CONTEXT.md` are reworded to match.
+- **Login links show a page first.** Opening a link no longer signs in; the page's "Sign in as …" button does (a POST), which stops login CSRF. This moved redemption from GET to POST in `/v1`.
+- **Browser Sessions expire** after 30 days unused or 90 days in all, and an admin can deactivate and reactivate a Member.
+- **`Referrer-Policy` is `same-origin`**, not `no-referrer`: with `no-referrer`, Chromium sends `Origin: null` from the sign-in page and the button is refused.
+- **Each Member may hold 16 Activity streams and 16 waiting `next` calls** at once; one more gets 429 `too_many_requests` (`DARKORY_MAX_WAITING`).
+
+## Known limitations
+
+- A Claim made with an explicit `--timeout` shorter than the token's default can lapse before `heartbeat run` lists it. Giving the token the default timeout avoids this.
+- Activity `at` times can be slightly out of `seq` order under load; `seq` is the true order.
+- Rate limits and the email cap are kept per server process, so with several processes the real ceilings multiply.
+- Under heavy contention on SQLite (3,000 Tasks in a minute), `next` reached a p99 of about 1.4 s.
+
 ## Before the first release
 
 1. Run `go run ./tools/keygen`. Store the private key as the repository secret `DARKORY_SIGNING_KEY` and the public key as the variable `DARKORY_RELEASE_PUBLIC_KEY`.
