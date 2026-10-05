@@ -12,10 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
@@ -30,6 +32,7 @@ const usage = `darkory: management for a software factory of agents and humans.
 Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
+                [--evidence-max-mb n]
                                                                        run the server
   darkory version                                                      print the version
 `
@@ -148,7 +151,11 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL})
+	blobs, err := blob.NewDisk(filepath.Join(cfg.DataDir, "evidence"))
+	if err != nil {
+		return err
+	}
+	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
@@ -167,6 +174,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine())
 
 	go housekeeping(ctx, api.Core(), log)
+	go api.WatchForUpdates(ctx)
 	announceSignIn(ctx, api.Core(), cfg, base, stdout, log)
 
 	select {

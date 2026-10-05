@@ -131,12 +131,51 @@ func getSkill(ctx context.Context, r store.Reader, orgID, id string) (Skill, err
 	return s, err
 }
 
-func getFeature(ctx context.Context, r store.Reader, orgID, id string) (Feature, error) {
+func getFeature(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (Feature, error) {
 	f, err := scanFeature(r.QueryRow(ctx, `SELECT `+featureCols+` FROM features f WHERE f.org_id = $1 AND f.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, refuse(CodeNotFound, "no Feature %s", id)
 	}
-	return f, err
+	if err != nil {
+		return f, err
+	}
+	fs := []Feature{f}
+	err = fillTaskCounts(ctx, r, orgID, now, fs)
+	return fs[0], err
+}
+
+// fillTaskCounts counts each Feature's Tasks by state, in one query.
+func fillTaskCounts(ctx context.Context, r store.Reader, orgID string, now time.Time, fs []Feature) error {
+	if len(fs) == 0 {
+		return nil
+	}
+	args := []any{orgID, ms(now)}
+	at := map[string]int{}
+	marks := make([]string, len(fs))
+	for i, f := range fs {
+		args = append(args, f.ID)
+		marks[i] = "$" + itoa(len(args))
+		at[f.ID] = i
+	}
+	rows, err := r.Query(ctx, `SELECT feature_id,
+SUM(CASE WHEN state = 'open' THEN 1 ELSE 0 END),
+SUM(CASE WHEN state = 'open' AND claim_holder_id IS NOT NULL AND (claim_expires_at IS NULL OR claim_expires_at > $2) THEN 1 ELSE 0 END),
+SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END),
+SUM(CASE WHEN state = 'dropped' THEN 1 ELSE 0 END)
+FROM tasks WHERE org_id = $1 AND feature_id IN (`+strings.Join(marks, ", ")+`) GROUP BY feature_id`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var c TaskCounts
+		if err := rows.Scan(&id, &c.Open, &c.Claimed, &c.Done, &c.Dropped); err != nil {
+			return err
+		}
+		fs[at[id]].TaskCounts = c
+	}
+	return rows.Err()
 }
 
 func getTask(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (Task, error) {
@@ -144,7 +183,45 @@ func getTask(ctx context.Context, r store.Reader, orgID, id string, now time.Tim
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, refuse(CodeNotFound, "no Task %s", id)
 	}
-	return t, err
+	if err != nil || !t.Blocked {
+		return t, err
+	}
+	ts := []Task{t}
+	err = fillOpenBlockers(ctx, r, orgID, ts)
+	return ts[0], err
+}
+
+// fillOpenBlockers names the open blockers of each blocked Task, in one query.
+func fillOpenBlockers(ctx context.Context, r store.Reader, orgID string, ts []Task) error {
+	args := []any{orgID}
+	at := map[string]int{}
+	var marks []string
+	for i, t := range ts {
+		if t.Blocked {
+			args = append(args, t.ID)
+			marks = append(marks, "$"+itoa(len(args)))
+			at[t.ID] = i
+		}
+	}
+	if len(marks) == 0 {
+		return nil
+	}
+	rows, err := r.Query(ctx, `SELECT b.task_id, bt.id, bt.display_key FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
+WHERE b.org_id = $1 AND bt.state = 'open' AND b.task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY bt.created_at, bt.id`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var task string
+		var b TaskBrief
+		if err := rows.Scan(&task, &b.ID, &b.Key); err != nil {
+			return err
+		}
+		i := at[task]
+		ts[i].OpenBlockers = append(ts[i].OpenBlockers, b)
+	}
+	return rows.Err()
 }
 
 // collect runs query and scans every row with scan.
@@ -165,9 +242,14 @@ func collect[T any](ctx context.Context, r store.Reader, scan func(interface{ Sc
 	return out, rows.Err()
 }
 
-func tasksWhere(ctx context.Context, r store.Reader, now time.Time, where string, args ...any) ([]Task, error) {
-	return collect(ctx, r, func(row interface{ Scan(...any) error }) (Task, error) { return scanTask(row, now) },
+// tasksWhere reads the Tasks of orgID matching where, which binds args.
+func tasksWhere(ctx context.Context, r store.Reader, orgID string, now time.Time, where string, args ...any) ([]Task, error) {
+	ts, err := collect(ctx, r, func(row interface{ Scan(...any) error }) (Task, error) { return scanTask(row, now) },
 		`SELECT `+taskCols+` FROM `+taskFrom+` JOIN features f ON f.id = t.feature_id WHERE `+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	return ts, fillOpenBlockers(ctx, r, orgID, ts)
 }
 
 func memberTeams(ctx context.Context, r store.Reader, orgID, memberID string) ([]Team, error) {
@@ -238,13 +320,13 @@ func getSkillDetail(ctx context.Context, r store.Reader, orgID, id string) (Skil
 	return d, err
 }
 
-const evidenceCols = `e.id, e.feature_id, e.task_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at`
+const evidenceCols = `e.id, e.feature_id, e.task_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
 
 func scanEvidence(row interface{ Scan(...any) error }) (Evidence, error) {
 	var e Evidence
 	var task sql.NullString
 	var at int64
-	err := row.Scan(&e.ID, &e.FeatureID, &task, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at)
+	err := row.Scan(&e.ID, &e.FeatureID, &task, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
 	e.TaskID, e.CreatedAt = nullString(task), fromMS(at)
 	return e, err
 }
@@ -252,10 +334,10 @@ func scanEvidence(row interface{ Scan(...any) error }) (Evidence, error) {
 func getFeatureDetail(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (FeatureDetail, error) {
 	var d FeatureDetail
 	var err error
-	if d.Feature, err = getFeature(ctx, r, orgID, id); err != nil {
+	if d.Feature, err = getFeature(ctx, r, orgID, id, now); err != nil {
 		return d, err
 	}
-	if d.Tasks, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.feature_id = $2 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
+	if d.Tasks, err = tasksWhere(ctx, r, orgID, now, `t.org_id = $1 AND t.feature_id = $2 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
 		return d, err
 	}
 	d.Evidence, err = collect(ctx, r, scanEvidence, `SELECT `+evidenceCols+` FROM evidence e
@@ -302,7 +384,7 @@ func getTaskDetail(ctx context.Context, r store.Reader, orgID, id string, now ti
 	if d.Task, err = getTask(ctx, r, orgID, id, now); err != nil {
 		return d, err
 	}
-	if d.Feature, err = getFeature(ctx, r, orgID, d.Task.FeatureID); err != nil {
+	if d.Feature, err = getFeature(ctx, r, orgID, d.Task.FeatureID, now); err != nil {
 		return d, err
 	}
 	if d.Claims, err = claimsOf(ctx, r, orgID, id, now); err != nil {
@@ -323,25 +405,62 @@ WHERE org_id = $1 AND task_id = $2 ORDER BY created_at, id`, orgID, id); err != 
 WHERE e.org_id = $1 AND e.task_id = $2 ORDER BY e.created_at, e.id`, orgID, id); err != nil {
 		return d, err
 	}
-	if d.Blockers, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.id IN (SELECT blocker_task_id FROM blocks WHERE org_id = $1 AND task_id = $2)
+	if d.Blockers, err = tasksWhere(ctx, r, orgID, now, `t.org_id = $1 AND t.id IN (SELECT blocker_task_id FROM blocks WHERE org_id = $1 AND task_id = $2)
 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
 		return d, err
 	}
-	if d.Blocking, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.id IN (SELECT task_id FROM blocks WHERE org_id = $1 AND blocker_task_id = $2)
+	if d.Blocking, err = tasksWhere(ctx, r, orgID, now, `t.org_id = $1 AND t.id IN (SELECT task_id FROM blocks WHERE org_id = $1 AND blocker_task_id = $2)
 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
 		return d, err
 	}
-	d.Observations, err = collect(ctx, r, func(row interface{ Scan(...any) error }) (Observation, error) {
-		var o Observation
-		var skill, reviewedBy sql.NullString
-		var at int64
-		var reviewedAt sql.NullInt64
-		err := row.Scan(&o.ID, &o.TaskID, &o.FeatureID, &o.AuthorID, &skill, &o.Outcome, &o.Body, &at, &reviewedBy, &reviewedAt)
-		o.SkillID, o.CreatedAt, o.ReviewedByTaskID, o.ReviewedAt = nullString(skill), fromMS(at), nullString(reviewedBy), nullTime(reviewedAt)
-		return o, err
-	}, `SELECT id, task_id, feature_id, author_id, skill_id, outcome, body, created_at, reviewed_by_task_id, reviewed_at
-FROM observations WHERE org_id = $1 AND task_id = $2 ORDER BY created_at, id`, orgID, id)
-	return d, err
+	if d.Observations, err = collect(ctx, r, scanObservation, `SELECT `+observationCols+`
+FROM observations o WHERE o.org_id = $1 AND o.task_id = $2 ORDER BY o.created_at, o.id`, orgID, id); err != nil {
+		return d, err
+	}
+	p, err := scanProposal(r.QueryRow(ctx, `SELECT `+proposalCols+` FROM skill_proposals p
+WHERE p.org_id = $1 AND p.task_id = $2 ORDER BY p.created_at DESC, p.id DESC LIMIT 1`, orgID, id))
+	if err == nil {
+		d.Proposal = &p
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return d, err
+	}
+	return d, nil
+}
+
+const observationCols = `o.id, o.task_id, o.feature_id, o.author_id, o.skill_id, o.outcome, o.body, o.created_at,
+o.reviewed_by_task_id, o.reviewed_at`
+
+func scanObservation(row interface{ Scan(...any) error }) (Observation, error) {
+	var o Observation
+	var skill, reviewedBy sql.NullString
+	var at int64
+	var reviewedAt sql.NullInt64
+	err := row.Scan(&o.ID, &o.TaskID, &o.FeatureID, &o.AuthorID, &skill, &o.Outcome, &o.Body, &at, &reviewedBy, &reviewedAt)
+	o.SkillID, o.CreatedAt, o.ReviewedByTaskID, o.ReviewedAt = nullString(skill), fromMS(at), nullString(reviewedBy), nullTime(reviewedAt)
+	return o, err
+}
+
+const proposalCols = `p.id, p.skill_id, p.task_id, p.based_on_version, p.body, p.author_id, p.state, p.published_version,
+p.created_at, p.decided_at`
+
+func scanProposal(row interface{ Scan(...any) error }) (SkillProposal, error) {
+	var p SkillProposal
+	var published, decided sql.NullInt64
+	var created int64
+	err := row.Scan(&p.ID, &p.SkillID, &p.TaskID, &p.BasedOnVersion, &p.Body, &p.AuthorID, &p.State, &published, &created, &decided)
+	if published.Valid {
+		p.PublishedVersion = &published.Int64
+	}
+	p.CreatedAt, p.DecidedAt = fromMS(created), nullTime(decided)
+	return p, err
+}
+
+func getProposal(ctx context.Context, r store.Reader, orgID, id string) (SkillProposal, error) {
+	p, err := scanProposal(r.QueryRow(ctx, `SELECT `+proposalCols+` FROM skill_proposals p WHERE p.org_id = $1 AND p.id = $2`, orgID, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return p, refuse(CodeNotFound, "no Skill proposal %s", id)
+	}
+	return p, err
 }
 
 func scanActivity(row interface{ Scan(...any) error }) (Activity, error) {
@@ -353,6 +472,7 @@ func scanActivity(row interface{ Scan(...any) error }) (Activity, error) {
 		return a, err
 	}
 	a.At, a.ActorID = fromMS(at), nullString(actor)
+	a.SubjectType, _, _ = strings.Cut(a.Kind, ".")
 	if err := json.Unmarshal([]byte(payload), &a.Payload); err != nil {
 		return a, fmt.Errorf("core: activity %d payload: %w", a.Seq, err)
 	}

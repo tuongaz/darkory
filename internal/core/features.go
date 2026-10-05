@@ -156,7 +156,183 @@ WHERE `+strings.Join(where, " AND ")+` ORDER BY tm.name, f.rank, f.id LIMIT $`+i
 	if err != nil {
 		return Page[Feature]{}, err
 	}
-	return page(items, offset, limit), nil
+	p := page(items, offset, limit)
+	return p, fillTaskCounts(ctx, s.store, c.OrgID, s.clock.Now(), p.Items)
+}
+
+// RankFeature moves a Feature to position within its Team's Rank, 1 first; a position past the
+// end moves it last. Ended Features keep their places and count as positions (ADR 0010). By a
+// Member of the Feature's Team or its owner.
+func (s *Service) RankFeature(ctx context.Context, c *auth.Caller, ref string, position int64, idem Idem) (Feature, error) {
+	if position < 1 {
+		return Feature{}, refuse(CodeInvalid, "position is 1 or more")
+	}
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		f, err := featureOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		if f.OwnerID != c.MemberID {
+			in, err := inTeam(ctx, t, c.OrgID, f.TeamID, c.MemberID)
+			if err != nil {
+				return nil, err
+			}
+			if !in {
+				return nil, refuse(CodeForbidden, "only a Member of the Team or the owner may rank Feature %s", f.Key)
+			}
+		}
+		var n int64
+		if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM features WHERE org_id = $1 AND team_id = $2`, c.OrgID, f.TeamID).Scan(&n); err != nil {
+			return nil, err
+		}
+		to, from := min(position, n), f.Rank
+		if to == from {
+			return f, nil
+		}
+		// Positions are 1…n; the Features between the two places each move one step.
+		shift := `UPDATE features SET rank = rank - 1 WHERE org_id = $1 AND team_id = $2 AND rank > $3 AND rank <= $4`
+		lo, hi := from, to
+		if to < from {
+			shift = `UPDATE features SET rank = rank + 1 WHERE org_id = $1 AND team_id = $2 AND rank >= $3 AND rank < $4`
+			lo, hi = to, from
+		}
+		if _, err := t.Exec(ctx, shift, c.OrgID, f.TeamID, lo, hi); err != nil {
+			return nil, err
+		}
+		if _, err := t.Exec(ctx, `UPDATE features SET rank = $1 WHERE org_id = $2 AND id = $3`, to, c.OrgID, f.ID); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("feature.ranked", f.ID, map[string]any{"from": from, "to": to}); err != nil {
+			return nil, err
+		}
+		return getFeature(ctx, t, c.OrgID, f.ID, t.now)
+	})
+	if err != nil {
+		return Feature{}, err
+	}
+	return res.(Feature), nil
+}
+
+// ShipFeature ends a Feature shipped, by its owner, once every one of its Tasks has ended, and
+// files its Retrospective in the same write (ADR 0010).
+func (s *Service) ShipFeature(ctx context.Context, c *auth.Caller, ref string, idem Idem) (FeatureDetail, error) {
+	return s.endFeature(ctx, c, ref, "shipped", idem)
+}
+
+// DropFeature ends a Feature dropped, by its owner: it drops the Feature's open Tasks, ending
+// their Claims, and files its Retrospective in the same write (ADR 0010).
+func (s *Service) DropFeature(ctx context.Context, c *auth.Caller, ref string, idem Idem) (FeatureDetail, error) {
+	return s.endFeature(ctx, c, ref, "dropped", idem)
+}
+
+func (s *Service) endFeature(ctx context.Context, c *auth.Caller, ref, state string, idem Idem) (FeatureDetail, error) {
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		f, err := featureOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		if f.OwnerID != c.MemberID {
+			return nil, refuse(CodeForbidden, "only the owner of Feature %s may ship or drop it", f.Key)
+		}
+		if f.State != "open" {
+			return nil, refuse(CodeEnded, "Feature %s has %s", f.Key, f.State)
+		}
+		open, err := collect(ctx, t, func(row interface{ Scan(...any) error }) (string, error) {
+			var id string
+			return id, row.Scan(&id)
+		}, `SELECT id FROM tasks WHERE org_id = $1 AND feature_id = $2 AND state = 'open' ORDER BY created_at, id`, c.OrgID, f.ID)
+		if err != nil {
+			return nil, err
+		}
+		if state == "shipped" && len(open) > 0 {
+			return nil, refuse(CodeTasksOpen, "Feature %s has %d open Tasks; each must end, done or dropped, before it ships", f.Key, len(open))
+		}
+		if _, err := t.Exec(ctx, `UPDATE features SET state = $1, ended_at = $2 WHERE org_id = $3 AND id = $4`, state, ms(t.now), c.OrgID, f.ID); err != nil {
+			return nil, err
+		}
+		kind, payload := "feature.shipped", map[string]any{}
+		if state == "dropped" {
+			kind, payload = "feature.dropped", map[string]any{"open_tasks_dropped": len(open)}
+		}
+		if err := t.recordByCaller(kind, f.ID, payload); err != nil {
+			return nil, err
+		}
+		for _, id := range open {
+			if err := dropTask(t, id, map[string]any{"feature_dropped": true}); err != nil {
+				return nil, err
+			}
+		}
+		if err := fileRetrospective(t, f); err != nil {
+			return nil, err
+		}
+		return getFeatureDetail(ctx, t, c.OrgID, f.ID, t.now)
+	})
+	if err != nil {
+		return FeatureDetail{}, err
+	}
+	return res.(FeatureDetail), nil
+}
+
+// fileRetrospective files "Retrospective: <title>" needing the retro Skill on an ended Feature
+// (ADR 0010). It sorts by the Feature's Rank, which an ended Feature keeps.
+func fileRetrospective(t *tx, f Feature) error {
+	retro, err := skillByName(t.ctx, t, t.caller.OrgID, SkillRetro)
+	if err != nil {
+		return err
+	}
+	title := "Retrospective: " + f.Title
+	id, key, err := insertTask(t, f, "retrospective", title, "", &retro, nil)
+	if err != nil {
+		return err
+	}
+	return t.recordByCaller("task.filed", id, map[string]any{"key": key, "title": title, "feature_id": f.ID, "kind": "retrospective", "skill_id": retro})
+}
+
+// PassFeatureOwnership makes another Member the Feature's owner: by the owner, or by someone
+// above the owner on their Reporting line (decisions.md).
+func (s *Service) PassFeatureOwnership(ctx context.Context, c *auth.Caller, ref, ownerRef string, idem Idem) (Feature, error) {
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		f, err := featureOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		if f.OwnerID != c.MemberID {
+			above, err := onReportingLine(ctx, t, c.OrgID, f.OwnerID, c.MemberID)
+			if err != nil {
+				return nil, err
+			}
+			if !above {
+				return nil, refuse(CodeForbidden, "only the owner of Feature %s, or someone above them on their Reporting line, may pass it on", f.Key)
+			}
+		}
+		owner, err := resolveMember(ctx, t, c.OrgID, ownerRef)
+		if err != nil {
+			return nil, err
+		}
+		if owner == f.OwnerID {
+			return f, nil
+		}
+		if _, err := t.Exec(ctx, `UPDATE features SET owner_id = $1 WHERE org_id = $2 AND id = $3`, owner, c.OrgID, f.ID); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("feature.owner_passed", f.ID, map[string]any{"from": f.OwnerID, "to": owner}); err != nil {
+			return nil, err
+		}
+		return getFeature(ctx, t, c.OrgID, f.ID, t.now)
+	})
+	if err != nil {
+		return Feature{}, err
+	}
+	return res.(Feature), nil
+}
+
+// featureOf reads the Feature ref names inside a write.
+func featureOf(t *tx, ref string) (Feature, error) {
+	id, err := resolveFeature(t.ctx, t, t.caller.OrgID, ref)
+	if err != nil {
+		return Feature{}, err
+	}
+	return getFeature(t.ctx, t, t.caller.OrgID, id, t.now)
 }
 
 func itoa64(n int64) string { return itoa(int(n)) }

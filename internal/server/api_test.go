@@ -142,7 +142,7 @@ func TestClaimPathThroughTheClient(t *testing.T) {
 		var kinds []string
 		for _, a := range act.Items {
 			if a.SubjectID == next.Task.ID {
-				kinds = append(kinds, a.Kind)
+				kinds = append(kinds, string(a.Kind))
 			}
 		}
 		if strings.Join(kinds, " ") != "task.filed task.claimed task.completed" {
@@ -256,7 +256,8 @@ func TestActivityStream(t *testing.T) {
 		ctx := t.Context()
 		before := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{})).want(t, http.StatusOK).JSON200.LastSeq
 
-		stream := h.openStream(t, "")
+		// Last-Event-ID 0 asks for the whole history.
+		stream := h.openStream(t, "0")
 		ids := stream.events(t, int(before))
 		if ids[len(ids)-1] != before {
 			t.Fatalf("the stream started with %v, want 1…%d", ids, before)

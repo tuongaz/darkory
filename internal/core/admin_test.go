@@ -216,8 +216,9 @@ func TestFilingFeaturesAndTasks(t *testing.T) {
 			_, err := f.svc.FileTask(ctx, web, bad, core.Idem{})
 			wantCode(t, err, core.CodeInvalid)
 		}
-		_, err = f.svc.FileTask(ctx, web, core.NewTask{Feature: ptrStr("WEB-1"), Title: "Q", AimedAt: ptrStr("ada"), Blocks: ptrStr("WEB-2")}, core.Idem{})
-		wantCode(t, err, core.CodeNotImplemented)
+		// A question joins the Feature of the Task it blocks; naming another Feature is refused.
+		_, err = f.svc.FileTask(ctx, web, core.NewTask{Feature: ptrStr("WEB-3"), Title: "Q", AimedAt: ptrStr("ada"), Blocks: ptrStr("WEB-2")}, core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
 
 		page, err := f.svc.ListFeatures(ctx, web, core.FeatureFilter{Team: ptrStr("WEB"), Limit: 1})
 		if err != nil || len(page.Items) != 1 || page.Items[0].Key != "WEB-1" || page.NextCursor == "" {

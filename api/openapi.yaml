@@ -57,7 +57,7 @@ paths:
     get:
       operationId: getHealth
       tags: [install]
-      summary: Report that the Install is up
+      summary: Report that the Install is up, how Members sign in, and whether a newer release exists
       security: []
       responses:
         "200":
@@ -518,6 +518,21 @@ paths:
               schema: {$ref: "#/components/schemas/SkillVersionList"}
         default: {$ref: "#/components/responses/Error"}
 
+  /v1/skill-proposals/{proposal}:
+    get:
+      operationId: getSkillProposal
+      tags: [skills]
+      summary: Get a proposed Skill version
+      parameters:
+        - {$ref: "#/components/parameters/ProposalID"}
+      responses:
+        "200":
+          description: The proposal.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/SkillProposal"}
+        default: {$ref: "#/components/responses/Error"}
+
   # ---------------------------------------------------------------- features
   /v1/features:
     post:
@@ -588,8 +603,9 @@ paths:
       tags: [features]
       summary: Move a Feature to a position in its Team's Rank
       description: |
-        Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-        (not in the Team).
+        Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+        their places and count as positions. By a Member of the Feature's Team or its owner.
+        Errors: `forbidden`.
       parameters:
         - {$ref: "#/components/parameters/FeatureRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -612,8 +628,9 @@ paths:
       tags: [features]
       summary: Ship a Feature (Feature owner)
       description: |
-        Needs every Task of the Feature to have ended. Files the Retrospective Task in the same
-        write. Errors: `forbidden` (not the owner), `tasks_open`, `ended`.
+        Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
+        <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
+        `tasks_open`, `ended`.
       parameters:
         - {$ref: "#/components/parameters/FeatureRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -631,8 +648,8 @@ paths:
       tags: [features]
       summary: Drop a Feature (Feature owner)
       description: |
-        Drops its open Tasks, ends their Claims, and files the Retrospective Task in the same
-        write. Errors: `forbidden` (not the owner), `ended`.
+        Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
+        <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
       parameters:
         - {$ref: "#/components/parameters/FeatureRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -676,7 +693,9 @@ paths:
         - {$ref: "#/components/parameters/FeatureRef"}
         - name: reviewed
           in: query
-          description: true for only reviewed Observations, false for only unreviewed ones. Omitted for all.
+          description: |
+            Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
+            Observation, reviewed or not.
           schema: {type: boolean}
       responses:
         "200":
@@ -692,8 +711,9 @@ paths:
       tags: [evidence]
       summary: Attach Evidence to a Feature
       description: |
-        The request body is the file itself, sent with its own `Content-Type`. Errors:
-        `too_large`.
+        The request body is the file itself, sent with its own `Content-Type` and a
+        `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
+        owner or a Member of its Team. Errors: `forbidden`, `too_large`.
       parameters:
         - {$ref: "#/components/parameters/FeatureRef"}
         - {$ref: "#/components/parameters/EvidenceFilename"}
@@ -720,8 +740,11 @@ paths:
       description: |
         A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
         question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-        then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-        Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+        then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+        even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+        Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+        `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+        `not_holder`, `forbidden`, `cycle`.
       parameters:
         - {$ref: "#/components/parameters/IdempotencyKey"}
       requestBody:
@@ -904,7 +927,10 @@ paths:
       operationId: handoverTask
       tags: [tasks]
       summary: End the caller's Claim and set the Skill the Task needs next
-      description: "Errors: `not_holder`."
+      description: |
+        The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+        no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+        again only under that Skill. Errors: `not_holder`.
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -927,10 +953,11 @@ paths:
       tags: [tasks]
       summary: Complete a Task the caller holds
       description: |
-        Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-        completing a Retrospective marks its Feature's Observations reviewed. Errors:
-        `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-        current; nothing changes).
+        Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+        proposal publishes it as the Skill's next version; completing a Retrospective marks its
+        Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+        (the version the proposal was written against is no longer current; nothing changes, and
+        the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -995,7 +1022,7 @@ paths:
       operationId: addNote
       tags: [tasks]
       summary: Add a Note to a Task's running log
-      description: "Errors: `not_holder` (the Task is held by someone else)."
+      description: "By the Member holding the Task. Errors: `not_holder`."
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -1017,7 +1044,9 @@ paths:
       operationId: observe
       tags: [tasks]
       summary: Record an Observation on a Task
-      description: "Errors: `not_holder` (the Task is held by someone else)."
+      description: |
+        By the Member holding the Task; the Observation records the Skill they hold it under.
+        Errors: `not_holder`.
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -1040,8 +1069,10 @@ paths:
       tags: [tasks]
       summary: Let one Task block another
       description: |
-        `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended.
-        Errors: `forbidden`, `not_holder`, `cycle`.
+        `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
+        may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
+        ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
+        (`{task}` already blocks `{blocker}`, directly or through other Tasks).
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/BlockerRef"}
@@ -1054,7 +1085,7 @@ paths:
       operationId: removeBlocker
       tags: [tasks]
       summary: Stop one Task blocking another
-      description: "Errors: `forbidden`, `not_holder`."
+      description: "Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`."
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/BlockerRef"}
@@ -1070,8 +1101,10 @@ paths:
       tags: [skills]
       summary: Propose a new version of a company Skill from the Task the caller holds
       description: |
-        Written against `based_on_version`, which must be the current version. The caller then
-        hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+        Written against `based_on_version`, which must be the current version, for a company
+        Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+        proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+        a company Skill).
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -1094,8 +1127,10 @@ paths:
       tags: [evidence]
       summary: Attach Evidence to a Task
       description: |
-        The request body is the file itself, sent with its own `Content-Type`. Errors:
-        `not_holder` (the Task is held by someone else), `too_large`.
+        The request body is the file itself, sent with its own `Content-Type` and a
+        `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
+        Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+        `not_holder`, `forbidden`, `too_large`.
       parameters:
         - {$ref: "#/components/parameters/TaskRef"}
         - {$ref: "#/components/parameters/EvidenceFilename"}
@@ -1134,7 +1169,9 @@ paths:
       operationId: downloadEvidence
       tags: [evidence]
       summary: Download an Evidence file
-      description: Served with the content type it was attached with.
+      description: |
+        Served with the content type it was attached with, always as an attachment and with
+        `X-Content-Type-Options: nosniff`, so a browser never renders an uploaded page.
       parameters:
         - {$ref: "#/components/parameters/EvidenceID"}
       responses:
@@ -1142,7 +1179,10 @@ paths:
           description: The file.
           headers:
             Content-Disposition:
+              description: "`attachment`, with the file's name."
               schema: {type: string}
+            X-Content-Type-Options:
+              schema: {type: string, enum: [nosniff]}
           content:
             "*/*":
               schema: {type: string, format: binary}
@@ -1153,15 +1193,22 @@ paths:
     get:
       operationId: listActivity
       tags: [activity]
-      summary: Read Activity after a sequence number
+      summary: Read Activity after, or before, a sequence number
       description: |
         Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
-        `after` to read the next.
+        `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
+        entries numbered just below it, still in sequence order, and its `first_seq` is the
+        `before` of the page before it. A `before` past the newest entry (such as
+        9007199254740991) reads the latest page.
       parameters:
         - name: after
           in: query
           description: Return entries with a sequence number greater than this. Defaults to 0.
           schema: {type: integer, format: int64, minimum: 0}
+        - name: before
+          in: query
+          description: Return the entries with a sequence number below this, closest first.
+          schema: {type: integer, format: int64, minimum: 1}
         - {$ref: "#/components/parameters/Limit"}
       responses:
         "200":
@@ -1179,7 +1226,9 @@ paths:
       description: |
         Each entry is one event: `id` is its sequence number, `event` is `activity` and `data` is
         the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
-        clients that cannot set headers) and receives every entry after it.
+        clients that cannot set headers) and receives every entry after it; `0` sends the whole
+        history. With neither, the stream starts from now: it sends only entries written after
+        it opened.
       parameters:
         - name: Last-Event-ID
           in: header
@@ -1265,6 +1314,11 @@ components:
       in: path
       required: true
       schema: {type: string}
+    ProposalID:
+      name: proposal
+      in: path
+      required: true
+      schema: {type: string}
     SessionID:
       name: session
       in: path
@@ -1344,7 +1398,7 @@ components:
     # ------------------------------------------------------------ install
     Health:
       type: object
-      required: [status, version]
+      required: [status, version, sign_in]
       properties:
         status:
           type: string
@@ -1352,6 +1406,25 @@ components:
         version:
           type: string
           description: The server's release version.
+        sign_in:
+          type: array
+          description: How humans sign in to this Install.
+          items: {$ref: "#/components/schemas/SignInMode"}
+        update_available:
+          type: boolean
+          description: |
+            True when a newer release than `version` exists. Absent when the server has not
+            checked: a development build, or checks turned off with DARKORY_NO_UPDATE_CHECK.
+        latest_version:
+          type: string
+          description: The newest release the server knows of. Absent when it has not checked.
+    SignInMode:
+      type: string
+      description: |
+        `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
+        `email`: login links emailed on request.
+      enum: [printed_link, email]
+      x-enum-varnames: [SignInPrintedLink, SignInEmail]
     Organisation:
       type: object
       required: [id, name, created_at]
@@ -1641,9 +1714,18 @@ components:
         published_version:
           type: integer
           format: int64
+          description: The version publishing it made. Absent unless `state` is `published`.
         created_at: {type: string, format: date-time}
+        decided_at:
+          type: string
+          format: date-time
+          description: When it was published or superseded.
     ProposalState:
       type: string
+      description: |
+        `pending`: waiting for review. `published`: a review published it. `superseded`: it will
+        not be published, because a newer proposal replaced it on its Task or its Task ended
+        without publishing it.
       enum: [pending, published, superseded]
     ProposeSkillVersionBody:
       type: object
@@ -1660,7 +1742,7 @@ components:
     # ------------------------------------------------------------ features
     Feature:
       type: object
-      required: [id, key, team_id, title, description, owner_id, state, rank, filed_by, created_at]
+      required: [id, key, team_id, title, description, owner_id, state, rank, filed_by, created_at, task_counts]
       properties:
         id: {type: string}
         key:
@@ -1681,6 +1763,20 @@ components:
         filed_by: {type: string}
         created_at: {type: string, format: date-time}
         ended_at: {type: string, format: date-time}
+        task_counts: {$ref: "#/components/schemas/TaskCounts"}
+    TaskCounts:
+      type: object
+      description: How many of the Feature's Tasks are in each state.
+      required: [open, claimed, done, dropped]
+      properties:
+        open:
+          type: integer
+          description: Open Tasks, claimed or not.
+        claimed:
+          type: integer
+          description: Open Tasks with a live Claim; these are also counted in `open`.
+        done: {type: integer}
+        dropped: {type: integer}
     FeatureState:
       type: string
       enum: [open, shipped, dropped]
@@ -1761,6 +1857,10 @@ components:
         blocked:
           type: boolean
           description: True while any Task blocking this one is open.
+        open_blockers:
+          type: array
+          description: The open Tasks blocking this one. Absent when none is open.
+          items: {$ref: "#/components/schemas/TaskBrief"}
         filed_by: {type: string}
         waiting_since:
           type: string
@@ -1768,6 +1868,15 @@ components:
           description: When the Task was filed or last handed over.
         created_at: {type: string, format: date-time}
         ended_at: {type: string, format: date-time}
+    TaskBrief:
+      type: object
+      description: A Task named by its id and display key.
+      required: [id, key]
+      properties:
+        id: {type: string}
+        key:
+          type: string
+          description: Display key, such as `WEB-42`.
     TaskState:
       type: string
       description: Claimed and lapsed are not states; they follow from the Task's Claim.
@@ -1812,6 +1921,7 @@ components:
     TaskDetail:
       type: object
       required: [task, feature, claims, notes, evidence, blockers, blocking, observations]
+      description: The Task with its record. `proposal` is the latest Skill proposal written on it, when any.
       properties:
         task: {$ref: "#/components/schemas/Task"}
         feature: {$ref: "#/components/schemas/Feature"}
@@ -1837,6 +1947,8 @@ components:
         observations:
           type: array
           items: {$ref: "#/components/schemas/Observation"}
+        proposal:
+          $ref: "#/components/schemas/SkillProposal"
     TaskList:
       type: object
       required: [items]
@@ -2012,7 +2124,7 @@ components:
     # ------------------------------------------------------------ activity
     Activity:
       type: object
-      required: [seq, at, kind, subject_id, payload]
+      required: [seq, at, kind, subject_type, subject_id, payload]
       properties:
         seq:
           type: integer
@@ -2022,15 +2134,61 @@ components:
         actor_id:
           type: string
           description: The Member who acted. Absent when Darkory acted, as when recording a lapse.
-        kind:
-          type: string
-          description: What happened, such as `task.claimed` or `feature.shipped`.
+        kind: {$ref: "#/components/schemas/ActivityKind"}
+        subject_type: {$ref: "#/components/schemas/SubjectType"}
         subject_id:
           type: string
-          description: The id of the record the entry is about.
+          description: The id of the record the entry is about, of `subject_type`.
         payload:
           type: object
           additionalProperties: true
+    ActivityKind:
+      type: string
+      description: |
+        What happened. The part before the dot is the `subject_type`. New kinds may be added
+        within `/v1`; a client should skip a kind it does not know.
+      enum:
+        - feature.filed
+        - feature.ranked
+        - feature.shipped
+        - feature.dropped
+        - feature.owner_passed
+        - feature.evidence_attached
+        - task.filed
+        - task.claimed
+        - task.lapsed
+        - task.released
+        - task.handed_over
+        - task.completed
+        - task.dropped
+        - task.taken_back
+        - task.claim_ended
+        - task.note_added
+        - task.observed
+        - task.blocker_added
+        - task.blocker_removed
+        - task.evidence_attached
+        - task.skill_proposed
+        - skill.created
+        - skill.version_published
+        - member.created
+        - member.updated
+        - member.manager_set
+        - member.manager_cleared
+        - member.skill_granted
+        - member.skill_revoked
+        - team.created
+        - team.member_added
+        - team.member_removed
+        - token.issued
+        - token.revoked
+        - session.closed
+        - login_link.issued
+        - login_link.redeemed
+    SubjectType:
+      type: string
+      description: The kind of record an Activity entry is about.
+      enum: [feature, task, skill, member, team, token, session, login_link]
     ActivityPage:
       type: object
       required: [items, last_seq]
@@ -2042,3 +2200,7 @@ components:
           type: integer
           format: int64
           description: The sequence number of the last entry returned, or `after` when none were. Pass it as `after` next time.
+        first_seq:
+          type: integer
+          format: int64
+          description: The sequence number of the first entry returned. Absent when none were. Pass it as `before` to read the page before.

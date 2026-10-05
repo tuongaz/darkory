@@ -43,7 +43,12 @@ type Serve struct {
 	// NoLoginLink stops `serve` issuing and printing the startup login link at all, for a
 	// container whose output goes to shipped logs (DARKORY_NO_LOGIN_LINK, --no-login-link).
 	NoLoginLink bool
+	// EvidenceMaxMB bounds one Evidence file, in MiB (DARKORY_EVIDENCE_MAX_MB, --evidence-max-mb).
+	EvidenceMaxMB int64
 }
+
+// DefaultEvidenceMaxMB is the largest Evidence file, in MiB, unless set otherwise.
+const DefaultEvidenceMaxMB = 100
 
 // Init holds the settings of `darkory init`.
 type Init struct {
@@ -83,8 +88,16 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	fs.BoolVar(&c.NoBrowser, "no-browser", noBrowser, "do not open the startup login link in a browser (DARKORY_NO_BROWSER)")
 	noLink, _ := strconv.ParseBool(getenv("DARKORY_NO_LOGIN_LINK"))
 	fs.BoolVar(&c.NoLoginLink, "no-login-link", noLink, "do not issue or print a startup login link (DARKORY_NO_LOGIN_LINK)")
+	maxMB, err := strconv.ParseInt(or(getenv("DARKORY_EVIDENCE_MAX_MB"), strconv.Itoa(DefaultEvidenceMaxMB)), 10, 64)
+	if err != nil {
+		return Serve{}, fmt.Errorf("DARKORY_EVIDENCE_MAX_MB: %w", err)
+	}
+	fs.Int64Var(&c.EvidenceMaxMB, "evidence-max-mb", maxMB, "largest Evidence file in MiB (DARKORY_EVIDENCE_MAX_MB)")
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
+	}
+	if c.EvidenceMaxMB < 1 {
+		return Serve{}, fmt.Errorf("--evidence-max-mb is 1 or more, got %d", c.EvidenceMaxMB)
 	}
 	if fs.NArg() > 0 {
 		return Serve{}, fmt.Errorf("serve takes no arguments, got %q", fs.Args())

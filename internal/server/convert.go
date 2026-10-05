@@ -58,7 +58,8 @@ func skillDetailOut(d core.SkillDetail) gen.SkillDetail {
 func featureOut(f core.Feature) gen.Feature {
 	return gen.Feature{ID: f.ID, Key: f.Key, TeamID: f.TeamID, Title: f.Title, Description: f.Description, OwnerID: f.OwnerID,
 		State: gen.FeatureState(f.State), Rank: f.Rank, FromRetrospectiveTaskID: f.FromRetrospectiveTaskID, FiledBy: f.FiledBy,
-		CreatedAt: f.CreatedAt, EndedAt: f.EndedAt}
+		CreatedAt: f.CreatedAt, EndedAt: f.EndedAt,
+		TaskCounts: gen.TaskCounts{Open: f.TaskCounts.Open, Claimed: f.TaskCounts.Claimed, Done: f.TaskCounts.Done, Dropped: f.TaskCounts.Dropped}}
 }
 
 func featureDetailOut(d core.FeatureDetail) gen.FeatureDetail {
@@ -84,15 +85,30 @@ func taskOut(t core.Task) gen.Task {
 		c := claimOut(*t.Claim)
 		out.Claim = &c
 	}
+	if len(t.OpenBlockers) > 0 {
+		bs := each(t.OpenBlockers, func(b core.TaskBrief) gen.TaskBrief { return gen.TaskBrief{ID: b.ID, Key: b.Key} })
+		out.OpenBlockers = &bs
+	}
 	return out
 }
 
 func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
-	return gen.TaskDetail{
+	out := gen.TaskDetail{
 		Task: taskOut(d.Task), Feature: featureOut(d.Feature), Claims: each(d.Claims, claimOut),
 		Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut), Blockers: each(d.Blockers, taskOut),
 		Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
 	}
+	if d.Proposal != nil {
+		p := proposalOut(*d.Proposal)
+		out.Proposal = &p
+	}
+	return out
+}
+
+func proposalOut(p core.SkillProposal) gen.SkillProposal {
+	return gen.SkillProposal{ID: p.ID, SkillID: p.SkillID, TaskID: p.TaskID, BasedOnVersion: p.BasedOnVersion, Body: p.Body,
+		AuthorID: p.AuthorID, State: gen.ProposalState(p.State), PublishedVersion: p.PublishedVersion, CreatedAt: p.CreatedAt,
+		DecidedAt: p.DecidedAt}
 }
 
 func noteOut(n core.Note) gen.Note {
@@ -111,7 +127,8 @@ func evidenceOut(e core.Evidence) gen.Evidence {
 }
 
 func activityOut(a core.Activity) gen.Activity {
-	return gen.Activity{Seq: a.Seq, At: a.At, ActorID: a.ActorID, Kind: a.Kind, SubjectID: a.SubjectID, Payload: a.Payload}
+	return gen.Activity{Seq: a.Seq, At: a.At, ActorID: a.ActorID, Kind: gen.ActivityKind(a.Kind),
+		SubjectType: gen.SubjectType(a.SubjectType), SubjectID: a.SubjectID, Payload: a.Payload}
 }
 
 func tokenOut(t core.Token) gen.Token {
