@@ -336,4 +336,64 @@ func TestRaceIdempotentRetries(t *testing.T) {
 	})
 }
 
+// Concurrent retries of a write on a held Task under one Idempotency-Key all get the first one's
+// response, even when a retry reads the Task only after the first has ended the Claim: the e2e
+// soak found the late retry refused not_holder instead.
+func TestRaceIdempotentRetriesOfHeldWrites(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 1)
+		f.skill("review")
+		c := callers[0]
+		ctx := t.Context()
+		for _, op := range []struct {
+			name string
+			run  func(task string, idem core.Idem) (any, error)
+		}{
+			{"release", func(task string, idem core.Idem) (any, error) { return f.svc.Release(ctx, c, task, nil, idem) }},
+			{"handover", func(task string, idem core.Idem) (any, error) {
+				return f.svc.Handover(ctx, c, task, "review", nil, idem)
+			}},
+			{"complete", func(task string, idem core.Idem) (any, error) { return f.svc.Complete(ctx, c, task, nil, idem) }},
+		} {
+			task := f.task(c, feature, op.name, "build")
+			f.claim(c, task.Key, noTimeout)
+			idem := jsonIdem("retry-"+op.name, op.name)
+			var mu sync.Mutex
+			var bodies [][]byte
+			firsts := 0
+			var wg sync.WaitGroup
+			start := make(chan struct{})
+			for range 10 {
+				wg.Go(func() {
+					<-start
+					res, err := op.run(task.ID, idem)
+					var replay *core.Replay
+					mu.Lock()
+					defer mu.Unlock()
+					switch {
+					case err == nil:
+						firsts++
+						bodies = append(bodies, mustJSON(t, res))
+					case errors.As(err, &replay):
+						bodies = append(bodies, replay.Body)
+					default:
+						t.Errorf("%s: %v", op.name, err)
+					}
+				})
+			}
+			close(start)
+			wg.Wait()
+			if firsts != 1 || len(bodies) != 10 {
+				t.Fatalf("%s: %d first responses and %d bodies, want 1 and 10", op.name, firsts, len(bodies))
+			}
+			for _, b := range bodies[1:] {
+				if !bytes.Equal(b, bodies[0]) {
+					t.Fatalf("%s: retries got different responses:\n%s\n%s", op.name, bodies[0], b)
+				}
+			}
+		}
+		f.checkActivity()
+	})
+}
+
 func ptrStr(s string) *string { return &s }

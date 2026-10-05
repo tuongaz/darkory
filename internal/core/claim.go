@@ -433,14 +433,16 @@ func (s *Service) heldWrite(ctx context.Context, c *auth.Caller, ref string, ide
 	if err != nil {
 		return nil, err
 	}
+	// A retry under the key of a write that has just ended the Claim reads the Task after that
+	// write committed: it answers with the stored response, not the refusal.
 	if err := holds(c, pre); err != nil {
-		return nil, err
+		return nil, s.afterRefusal(ctx, c, idem, err)
 	}
 	args := map[string]any{"org": c.OrgID, "task": taskID, "claim": pre.Claim.ID, "member": c.MemberID,
 		"session": c.SessionID, "now": ms(now)}
 	result, body, err := op.build(pre, args, now)
 	if err != nil {
-		return nil, err
+		return nil, s.afterRefusal(ctx, c, idem, err)
 	}
 	stmts, err := idemStmts(c, idem, result, now)
 	if err != nil {
