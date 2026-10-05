@@ -169,7 +169,7 @@ func idemStmts(c *auth.Caller, idem Idem, result any, now time.Time) ([]store.St
 		"cutoff": now.Add(-IdempotencyTTL).UnixMilli(),
 	}
 	return []store.Stmt{
-		store.S(`DELETE FROM idempotency_keys WHERE member_id = @member AND idempotency_key = @key AND created_at <= @cutoff`, args),
+		store.S(`DELETE FROM idempotency_keys WHERE org_id = @org AND member_id = @member AND idempotency_key = @key AND created_at <= @cutoff`, args),
 		store.S(`INSERT INTO idempotency_keys (org_id, member_id, idempotency_key, request_hash, status, response, created_at)
 VALUES (@org, @member, @key, @hash, @status, @body, @now)`, args),
 	}, nil

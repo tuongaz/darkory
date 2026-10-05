@@ -163,7 +163,6 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var refusal *core.Error
 	switch {
 	case errors.As(err, &replay):
-		w.Header().Set("Idempotent-Replayed", "true")
 		writeRaw(w, replay.Status, replay.Body)
 	case errors.As(err, &refusal):
 		status, ok := statusOf[refusal.Code]

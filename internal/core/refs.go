@@ -56,8 +56,9 @@ func skillByName(ctx context.Context, r store.Reader, orgID, name string) (strin
 	return resolve(ctx, r, "Skill", `SELECT id FROM skills WHERE org_id = $1 AND name = $2`, orgID, name)
 }
 
-func inTeam(ctx context.Context, r store.Reader, teamID, memberID string) (bool, error) {
+func inTeam(ctx context.Context, r store.Reader, orgID, teamID, memberID string) (bool, error) {
 	var n int
-	err := r.QueryRow(ctx, `SELECT COUNT(*) FROM team_members WHERE team_id = $1 AND member_id = $2`, teamID, memberID).Scan(&n)
+	err := r.QueryRow(ctx, `SELECT COUNT(*) FROM team_members WHERE org_id = $1 AND team_id = $2 AND member_id = $3`,
+		orgID, teamID, memberID).Scan(&n)
 	return n > 0, err
 }

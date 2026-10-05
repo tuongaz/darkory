@@ -136,8 +136,8 @@ WHERE t.secret_hash = $1 AND t.revoked_at IS NULL`, Hash(cr.Bearer)).
 	now := a.clock.Now()
 	if !lastUsed.Valid || now.Sub(time.UnixMilli(lastUsed.Int64)) >= touchEvery {
 		if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{
-			SQL:  `UPDATE tokens SET last_used_at = $1 WHERE id = $2`,
-			Args: []any{now.UnixMilli(), c.TokenID},
+			SQL:  `UPDATE tokens SET last_used_at = $1 WHERE org_id = $2 AND id = $3`,
+			Args: []any{now.UnixMilli(), c.OrgID, c.TokenID},
 		}); err != nil {
 			return nil, fmt.Errorf("auth: touch token: %w", err)
 		}
@@ -165,8 +165,8 @@ WHERE org_id = $1 AND member_id = $2 AND chosen_id = $3 AND closed_at IS NULL`, 
 			}
 			if now.Sub(time.UnixMilli(lastSeen)) >= touchEvery {
 				return a.store.WriteBatchNoSeq(ctx, store.Stmt{
-					SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE id = $2`,
-					Args: []any{now.UnixMilli(), c.SessionID},
+					SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE org_id = $2 AND id = $3`,
+					Args: []any{now.UnixMilli(), c.OrgID, c.SessionID},
 				})
 			}
 			return nil
@@ -200,8 +200,8 @@ WHERE s.cookie_hash = $1 AND s.kind = 'browser' AND s.closed_at IS NULL`, Hash(c
 	}
 	if now := a.clock.Now(); now.Sub(time.UnixMilli(lastSeen)) >= touchEvery {
 		if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{
-			SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE id = $2`,
-			Args: []any{now.UnixMilli(), c.SessionID},
+			SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE org_id = $2 AND id = $3`,
+			Args: []any{now.UnixMilli(), c.OrgID, c.SessionID},
 		}); err != nil {
 			return nil, fmt.Errorf("auth: touch session: %w", err)
 		}

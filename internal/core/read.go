@@ -71,7 +71,8 @@ const taskCols = `t.id, t.display_key, t.feature_id, t.kind, t.title, t.descript
 t.aimed_at_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
 t.claim_id, t.claim_holder_id, cs.chosen_id, t.claim_skill_id, cc.skill_version, cc.model_label,
 t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
-EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id WHERE b.task_id = t.id AND bt.state = 'open')`
+EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
+	WHERE b.org_id = t.org_id AND b.task_id = t.id AND bt.state = 'open')`
 
 const taskFrom = `tasks t LEFT JOIN claims cc ON cc.id = t.claim_id LEFT JOIN sessions cs ON cs.id = t.claim_session_id`
 
@@ -322,11 +323,11 @@ WHERE org_id = $1 AND task_id = $2 ORDER BY created_at, id`, orgID, id); err != 
 WHERE e.org_id = $1 AND e.task_id = $2 ORDER BY e.created_at, e.id`, orgID, id); err != nil {
 		return d, err
 	}
-	if d.Blockers, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.id IN (SELECT blocker_task_id FROM blocks WHERE task_id = $2)
+	if d.Blockers, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.id IN (SELECT blocker_task_id FROM blocks WHERE org_id = $1 AND task_id = $2)
 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
 		return d, err
 	}
-	if d.Blocking, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.id IN (SELECT task_id FROM blocks WHERE blocker_task_id = $2)
+	if d.Blocking, err = tasksWhere(ctx, r, now, `t.org_id = $1 AND t.id IN (SELECT task_id FROM blocks WHERE org_id = $1 AND blocker_task_id = $2)
 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
 		return d, err
 	}

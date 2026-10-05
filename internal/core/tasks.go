@@ -60,7 +60,7 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 		}
 		var prefix string
 		var last int64
-		if err := t.QueryRow(ctx, `UPDATE teams SET last_number = last_number + 1 WHERE id = $1 RETURNING key_prefix, last_number`, f.TeamID).
+		if err := t.QueryRow(ctx, `UPDATE teams SET last_number = last_number + 1 WHERE org_id = $1 AND id = $2 RETURNING key_prefix, last_number`, c.OrgID, f.TeamID).
 			Scan(&prefix, &last); err != nil {
 			return nil, err
 		}

@@ -20,20 +20,20 @@ const takeableSQL = `t.org_id = @org
 AND t.state = 'open'
 AND (t.claim_holder_id IS NULL OR (t.claim_expires_at IS NOT NULL AND t.claim_expires_at <= @now))
 AND NOT EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
-	WHERE b.task_id = t.id AND bt.state = 'open')
+	WHERE b.org_id = @org AND b.task_id = t.id AND bt.state = 'open')
 AND (
 	t.aimed_at_id = @member
 	OR (t.aimed_at_id IS NULL
-		AND EXISTS (SELECT 1 FROM member_skills ms WHERE ms.member_id = @member AND ms.skill_id = t.skill_id)
+		AND EXISTS (SELECT 1 FROM member_skills ms WHERE ms.org_id = @org AND ms.member_id = @member AND ms.skill_id = t.skill_id)
 		AND (EXISTS (SELECT 1 FROM features f JOIN team_members tm ON tm.team_id = f.team_id
-				WHERE f.id = t.feature_id AND tm.member_id = @member)
-			OR EXISTS (SELECT 1 FROM skills sr WHERE sr.id = t.skill_id AND sr.builtin = TRUE AND sr.name = 'skill-review')))
+				WHERE f.org_id = @org AND f.id = t.feature_id AND tm.member_id = @member)
+			OR EXISTS (SELECT 1 FROM skills sr WHERE sr.org_id = @org AND sr.id = t.skill_id AND sr.builtin = TRUE AND sr.name = 'skill-review')))
 	OR (t.aimed_at_id IS NULL
-		AND EXISTS (SELECT 1 FROM features f WHERE f.id = t.feature_id AND f.owner_id = @member
+		AND EXISTS (SELECT 1 FROM features f WHERE f.org_id = @org AND f.id = t.feature_id AND f.owner_id = @member
 			AND NOT EXISTS (SELECT 1 FROM team_members tm JOIN member_skills ms ON ms.member_id = tm.member_id
-				WHERE tm.team_id = f.team_id AND ms.skill_id = t.skill_id)))
+				WHERE tm.org_id = @org AND tm.team_id = f.team_id AND ms.skill_id = t.skill_id)))
 )
-AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.task_id = t.id AND pc.holder_id = @member
+AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.org_id = @org AND pc.task_id = t.id AND pc.holder_id = @member
 	AND pc.skill_id IS DISTINCT FROM t.skill_id)`
 
 // nextOrder is the order `next` offers takeable Tasks in, over t and its Feature f (ADR 0005):
@@ -41,7 +41,7 @@ AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.task_id = t.id AND pc.holder_id
 // Task that has waited longest since it was filed or last handed over.
 const nextOrder = ` ORDER BY f.rank,
 CASE WHEN EXISTS (SELECT 1 FROM blocks nb JOIN tasks nt ON nt.id = nb.task_id
-	WHERE nb.blocker_task_id = t.id AND nt.state = 'open') THEN 0 ELSE 1 END,
+	WHERE nb.org_id = t.org_id AND nb.blocker_task_id = t.id AND nt.state = 'open') THEN 0 ELSE 1 END,
 t.waiting_since, t.id`
 
 func takeableArgs(c *auth.Caller, now time.Time) map[string]any {

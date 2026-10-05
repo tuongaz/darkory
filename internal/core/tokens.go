@@ -48,7 +48,8 @@ func (s *Service) IssueToken(ctx context.Context, c *auth.Caller, memberRef, nam
 
 func issueToken(t *tx, memberID, name string, defaultTimeout time.Duration) (IssuedToken, error) {
 	var n int
-	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM tokens WHERE member_id = $1 AND name = $2 AND revoked_at IS NULL`, memberID, name).Scan(&n); err != nil {
+	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM tokens WHERE org_id = $1 AND member_id = $2 AND name = $3 AND revoked_at IS NULL`,
+		t.caller.OrgID, memberID, name).Scan(&n); err != nil {
 		return IssuedToken{}, err
 	}
 	if n > 0 {
@@ -67,7 +68,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, id, t.caller.OrgID, memberID, name
 	if err := t.recordByCaller("token.issued", id, map[string]any{"member_id": memberID, "name": name}); err != nil {
 		return IssuedToken{}, err
 	}
-	tok, err := scanToken(t.QueryRow(t.ctx, `SELECT `+tokenCols+` FROM tokens WHERE id = $1`, id))
+	tok, err := scanToken(t.QueryRow(t.ctx, `SELECT `+tokenCols+` FROM tokens WHERE org_id = $1 AND id = $2`, t.caller.OrgID, id))
 	return IssuedToken{Token: tok, Secret: secret}, err
 }
 
@@ -101,7 +102,7 @@ func (s *Service) RevokeToken(ctx context.Context, c *auth.Caller, tokenID strin
 		if tok.RevokedAt != nil {
 			return tok, nil
 		}
-		if _, err := t.Exec(ctx, `UPDATE tokens SET revoked_at = $1 WHERE id = $2`, ms(t.now), tokenID); err != nil {
+		if _, err := t.Exec(ctx, `UPDATE tokens SET revoked_at = $1 WHERE org_id = $2 AND id = $3`, ms(t.now), c.OrgID, tokenID); err != nil {
 			return nil, err
 		}
 		if err := t.recordByCaller("token.revoked", tokenID, map[string]any{"member_id": tok.MemberID}); err != nil {
@@ -116,7 +117,7 @@ func (s *Service) RevokeToken(ctx context.Context, c *auth.Caller, tokenID strin
 				return nil, err
 			}
 		}
-		return scanToken(t.QueryRow(ctx, `SELECT `+tokenCols+` FROM tokens WHERE id = $1`, tokenID))
+		return scanToken(t.QueryRow(ctx, `SELECT `+tokenCols+` FROM tokens WHERE org_id = $1 AND id = $2`, c.OrgID, tokenID))
 	})
 	if err != nil {
 		return Token{}, err
@@ -134,7 +135,8 @@ func openSessions(t *tx, where string, arg any) ([]string, error) {
 // closeSession closes a Session and ends the Claims bound to it — those made with a heartbeat
 // timeout — recording each in Activity. It returns how many Claims it ended.
 func closeSession(t *tx, sessionID, how string) (int, error) {
-	if _, err := t.Exec(t.ctx, `UPDATE sessions SET closed_at = $1 WHERE id = $2 AND closed_at IS NULL`, ms(t.now), sessionID); err != nil {
+	if _, err := t.Exec(t.ctx, `UPDATE sessions SET closed_at = $1 WHERE org_id = $2 AND id = $3 AND closed_at IS NULL`,
+		ms(t.now), t.caller.OrgID, sessionID); err != nil {
 		return 0, err
 	}
 	type bound struct {
@@ -157,11 +159,11 @@ ORDER BY t.id`, t.caller.OrgID, sessionID)
 		if b.expires <= ms(t.now) {
 			endedAt, endedHow, by = b.expires, "lapsed", nil
 		}
-		if _, err := t.Exec(t.ctx, `UPDATE claims SET ended_at = $1, how_ended = $2, ended_by = $3 WHERE id = $4`,
-			endedAt, endedHow, by, b.claim); err != nil {
+		if _, err := t.Exec(t.ctx, `UPDATE claims SET ended_at = $1, how_ended = $2, ended_by = $3 WHERE org_id = $4 AND id = $5`,
+			endedAt, endedHow, by, t.caller.OrgID, b.claim); err != nil {
 			return 0, err
 		}
-		if _, err := t.Exec(t.ctx, clearClaimSQL+` WHERE id = $1 AND claim_id = $2`, b.task, b.claim); err != nil {
+		if _, err := t.Exec(t.ctx, clearClaimSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, t.caller.OrgID, b.task, b.claim); err != nil {
 			return 0, err
 		}
 		kind := "task.claim_ended"
@@ -303,7 +305,8 @@ func (s *Service) RedeemLoginLink(ctx context.Context, code string) (BrowserSess
 	cookie, hash := auth.NewSecret("")
 	c := &auth.Caller{OrgID: orgID, MemberID: memberID}
 	_, err = s.write(ctx, c, Idem{}, func(t *tx) (any, error) {
-		res, err := t.Exec(ctx, `UPDATE login_links SET used_at = $1 WHERE id = $2 AND used_at IS NULL AND expires_at > $1`, ms(t.now), linkID)
+		res, err := t.Exec(ctx, `UPDATE login_links SET used_at = $1 WHERE org_id = $2 AND id = $3 AND used_at IS NULL AND expires_at > $1`,
+			ms(t.now), orgID, linkID)
 		if err != nil {
 			return nil, err
 		}

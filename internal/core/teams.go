@@ -79,7 +79,7 @@ func (s *Service) AddTeamMember(ctx context.Context, c *auth.Caller, teamRef, me
 		if err != nil {
 			return nil, err
 		}
-		if in, err := inTeam(ctx, t, team, member); err != nil || in {
+		if in, err := inTeam(ctx, t, c.OrgID, team, member); err != nil || in {
 			return nil, err
 		}
 		if _, err := t.Exec(ctx, `INSERT INTO team_members (org_id, team_id, member_id, added_at) VALUES ($1, $2, $3, $4)`,

@@ -61,26 +61,27 @@ func claimStmts(c *auth.Caller, taskID, claimID string, pre Task, version *int64
 	if o.ModelLabel != nil {
 		payload["model_label"] = *o.ModelLabel
 	}
-	outgoingOpen := `FROM tasks ot JOIN claims oc ON oc.id = ot.outgoing_claim_id WHERE ot.id = @task AND oc.ended_at IS NULL`
+	outgoingOpen := `FROM tasks ot JOIN claims oc ON oc.id = ot.outgoing_claim_id
+WHERE ot.org_id = @org AND ot.id = @task AND oc.org_id = @org AND oc.ended_at IS NULL`
 	return []store.Stmt{
 		store.S(`UPDATE tasks AS t SET outgoing_claim_id = claim_id, outgoing_holder_id = claim_holder_id,
 outgoing_expires_at = claim_expires_at, claim_id = @claim, claim_holder_id = @member, claim_session_id = @session,
 claim_skill_id = skill_id, claim_timeout_ms = @timeout, claim_expires_at = @expires
 WHERE t.id = @task AND `+takeableSQL, args),
 		// The claim happened, on the Task as it was read: the same Skill, at the same version.
-		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.id = @task AND t.claim_id = @claim
+		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim
 AND t.skill_id IS NOT DISTINCT FROM @skill
-AND (t.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.id = t.skill_id AND s.current_version = @version))`, args)),
+AND (t.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.org_id = @org AND s.id = t.skill_id AND s.current_version = @version))`, args)),
 		store.S(`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at)
 SELECT @org, o.seq, NULL, 'task.lapsed', ot.id, '{"claim_id":"' || oc.id || '","holder_id":"' || oc.holder_id || '","how_ended":"lapsed"}', CAST(@now AS BIGINT)
 FROM tasks ot JOIN claims oc ON oc.id = ot.outgoing_claim_id JOIN organisations o ON o.id = @org
-WHERE ot.id = @task AND oc.ended_at IS NULL`, args),
+WHERE ot.org_id = @org AND ot.id = @task AND oc.org_id = @org AND oc.ended_at IS NULL`, args),
 		store.S(`UPDATE organisations SET seq = seq + 1 WHERE id = @org AND EXISTS (SELECT 1 `+outgoingOpen+`)`, args),
-		store.S(`UPDATE claims SET ended_at = (SELECT outgoing_expires_at FROM tasks WHERE id = @task), how_ended = 'lapsed'
-WHERE id = (SELECT outgoing_claim_id FROM tasks WHERE id = @task) AND ended_at IS NULL`, args),
+		store.S(`UPDATE claims SET ended_at = (SELECT outgoing_expires_at FROM tasks WHERE org_id = @org AND id = @task), how_ended = 'lapsed'
+WHERE org_id = @org AND id = (SELECT outgoing_claim_id FROM tasks WHERE org_id = @org AND id = @task) AND ended_at IS NULL`, args),
 		store.S(`INSERT INTO claims (id, org_id, task_id, holder_id, session_id, skill_id, skill_version, model_label, timeout_ms, started_at)
 SELECT @claim, @org, t.id, @member, @session, t.skill_id, s.current_version, CAST(@label AS TEXT), CAST(@timeout AS BIGINT), CAST(@now AS BIGINT)
-FROM tasks t LEFT JOIN skills s ON s.id = t.skill_id WHERE t.id = @task`, args),
+FROM tasks t LEFT JOIN skills s ON s.org_id = @org AND s.id = t.skill_id WHERE t.org_id = @org AND t.id = @task`, args),
 		activityStmt(c.OrgID, &c.MemberID, "task.claimed", taskID, payload, now),
 	}
 }
@@ -344,8 +345,9 @@ func (s *Service) recordLapse(ctx context.Context, orgID, taskID, claimID string
 		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t JOIN claims c ON c.id = t.claim_id
 WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim AND c.ended_at IS NULL AND t.claim_expires_at <= @now`, args)),
 		activityStmt(orgID, nil, "task.lapsed", taskID, map[string]any{"claim_id": claimID, "holder_id": holder, "how_ended": "lapsed"}, now),
-		store.S(`UPDATE claims SET ended_at = (SELECT claim_expires_at FROM tasks WHERE id = @task), how_ended = 'lapsed' WHERE id = @claim`, args),
-		store.S(clearClaimSQL+` WHERE id = @task AND claim_id = @claim`, args),
+		store.S(`UPDATE claims SET ended_at = (SELECT claim_expires_at FROM tasks WHERE org_id = @org AND id = @task), how_ended = 'lapsed'
+WHERE org_id = @org AND id = @claim`, args),
+		store.S(clearClaimSQL+` WHERE org_id = @org AND id = @task AND claim_id = @claim`, args),
 	})
 	if errors.Is(err, store.ErrConditionFailed) {
 		return nil // someone else recorded it first
@@ -422,8 +424,8 @@ func (s *Service) endHeld(ctx context.Context, c *auth.Caller, ref, how string, 
 		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.state = 'open'
 AND t.claim_id = @claim AND t.claim_holder_id = @member AND (t.claim_timeout_ms IS NULL OR t.claim_session_id = @session)
 AND (t.claim_expires_at IS NULL OR t.claim_expires_at > @now)`, args)),
-		store.S(`UPDATE claims SET ended_at = @now, how_ended = @how, ended_by = @member WHERE id = @claim`, args),
-		store.S(setTask+` WHERE id = @task`, args),
+		store.S(`UPDATE claims SET ended_at = @now, how_ended = @how, ended_by = @member WHERE org_id = @org AND id = @claim`, args),
+		store.S(setTask+` WHERE org_id = @org AND id = @task`, args),
 	)
 	if note != nil && *note != "" {
 		stmts = append(stmts, store.S(`INSERT INTO notes (id, org_id, task_id, author_id, skill_id, body, created_at)

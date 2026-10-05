@@ -132,8 +132,8 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 				return nil, refuse(CodeConflict, "%s is the last admin", m.Name)
 			}
 		}
-		if _, err := t.Exec(ctx, `UPDATE members SET name = $1, email = $2, admin = $3, updated_at = $4 WHERE id = $5`,
-			name, email, admin, ms(t.now), id); err != nil {
+		if _, err := t.Exec(ctx, `UPDATE members SET name = $1, email = $2, admin = $3, updated_at = $4 WHERE org_id = $5 AND id = $6`,
+			name, email, admin, ms(t.now), c.OrgID, id); err != nil {
 			return nil, err
 		}
 		if err := t.recordByCaller("member.updated", id, payload); err != nil {
@@ -157,7 +157,7 @@ func (s *Service) ListMembers(ctx context.Context, c *auth.Caller, team, kind *s
 			return nil, err
 		}
 		args = append(args, id)
-		q += ` AND m.id IN (SELECT member_id FROM team_members WHERE team_id = $2)`
+		q += ` AND m.id IN (SELECT member_id FROM team_members WHERE org_id = $1 AND team_id = $2)`
 	}
 	if kind != nil {
 		args = append(args, *kind)
@@ -198,21 +198,21 @@ func (s *Service) SetManager(ctx context.Context, c *auth.Caller, ref, managerRe
 				return nil, refuse(CodeCycle, "the Reporting line above %s already loops", managerRef)
 			}
 			var up sql.NullString
-			err := t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE member_id = $1`, m).Scan(&up)
+			err := t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, c.OrgID, m).Scan(&up)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return nil, err
 			}
 			m = up.String
 		}
 		var current sql.NullString
-		err = t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE member_id = $1`, id).Scan(&current)
+		err = t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, c.OrgID, id).Scan(&current)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
 		if current.String == manager {
 			return nil, nil
 		}
-		if _, err := t.Exec(ctx, `DELETE FROM reporting_lines WHERE member_id = $1`, id); err != nil {
+		if _, err := t.Exec(ctx, `DELETE FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, c.OrgID, id); err != nil {
 			return nil, err
 		}
 		if _, err := t.Exec(ctx, `INSERT INTO reporting_lines (org_id, member_id, manager_id, set_by, set_at) VALUES ($1, $2, $3, $4, $5)`,
@@ -261,7 +261,8 @@ func (s *Service) GrantSkill(ctx context.Context, c *auth.Caller, memberRef, ski
 			return nil, err
 		}
 		var n int
-		if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM member_skills WHERE member_id = $1 AND skill_id = $2`, member, skill).Scan(&n); err != nil {
+		if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM member_skills WHERE org_id = $1 AND member_id = $2 AND skill_id = $3`,
+			c.OrgID, member, skill).Scan(&n); err != nil {
 			return nil, err
 		}
 		if n > 0 {

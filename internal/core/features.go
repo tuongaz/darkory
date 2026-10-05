@@ -37,7 +37,7 @@ func (s *Service) FileFeature(ctx context.Context, c *auth.Caller, nf NewFeature
 		if err != nil {
 			return nil, err
 		}
-		if in, err := inTeam(ctx, t, team, c.MemberID); err != nil {
+		if in, err := inTeam(ctx, t, c.OrgID, team, c.MemberID); err != nil {
 			return nil, err
 		} else if !in {
 			return nil, refuse(CodeForbidden, "only a Member of Team %s may file a Feature in it", nf.Team)
@@ -55,7 +55,7 @@ func (s *Service) FileFeature(ctx context.Context, c *auth.Caller, nf NewFeature
 				return nil, err
 			}
 			var kind string
-			if err := t.QueryRow(ctx, `SELECT kind FROM tasks WHERE id = $1`, id).Scan(&kind); err != nil {
+			if err := t.QueryRow(ctx, `SELECT kind FROM tasks WHERE org_id = $1 AND id = $2`, c.OrgID, id).Scan(&kind); err != nil {
 				return nil, err
 			}
 			if kind != "retrospective" {
@@ -70,12 +70,12 @@ func (s *Service) FileFeature(ctx context.Context, c *auth.Caller, nf NewFeature
 		// The Feature and its Break down take two numbers from the Team's one counter.
 		var prefix string
 		var last int64
-		if err := t.QueryRow(ctx, `UPDATE teams SET last_number = last_number + 2 WHERE id = $1 RETURNING key_prefix, last_number`, team).
+		if err := t.QueryRow(ctx, `UPDATE teams SET last_number = last_number + 2 WHERE org_id = $1 AND id = $2 RETURNING key_prefix, last_number`, c.OrgID, team).
 			Scan(&prefix, &last); err != nil {
 			return nil, err
 		}
 		var rank int64
-		if err := t.QueryRow(ctx, `SELECT COALESCE(MAX(rank), 0) + 1 FROM features WHERE team_id = $1`, team).Scan(&rank); err != nil {
+		if err := t.QueryRow(ctx, `SELECT COALESCE(MAX(rank), 0) + 1 FROM features WHERE org_id = $1 AND team_id = $2`, c.OrgID, team).Scan(&rank); err != nil {
 			return nil, err
 		}
 		featureID, taskID := newID(), newID()
