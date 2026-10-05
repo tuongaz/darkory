@@ -215,7 +215,9 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	defer cancelRequests()
 	srv := &http.Server{
 		Handler: api.Handler(),
-		// No write timeout: the Activity stream and the long-poll `next` hold responses open.
+		// No write timeout: the Activity stream and the long-poll `next` hold responses open. No
+		// read timeout either, which would end them too: the server bounds each request's body
+		// instead (server.Options.BodyReadTimeout).
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		BaseContext:       func(net.Listener) context.Context { return reqCtx },

@@ -235,7 +235,7 @@ func (s *Server) SignInModes() []string { return config.SignInModes(s.signIn != 
 func (s *Server) RequestEmailSignIn(w http.ResponseWriter, r *http.Request, _ gen.RequestEmailSignInParams) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
 	if err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, gen.ErrorCodeTooLarge, "the request body is over 4 KiB")
+		readFailed(w, err, "4 KiB")
 		return
 	}
 	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
@@ -327,8 +327,10 @@ If you did not ask, ignore this email: nobody can sign in without the link.
 }
 
 // clientAddress is the address a request came from, for rate limits: the connection's, or, behind
-// hops proxies that each append to X-Forwarded-For, the entry that many from its end. An IPv6
-// address counts by its /64, which one client usually holds whole.
+// hops proxies that each append to X-Forwarded-For, the entry that many from its end. A chain
+// shorter than hops did not come through every proxy, so its entries are the client's own words
+// and the connection's address counts instead (security review L9). An IPv6 address counts by its
+// /64, which one client usually holds whole.
 func clientAddress(r *http.Request, hops int) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -343,11 +345,8 @@ func clientAddress(r *http.Request, hops int) string {
 				}
 			}
 		}
-		switch {
-		case len(chain) >= hops:
+		if len(chain) >= hops {
 			host = chain[len(chain)-hops]
-		case len(chain) > 0:
-			host = chain[0]
 		}
 	}
 	ip, err := netip.ParseAddr(host)

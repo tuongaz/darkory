@@ -149,7 +149,7 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request, key *string, body
 	c := caller(r)
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
 	if err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, gen.ErrorCodeTooLarge, "the request body is over 1 MiB")
+		readFailed(w, err, "1 MiB")
 		return nil, core.Idem{}, false
 	}
 	if body != nil && len(strings.TrimSpace(string(raw))) > 0 {

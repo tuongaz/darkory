@@ -478,6 +478,8 @@ func TestClientAddress(t *testing.T) {
 		{"10.0.0.2:5000", []string{"6.6.6.6, 198.51.100.1"}, 1, "198.51.100.1"}, // a forged first entry is ignored
 		{"10.0.0.2:5000", []string{"6.6.6.6", "198.51.100.1, 10.0.0.1"}, 2, "198.51.100.1"},
 		{"10.0.0.2:5000", nil, 1, "10.0.0.2"},
+		// Shorter than the hops: the client reached the server past a proxy and wrote it all.
+		{"203.0.113.7:5000", []string{"6.6.6.6"}, 2, "203.0.113.7"},
 		{"[2001:db8:1:2:3:4:5:6]:5000", nil, 0, "2001:db8:1:2::/64"},
 		{"[::ffff:203.0.113.7]:5000", nil, 0, "203.0.113.7"},
 	} {

@@ -37,6 +37,8 @@ type Server struct {
 	blobs blob.Store
 	// maxEvidence bounds one Evidence file, in bytes.
 	maxEvidence int64
+	// bodyTimeout bounds how long a request body may take to arrive.
+	bodyTimeout time.Duration
 	// update is the last check for a newer release, for /v1/health; nil until one ran.
 	updateStatus atomic.Pointer[update.Status]
 }
@@ -65,6 +67,9 @@ type Options struct {
 	Blobs blob.Store
 	// MaxEvidenceSize bounds one Evidence file, in bytes. Defaults to DefaultMaxEvidenceSize.
 	MaxEvidenceSize int64
+	// BodyReadTimeout bounds how long a request body may take to arrive; an Evidence upload also
+	// gets time in proportion to its size. Defaults to DefaultBodyReadTimeout.
+	BodyReadTimeout time.Duration
 }
 
 // DefaultMaxEvidenceSize is the largest Evidence file an Install takes unless set otherwise.
@@ -87,6 +92,9 @@ func New(st *store.Store, o Options) *Server {
 	if o.MaxEvidenceSize <= 0 {
 		o.MaxEvidenceSize = DefaultMaxEvidenceSize
 	}
+	if o.BodyReadTimeout <= 0 {
+		o.BodyReadTimeout = DefaultBodyReadTimeout
+	}
 	return &Server{
 		store:       st,
 		core:        core.New(st, o.Clock, o.Wake, o.Log),
@@ -98,13 +106,14 @@ func New(st *store.Store, o Options) *Server {
 		signIn:      newEmailSignIn(o),
 		blobs:       o.Blobs,
 		maxEvidence: o.MaxEvidenceSize,
+		bodyTimeout: o.BodyReadTimeout,
 	}
 }
 
 // Core returns the domain service the Server runs on.
 func (s *Server) Core() *core.Service { return s.core }
 
-// Handler routes /v1 to the API and every other path to the web app.
+// Handler routes /v1 to the API and every other path to the web app, behind guard.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(s, gen.StdHTTPServerOptions{
@@ -119,7 +128,7 @@ func (s *Server) Handler() http.Handler {
 		writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, "no operation "+r.Method+" "+r.URL.Path)
 	})
 	mux.Handle("/", web.Handler())
-	return mux
+	return s.guard(mux)
 }
 
 func (s *Server) notImplemented(w http.ResponseWriter, r *http.Request) {

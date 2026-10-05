@@ -237,7 +237,7 @@ func TestEvidence(t *testing.T) {
 		dl := got(lead.DownloadEvidenceWithResponse(ctx, html.ID)).want(t, http.StatusOK)
 		hd := dl.HTTPResponse.Header
 		if hd.Get("Content-Type") != "text/html" || hd.Get("X-Content-Type-Options") != "nosniff" ||
-			hd.Get("Content-Disposition") != `attachment; filename=page.html` || !strings.Contains(hd.Get("Content-Security-Policy"), "sandbox") ||
+			hd.Get("Content-Disposition") != `attachment; filename="page.html"; filename*=UTF-8''page.html` || !strings.Contains(hd.Get("Content-Security-Policy"), "sandbox") ||
 			!bytes.Equal(dl.Body, page) {
 			t.Fatalf("download headers %v body %q", hd, dl.Body)
 		}
