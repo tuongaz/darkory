@@ -3,7 +3,9 @@ package wake
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -150,6 +152,43 @@ func TestReconnectWakesEveryWaiter(t *testing.T) {
 	ch := a.n.Wait("x")
 	b.n.Signal("x")
 	woken(t, ch, time.Second, "a waiter in A after reconnecting, on a Signal in B")
+}
+
+// A LISTEN connection that does not hear this process's own notification, as through a
+// transaction-pooling PgBouncer or on another database, is reported.
+func TestListenThatHearsNothingIsReported(t *testing.T) {
+	defer func(d time.Duration) { probeWait = d }(probeWait)
+	probeWait = 300 * time.Millisecond
+	st, err := store.Open(t.Context(), storetest.DSN(t, store.Postgres))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	var logs syncBuffer
+	log := slog.New(slog.NewTextHandler(&logs, nil))
+	pg, err := ListenPostgres(t.Context(), New(), st, storetest.DSN(t, store.Postgres), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pg.Close()
+	waitFor(t, func() bool { return strings.Contains(logs.String(), "has not received its own notification") })
+}
+
+type syncBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
 }
 
 func terminate(t *testing.T, st *store.Store, pid uint32) {

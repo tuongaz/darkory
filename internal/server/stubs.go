@@ -54,9 +54,6 @@ func (s *Server) RankFeature(w http.ResponseWriter, r *http.Request, _ gen.Featu
 func (s *Server) RemoveBlocker(w http.ResponseWriter, r *http.Request, _ gen.TaskRef, _ gen.BlockerRef, _ gen.RemoveBlockerParams) {
 	s.notImplemented(w, r)
 }
-func (s *Server) RequestEmailSignIn(w http.ResponseWriter, r *http.Request, _ gen.RequestEmailSignInParams) {
-	s.notImplemented(w, r)
-}
 func (s *Server) ShipFeature(w http.ResponseWriter, r *http.Request, _ gen.FeatureRef, _ gen.ShipFeatureParams) {
 	s.notImplemented(w, r)
 }

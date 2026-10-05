@@ -11,6 +11,7 @@ import (
 	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/version"
@@ -28,6 +29,8 @@ type Server struct {
 	// publicURL is where the Install is reached, for login links; empty to use the request's host.
 	publicURL string
 	keepAlive time.Duration
+	// signIn sends login links by email; nil when the Install has no email set up.
+	signIn *emailSignIn
 }
 
 var _ gen.ServerInterface = (*Server)(nil)
@@ -42,6 +45,11 @@ type Options struct {
 	PublicURL string
 	// KeepAlive is how often an idle Activity stream sends a comment. Defaults to 15 s.
 	KeepAlive time.Duration
+	// Mail, when set, sends login links to Members who ask by email; it needs PublicURL.
+	Mail mail.Sender
+	// ProxyHops is how many proxies in front append to X-Forwarded-For, to find the client's
+	// address for rate limits; zero uses the connection's.
+	ProxyHops int
 }
 
 // New returns a Server over st.
@@ -66,6 +74,7 @@ func New(st *store.Store, o Options) *Server {
 		log:       o.Log,
 		publicURL: o.PublicURL,
 		keepAlive: o.KeepAlive,
+		signIn:    newEmailSignIn(o),
 	}
 }
 

@@ -147,7 +147,7 @@ func TestUnbuiltOperationsAnswer501ThroughTheClient(t *testing.T) {
 var unbuilt = []string{
 	"AddBlocker", "AddNote", "AttachFeatureEvidence", "AttachTaskEvidence", "DownloadEvidence", "DropFeature",
 	"DropTask", "GetEvidence", "HandoverTask", "ListFeatureObservations", "Observe", "PassFeatureOwnership",
-	"ProposeSkillVersion", "RankFeature", "RemoveBlocker", "RequestEmailSignIn", "ShipFeature", "TakeBackTask",
+	"ProposeSkillVersion", "RankFeature", "RemoveBlocker", "ShipFeature", "TakeBackTask",
 }
 
 // Every operation not yet built answers 501 with the Error body.

@@ -20,6 +20,7 @@ import (
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/version"
@@ -158,6 +159,16 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var sender mail.Sender
+	if cfg.SMTP.URL != "" {
+		smtp, err := mail.NewSMTP(cfg.SMTP.URL, cfg.SMTP.From)
+		if err != nil {
+			return err
+		}
+		sender = smtp
+		log.Info("emailed sign-in is on", "smtp", smtp.String())
+	}
+
 	st, err := openStore(ctx, cfg.Store, migrateAtStart(cfg), log)
 	if err != nil {
 		return err
@@ -178,7 +189,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n})
+	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender, ProxyHops: cfg.ProxyHops})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
@@ -194,7 +205,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	base := config.BaseURL(cfg.PublicURL, ln.Addr().String())
-	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine())
+	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine(), "sign_in", api.SignInModes())
 
 	go housekeeping(ctx, api.Core(), log)
 	announceSignIn(ctx, api.Core(), cfg, base, stdout, log)

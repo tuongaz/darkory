@@ -30,6 +30,9 @@ const ApplicationName = "darkory-wake"
 const probeOrg = "-"
 
 var (
+	// probeWait is how long a process waits for its own notification before warning that its
+	// LISTEN connection does not receive.
+	probeWait = 5 * time.Second
 	// pingEvery is how long the LISTEN connection waits for a notification before checking it is
 	// still alive: a connection lost to a network partition reports nothing by itself.
 	pingEvery = 30 * time.Second
@@ -52,10 +55,10 @@ type Postgres struct {
 	log *slog.Logger
 	cfg *pgx.ConnConfig
 	pub *publisher
-	// pingEvery is the package's, read once at start.
-	pingEvery time.Duration
-	cancel    context.CancelFunc
-	wg        sync.WaitGroup
+	// pingEvery and probeWait are the package's, read once at start.
+	pingEvery, probeWait time.Duration
+	cancel               context.CancelFunc
+	wg                   sync.WaitGroup
 	// pid is the LISTEN connection's backend process id, 0 while disconnected.
 	pid       atomic.Uint32
 	probeOnce sync.Once
@@ -86,7 +89,7 @@ func ListenPostgres(ctx context.Context, n *Notifier, db Querier, listenDSN stri
 	cfg.RuntimeParams["application_name"] = ApplicationName
 	var b [8]byte
 	_, _ = crand.Read(b[:])
-	p := &Postgres{n: n, id: hex.EncodeToString(b[:]), log: log, cfg: cfg, pingEvery: pingEvery, probed: make(chan struct{})}
+	p := &Postgres{n: n, id: hex.EncodeToString(b[:]), log: log, cfg: cfg, pingEvery: pingEvery, probeWait: probeWait, probed: make(chan struct{})}
 	conn, err := p.connect(ctx)
 	if err != nil {
 		return nil, err
@@ -104,10 +107,10 @@ func ListenPostgres(ctx context.Context, n *Notifier, db Querier, listenDSN stri
 	go func() {
 		select {
 		case <-p.probed:
-		case <-time.After(5 * time.Second):
-			log.Warn("this server's LISTEN connection has not received its own notification after 5 s; " +
-				"other server processes' writes may wake its waiters late. Point DARKORY_DB_LISTEN at Postgres " +
-				"directly or through session pooling, not a transaction-pooling PgBouncer")
+		case <-time.After(p.probeWait):
+			log.Warn("this server's LISTEN connection has not received its own notification; other server processes' "+
+				"writes may wake its waiters late. Point DARKORY_DB_LISTEN at the same database as DARKORY_DB, directly "+
+				"or through session pooling, not a transaction-pooling PgBouncer", "waited", p.probeWait)
 		case <-runCtx.Done():
 		}
 	}()
