@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+#
+# Cuts a Darkory release: binaries for macOS, Linux and Windows on amd64 and arm64, signed
+# checksums, the container image and the Homebrew cask (ADR 0007). .github/workflows/release.yml
+# runs it on a v* tag; docs/build/release.md has the keys and the steps. Try it locally with
+#
+#   goreleaser check
+#   goreleaser release --snapshot --clean --skip=publish,sign
+#
+# internal/update reads what this file names (archives, checksums.txt, its .sig, the image), and
+# TestReleaseConfigMatches fails when the two drift apart.
+version: 2
+project_name: darkory
+
+before:
+  hooks:
+    # Build the web app into web/dist when the Makefile has a web target; otherwise the
+    # web/dist in the tree is embedded as it is.
+    - sh -c 'if grep -q "^web:" Makefile; then make web; else echo "no make web target; embedding web/dist as it is"; fi'
+
+builds:
+  - id: darkory
+    main: ./cmd/darkory
+    binary: darkory
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/tuongaz/darkory/internal/version.Version=v{{ .Version }}
+      # The key `darkory update` checks signatures with. tools/sign refuses to sign with a
+      # private key that is not its pair, so a release never ships a key that cannot verify it.
+      - -X github.com/tuongaz/darkory/internal/update.PublicKey={{ index .Env "DARKORY_RELEASE_PUBLIC_KEY" }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: darkory
+    ids: [darkory]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "darkory_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# checksums.txt.sig: one line of base64, the ed25519 signature over checksums.txt by the key in
+# DARKORY_SIGNING_KEY.
+signs:
+  - id: checksums
+    artifacts: checksum
+    cmd: go
+    args: ["run", "./tools/sign", "-out", "${signature}", "${artifact}"]
+    signature: "${artifact}.sig"
+
+dockers_v2:
+  - id: darkory
+    ids: [darkory]
+    dockerfile: release.Dockerfile
+    images:
+      - ghcr.io/tuongaz/darkory
+    tags:
+      - "{{ .Tag }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.title: darkory
+      org.opencontainers.image.source: https://github.com/tuongaz/darkory
+      org.opencontainers.image.version: "{{ .Tag }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.licenses: AGPL-3.0-only
+
+# A cask rather than a formula: goreleaser deprecates formulas for prebuilt binaries.
+homebrew_casks:
+  - name: darkory
+    ids: [darkory]
+    repository:
+      owner: tuongaz
+      name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}'
+    directory: Casks
+    homepage: https://github.com/tuongaz/darkory
+    description: Management for a software factory of agents and humans
+    binaries: [darkory]
+    # Without a token for the tap, the cask is written to dist/ and not pushed.
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
+    hooks:
+      post:
+        # The binaries are not notarized; without this, Gatekeeper refuses to run them.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/darkory"]
+          end
+
+release:
+  github:
+    owner: tuongaz
+    name: darkory
+  prerelease: auto
+
+changelog:
+  sort: asc

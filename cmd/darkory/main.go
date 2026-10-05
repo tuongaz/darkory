@@ -42,6 +42,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "serve":
 		return serve(args[1:], stderr)
+	case "update":
+		return runUpdate(args[1:], stdout, stderr)
 	case "version", "--version":
 		fmt.Fprintln(stdout, version.Version)
 		return nil
