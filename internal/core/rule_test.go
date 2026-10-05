@@ -50,6 +50,7 @@ func TestTakeableRule(t *testing.T) {
 			{"aimed at someone else", builder, aimed, false},
 			{"skill-review from another Team", reviewer, review, true},
 			{"skill-review without the Skill", builder, review, false},
+			{"the owner, while a Member of another Team has skill-review", owner, review, false},
 			{"the owner, when no Member of the Team has the Skill", owner, qa, true},
 			{"not the owner, when no Member of the Team has the Skill", noSkill, qa, false},
 			{"the owner falls back to the Break down too", owner, breakdown, true},

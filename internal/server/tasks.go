@@ -135,6 +135,10 @@ func (s *Server) NextTask(w http.ResponseWriter, r *http.Request, params gen.Nex
 	if !ok {
 		return
 	}
+	if !s.nexts.enter(w, c) {
+		return
+	}
+	defer s.nexts.leave(c)
 	wait := core.NextWaitDefault
 	if body.WaitSeconds != nil {
 		if *body.WaitSeconds < 0 || *body.WaitSeconds > int(core.NextWaitMax/time.Second) {

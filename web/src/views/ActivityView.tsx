@@ -99,6 +99,8 @@ const said: Record<ActivityKind, string> = {
   "member.manager_cleared": "removed the Reporting line of",
   "member.skill_granted": "granted a Skill to",
   "member.skill_revoked": "took a Skill away from",
+  "member.deactivated": "deactivated the Member",
+  "member.reactivated": "reactivated the Member",
   "team.created": "created the Team",
   "team.member_added": "added a Member to",
   "team.member_removed": "removed a Member from",

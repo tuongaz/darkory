@@ -102,6 +102,13 @@ func TestMembersTeamsAndSkills(t *testing.T) {
 		wantCode(t, err, core.CodeConflict)
 		_, err = f.svc.UpdateMember(ctx, f.admin, "ada", core.MemberChange{Admin: ptrBool(false)}, core.Idem{})
 		wantCode(t, err, core.CodeConflict) // the last admin
+		// A name spelled as an id would make references to it ambiguous (security review, Info).
+		_, err = f.svc.CreateMember(ctx, f.admin, core.NewMember{Name: bob.ID, Kind: "agent"}, core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
+		_, err = f.svc.UpdateMember(ctx, f.admin, "bob", core.MemberChange{Name: &f.admin.MemberID}, core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
+		_, err = f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "0199b4a2-7c1e-7d3a-9f00-123456789abc", Kind: "generic", Body: "x"}, core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
 		bob, err = f.svc.UpdateMember(ctx, f.admin, "bob", core.MemberChange{Admin: ptrBool(true), Name: ptrStr("robert")}, core.Idem{})
 		if err != nil || !bob.Admin || bob.Name != "robert" {
 			t.Fatalf("update %+v, %v", bob, err)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // DefaultEvidenceMaxMB matches the server's default limit on one Evidence file
@@ -93,7 +94,16 @@ func (e evidenceRules) read(path string) (string, []byte, error) {
 	if !e.allowHidden && hidden(rel) {
 		return "", nil, refusef("%s leads to a hidden file (a name in it starts with a dot); hidden files are not attached", path)
 	}
-	fi, err := os.Stat(real)
+	// Open the file once, inside the root, and read only what that open found (security review
+	// L2): a name on the path swapped for a link since it was resolved must not lead out of the
+	// root. os.Root opens each name without following a link and follows one only while it stays
+	// inside the root.
+	dir, err := os.OpenRoot(e.real)
+	if err != nil {
+		return "", nil, refusef("%s cannot be read: %v", path, err)
+	}
+	defer dir.Close()
+	fi, err := dir.Lstat(rel)
 	if err != nil {
 		return "", nil, refusef("%s cannot be read: %v", path, err)
 	}
@@ -103,14 +113,19 @@ func (e evidenceRules) read(path string) (string, []byte, error) {
 	if fi.Size() > e.maxBytes {
 		return "", nil, refusef("%s is %d bytes, over the %d MiB limit", path, fi.Size(), e.maxBytes>>20)
 	}
-	f, err := os.Open(real)
+	// O_NONBLOCK keeps a pipe swapped in since the check from holding the open.
+	f, err := dir.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return "", nil, refusef("%s cannot be read: %v", path, err)
 	}
 	defer f.Close()
 	// The file opened must be the one checked, not one swapped in since.
-	if now, err := f.Stat(); err != nil || !os.SameFile(fi, now) || !now.Mode().IsRegular() {
+	now, err := f.Stat()
+	if err != nil || !os.SameFile(fi, now) || !now.Mode().IsRegular() {
 		return "", nil, refusef("%s changed while it was being checked", path)
+	}
+	if now.Size() > e.maxBytes {
+		return "", nil, refusef("%s is %d bytes, over the %d MiB limit", path, now.Size(), e.maxBytes>>20)
 	}
 	content, err := io.ReadAll(io.LimitReader(f, e.maxBytes+1))
 	if err != nil {

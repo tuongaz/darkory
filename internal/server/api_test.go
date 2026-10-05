@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -200,12 +201,7 @@ func TestLoginLinkSignsInABrowser(t *testing.T) {
 		if !strings.HasPrefix(link.URL, h.ts.URL+"/v1/login-links/") || link.ExpiresAt.Sub(time.Now()) > 15*time.Minute {
 			t.Fatalf("link %+v", link)
 		}
-		browser := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-		res, err := browser.Get(link.URL)
-		if err != nil {
-			t.Fatal(err)
-		}
-		res.Body.Close()
+		res := redeem(t, h.ts, strings.TrimPrefix(link.URL, h.ts.URL))
 		if res.StatusCode != http.StatusSeeOther || res.Header.Get("Location") != "/" {
 			t.Fatalf("redeem: %d to %q", res.StatusCode, res.Header.Get("Location"))
 		}
@@ -234,12 +230,24 @@ func TestLoginLinkSignsInABrowser(t *testing.T) {
 		if me.StatusCode != http.StatusOK || body.Member.Name != "ada" || body.Session.Kind != client.SessionKindBrowser {
 			t.Fatalf("me with the cookie: %d %+v", me.StatusCode, body)
 		}
-		// The link works once.
-		res, err = browser.Get(link.URL)
+		// The link works once: a program posting it again is told not_found, and a browser
+		// opening it sees a page saying so.
+		again, _ := http.NewRequest(http.MethodPost, link.URL, nil)
+		again.Header.Set("Origin", h.ts.URL)
+		res, err := http.DefaultClient.Do(again)
 		if err != nil {
 			t.Fatal(err)
 		}
 		assertError(t, res, http.StatusNotFound, "not_found")
+		res, err = http.Get(link.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		page, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		if res.StatusCode != http.StatusNotFound || !strings.Contains(string(page), "does not work") {
+			t.Fatalf("a used link opened again: %d %s", res.StatusCode, page)
+		}
 
 		if res := withCookie(http.MethodPost, "/v1/logout"); res.StatusCode != http.StatusNoContent {
 			t.Fatalf("logout: %d", res.StatusCode)

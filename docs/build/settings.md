@@ -8,7 +8,10 @@ An Install's storage, Evidence store and sign-in are independent settings ([ADR 
 |---|---|---|---|
 | `DARKORY_LISTEN` | `--listen` | `127.0.0.1:7357` (the image: `0.0.0.0:7357`) | Address `serve` listens on. |
 | `DARKORY_PUBLIC_URL` | `--public-url` | none: `http://` and the address a request came to | Address browsers reach the Install at, such as `https://darkory.example.com`. Login links are built on it, and the browser-cookie origin check accepts it. Set it behind a proxy that ends TLS. Emailed sign-in requires it. |
-| `DARKORY_PROXY_HOPS` | `--proxy-hops` | `0` | How many proxies in front append to `X-Forwarded-For`. The client's address is that many entries from the end; with `0` it is the connection's address. Only the email sign-in rate limit uses it. Leave it at `0` unless every request passes through that many proxies you run, or clients can choose their own address. |
+| `DARKORY_PROXY_HOPS` | `--proxy-hops` | `0` | How many proxies in front append to `X-Forwarded-For`. The client's address is that many entries from the end; with `0` it is the connection's address. A chain shorter than that is ignored and the connection's address counts. Only the email sign-in rate limit uses it. Leave it at `0` unless every request passes through that many proxies you run, or clients can choose their own address. |
+| `DARKORY_MAX_WAITING` | `--max-waiting` | `16` | How many Activity streams, and separately how many waiting `next` calls, one Member may have open on a server process at once. One more is refused with `too_many_requests` (429). |
+
+Every request body must arrive within 30 seconds; an Evidence upload gets a further second for each 64 KiB. Every response carries `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin` and a Content-Security-Policy that forbids framing.
 
 ## Storage
 
@@ -50,9 +53,13 @@ darkory migrate --db "$DARKORY_DB"             # apply them and exit
 |---|---|---|---|
 | `DARKORY_NO_LOGIN_LINK` | `--no-login-link` | off | Do not issue or print the startup login link. Use it for a container whose output goes to logs that others read. An admin can still issue links through `/v1`. |
 | `DARKORY_NO_BROWSER` | `--no-browser` | off | Print the startup login link without opening a browser. |
+| `DARKORY_SESSION_IDLE` | `--session-idle` | `720h` (30 days) | A browser Session not used for this long ends, whatever its cookie says. A Go duration. |
+| `DARKORY_SESSION_LIFETIME` | `--session-lifetime` | `2160h` (90 days) | A browser Session ends this long after it started, used or not; its cookie is kept as long. Token Sessions end only when closed or when their token is revoked. |
 | `DARKORY_SMTP_URL` | (environment only) | none: email sign-in is off | The SMTP server that sends emailed login links: `smtp://user:pass@host:587` requires STARTTLS, `smtps://user:pass@host:465` uses TLS from the start, and `smtp://host:25?tls=none` sends plain text, for a relay on a trusted network only. Percent-encode the user and password. |
 | `DARKORY_SMTP_FROM` | (environment only) | none | The sender, such as `Darkory <darkory@example.com>`. Required with `DARKORY_SMTP_URL`. |
 | `DARKORY_SMTP_MAX_PER_HOUR` | (environment only) | `300` | The most sign-in emails a server process sends an hour. Over it, requests still answer 202 and nothing is sent until the cap refills; printed and admin-issued links keep working. |
+
+Opening a login link shows a page naming the Member it signs in as, with a button; pressing it signs the browser in, and closes the Session of any cookie the browser held. An admin lists a Member's open Sessions with `GET /v1/members/{member}/sessions` (`darkory session list <member>`), and `POST /v1/members/{member}/deactivate` (`darkory member deactivate <member>`) revokes their tokens, closes their Sessions, ends their Claims and refuses every later credential of theirs until they are reactivated.
 
 An Install always has the **printed link**. `serve` prints a link at every start, and an admin issues one for any Member with `POST /v1/members/{member}/login-links` (`darkory login <member>`). With SMTP set, the Install also has the **emailed link**. `POST /v1/sign-in/email` emails a link to each Member whose email matches, ignoring case. The link has the same 15-minute expiry and single use as a printed link. The request always answers 202. It is limited per client address (an IPv6 client by its /64) before the reply; then, only for an address a Member has, per Member and by the cap on emails sent. `serve` refuses to start when `DARKORY_SMTP_URL` is set without `DARKORY_PUBLIC_URL` and `DARKORY_SMTP_FROM`. The health reply lists the modes (`printed_link`, `email_link`) from `Server.SignInModes`. GitHub and Google sign-in are not in this build.
 
@@ -63,11 +70,14 @@ An Install always has the **printed link**. `serve` prints a link at every start
 | `DARKORY_NO_UPDATE_CHECK` | off | Turns off the update notice, and `serve`'s daily check for a newer release (so health never reports one). The CLI and `serve` also take `--no-update-check`. |
 | `DARKORY_UPDATE_URL` | GitHub's releases API | Another releases API for `darkory update` and the notice. Signatures are still checked against the key compiled into the binary. |
 | `DARKORY_CONTAINER` | set in the image | Makes `darkory update` point at a newer image instead of replacing the binary. |
-| `DARKORY_VERSION`, `DARKORY_INSTALL_DIR`, `DARKORY_DOWNLOAD_URL` | latest, `/usr/local/bin`, GitHub | Settings of `install.sh` ([release.md](release.md)). |
+| `DARKORY_VERSION`, `DARKORY_INSTALL_DIR`, `DARKORY_DOWNLOAD_URL` | latest, `/usr/local/bin`, GitHub | Settings of `install.sh` ([release.md](release.md)). `DARKORY_DOWNLOAD_URL` must be https unless `DARKORY_INSECURE` is set. |
 
 ## The CLI and MCP server
 
-These are settings of a client, not of the Install: `DARKORY_URL` (`--url`, default `http://127.0.0.1:7357`), `DARKORY_TOKEN` (`--token`), `DARKORY_SESSION` (`--session`; `darkory prime` prints one) and `DARKORY_NO_UPDATE_CHECK` (`--no-update-check`).
+These are settings of a client, not of the Install: `DARKORY_URL` (`--url`, default `http://127.0.0.1:7357`), `DARKORY_TOKEN` (`--token`), `DARKORY_SESSION` (`--session`; `darkory prime` prints one), `DARKORY_NO_UPDATE_CHECK` (`--no-update-check`) and `DARKORY_INSECURE` (`--insecure`, default off).
+
+- A plain `http://` URL to a host other than `localhost` or a loopback address is refused unless `DARKORY_INSECURE` is set (any value but empty, `0` or `false`), since the token would cross the network in clear text.
+- Prefer `DARKORY_TOKEN` to `--token`: other processes on the machine can read a command's arguments, and `--token` prints a warning saying so.
 
 ## Tests
 

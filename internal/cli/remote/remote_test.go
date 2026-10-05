@@ -106,3 +106,35 @@ func TestErrorFrom(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// Dial refuses a URL that would carry the token in clear text across a network: plain http to a
+// host other than this machine, unless Insecure (security review L10).
+func TestDialRefusesPlainHTTPToAnotherHost(t *testing.T) {
+	for url, ok := range map[string]bool{
+		"http://darkory.example:7357": false,
+		"http://192.168.1.10":         false,
+		"http://[fe80::1]:7357":       false,
+		"ftp://darkory.example":       false,
+		"darkory.example:7357":        false,
+		"https://darkory.example":     true,
+		"http://127.0.0.1:7357":       true,
+		"http://127.1.2.3":            true,
+		"http://localhost:7357":       true,
+		"http://[::1]:7357":           true,
+	} {
+		_, err := Dial(Settings{URL: url, Token: "dk_x"})
+		if (err == nil) != ok {
+			t.Errorf("%s: %v", url, err)
+		}
+		if !ok && strings.Contains(url, "://") && !strings.HasPrefix(url, "ftp") {
+			if _, err := Dial(Settings{URL: url, Token: "dk_x", Insecure: true}); err != nil {
+				t.Errorf("%s with Insecure: %v", url, err)
+			}
+		}
+	}
+	for v, want := range map[string]bool{"": false, "0": false, "false": false, "1": true, "true": true} {
+		if got := FromEnv(func(k string) string { return map[string]string{EnvInsecure: v}[k] }).Insecure; got != want {
+			t.Errorf("DARKORY_INSECURE=%q: Insecure %v", v, got)
+		}
+	}
+}

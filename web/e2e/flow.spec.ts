@@ -60,6 +60,8 @@ test("the MVP flow in the browser, with an agent working through the API", async
 
   await test.step("sign in with the startup link", async () => {
     await page.goto(process.env.DARKORY_E2E_LOGIN_LINK!);
+    // Opening the link only shows its page; its same-origin POST signs in.
+    await page.getByRole("button", { name: /^Sign in as / }).click();
     await expect(page).toHaveURL(`${base()}/`);
     await expect(page.getByRole("heading", { name: "Board" })).toBeVisible();
     await expect(page.getByText("There are no Teams yet.")).toBeVisible();

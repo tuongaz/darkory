@@ -71,15 +71,50 @@ func Hash(secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Authenticator finds the Caller of a request.
-type Authenticator struct {
-	store *store.Store
-	clock clock.Clock
+// BrowserLimits bound a browser Session's life on the server (security review M4): it expires
+// once unused for Idle, and at the latest Lifetime after it started. A token Session never
+// expires; it ends when closed or when its token is revoked.
+type BrowserLimits struct {
+	Idle, Lifetime time.Duration
 }
 
-// New returns an Authenticator over st.
+// DefaultBrowserLimits are the limits unless the Install sets others.
+var DefaultBrowserLimits = BrowserLimits{Idle: 30 * 24 * time.Hour, Lifetime: 90 * 24 * time.Hour}
+
+// LiveSessionSQL is the one condition, over a Session aliased s, that it has not expired. It binds
+// @idle_since and @started_since (Args).
+const LiveSessionSQL = `(s.kind <> 'browser' OR (s.last_seen_at > @idle_since AND s.created_at > @started_since))`
+
+// Args binds LiveSessionSQL at now.
+func (l BrowserLimits) Args(now time.Time) map[string]any {
+	return map[string]any{"idle_since": now.Add(-l.Idle).UnixMilli(), "started_since": now.Add(-l.Lifetime).UnixMilli()}
+}
+
+// ExpiresAt is when a browser Session that started and was last seen at these times expires.
+func (l BrowserLimits) ExpiresAt(started, lastSeen time.Time) time.Time {
+	idle, end := lastSeen.Add(l.Idle), started.Add(l.Lifetime)
+	if idle.Before(end) {
+		return idle
+	}
+	return end
+}
+
+// Authenticator finds the Caller of a request.
+type Authenticator struct {
+	store   *store.Store
+	clock   clock.Clock
+	browser BrowserLimits
+}
+
+// New returns an Authenticator over st, with DefaultBrowserLimits.
 func New(st *store.Store, c clock.Clock) *Authenticator {
-	return &Authenticator{store: st, clock: c}
+	return &Authenticator{store: st, clock: c, browser: DefaultBrowserLimits}
+}
+
+// WithBrowserLimits sets how long browser Sessions last, and returns a.
+func (a *Authenticator) WithBrowserLimits(l BrowserLimits) *Authenticator {
+	a.browser = l
+	return a
 }
 
 // Credentials are what a request presented.
@@ -118,7 +153,7 @@ func (a *Authenticator) bearer(ctx context.Context, cr Credentials) (*Caller, er
 	var timeout, lastUsed sql.NullInt64
 	err := a.store.QueryRow(ctx, `SELECT t.id, t.org_id, t.member_id, t.default_heartbeat_timeout_ms, t.last_used_at, m.name, m.admin
 FROM tokens t JOIN members m ON m.id = t.member_id
-WHERE t.secret_hash = $1 AND t.revoked_at IS NULL`, Hash(cr.Bearer)).
+WHERE t.secret_hash = $1 AND t.revoked_at IS NULL AND m.deactivated_at IS NULL`, Hash(cr.Bearer)).
 		Scan(&c.TokenID, &c.OrgID, &c.MemberID, &timeout, &lastUsed, &c.Name, &c.Admin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUnauthenticated
@@ -185,20 +220,25 @@ VALUES ($1, $2, $3, $4, 'token', $5, $6, $6) ON CONFLICT DO NOTHING`,
 	return fmt.Errorf("auth: session %q could not be started", c.ChosenID)
 }
 
+// cookie finds the browser Session a cookie maps to, while it is open, has not expired, and its
+// Member is active.
 func (a *Authenticator) cookie(ctx context.Context, cookie string) (*Caller, error) {
 	var c Caller
 	var lastSeen int64
-	err := a.store.QueryRow(ctx, `SELECT s.id, s.chosen_id, s.org_id, s.member_id, s.last_seen_at, m.name, m.admin
+	now := a.clock.Now()
+	args := a.browser.Args(now)
+	args["hash"] = Hash(cookie)
+	q, qa := store.Bind(`SELECT s.id, s.chosen_id, s.org_id, s.member_id, s.last_seen_at, m.name, m.admin
 FROM sessions s JOIN members m ON m.id = s.member_id
-WHERE s.cookie_hash = $1 AND s.kind = 'browser' AND s.closed_at IS NULL`, Hash(cookie)).
-		Scan(&c.SessionID, &c.ChosenID, &c.OrgID, &c.MemberID, &lastSeen, &c.Name, &c.Admin)
+WHERE s.cookie_hash = @hash AND s.kind = 'browser' AND s.closed_at IS NULL AND m.deactivated_at IS NULL AND `+LiveSessionSQL, args)
+	err := a.store.QueryRow(ctx, q, qa...).Scan(&c.SessionID, &c.ChosenID, &c.OrgID, &c.MemberID, &lastSeen, &c.Name, &c.Admin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUnauthenticated
 	}
 	if err != nil {
 		return nil, fmt.Errorf("auth: cookie: %w", err)
 	}
-	if now := a.clock.Now(); now.Sub(time.UnixMilli(lastSeen)) >= touchEvery {
+	if now.Sub(time.UnixMilli(lastSeen)) >= touchEvery {
 		if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{
 			SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE org_id = $2 AND id = $3`,
 			Args: []any{now.UnixMilli(), c.OrgID, c.SessionID},

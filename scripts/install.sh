@@ -10,6 +10,7 @@
 #                         otherwise ~/.local/bin
 #   DARKORY_DOWNLOAD_URL  where releases are downloaded from; default
 #                         https://github.com/tuongaz/darkory/releases (for mirrors and tests)
+#   DARKORY_INSECURE      1 (any value but empty, 0 or false) to allow a plain http DARKORY_DOWNLOAD_URL
 #
 # What this checks, and what it does not. The archive's SHA-256 must match checksums.txt from
 # the same release, which catches a corrupt or truncated download. It cannot show that the
@@ -30,9 +31,22 @@ die() {
 	exit 1
 }
 
+# Downloads go over https only, redirects included, unless DARKORY_INSECURE allows a plain http
+# mirror: the checksums come from the same place as the binaries.
+proto='=https'
+case "$releases" in
+https://*) ;;
+*)
+	case "${DARKORY_INSECURE:-}" in
+	"" | 0 | false) die "DARKORY_DOWNLOAD_URL is not https ($releases); set DARKORY_INSECURE=1 to allow it" ;;
+	esac
+	proto='=http,https'
+	;;
+esac
+
 fetch() { # url file
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL --retry 3 -o "$2" "$1"
+		curl -fsSL --proto "$proto" --proto-redir "$proto" --retry 3 -o "$2" "$1"
 	elif command -v wget >/dev/null 2>&1; then
 		wget -q -O "$2" "$1"
 	else
@@ -111,10 +125,12 @@ mkdir -p "$dir" || die "cannot create $dir"
 if [ -L "$dir/darkory" ]; then
 	die "$dir/darkory is a link, perhaps to a Homebrew install; update that with brew upgrade darkory, or set DARKORY_INSTALL_DIR"
 fi
-# Copy beside the old binary and rename over it, so a running darkory is never half-written.
-cp "$tmp/darkory" "$dir/.darkory.new.$$"
-chmod 755 "$dir/.darkory.new.$$"
-mv -f "$dir/.darkory.new.$$" "$dir/darkory"
+# Copy beside the old binary and rename over it, so a running darkory is never half-written. The
+# copy's name is unpredictable and made fresh, so nothing else can have put a file there first.
+new=$(mktemp "$dir/.darkory.new.XXXXXX") || die "cannot write to $dir"
+cp "$tmp/darkory" "$new"
+chmod 755 "$new"
+mv -f "$new" "$dir/darkory"
 
 say "Installed $("$dir/darkory" version) at $dir/darkory"
 case ":$PATH:" in

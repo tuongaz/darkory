@@ -14,17 +14,20 @@ import (
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 	"github.com/tuongaz/darkory/internal/mcp"
 )
 
-const mcpUsage = `Usage: darkory mcp [--url url] [--token dk_…] [--session id] [--evidence-root dir]
+const mcpUsage = `Usage: darkory mcp [--url url] [--token dk_…] [--session id] [--insecure] [--evidence-root dir]
                    [--evidence-allow-hidden] [--evidence-max-mb n]
 
 Serves the agent operations as MCP tools over standard input and output. It reads DARKORY_URL,
 DARKORY_TOKEN and DARKORY_SESSION (a fresh Session id per process when unset), and sends
 Heartbeats for its Session's Claims while it runs. attach_evidence reads only regular files under
-the evidence root (the working directory unless set), none hidden unless allowed.
+the evidence root (the working directory unless set), none hidden unless allowed. A plain http://
+URL must name this machine unless --insecure (DARKORY_INSECURE=1) is given, since the token would
+cross the network in clear text. Prefer DARKORY_TOKEN to --token, which other processes can read.
 
 `
 
@@ -40,6 +43,7 @@ func runMCP(args []string, stderr io.Writer) error {
 	fs.StringVar(&s.URL, "url", s.URL, "the Install's URL (DARKORY_URL)")
 	fs.StringVar(&s.Token, "token", s.Token, "the Member's token (DARKORY_TOKEN)")
 	fs.StringVar(&s.Session, "session", s.Session, "this running copy's Session id (DARKORY_SESSION)")
+	fs.BoolVar(&s.Insecure, "insecure", s.Insecure, "allow plain http:// to a host other than this machine (DARKORY_INSECURE)")
 	var o mcp.Options
 	fs.StringVar(&o.EvidenceRoot, "evidence-root", os.Getenv("DARKORY_EVIDENCE_ROOT"),
 		"the only directory attach_evidence reads from (DARKORY_EVIDENCE_ROOT; default the working directory)")
@@ -64,6 +68,16 @@ func runMCP(args []string, stderr io.Writer) error {
 	}
 	if s.Token == "" {
 		return errors.New("mcp: no token: set DARKORY_TOKEN or pass --token")
+	}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "token" {
+			fmt.Fprintln(stderr, "darkory mcp: warning: --token shows the token to other processes on this machine, "+
+				"which can read a command's arguments; set DARKORY_TOKEN instead")
+		}
+	})
+	if err := s.CheckURL(); err != nil {
+		fmt.Fprintf(stderr, "darkory mcp: %v\n", err)
+		return &cli.ExitError{Code: cli.ExitUsage}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

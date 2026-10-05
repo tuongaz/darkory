@@ -100,6 +100,8 @@ Global flags, accepted before or after the command:
   --token dk_…       the Member's token (DARKORY_TOKEN)
   --session id       this running copy's Session id (DARKORY_SESSION; darkory prime prints one)
   --json             print the /v1 JSON instead of text
+  --insecure         allow a plain http:// URL to a host other than this machine, which sends the
+                     token in clear text (DARKORY_INSECURE=1)
   --no-update-check  print no update notice (DARKORY_NO_UPDATE_CHECK=1)
 
 Exit status: 0 done, 1 failed, 2 usage or a missing setting, 3 refused by a rule of the record
@@ -116,7 +118,7 @@ func Handles(args []string) bool {
 	}
 	if strings.HasPrefix(args[0], "-") {
 		return slices.Contains([]string{"--url", "-url", "--token", "-token", "--session", "-session", "--json", "-json",
-			"--no-update-check", "-no-update-check"}, strings.SplitN(args[0], "=", 2)[0])
+			"--no-update-check", "-no-update-check", "--insecure", "-insecure"}, strings.SplitN(args[0], "=", 2)[0])
 	}
 	_, _, ok := find(args)
 	return ok
@@ -139,16 +141,17 @@ func find(args []string) (command, []string, bool) {
 
 // globals are the flags every command takes.
 type globals struct {
-	url, token, session string
-	json, noUpdateCheck bool
+	url, token, session           string
+	json, noUpdateCheck, insecure bool
 }
 
 func (g *globals) register(fs *flag.FlagSet) {
 	fs.StringVar(&g.url, "url", g.url, "the Install's URL (DARKORY_URL)")
-	fs.StringVar(&g.token, "token", g.token, "the Member's token (DARKORY_TOKEN)")
+	fs.StringVar(&g.token, "token", g.token, "the Member's token (DARKORY_TOKEN, which other processes cannot read as they can arguments)")
 	fs.StringVar(&g.session, "session", g.session, "this running copy's Session id (DARKORY_SESSION)")
 	fs.BoolVar(&g.json, "json", g.json, "print the /v1 JSON")
 	fs.BoolVar(&g.noUpdateCheck, "no-update-check", g.noUpdateCheck, "print no update notice")
+	fs.BoolVar(&g.insecure, "insecure", g.insecure, "allow plain http:// to a host other than this machine (DARKORY_INSECURE)")
 }
 
 // Run runs the command args name, printing its output and, on failure, why. It returns nil or an

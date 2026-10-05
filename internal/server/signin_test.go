@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -44,11 +45,34 @@ func askByEmail(t *testing.T, ts *httptest.Server, body string, headers map[stri
 	return res.StatusCode
 }
 
-// redeem opens a login link's path in a browser that does not follow redirects.
-func redeem(t *testing.T, ts *httptest.Server, path string) *http.Response {
+// redeem opens a login link's path in a browser that does not follow redirects, as a person
+// would: it reads the sign-in page, then presses its button, which posts from the page's origin.
+// It returns the reply to the post, or the page when it has no button.
+func redeem(t *testing.T, ts *httptest.Server, path string, cookies ...*http.Cookie) *http.Response {
 	t.Helper()
 	browser := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	res, err := browser.Get(ts.URL + path)
+	page, err := browser.Get(ts.URL + path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(page.Body)
+	page.Body.Close()
+	if len(page.Cookies()) != 0 {
+		t.Fatalf("opening the link set %v", page.Cookies())
+	}
+	if page.StatusCode != http.StatusOK {
+		return page
+	}
+	if !strings.Contains(string(body), "Sign in as") {
+		t.Fatalf("the sign-in page: %s", body)
+	}
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+path, nil)
+	req.Header.Set("Origin", ts.URL)
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	for _, ck := range cookies {
+		req.AddCookie(ck)
+	}
+	res, err := browser.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,6 +502,8 @@ func TestClientAddress(t *testing.T) {
 		{"10.0.0.2:5000", []string{"6.6.6.6, 198.51.100.1"}, 1, "198.51.100.1"}, // a forged first entry is ignored
 		{"10.0.0.2:5000", []string{"6.6.6.6", "198.51.100.1, 10.0.0.1"}, 2, "198.51.100.1"},
 		{"10.0.0.2:5000", nil, 1, "10.0.0.2"},
+		// Shorter than the hops: the client reached the server past a proxy and wrote it all.
+		{"203.0.113.7:5000", []string{"6.6.6.6"}, 2, "203.0.113.7"},
 		{"[2001:db8:1:2:3:4:5:6]:5000", nil, 0, "2001:db8:1:2::/64"},
 		{"[::ffff:203.0.113.7]:5000", nil, 0, "203.0.113.7"},
 	} {

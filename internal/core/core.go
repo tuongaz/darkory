@@ -21,18 +21,26 @@ import (
 
 // Service runs the domain operations.
 type Service struct {
-	store *store.Store
-	clock clock.Clock
-	wake  *wake.Notifier
-	log   *slog.Logger
+	store   *store.Store
+	clock   clock.Clock
+	wake    *wake.Notifier
+	log     *slog.Logger
+	browser auth.BrowserLimits
 }
 
-// New returns a Service over st.
+// New returns a Service over st, with auth.DefaultBrowserLimits.
 func New(st *store.Store, c clock.Clock, w *wake.Notifier, log *slog.Logger) *Service {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Service{store: st, clock: c, wake: w, log: log}
+	return &Service{store: st, clock: c, wake: w, log: log, browser: auth.DefaultBrowserLimits}
+}
+
+// WithBrowserLimits sets how long browser Sessions last, as the Authenticator has them, and
+// returns s.
+func (s *Service) WithBrowserLimits(l auth.BrowserLimits) *Service {
+	s.browser = l
+	return s
 }
 
 // Store returns the store the Service runs on.

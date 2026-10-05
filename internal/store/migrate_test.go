@@ -236,3 +236,59 @@ func TestMigrateIsSerialisedOnPostgres(t *testing.T) {
 		t.Fatalf("migration 1 recorded %d times", n)
 	}
 }
+
+// Migration 0002 widens claims.how_ended, which SQLite does by rebuilding the table: a Claim
+// written under 0001 survives it, and the new value is accepted afterwards.
+func TestMigration2KeepsClaims(t *testing.T) {
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			first := fstest.MapFS{}
+			for _, name := range []string{"0001_init.sql"} {
+				b, err := os.ReadFile("migrations/" + name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				first[name] = file(string(b))
+			}
+			if _, err := s.MigrateFS(ctx, first, now); err != nil {
+				t.Fatal(err)
+			}
+			exec := func(q string) error {
+				return s.WriteNoSeq(ctx, func(tx store.Tx) error {
+					_, err := tx.Exec(ctx, q)
+					return err
+				})
+			}
+			for _, q := range []string{
+				`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`,
+				`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`,
+				`INSERT INTO sessions (id, org_id, member_id, chosen_id, kind, created_at, last_seen_at) VALUES ('s', 'o', 'm', 'ada-1', 'token', 0, 0)`,
+				`INSERT INTO teams (id, org_id, key_prefix, name, created_at) VALUES ('tm', 'o', 'WEB', 'Web', 0)`,
+				`INSERT INTO features (id, org_id, team_id, display_key, title, owner_id, state, rank, filed_by, created_at) VALUES ('f', 'o', 'tm', 'WEB-1', 'F', 'm', 'open', 1, 'm', 0)`,
+				`INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, filed_by, waiting_since, created_at) VALUES ('t', 'o', 'f', 'WEB-2', 'work', 'T', 'open', 'm', 0, 0)`,
+				`INSERT INTO claims (id, org_id, task_id, holder_id, session_id, timeout_ms, started_at, ended_at, how_ended, ended_by) VALUES ('c', 'o', 't', 'm', 's', 60000, 1, 2, 'session_closed', 'm')`,
+			} {
+				if err := exec(q); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			if _, err := s.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			var how string
+			var timeout, ended int64
+			if err := s.QueryRow(ctx, `SELECT how_ended, timeout_ms, ended_at FROM claims WHERE id = 'c'`).Scan(&how, &timeout, &ended); err != nil ||
+				how != "session_closed" || timeout != 60000 || ended != 2 {
+				t.Fatalf("the Claim after the migration: %s %d %d %v", how, timeout, ended, err)
+			}
+			if err := exec(`UPDATE claims SET how_ended = 'member_deactivated' WHERE id = 'c'`); err != nil {
+				t.Fatal(err)
+			}
+			if err := exec(`UPDATE claims SET how_ended = 'unheard_of' WHERE id = 'c'`); err == nil {
+				t.Fatal("the check on how_ended is gone")
+			}
+		})
+	}
+}

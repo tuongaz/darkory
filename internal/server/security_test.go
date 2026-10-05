@@ -14,13 +14,8 @@ import (
 func (h *harness) signIn(t *testing.T, member string) *http.Cookie {
 	t.Helper()
 	link := got(h.admin.IssueLoginLinkWithResponse(t.Context(), member, &client.IssueLoginLinkParams{})).want(t, http.StatusCreated).JSON201
-	browser := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	// The link names the public URL; the test server is reached at its own address.
-	res, err := browser.Get(h.ts.URL + link.URL[strings.Index(link.URL, "/v1/"):])
-	if err != nil {
-		t.Fatal(err)
-	}
-	res.Body.Close()
+	res := redeem(t, h.ts, link.URL[strings.Index(link.URL, "/v1/"):])
 	for _, ck := range res.Cookies() {
 		if ck.Name == "darkory_session" {
 			return ck

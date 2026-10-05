@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -27,6 +29,9 @@ const (
 	EnvURL     = "DARKORY_URL"
 	EnvToken   = "DARKORY_TOKEN"
 	EnvSession = "DARKORY_SESSION"
+	// EnvInsecure, set to anything but empty, 0 or false, lets the token go over plain http to a
+	// host other than this machine (--insecure).
+	EnvInsecure = "DARKORY_INSECURE"
 )
 
 // Settings say which Install to reach and as whom.
@@ -39,6 +44,8 @@ type Settings struct {
 	Session string
 	// OneOff is true when Session was made up for this process because none was set.
 	OneOff bool
+	// Insecure lets URL be plain http to a host other than this machine (CheckURL).
+	Insecure bool
 	// HTTPClient sends the requests; nil means one with no timeout, since `next` and the
 	// Activity stream hold requests open.
 	HTTPClient *http.Client
@@ -46,11 +53,36 @@ type Settings struct {
 
 // FromEnv reads the settings from getenv, leaving Session empty when DARKORY_SESSION is unset.
 func FromEnv(getenv func(string) string) Settings {
-	s := Settings{URL: getenv(EnvURL), Token: getenv(EnvToken), Session: getenv(EnvSession)}
+	s := Settings{URL: getenv(EnvURL), Token: getenv(EnvToken), Session: getenv(EnvSession),
+		Insecure: !slices.Contains([]string{"", "0", "false"}, getenv(EnvInsecure))}
 	if s.URL == "" {
 		s.URL = DefaultURL
 	}
 	return s
+}
+
+// CheckURL refuses a URL that would send the token in clear text across a network: plain http
+// to a host other than this machine (localhost or a loopback address), unless Insecure says the
+// network is trusted (security review L10).
+func (s Settings) CheckURL() error {
+	u, err := url.Parse(s.URL)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("the Install's URL %q is not an http:// or https:// URL", s.URL)
+	}
+	if u.Scheme == "https" || s.Insecure || Loopback(u.Hostname()) {
+		return nil
+	}
+	return fmt.Errorf("refusing to send the token in clear text to %s: use https://, "+
+		"or pass --insecure (DARKORY_INSECURE=1) if the network to it is trusted", u.Host)
+}
+
+// Loopback reports whether host names this machine: localhost or a loopback address.
+func Loopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // NewSessionID returns a fresh Session id, a UUIDv7.
@@ -64,6 +96,9 @@ type Conn struct {
 
 // Dial returns a Conn for s. It sends nothing until the first call.
 func Dial(s Settings) (*Conn, error) {
+	if err := s.CheckURL(); err != nil {
+		return nil, err
+	}
 	s.URL = strings.TrimRight(s.URL, "/")
 	hc := s.HTTPClient
 	if hc == nil {

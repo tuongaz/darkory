@@ -34,6 +34,26 @@ func (s *Server) CreateMember(w http.ResponseWriter, r *http.Request, params gen
 	s.respond(w, r, out, m, err)
 }
 
+func (s *Server) DeactivateMember(w http.ResponseWriter, r *http.Request, member gen.MemberRef, params gen.DeactivateMemberParams) {
+	out := as(http.StatusOK, func(m core.Member) any { return memberOut(m) })
+	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, out)
+	if !ok {
+		return
+	}
+	m, err := s.core.DeactivateMember(r.Context(), c, member, idem)
+	s.respond(w, r, out, m, err)
+}
+
+func (s *Server) ReactivateMember(w http.ResponseWriter, r *http.Request, member gen.MemberRef, params gen.ReactivateMemberParams) {
+	out := as(http.StatusOK, func(m core.Member) any { return memberOut(m) })
+	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, out)
+	if !ok {
+		return
+	}
+	m, err := s.core.ReactivateMember(r.Context(), c, member, idem)
+	s.respond(w, r, out, m, err)
+}
+
 func (s *Server) ListMembers(w http.ResponseWriter, r *http.Request, params gen.ListMembersParams) {
 	ms, err := s.core.ListMembers(r.Context(), caller(r), params.Team, (*string)(params.Kind))
 	s.respond(w, r, as(http.StatusOK, func(ms []core.Member) any { return gen.MemberList{Items: each(ms, memberOut)} }), ms, err)

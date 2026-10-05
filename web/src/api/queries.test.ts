@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
+import type { Activity } from "./client";
 import { affectedBy, invalidateFor, keys } from "./queries";
 
 describe("live invalidation", () => {
@@ -24,7 +25,8 @@ describe("live invalidation", () => {
     expect(qc.getQueryState(keys.teams)?.isInvalidated).toBe(false);
     expect(qc.getQueryState(keys.activity)?.isInvalidated).toBe(false);
 
-    invalidateFor(qc, { kind: "unheard.of" });
+    // A kind added to the server after this build was made.
+    invalidateFor(qc, { kind: "unheard.of" as string as Activity["kind"] });
     expect(qc.getQueryState(keys.teams)?.isInvalidated).toBe(true);
     expect(qc.getQueryState(keys.activity)?.isInvalidated).toBe(false);
   });

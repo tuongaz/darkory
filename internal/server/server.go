@@ -37,6 +37,12 @@ type Server struct {
 	blobs blob.Store
 	// maxEvidence bounds one Evidence file, in bytes.
 	maxEvidence int64
+	// bodyTimeout bounds how long a request body may take to arrive.
+	bodyTimeout time.Duration
+	// browser bounds how long a browser Session lasts; its cookie lives as long as Lifetime.
+	browser auth.BrowserLimits
+	// streams and nexts count each Member's open Activity streams and waiting `next` calls.
+	streams, nexts *waiting
 	// update is the last check for a newer release, for /v1/health; nil until one ran.
 	updateStatus atomic.Pointer[update.Status]
 }
@@ -65,6 +71,15 @@ type Options struct {
 	Blobs blob.Store
 	// MaxEvidenceSize bounds one Evidence file, in bytes. Defaults to DefaultMaxEvidenceSize.
 	MaxEvidenceSize int64
+	// BodyReadTimeout bounds how long a request body may take to arrive; an Evidence upload also
+	// gets time in proportion to its size. Defaults to DefaultBodyReadTimeout.
+	BodyReadTimeout time.Duration
+	// BrowserSessions bound how long a browser Session lasts, unused and in all. Zero fields take
+	// auth.DefaultBrowserLimits'.
+	BrowserSessions auth.BrowserLimits
+	// MaxWaiting is how many Activity streams, and separately how many waiting `next` calls, one
+	// Member may have open on this process at once. Defaults to DefaultMaxWaiting.
+	MaxWaiting int
 }
 
 // DefaultMaxEvidenceSize is the largest Evidence file an Install takes unless set otherwise.
@@ -87,10 +102,22 @@ func New(st *store.Store, o Options) *Server {
 	if o.MaxEvidenceSize <= 0 {
 		o.MaxEvidenceSize = DefaultMaxEvidenceSize
 	}
+	if o.BodyReadTimeout <= 0 {
+		o.BodyReadTimeout = DefaultBodyReadTimeout
+	}
+	if o.BrowserSessions.Idle <= 0 {
+		o.BrowserSessions.Idle = auth.DefaultBrowserLimits.Idle
+	}
+	if o.BrowserSessions.Lifetime <= 0 {
+		o.BrowserSessions.Lifetime = auth.DefaultBrowserLimits.Lifetime
+	}
+	if o.MaxWaiting <= 0 {
+		o.MaxWaiting = DefaultMaxWaiting
+	}
 	return &Server{
 		store:       st,
-		core:        core.New(st, o.Clock, o.Wake, o.Log),
-		auth:        auth.New(st, o.Clock),
+		core:        core.New(st, o.Clock, o.Wake, o.Log).WithBrowserLimits(o.BrowserSessions),
+		auth:        auth.New(st, o.Clock).WithBrowserLimits(o.BrowserSessions),
 		wake:        o.Wake,
 		log:         o.Log,
 		publicURL:   o.PublicURL,
@@ -98,13 +125,17 @@ func New(st *store.Store, o Options) *Server {
 		signIn:      newEmailSignIn(o),
 		blobs:       o.Blobs,
 		maxEvidence: o.MaxEvidenceSize,
+		bodyTimeout: o.BodyReadTimeout,
+		browser:     o.BrowserSessions,
+		streams:     newWaiting("Activity streams", o.MaxWaiting),
+		nexts:       newWaiting("waiting next calls", o.MaxWaiting),
 	}
 }
 
 // Core returns the domain service the Server runs on.
 func (s *Server) Core() *core.Service { return s.core }
 
-// Handler routes /v1 to the API and every other path to the web app.
+// Handler routes /v1 to the API and every other path to the web app, behind guard.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	gen.HandlerWithOptions(s, gen.StdHTTPServerOptions{
@@ -119,7 +150,7 @@ func (s *Server) Handler() http.Handler {
 		writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, "no operation "+r.Method+" "+r.URL.Path)
 	})
 	mux.Handle("/", web.Handler())
-	return mux
+	return s.guard(mux)
 }
 
 func (s *Server) notImplemented(w http.ResponseWriter, r *http.Request) {

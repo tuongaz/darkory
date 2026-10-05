@@ -78,9 +78,16 @@ type Status struct {
 	CheckedAt time.Time
 }
 
-// Available reports whether a release newer than the running one exists.
+// Available reports whether a release newer than the running one exists. A prerelease is never
+// announced.
 func (s Status) Available() bool {
-	return s.Latest != "" && !IsDevBuild(s.Current) && Newer(s.Latest, s.Current)
+	return announceable(s.Latest) && !IsDevBuild(s.Current) && Newer(s.Latest, s.Current)
+}
+
+// announceable reports whether a remembered latest release may be shown: a release tag, not a
+// prerelease. A cache written by an older binary is held to the same rule as a fresh answer.
+func announceable(latest string) bool {
+	return ValidTag(latest) && !IsPrerelease(latest)
 }
 
 type cacheEntry struct {
@@ -101,6 +108,9 @@ func (c *Checker) Check(ctx context.Context) (Status, error) {
 		now = c.Now()
 	}
 	prev := c.read()
+	if !announceable(prev.Latest) {
+		prev.Latest, prev.URL = "", ""
+	}
 	if !prev.CheckedAt.IsZero() && !prev.CheckedAt.After(now) && now.Sub(prev.CheckedAt) < or(c.Interval, CheckInterval) {
 		return Status{Current: c.Current, Latest: prev.Latest, URL: prev.URL, CheckedAt: prev.CheckedAt}, nil
 	}

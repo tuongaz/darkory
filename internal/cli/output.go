@@ -243,7 +243,21 @@ func (c *call) printMemberLine(w io.Writer, m client.Member) {
 	if m.ManagerID != nil {
 		extra += " reports to " + c.member(*m.ManagerID)
 	}
+	if m.DeactivatedAt != nil {
+		extra += " deactivated " + stamp(*m.DeactivatedAt)
+	}
 	fmt.Fprintf(w, "%-16s %-6s%s\n", one(m.Name), one(string(m.Kind)), extra)
+}
+
+func (c *call) printSession(w io.Writer, s client.Session) {
+	how := "token " + one(deref(s.TokenID))
+	if s.Kind == client.SessionKindBrowser {
+		how = "browser"
+		if s.ExpiresAt != nil {
+			how += ", expires " + stamp(*s.ExpiresAt)
+		}
+	}
+	fmt.Fprintf(w, "%-40s %s, last seen %s, started %s\n", one(s.ID), how, stamp(s.LastSeenAt), stamp(s.StartedAt))
 }
 
 func names[T any](items []T, name func(T) string) string {

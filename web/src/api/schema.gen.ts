@@ -67,13 +67,26 @@ export interface paths {
             cookie?: never;
         };
         /**
+         * Show a login link's sign-in page
+         * @description An HTML page naming the Member and Organisation the link signs in as, with a button that
+         *     posts to the same address (`redeemLoginLink`). Opening the link signs nobody in, so a
+         *     page elsewhere cannot sign a browser in by sending it here, and a mail scanner fetching
+         *     the link does not use it up. An unknown, used or expired link gets an HTML page saying
+         *     so, with status 404.
+         */
+        get: operations["showLoginLink"];
+        put?: never;
+        /**
          * Redeem a login link
          * @description Starts a browser Session for the link's Member, sets the `darkory_session` cookie and
-         *     redirects to `/`. Errors: `not_found` (unknown, used or expired link).
+         *     redirects to `/`. The request must come from the Install's own sign-in page, as a cookie
+         *     write must: `Sec-Fetch-Site`, when sent, says `same-origin` or `none`, and the `Origin`
+         *     (or `Referer`) is the Install's. A cookie the browser already held has its Session
+         *     closed. The `Idempotency-Key` is accepted and not stored: a link works once. Errors:
+         *     `not_found` (unknown, used or expired link), `forbidden` (not sent from the Install's
+         *     own page).
          */
-        get: operations["redeemLoginLink"];
-        put?: never;
-        post?: never;
+        post: operations["redeemLoginLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -137,6 +150,28 @@ export interface paths {
          *     Member's Session by naming `member`.
          */
         post: operations["closeSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{member}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a Member's open Sessions
+         * @description The Member's Sessions that are open and, for a browser Session, not yet expired, most
+         *     recently seen first. A Member may list their own; an admin anyone's. Close one with
+         *     `closeSession` and `member`, or close them all with `deactivateMember`.
+         */
+        get: operations["listSessions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -229,6 +264,53 @@ export interface paths {
          * @description Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
          */
         patch: operations["updateMember"];
+        trace?: never;
+    };
+    "/v1/members/{member}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deactivate a Member (admin)
+         * @description Revokes the Member's tokens, closes their Sessions and ends every Claim they hold, bound
+         *     to a Session or to the Member, recording each in Activity. From then on every credential
+         *     of theirs is refused, and no token or login link can be issued for them. The Member stays
+         *     in the record, with everything they did. Deactivating a deactivated Member changes
+         *     nothing. Errors: `forbidden` (not an admin, or deactivating yourself), `conflict` (the
+         *     last active admin).
+         */
+        post: operations["deactivateMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/members/{member}/reactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reactivate a deactivated Member (admin)
+         * @description The Member may sign in and be issued tokens again. Tokens revoked and Sessions closed by
+         *     the deactivation stay so. Reactivating an active Member changes nothing. Errors:
+         *     `forbidden` (not an admin).
+         */
+        post: operations["reactivateMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/members/{member}/skills/{skill}": {
@@ -635,7 +717,8 @@ export interface paths {
          *     another come first). When none is takeable, holds the request open for up to
          *     `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
          *     ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-         *     token's default.
+         *     token's default. A Member may have a limited number of `next` calls waiting at once
+         *     (an Install setting, 16 by default); one more is refused with `too_many_requests`.
          */
         post: operations["nextTask"];
         delete?: never;
@@ -875,7 +958,7 @@ export interface paths {
         post?: never;
         /**
          * Stop one Task blocking another
-         * @description Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
+         * @description Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
          */
         delete: operations["removeBlocker"];
         options?: never;
@@ -895,9 +978,10 @@ export interface paths {
         /**
          * Propose a new version of a company Skill from the Task the caller holds
          * @description Written against `based_on_version`, which must be the current version, for a company
-         *     Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
-         *     proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
-         *     a company Skill).
+         *     Skill, on a Retrospective the caller holds. The caller then hands the Task over to
+         *     `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
+         *     `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+         *     company Skill).
          */
         post: operations["proposeSkillVersion"];
         delete?: never;
@@ -1004,7 +1088,8 @@ export interface paths {
          *     the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
          *     clients that cannot set headers) and receives every entry after it; `0` sends the whole
          *     history. With neither, the stream starts from now: it sends only entries written after
-         *     it opened.
+         *     it opened. A Member may have a limited number of streams open at once (an Install
+         *     setting, 16 by default); one more is refused with `too_many_requests`.
          */
         get: operations["streamActivity"];
         put?: never;
@@ -1033,10 +1118,11 @@ export interface components {
          *     `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
          *     `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
          *     `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-         *     `too_large` 413 · `idempotency_key_reused` 422 · `internal` 500 · `not_implemented` 501.
+         *     `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+         *     `not_implemented` 501.
          * @enum {string}
          */
-        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "too_large" | "idempotency_key_reused" | "internal" | "not_implemented";
+        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -1082,8 +1168,20 @@ export interface components {
             started_at: string;
             /** Format: date-time */
             last_seen_at: string;
+            /**
+             * Format: date-time
+             * @description When an open browser Session ends unless it is used before: after a time unused, and
+             *     at the latest a time after it started. Absent for token Sessions, which end when
+             *     closed or when their token is revoked.
+             */
+            expires_at?: string;
             /** Format: date-time */
             closed_at?: string;
+        };
+        SessionList: {
+            items: components["schemas"]["Session"][];
+            /** @description Pass as `cursor` for the next page. Absent on the last page. */
+            next_cursor?: string;
         };
         /** @enum {string} */
         SessionKind: "token" | "browser";
@@ -1140,6 +1238,11 @@ export interface components {
             manager_id?: string;
             /** Format: date-time */
             created_at: string;
+            /**
+             * Format: date-time
+             * @description When an admin deactivated the Member. Absent while the Member is active.
+             */
+            deactivated_at?: string;
         };
         /** @enum {string} */
         MemberKind: "human" | "agent";
@@ -1406,7 +1509,7 @@ export interface components {
             how_ended?: components["schemas"]["ClaimEnd"];
         };
         /** @enum {string} */
-        ClaimEnd: "released" | "handed_over" | "completed" | "lapsed" | "taken_back" | "dropped" | "token_revoked" | "session_closed";
+        ClaimEnd: "released" | "handed_over" | "completed" | "lapsed" | "taken_back" | "dropped" | "token_revoked" | "session_closed" | "member_deactivated";
         /** @description The Task with its record. `proposal` is the latest Skill proposal written on it, when any. */
         TaskDetail: {
             task: components["schemas"]["Task"];
@@ -1562,7 +1665,7 @@ export interface components {
          *     within `/v1`; a client should skip a kind it does not know.
          * @enum {string}
          */
-        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "team.created" | "team.member_added" | "team.member_removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "team.created" | "team.member_added" | "team.member_removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
         /**
          * @description The kind of record an Activity entry is about.
          * @enum {string}
@@ -1594,7 +1697,10 @@ export interface components {
         };
     };
     parameters: {
-        /** @description A key unique to this write. A retry with the same key returns the first response. */
+        /**
+         * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+         *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+         */
         IdempotencyKey: string;
         /** @description Member id or name. */
         MemberRef: string;
@@ -1673,7 +1779,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1696,10 +1805,48 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    redeemLoginLink: {
+    showLoginLink: {
         parameters: {
             query?: never;
             header?: never;
+            path: {
+                code: components["parameters"]["LoginCode"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sign-in page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description The link is unknown, used or expired. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    redeemLoginLink: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
             path: {
                 code: components["parameters"]["LoginCode"];
             };
@@ -1724,7 +1871,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -1750,7 +1900,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -1776,7 +1929,10 @@ export interface operations {
                 member?: string;
             };
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1794,6 +1950,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClosedSession"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSessions: {
+        parameters: {
+            query?: {
+                /** @description At most this many items. Defaults to 100. */
+                limit?: components["parameters"]["Limit"];
+                /** @description The `next_cursor` of the previous page. */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                /** @description Member id or name. */
+                member: components["parameters"]["MemberRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
                 };
             };
             default: components["responses"]["Error"];
@@ -1827,7 +2012,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1858,7 +2046,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1909,7 +2100,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -1961,7 +2155,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1988,11 +2185,74 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    deactivateMember: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Member id or name. */
+                member: components["parameters"]["MemberRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deactivated Member. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    reactivateMember: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Member id or name. */
+                member: components["parameters"]["MemberRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Member. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     grantSkill: {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2019,7 +2279,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2046,7 +2309,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2075,7 +2341,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2121,7 +2390,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2173,7 +2445,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2200,7 +2475,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2250,7 +2528,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2378,7 +2659,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2430,7 +2714,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2461,7 +2748,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2488,7 +2778,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2515,7 +2808,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2579,7 +2875,10 @@ export interface operations {
                 filename: components["parameters"]["EvidenceFilename"];
             };
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2645,7 +2944,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2697,7 +2999,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path?: never;
@@ -2756,7 +3061,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2787,7 +3095,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2814,7 +3125,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2845,7 +3159,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2876,7 +3193,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2907,7 +3227,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2938,7 +3261,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -2969,7 +3295,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -3000,7 +3329,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -3031,7 +3363,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -3058,7 +3393,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -3085,7 +3423,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -3119,7 +3460,10 @@ export interface operations {
                 filename: components["parameters"]["EvidenceFilename"];
             };
             header?: {
-                /** @description A key unique to this write. A retry with the same key returns the first response. */
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {

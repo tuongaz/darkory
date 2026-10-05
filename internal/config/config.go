@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/tuongaz/darkory/internal/blob"
 )
@@ -72,7 +73,21 @@ type Serve struct {
 	SMTP SMTP
 	// EvidenceMaxMB bounds one Evidence file, in MiB (DARKORY_EVIDENCE_MAX_MB, --evidence-max-mb).
 	EvidenceMaxMB int64
+	// SessionIdle ends a browser Session unused for this long (DARKORY_SESSION_IDLE,
+	// --session-idle); SessionLifetime ends one this long after it started, used or not
+	// (DARKORY_SESSION_LIFETIME, --session-lifetime). Token Sessions are not affected.
+	SessionIdle, SessionLifetime time.Duration
+	// MaxWaiting is how many Activity streams, and separately how many waiting `next` calls, one
+	// Member may have open on a server process at once (DARKORY_MAX_WAITING, --max-waiting).
+	MaxWaiting int
 }
+
+// Defaults for browser Sessions and long requests.
+const (
+	DefaultSessionIdle     = 30 * 24 * time.Hour
+	DefaultSessionLifetime = 90 * 24 * time.Hour
+	DefaultMaxWaiting      = 16
+)
 
 // SMTP names the server that sends email (environment only).
 type SMTP struct {
@@ -179,8 +194,37 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 		return Serve{}, fmt.Errorf("DARKORY_EVIDENCE_MAX_MB: %w", err)
 	}
 	fs.Int64Var(&c.EvidenceMaxMB, "evidence-max-mb", maxMB, "largest Evidence file in MiB (DARKORY_EVIDENCE_MAX_MB)")
+	for _, d := range []struct {
+		flag, env, usage string
+		into             *time.Duration
+		def              time.Duration
+	}{
+		{"session-idle", "DARKORY_SESSION_IDLE", "end a browser Session unused this long (DARKORY_SESSION_IDLE)", &c.SessionIdle, DefaultSessionIdle},
+		{"session-lifetime", "DARKORY_SESSION_LIFETIME", "end a browser Session this long after it started (DARKORY_SESSION_LIFETIME)", &c.SessionLifetime, DefaultSessionLifetime},
+	} {
+		v := d.def
+		if s := getenv(d.env); s != "" {
+			if v, err = time.ParseDuration(s); err != nil {
+				return Serve{}, fmt.Errorf("%s is a duration such as 720h, got %q", d.env, s)
+			}
+		}
+		fs.DurationVar(d.into, d.flag, v, d.usage)
+	}
+	maxWaiting := DefaultMaxWaiting
+	if v := getenv("DARKORY_MAX_WAITING"); v != "" {
+		if maxWaiting, err = strconv.Atoi(v); err != nil {
+			return Serve{}, fmt.Errorf("DARKORY_MAX_WAITING is a count, got %q", v)
+		}
+	}
+	fs.IntVar(&c.MaxWaiting, "max-waiting", maxWaiting, "Activity streams, and waiting next calls, one Member may have open at once (DARKORY_MAX_WAITING)")
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
+	}
+	if c.SessionIdle <= 0 || c.SessionLifetime <= 0 {
+		return Serve{}, errors.New("--session-idle and --session-lifetime are above zero")
+	}
+	if c.MaxWaiting < 1 {
+		return Serve{}, fmt.Errorf("--max-waiting is 1 or more, got %d", c.MaxWaiting)
 	}
 	if c.EvidenceMaxMB < 1 {
 		return Serve{}, fmt.Errorf("--evidence-max-mb is 1 or more, got %d", c.EvidenceMaxMB)

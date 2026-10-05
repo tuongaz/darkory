@@ -9,7 +9,7 @@ import (
 )
 
 // Operations that need no credential (plan invariant 8).
-var public = []string{"getHealth", "redeemLoginLink", "requestEmailSignIn"}
+var public = []string{"getHealth", "showLoginLink", "redeemLoginLink", "requestEmailSignIn"}
 
 // The spec is valid OpenAPI 3.0, and every operation keeps the contract's conventions, so a new
 // operation cannot forget them.

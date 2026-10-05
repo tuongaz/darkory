@@ -22,7 +22,7 @@ func (s *Service) CreateSkill(ctx context.Context, c *auth.Caller, ns NewSkill, 
 	if err := mustAdmin(c); err != nil {
 		return SkillDetail{}, err
 	}
-	if !skillName.MatchString(ns.Name) {
+	if !skillName.MatchString(ns.Name) || looksLikeID(ns.Name) {
 		return SkillDetail{}, refuse(CodeInvalid, "a Skill name is lower-case letters, digits and dashes, such as qa")
 	}
 	switch {

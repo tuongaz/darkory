@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli"
 	"github.com/tuongaz/darkory/internal/clock"
@@ -208,14 +209,17 @@ func serve(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender,
-		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20})
+		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20,
+		BrowserSessions: auth.BrowserLimits{Idle: cfg.SessionIdle, Lifetime: cfg.SessionLifetime}, MaxWaiting: cfg.MaxWaiting})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
 	defer cancelRequests()
 	srv := &http.Server{
 		Handler: api.Handler(),
-		// No write timeout: the Activity stream and the long-poll `next` hold responses open.
+		// No write timeout: the Activity stream and the long-poll `next` hold responses open. No
+		// read timeout either, which would end them too: the server bounds each request's body
+		// instead (server.Options.BodyReadTimeout).
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 		BaseContext:       func(net.Listener) context.Context { return reqCtx },

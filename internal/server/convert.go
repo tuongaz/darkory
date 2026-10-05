@@ -26,7 +26,8 @@ func each[T, U any](in []T, conv func(T) U) []U {
 }
 
 func memberOut(m core.Member) gen.Member {
-	return gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID, CreatedAt: m.CreatedAt}
+	return gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID,
+		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt}
 }
 
 func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
@@ -138,7 +139,7 @@ func tokenOut(t core.Token) gen.Token {
 
 func sessionOut(s core.Session) gen.Session {
 	return gen.Session{ID: s.ID, MemberID: s.MemberID, Kind: gen.SessionKind(s.Kind), TokenID: s.TokenID,
-		StartedAt: s.StartedAt, LastSeenAt: s.LastSeenAt, ClosedAt: s.ClosedAt}
+		StartedAt: s.StartedAt, LastSeenAt: s.LastSeenAt, ExpiresAt: s.ExpiresAt, ClosedAt: s.ClosedAt}
 }
 
 func pageCursor(next string) *string {

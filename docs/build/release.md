@@ -46,11 +46,17 @@ Back the private key up offline (a password manager is fine) and delete the file
 | `HOMEBREW_TAP_GITHUB_TOKEN` | secret | a fine-grained token with contents read/write on `tuongaz/homebrew-tap`; without it the cask is written to `dist/` and not pushed |
 | `GITHUB_TOKEN` | built in | creates the GitHub release and pushes the image to `ghcr.io` (the workflow asks for `contents: write` and `packages: write`) |
 
+## How the workflow keeps the key away from npm
+
+The workflow has two jobs. `web` checks out the tag, runs `npm ci --ignore-scripts` and `npm run build` in `web/` with no secret in its environment and read-only repository access, and uploads `web/dist/app` as an artifact. `release` downloads it into `web/dist/app` and runs goreleaser with the secrets above. goreleaser's before-hook embeds an app that is already there and never runs npm in that environment: on GitHub Actions a missing `web/dist/app` stops the release instead. npm runs code from hundreds of packages, and one compromised version would otherwise read `DARKORY_SIGNING_KEY` and sign updates every binary trusts.
+
+Every action is pinned by commit, with its version in a comment, and goreleaser by exact version (`version: v2.18.2`). To move to a newer one, look its commit up (`git ls-remote https://github.com/<owner>/<repo> refs/tags/<tag>`, taking the `^{}` line for an annotated tag) and change both. The release job's Go cache is off, so no cache written elsewhere is restored next to the key.
+
 The tap repository `tuongaz/homebrew-tap` must exist (an empty repository is enough; goreleaser creates `Casks/`). After the first release, make the `ghcr.io/tuongaz/darkory` package public in its package settings, or `docker pull` needs a login.
 
 ## Cutting a release
 
-1. On `main`, with `make check` green and the web app building (`make web`, when the Makefile has it; goreleaser's before-hook runs it and otherwise embeds `web/dist` as committed).
+1. On `main`, with `make check` green and the web app building (`make web`; the workflow's `web` job builds it again from the tag).
 2. Tag and push:
 
    ```sh
@@ -60,15 +66,17 @@ The tap repository `tuongaz/homebrew-tap` must exist (an empty repository is eno
 
 3. Watch the `release` workflow. It publishes the GitHub release with the archives, `checksums.txt` and `checksums.txt.sig`, pushes the image, and pushes the cask. A tag with a prerelease part (`v0.2.0-rc.1`) makes a GitHub prerelease, which `darkory update`, the install script's default and the `latest` image all skip.
 
-To release from a laptop instead, export the four variables above and run `goreleaser release --clean`.
+To release from a laptop instead, run `make web` first, then export the four variables above and run `goreleaser release --clean`, so npm never runs with the key in its environment.
 
 ## Trying it without publishing
 
 ```sh
-go install github.com/goreleaser/goreleaser/v2@latest
+go install github.com/goreleaser/goreleaser/v2@v2.18.2   # the version the workflow pins
 goreleaser check
 goreleaser release --snapshot --clean --skip=publish,sign   # dist/, plus images tagged -amd64/-arm64 in the local daemon
 ```
+
+Locally the before-hook runs `make web` when `web/dist/app` is missing, and embeds it as it is otherwise, so run `make web` again after changing the app.
 
 Snapshot binaries report `v0.0.0-SNAPSHOT-<commit>`, a dev build, so they never check for or install updates. To rehearse a signed release end to end, use a throwaway key and a version that has no tag; nothing is pushed:
 
@@ -90,8 +98,8 @@ docker run -p 7357:7357 -v darkory-data:/data darkory
 
 ## How each install updates
 
-- **Install script** (`scripts/install.sh`): `curl -fsSL https://raw.githubusercontent.com/tuongaz/darkory/main/scripts/install.sh | sh`. It installs to `/usr/local/bin` when writable, otherwise `~/.local/bin`, and takes `DARKORY_VERSION` and `DARKORY_INSTALL_DIR`. It checks the archive's SHA-256 against `checksums.txt`, which catches a damaged download but not a substituted release; it does not check the signature. Those users then run `darkory update`, which checks the signature and the checksum, runs the new binary's `version`, and only then renames it over the old one (on Windows the old binary moves aside to `darkory.exe.old`). It refuses older releases and dev builds; `--check` only reports; `--version v1.2.3` picks a release.
+- **Install script** (`scripts/install.sh`): `curl -fsSL https://raw.githubusercontent.com/tuongaz/darkory/main/scripts/install.sh | sh`. It installs to `/usr/local/bin` when writable, otherwise `~/.local/bin`, and takes `DARKORY_VERSION` and `DARKORY_INSTALL_DIR`. It checks the archive's SHA-256 against `checksums.txt`, which catches a damaged download but not a substituted release; it does not check the signature. Those users then run `darkory update`, which checks the signature and the checksum, runs the new binary's `version`, and only then renames it over the old one (on Windows the old binary moves aside to `darkory.exe.old`). It refuses older releases and dev builds; `--check` only reports; `--version v1.2.3` picks a release, and is the only way to install a prerelease. A releases API (`DARKORY_UPDATE_URL`) that offers a prerelease as the latest release, a tag that is not a semantic version such as `v1.2.3`, or another release than the one named is refused, and a refused tag is printed escaped.
 - **Homebrew**: `brew install tuongaz/tap/darkory`, then `brew upgrade darkory`. `darkory update` sees the `Caskroom`/`Cellar` path and prints that command instead.
 - **Container**: `docker pull ghcr.io/tuongaz/darkory:latest` and recreate the container. The image sets `DARKORY_CONTAINER=1`, so `darkory update` prints that instead.
 
-The update notice (`update.PrintNotice` for the CLI, `update.NewChecker(…).Check` for the server) asks GitHub at most once a day, remembers the answer in the user cache directory (`darkory/update-check.json`), waits at most a second, and is off for dev builds, with `DARKORY_NO_UPDATE_CHECK=1`, or when the caller passes `noCheck` (meant for a CLI `--no-update-check` flag).
+The update notice (`update.PrintNotice` for the CLI, `update.NewChecker(…).Check` for the server) asks GitHub at most once a day, remembers the answer in the user cache directory (`darkory/update-check.json`), waits at most a second, never announces a prerelease or a tag that is not a version (even one remembered by an older binary), and is off for dev builds, with `DARKORY_NO_UPDATE_CHECK=1`, or when the caller passes `noCheck` (meant for a CLI `--no-update-check` flag).

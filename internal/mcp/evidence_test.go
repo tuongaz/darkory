@@ -10,6 +10,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/server"
@@ -157,4 +158,85 @@ func TestAttachEvidenceTool(t *testing.T) {
 	if err := json.Unmarshal(b, &ev); err != nil || ev.Filename != "report.txt" || ev.Size != 10 {
 		t.Fatalf("attached %s: %v", b, err)
 	}
+}
+
+// A path swapped for a link out of the root while attach_evidence checks it never makes it read
+// the file outside (security review L2): the file is opened once, inside the root, without
+// following a link out, and only what that open found is read. The swap replaces the file itself
+// with a link, or a directory on its path with one.
+func TestEvidenceSwappedForALinkNeverLeadsOut(t *testing.T) {
+	setup := func(t *testing.T) (root, outside string, rules evidenceRules) {
+		top := t.TempDir()
+		root, outside = filepath.Join(top, "work"), filepath.Join(top, "home-ssh")
+		for _, dir := range []string{filepath.Join(root, "d"), outside} {
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for path, content := range map[string]string{
+			filepath.Join(root, "d", "notes.txt"): "inside",
+			filepath.Join(root, "kept.txt"):       "inside",
+			filepath.Join(outside, "notes.txt"):   "OUTSIDE-SECRET",
+		} {
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		rules, err := newEvidenceRules(root, false, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return root, outside, rules
+	}
+	// race reads path while swap runs over and over, and fails on reading the outside file.
+	race := func(t *testing.T, rules evidenceRules, path string, swap func()) {
+		stop, done := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(done)
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+					swap()
+				}
+			}
+		}()
+		defer func() { close(stop); <-done }()
+		inside, refused := 0, 0
+		for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+			_, content, err := rules.read(path)
+			switch {
+			case string(content) == "OUTSIDE-SECRET":
+				t.Fatalf("read the file outside the root after %d reads inside and %d refused", inside, refused)
+			case err == nil:
+				inside++
+			default:
+				refused++
+			}
+		}
+		t.Logf("%d reads inside, %d refused", inside, refused)
+	}
+	t.Run("file", func(t *testing.T) {
+		root, outside, rules := setup(t)
+		target := filepath.Join(root, "notes.txt")
+		link, file := filepath.Join(root, "link.tmp"), filepath.Join(root, "file.tmp")
+		race(t, rules, "notes.txt", func() {
+			_ = os.Symlink(filepath.Join(outside, "notes.txt"), link)
+			_ = os.Rename(link, target)
+			_ = os.Link(filepath.Join(root, "kept.txt"), file)
+			_ = os.Rename(file, target)
+		})
+	})
+	t.Run("directory", func(t *testing.T) {
+		root, outside, rules := setup(t)
+		d, saved := filepath.Join(root, "d"), filepath.Join(root, "d-saved")
+		race(t, rules, "d/notes.txt", func() {
+			if os.Rename(d, saved) == nil {
+				_ = os.Symlink(outside, d)
+				_ = os.Remove(d)
+				_ = os.Rename(saved, d)
+			}
+		})
+	})
 }

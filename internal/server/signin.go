@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -21,9 +22,6 @@ import (
 	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
-
-// cookieAge is how long a browser keeps its Session cookie.
-const cookieAge = 30 * 24 * time.Hour
 
 // shownOnce is what a retry of a write that issued a secret gets back: the secret is never kept,
 // so the first response cannot be repeated (decisions.md).
@@ -66,20 +64,72 @@ func (s *Server) IssueLoginLink(w http.ResponseWriter, r *http.Request, member g
 	s.respond(w, r, out, l, err)
 }
 
-// RedeemLoginLink signs a browser in: it starts a browser Session, sets its cookie and sends the
-// browser to the web app.
-func (s *Server) RedeemLoginLink(w http.ResponseWriter, r *http.Request, code gen.LoginCode) {
-	bs, err := s.core.RedeemLoginLink(r.Context(), code)
+// ShowLoginLink answers a login link opened in a browser with a page naming whom it signs in as,
+// and a button that posts back to the same address to sign in. Opening the link changes nothing,
+// so a page elsewhere that sends a browser here cannot sign it in as someone else, and a mail
+// scanner that fetches the link does not use it up (security review L1).
+func (s *Server) ShowLoginLink(w http.ResponseWriter, r *http.Request, code gen.LoginCode) {
+	member, org, err := s.core.LoginLinkFor(r.Context(), code)
+	var refusal *core.Error
+	switch {
+	case errors.As(err, &refusal) && refusal.Code == core.CodeNotFound:
+		loginPage(w, http.StatusNotFound, loginPageData{})
+	case err != nil:
+		s.fail(w, r, err)
+	default:
+		loginPage(w, http.StatusOK, loginPageData{Member: member, Organisation: org, Minutes: int(core.LoginLinkTTL.Minutes())})
+	}
+}
+
+// RedeemLoginLink signs a browser in from the sign-in page: it starts a browser Session, sets its
+// cookie and sends the browser to the web app. Like a cookie write, it must come from the
+// Install's own page. The Session of a cookie the browser already held is closed.
+func (s *Server) RedeemLoginLink(w http.ResponseWriter, r *http.Request, code gen.LoginCode, _ gen.RedeemLoginLinkParams) {
+	if !s.sameOrigin(r) {
+		writeError(w, http.StatusForbidden, gen.ErrorCodeForbidden,
+			"a login link signs in from this Install's own sign-in page: open the link in a browser")
+		return
+	}
+	var old string
+	if ck, err := r.Cookie(auth.CookieName); err == nil {
+		old = ck.Value
+	}
+	bs, err := s.core.RedeemLoginLink(r.Context(), code, old)
+	var refusal *core.Error
+	if errors.As(err, &refusal) && refusal.Code == core.CodeNotFound && wantsHTML(r) {
+		loginPage(w, http.StatusNotFound, loginPageData{})
+		return
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name: auth.CookieName, Value: bs.Cookie, Path: "/", MaxAge: int(cookieAge / time.Second),
+		Name: auth.CookieName, Value: bs.Cookie, Path: "/", MaxAge: int(s.browser.Lifetime / time.Second),
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: strings.HasPrefix(s.baseURL(r), "https://"),
 	})
 	w.Header().Set("Location", "/")
 	w.WriteHeader(http.StatusSeeOther)
+}
+
+// wantsHTML reports whether the request came from a browser page rather than a program.
+func wantsHTML(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
+func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request, member gen.MemberRef, params gen.ListSessionsParams) {
+	var limit int
+	var cursor string
+	if params.Limit != nil {
+		limit = *params.Limit
+	}
+	if params.Cursor != nil {
+		cursor = *params.Cursor
+	}
+	p, err := s.core.ListSessions(r.Context(), caller(r), member, limit, cursor)
+	s.respond(w, r, as(http.StatusOK, func(p core.Page[core.Session]) any {
+		return gen.SessionList{Items: each(p.Items, sessionOut), NextCursor: pageCursor(p.NextCursor)}
+	}), p, err)
 }
 
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request, params gen.LogoutParams) {
@@ -235,7 +285,7 @@ func (s *Server) SignInModes() []string { return config.SignInModes(s.signIn != 
 func (s *Server) RequestEmailSignIn(w http.ResponseWriter, r *http.Request, _ gen.RequestEmailSignInParams) {
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
 	if err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, gen.ErrorCodeTooLarge, "the request body is over 4 KiB")
+		readFailed(w, err, "4 KiB")
 		return
 	}
 	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
@@ -301,6 +351,11 @@ func (e *emailSignIn) send(ctx context.Context, s *Server, address string) {
 			return
 		}
 		l, err := s.core.IssueEmailLink(ctx, f)
+		var refusal *core.Error
+		if errors.As(err, &refusal) && refusal.Code == core.CodeConflict {
+			s.log.Info("email sign-in: the Member was deactivated; sending nothing", "member", f.MemberID)
+			continue
+		}
 		if err != nil {
 			s.log.Error("email sign-in: issuing a login link", "member", f.MemberID, "err", err)
 			continue
@@ -327,8 +382,10 @@ If you did not ask, ignore this email: nobody can sign in without the link.
 }
 
 // clientAddress is the address a request came from, for rate limits: the connection's, or, behind
-// hops proxies that each append to X-Forwarded-For, the entry that many from its end. An IPv6
-// address counts by its /64, which one client usually holds whole.
+// hops proxies that each append to X-Forwarded-For, the entry that many from its end. A chain
+// shorter than hops did not come through every proxy, so its entries are the client's own words
+// and the connection's address counts instead (security review L9). An IPv6 address counts by its
+// /64, which one client usually holds whole.
 func clientAddress(r *http.Request, hops int) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -343,11 +400,8 @@ func clientAddress(r *http.Request, hops int) string {
 				}
 			}
 		}
-		switch {
-		case len(chain) >= hops:
+		if len(chain) >= hops {
 			host = chain[len(chain)-hops]
-		case len(chain) > 0:
-			host = chain[0]
 		}
 	}
 	ip, err := netip.ParseAddr(host)
