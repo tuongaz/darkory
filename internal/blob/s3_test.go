@@ -36,6 +36,9 @@ const (
 	minioSecret = "darkory-minio-secret"
 )
 
+// StartMinIO starts MinIO with a bucket and returns settings for it; blob_test uses it too.
+func StartMinIO(t *testing.T) S3Settings { return minio(t) }
+
 // minio starts MinIO with a bucket and returns settings for it.
 func minio(t *testing.T) S3Settings {
 	t.Helper()

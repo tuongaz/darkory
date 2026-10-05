@@ -66,6 +66,8 @@ type Serve struct {
 	Evidence blob.Settings
 	// SMTP sends emailed sign-in links; unset, email sign-in is off.
 	SMTP SMTP
+	// EvidenceMaxMB bounds one Evidence file, in MiB (DARKORY_EVIDENCE_MAX_MB, --evidence-max-mb).
+	EvidenceMaxMB int64
 }
 
 // SMTP names the server that sends email (environment only).
@@ -110,6 +112,9 @@ func SignInModes(email bool) []string {
 
 // SignInModes lists how humans sign in to this Install.
 func (c Serve) SignInModes() []string { return SignInModes(c.SMTP.URL != "") }
+
+// DefaultEvidenceMaxMB is the largest Evidence file, in MiB, unless set otherwise.
+const DefaultEvidenceMaxMB = 100
 
 // Init holds the settings of `darkory init`.
 type Init struct {
@@ -162,8 +167,16 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	fs.IntVar(&c.ProxyHops, "proxy-hops", hops, "proxies in front that append to X-Forwarded-For (DARKORY_PROXY_HOPS)")
 	var evidence string
 	fs.StringVar(&evidence, "evidence", getenv("DARKORY_EVIDENCE"), "directory for Evidence, or s3://bucket/prefix; default evidence in the data directory (DARKORY_EVIDENCE)")
+	maxMB, err := strconv.ParseInt(or(getenv("DARKORY_EVIDENCE_MAX_MB"), strconv.Itoa(DefaultEvidenceMaxMB)), 10, 64)
+	if err != nil {
+		return Serve{}, fmt.Errorf("DARKORY_EVIDENCE_MAX_MB: %w", err)
+	}
+	fs.Int64Var(&c.EvidenceMaxMB, "evidence-max-mb", maxMB, "largest Evidence file in MiB (DARKORY_EVIDENCE_MAX_MB)")
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
+	}
+	if c.EvidenceMaxMB < 1 {
+		return Serve{}, fmt.Errorf("--evidence-max-mb is 1 or more, got %d", c.EvidenceMaxMB)
 	}
 	if fs.NArg() > 0 {
 		return Serve{}, fmt.Errorf("serve takes no arguments, got %q", fs.Args())
@@ -173,7 +186,6 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	}
 	c.finish()
 	c.DatabaseListen = getenv("DARKORY_DB_LISTEN")
-	var err error
 	if c.Evidence, err = loadEvidence(evidence, c.DataDir, getenv); err != nil {
 		return Serve{}, err
 	}

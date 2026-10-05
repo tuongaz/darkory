@@ -18,6 +18,129 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActivityKind.
+const (
+	ActivityKindFeatureDropped          ActivityKind = "feature.dropped"
+	ActivityKindFeatureEvidenceAttached ActivityKind = "feature.evidence_attached"
+	ActivityKindFeatureFiled            ActivityKind = "feature.filed"
+	ActivityKindFeatureOwnerPassed      ActivityKind = "feature.owner_passed"
+	ActivityKindFeatureRanked           ActivityKind = "feature.ranked"
+	ActivityKindFeatureShipped          ActivityKind = "feature.shipped"
+	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
+	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
+	ActivityKindMemberCreated           ActivityKind = "member.created"
+	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
+	ActivityKindMemberManagerSet        ActivityKind = "member.manager_set"
+	ActivityKindMemberSkillGranted      ActivityKind = "member.skill_granted"
+	ActivityKindMemberSkillRevoked      ActivityKind = "member.skill_revoked"
+	ActivityKindMemberUpdated           ActivityKind = "member.updated"
+	ActivityKindSessionClosed           ActivityKind = "session.closed"
+	ActivityKindSkillCreated            ActivityKind = "skill.created"
+	ActivityKindSkillVersionPublished   ActivityKind = "skill.version_published"
+	ActivityKindTaskBlockerAdded        ActivityKind = "task.blocker_added"
+	ActivityKindTaskBlockerRemoved      ActivityKind = "task.blocker_removed"
+	ActivityKindTaskClaimEnded          ActivityKind = "task.claim_ended"
+	ActivityKindTaskClaimed             ActivityKind = "task.claimed"
+	ActivityKindTaskCompleted           ActivityKind = "task.completed"
+	ActivityKindTaskDropped             ActivityKind = "task.dropped"
+	ActivityKindTaskEvidenceAttached    ActivityKind = "task.evidence_attached"
+	ActivityKindTaskFiled               ActivityKind = "task.filed"
+	ActivityKindTaskHandedOver          ActivityKind = "task.handed_over"
+	ActivityKindTaskLapsed              ActivityKind = "task.lapsed"
+	ActivityKindTaskNoteAdded           ActivityKind = "task.note_added"
+	ActivityKindTaskObserved            ActivityKind = "task.observed"
+	ActivityKindTaskReleased            ActivityKind = "task.released"
+	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
+	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
+	ActivityKindTeamCreated             ActivityKind = "team.created"
+	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
+	ActivityKindTeamMemberRemoved       ActivityKind = "team.member_removed"
+	ActivityKindTokenIssued             ActivityKind = "token.issued"
+	ActivityKindTokenRevoked            ActivityKind = "token.revoked"
+)
+
+// Valid indicates whether the value is a known member of the ActivityKind enum.
+func (e ActivityKind) Valid() bool {
+	switch e {
+	case ActivityKindFeatureDropped:
+		return true
+	case ActivityKindFeatureEvidenceAttached:
+		return true
+	case ActivityKindFeatureFiled:
+		return true
+	case ActivityKindFeatureOwnerPassed:
+		return true
+	case ActivityKindFeatureRanked:
+		return true
+	case ActivityKindFeatureShipped:
+		return true
+	case ActivityKindLoginLinkIssued:
+		return true
+	case ActivityKindLoginLinkRedeemed:
+		return true
+	case ActivityKindMemberCreated:
+		return true
+	case ActivityKindMemberManagerCleared:
+		return true
+	case ActivityKindMemberManagerSet:
+		return true
+	case ActivityKindMemberSkillGranted:
+		return true
+	case ActivityKindMemberSkillRevoked:
+		return true
+	case ActivityKindMemberUpdated:
+		return true
+	case ActivityKindSessionClosed:
+		return true
+	case ActivityKindSkillCreated:
+		return true
+	case ActivityKindSkillVersionPublished:
+		return true
+	case ActivityKindTaskBlockerAdded:
+		return true
+	case ActivityKindTaskBlockerRemoved:
+		return true
+	case ActivityKindTaskClaimEnded:
+		return true
+	case ActivityKindTaskClaimed:
+		return true
+	case ActivityKindTaskCompleted:
+		return true
+	case ActivityKindTaskDropped:
+		return true
+	case ActivityKindTaskEvidenceAttached:
+		return true
+	case ActivityKindTaskFiled:
+		return true
+	case ActivityKindTaskHandedOver:
+		return true
+	case ActivityKindTaskLapsed:
+		return true
+	case ActivityKindTaskNoteAdded:
+		return true
+	case ActivityKindTaskObserved:
+		return true
+	case ActivityKindTaskReleased:
+		return true
+	case ActivityKindTaskSkillProposed:
+		return true
+	case ActivityKindTaskTakenBack:
+		return true
+	case ActivityKindTeamCreated:
+		return true
+	case ActivityKindTeamMemberAdded:
+		return true
+	case ActivityKindTeamMemberRemoved:
+		return true
+	case ActivityKindTokenIssued:
+		return true
+	case ActivityKindTokenRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClaimEnd.
 const (
 	ClaimEndCompleted     ClaimEnd = "completed"
@@ -252,6 +375,24 @@ func (e SessionKind) Valid() bool {
 	}
 }
 
+// Defines values for SignInMode.
+const (
+	SignInEmailLink   SignInMode = "email_link"
+	SignInPrintedLink SignInMode = "printed_link"
+)
+
+// Valid indicates whether the value is a known member of the SignInMode enum.
+func (e SignInMode) Valid() bool {
+	switch e {
+	case SignInEmailLink:
+		return true
+	case SignInPrintedLink:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SkillKind.
 const (
 	Company SkillKind = "company"
@@ -264,6 +405,42 @@ func (e SkillKind) Valid() bool {
 	case Company:
 		return true
 	case Generic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubjectType.
+const (
+	SubjectTypeFeature   SubjectType = "feature"
+	SubjectTypeLoginLink SubjectType = "login_link"
+	SubjectTypeMember    SubjectType = "member"
+	SubjectTypeSession   SubjectType = "session"
+	SubjectTypeSkill     SubjectType = "skill"
+	SubjectTypeTask      SubjectType = "task"
+	SubjectTypeTeam      SubjectType = "team"
+	SubjectTypeToken     SubjectType = "token"
+)
+
+// Valid indicates whether the value is a known member of the SubjectType enum.
+func (e SubjectType) Valid() bool {
+	switch e {
+	case SubjectTypeFeature:
+		return true
+	case SubjectTypeLoginLink:
+		return true
+	case SubjectTypeMember:
+		return true
+	case SubjectTypeSession:
+		return true
+	case SubjectTypeSkill:
+		return true
+	case SubjectTypeTask:
+		return true
+	case SubjectTypeTeam:
+		return true
+	case SubjectTypeToken:
 		return true
 	default:
 		return false
@@ -318,20 +495,30 @@ type Activity struct {
 	ActorID *string   `json:"actor_id,omitempty"`
 	At      time.Time `json:"at"`
 
-	// Kind What happened, such as `task.claimed` or `feature.shipped`.
-	Kind    string                 `json:"kind"`
+	// Kind What happened. The part before the dot is the `subject_type`. New kinds may be added
+	// within `/v1`; a client should skip a kind it does not know.
+	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
 	// Seq Per-Organisation sequence number, in commit order.
 	Seq int64 `json:"seq"`
 
-	// SubjectID The id of the record the entry is about.
+	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID string `json:"subject_id"`
+
+	// SubjectType The kind of record an Activity entry is about.
+	SubjectType SubjectType `json:"subject_type"`
 }
+
+// ActivityKind What happened. The part before the dot is the `subject_type`. New kinds may be added
+// within `/v1`; a client should skip a kind it does not know.
+type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
 type ActivityPage struct {
-	Items []Activity `json:"items"`
+	// FirstSeq The sequence number of the first entry returned. Absent when none were. Pass it as `before` to read the page before.
+	FirstSeq *int64     `json:"first_seq,omitempty"`
+	Items    []Activity `json:"items"`
 
 	// LastSeq The sequence number of the last entry returned, or `after` when none were. Pass it as `after` next time.
 	LastSeq int64 `json:"last_seq"`
@@ -482,10 +669,13 @@ type Feature struct {
 	OwnerID string `json:"owner_id"`
 
 	// Rank Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-	Rank   int64        `json:"rank"`
-	State  FeatureState `json:"state"`
-	TeamID string       `json:"team_id"`
-	Title  string       `json:"title"`
+	Rank  int64        `json:"rank"`
+	State FeatureState `json:"state"`
+
+	// TaskCounts How many of the Feature's Tasks are in each state.
+	TaskCounts TaskCounts `json:"task_counts"`
+	TeamID     string     `json:"team_id"`
+	Title      string     `json:"title"`
 }
 
 // FeatureDetail defines model for FeatureDetail.
@@ -549,7 +739,16 @@ type HandoverTaskBody struct {
 
 // Health defines model for Health.
 type Health struct {
-	Status HealthStatus `json:"status"`
+	// LatestVersion The newest release the server knows of. Absent when it has not checked.
+	LatestVersion *string `json:"latest_version,omitempty"`
+
+	// SignInModes How humans sign in to this Install.
+	SignInModes []SignInMode `json:"sign_in_modes"`
+	Status      HealthStatus `json:"status"`
+
+	// UpdateAvailable True when a newer release than `version` exists. Absent when the server has not
+	// checked: a development build, or checks turned off with DARKORY_NO_UPDATE_CHECK.
+	UpdateAvailable *bool `json:"update_available,omitempty"`
 
 	// Version The server's release version.
 	Version string `json:"version"`
@@ -703,7 +902,9 @@ type PassFeatureOwnershipBody struct {
 	Owner string `json:"owner"`
 }
 
-// ProposalState defines model for ProposalState.
+// ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
+// not be published, because a newer proposal replaced it on its Task or its Task ended
+// without publishing it.
 type ProposalState string
 
 // ProposeSkillVersionBody defines model for ProposeSkillVersionBody.
@@ -750,6 +951,10 @@ type SetManagerBody struct {
 	Manager string `json:"manager"`
 }
 
+// SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
+// `email_link`: login links emailed on request. More modes may be added within `/v1`.
+type SignInMode string
+
 // Skill defines model for Skill.
 type Skill struct {
 	// BaseSkillID The generic Skill a company Skill builds on.
@@ -780,15 +985,24 @@ type SkillList struct {
 
 // SkillProposal defines model for SkillProposal.
 type SkillProposal struct {
-	AuthorID         string        `json:"author_id"`
-	BasedOnVersion   int64         `json:"based_on_version"`
-	Body             string        `json:"body"`
-	CreatedAt        time.Time     `json:"created_at"`
-	ID               string        `json:"id"`
-	PublishedVersion *int64        `json:"published_version,omitempty"`
-	SkillID          string        `json:"skill_id"`
-	State            ProposalState `json:"state"`
-	TaskID           string        `json:"task_id"`
+	AuthorID       string    `json:"author_id"`
+	BasedOnVersion int64     `json:"based_on_version"`
+	Body           string    `json:"body"`
+	CreatedAt      time.Time `json:"created_at"`
+
+	// DecidedAt When it was published or superseded.
+	DecidedAt *time.Time `json:"decided_at,omitempty"`
+	ID        string     `json:"id"`
+
+	// PublishedVersion The version publishing it made. Absent unless `state` is `published`.
+	PublishedVersion *int64 `json:"published_version,omitempty"`
+	SkillID          string `json:"skill_id"`
+
+	// State `pending`: waiting for review. `published`: a review published it. `superseded`: it will
+	// not be published, because a newer proposal replaced it on its Task or its Task ended
+	// without publishing it.
+	State  ProposalState `json:"state"`
+	TaskID string        `json:"task_id"`
 }
 
 // SkillVersion defines model for SkillVersion.
@@ -809,6 +1023,9 @@ type SkillVersion struct {
 type SkillVersionList struct {
 	Items []SkillVersion `json:"items"`
 }
+
+// SubjectType The kind of record an Activity entry is about.
+type SubjectType string
 
 // TakeBackTaskBody defines model for TakeBackTaskBody.
 type TakeBackTaskBody struct {
@@ -836,6 +1053,9 @@ type Task struct {
 	// Kind `breakdown` and `retrospective` Tasks are filed by Darkory.
 	Kind TaskKind `json:"kind"`
 
+	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
+	OpenBlockers *[]TaskBrief `json:"open_blockers,omitempty"`
+
 	// SkillID The Skill the Task needs now. Absent when it is aimed at a Member.
 	SkillID *string `json:"skill_id,omitempty"`
 
@@ -847,7 +1067,26 @@ type Task struct {
 	WaitingSince time.Time `json:"waiting_since"`
 }
 
-// TaskDetail defines model for TaskDetail.
+// TaskBrief A Task named by its id and display key.
+type TaskBrief struct {
+	ID string `json:"id"`
+
+	// Key Display key, such as `WEB-42`.
+	Key string `json:"key"`
+}
+
+// TaskCounts How many of the Feature's Tasks are in each state.
+type TaskCounts struct {
+	// Claimed Open Tasks with a live Claim; these are also counted in `open`.
+	Claimed int `json:"claimed"`
+	Done    int `json:"done"`
+	Dropped int `json:"dropped"`
+
+	// Open Open Tasks, claimed or not.
+	Open int `json:"open"`
+}
+
+// TaskDetail The Task with its record. `proposal` is the latest Skill proposal written on it, when any.
 type TaskDetail struct {
 	// Blockers The Tasks blocking this one.
 	Blockers []Task `json:"blockers"`
@@ -861,9 +1100,10 @@ type TaskDetail struct {
 	Feature  Feature    `json:"feature"`
 
 	// Notes The running log, oldest first.
-	Notes        []Note        `json:"notes"`
-	Observations []Observation `json:"observations"`
-	Task         Task          `json:"task"`
+	Notes        []Note         `json:"notes"`
+	Observations []Observation  `json:"observations"`
+	Proposal     *SkillProposal `json:"proposal,omitempty"`
+	Task         Task           `json:"task"`
 }
 
 // TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
@@ -956,6 +1196,9 @@ type LoginCode = string
 // MemberRef defines model for MemberRef.
 type MemberRef = string
 
+// ProposalID defines model for ProposalID.
+type ProposalID = string
+
 // SessionID defines model for SessionID.
 type SessionID = string
 
@@ -975,6 +1218,9 @@ type TokenID = string
 type ListActivityParams struct {
 	// After Return entries with a sequence number greater than this. Defaults to 0.
 	After *int64 `form:"after,omitempty" json:"after,omitempty"`
+
+	// Before Return the entries with a sequence number below this, closest first.
+	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1023,7 +1269,8 @@ type AttachFeatureEvidenceParams struct {
 
 // ListFeatureObservationsParams defines parameters for ListFeatureObservations.
 type ListFeatureObservationsParams struct {
-	// Reviewed true for only reviewed Observations, false for only unreviewed ones. Omitted for all.
+	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
+	// Observation, reviewed or not.
 	Reviewed *bool `form:"reviewed,omitempty" json:"reviewed,omitempty"`
 }
 
@@ -1414,10 +1661,13 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// ListActivity Read Activity after a sequence number
+	// ListActivity Read Activity after, or before, a sequence number
 	//
 	// Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
-	// `after` to read the next.
+	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
+	// entries numbered just below it, still in sequence order, and its `first_seq` is the
+	// `before` of the page before it. A `before` past the newest entry (such as
+	// 9007199254740991) reads the latest page.
 	//
 	// Corresponds with GET /v1/activity (the `ListActivity` operationId).
 	ListActivity(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1426,7 +1676,9 @@ type ClientInterface interface {
 	//
 	// Each entry is one event: `id` is its sequence number, `event` is `activity` and `data` is
 	// the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
-	// clients that cannot set headers) and receives every entry after it.
+	// clients that cannot set headers) and receives every entry after it; `0` sends the whole
+	// history. With neither, the stream starts from now: it sends only entries written after
+	// it opened.
 	//
 	// Corresponds with GET /v1/activity/stream (the `StreamActivity` operationId).
 	StreamActivity(ctx context.Context, params *StreamActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1438,7 +1690,8 @@ type ClientInterface interface {
 
 	// DownloadEvidence Download an Evidence file
 	//
-	// Served with the content type it was attached with.
+	// Served with the content type it was attached with, always as an attachment and with
+	// `X-Content-Type-Options: nosniff`, so a browser never renders an uploaded page.
 	//
 	// Corresponds with GET /v1/evidence/{evidence}/content (the `DownloadEvidence` operationId).
 	DownloadEvidence(ctx context.Context, evidence EvidenceID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1479,16 +1732,17 @@ type ClientInterface interface {
 
 	// DropFeature Drop a Feature (Feature owner)
 	//
-	// Drops its open Tasks, ends their Claims, and files the Retrospective Task in the same
-	// write. Errors: `forbidden` (not the owner), `ended`.
+	// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
+	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
 	//
 	// Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
 	DropFeature(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AttachFeatureEvidenceWithBody Attach Evidence to a Feature
 	//
-	// The request body is the file itself, sent with its own `Content-Type`. Errors:
-	// `too_large`.
+	// The request body is the file itself, sent with its own `Content-Type` and a
+	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
+	// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1520,8 +1774,9 @@ type ClientInterface interface {
 
 	// RankFeatureWithBody Move a Feature to a position in its Team's Rank
 	//
-	// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-	// (not in the Team).
+	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+	// their places and count as positions. By a Member of the Feature's Team or its owner.
+	// Errors: `forbidden`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1530,8 +1785,9 @@ type ClientInterface interface {
 
 	// RankFeature Move a Feature to a position in its Team's Rank
 	//
-	// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-	// (not in the Team).
+	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+	// their places and count as positions. By a Member of the Feature's Team or its owner.
+	// Errors: `forbidden`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1540,13 +1796,14 @@ type ClientInterface interface {
 
 	// ShipFeature Ship a Feature (Feature owner)
 	//
-	// Needs every Task of the Feature to have ended. Files the Retrospective Task in the same
-	// write. Errors: `forbidden` (not the owner), `tasks_open`, `ended`.
+	// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
+	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
+	// `tasks_open`, `ended`.
 	//
 	// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
 	ShipFeature(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetHealth Report that the Install is up
+	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	//
 	// Corresponds with GET /v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1716,6 +1973,11 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/sign-in/email (the `RequestEmailSignIn` operationId).
 	RequestEmailSignIn(ctx context.Context, params *RequestEmailSignInParams, body RequestEmailSignInJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetSkillProposal Get a proposed Skill version
+	//
+	// Corresponds with GET /v1/skill-proposals/{proposal} (the `GetSkillProposal` operationId).
+	GetSkillProposal(ctx context.Context, proposal ProposalID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListSkills List the Organisation's Skills
 	//
 	// Corresponds with GET /v1/skills (the `ListSkills` operationId).
@@ -1762,8 +2024,11 @@ type ClientInterface interface {
 	//
 	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-	// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+	// `not_holder`, `forbidden`, `cycle`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1774,8 +2039,11 @@ type ClientInterface interface {
 	//
 	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-	// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+	// `not_holder`, `forbidden`, `cycle`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1822,15 +2090,17 @@ type ClientInterface interface {
 
 	// RemoveBlocker Stop one Task blocking another
 	//
-	// Errors: `forbidden`, `not_holder`.
+	// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
 	//
 	// Corresponds with DELETE /v1/tasks/{task}/blockers/{blocker} (the `RemoveBlocker` operationId).
 	RemoveBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *RemoveBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AddBlocker Let one Task block another
 	//
-	// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended.
-	// Errors: `forbidden`, `not_holder`, `cycle`.
+	// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
+	// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
+	// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
+	// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
 	//
 	// Corresponds with PUT /v1/tasks/{task}/blockers/{blocker} (the `AddBlocker` operationId).
 	AddBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *AddBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1861,10 +2131,11 @@ type ClientInterface interface {
 
 	// CompleteTaskWithBody Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-	// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-	// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-	// current; nothing changes).
+	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// (the version the proposal was written against is no longer current; nothing changes, and
+	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1873,10 +2144,11 @@ type ClientInterface interface {
 
 	// CompleteTask Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-	// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-	// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-	// current; nothing changes).
+	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// (the version the proposal was written against is no longer current; nothing changes, and
+	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1903,8 +2175,10 @@ type ClientInterface interface {
 
 	// AttachTaskEvidenceWithBody Attach Evidence to a Task
 	//
-	// The request body is the file itself, sent with its own `Content-Type`. Errors:
-	// `not_holder` (the Task is held by someone else), `too_large`.
+	// The request body is the file itself, sent with its own `Content-Type` and a
+	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
+	// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+	// `not_holder`, `forbidden`, `too_large`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1913,7 +2187,9 @@ type ClientInterface interface {
 
 	// HandoverTaskWithBody End the caller's Claim and set the Skill the Task needs next
 	//
-	// Errors: `not_holder`.
+	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+	// again only under that Skill. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1922,7 +2198,9 @@ type ClientInterface interface {
 
 	// HandoverTask End the caller's Claim and set the Skill the Task needs next
 	//
-	// Errors: `not_holder`.
+	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+	// again only under that Skill. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1942,7 +2220,7 @@ type ClientInterface interface {
 
 	// AddNoteWithBody Add a Note to a Task's running log
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1951,7 +2229,7 @@ type ClientInterface interface {
 
 	// AddNote Add a Note to a Task's running log
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1960,7 +2238,8 @@ type ClientInterface interface {
 
 	// ObserveWithBody Record an Observation on a Task
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task; the Observation records the Skill they hold it under.
+	// Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1969,7 +2248,8 @@ type ClientInterface interface {
 
 	// Observe Record an Observation on a Task
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task; the Observation records the Skill they hold it under.
+	// Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1996,8 +2276,10 @@ type ClientInterface interface {
 
 	// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Task the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version. The caller then
-	// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+	// Written against `based_on_version`, which must be the current version, for a company
+	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+	// a company Skill).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2006,8 +2288,10 @@ type ClientInterface interface {
 
 	// ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version. The caller then
-	// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+	// Written against `based_on_version`, which must be the current version, for a company
+	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+	// a company Skill).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2083,10 +2367,13 @@ type ClientInterface interface {
 	RevokeToken(ctx context.Context, token TokenID, params *RevokeTokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// ListActivity Read Activity after a sequence number
+// ListActivity Read Activity after, or before, a sequence number
 //
 // Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
-// `after` to read the next.
+// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
+// entries numbered just below it, still in sequence order, and its `first_seq` is the
+// `before` of the page before it. A `before` past the newest entry (such as
+// 9007199254740991) reads the latest page.
 //
 // Corresponds with GET /v1/activity (the `ListActivity` operationId).
 func (c *Client) ListActivity(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2105,7 +2392,9 @@ func (c *Client) ListActivity(ctx context.Context, params *ListActivityParams, r
 //
 // Each entry is one event: `id` is its sequence number, `event` is `activity` and `data` is
 // the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
-// clients that cannot set headers) and receives every entry after it.
+// clients that cannot set headers) and receives every entry after it; `0` sends the whole
+// history. With neither, the stream starts from now: it sends only entries written after
+// it opened.
 //
 // Corresponds with GET /v1/activity/stream (the `StreamActivity` operationId).
 func (c *Client) StreamActivity(ctx context.Context, params *StreamActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2137,7 +2426,8 @@ func (c *Client) GetEvidence(ctx context.Context, evidence EvidenceID, reqEditor
 
 // DownloadEvidence Download an Evidence file
 //
-// Served with the content type it was attached with.
+// Served with the content type it was attached with, always as an attachment and with
+// `X-Content-Type-Options: nosniff`, so a browser never renders an uploaded page.
 //
 // Corresponds with GET /v1/evidence/{evidence}/content (the `DownloadEvidence` operationId).
 func (c *Client) DownloadEvidence(ctx context.Context, evidence EvidenceID, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2228,8 +2518,8 @@ func (c *Client) GetFeature(ctx context.Context, feature FeatureRef, reqEditors 
 
 // DropFeature Drop a Feature (Feature owner)
 //
-// Drops its open Tasks, ends their Claims, and files the Retrospective Task in the same
-// write. Errors: `forbidden` (not the owner), `ended`.
+// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
+// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
 //
 // Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
 func (c *Client) DropFeature(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2246,8 +2536,9 @@ func (c *Client) DropFeature(ctx context.Context, feature FeatureRef, params *Dr
 
 // AttachFeatureEvidenceWithBody Attach Evidence to a Feature
 //
-// The request body is the file itself, sent with its own `Content-Type`. Errors:
-// `too_large`.
+// The request body is the file itself, sent with its own `Content-Type` and a
+// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
+// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2319,8 +2610,9 @@ func (c *Client) PassFeatureOwnership(ctx context.Context, feature FeatureRef, p
 
 // RankFeatureWithBody Move a Feature to a position in its Team's Rank
 //
-// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-// (not in the Team).
+// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+// their places and count as positions. By a Member of the Feature's Team or its owner.
+// Errors: `forbidden`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2339,8 +2631,9 @@ func (c *Client) RankFeatureWithBody(ctx context.Context, feature FeatureRef, pa
 
 // RankFeature Move a Feature to a position in its Team's Rank
 //
-// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-// (not in the Team).
+// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+// their places and count as positions. By a Member of the Feature's Team or its owner.
+// Errors: `forbidden`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2359,8 +2652,9 @@ func (c *Client) RankFeature(ctx context.Context, feature FeatureRef, params *Ra
 
 // ShipFeature Ship a Feature (Feature owner)
 //
-// Needs every Task of the Feature to have ended. Files the Retrospective Task in the same
-// write. Errors: `forbidden` (not the owner), `tasks_open`, `ended`.
+// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
+// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
+// `tasks_open`, `ended`.
 //
 // Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
 func (c *Client) ShipFeature(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2375,7 +2669,7 @@ func (c *Client) ShipFeature(ctx context.Context, feature FeatureRef, params *Sh
 	return c.Client.Do(req)
 }
 
-// GetHealth Report that the Install is up
+// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 //
 // Corresponds with GET /v1/health (the `GetHealth` operationId).
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2765,6 +3059,21 @@ func (c *Client) RequestEmailSignIn(ctx context.Context, params *RequestEmailSig
 	return c.Client.Do(req)
 }
 
+// GetSkillProposal Get a proposed Skill version
+//
+// Corresponds with GET /v1/skill-proposals/{proposal} (the `GetSkillProposal` operationId).
+func (c *Client) GetSkillProposal(ctx context.Context, proposal ProposalID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSkillProposalRequest(c.Server, proposal)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListSkills List the Organisation's Skills
 //
 // Corresponds with GET /v1/skills (the `ListSkills` operationId).
@@ -2871,8 +3180,11 @@ func (c *Client) ListTasks(ctx context.Context, params *ListTasksParams, reqEdit
 //
 // A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+// `not_holder`, `forbidden`, `cycle`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2893,8 +3205,11 @@ func (c *Client) FileTaskWithBody(ctx context.Context, params *FileTaskParams, c
 //
 // A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+// `not_holder`, `forbidden`, `cycle`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2991,7 +3306,7 @@ func (c *Client) GetTask(ctx context.Context, task TaskRef, reqEditors ...Reques
 
 // RemoveBlocker Stop one Task blocking another
 //
-// Errors: `forbidden`, `not_holder`.
+// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
 //
 // Corresponds with DELETE /v1/tasks/{task}/blockers/{blocker} (the `RemoveBlocker` operationId).
 func (c *Client) RemoveBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *RemoveBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3008,8 +3323,10 @@ func (c *Client) RemoveBlocker(ctx context.Context, task TaskRef, blocker Blocke
 
 // AddBlocker Let one Task block another
 //
-// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended.
-// Errors: `forbidden`, `not_holder`, `cycle`.
+// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
+// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
+// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
+// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
 //
 // Corresponds with PUT /v1/tasks/{task}/blockers/{blocker} (the `AddBlocker` operationId).
 func (c *Client) AddBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *AddBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3070,10 +3387,11 @@ func (c *Client) ClaimTask(ctx context.Context, task TaskRef, params *ClaimTaskP
 
 // CompleteTaskWithBody Complete a Task the caller holds
 //
-// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-// current; nothing changes).
+// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// (the version the proposal was written against is no longer current; nothing changes, and
+// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3092,10 +3410,11 @@ func (c *Client) CompleteTaskWithBody(ctx context.Context, task TaskRef, params 
 
 // CompleteTask Complete a Task the caller holds
 //
-// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-// current; nothing changes).
+// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// (the version the proposal was written against is no longer current; nothing changes, and
+// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3152,8 +3471,10 @@ func (c *Client) DropTask(ctx context.Context, task TaskRef, params *DropTaskPar
 
 // AttachTaskEvidenceWithBody Attach Evidence to a Task
 //
-// The request body is the file itself, sent with its own `Content-Type`. Errors:
-// `not_holder` (the Task is held by someone else), `too_large`.
+// The request body is the file itself, sent with its own `Content-Type` and a
+// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
+// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+// `not_holder`, `forbidden`, `too_large`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3172,7 +3493,9 @@ func (c *Client) AttachTaskEvidenceWithBody(ctx context.Context, task TaskRef, p
 
 // HandoverTaskWithBody End the caller's Claim and set the Skill the Task needs next
 //
-// Errors: `not_holder`.
+// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+// again only under that Skill. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3191,7 +3514,9 @@ func (c *Client) HandoverTaskWithBody(ctx context.Context, task TaskRef, params 
 
 // HandoverTask End the caller's Claim and set the Skill the Task needs next
 //
-// Errors: `not_holder`.
+// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+// again only under that Skill. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3231,7 +3556,7 @@ func (c *Client) Heartbeat(ctx context.Context, task TaskRef, params *HeartbeatP
 
 // AddNoteWithBody Add a Note to a Task's running log
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3250,7 +3575,7 @@ func (c *Client) AddNoteWithBody(ctx context.Context, task TaskRef, params *AddN
 
 // AddNote Add a Note to a Task's running log
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3269,7 +3594,8 @@ func (c *Client) AddNote(ctx context.Context, task TaskRef, params *AddNoteParam
 
 // ObserveWithBody Record an Observation on a Task
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task; the Observation records the Skill they hold it under.
+// Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3288,7 +3614,8 @@ func (c *Client) ObserveWithBody(ctx context.Context, task TaskRef, params *Obse
 
 // Observe Record an Observation on a Task
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task; the Observation records the Skill they hold it under.
+// Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3345,8 +3672,10 @@ func (c *Client) ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseT
 
 // ProposeSkillVersionWithBody Propose a new version of a company Skill from the Task the caller holds
 //
-// Written against `based_on_version`, which must be the current version. The caller then
-// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+// Written against `based_on_version`, which must be the current version, for a company
+// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+// a company Skill).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3365,8 +3694,10 @@ func (c *Client) ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, 
 
 // ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
 //
-// Written against `based_on_version`, which must be the current version. The caller then
-// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+// Written against `based_on_version`, which must be the current version, for a company
+// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+// a company Skill).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3572,6 +3903,18 @@ func NewListActivityRequest(server string, params *ListActivityParams) (*http.Re
 		if params.After != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", *params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Before != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "before", *params.Before, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -5133,6 +5476,40 @@ func NewRequestEmailSignInRequestWithBody(server string, params *RequestEmailSig
 			req.Header.Set("Idempotency-Key", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewGetSkillProposalRequest constructs an http.Request for the GetSkillProposal method
+func NewGetSkillProposalRequest(server string, proposal ProposalID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "proposal", proposal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/skill-proposals/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -6765,10 +7142,13 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// ListActivityWithResponse Read Activity after a sequence number
+	// ListActivityWithResponse Read Activity after, or before, a sequence number
 	//
 	// Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
-	// `after` to read the next.
+	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
+	// entries numbered just below it, still in sequence order, and its `first_seq` is the
+	// `before` of the page before it. A `before` past the newest entry (such as
+	// 9007199254740991) reads the latest page.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6779,7 +7159,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// Each entry is one event: `id` is its sequence number, `event` is `activity` and `data` is
 	// the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
-	// clients that cannot set headers) and receives every entry after it.
+	// clients that cannot set headers) and receives every entry after it; `0` sends the whole
+	// history. With neither, the stream starts from now: it sends only entries written after
+	// it opened.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6795,7 +7177,8 @@ type ClientWithResponsesInterface interface {
 
 	// DownloadEvidenceWithResponse Download an Evidence file
 	//
-	// Served with the content type it was attached with.
+	// Served with the content type it was attached with, always as an attachment and with
+	// `X-Content-Type-Options: nosniff`, so a browser never renders an uploaded page.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6842,8 +7225,8 @@ type ClientWithResponsesInterface interface {
 
 	// DropFeatureWithResponse Drop a Feature (Feature owner)
 	//
-	// Drops its open Tasks, ends their Claims, and files the Retrospective Task in the same
-	// write. Errors: `forbidden` (not the owner), `ended`.
+	// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
+	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -6852,8 +7235,9 @@ type ClientWithResponsesInterface interface {
 
 	// AttachFeatureEvidenceWithBodyWithResponse Attach Evidence to a Feature
 	//
-	// The request body is the file itself, sent with its own `Content-Type`. Errors:
-	// `too_large`.
+	// The request body is the file itself, sent with its own `Content-Type` and a
+	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
+	// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -6887,8 +7271,9 @@ type ClientWithResponsesInterface interface {
 
 	// RankFeatureWithBodyWithResponse Move a Feature to a position in its Team's Rank
 	//
-	// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-	// (not in the Team).
+	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+	// their places and count as positions. By a Member of the Feature's Team or its owner.
+	// Errors: `forbidden`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -6897,8 +7282,9 @@ type ClientWithResponsesInterface interface {
 
 	// RankFeatureWithResponse Move a Feature to a position in its Team's Rank
 	//
-	// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-	// (not in the Team).
+	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+	// their places and count as positions. By a Member of the Feature's Team or its owner.
+	// Errors: `forbidden`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -6907,15 +7293,16 @@ type ClientWithResponsesInterface interface {
 
 	// ShipFeatureWithResponse Ship a Feature (Feature owner)
 	//
-	// Needs every Task of the Feature to have ended. Files the Retrospective Task in the same
-	// write. Errors: `forbidden` (not the owner), `tasks_open`, `ended`.
+	// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
+	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
+	// `tasks_open`, `ended`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
 	ShipFeatureWithResponse(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*ShipFeatureResponse, error)
 
-	// GetHealthWithResponse Report that the Install is up
+	// GetHealthWithResponse Report that the Install is up, how Members sign in, and whether a newer release exists
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -7109,6 +7496,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/sign-in/email (the `RequestEmailSignIn` operationId).
 	RequestEmailSignInWithResponse(ctx context.Context, params *RequestEmailSignInParams, body RequestEmailSignInJSONRequestBody, reqEditors ...RequestEditorFn) (*RequestEmailSignInResponse, error)
 
+	// GetSkillProposalWithResponse Get a proposed Skill version
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/skill-proposals/{proposal} (the `GetSkillProposal` operationId).
+	GetSkillProposalWithResponse(ctx context.Context, proposal ProposalID, reqEditors ...RequestEditorFn) (*GetSkillProposalResponse, error)
+
 	// ListSkillsWithResponse List the Organisation's Skills
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -7163,8 +7557,11 @@ type ClientWithResponsesInterface interface {
 	//
 	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-	// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+	// `not_holder`, `forbidden`, `cycle`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7175,8 +7572,11 @@ type ClientWithResponsesInterface interface {
 	//
 	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-	// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+	// `not_holder`, `forbidden`, `cycle`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7227,7 +7627,7 @@ type ClientWithResponsesInterface interface {
 
 	// RemoveBlockerWithResponse Stop one Task blocking another
 	//
-	// Errors: `forbidden`, `not_holder`.
+	// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -7236,8 +7636,10 @@ type ClientWithResponsesInterface interface {
 
 	// AddBlockerWithResponse Let one Task block another
 	//
-	// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended.
-	// Errors: `forbidden`, `not_holder`, `cycle`.
+	// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
+	// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
+	// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
+	// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -7270,10 +7672,11 @@ type ClientWithResponsesInterface interface {
 
 	// CompleteTaskWithBodyWithResponse Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-	// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-	// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-	// current; nothing changes).
+	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// (the version the proposal was written against is no longer current; nothing changes, and
+	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7282,10 +7685,11 @@ type ClientWithResponsesInterface interface {
 
 	// CompleteTaskWithResponse Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-	// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-	// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-	// current; nothing changes).
+	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// (the version the proposal was written against is no longer current; nothing changes, and
+	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7312,8 +7716,10 @@ type ClientWithResponsesInterface interface {
 
 	// AttachTaskEvidenceWithBodyWithResponse Attach Evidence to a Task
 	//
-	// The request body is the file itself, sent with its own `Content-Type`. Errors:
-	// `not_holder` (the Task is held by someone else), `too_large`.
+	// The request body is the file itself, sent with its own `Content-Type` and a
+	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
+	// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+	// `not_holder`, `forbidden`, `too_large`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7322,7 +7728,9 @@ type ClientWithResponsesInterface interface {
 
 	// HandoverTaskWithBodyWithResponse End the caller's Claim and set the Skill the Task needs next
 	//
-	// Errors: `not_holder`.
+	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+	// again only under that Skill. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7331,7 +7739,9 @@ type ClientWithResponsesInterface interface {
 
 	// HandoverTaskWithResponse End the caller's Claim and set the Skill the Task needs next
 	//
-	// Errors: `not_holder`.
+	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+	// again only under that Skill. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7353,7 +7763,7 @@ type ClientWithResponsesInterface interface {
 
 	// AddNoteWithBodyWithResponse Add a Note to a Task's running log
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7362,7 +7772,7 @@ type ClientWithResponsesInterface interface {
 
 	// AddNoteWithResponse Add a Note to a Task's running log
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7371,7 +7781,8 @@ type ClientWithResponsesInterface interface {
 
 	// ObserveWithBodyWithResponse Record an Observation on a Task
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task; the Observation records the Skill they hold it under.
+	// Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7380,7 +7791,8 @@ type ClientWithResponsesInterface interface {
 
 	// ObserveWithResponse Record an Observation on a Task
 	//
-	// Errors: `not_holder` (the Task is held by someone else).
+	// By the Member holding the Task; the Observation records the Skill they hold it under.
+	// Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7407,8 +7819,10 @@ type ClientWithResponsesInterface interface {
 
 	// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Task the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version. The caller then
-	// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+	// Written against `based_on_version`, which must be the current version, for a company
+	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+	// a company Skill).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7417,8 +7831,10 @@ type ClientWithResponsesInterface interface {
 
 	// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Task the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version. The caller then
-	// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+	// Written against `based_on_version`, which must be the current version, for a company
+	// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+	// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+	// a company Skill).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -7643,7 +8059,8 @@ func (r GetEvidenceResponse) ContentType() string {
 
 // DownloadEvidenceResponse200Headers the declared response headers of an HTTP 200 response for DownloadEvidence
 type DownloadEvidenceResponse200Headers struct {
-	ContentDisposition *string
+	ContentDisposition  *string
+	XContentTypeOptions *string
 }
 
 type DownloadEvidenceResponse struct {
@@ -8897,6 +9314,54 @@ func (r RequestEmailSignInResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RequestEmailSignInResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetSkillProposalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SkillProposal
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetSkillProposalResponse) GetJSON200() *SkillProposal {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetSkillProposalResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetSkillProposalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetSkillProposalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetSkillProposalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetSkillProposalResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -10219,10 +10684,13 @@ func (r RevokeTokenResponse) ContentType() string {
 	return ""
 }
 
-// ListActivityWithResponse Read Activity after a sequence number
+// ListActivityWithResponse Read Activity after, or before, a sequence number
 //
 // Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
-// `after` to read the next.
+// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
+// entries numbered just below it, still in sequence order, and its `first_seq` is the
+// `before` of the page before it. A `before` past the newest entry (such as
+// 9007199254740991) reads the latest page.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10239,7 +10707,9 @@ func (c *ClientWithResponses) ListActivityWithResponse(ctx context.Context, para
 //
 // Each entry is one event: `id` is its sequence number, `event` is `activity` and `data` is
 // the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
-// clients that cannot set headers) and receives every entry after it.
+// clients that cannot set headers) and receives every entry after it; `0` sends the whole
+// history. With neither, the stream starts from now: it sends only entries written after
+// it opened.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10267,7 +10737,8 @@ func (c *ClientWithResponses) GetEvidenceWithResponse(ctx context.Context, evide
 
 // DownloadEvidenceWithResponse Download an Evidence file
 //
-// Served with the content type it was attached with.
+// Served with the content type it was attached with, always as an attachment and with
+// `X-Content-Type-Options: nosniff`, so a browser never renders an uploaded page.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10344,8 +10815,8 @@ func (c *ClientWithResponses) GetFeatureWithResponse(ctx context.Context, featur
 
 // DropFeatureWithResponse Drop a Feature (Feature owner)
 //
-// Drops its open Tasks, ends their Claims, and files the Retrospective Task in the same
-// write. Errors: `forbidden` (not the owner), `ended`.
+// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
+// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10360,8 +10831,9 @@ func (c *ClientWithResponses) DropFeatureWithResponse(ctx context.Context, featu
 
 // AttachFeatureEvidenceWithBodyWithResponse Attach Evidence to a Feature
 //
-// The request body is the file itself, sent with its own `Content-Type`. Errors:
-// `too_large`.
+// The request body is the file itself, sent with its own `Content-Type` and a
+// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
+// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -10419,8 +10891,9 @@ func (c *ClientWithResponses) PassFeatureOwnershipWithResponse(ctx context.Conte
 
 // RankFeatureWithBodyWithResponse Move a Feature to a position in its Team's Rank
 //
-// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-// (not in the Team).
+// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+// their places and count as positions. By a Member of the Feature's Team or its owner.
+// Errors: `forbidden`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -10435,8 +10908,9 @@ func (c *ClientWithResponses) RankFeatureWithBodyWithResponse(ctx context.Contex
 
 // RankFeatureWithResponse Move a Feature to a position in its Team's Rank
 //
-// Position 1 is first. A position past the end moves the Feature last. Errors: `forbidden`
-// (not in the Team).
+// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
+// their places and count as positions. By a Member of the Feature's Team or its owner.
+// Errors: `forbidden`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -10451,8 +10925,9 @@ func (c *ClientWithResponses) RankFeatureWithResponse(ctx context.Context, featu
 
 // ShipFeatureWithResponse Ship a Feature (Feature owner)
 //
-// Needs every Task of the Feature to have ended. Files the Retrospective Task in the same
-// write. Errors: `forbidden` (not the owner), `tasks_open`, `ended`.
+// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
+// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
+// `tasks_open`, `ended`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10465,7 +10940,7 @@ func (c *ClientWithResponses) ShipFeatureWithResponse(ctx context.Context, featu
 	return ParseShipFeatureResponse(rsp)
 }
 
-// GetHealthWithResponse Report that the Install is up
+// GetHealthWithResponse Report that the Install is up, how Members sign in, and whether a newer release exists
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10791,6 +11266,19 @@ func (c *ClientWithResponses) RequestEmailSignInWithResponse(ctx context.Context
 	return ParseRequestEmailSignInResponse(rsp)
 }
 
+// GetSkillProposalWithResponse Get a proposed Skill version
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/skill-proposals/{proposal} (the `GetSkillProposal` operationId).
+func (c *ClientWithResponses) GetSkillProposalWithResponse(ctx context.Context, proposal ProposalID, reqEditors ...RequestEditorFn) (*GetSkillProposalResponse, error) {
+	rsp, err := c.GetSkillProposal(ctx, proposal, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetSkillProposalResponse(rsp)
+}
+
 // ListSkillsWithResponse List the Organisation's Skills
 //
 // Returns a wrapper object for the known response body format(s).
@@ -10881,8 +11369,11 @@ func (c *ClientWithResponses) ListTasksWithResponse(ctx context.Context, params 
 //
 // A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+// `not_holder`, `forbidden`, `cycle`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -10899,8 +11390,11 @@ func (c *ClientWithResponses) FileTaskWithBodyWithResponse(ctx context.Context, 
 //
 // A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write.
-// Errors: `ended` (Feature ended and the Task blocks nothing), `cycle`.
+// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
+// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
+// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
+// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
+// `not_holder`, `forbidden`, `cycle`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -10981,7 +11475,7 @@ func (c *ClientWithResponses) GetTaskWithResponse(ctx context.Context, task Task
 
 // RemoveBlockerWithResponse Stop one Task blocking another
 //
-// Errors: `forbidden`, `not_holder`.
+// Needs the same authority as adding the blocker. Errors: `forbidden`, `not_holder`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -10996,8 +11490,10 @@ func (c *ClientWithResponses) RemoveBlockerWithResponse(ctx context.Context, tas
 
 // AddBlockerWithResponse Let one Task block another
 //
-// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended.
-// Errors: `forbidden`, `not_holder`, `cycle`.
+// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
+// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
+// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
+// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -11048,10 +11544,11 @@ func (c *ClientWithResponses) ClaimTaskWithResponse(ctx context.Context, task Ta
 
 // CompleteTaskWithBodyWithResponse Complete a Task the caller holds
 //
-// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-// current; nothing changes).
+// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// (the version the proposal was written against is no longer current; nothing changes, and
+// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11066,10 +11563,11 @@ func (c *ClientWithResponses) CompleteTaskWithBodyWithResponse(ctx context.Conte
 
 // CompleteTaskWithResponse Complete a Task the caller holds
 //
-// Ends the Task done. Completing a skill-review Task publishes its pending Skill version;
-// completing a Retrospective marks its Feature's Observations reviewed. Errors:
-// `not_holder`, `proposal_stale` (the version the proposal was written against is no longer
-// current; nothing changes).
+// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
+// proposal publishes it as the Skill's next version; completing a Retrospective marks its
+// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// (the version the proposal was written against is no longer current; nothing changes, and
+// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11114,8 +11612,10 @@ func (c *ClientWithResponses) DropTaskWithResponse(ctx context.Context, task Tas
 
 // AttachTaskEvidenceWithBodyWithResponse Attach Evidence to a Task
 //
-// The request body is the file itself, sent with its own `Content-Type`. Errors:
-// `not_holder` (the Task is held by someone else), `too_large`.
+// The request body is the file itself, sent with its own `Content-Type` and a
+// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
+// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+// `not_holder`, `forbidden`, `too_large`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11130,7 +11630,9 @@ func (c *ClientWithResponses) AttachTaskEvidenceWithBodyWithResponse(ctx context
 
 // HandoverTaskWithBodyWithResponse End the caller's Claim and set the Skill the Task needs next
 //
-// Errors: `not_holder`.
+// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+// again only under that Skill. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11145,7 +11647,9 @@ func (c *ClientWithResponses) HandoverTaskWithBodyWithResponse(ctx context.Conte
 
 // HandoverTaskWithResponse End the caller's Claim and set the Skill the Task needs next
 //
-// Errors: `not_holder`.
+// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
+// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
+// again only under that Skill. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11179,7 +11683,7 @@ func (c *ClientWithResponses) HeartbeatWithResponse(ctx context.Context, task Ta
 
 // AddNoteWithBodyWithResponse Add a Note to a Task's running log
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11194,7 +11698,7 @@ func (c *ClientWithResponses) AddNoteWithBodyWithResponse(ctx context.Context, t
 
 // AddNoteWithResponse Add a Note to a Task's running log
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11209,7 +11713,8 @@ func (c *ClientWithResponses) AddNoteWithResponse(ctx context.Context, task Task
 
 // ObserveWithBodyWithResponse Record an Observation on a Task
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task; the Observation records the Skill they hold it under.
+// Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11224,7 +11729,8 @@ func (c *ClientWithResponses) ObserveWithBodyWithResponse(ctx context.Context, t
 
 // ObserveWithResponse Record an Observation on a Task
 //
-// Errors: `not_holder` (the Task is held by someone else).
+// By the Member holding the Task; the Observation records the Skill they hold it under.
+// Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11269,8 +11775,10 @@ func (c *ClientWithResponses) ReleaseTaskWithResponse(ctx context.Context, task 
 
 // ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Task the caller holds
 //
-// Written against `based_on_version`, which must be the current version. The caller then
-// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+// Written against `based_on_version`, which must be the current version, for a company
+// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+// a company Skill).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11285,8 +11793,10 @@ func (c *ClientWithResponses) ProposeSkillVersionWithBodyWithResponse(ctx contex
 
 // ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Task the caller holds
 //
-// Written against `based_on_version`, which must be the current version. The caller then
-// hands the Task over to `skill-review`. Errors: `not_holder`, `proposal_stale`.
+// Written against `based_on_version`, which must be the current version, for a company
+// Skill. The caller then hands the Task over to `skill-review`. A Task carries one pending
+// proposal; a new one supersedes it. Errors: `not_holder`, `proposal_stale`, `invalid` (not
+// a company Skill).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -11555,6 +12065,13 @@ func ParseDownloadEvidenceResponse(rsp *http.Response) (*DownloadEvidenceRespons
 				return nil, err
 			}
 			headers.ContentDisposition = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = &value
 		}
 		response.Headers200 = &headers
 	}
@@ -12412,6 +12929,39 @@ func ParseRequestEmailSignInResponse(rsp *http.Response) (*RequestEmailSignInRes
 	switch {
 	case rsp.StatusCode == 202:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetSkillProposalResponse parses an HTTP response from a GetSkillProposalWithResponse call
+func ParseGetSkillProposalResponse(rsp *http.Response) (*GetSkillProposalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetSkillProposalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SkillProposal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

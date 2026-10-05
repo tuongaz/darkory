@@ -6,12 +6,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -40,6 +40,13 @@ func newHarnessWith(t *testing.T, st *store.Store, o Options) *harness {
 	t.Helper()
 	if o.KeepAlive == 0 {
 		o.KeepAlive = 100 * time.Millisecond
+	}
+	if o.Blobs == nil {
+		disk, err := blob.NewDisk(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		o.Blobs = disk
 	}
 	srv := New(st, o)
 	init, err := srv.Core().Init(t.Context(), "Acme", "ada")
@@ -129,47 +136,6 @@ func TestCredentials(t *testing.T) {
 			t.Fatalf("me: status %d body %s", me.StatusCode(), me.Body)
 		}
 	})
-}
-
-// The generated client sees an unbuilt operation's 501 as the Error body.
-func TestUnbuiltOperationsAnswer501ThroughTheClient(t *testing.T) {
-	_, c := newTestServer(t)
-	res, err := c.RankFeatureWithResponse(t.Context(), "WEB-1", &client.RankFeatureParams{}, client.RankFeatureBody{Position: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.StatusCode() != http.StatusNotImplemented || res.JSONDefault == nil || res.JSONDefault.Code != client.ErrorCodeNotImplemented {
-		t.Fatalf("rankFeature: status %d body %s", res.StatusCode(), res.Body)
-	}
-}
-
-// unbuilt lists the operations still answering 501 from stubs.go.
-var unbuilt = []string{
-	"AddBlocker", "AddNote", "AttachFeatureEvidence", "AttachTaskEvidence", "DownloadEvidence", "DropFeature",
-	"DropTask", "GetEvidence", "HandoverTask", "ListFeatureObservations", "Observe", "PassFeatureOwnership",
-	"ProposeSkillVersion", "RankFeature", "RemoveBlocker", "ShipFeature", "TakeBackTask",
-}
-
-// Every operation not yet built answers 501 with the Error body.
-func TestEveryUnbuiltOperationAnswers501(t *testing.T) {
-	srv := New(nil, Options{})
-	iface := reflect.TypeFor[gen.ServerInterface]()
-	for _, name := range unbuilt {
-		m, ok := iface.MethodByName(name)
-		if !ok {
-			t.Fatalf("%s is not an operation", name)
-		}
-		t.Run(name, func(t *testing.T) {
-			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(http.MethodPost, "/v1/"+name, nil)
-			args := []reflect.Value{reflect.ValueOf(rec), reflect.ValueOf(req)}
-			for j := 2; j < m.Type.NumIn(); j++ {
-				args = append(args, reflect.Zero(m.Type.In(j)))
-			}
-			reflect.ValueOf(srv).MethodByName(m.Name).Call(args)
-			assertError(t, rec.Result(), http.StatusNotImplemented, gen.ErrorCodeNotImplemented)
-		})
-	}
 }
 
 func TestUnknownAPIPathsAnswerJSON404(t *testing.T) {

@@ -76,6 +76,12 @@ type Feature struct {
 	FiledBy                 string
 	CreatedAt               time.Time
 	EndedAt                 *time.Time
+	TaskCounts              TaskCounts
+}
+
+// TaskCounts counts a Feature's Tasks by state; Claimed counts the open ones with a live Claim.
+type TaskCounts struct {
+	Open, Claimed, Done, Dropped int
 }
 
 type FeatureDetail struct {
@@ -85,21 +91,29 @@ type FeatureDetail struct {
 }
 
 type Task struct {
-	ID           string
-	Key          string
-	FeatureID    string
-	Kind         string
-	Title        string
-	Description  string
-	State        string
-	SkillID      *string
-	AimedAtID    *string
-	Claim        *Claim
-	Blocked      bool
+	ID          string
+	Key         string
+	FeatureID   string
+	Kind        string
+	Title       string
+	Description string
+	State       string
+	SkillID     *string
+	AimedAtID   *string
+	Claim       *Claim
+	Blocked     bool
+	// OpenBlockers are the open Tasks blocking this one.
+	OpenBlockers []TaskBrief
 	FiledBy      string
 	WaitingSince time.Time
 	CreatedAt    time.Time
 	EndedAt      *time.Time
+}
+
+// TaskBrief names a Task by its id and display key.
+type TaskBrief struct {
+	ID  string
+	Key string
 }
 
 type Claim struct {
@@ -128,6 +142,21 @@ type TaskDetail struct {
 	Blockers     []Task
 	Blocking     []Task
 	Observations []Observation
+	// Proposal is the latest Skill proposal written on the Task.
+	Proposal *SkillProposal
+}
+
+type SkillProposal struct {
+	ID               string
+	SkillID          string
+	TaskID           string
+	BasedOnVersion   int64
+	Body             string
+	AuthorID         string
+	State            string
+	PublishedVersion *int64
+	CreatedAt        time.Time
+	DecidedAt        *time.Time
 }
 
 type Note struct {
@@ -162,20 +191,26 @@ type Evidence struct {
 	SHA256      string
 	AttachedBy  string
 	CreatedAt   time.Time
+	// BlobKey is where the Evidence store keeps the file; it is not shown.
+	BlobKey string
 }
 
 type Activity struct {
-	Seq       int64
-	At        time.Time
-	ActorID   *string
-	Kind      string
-	SubjectID string
-	Payload   map[string]any
+	Seq     int64
+	At      time.Time
+	ActorID *string
+	Kind    string
+	// SubjectType is the kind of record SubjectID names: the part of Kind before the dot.
+	SubjectType string
+	SubjectID   string
+	Payload     map[string]any
 }
 
 type ActivityPage struct {
 	Items   []Activity
 	LastSeq int64
+	// FirstSeq is the first entry's number; zero when the page is empty.
+	FirstSeq int64
 }
 
 type Token struct {

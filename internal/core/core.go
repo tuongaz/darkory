@@ -59,6 +59,9 @@ const (
 	CodeNotHolder            Code = "not_holder"
 	CodeEnded                Code = "ended"
 	CodeCycle                Code = "cycle"
+	CodeTasksOpen            Code = "tasks_open"
+	CodeProposalStale        Code = "proposal_stale"
+	CodeTooLarge             Code = "too_large"
 	CodeIdempotencyKeyReused Code = "idempotency_key_reused"
 	CodeNotImplemented       Code = "not_implemented"
 )

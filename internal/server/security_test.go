@@ -141,7 +141,7 @@ func TestStreamEndsWhenItsCredentialEnds(t *testing.T) {
 			tokens := got(h.admin.ListTokensWithResponse(ctx, name)).want(t, http.StatusOK).JSON200
 			secret := h.secretOf(t, name)
 			before := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{})).want(t, http.StatusOK).JSON200.LastSeq
-			stream := h.openStreamAs(t, secret, name+"-1", "")
+			stream := h.openStreamAs(t, secret, name+"-1", "0")
 			if ids := stream.events(t, int(before)); ids[len(ids)-1] != before {
 				t.Fatalf("%s: the stream began with %v", end, ids)
 			}

@@ -33,7 +33,7 @@ const usage = `darkory: management for a software factory of agents and humans.
 Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
-                [--migrate] [--evidence dir|s3://bucket/prefix] [--proxy-hops n]
+                [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
                                                                        run the server
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
   darkory version                                                      print the version
@@ -171,11 +171,13 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	}
 	defer st.Close()
 
+	// Evidence on disk by default; a bucket that cannot be reached stops the start, rather than
+	// the first upload.
+	blobs, err := blob.Open(ctx, cfg.Evidence, nil)
+	if err != nil {
+		return err
+	}
 	if cfg.Evidence.S3 != nil {
-		// A bucket that cannot be reached stops the start, rather than the first upload.
-		if _, err := blob.Open(ctx, cfg.Evidence, nil); err != nil {
-			return err
-		}
 		log.Info("Evidence is kept in S3-compatible storage", "bucket", cfg.Evidence.S3.String())
 	}
 
@@ -194,7 +196,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender,
-		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops})
+		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
@@ -213,6 +215,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	log.Info("darkory is serving", "version", version.Version, "url", base, "engine", st.Engine(), "sign_in", api.SignInModes())
 
 	go housekeeping(ctx, api.Core(), log)
+	go api.WatchForUpdates(ctx)
 	announceSignIn(ctx, api.Core(), cfg, base, stdout, log)
 
 	select {

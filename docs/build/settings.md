@@ -35,6 +35,7 @@ darkory migrate --db "$DARKORY_DB"             # apply them and exit
 | Variable | Flag | Default | Meaning |
 |---|---|---|---|
 | `DARKORY_EVIDENCE` | `--evidence` | `evidence` in the data directory | A directory for the disk store, or `s3://bucket` or `s3://bucket/prefix` for S3-compatible storage. |
+| `DARKORY_EVIDENCE_MAX_MB` | `--evidence-max-mb` | `100` | The largest Evidence file, in MiB. A larger upload is refused before a byte is read. |
 | `DARKORY_S3_ENDPOINT` | (environment only) | AWS | The service's URL with its scheme, such as `http://minio:9000` or `https://<account>.r2.cloudflarestorage.com`. |
 | `DARKORY_S3_REGION` | (environment only) | `AWS_REGION`, else `us-east-1` | Region used to sign requests. |
 | `DARKORY_S3_ACCESS_KEY` | (environment only) | `AWS_ACCESS_KEY_ID` | Required for S3. |

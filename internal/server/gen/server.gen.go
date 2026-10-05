@@ -15,6 +15,129 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActivityKind.
+const (
+	ActivityKindFeatureDropped          ActivityKind = "feature.dropped"
+	ActivityKindFeatureEvidenceAttached ActivityKind = "feature.evidence_attached"
+	ActivityKindFeatureFiled            ActivityKind = "feature.filed"
+	ActivityKindFeatureOwnerPassed      ActivityKind = "feature.owner_passed"
+	ActivityKindFeatureRanked           ActivityKind = "feature.ranked"
+	ActivityKindFeatureShipped          ActivityKind = "feature.shipped"
+	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
+	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
+	ActivityKindMemberCreated           ActivityKind = "member.created"
+	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
+	ActivityKindMemberManagerSet        ActivityKind = "member.manager_set"
+	ActivityKindMemberSkillGranted      ActivityKind = "member.skill_granted"
+	ActivityKindMemberSkillRevoked      ActivityKind = "member.skill_revoked"
+	ActivityKindMemberUpdated           ActivityKind = "member.updated"
+	ActivityKindSessionClosed           ActivityKind = "session.closed"
+	ActivityKindSkillCreated            ActivityKind = "skill.created"
+	ActivityKindSkillVersionPublished   ActivityKind = "skill.version_published"
+	ActivityKindTaskBlockerAdded        ActivityKind = "task.blocker_added"
+	ActivityKindTaskBlockerRemoved      ActivityKind = "task.blocker_removed"
+	ActivityKindTaskClaimEnded          ActivityKind = "task.claim_ended"
+	ActivityKindTaskClaimed             ActivityKind = "task.claimed"
+	ActivityKindTaskCompleted           ActivityKind = "task.completed"
+	ActivityKindTaskDropped             ActivityKind = "task.dropped"
+	ActivityKindTaskEvidenceAttached    ActivityKind = "task.evidence_attached"
+	ActivityKindTaskFiled               ActivityKind = "task.filed"
+	ActivityKindTaskHandedOver          ActivityKind = "task.handed_over"
+	ActivityKindTaskLapsed              ActivityKind = "task.lapsed"
+	ActivityKindTaskNoteAdded           ActivityKind = "task.note_added"
+	ActivityKindTaskObserved            ActivityKind = "task.observed"
+	ActivityKindTaskReleased            ActivityKind = "task.released"
+	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
+	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
+	ActivityKindTeamCreated             ActivityKind = "team.created"
+	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
+	ActivityKindTeamMemberRemoved       ActivityKind = "team.member_removed"
+	ActivityKindTokenIssued             ActivityKind = "token.issued"
+	ActivityKindTokenRevoked            ActivityKind = "token.revoked"
+)
+
+// Valid indicates whether the value is a known member of the ActivityKind enum.
+func (e ActivityKind) Valid() bool {
+	switch e {
+	case ActivityKindFeatureDropped:
+		return true
+	case ActivityKindFeatureEvidenceAttached:
+		return true
+	case ActivityKindFeatureFiled:
+		return true
+	case ActivityKindFeatureOwnerPassed:
+		return true
+	case ActivityKindFeatureRanked:
+		return true
+	case ActivityKindFeatureShipped:
+		return true
+	case ActivityKindLoginLinkIssued:
+		return true
+	case ActivityKindLoginLinkRedeemed:
+		return true
+	case ActivityKindMemberCreated:
+		return true
+	case ActivityKindMemberManagerCleared:
+		return true
+	case ActivityKindMemberManagerSet:
+		return true
+	case ActivityKindMemberSkillGranted:
+		return true
+	case ActivityKindMemberSkillRevoked:
+		return true
+	case ActivityKindMemberUpdated:
+		return true
+	case ActivityKindSessionClosed:
+		return true
+	case ActivityKindSkillCreated:
+		return true
+	case ActivityKindSkillVersionPublished:
+		return true
+	case ActivityKindTaskBlockerAdded:
+		return true
+	case ActivityKindTaskBlockerRemoved:
+		return true
+	case ActivityKindTaskClaimEnded:
+		return true
+	case ActivityKindTaskClaimed:
+		return true
+	case ActivityKindTaskCompleted:
+		return true
+	case ActivityKindTaskDropped:
+		return true
+	case ActivityKindTaskEvidenceAttached:
+		return true
+	case ActivityKindTaskFiled:
+		return true
+	case ActivityKindTaskHandedOver:
+		return true
+	case ActivityKindTaskLapsed:
+		return true
+	case ActivityKindTaskNoteAdded:
+		return true
+	case ActivityKindTaskObserved:
+		return true
+	case ActivityKindTaskReleased:
+		return true
+	case ActivityKindTaskSkillProposed:
+		return true
+	case ActivityKindTaskTakenBack:
+		return true
+	case ActivityKindTeamCreated:
+		return true
+	case ActivityKindTeamMemberAdded:
+		return true
+	case ActivityKindTeamMemberRemoved:
+		return true
+	case ActivityKindTokenIssued:
+		return true
+	case ActivityKindTokenRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClaimEnd.
 const (
 	ClaimEndCompleted     ClaimEnd = "completed"
@@ -249,6 +372,24 @@ func (e SessionKind) Valid() bool {
 	}
 }
 
+// Defines values for SignInMode.
+const (
+	SignInEmailLink   SignInMode = "email_link"
+	SignInPrintedLink SignInMode = "printed_link"
+)
+
+// Valid indicates whether the value is a known member of the SignInMode enum.
+func (e SignInMode) Valid() bool {
+	switch e {
+	case SignInEmailLink:
+		return true
+	case SignInPrintedLink:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SkillKind.
 const (
 	Company SkillKind = "company"
@@ -261,6 +402,42 @@ func (e SkillKind) Valid() bool {
 	case Company:
 		return true
 	case Generic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SubjectType.
+const (
+	SubjectTypeFeature   SubjectType = "feature"
+	SubjectTypeLoginLink SubjectType = "login_link"
+	SubjectTypeMember    SubjectType = "member"
+	SubjectTypeSession   SubjectType = "session"
+	SubjectTypeSkill     SubjectType = "skill"
+	SubjectTypeTask      SubjectType = "task"
+	SubjectTypeTeam      SubjectType = "team"
+	SubjectTypeToken     SubjectType = "token"
+)
+
+// Valid indicates whether the value is a known member of the SubjectType enum.
+func (e SubjectType) Valid() bool {
+	switch e {
+	case SubjectTypeFeature:
+		return true
+	case SubjectTypeLoginLink:
+		return true
+	case SubjectTypeMember:
+		return true
+	case SubjectTypeSession:
+		return true
+	case SubjectTypeSkill:
+		return true
+	case SubjectTypeTask:
+		return true
+	case SubjectTypeTeam:
+		return true
+	case SubjectTypeToken:
 		return true
 	default:
 		return false
@@ -315,20 +492,30 @@ type Activity struct {
 	ActorID *string   `json:"actor_id,omitempty"`
 	At      time.Time `json:"at"`
 
-	// Kind What happened, such as `task.claimed` or `feature.shipped`.
-	Kind    string                 `json:"kind"`
+	// Kind What happened. The part before the dot is the `subject_type`. New kinds may be added
+	// within `/v1`; a client should skip a kind it does not know.
+	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
 	// Seq Per-Organisation sequence number, in commit order.
 	Seq int64 `json:"seq"`
 
-	// SubjectID The id of the record the entry is about.
+	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID string `json:"subject_id"`
+
+	// SubjectType The kind of record an Activity entry is about.
+	SubjectType SubjectType `json:"subject_type"`
 }
+
+// ActivityKind What happened. The part before the dot is the `subject_type`. New kinds may be added
+// within `/v1`; a client should skip a kind it does not know.
+type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
 type ActivityPage struct {
-	Items []Activity `json:"items"`
+	// FirstSeq The sequence number of the first entry returned. Absent when none were. Pass it as `before` to read the page before.
+	FirstSeq *int64     `json:"first_seq,omitempty"`
+	Items    []Activity `json:"items"`
 
 	// LastSeq The sequence number of the last entry returned, or `after` when none were. Pass it as `after` next time.
 	LastSeq int64 `json:"last_seq"`
@@ -479,10 +666,13 @@ type Feature struct {
 	OwnerID string `json:"owner_id"`
 
 	// Rank Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-	Rank   int64        `json:"rank"`
-	State  FeatureState `json:"state"`
-	TeamID string       `json:"team_id"`
-	Title  string       `json:"title"`
+	Rank  int64        `json:"rank"`
+	State FeatureState `json:"state"`
+
+	// TaskCounts How many of the Feature's Tasks are in each state.
+	TaskCounts TaskCounts `json:"task_counts"`
+	TeamID     string     `json:"team_id"`
+	Title      string     `json:"title"`
 }
 
 // FeatureDetail defines model for FeatureDetail.
@@ -546,7 +736,16 @@ type HandoverTaskBody struct {
 
 // Health defines model for Health.
 type Health struct {
-	Status HealthStatus `json:"status"`
+	// LatestVersion The newest release the server knows of. Absent when it has not checked.
+	LatestVersion *string `json:"latest_version,omitempty"`
+
+	// SignInModes How humans sign in to this Install.
+	SignInModes []SignInMode `json:"sign_in_modes"`
+	Status      HealthStatus `json:"status"`
+
+	// UpdateAvailable True when a newer release than `version` exists. Absent when the server has not
+	// checked: a development build, or checks turned off with DARKORY_NO_UPDATE_CHECK.
+	UpdateAvailable *bool `json:"update_available,omitempty"`
 
 	// Version The server's release version.
 	Version string `json:"version"`
@@ -700,7 +899,9 @@ type PassFeatureOwnershipBody struct {
 	Owner string `json:"owner"`
 }
 
-// ProposalState defines model for ProposalState.
+// ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
+// not be published, because a newer proposal replaced it on its Task or its Task ended
+// without publishing it.
 type ProposalState string
 
 // ProposeSkillVersionBody defines model for ProposeSkillVersionBody.
@@ -747,6 +948,10 @@ type SetManagerBody struct {
 	Manager string `json:"manager"`
 }
 
+// SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
+// `email_link`: login links emailed on request. More modes may be added within `/v1`.
+type SignInMode string
+
 // Skill defines model for Skill.
 type Skill struct {
 	// BaseSkillID The generic Skill a company Skill builds on.
@@ -777,15 +982,24 @@ type SkillList struct {
 
 // SkillProposal defines model for SkillProposal.
 type SkillProposal struct {
-	AuthorID         string        `json:"author_id"`
-	BasedOnVersion   int64         `json:"based_on_version"`
-	Body             string        `json:"body"`
-	CreatedAt        time.Time     `json:"created_at"`
-	ID               string        `json:"id"`
-	PublishedVersion *int64        `json:"published_version,omitempty"`
-	SkillID          string        `json:"skill_id"`
-	State            ProposalState `json:"state"`
-	TaskID           string        `json:"task_id"`
+	AuthorID       string    `json:"author_id"`
+	BasedOnVersion int64     `json:"based_on_version"`
+	Body           string    `json:"body"`
+	CreatedAt      time.Time `json:"created_at"`
+
+	// DecidedAt When it was published or superseded.
+	DecidedAt *time.Time `json:"decided_at,omitempty"`
+	ID        string     `json:"id"`
+
+	// PublishedVersion The version publishing it made. Absent unless `state` is `published`.
+	PublishedVersion *int64 `json:"published_version,omitempty"`
+	SkillID          string `json:"skill_id"`
+
+	// State `pending`: waiting for review. `published`: a review published it. `superseded`: it will
+	// not be published, because a newer proposal replaced it on its Task or its Task ended
+	// without publishing it.
+	State  ProposalState `json:"state"`
+	TaskID string        `json:"task_id"`
 }
 
 // SkillVersion defines model for SkillVersion.
@@ -806,6 +1020,9 @@ type SkillVersion struct {
 type SkillVersionList struct {
 	Items []SkillVersion `json:"items"`
 }
+
+// SubjectType The kind of record an Activity entry is about.
+type SubjectType string
 
 // TakeBackTaskBody defines model for TakeBackTaskBody.
 type TakeBackTaskBody struct {
@@ -833,6 +1050,9 @@ type Task struct {
 	// Kind `breakdown` and `retrospective` Tasks are filed by Darkory.
 	Kind TaskKind `json:"kind"`
 
+	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
+	OpenBlockers *[]TaskBrief `json:"open_blockers,omitempty"`
+
 	// SkillID The Skill the Task needs now. Absent when it is aimed at a Member.
 	SkillID *string `json:"skill_id,omitempty"`
 
@@ -844,7 +1064,26 @@ type Task struct {
 	WaitingSince time.Time `json:"waiting_since"`
 }
 
-// TaskDetail defines model for TaskDetail.
+// TaskBrief A Task named by its id and display key.
+type TaskBrief struct {
+	ID string `json:"id"`
+
+	// Key Display key, such as `WEB-42`.
+	Key string `json:"key"`
+}
+
+// TaskCounts How many of the Feature's Tasks are in each state.
+type TaskCounts struct {
+	// Claimed Open Tasks with a live Claim; these are also counted in `open`.
+	Claimed int `json:"claimed"`
+	Done    int `json:"done"`
+	Dropped int `json:"dropped"`
+
+	// Open Open Tasks, claimed or not.
+	Open int `json:"open"`
+}
+
+// TaskDetail The Task with its record. `proposal` is the latest Skill proposal written on it, when any.
 type TaskDetail struct {
 	// Blockers The Tasks blocking this one.
 	Blockers []Task `json:"blockers"`
@@ -858,9 +1097,10 @@ type TaskDetail struct {
 	Feature  Feature    `json:"feature"`
 
 	// Notes The running log, oldest first.
-	Notes        []Note        `json:"notes"`
-	Observations []Observation `json:"observations"`
-	Task         Task          `json:"task"`
+	Notes        []Note         `json:"notes"`
+	Observations []Observation  `json:"observations"`
+	Proposal     *SkillProposal `json:"proposal,omitempty"`
+	Task         Task           `json:"task"`
 }
 
 // TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
@@ -953,6 +1193,9 @@ type LoginCode = string
 // MemberRef defines model for MemberRef.
 type MemberRef = string
 
+// ProposalID defines model for ProposalID.
+type ProposalID = string
+
 // SessionID defines model for SessionID.
 type SessionID = string
 
@@ -972,6 +1215,9 @@ type TokenID = string
 type ListActivityParams struct {
 	// After Return entries with a sequence number greater than this. Defaults to 0.
 	After *int64 `form:"after,omitempty" json:"after,omitempty"`
+
+	// Before Return the entries with a sequence number below this, closest first.
+	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1020,7 +1266,8 @@ type AttachFeatureEvidenceParams struct {
 
 // ListFeatureObservationsParams defines parameters for ListFeatureObservations.
 type ListFeatureObservationsParams struct {
-	// Reviewed true for only reviewed Observations, false for only unreviewed ones. Omitted for all.
+	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
+	// Observation, reviewed or not.
 	Reviewed *bool `form:"reviewed,omitempty" json:"reviewed,omitempty"`
 }
 
@@ -1339,7 +1586,7 @@ type CreateTeamJSONRequestBody = CreateTeamBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// ListActivity Read Activity after a sequence number
+	// ListActivity Read Activity after, or before, a sequence number
 	// (GET /v1/activity)
 	ListActivity(w http.ResponseWriter, r *http.Request, params ListActivityParams)
 	// StreamActivity Stream Activity as Server-Sent Events
@@ -1378,7 +1625,7 @@ type ServerInterface interface {
 	// ShipFeature Ship a Feature (Feature owner)
 	// (POST /v1/features/{feature}/ship)
 	ShipFeature(w http.ResponseWriter, r *http.Request, feature FeatureRef, params ShipFeatureParams)
-	// GetHealth Report that the Install is up
+	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	// (GET /v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
 	// RedeemLoginLink Redeem a login link
@@ -1429,6 +1676,9 @@ type ServerInterface interface {
 	// RequestEmailSignIn Ask for a login link by email
 	// (POST /v1/sign-in/email)
 	RequestEmailSignIn(w http.ResponseWriter, r *http.Request, params RequestEmailSignInParams)
+	// GetSkillProposal Get a proposed Skill version
+	// (GET /v1/skill-proposals/{proposal})
+	GetSkillProposal(w http.ResponseWriter, r *http.Request, proposal ProposalID)
 	// ListSkills List the Organisation's Skills
 	// (GET /v1/skills)
 	ListSkills(w http.ResponseWriter, r *http.Request, params ListSkillsParams)
@@ -1542,6 +1792,19 @@ func (siw *ServerInterfaceWrapper) ListActivity(w http.ResponseWriter, r *http.R
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
 		}
 		return
 	}
@@ -2830,6 +3093,32 @@ func (siw *ServerInterfaceWrapper) RequestEmailSignIn(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RequestEmailSignIn(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSkillProposal operation middleware
+func (siw *ServerInterfaceWrapper) GetSkillProposal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "proposal" -------------
+	var proposal ProposalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "proposal", r.PathValue("proposal"), &proposal, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proposal", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSkillProposal(w, r, proposal)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4307,6 +4596,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/skills", wrapper.CreateSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}", wrapper.GetSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}/versions", wrapper.ListSkillVersions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skill-proposals/{proposal}", wrapper.GetSkillProposal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features", wrapper.ListFeatures)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features", wrapper.FileFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features/{feature}", wrapper.GetFeature)

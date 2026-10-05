@@ -136,6 +136,9 @@ func (s *Service) tryClaim(ctx context.Context, c *auth.Caller, taskID string, o
 	}
 	out.Claims = append(out.Claims, claim)
 	out.Task.Claim = &claim
+	if pre.Task.Claim == nil {
+		out.Feature.TaskCounts.Claimed++
+	}
 
 	stmts, err := idemStmts(c, idem, out, now)
 	if err != nil {
@@ -399,71 +402,93 @@ ORDER BY t.claim_expires_at LIMIT 100`, org, ms(now))
 	return n, nil
 }
 
-// endHeld ends the caller's Claim on a Task they hold, in one batch: release leaves the Task
-// needing the same Skill; complete ends the Task done.
-func (s *Service) endHeld(ctx context.Context, c *auth.Caller, ref, how string, note *string, idem Idem) (Task, error) {
+// holderGuard is the Claim guard (plan invariant 6) of a batch write on a held Task: it holds
+// while the caller holds the Task's live Claim @claim, through its Session when the Claim has a
+// timeout. The counter is held, so the Task cannot change after this check except by a
+// Heartbeat, which only moves the expiry later.
+const holderGuard = `SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.state = 'open'
+AND t.claim_id = @claim AND t.claim_holder_id = @member AND (t.claim_timeout_ms IS NULL OR t.claim_session_id = @session)
+AND (t.claim_expires_at IS NULL OR t.claim_expires_at > @now)`
+
+// heldOp is a hot-path write on a Task the caller holds.
+type heldOp struct {
+	// build gets the Task as read, with the batch's arguments (org, task, claim, member, session,
+	// now), and returns the result the write will make true and the statements to run after the
+	// Claim guard.
+	build func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error)
+	// explain, when set, says why a refused batch was refused when the caller still holds the
+	// Task afterwards: a guard of build's own failed.
+	explain func(ctx context.Context, t Task) error
+}
+
+// heldWrite runs op as one batch (one round trip on Postgres): the Idempotency-Key's response,
+// the Claim guard, then op's statements. A refused batch is explained after the rollback.
+func (s *Service) heldWrite(ctx context.Context, c *auth.Caller, ref string, idem Idem, op heldOp) (any, error) {
 	taskID, err := resolveTask(ctx, s.store, c.OrgID, ref)
 	if err != nil {
-		return Task{}, err
+		return nil, err
 	}
 	now := s.clock.Now()
 	pre, err := getTask(ctx, s.store, c.OrgID, taskID, now)
 	if err != nil {
-		return Task{}, err
+		return nil, err
 	}
 	if err := holds(c, pre); err != nil {
-		return Task{}, err
+		return nil, err
 	}
-	claim := pre.Claim
-	out := pre
-	out.Claim = nil
-	setTask := clearClaimSQL
-	kind := "task.released"
-	if how == "completed" {
-		out.State, out.EndedAt = "done", &now
-		setTask = clearClaimSQL + `, state = 'done', ended_at = @now`
-		kind = "task.completed"
-	}
-	args := map[string]any{"org": c.OrgID, "task": taskID, "claim": claim.ID, "member": c.MemberID,
-		"session": c.SessionID, "now": ms(now), "how": how}
-	stmts, err := idemStmts(c, idem, out, now)
+	args := map[string]any{"org": c.OrgID, "task": taskID, "claim": pre.Claim.ID, "member": c.MemberID,
+		"session": c.SessionID, "now": ms(now)}
+	result, body, err := op.build(pre, args, now)
 	if err != nil {
-		return Task{}, err
+		return nil, err
 	}
-	stmts = append(stmts,
-		// The Claim guard (plan invariant 6): the caller holds the live Claim, through its Session
-		// when it has a timeout. The counter is held, so the Task cannot change after this check
-		// except by a Heartbeat, which only moves the expiry later.
-		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.state = 'open'
-AND t.claim_id = @claim AND t.claim_holder_id = @member AND (t.claim_timeout_ms IS NULL OR t.claim_session_id = @session)
-AND (t.claim_expires_at IS NULL OR t.claim_expires_at > @now)`, args)),
-		store.S(`UPDATE claims SET ended_at = @now, how_ended = @how, ended_by = @member WHERE org_id = @org AND id = @claim`, args),
-		store.S(setTask+` WHERE org_id = @org AND id = @task`, args),
-	)
-	if note != nil && *note != "" {
-		stmts = append(stmts, store.S(`INSERT INTO notes (id, org_id, task_id, author_id, skill_id, body, created_at)
-VALUES (@id, @org, @task, @member, @skill, @body, @now)`,
-			map[string]any{"id": newID(), "org": c.OrgID, "task": taskID, "member": c.MemberID, "skill": claim.SkillID, "body": *note, "now": ms(now)}))
+	stmts, err := idemStmts(c, idem, result, now)
+	if err != nil {
+		return nil, err
 	}
-	stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, kind, taskID, map[string]any{"claim_id": claim.ID}, now))
+	stmts = append(stmts, withGuard(store.S(holderGuard, args)))
+	stmts = append(stmts, body...)
 	err = s.writeBatch(ctx, c.OrgID, stmts)
 	if refused(err) {
 		if err := s.afterRefusal(ctx, c, idem, nil); err != nil {
-			return Task{}, err
+			return nil, err
 		}
 		t, rerr := getTask(ctx, s.store, c.OrgID, taskID, s.clock.Now())
 		if rerr != nil {
-			return Task{}, rerr
+			return nil, rerr
 		}
 		if herr := holds(c, t); herr != nil {
-			return Task{}, herr
+			return nil, herr
 		}
-		return Task{}, refuse(CodeNotHolder, "your Claim on %s changed while this request ran; read the Task and try again", t.Key)
+		if op.explain != nil {
+			if eerr := op.explain(ctx, t); eerr != nil {
+				return nil, eerr
+			}
+		}
+		return nil, refuse(CodeNotHolder, "your Claim on %s changed while this request ran; read the Task and try again", t.Key)
 	}
 	if err != nil {
-		return Task{}, err
+		return nil, err
 	}
-	return out, nil
+	return result, nil
+}
+
+// with copies args and adds kv, so one op's statements can bind more than the guard.
+func with(args map[string]any, kv map[string]any) map[string]any {
+	out := make(map[string]any, len(args)+len(kv))
+	for k, v := range args {
+		out[k] = v
+	}
+	for k, v := range kv {
+		out[k] = v
+	}
+	return out
+}
+
+// noteStmt adds a Note written by the holder under the Skill of their Claim.
+func noteStmt(pre Task, args map[string]any, id, body string) store.Stmt {
+	return store.S(`INSERT INTO notes (id, org_id, task_id, author_id, skill_id, body, created_at)
+VALUES (@id, @org, @task, @member, CAST(@skill AS TEXT), @body, @now)`, with(args, map[string]any{"id": id, "skill": pre.Claim.SkillID, "body": body}))
 }
 
 // holds refuses a caller who does not hold the Task's live Claim: through the Session that made
@@ -484,10 +509,79 @@ func holds(c *auth.Caller, t Task) error {
 
 // Release gives up the caller's Claim, leaving the Task needing the same Skill.
 func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note *string, idem Idem) (Task, error) {
-	return s.endHeld(ctx, c, ref, "released", note, idem)
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+		out := pre
+		out.Claim = nil
+		stmts := []store.Stmt{
+			store.S(`UPDATE claims SET ended_at = @now, how_ended = 'released', ended_by = @member WHERE org_id = @org AND id = @claim`, args),
+			store.S(clearClaimSQL+` WHERE org_id = @org AND id = @task`, args),
+		}
+		if note != nil && *note != "" {
+			stmts = append(stmts, noteStmt(pre, args, newID(), *note))
+		}
+		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.released", pre.ID, map[string]any{"claim_id": pre.Claim.ID}, now))
+		return out, stmts, nil
+	}})
+	if err != nil {
+		return Task{}, err
+	}
+	return res.(Task), nil
 }
 
-// Complete ends a Task the caller holds, done.
+// Complete ends a Task the caller holds, done, in one batch. Completing a Task that needs
+// skill-review and carries a pending proposal publishes it as the Skill's next version, only while
+// the version it was written against is still current and never by its author; completing a
+// Retrospective marks its Feature's unreviewed Observations reviewed by it (ADR 0010). A proposal
+// left pending on the Task is superseded.
 func (s *Service) Complete(ctx context.Context, c *auth.Caller, ref string, note *string, idem Idem) (Task, error) {
-	return s.endHeld(ctx, c, ref, "completed", note, idem)
+	var review *SkillProposal
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{
+		build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+			out := pre
+			out.Claim, out.State, out.EndedAt = nil, "done", &now
+			var stmts []store.Stmt
+			p, err := s.pendingReview(ctx, c, pre)
+			if err != nil {
+				return nil, nil, err
+			}
+			if p != nil {
+				review = p
+				stmts = append(stmts, publishStmts(*p, args)...)
+			}
+			stmts = append(stmts,
+				store.S(`UPDATE claims SET ended_at = @now, how_ended = 'completed', ended_by = @member WHERE org_id = @org AND id = @claim`, args),
+				store.S(clearClaimSQL+`, state = 'done', ended_at = @now WHERE org_id = @org AND id = @task`, args),
+				store.S(supersedeSQL+` WHERE org_id = @org AND task_id = @task AND state = 'pending'`, args),
+			)
+			if pre.Kind == "retrospective" {
+				stmts = append(stmts, store.S(`UPDATE observations SET reviewed_by_task_id = @task, reviewed_at = @now
+WHERE org_id = @org AND feature_id = @feature AND reviewed_by_task_id IS NULL`, with(args, map[string]any{"feature": pre.FeatureID})))
+			}
+			if note != nil && *note != "" {
+				stmts = append(stmts, noteStmt(pre, args, newID(), *note))
+			}
+			stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.completed", pre.ID, map[string]any{"claim_id": pre.Claim.ID}, now))
+			if p != nil {
+				stmts = append(stmts, nextSeqStmt(c.OrgID), activityStmt(c.OrgID, &c.MemberID, "skill.version_published", p.SkillID,
+					map[string]any{"version": p.BasedOnVersion + 1, "proposal_id": p.ID, "task_id": pre.ID}, now))
+			}
+			return out, stmts, nil
+		},
+		explain: func(ctx context.Context, t Task) error {
+			if review == nil {
+				return nil
+			}
+			return s.whyNotPublished(ctx, c, *review)
+		},
+	})
+	if err != nil {
+		return Task{}, err
+	}
+	return res.(Task), nil
+}
+
+// nextSeqStmt takes the next number from the counter inside a batch, for a further Activity
+// entry (decisions.md).
+func nextSeqStmt(orgID string) store.Stmt {
+	return store.Stmt{SQL: `UPDATE organisations SET seq = seq + 1 WHERE id = $1`, Args: []any{orgID}}
 }

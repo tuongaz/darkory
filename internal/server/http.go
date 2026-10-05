@@ -215,6 +215,9 @@ var statusOf = map[core.Code]int{
 	core.CodeNotHolder:            http.StatusConflict,
 	core.CodeEnded:                http.StatusConflict,
 	core.CodeCycle:                http.StatusConflict,
+	core.CodeTasksOpen:            http.StatusConflict,
+	core.CodeProposalStale:        http.StatusConflict,
+	core.CodeTooLarge:             http.StatusRequestEntityTooLarge,
 	core.CodeIdempotencyKeyReused: http.StatusUnprocessableEntity,
 	core.CodeNotImplemented:       http.StatusNotImplemented,
 }

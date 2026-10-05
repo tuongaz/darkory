@@ -14,35 +14,65 @@ type NewTask struct {
 	Description string
 	Skill       *string
 	AimedAt     *string
-	// Blocks names a Task the new one blocks (a question or Escalation); built with Blocking.
+	// Blocks names a Task the new one blocks: a question or Escalation. The new Task joins that
+	// Task's Feature, even when the Feature has ended.
 	Blocks *string
 }
 
-// FileTask files a Task on a Feature of any Team.
+// FileTask files a Task on a Feature of any Team. A Task that blocks another (a question or an
+// Escalation) joins the Feature of the Task it blocks and blocks it in the same write; the asker
+// keeps their Claim. Any other Task needs its Feature open: an ended Feature holds no open Task
+// but its Retrospective and the questions blocking its Tasks.
 func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem Idem) (TaskDetail, error) {
 	if err := validTitle(nt.Title); err != nil {
 		return TaskDetail{}, err
 	}
-	if nt.Blocks != nil {
-		return TaskDetail{}, refuse(CodeNotImplemented, "filing a Task that blocks another arrives with Blocking")
-	}
-	if nt.Feature == nil {
-		return TaskDetail{}, refuse(CodeInvalid, "name the feature the Task belongs to")
+	if nt.Feature == nil && nt.Blocks == nil {
+		return TaskDetail{}, refuse(CodeInvalid, "name the feature the Task belongs to, or the Task it blocks")
 	}
 	if (nt.Skill == nil) == (nt.AimedAt == nil) {
 		return TaskDetail{}, refuse(CodeInvalid, "a Task needs a skill or is aimed_at a Member, not both")
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		featureID, err := resolveFeature(ctx, t, c.OrgID, *nt.Feature)
+		var featureID string
+		var blocked *Task
+		if nt.Blocks != nil {
+			id, err := resolveTask(ctx, t, c.OrgID, *nt.Blocks)
+			if err != nil {
+				return nil, err
+			}
+			b, err := getTask(ctx, t, c.OrgID, id, t.now)
+			if err != nil {
+				return nil, err
+			}
+			if b.State != "open" {
+				return nil, refuse(CodeEnded, "Task %s is %s; a question blocks an open Task", b.Key, b.State)
+			}
+			bf, err := getFeature(ctx, t, c.OrgID, b.FeatureID, t.now)
+			if err != nil {
+				return nil, err
+			}
+			if err := mayBlock(ctx, t, c, b, bf); err != nil {
+				return nil, err
+			}
+			blocked, featureID = &b, b.FeatureID
+		}
+		if nt.Feature != nil {
+			id, err := resolveFeature(ctx, t, c.OrgID, *nt.Feature)
+			if err != nil {
+				return nil, err
+			}
+			if blocked != nil && id != featureID {
+				return nil, refuse(CodeInvalid, "a Task that blocks %s joins its Feature; leave feature out or name that one", blocked.Key)
+			}
+			featureID = id
+		}
+		f, err := getFeature(ctx, t, c.OrgID, featureID, t.now)
 		if err != nil {
 			return nil, err
 		}
-		f, err := getFeature(ctx, t, c.OrgID, featureID)
-		if err != nil {
-			return nil, err
-		}
-		if f.State != "open" {
-			return nil, refuse(CodeEnded, "Feature %s has %s", f.Key, f.State)
+		if f.State != "open" && blocked == nil {
+			return nil, refuse(CodeEnded, "Feature %s has %s; it takes only questions that block its Tasks", f.Key, f.State)
 		}
 		var skill, aimed *string
 		if nt.Skill != nil {
@@ -58,26 +88,30 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 			}
 			aimed = &id
 		}
-		var prefix string
-		var last int64
-		if err := t.QueryRow(ctx, `UPDATE teams SET last_number = last_number + 1 WHERE org_id = $1 AND id = $2 RETURNING key_prefix, last_number`, c.OrgID, f.TeamID).
-			Scan(&prefix, &last); err != nil {
+		id, key, err := insertTask(t, f, "work", nt.Title, nt.Description, skill, aimed)
+		if err != nil {
 			return nil, err
 		}
-		id, key := newID(), prefix+"-"+itoa64(last)
-		if _, err := t.Exec(ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, description, state, skill_id, aimed_at_id,
-filed_by, waiting_since, created_at) VALUES ($1, $2, $3, $4, 'work', $5, $6, 'open', $7, $8, $9, $10, $10)`,
-			id, c.OrgID, featureID, key, nt.Title, nt.Description, skill, aimed, c.MemberID, ms(t.now)); err != nil {
-			return nil, err
-		}
-		payload := map[string]any{"key": key, "title": nt.Title, "feature_id": featureID, "kind": "work"}
+		payload := map[string]any{"key": key, "title": nt.Title, "feature_id": f.ID, "kind": "work"}
 		if skill != nil {
 			payload["skill_id"] = *skill
 		} else {
 			payload["aimed_at_id"] = *aimed
 		}
+		if blocked != nil {
+			payload["blocks"] = blocked.ID
+		}
 		if err := t.recordByCaller("task.filed", id, payload); err != nil {
 			return nil, err
+		}
+		if blocked != nil {
+			if _, err := t.Exec(ctx, `INSERT INTO blocks (org_id, task_id, blocker_task_id, added_by, added_at) VALUES ($1, $2, $3, $4, $5)`,
+				c.OrgID, blocked.ID, id, c.MemberID, ms(t.now)); err != nil {
+				return nil, err
+			}
+			if err := t.recordByCaller("task.blocker_added", blocked.ID, map[string]any{"blocker_id": id, "blocker_key": key}); err != nil {
+				return nil, err
+			}
 		}
 		return getTaskDetail(ctx, t, c.OrgID, id, t.now)
 	})
@@ -85,6 +119,21 @@ filed_by, waiting_since, created_at) VALUES ($1, $2, $3, $4, 'work', $5, $6, 'op
 		return TaskDetail{}, err
 	}
 	return res.(TaskDetail), nil
+}
+
+// insertTask files an open Task on f, allocating its display key from f's Team.
+func insertTask(t *tx, f Feature, kind, title, description string, skill, aimed *string) (id, key string, err error) {
+	var prefix string
+	var last int64
+	if err := t.QueryRow(t.ctx, `UPDATE teams SET last_number = last_number + 1 WHERE org_id = $1 AND id = $2 RETURNING key_prefix, last_number`,
+		t.caller.OrgID, f.TeamID).Scan(&prefix, &last); err != nil {
+		return "", "", err
+	}
+	id, key = newID(), prefix+"-"+itoa64(last)
+	_, err = t.Exec(t.ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, description, state, skill_id, aimed_at_id,
+filed_by, waiting_since, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9, $10, $11, $11)`,
+		id, t.caller.OrgID, f.ID, key, kind, title, description, skill, aimed, t.caller.MemberID, ms(t.now))
+	return id, key, err
 }
 
 // GetTask returns a Task with its Claims, Notes, Evidence, blockers and Observations.
@@ -145,7 +194,7 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 		add("t.state = ?", *tf.State)
 	}
 	args = append(args, limit+1, offset)
-	items, err := tasksWhere(ctx, s.store, now, strings.Join(where, " AND ")+
+	items, err := tasksWhere(ctx, s.store, c.OrgID, now, strings.Join(where, " AND ")+
 		` ORDER BY f.rank, t.waiting_since, t.id LIMIT $`+itoa(len(args)-1)+` OFFSET $`+itoa(len(args)), args...)
 	if err != nil {
 		return Page[Task]{}, err
