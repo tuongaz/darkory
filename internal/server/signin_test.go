@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -209,7 +210,7 @@ func TestEmailSignInIsRateLimited(t *testing.T) {
 		ask(a, "BOB@example.com")
 	}
 	if n := sent(); n != 3 {
-		t.Fatalf("sent %d of 4 asks for one address, want 3", n)
+		t.Fatalf("sent %d of 4 asks for one Member, want 3", n)
 	}
 	clk.Advance(5 * time.Minute)
 	ask(a, "bob@example.com")
@@ -217,7 +218,7 @@ func TestEmailSignInIsRateLimited(t *testing.T) {
 		t.Fatalf("sent %d after five minutes, want 1", n)
 	}
 
-	// Client a's burst of ten is back to nine; nine asks for other addresses use it up.
+	// Client a's burst of ten is back to nine; nine asks for addresses no Member has use it up.
 	for i := range 9 {
 		ask(a, "nobody"+string(rune('a'+i))+"@example.com")
 	}
@@ -233,6 +234,84 @@ func TestEmailSignInIsRateLimited(t *testing.T) {
 	ask(a, "carol@example.com")
 	if n := sent(); n != 1 {
 		t.Fatalf("sent %d a minute later, want 1", n)
+	}
+}
+
+// Addresses no Member has, from many clients, spend only those clients' tokens: no Member's limit
+// gets a key and the cap on emails sent loses nothing.
+func TestEmailSignInSpendsNothingOnUnknownAddresses(t *testing.T) {
+	fake := mail.NewFake()
+	st := storetest.Open(t, store.SQLite)
+	h := newHarnessWith(t, st, Options{Mail: fake, PublicURL: publicURL, MailPerHour: 2})
+	for _, name := range []string{"bob", "carol"} {
+		email := name + "@example.com"
+		got(h.admin.CreateMemberWithResponse(t.Context(), &client.CreateMemberParams{},
+			client.CreateMemberBody{Name: name, Kind: client.Human, Email: (*openapi_types.Email)(&email)})).want(t, http.StatusCreated)
+	}
+	e := h.srv.signIn
+	links := countLinks(t, st)
+	const flood = 10000
+	for i := range flood {
+		// Wait for a free lookup slot, so every address is looked up rather than turned away.
+		for len(e.inFlight) == cap(e.inFlight) {
+			time.Sleep(time.Millisecond)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/v1/sign-in/email",
+			strings.NewReader(`{"email":"x`+strconv.Itoa(i)+`@example.org"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = fmt.Sprintf("[2001:db8:%x:%x::1]:4000", i>>16, i&0xffff)
+		rec := httptest.NewRecorder()
+		h.srv.RequestEmailSignIn(rec, req, gen.RequestEmailSignInParams{})
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("status %d", rec.Code)
+		}
+	}
+	waitFor(t, func() bool { return len(e.inFlight) == 0 })
+	if n := e.byClient.Len(); n != flood {
+		t.Fatalf("the client limiter holds %d keys, want one per /64: %d", n, flood)
+	}
+	if n := e.byMember.Len(); n != 0 {
+		t.Fatalf("the Member limiter holds %d keys after addresses no Member has", n)
+	}
+	if m, ok := fake.Next(100 * time.Millisecond); ok {
+		t.Fatalf("sent %+v", m)
+	}
+	if countLinks(t, st) != links {
+		t.Fatal("issued links for addresses no Member has")
+	}
+	// The cap of two is whole.
+	for _, email := range []string{"bob@example.com", "carol@example.com"} {
+		if s := askByEmail(t, h.ts, `{"email":"`+email+`"}`, nil); s != http.StatusAccepted {
+			t.Fatalf("status %d", s)
+		}
+		if _, ok := fake.Next(5 * time.Second); !ok {
+			t.Fatalf("no email to %s after the flood", email)
+		}
+	}
+}
+
+// A Member's address asked for from many clients is held to the Member's limit.
+func TestEmailSignInHoldsAMemberToTheirLimitFromManyClients(t *testing.T) {
+	fake := mail.NewFake()
+	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{Mail: fake, PublicURL: publicURL, ProxyHops: 1})
+	email := "bob@example.com"
+	got(h.admin.CreateMemberWithResponse(t.Context(), &client.CreateMemberParams{},
+		client.CreateMemberBody{Name: "bob", Kind: client.Human, Email: (*openapi_types.Email)(&email)})).want(t, http.StatusCreated)
+	for i := range 20 {
+		from := fmt.Sprintf("2001:db8:%x::1", i+1)
+		if s := askByEmail(t, h.ts, `{"email":"BOB@example.com"}`, map[string]string{"X-Forwarded-For": from}); s != http.StatusAccepted {
+			t.Fatalf("status %d", s)
+		}
+	}
+	var n int
+	for {
+		if _, ok := fake.Next(time.Second); !ok {
+			break
+		}
+		n++
+	}
+	if n != signInPerMember {
+		t.Fatalf("sent %d emails to one Member asked for from 20 clients, want %d", n, signInPerMember)
 	}
 }
 
@@ -262,16 +341,17 @@ func TestEmailSignInLimitsAnIPv6ClientByItsNetwork(t *testing.T) {
 	}
 }
 
-// Past the cap on emails sent, requests still answer 202, nothing is sent or issued, and the
-// warning is logged once a minute; the cap refills over the hour.
+// Past the cap on emails sent, across many Members each within their own limit, requests still
+// answer 202, nothing is sent or issued, and the warning is logged once a minute; the cap
+// refills over the hour.
 func TestEmailSignInCapsEmailsSent(t *testing.T) {
 	fake := mail.NewFake()
 	clk := clock.NewFake(time.Now())
 	st := storetest.Open(t, store.SQLite)
 	var logs syncBuffer
-	h := newHarnessWith(t, st, Options{Mail: fake, PublicURL: publicURL, Clock: clk, ProxyHops: 1, MailPerHour: 2,
+	h := newHarnessWith(t, st, Options{Mail: fake, PublicURL: publicURL, Clock: clk, ProxyHops: 1, MailPerHour: 3,
 		Log: slog.New(slog.NewTextHandler(&logs, nil))})
-	names := []string{"bob", "carol", "dave", "erin"}
+	names := []string{"bob", "carol", "dave", "erin", "fay", "gus"}
 	for _, name := range names {
 		email := name + "@example.com"
 		got(h.admin.CreateMemberWithResponse(t.Context(), &client.CreateMemberParams{},
@@ -285,15 +365,16 @@ func TestEmailSignInCapsEmailsSent(t *testing.T) {
 			t.Fatalf("status %d", s)
 		}
 	}
-	for i := range 2 {
+	for i := range 3 {
 		ask(i)
 		if _, ok := fake.Next(5 * time.Second); !ok {
 			t.Fatalf("email %d within the cap was not sent", i+1)
 		}
 	}
 	links := countLinks(t, st)
-	ask(2)
-	ask(3)
+	for i := 3; i < len(names); i++ {
+		ask(i)
+	}
 	if m, ok := fake.Next(time.Second); ok {
 		t.Fatalf("sent past the cap: %+v", m)
 	}
@@ -303,11 +384,11 @@ func TestEmailSignInCapsEmailsSent(t *testing.T) {
 	if n := strings.Count(logs.String(), "sent its cap of emails"); n != 1 {
 		t.Fatalf("the cap's warning was logged %d times, want once a minute", n)
 	}
-	// Two an hour refill one each half hour.
-	clk.Advance(30 * time.Minute)
-	ask(2)
-	if m, ok := fake.Next(5 * time.Second); !ok || m.To != "dave@example.com" {
-		t.Fatalf("after half an hour: %+v, %v", m, ok)
+	// Three an hour refill one each twenty minutes.
+	clk.Advance(20 * time.Minute)
+	ask(3)
+	if m, ok := fake.Next(5 * time.Second); !ok || m.To != "erin@example.com" {
+		t.Fatalf("after twenty minutes: %+v, %v", m, ok)
 	}
 }
 
@@ -408,5 +489,16 @@ func TestClientAddress(t *testing.T) {
 		if got := clientAddress(r, c.hops); got != c.want {
 			t.Errorf("%s %v hops %d: got %s, want %s", c.remote, c.xff, c.hops, got, c.want)
 		}
+	}
+}
+
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("timed out")
+		}
+		time.Sleep(time.Millisecond)
 	}
 }

@@ -144,18 +144,20 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, token gen.T
 	s.respond(w, r, out, t, err)
 }
 
-// Email sign-in limits, per server process (decisions.md): each address may ask three times, then
-// once every five minutes; each client address ten times, then once a minute; and all of them
-// together are sent at most MailPerHour emails an hour. Sends in flight are bounded too. A request
-// over any limit is answered like any other and sends nothing, and each limit's warning is logged
-// at most once a minute.
+// Email sign-in limits, per server process (decisions.md), checked in this order: each client
+// address ten times, then once a minute, before the 202; then, in the background and only for an
+// address that belongs to a Member, each Member three times, then once every five minutes; then
+// at most MailPerHour emails an hour for all of them together. An address no Member has spends
+// nothing but its client's token and one read. Lookups in flight are bounded too. A request over
+// any limit is answered like any other and sends nothing, and each limit's warning is logged at
+// most once a minute.
 const (
-	signInPerAddress      = 3
-	signInPerAddressEvery = 5 * time.Minute
-	signInPerClient       = 10
-	signInPerClientEvery  = time.Minute
-	signInInFlight        = 16
-	signInSendTimeout     = time.Minute
+	signInPerMember      = 3
+	signInPerMemberEvery = 5 * time.Minute
+	signInPerClient      = 10
+	signInPerClientEvery = time.Minute
+	signInInFlight       = 16
+	signInSendTimeout    = time.Minute
 	// DefaultMailPerHour is the cap on emails sent when Options.MailPerHour is zero.
 	DefaultMailPerHour = 300
 	warnEvery          = time.Minute
@@ -167,10 +169,11 @@ type emailSignIn struct {
 	// base is the public URL the links are built on; never the Host a request names.
 	base      string
 	proxyHops int
-	byAddress *auth.Limiter
 	byClient  *auth.Limiter
+	// byMember is keyed by Member id, so its keys are bounded by the Members there are.
+	byMember *auth.Limiter
 	// sent is one bucket for every email this process sends, so a flood spread over many
-	// addresses and clients cannot spend the SMTP account's reputation.
+	// Members and clients cannot spend the SMTP account's reputation.
 	sent     *auth.Limiter
 	perHour  int
 	inFlight chan struct{}
@@ -197,8 +200,8 @@ func newEmailSignIn(o Options) *emailSignIn {
 		mail:      o.Mail,
 		base:      strings.TrimRight(o.PublicURL, "/"),
 		proxyHops: o.ProxyHops,
-		byAddress: auth.NewLimiter(signInPerAddress, signInPerAddressEvery, o.Clock),
 		byClient:  auth.NewLimiter(signInPerClient, signInPerClientEvery, o.Clock),
+		byMember:  auth.NewLimiter(signInPerMember, signInPerMemberEvery, o.Clock),
 		sent:      auth.NewLimiter(perHour, time.Hour/time.Duration(perHour), o.Clock),
 		perHour:   perHour,
 		inFlight:  make(chan struct{}, signInInFlight),
@@ -255,17 +258,12 @@ func (s *Server) RequestEmailSignIn(w http.ResponseWriter, r *http.Request, _ ge
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// request checks the limits and, within them, issues and sends the links in the background.
+// request checks the client's limit and, within it, looks the address up and sends in the
+// background, so nothing the reply or its timing shows depends on whether a Member has it.
 func (e *emailSignIn) request(s *Server, r *http.Request, address string) {
 	client := clientAddress(r, e.proxyHops)
-	// The client's limit comes first, so one client cycling through addresses is stopped before
-	// it can fill the address limiter.
 	if !e.byClient.Allow(client) {
 		e.warn(s, "email sign-in: a client address is over its limit; sending it nothing", "client", client)
-		return
-	}
-	if !e.byAddress.Allow(strings.ToLower(address)) {
-		e.warn(s, "email sign-in: an address is over its limit; sending it nothing", "client", client)
 		return
 	}
 	select {
@@ -282,6 +280,9 @@ func (e *emailSignIn) request(s *Server, r *http.Request, address string) {
 	}()
 }
 
+// send emails a login link to each Member who has address, within each Member's limit and the
+// cap on emails sent. An address no Member has creates no limiter key and takes no token, so a
+// flood of made-up addresses cannot reset a Member's bucket or spend the cap.
 func (e *emailSignIn) send(ctx context.Context, s *Server, address string) {
 	found, err := s.core.MembersByEmail(ctx, address)
 	if err != nil {
@@ -289,6 +290,10 @@ func (e *emailSignIn) send(ctx context.Context, s *Server, address string) {
 		return
 	}
 	for _, f := range found {
+		if !e.byMember.Allow(f.MemberID) {
+			e.warn(s, "email sign-in: a Member is over their limit; sending them nothing", "member", f.MemberID)
+			continue
+		}
 		// Taken before the link is issued, so a capped request writes nothing either.
 		if !e.sent.Allow("") {
 			e.warn(s, "email sign-in: this server has sent its cap of emails for the hour; sending nothing until it refills. "+

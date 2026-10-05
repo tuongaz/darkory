@@ -68,3 +68,10 @@ func (l *Limiter) Allow(key string) bool {
 	b.tokens--
 	return true
 }
+
+// Len is how many keys the Limiter holds.
+func (l *Limiter) Len() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.recent.Len()
+}
