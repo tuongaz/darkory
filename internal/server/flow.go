@@ -141,8 +141,8 @@ func (s *Server) PassFeatureOwnership(w http.ResponseWriter, r *http.Request, fe
 
 func (s *Server) ListFeatureObservations(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.ListFeatureObservationsParams) {
 	all := params.Reviewed != nil && *params.Reviewed
-	os, err := s.core.ListFeatureObservations(r.Context(), caller(r), feature, all)
-	s.respond(w, r, as(http.StatusOK, func(os []core.Observation) any {
-		return gen.ObservationList{Items: each(os, observationOut)}
-	}), os, err)
+	obs, err := s.core.ListFeatureObservations(r.Context(), caller(r), feature, all)
+	s.respond(w, r, as(http.StatusOK, func(obs []core.Observation) any {
+		return gen.ObservationList{Items: each(obs, observationOut)}
+	}), obs, err)
 }
