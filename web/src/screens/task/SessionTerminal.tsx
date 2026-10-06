@@ -114,7 +114,8 @@ export default function SessionTerminal({
       for (const s of subscriptions) s.dispose();
       ws.onopen = ws.onmessage = ws.onclose = null;
       ws.close();
-      if (joined) term.blur();
+      // Unmounting, xterm may already be gone.
+      if (joined && xterm.current) term.blur();
     };
   }, [task, mode, attempt]);
 

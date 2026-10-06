@@ -196,7 +196,8 @@ function TaskBody({
         {task.description && <p className="whitespace-pre-wrap">{task.description}</p>}
       </header>
       {properties}
-      {session && <SessionPanel detail={detail} session={session} tall={heading === "h1"} />}
+      {/* Keyed: another Task's page starts watching, whatever this one was joined to. */}
+      {session && <SessionPanel key={task.id} detail={detail} session={session} tall={heading === "h1"} />}
       {proposal && <ProposalCard detail={detail} proposal={proposal} />}
       {task.kind === "retrospective" && <RetrospectiveObservations detail={detail} />}
       <section aria-label="Activity" className="flex flex-col gap-2">
