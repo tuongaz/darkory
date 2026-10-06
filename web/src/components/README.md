@@ -47,7 +47,9 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   The DOM event is `darkory:intent`.
 - **Peek** (`@/app/peek`): `usePeekLink()(key)` is a `To` for the current page with `?task=key`
   added (other parameters stay); link a row to it. The shell mounts `TaskPeek` while the parameter
-  is there; `usePeek()` gives `{ taskKey, close }`.
+  is there; `usePeek()` gives `{ taskKey, close }`. A link with the hash `sessionAnchor`
+  (`#session`) opens the Task scrolled to its Session panel, and the location state
+  `{ join: true }` joins an admin to its terminal (the agent's peek's Join).
 - **Current Team** (`@/app/currentTeam`): `useCurrentTeam()` (the Team in the URL or of the
   record shown, else the one last shown in this browser); a Task's or Feature's page calls
   `useReportTeam(team.key, "tasks" | "features")` so the sidebar opens that Team and marks the
@@ -60,7 +62,9 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   Team's board, ? the shortcuts; on a list of Tasks J / ↓ and K / ↑ move the ring, Enter opens the
   ringed Task's peek, Esc closes it and returns the focus to its row, and with the peek open J and
   K move it along the list. They are ignored while typing, while a dialog or a menu is open, and
-  while a card is carried; the peek is not modal and does not count.
+  while a card is carried; the peek is not modal and does not count. An element marked
+  `ownsKeysAttr` (`data-owns-keys`, `@/lib/keys`), the Session panel's terminal, takes every key
+  while it has the focus, ⌘K and Esc included: the shell ignores them and the Peek does not close.
 - **Selection** (`@/app/selection`): a page joins the walk by marking each Task row or card
   `data-task={key}` inside `#main`, in the order it shows them, and drawing the ring
   (`ring-2 ring-ring`) where `useSelectedTask() === key`: the Task walked to or focused, or the
@@ -73,8 +77,9 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   with another `queryFn`.
 - **Shared reads** in `@/api/queries`: `useMe`, `useMembers`, `useTeams`, `useSkills`,
   `useDirectory` (by id), `useOpenTasks` (every open Task: the sidebar's live count),
-  `useAllTasks`, `useAllFeatures` (⌘K). `@/work`: `liveClaim`, `boundTo`, `liveAgents`,
-  `taskGlyph` (by state, until Statuses reach `/v1`).
+  `useAllTasks`, `useAllFeatures` (⌘K), `useRunnerSessions` (`["runner", "sessions"]`: what the
+  Runner runs now, `{ runner, items }`) and `useRunnerSession(taskId)`. `@/work`: `liveClaim`,
+  `boundTo`, `liveAgents`, `taskGlyph` (by state, until Statuses reach `/v1`).
 
 ## Primitives (`src/components/`)
 
@@ -96,12 +101,56 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | `HeartbeatMeter claim variant` | `.hb` | `bar` (peek, Agents): "in 15 min" with the time left as a bar; `compact` (a card): pulse + "15 min". No expiry, Lapsed. |
 | `Refusal error`, `Loaded query` | | A refusal with its stable code; a query's data, skeleton or refusal. |
 | `Time`, `ClockTime`, `RelativeTime` | | "6 Oct 2026, 22:18"; "22:18"; "in 4 minutes". |
+| `RunnerSessionBadge session bare` | | The Runner's session on a Task as one line of text: "Session · running since 04:25 · mac-mini"; `bare` leaves out "Session ·" under a Session column. |
+| `SessionFacts session agent` | | A runner session's facts in one line: the agent, started, Running / Nudged / Ending, the host, `tmux dk-WEB-12` or "no tmux". `SessionStateDot` is its state's dot. |
 
 shadcn/ui components are in `src/components/ui/` (sidebar, button, badge, avatar, sheet, dialog,
 dropdown-menu, popover, command, tabs, table, switch, select, input, textarea, tooltip, separator,
 scroll-area, skeleton, kbd, sonner, collapsible, label), tuned to the kit's density: buttons are
 32px (`default`), 36px (`md`, a dialog's primary), 26px (`xs`, inside rows); `icon`, `icon-xs`.
 Add more with `npx shadcn@latest add <name>` from `web/`, then check its imports use `@/lib/utils`.
+
+## The Session panel and its terminal
+
+While the Runner (`CONTEXT.md`) runs an agent's session on a Task, the Task's peek and page show
+a **Session panel** (`src/screens/task/SessionPanel.tsx`) between the facts and the record:
+
+- **Facts** (`SessionFacts`), then the **shell line** `darkory join WEB-12` with a copy button (the
+  clipboard, or, where the browser refuses it, the line selected and "Selected · press ⌘C").
+- **The terminal**: xterm.js (`@xterm/xterm`, `@xterm/addon-fit`, pinned), loaded in its own chunk
+  when a panel first shows one, 13px mono, coloured from the tokens (`--background`,
+  `--foreground`, `--ring` for the selection) and following light and dark. Under it a 36px line
+  says what it is doing: Connecting…, "Read-only · admins can join" (not an admin), "Read-only ·
+  Join to type" (an admin), "Joined · your keys go to the session", or "The terminal closed"
+  with Reconnect. A session without tmux opens no terminal and says it cannot be joined.
+- **Join and Leave** (admins, the section's one button): Join reconnects read-write and gives
+  the terminal the focus; Leave reconnects read-only. The ⋯ menu gains **Nudge** and **Stop
+  session** for admins (`SessionActions.tsx`; Stop confirms, naming the Claim's release).
+- **Keys**: the terminal is marked `data-owns-keys`. Focused, it takes every key: watching, Esc
+  gives the focus back to the page; joined, Esc goes to the session. Unfocused, J, K, Esc and
+  the rest work as everywhere.
+
+The panel shows only while `useRunnerSessions` lists a session on the Task. That read is asked
+only when an agent has agent settings (the Runner starts no other), every 5 s and on Task,
+Member and Session Activity; `no_runner` reads as "no Runner" and stops it for the page's life,
+because every refused request is an error in the browser's console.
+
+**The WebSocket** (`api/openapi.yaml`, `runnerTerminal`; `src/screens/task/terminal.ts`):
+
+| | |
+|---|---|
+| Address | `ws(s)://<this origin>/v1/runner/sessions/{task key}/terminal`, `?readonly=1` to watch. Same origin, so the cookie authenticates and the server checks the Origin. |
+| Who types | Everyone connects with `?readonly=1` first; an admin's Join connects without it. The server keeps every non-admin read-only whatever the URL says. |
+| Server → browser | Binary frames: the terminal's bytes (`binaryType = "arraybuffer"`), written to xterm. Text frames are ignored. |
+| Browser → server | Binary frames: keys and mouse reports, joined only. A text frame `{"cols": n, "rows": n}` on connecting and after every fit, in both modes. |
+| Lifetime | One socket per mode and Reconnect, each from a cleared screen (tmux redraws on attach). Closing the peek, J or K to another Task, or Leave closes it. Refusals come before the upgrade (`no_runner`, `not_found`, `conflict` for no tmux, `forbidden`), which a browser sees only as a close. |
+
+**The CSP.** xterm.js writes the CSS it computes (its theme, the cell size) into `<style>`
+elements and a truecolor cell's colour into a `style` attribute, both of which `style-src 'self'`
+refuses. `noInjectedStyles` in `vite.config.ts` turns its `<style>` elements into a constructed
+stylesheet the document adopts and its style attribute into a CSSOM write, which the policy
+allows; xterm's own CSS is in `globals.css`. `csp.test.tsx` fails if the terminal adds either, and
+`e2e/session.spec.ts` draws truecolor output under the real policy with no console error.
 
 ## Tokens
 
@@ -116,6 +165,8 @@ Light is the design; check a new screen in dark too.
 
 `npm test` (Vitest) renders the whole app with `renderApp(path)` and a mocked `/v1`
 (`src/test/api.ts`, `fixtures.ts`; `signedIn()` answers what every page reads). Push Activity with
-`FakeEventSource.latest().emit("activity", entry, seq)`. `npm run e2e` builds the app and runs
+`FakeEventSource.latest().emit("activity", entry, seq)`. Play the Runner's terminal with
+`FakeWebSocket` (`src/test/webSocket.ts`): `latest().open()`, `receive(bytes)`, `serverClose()`,
+and read `sent`, `textFrames()` and `typed()`. `npm run e2e` builds the app and runs
 `e2e/` against the real binary; it fails on any console error, which is how a refusal by the
 Install's Content-Security-Policy shows (no inline `<style>`, no external fonts or scripts).
