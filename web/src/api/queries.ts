@@ -44,6 +44,7 @@ type Root =
   | "tasks"
   | "task"
   | "takeable"
+  | "statuses"
   | "activity";
 
 const work: Root[] = ["features", "feature", "feature-observations", "tasks", "task", "takeable"];
@@ -61,7 +62,7 @@ const affected: Record<SubjectType, Root[]> = {
   token: [...organisation, ...work],
   session: [...organisation, ...work],
   login_link: [],
-  statuses: work,
+  statuses: [...work, "statuses"],
 };
 
 /** The query roots an Activity entry may have changed. */

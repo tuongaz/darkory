@@ -13,6 +13,23 @@ describe("live invalidation", () => {
     expect(affectedBy("something.new")).toBe("all");
   });
 
+  it("refetches the Statuses, and the work they order, when the Organisation's list changes", () => {
+    const qc = new QueryClient();
+    qc.setQueryData(["statuses"], []);
+    qc.setQueryData(keys.task("WEB-1"), {});
+    qc.setQueryData(keys.teams, []);
+
+    invalidateFor(qc, { kind: "statuses.changed" });
+    expect(qc.getQueryState(["statuses"])?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(keys.task("WEB-1"))?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(keys.teams)?.isInvalidated).toBe(false);
+
+    // Moving one Task leaves the list alone.
+    qc.setQueryData(["statuses"], []);
+    invalidateFor(qc, { kind: "task.status_set" });
+    expect(qc.getQueryState(["statuses"])?.isInvalidated).toBe(false);
+  });
+
   it("marks the affected queries stale and leaves Activity history alone", () => {
     const qc = new QueryClient();
     qc.setQueryData(keys.task("WEB-1"), {});
