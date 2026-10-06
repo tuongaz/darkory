@@ -3033,7 +3033,10 @@ type ClientInterface interface {
 
 	// AddNoteWithBody Add a Note to a Task's running log
 	//
-	// By the Member holding the Task. Errors: `not_holder`.
+	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3042,7 +3045,10 @@ type ClientInterface interface {
 
 	// AddNote Add a Note to a Task's running log
 	//
-	// By the Member holding the Task. Errors: `not_holder`.
+	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4822,7 +4828,10 @@ func (c *Client) Heartbeat(ctx context.Context, task TaskRef, params *HeartbeatP
 
 // AddNoteWithBody Add a Note to a Task's running log
 //
-// By the Member holding the Task. Errors: `not_holder`.
+// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4841,7 +4850,10 @@ func (c *Client) AddNoteWithBody(ctx context.Context, task TaskRef, params *AddN
 
 // AddNote Add a Note to a Task's running log
 //
-// By the Member holding the Task. Errors: `not_holder`.
+// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10385,7 +10397,10 @@ type ClientWithResponsesInterface interface {
 
 	// AddNoteWithBodyWithResponse Add a Note to a Task's running log
 	//
-	// By the Member holding the Task. Errors: `not_holder`.
+	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10394,7 +10409,10 @@ type ClientWithResponsesInterface interface {
 
 	// AddNoteWithResponse Add a Note to a Task's running log
 	//
-	// By the Member holding the Task. Errors: `not_holder`.
+	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15509,7 +15527,10 @@ func (c *ClientWithResponses) HeartbeatWithResponse(ctx context.Context, task Ta
 
 // AddNoteWithBodyWithResponse Add a Note to a Task's running log
 //
-// By the Member holding the Task. Errors: `not_holder`.
+// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15524,7 +15545,10 @@ func (c *ClientWithResponses) AddNoteWithBodyWithResponse(ctx context.Context, t
 
 // AddNoteWithResponse Add a Note to a Task's running log
 //
-// By the Member holding the Task. Errors: `not_holder`.
+// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

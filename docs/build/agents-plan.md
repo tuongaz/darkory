@@ -86,8 +86,9 @@ Allowlist permissions (B/C), workers on other machines (the terminal relay and t
 
 ### R0
 
-- **Workspace required.** The lead's brief said a Task naming no Workspace in a Team with no default is `invalid`; read literally that refuses all filing on every Install today and in TestBots. Built permissively (decisions.md): such a Task names none, `workspaces: []` names none on purpose, and only a quick Feature with no Workspace to name is refused. The Runner (R1) must decide what a claimed Task with no Workspace means: a session in an empty directory, or a release with a Note.
-- **`darkory attach <task>`** (R2, the terminal) collides with the existing `darkory attach <task> <file>` that attaches Evidence. Suggest `darkory sessions join <task>`.
+- **Workspace required.** The lead's brief said a Task naming no Workspace in a Team with no default is `invalid`; read literally that refuses all filing on every Install today and in TestBots. Built permissively, and approved (decisions.md): such a Task names none, `workspaces: []` names none on purpose, and only a quick Feature with no Workspace to name is refused. The Runner (R1) starts such a Task's session in `<data>/sessions/<task-key>/` with no checkout and says so in the prompt.
+- **`darkory attach <task>`** (R2, the terminal) collided with the existing `darkory attach <task> <file>` that attaches Evidence. The lead's call: the join command is `darkory join <task> [--readonly]`.
+- **Notes on a Task nobody holds** were the holder's alone; the Runner needs to note merges and conflicts on review Tasks just completed, so the Feature's owner and its Team's Members may now add them (decisions.md).
 - **`darkory agents`** (the Runner loop, R1) sits one letter from `darkory agent set|list` (the settings, R0). Consider `darkory runner` for the loop.
 - **`unattended` and `--dangerously-skip-permissions`.** The default args carry the flag, so `unattended: false` changes nothing by itself. R1 should drop the flag when `unattended` is false, or add an `{unattended}` placeholder.
 - **A Break down completed with nothing filed** ships a ship-when-done Feature at once, and files its Retrospective: the Break down is its last open Task. The planner's exit rules should say to file the Tasks before completing.

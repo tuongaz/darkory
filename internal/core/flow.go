@@ -66,19 +66,74 @@ func (s *Service) Handover(ctx context.Context, c *auth.Caller, ref, skillRef st
 	return res.(Task), nil
 }
 
-// AddNote adds a Note to the running log of a Task the caller holds, in one batch. Notes stay on
-// the Task, so they carry its context across a Handover.
+// AddNote adds a Note to a Task's running log. Notes stay on the Task, so they carry its context
+// across a Handover. A held Task takes Notes from its holder alone, in one batch, under the Skill
+// of their Claim; a Task nobody holds, open or ended, from its Feature's owner or a Member of its
+// Feature's Team, under no Skill, as the Runner notes a merge on a review just completed.
 func (s *Service) AddNote(ctx context.Context, c *auth.Caller, ref, body string, idem Idem) (Note, error) {
 	if strings.TrimSpace(body) == "" {
 		return Note{}, refuse(CodeInvalid, "a Note has a body")
 	}
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, _ statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+	taskID, err := resolveTask(ctx, s.store, c.OrgID, ref)
+	if err != nil {
+		return Note{}, err
+	}
+	t, err := getTask(ctx, s.store, c.OrgID, taskID, s.clock.Now())
+	if err != nil {
+		return Note{}, err
+	}
+	if t.Claim == nil {
+		return s.addUnheldNote(ctx, c, taskID, body, idem)
+	}
+	res, err := s.heldWrite(ctx, c, taskID, idem, heldOp{build: func(pre Task, _ statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 		n := Note{ID: newID(), TaskID: pre.ID, AuthorID: c.MemberID, SkillID: pre.Claim.SkillID, Body: body, CreatedAt: now}
 		return n, []store.Stmt{
 			noteStmt(pre, args, n.ID, body),
 			activityStmt(c.OrgID, &c.MemberID, "task.note_added", pre.ID, map[string]any{"note_id": n.ID}, now),
 		}, nil
 	}})
+	if err != nil {
+		return Note{}, err
+	}
+	return res.(Note), nil
+}
+
+// addUnheldNote adds a Note to a Task that was read unheld. The write reads it again under the
+// counter: claimed since, it takes the Note from the holder alone, under their Claim's Skill.
+func (s *Service) addUnheldNote(ctx context.Context, c *auth.Caller, taskID, body string, idem Idem) (Note, error) {
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		task, err := getTask(ctx, t, c.OrgID, taskID, t.now)
+		if err != nil {
+			return nil, err
+		}
+		var skill *string
+		if task.Claim != nil {
+			if err := holds(c, task); err != nil {
+				return nil, err
+			}
+			skill = task.Claim.SkillID
+		} else {
+			f, err := getFeature(ctx, t, c.OrgID, task.FeatureID, t.now)
+			if err != nil {
+				return nil, err
+			}
+			if f.OwnerID != c.MemberID {
+				in, err := inTeam(ctx, t, c.OrgID, f.TeamID, c.MemberID)
+				if err != nil {
+					return nil, err
+				}
+				if !in {
+					return nil, refuse(CodeForbidden, "while nobody holds Task %s, only its Feature's owner or a Member of its Team may add a Note to it", task.Key)
+				}
+			}
+		}
+		n := Note{ID: newID(), TaskID: taskID, AuthorID: c.MemberID, SkillID: skill, Body: body, CreatedAt: t.now}
+		if _, err := t.Exec(ctx, `INSERT INTO notes (id, org_id, task_id, author_id, skill_id, body, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			n.ID, c.OrgID, taskID, c.MemberID, skill, body, ms(t.now)); err != nil {
+			return nil, err
+		}
+		return n, t.recordByCaller("task.note_added", taskID, map[string]any{"note_id": n.ID})
+	})
 	if err != nil {
 		return Note{}, err
 	}

@@ -166,13 +166,14 @@ func TestHandoverOfAnAimedTask(t *testing.T) {
 	})
 }
 
-// Notes and Observations are written only by the Member holding the Task, through the Session
-// that holds it when the Claim has a timeout. An Observation records the Skill it was made under.
+// On a held Task, Notes and Observations are written only by the Member holding it, through the
+// Session that holds it when the Claim has a timeout, and record the Skill they were made under.
+// Observations always need the Claim; Notes on a Task nobody holds are TestNotesOnATaskNobodyHolds.
 func TestNotesAndObservationsNeedTheClaim(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newClaimFixture(t, st)
 		ctx := t.Context()
-		_, err := f.svc.AddNote(ctx, f.a, f.task.Key, "nobody holds it", core.Idem{})
+		_, err := f.svc.Observe(ctx, f.a, f.task.Key, "worked", "nobody holds it", core.Idem{})
 		wantCode(t, err, core.CodeNotHolder)
 		f.claim(f.a, f.task.Key, timeout(time.Minute))
 		sibling := f.session(f.a.MemberID, "alice-2")
@@ -200,9 +201,9 @@ func TestNotesAndObservationsNeedTheClaim(t *testing.T) {
 		if len(d.Notes) != 1 || len(d.Observations) != 1 || d.Observations[0].ID != o.ID {
 			t.Fatalf("notes %+v observations %+v", d.Notes, d.Observations)
 		}
-		// A lapsed Claim writes nothing more.
+		// A lapsed Claim writes no more Observations.
 		f.clock.Advance(2 * time.Minute)
-		_, err = f.svc.AddNote(ctx, f.a, f.task.Key, "too late", core.Idem{})
+		_, err = f.svc.Observe(ctx, f.a, f.task.Key, "worked", "too late", core.Idem{})
 		wantCode(t, err, core.CodeNotHolder)
 		if got := f.kinds(f.task.ID); got != "task.filed task.claimed task.note_added task.observed" {
 			t.Fatalf("Activity: %s", got)

@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"encoding/json"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -626,3 +627,70 @@ func TestInitSeedsTheRoster(t *testing.T) {
 }
 
 func clockAt(t time.Time) *clock.Fake { return clock.NewFake(t) }
+
+// A Task nobody holds, open or ended, takes Notes from its Feature's owner, wherever they are, and
+// from any Member of its Feature's Team, under no Skill; anyone else is forbidden. A held Task
+// takes them from its holder alone, the owner and the Team included. A retry under its key adds
+// nothing more.
+func TestNotesOnATaskNobodyHolds(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.team("WEB")
+		f.team("OPS")
+		f.skill("build")
+		owner := f.member("owner", []string{"OPS"}, nil)
+		mate := f.member("mate", []string{"WEB"}, nil)
+		builder := f.member("builder", []string{"WEB"}, []string{"build"})
+		reviewer := f.member("reviewer", []string{"OPS"}, nil)
+		d, err := f.svc.FileFeature(ctx, mate, core.NewFeature{Team: "WEB", Title: "Cart", Owner: ptrStr("owner")}, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		task := f.task(mate, d.Feature.ID, "Pay", "build")
+
+		for _, c := range []*auth.Caller{owner, mate} {
+			n, err := f.svc.AddNote(ctx, c, task.Key, "context for whoever takes it", core.Idem{})
+			if err != nil || n.SkillID != nil || n.AuthorID != c.MemberID || n.TaskID != task.ID {
+				t.Fatalf("a Note on an open Task nobody holds: %+v %v", n, err)
+			}
+		}
+		_, err = f.svc.AddNote(ctx, reviewer, task.Key, "not mine", core.Idem{})
+		wantCode(t, err, core.CodeForbidden)
+
+		// Held: the holder alone, under their Claim's Skill.
+		f.claim(builder, task.Key, noTimeout)
+		for _, c := range []*auth.Caller{owner, mate} {
+			_, err := f.svc.AddNote(ctx, c, task.Key, "while held", core.Idem{})
+			wantCode(t, err, core.CodeNotHolder)
+		}
+		if n, err := f.svc.AddNote(ctx, builder, task.Key, "building", core.Idem{}); err != nil || n.SkillID == nil {
+			t.Fatalf("the holder's Note: %+v %v", n, err)
+		}
+		if _, err := f.svc.Complete(ctx, builder, task.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+
+		// Ended: someone from OPS still may not; the Team and the owner still write.
+		_, err = f.svc.AddNote(ctx, reviewer, task.Key, "one more thing", core.Idem{})
+		wantCode(t, err, core.CodeForbidden)
+		key := jsonIdem("merged-"+task.ID, "h")
+		n, err := f.svc.AddNote(ctx, mate, task.Key, "Merged WEB-3/pay into feature/WEB-1 at 1a2b3c", key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again, err := f.svc.AddNote(ctx, mate, task.Key, "Merged WEB-3/pay into feature/WEB-1 at 1a2b3c", key)
+		var replay *core.Replay
+		if err == nil || !errors.As(err, &replay) {
+			t.Fatalf("the retry: %+v %v", again, err)
+		}
+		got, err := f.svc.GetTask(ctx, mate, task.Key)
+		if err != nil || len(got.Notes) != 4 || got.Notes[3].ID != n.ID || got.Notes[3].SkillID != nil {
+			t.Fatalf("Notes %+v %v", got.Notes, err)
+		}
+		if notes := f.count(`SELECT COUNT(*) FROM activity WHERE kind = 'task.note_added' AND subject_id = $1`, task.ID); notes != 4 {
+			t.Fatalf("%d task.note_added entries", notes)
+		}
+		f.checkActivity()
+	})
+}

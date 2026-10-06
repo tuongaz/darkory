@@ -1072,7 +1072,10 @@ export interface paths {
         put?: never;
         /**
          * Add a Note to a Task's running log
-         * @description By the Member holding the Task. Errors: `not_holder`.
+         * @description On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
+         *     a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
+         *     Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
+         *     just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
          */
         post: operations["addNote"];
         delete?: never;
