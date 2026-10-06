@@ -114,8 +114,10 @@ describe("the Inbox", () => {
 
     const aimed = await section("Aimed at me");
     expect(within(aimed).getByText("Stripe keys for staging?")).toBeInTheDocument();
-    expect(within(aimed).getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toBeInTheDocument();
+    // One line per row: the question's text is in its peek; the row keeps what it blocks and who asked.
+    expect(within(aimed).queryByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).not.toBeInTheDocument();
     expect(within(aimed).getByText(/blocks WEB-3/)).toBeInTheDocument();
+    expect(within(aimed).getByRole("img", { name: "builder (agent)" })).toBeInTheDocument();
     expect(within(aimed).getByRole("button", { name: "Answer WEB-8" })).toBeInTheDocument();
 
     const held = await section("Held by me");
@@ -129,6 +131,8 @@ describe("the Inbox", () => {
 
     const owned = await section("Features I own");
     expect(within(owned).getByRole("link", { name: "Feature 1" })).toHaveAttribute("href", "/features/WEB-1");
+    // Rank names the Team: two Teams each have a #1.
+    expect(within(owned).getByText("Web #2")).toBeInTheDocument();
     expect(within(owned).getByText("1 blocked")).toBeInTheDocument();
     expect(within(owned).getByText("2 done · 5 open")).toBeInTheDocument();
     expect(within(owned).getByText("WEB-17")).toBeInTheDocument();
@@ -220,7 +224,7 @@ describe("My work", () => {
     const table = await screen.findByRole("table", { name: "Takeable now" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((r) => within(r).getAllByRole("cell")[2].textContent)).toEqual(["Magic link email", "Break down: Billing export"]);
-    expect(within(rows[0]).getByText("#1")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("Web #1")).toBeInTheDocument();
     expect(within(rows[0]).getByText("review")).toBeInTheDocument();
     expect(within(rows[0]).getByText("4 min")).toBeInTheDocument();
     expect(within(rows[1]).getByText("< 1 min")).toBeInTheDocument();

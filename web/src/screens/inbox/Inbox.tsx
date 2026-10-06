@@ -1,7 +1,7 @@
 import { BookOpenIcon, InboxIcon, LinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { Feature, Member, Task } from "@/api/client";
+import type { Feature, Member, Task, Team } from "@/api/client";
 import { useDirectory, useOpenTasks } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
@@ -19,10 +19,10 @@ import { blocksOf, featureBar, skillOf, featuresIOwn, myProposals, retrospective
 import { AnswerButton, ClaimButton, FeatureCell, GroupHeader, KindPill, NoneLine, RowLink, ShortTime, StatusCell } from "./parts";
 import { useAimedAt, useFeatureMap, useHeldBy, useOwnedFeatures, useStatuses, useTakeable, useTaskDetails, type StatusView } from "./queries";
 
-// Kit `.irow`: Status · key · title · marks · Feature · from / Skill · time · action. On a phone a
-// row keeps the Status glyph, the title and the action.
+// Kit `.irow`: Status · key · title · marks · Feature · from / Skill · time · action, on one 36px
+// line. On a phone a row keeps the Status glyph, the title and the action.
 const taskGrid =
-  "relative grid min-h-10 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent md:grid-cols-[128px_52px_minmax(0,1fr)_auto_190px_150px_44px_72px]";
+  "relative grid h-9 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent md:grid-cols-[128px_52px_minmax(0,1fr)_auto_190px_150px_44px_72px]";
 const wide = "hidden md:flex";
 
 /** /inbox: what needs me first, section by section, each hidden when it is empty. */
@@ -36,7 +36,7 @@ export function InboxPage() {
   const open = useOpenTasks();
   const features = useFeatureMap();
   const statuses = useStatuses();
-  const { members, skills } = useDirectory();
+  const { members, skills, teams } = useDirectory();
 
   const teamIds = new Set(me.teams.map((t) => t.id));
   const retrospectives = retrospectivesIn(open.data ?? [], features, teamIds);
@@ -127,7 +127,7 @@ export function InboxPage() {
               <section aria-label="Features I own">
                 <GroupHeader title="Features I own" count={mine.length} />
                 {mine.map((o) => (
-                  <OwnedRow key={o.feature.id} owned={o} members={members} statuses={statuses} />
+                  <OwnedRow key={o.feature.id} owned={o} members={members} teams={teams} statuses={statuses} />
                 ))}
               </section>
             )}
@@ -159,11 +159,10 @@ export function InboxPage() {
   );
 }
 
-/** One Task as the Inbox lists it; the title opens its peek. */
+/** One Task as the Inbox lists it, on one line; the title opens its peek, where its text is. */
 export function TaskRow({
   task,
   status,
-  sub,
   marks,
   feature,
   by,
@@ -172,7 +171,6 @@ export function TaskRow({
 }: {
   task: Task;
   status: StatusView | undefined;
-  sub?: ReactNode;
   marks?: ReactNode;
   feature: Feature | undefined;
   by?: ReactNode;
@@ -180,27 +178,23 @@ export function TaskRow({
   action?: ReactNode;
 }) {
   const peek = usePeekLink();
-  // With a line under the title (a question's text), the row is two lines tall and that line
-  // runs under the title and the marks, as kit `.irow.tall` draws it.
-  const both = sub ? "row-span-2" : "";
   return (
-    <div className={cn(taskGrid, sub && "min-h-14 grid-rows-[auto_auto] content-center gap-y-0.5 py-2")}>
-      <StatusCell status={status} className={cn(both, "[&>span:last-child]:hidden md:[&>span:last-child]:inline")} />
-      <Key className={cn(both, "hidden md:block")}>{task.key}</Key>
+    <div className={taskGrid}>
+      <StatusCell status={status} className="[&>span:last-child]:hidden md:[&>span:last-child]:inline" />
+      <Key className="hidden md:block">{task.key}</Key>
       <span className="flex min-w-0">
         <RowLink to={peek(task.key)}>{task.title}</RowLink>
       </span>
       <span className={cn(wide, "items-center gap-1.5")}>{marks}</span>
-      {sub && <small className="col-start-2 row-start-2 truncate text-xs text-muted-foreground md:col-start-3 md:col-end-5">{sub}</small>}
-      <FeatureCell className={cn(both, wide)} feature={feature} />
-      <span className={cn(both, wide, "min-w-0 items-center gap-1.5 whitespace-nowrap text-muted-foreground")}>{by}</span>
-      <ShortTime className={cn(both, "hidden text-right md:block")} at={when} />
-      <span className={cn(both, "flex justify-end")}>{action}</span>
+      <FeatureCell className={wide} feature={feature} />
+      <span className={cn(wide, "min-w-0 items-center gap-1.5 whitespace-nowrap text-muted-foreground")}>{by}</span>
+      <ShortTime className="hidden text-right md:block" at={when} />
+      <span className="flex justify-end">{action}</span>
     </div>
   );
 }
 
-/** A question or Escalation aimed at me: its text, what it blocks, who asked; Answer claims and opens it. */
+/** A question or Escalation aimed at me: what it blocks and who asked; Answer claims and opens it. */
 function AimedRow({
   task,
   status,
@@ -216,12 +210,10 @@ function AimedRow({
   blocks: Task[];
   primary: boolean;
 }) {
-  const question = task.description.split("\n").find((l) => l.trim());
   return (
     <TaskRow
       task={task}
       status={status}
-      sub={question}
       marks={
         blocks[0] && (
           <Pill tone="secondary">
@@ -265,13 +257,25 @@ export function HeldRow({ task, status, feature, skill }: { task: Task; status: 
   );
 }
 
-// Kit `.frow`: Rank · key · title · bar · counts · what it waits on.
+// Kit `.frow`: Rank (with the Team, as two Teams each have a #1) · key · title · bar · counts ·
+// what it waits on.
 const featureGrid =
-  "relative grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent md:grid-cols-[128px_52px_minmax(0,1fr)_90px_170px_minmax(0,370px)]";
+  "relative grid h-9 grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent md:grid-cols-[128px_52px_minmax(0,1fr)_90px_170px_minmax(0,370px)]";
 
 /** A Feature I own: how far along it is, and the one thing it waits on. */
-function OwnedRow({ owned, members, statuses }: { owned: OwnedFeature; members: Map<string, Member>; statuses: Map<string, StatusView> }) {
+function OwnedRow({
+  owned,
+  members,
+  teams,
+  statuses,
+}: {
+  owned: OwnedFeature;
+  members: Map<string, Member>;
+  teams: Map<string, Team>;
+  statuses: Map<string, StatusView>;
+}) {
   const { feature: f, blocked, breakdown, retrospective } = owned;
+  const team = teams.get(f.team_id);
   const now = useNow();
   const bar = featureBar(f);
   const c = f.task_counts;
@@ -279,7 +283,9 @@ function OwnedRow({ owned, members, statuses }: { owned: OwnedFeature; members: 
   const holder = breakdown && liveClaim(breakdown, now);
   return (
     <div className={featureGrid}>
-      <span className="hidden whitespace-nowrap text-muted-foreground tabular-nums md:block">Rank #{f.rank}</span>
+      <span className="hidden truncate text-muted-foreground tabular-nums md:block" title={`Rank #${f.rank} in ${team?.name ?? "its Team"}`}>
+        {team?.name} #{f.rank}
+      </span>
       <Key className="hidden md:block">{f.key}</Key>
       <span className="flex min-w-0 items-center gap-2">
         <RowLink to={`/features/${f.key}`}>{f.title}</RowLink>

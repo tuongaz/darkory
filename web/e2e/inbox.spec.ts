@@ -141,10 +141,13 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   const key = question.task.key;
   const aimed = page.getByRole("region", { name: "Aimed at me" });
   await expect(aimed.getByText("Stripe keys for staging?")).toBeVisible();
-  await expect(aimed.getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toBeVisible();
+  // One line per row: the question's text is in its peek.
+  await expect(aimed.getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toHaveCount(0);
   await expect(aimed.getByText(`blocks ${cart}`)).toBeVisible();
   await expect(aimed.getByText("inbox-builder")).toBeVisible();
   await expect(aimed.getByRole("button", { name: `Answer ${key}` })).toBeVisible();
+  const questionRow = aimed.getByRole("button", { name: `Answer ${key}` }).locator("xpath=ancestor::div[contains(@class, 'grid')][1]");
+  expect((await questionRow.boundingBox())!.height).toBe(36);
   await notReloaded(page);
   await shot(page, "inbox-aimed");
 

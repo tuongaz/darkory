@@ -110,6 +110,7 @@ function QueueRow({
 }) {
   const peek = usePeekLink();
   const now = useNow();
+  const { teams } = useDirectory();
   return (
     <div role="row" className={`${queueGrid} relative min-h-10 hover:bg-accent`}>
       <span role="cell" className="flex">
@@ -125,7 +126,8 @@ function QueueRow({
         <FeatureCell feature={feature} />
       </span>
       <span role="cell" className={`${wide} text-muted-foreground tabular-nums`}>
-        {feature && `#${feature.rank}`}
+        {/* With the Team: two Teams each have a #1. */}
+        {feature && `${teams.get(feature.team_id)?.name ?? ""} #${feature.rank}`.trim()}
       </span>
       <span role="cell" className={wide}>
         {skill && <Pill tone="outline">{skill}</Pill>}
