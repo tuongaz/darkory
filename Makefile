@@ -71,7 +71,7 @@ e2e-pg:
 ## (Vite: changes show on save) and proxies /v1 to the server on 7358, which is rebuilt and
 ## restarted when Go code changes. Ctrl-C stops both. The Install lives in $(DEV_DATA).
 dev: dev-init
-	@test -d web/node_modules || (cd web && npm ci)
+	@test web/node_modules/.package-lock.json -nt web/package-lock.json || (cd web && npm ci)
 	@trap 'kill 0' INT TERM; \
 	$(MAKE) --no-print-directory dev-api & \
 	$(MAKE) --no-print-directory dev-web & \
