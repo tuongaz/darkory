@@ -203,6 +203,20 @@ test("scenario 8: an admin renames In review and adds a Status; GET /v1/statuses
   const table = page.getByRole("table", { name: "Statuses" });
   await expect(table.getByRole("row")).toHaveCount(7);
 
+  // The ⓘ opens beside the Kind column it explains, wide enough for its lines, inside the window.
+  await page.getByRole("button", { name: "About the kinds" }).click();
+  const kinds = page.getByRole("dialog").filter({ hasText: "Reached by Drop only" });
+  await expect(kinds).toBeVisible();
+  const head = (await table.getByRole("columnheader", { name: /^Kind/ }).boundingBox())!;
+  await expect.poll(async () => (await kinds.boundingBox())!.x).toBeGreaterThanOrEqual(head.x + head.width);
+  const box = (await kinds.boundingBox())!;
+  expect(box.width).toBeGreaterThanOrEqual(300);
+  expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  expect(await kinds.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await shot(page, "workflow-kinds");
+  await page.keyboard.press("Escape");
+  await expect(kinds).toHaveCount(0);
+
   await page.getByRole("button", { name: "Rename In review" }).click();
   await page.getByRole("textbox", { name: "Name of In review" }).fill("Code review");
   await page.keyboard.press("Enter");

@@ -10,7 +10,7 @@ import {
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { GripVerticalIcon, PlusIcon } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { ApiError } from "@/api/client";
 import type { components } from "@/api/schema.gen";
 import { InfoPopover } from "@/components/InfoPopover";
@@ -21,6 +21,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { glyphFor, type StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AdminFrame } from "./AdminLayout";
@@ -74,6 +75,9 @@ function StatusEditor({ current, adding, onAdded }: { current: Status[]; adding:
   const { counts, tasks } = useTasksByStatus();
   const [refused, setRefused] = useState<Problem | undefined>();
   const [deleting, setDeleting] = useState<Status | null>(null);
+  // The ⓘ opens beside the Kind column, over the empty space right of it, not over the column.
+  const kindHead = useRef<HTMLSpanElement>(null);
+  const phone = useIsMobile();
   const save = useMutation({
     mutationFn: ({ rows, moves }: Save) => setStatuses(setStatusesBody(rows, moves)),
     onSuccess: (r) => qc.setQueryData(statusesKey, r.items),
@@ -120,11 +124,11 @@ function StatusEditor({ current, adding, onAdded }: { current: Status[]; adding:
           <span role="columnheader" className="hidden sm:block">
             Tasks
           </span>
-          <span role="columnheader" className="flex items-center gap-1">
+          <span ref={kindHead} role="columnheader" className="flex items-center gap-1">
             Kind
-            <InfoPopover label="About the kinds">
+            <InfoPopover label="About the kinds" anchor={kindHead} side={phone ? "bottom" : "right"} align="start" className="w-[336px]">
               <p className="mb-1.5 font-semibold">Kinds</p>
-              <dl className="grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-1 whitespace-nowrap">
+              <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
                 <dt className="text-muted-foreground">Backlog</dt>
                 <dd>
                   Not offered by <code>next</code>

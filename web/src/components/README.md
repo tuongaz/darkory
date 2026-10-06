@@ -91,7 +91,7 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | `FormDialog title description hint submitLabel onSubmit pending error size` + `FormRows`, `FormRow label htmlFor help` | `.dialog`, `.dform` | A dialog that does one thing: one label column, one control column (320px), Cancel and the one primary; the refusal shows above the footer. `size` `sm` 480 · `md` 560 · `lg` 600. |
 | `Timeline` + `TimelineDay` + `TimelineRow who when` + `SystemMark` | `.tl` | Activity and a Task's record. `SystemMark` stands for Darkory when no Member acted (a lapse). |
 | `EmptyState icon title action` | `.empty` | A heading of at most three words and the one next thing. |
-| `InfoPopover label` | `.info` | ⓘ: where explanations go, so the screen stays label + number + pill. |
+| `InfoPopover label anchor side align` | `.info` | ⓘ: where explanations go, so the screen stays label + number + pill. `anchor` (a ref), `side` and `align` open it beside what it explains rather than over it. |
 | `HeartbeatMeter claim variant` | `.hb` | `bar` (peek, Agents): "in 15 min" with the time left as a bar; `compact` (a card): pulse + "15 min". No expiry, Lapsed. |
 | `Refusal error`, `Loaded query` | | A refusal with its stable code; a query's data, skeleton or refusal. |
 | `Time`, `ClockTime`, `RelativeTime` | | "6 Oct 2026, 22:18"; "22:18"; "in 4 minutes". |
