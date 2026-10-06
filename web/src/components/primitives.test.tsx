@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -18,6 +18,7 @@ import { Peek } from "./Peek";
 import { Pill } from "./Pill";
 import { PropertiesRail, Property } from "./PropertiesRail";
 import { StatusGlyph } from "./StatusGlyph";
+import { StatusSelect } from "./StatusSelect";
 import { Timeline, TimelineDay, TimelineRow } from "./Timeline";
 
 const inMinutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
@@ -73,13 +74,16 @@ describe("HeartbeatMeter", () => {
       <>
         <HeartbeatMeter claim={{ expires_at: inMinutes(15), heartbeat_timeout_seconds: 900 }} />
         <HeartbeatMeter claim={{ expires_at: inMinutes(10), heartbeat_timeout_seconds: 900 }} variant="compact" />
+        <HeartbeatMeter claim={{ expires_at: new Date(Date.now() + 36_000).toISOString(), heartbeat_timeout_seconds: 60 }} variant="compact" />
         <HeartbeatMeter claim={{}} />
         <HeartbeatMeter claim={{ expires_at: inMinutes(-1), heartbeat_timeout_seconds: 2 }} />
       </>,
     );
     expect(screen.getByText("in 15 min")).toBeInTheDocument();
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "100");
-    expect(screen.getByText("10 min")).toBeInTheDocument();
+    // A card's compact meter reads as the Agents table's does.
+    expect(screen.getByText("in 10 min")).toBeInTheDocument();
+    expect(screen.getByText("in 36 s")).toBeInTheDocument();
     expect(screen.getByText("No expiry")).toBeInTheDocument();
     expect(screen.getByText("Lapsed")).toBeInTheDocument();
   });
@@ -157,6 +161,33 @@ describe("FormDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("network taken");
     await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("StatusSelect", () => {
+  const statuses = [
+    { id: "st-done", name: "Done", kind: "done" as const, position: 5 },
+    { id: "st-review", name: "In review", kind: "in_progress" as const, position: 4 },
+    { id: "st-backlog", name: "Backlog", kind: "backlog" as const, position: 1 },
+    { id: "st-progress", name: "In progress", kind: "in_progress" as const, position: 3 },
+    { id: "st-todo", name: "Todo", kind: "todo" as const, position: 2 },
+    { id: "st-dropped", name: "Dropped", kind: "dropped" as const, position: 6 },
+  ];
+
+  it("is one control for a form and for a Task's properties: the open-kind Statuses in board order, with their glyphs", async () => {
+    const lists: string[][] = [];
+    for (const variant of ["field", "property"] as const) {
+      const { unmount } = render(<StatusSelect variant={variant} id="s" statuses={statuses} value="st-todo" onValueChange={() => {}} />);
+      const trigger = screen.getByRole("combobox");
+      expect(trigger).toHaveTextContent("Todo");
+      if (variant === "property") expect(trigger).toHaveAccessibleName("Status: Todo");
+      await userEvent.click(trigger);
+      const list = await screen.findByRole("listbox");
+      lists.push(within(list).getAllByRole("option").map((o) => `${o.querySelector("[data-glyph]")?.getAttribute("data-glyph")} ${o.textContent}`));
+      unmount();
+    }
+    expect(lists[0]).toEqual(["backlog Backlog", "todo Todo", "inprogress In progress", "inreview In review"]);
+    expect(lists[1]).toEqual(lists[0]);
   });
 });
 

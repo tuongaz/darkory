@@ -174,18 +174,22 @@ export function ActivityPage() {
         )}
       </Content>
       {history.isSuccess && entries.length > 0 && (
-        <footer className="flex h-10 flex-none items-center gap-2 border-t pr-4 pl-6 text-xs text-muted-foreground">
-          {history.hasNextPage ? `${entries.length} entries loaded` : count(entries.length, "entry", "entries")}
+        // The same words whether or not there is more: "100 entries loaded · Load older".
+        <footer className="flex h-10 flex-none items-center gap-1.5 border-t pr-4 pl-6 text-xs text-muted-foreground">
+          <span>{count(entries.length, "entry", "entries")} loaded</span>
           {history.hasNextPage && (
-            <Button
-              size="xs"
-              variant="outline"
-              className="ml-auto"
-              disabled={history.isFetchingNextPage}
-              onClick={() => void history.fetchNextPage()}
-            >
-              Load older
-            </Button>
+            <>
+              <span aria-hidden>·</span>
+              <Button
+                size="xs"
+                variant="link"
+                className="h-auto px-0 text-xs text-foreground"
+                disabled={history.isFetchingNextPage}
+                onClick={() => void history.fetchNextPage()}
+              >
+                Load older
+              </Button>
+            </>
           )}
         </footer>
       )}

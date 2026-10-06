@@ -214,7 +214,7 @@ test("Activity narrows to a Member and to a Kind", async ({ page }) => {
   await expect(page.getByText("Kind is")).toBeVisible();
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText("Darkory Lapsed");
-  await expect(page.getByText("1 entry", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 entry loaded", { exact: true })).toBeVisible();
   await shot(page, "activity-kind");
   expect(errors).toEqual([]);
 });
@@ -230,5 +230,17 @@ test("at phone width the four pages do not scroll sideways", async ({ page }) =>
     expect(scroll, path).toBe(client);
   }
   await shot(page, "phone-activity");
+
+  // Agents fits the phone: the table does not scroll inside its frame, and the Heartbeat is whole.
+  await page.goto(`${base()}/agents`);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("columnheader", { name: "Heartbeat" })).toBeVisible();
+  expect(await table.evaluate((el) => el.scrollWidth <= el.parentElement!.clientWidth)).toBe(true);
+  // inbox-builder still holds the cart page, so its row draws the meter.
+  const meter = (await table.getByRole("meter").first().boundingBox())!;
+  expect(meter.x + meter.width).toBeLessThanOrEqual(390);
+  const head = (await table.getByRole("columnheader", { name: "Heartbeat" }).boundingBox())!;
+  expect(head.x + head.width).toBeLessThanOrEqual(390);
+  await shot(page, "phone-agents");
   expect(errors).toEqual([]);
 });

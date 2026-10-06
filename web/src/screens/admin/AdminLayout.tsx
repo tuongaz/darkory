@@ -64,14 +64,16 @@ function AdminTabs() {
     { to: "/admin/workflow", label: "Workflow" },
   ];
   return (
-    <nav aria-label="Admin" className="flex flex-none gap-0.5 overflow-x-auto border-b px-4">
+    // On a phone the four tabs fit the width: tighter padding, and they scroll inside the bar if
+    // the counts ever grow past it.
+    <nav aria-label="Admin" className="flex flex-none gap-0.5 overflow-x-auto border-b px-2 sm:px-4">
       {tabs.map((t) => (
         <NavLink
           key={t.to}
           to={t.to}
           className={({ isActive }) =>
             cn(
-              "-mb-px inline-flex h-9 items-center gap-1.5 border-b-2 border-transparent px-2.5 font-medium whitespace-nowrap text-muted-foreground hover:text-foreground",
+              "-mb-px inline-flex h-9 flex-none items-center gap-1.5 border-b-2 border-transparent px-2 font-medium whitespace-nowrap text-muted-foreground hover:text-foreground sm:px-2.5",
               isActive && "border-foreground text-foreground",
             )
           }

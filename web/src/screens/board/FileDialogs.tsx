@@ -11,7 +11,7 @@ import { usePeekLink } from "@/app/peek";
 import { FormDialog } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
-import { StatusGlyph } from "@/components/StatusGlyph";
+import { StatusSelect } from "@/components/StatusSelect";
 import { TeamMark } from "@/components/TeamMark";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { Combobox } from "./Combobox";
-import { defaultFileStatus, isOpenKind, statusGlyphs } from "./derive";
+import { defaultFileStatus } from "./derive";
 import { useStatuses, useTeamFeatures, useTeamTasks } from "./queries";
 
 /** One field of the dialogs' 12-column form (kit `.field`): its label over its control, and what is wrong with it. */
@@ -84,8 +84,6 @@ export function FileTaskDialog({
   const [more, setMore] = useState(false);
   const [errors, setErrors] = useState<{ feature?: string; title?: string; who?: string }>({});
 
-  const statusList = (statuses.data ?? []).filter((s) => isOpenKind(s.kind));
-  const glyphs = statusGlyphs(statuses.data ?? []);
   const chosenStatus = statusId ?? defaultFileStatus(statuses.data ?? [])?.id;
   const blockable = (tasks.data ?? []).filter((t) => t.state === "open" && (!featureKey || features.data?.find((f) => f.key === featureKey)?.id === t.feature_id));
   const featureById = new Map((features.data ?? []).map((f) => [f.id, f]));
@@ -244,21 +242,7 @@ export function FileTaskDialog({
           </div>
         </Field>
         <Field label="Status" htmlFor="file-task-status" className="sm:col-span-4">
-          <Select value={chosenStatus} onValueChange={setStatusId}>
-            <SelectTrigger id="file-task-status" className="w-full">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              {statusList.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  <span aria-hidden className="inline-flex">
-                    <StatusGlyph glyph={glyphs.get(s.id) ?? "todo"} className="size-3" />
-                  </span>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <StatusSelect id="file-task-status" statuses={statuses.data ?? []} value={chosenStatus} onValueChange={setStatusId} />
         </Field>
         <Field
           label={

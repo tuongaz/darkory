@@ -8,9 +8,9 @@ type Beat = Pick<Claim, "expires_at" | "heartbeat_timeout_seconds">;
 
 /**
  * How long a Claim has until it lapses without a Heartbeat (kit `.hb`). `bar` (the peek and the
- * Agents table) draws the time left as a bar over the timeout, amber in the last third, and reads
- * "in 15 min"; `compact` (a card) is the pulse icon and "15 min". A Claim with no timeout reads
- * "No expiry", one past its expiry "Lapsed".
+ * Agents table) draws the time left as a bar over the timeout, amber in the last third; `compact`
+ * (a card, a row) draws the pulse icon instead. Both read "in 15 min", "in 36 s". A Claim with no
+ * timeout reads "No expiry", one past its expiry "Lapsed".
  */
 export function HeartbeatMeter({ claim, variant = "bar", className }: { claim: Beat; variant?: "bar" | "compact"; className?: string }) {
   const now = useNow();
@@ -22,7 +22,7 @@ export function HeartbeatMeter({ claim, variant = "bar", className }: { claim: B
     return (
       <span className={base} title={`Heartbeat in ${untilText(left)}`}>
         <HeartPulseIcon className="size-3" aria-hidden />
-        {untilText(left)}
+        in {untilText(left)}
       </span>
     );
   }

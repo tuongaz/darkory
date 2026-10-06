@@ -81,6 +81,7 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | Component | Kit | Use |
 |---|---|---|
 | `StatusGlyph glyph` | `.st` | `backlog · todo · inprogress · inreview · done · dropped`. `glyphFor(kind, nthOfKind)` in `@/lib/status` maps a Status kind to a glyph: the first In-progress Status draws half full, later ones (In review) three quarters. |
+| `StatusSelect statuses value onValueChange variant id` | `.select` | The one Status picker (File a Task, a Task's properties): the open-kind Statuses in board order with their glyphs. `field` for a form, `property` for a properties column. |
 | `MemberAvatar member size` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Round initials for a human, square violet for an agent; named for screen readers ("builder-1 (agent)"). |
 | `Pill tone` | `.badge` | `waiting · claimed · blocked · done · dropped · agent` (ink on a tint), `outline` (a Skill name), `secondary` (a Task kind, a fact), `destructive`. At most two words; a dimmed row's pill says why. |
 | `Key to?` | `.key` | `WEB-3` in mono; a link with `to`. |

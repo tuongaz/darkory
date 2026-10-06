@@ -135,7 +135,9 @@ describe("the Activity page", () => {
     expect(within(rows()[0]).getByRole("img", { name: "Darkory" })).toBeInTheDocument();
     expect(rows()[0]).toHaveTextContent("Darkory Lapsed WEB-4 Payment form · held by builder · no Heartbeat in 2 s");
     expect(within(rows()[0]).getByRole("link", { name: /WEB-4/ })).toHaveAttribute("href", "/activity?task=WEB-4");
-    expect(screen.getByText("3 entries")).toBeInTheDocument();
+    expect(screen.getByText("3 entries loaded")).toBeInTheDocument();
+    // Nothing older: no Load older.
+    expect(screen.queryByRole("button", { name: "Load older" })).not.toBeInTheDocument();
     expect(api.calls.find((c) => c.path === "/v1/activity")?.query.get("limit")).toBe("100");
 
     act(() => {
@@ -163,6 +165,21 @@ describe("the Activity page", () => {
     await waitFor(() => expect(screen.queryByText("Member is")).not.toBeInTheDocument());
   });
 
+  it("says how many entries are loaded the same way when there are older ones, and offers them", async () => {
+    const page = Array.from({ length: 100 }, (_, i) => entry(200 - i, "task.claimed", { claim_id: `c-${i}` }, { at: at(9, 0) }));
+    mockApi({
+      ...signedIn(),
+      "GET /v1/statuses": statuses,
+      "GET /v1/tasks": { items: [payment] },
+      "GET /v1/features": { items: [feature(1, 1)] },
+      "GET /v1/activity": { items: page, last_seq: 200, first_seq: 101 },
+    });
+    renderApp("/activity");
+    const footer = await screen.findByText("100 entries loaded");
+    expect(footer.parentElement).toHaveTextContent(/^100 entries loaded·Load older$/);
+    expect(screen.getByRole("button", { name: "Load older" })).toBeInTheDocument();
+  });
+
   it("filters by Kind from its menu", async () => {
     const api = activityApi();
     renderApp("/activity");
@@ -171,6 +188,6 @@ describe("the Activity page", () => {
     await userEvent.click(await screen.findByRole("menuitemradio", { name: "Lapsed" }));
     await waitFor(() => expect(api.calls.some((c) => c.path === "/v1/activity" && c.query.get("kind") === "task.lapsed")).toBe(true));
     expect(await screen.findByText("Task lapsed")).toBeInTheDocument();
-    expect(await screen.findByText("1 entry")).toBeInTheDocument();
+    expect(await screen.findByText("1 entry loaded")).toBeInTheDocument();
   });
 });

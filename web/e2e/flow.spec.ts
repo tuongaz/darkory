@@ -179,6 +179,11 @@ test("the shell: sign in, the checklist, live updates, keys, the peek, a phone",
       await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
       await noSidewaysScroll(page);
     }
+    // The Admin tabs fit the phone: none is cut at the edge.
+    const tabs = page.getByRole("navigation", { name: "Admin" });
+    expect(await tabs.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    const workflow = (await tabs.getByRole("link", { name: "Workflow" }).boundingBox())!;
+    expect(workflow.x + workflow.width).toBeLessThanOrEqual(390);
     await shot(page, "phone-admin");
     await page.goto(`${base()}/teams/WEB/tasks?view=board`);
     await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);

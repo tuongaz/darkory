@@ -23,6 +23,8 @@ import { agentRows, claimKinds, lapsesIn24h, lastClaimEntry, type AgentRow } fro
 import { useFeatureMap, useMemberDetails, useRecentActivity, useSessions, useTaskMap, type Session } from "./queries";
 
 const claimKindSet = new Set<string>(claimKinds);
+// The columns a phone leaves out.
+const wide = "hidden md:table-cell";
 
 /** /agents: who is working right now, and is anyone stuck. ?agent=<name> opens one agent's peek. */
 export function AgentsPage() {
@@ -101,25 +103,18 @@ export function AgentsPage() {
             Add an agent Member to see its Claims here.
           </EmptyState>
         ) : (
-          <table className="w-full min-w-[1020px] table-fixed border-collapse">
-            <colgroup>
-              <col className="w-[220px]" />
-              <col />
-              <col className="w-[136px]" />
-              <col className="w-[176px]" />
-              <col className="w-[200px]" />
-              <col className="w-[104px]" />
-              <col className="w-12" />
-            </colgroup>
+          // On a phone the table keeps Agent, Holds and Heartbeat, and fits the screen; the rest is in
+          // the agent's peek.
+          <table className="w-full table-fixed border-collapse md:min-w-[1020px]">
             <thead>
-              <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-6">
-                <th>Agent</th>
+              <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 md:[&>th:first-child]:pl-6">
+                <th className="w-[132px] md:w-[220px]">Agent</th>
                 <th>Holds</th>
-                <th>Heartbeat</th>
-                <th>Session · model</th>
-                <th>Skills · Teams</th>
-                <th className="text-right">Lapses, 24 h</th>
-                <th>
+                <th className="w-[92px] md:w-[136px]">Heartbeat</th>
+                <th className={cn(wide, "w-[176px]")}>Session · model</th>
+                <th className={cn(wide, "w-[200px]")}>Skills · Teams</th>
+                <th className={cn(wide, "w-[104px] text-right")}>Lapses, 24 h</th>
+                <th className={cn(wide, "w-12")}>
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -216,7 +211,7 @@ function AgentTableRow({
       onClick={open}
       aria-selected={selected}
       className={cn(
-        "group h-[58px] cursor-pointer border-b hover:bg-accent [&>td]:px-2.5 [&>td]:py-2 [&>td:first-child]:pl-6",
+        "group h-[58px] cursor-pointer border-b hover:bg-accent [&>td]:px-2.5 [&>td]:py-2 [&>td:first-child]:pl-4 md:[&>td:first-child]:pl-6",
         idle && "text-muted-foreground",
         selected && "bg-accent [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]",
       )}
@@ -263,8 +258,8 @@ function AgentTableRow({
           </span>
         )}
       </td>
-      <td>{claim && <HeartbeatMeter claim={claim} className="text-foreground" />}</td>
-      <td>
+      <td>{claim && <HeartbeatMeter claim={claim} className="flex-wrap text-foreground" />}</td>
+      <td className={wide}>
         {agent.deactivated_at ? null : claim ? (
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate font-mono text-xs text-foreground">{claim.session_id}</span>
@@ -279,7 +274,7 @@ function AgentTableRow({
           noSession && !saidNoSession && <Pill tone="dropped">No Session</Pill>
         )}
       </td>
-      <td>
+      <td className={wide}>
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="flex min-w-0 gap-1 overflow-hidden">
             {detail?.skills.map((s) => (
@@ -291,7 +286,7 @@ function AgentTableRow({
           <small className="truncate text-xs text-muted-foreground">{detail?.teams.map((t) => t.name).join(" · ")}</small>
         </span>
       </td>
-      <td className="text-right tabular-nums">
+      <td className={cn(wide, "text-right tabular-nums")}>
         <span className="flex flex-col items-end gap-0.5">
           <span className={cn(lapses.length > 0 && "text-foreground")}>{lapses.length}</span>
           {lapsedKeys.length > 0 && (
@@ -305,7 +300,7 @@ function AgentTableRow({
           )}
         </span>
       </td>
-      <td>
+      <td className={wide}>
         {actions.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
