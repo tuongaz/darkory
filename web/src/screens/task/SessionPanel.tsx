@@ -59,7 +59,7 @@ export function SessionPanel({ detail, session, tall }: { detail: TaskDetail; se
     <section ref={section} id={sessionAnchor} aria-label="Session" className="flex scroll-mt-4 flex-col gap-2">
       <SectionHeader title="Session" actions={action} />
       <div className="flex flex-col overflow-hidden rounded-md border">
-        <SessionFacts session={session} agent={members.get(session.member_id)} className="h-9 border-b px-3" />
+        <SessionFacts session={session} agent={members.get(session.member_id)} className="min-h-9 border-b px-3 py-1.5" />
         {joinable ? (
           <>
             <ShellLine text={joinCommand(key)} />

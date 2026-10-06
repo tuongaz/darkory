@@ -304,7 +304,7 @@ function RunnerSessionSection({ agent, session, task, admin }: { agent: Member; 
     <section aria-label="Runner session">
       <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Session now</h3>
       <div className="flex flex-col rounded-md border">
-        <SessionFacts session={session} agent={agent} className="h-9 border-b px-2.5" />
+        <SessionFacts session={session} agent={agent} className="min-h-9 border-b px-2.5 py-1.5" />
         {task && (
           <div className="flex h-9 min-w-0 items-center gap-1.5 px-2.5">
             <Key to={taskOverAgents(task.key)}>{task.key}</Key>

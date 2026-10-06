@@ -189,6 +189,9 @@ test("the terminal under the Install's CSP, the Runner played by the test: watch
   expect(sockets[0].url).toMatch(new RegExp(`/v1/runner/sessions/${taskKey}/terminal\\?readonly=1$`));
   await expect.poll(() => sockets[0].text.map((t) => JSON.parse(t))).toContainEqual({ cols: expect.any(Number), rows: expect.any(Number) });
   await shot(page, "3-terminal-watching");
+  // A selected line stays readable over the selection colour.
+  await panel.locator(".xterm-screen").click({ clickCount: 3, position: { x: 40, y: 6 } });
+  await shot(page, "3b-terminal-selection");
 
   await panel.getByRole("button", { name: "Join", exact: true }).click();
   await expect(panel.getByRole("status")).toHaveText("Joined · your keys go to the session");
@@ -221,6 +224,13 @@ test("the terminal under the Install's CSP, the Runner played by the test: watch
   await expect(peek.getByRole("region", { name: "Session" }).locator(".xterm-rows")).toContainText("builder is running the tests");
   await expect(page).toHaveURL(new RegExp(`/agents\\?task=${taskKey}#session$`));
   await shot(page, "6-peek-over-agents");
+
+  // A phone: the page with a terminal on it does not scroll sideways.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`${base}/tasks/${taskKey}`);
+  await expect(panel.locator(".xterm-rows")).toContainText("builder is running the tests");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
+  await shot(page, "7-phone");
 
   expect(errors).toEqual([]);
   await ctx.close();

@@ -42,7 +42,8 @@ function Sep() {
 
 /**
  * A runner session's facts in one line, as text: the agent, when it started, its state, the
- * machine it runs on, and its tmux session, or "no tmux" when it cannot be joined.
+ * machine it runs on, and its tmux session, or "no tmux" when it cannot be joined. Too narrow for
+ * one line (a phone), it wraps between facts rather than cutting them.
  */
 export function SessionFacts({
   session,
@@ -54,7 +55,7 @@ export function SessionFacts({
   className?: string;
 }) {
   return (
-    <p className={cn("flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap", className)}>
+    <p className={cn("flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 whitespace-nowrap", className)}>
       {agent && (
         <>
           <MemberAvatar member={agent} />
@@ -71,12 +72,12 @@ export function SessionFacts({
         {stateNames[session.state]}
       </span>
       <Sep />
-      <span className="min-w-0 truncate" title="Host">
+      <span className="max-w-full truncate" title="Host">
         {session.host}
       </span>
       <Sep />
       {session.tmux ? (
-        <span className="min-w-0 truncate">
+        <span className="max-w-full truncate">
           tmux <span className="font-mono text-xs">{session.tmux}</span>
         </span>
       ) : (
