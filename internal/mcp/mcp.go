@@ -40,6 +40,9 @@ type Options struct {
 	// EvidenceMaxMB is the largest file attach_evidence sends, in MiB; zero means
 	// DefaultEvidenceMaxMB.
 	EvidenceMaxMB int64
+	// NoHeartbeats stops the server sending Heartbeats for its Session's Claims, for a session
+	// whose Heartbeats the runner sends while it shows progress (ADR 0013).
+	NoHeartbeats bool
 }
 
 // Server is the MCP server for one Member and Session.
@@ -49,21 +52,31 @@ type Server struct {
 	mcp      *sdk.Server
 	log      *slog.Logger
 	evidence evidenceRules
+	// noHeartbeats leaves the Session's Heartbeats to the runner.
+	noHeartbeats bool
 
 	mu      sync.Mutex
 	notices []string
 }
 
-// mcpPreamble comes before the working rules in the server's instructions.
+// mcpPreamble comes before the working rules in the server's instructions, with the sentence
+// about Heartbeats that fits the server.
 const mcpPreamble = `This MCP server is the darkory CLI as tools: next, claim, show_task, note, observe,
 attach_evidence, handover, complete, release, file_task (with blocks for a question), set_status
 (darkory status), workflow, and so on.
-Where the rules below name a darkory command, call the tool of that name. This server sends
-Heartbeats for the Claims its Session makes while it runs, so you need not call heartbeat
-yourself; when a Claim lapses or is taken back, the next tool result says so — then stop working
-that Task.
+Where the rules below name a darkory command, call the tool of that name. %s
 
 `
+
+const (
+	keeperSentence = `This server sends
+Heartbeats for the Claims its Session makes while it runs, so you need not call heartbeat
+yourself; when a Claim lapses or is taken back, the next tool result says so — then stop working
+that Task.`
+	runnerSentence = `The runner that started
+this session sends its Heartbeats while the session shows progress, so you need not call
+heartbeat yourself.`
+)
 
 // New returns a Server; nothing is sent until a tool is called or Run starts the Heartbeats.
 func New(o Options) (*Server, error) {
@@ -81,7 +94,7 @@ func New(o Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{conn: conn, log: o.Log, evidence: rules}
+	s := &Server{conn: conn, log: o.Log, evidence: rules, noHeartbeats: o.NoHeartbeats}
 	listEvery := o.ListEvery
 	if listEvery <= 0 {
 		listEvery = 30 * time.Second
@@ -94,7 +107,7 @@ func New(o Options) (*Server, error) {
 		OnError:   func(err error) { s.log.Warn("darkory mcp", "err", err) },
 	}
 	s.mcp = sdk.NewServer(&sdk.Implementation{Name: "darkory", Title: "Darkory", Version: version.Version},
-		&sdk.ServerOptions{Instructions: mcpPreamble + remote.Rules, Logger: o.Log})
+		&sdk.ServerOptions{Instructions: s.instructions(), Logger: o.Log})
 	s.addTools()
 	s.addRules()
 	return s, nil
@@ -107,8 +120,11 @@ func (s *Server) Session() string { return s.conn.Settings.Session }
 func (s *Server) MCP() *sdk.Server { return s.mcp }
 
 // Run serves one client over t and keeps this Session's Claims alive until the client goes away
-// or ctx ends.
+// or ctx ends, unless the server leaves Heartbeats to the runner.
 func (s *Server) Run(ctx context.Context, t sdk.Transport) error {
+	if s.noHeartbeats {
+		return s.mcp.Run(ctx, t)
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	kept := make(chan error, 1)
@@ -135,18 +151,27 @@ func (s *Server) drain() []string {
 	return out
 }
 
+// instructions are the preamble and the working rules.
+func (s *Server) instructions() string {
+	sentence := keeperSentence
+	if s.noHeartbeats {
+		sentence = runnerSentence
+	}
+	return fmt.Sprintf(mcpPreamble, sentence) + remote.Rules
+}
+
 func (s *Server) addRules() {
 	s.mcp.AddPrompt(&sdk.Prompt{Name: "prime", Title: "Darkory working rules",
 		Description: "The working rules for an agent's Darkory Session: read them before taking work."},
 		func(context.Context, *sdk.GetPromptRequest) (*sdk.GetPromptResult, error) {
 			return &sdk.GetPromptResult{Description: "Darkory working rules", Messages: []*sdk.PromptMessage{
-				{Role: "user", Content: &sdk.TextContent{Text: mcpPreamble + remote.Rules}}}}, nil
+				{Role: "user", Content: &sdk.TextContent{Text: s.instructions()}}}}, nil
 		})
 	s.mcp.AddResource(&sdk.Resource{URI: RulesURI, Name: "rules", Title: "Darkory working rules", MIMEType: "text/markdown",
 		Description: "The working rules for an agent's Darkory Session."},
 		func(_ context.Context, req *sdk.ReadResourceRequest) (*sdk.ReadResourceResult, error) {
 			return &sdk.ReadResourceResult{Contents: []*sdk.ResourceContents{
-				{URI: RulesURI, MIMEType: "text/markdown", Text: mcpPreamble + remote.Rules}}}, nil
+				{URI: RulesURI, MIMEType: "text/markdown", Text: s.instructions()}}}, nil
 		})
 }
 
