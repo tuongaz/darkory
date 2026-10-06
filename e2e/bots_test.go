@@ -77,6 +77,10 @@ func TestBots(t *testing.T) {
 		status[s.Name] = s
 	}
 	todo, inProgress, inReview, backlog := status["Todo"], status["In progress"], status["In review"], status["Backlog"]
+	// The rules name no Status, only a kind; the defaults' first todo-kind Status is Todo.
+	if i := slices.IndexFunc(statuses, func(s client.Status) bool { return s.Kind == client.StatusKindTodo }); i < 0 || statuses[i].ID != todo.ID {
+		t.Fatalf("the first todo-kind Status is not Todo: %+v", statuses)
+	}
 
 	// The bots start, and a watcher looks for a Backlog Task with a holder, which must never be.
 	rec := &botLog{t: t}
@@ -143,8 +147,9 @@ func TestBots(t *testing.T) {
 	// Reads show the Claim ended at its expiry at once; the Task stays In progress until the
 	// sweeper records the lapse, within a second.
 	eventually(t, 15*time.Second, "the lapse recorded", func() bool { return admin.task(logs.Task.Key).Task.StatusID == todo.ID })
+	// GET /v1/tasks/{task} then shows it in the first todo-kind Status, with the lapse recorded.
 	if d := admin.task(logs.Task.Key); len(d.Claims) != 1 || *d.Claims[0].HowEnded != client.ClaimEndLapsed || d.Claims[0].HolderID != id("lapser") ||
-		d.Status.ID != todo.ID || d.Task.StatusID != todo.ID {
+		d.Task.Claim != nil || d.Status.ID != todo.ID || d.Status.Kind != client.StatusKindTodo || d.Task.StatusID != todo.ID {
 		t.Fatalf("the lapser's Task is in %s with Claims %+v", d.Status.Name, d.Claims)
 	}
 
