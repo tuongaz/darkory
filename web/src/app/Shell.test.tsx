@@ -150,7 +150,8 @@ describe("keys", () => {
 
     await userEvent.keyboard("c");
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
-    expect(dialog).toHaveTextContent("Team WEB");
+    // It files into the current Team, whose chip heads it.
+    expect(dialog).toHaveTextContent(/^W?Web\s*File a Task/);
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
