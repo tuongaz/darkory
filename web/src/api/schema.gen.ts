@@ -945,12 +945,14 @@ export interface paths {
         put?: never;
         /**
          * Move a Task to another Status
-         * @description By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-         *     where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-         *     (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-         *     being completed or dropped. Naming the Status the Task is in changes nothing. Records
-         *     `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-         *     has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+         * @description By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+         *     (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+         *     whether or not someone holds it: the Status is where the Task is in its workflow, and the
+         *     Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+         *     Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+         *     Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+         *     those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+         *     `dropped` Status).
          */
         post: operations["setTaskStatus"];
         delete?: never;
@@ -1151,7 +1153,8 @@ export interface paths {
          *     the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
          *     clients that cannot set headers) and receives every entry after it; `0` sends the whole
          *     history. With neither, the stream starts from now: it sends only entries written after
-         *     it opened. A Member may have a limited number of streams open at once (an Install
+         *     it opened. It opens with the comment `: connected` and sends `: keep-alive` while idle;
+         *     clients skip comments. A Member may have a limited number of streams open at once (an Install
          *     setting, 16 by default); one more is refused with `too_many_requests`.
          */
         get: operations["streamActivity"];

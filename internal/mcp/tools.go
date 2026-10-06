@@ -46,9 +46,15 @@ type noteIn struct {
 }
 
 type handoverIn struct {
-	Task  string `json:"task" jsonschema:"the Task's display key or id"`
-	Skill string `json:"skill" jsonschema:"the Skill the Task needs next, such as review"`
-	Note  string `json:"note,omitempty" jsonschema:"a Note for whoever takes it next, added in the same write"`
+	Task   string `json:"task" jsonschema:"the Task's display key or id"`
+	Skill  string `json:"skill" jsonschema:"the Skill the Task needs next, such as review"`
+	Status string `json:"status,omitempty" jsonschema:"the Status to move the Task to, such as In review (workflow lists them); left out, it stays where it is"`
+	Note   string `json:"note,omitempty" jsonschema:"a Note for whoever takes it next, added in the same write"`
+}
+
+type setStatusIn struct {
+	Task   string `json:"task" jsonschema:"the Task's display key or id"`
+	Status string `json:"status" jsonschema:"the Status's name or id, of kind backlog, todo or in_progress; workflow lists them"`
 }
 
 type addNoteIn struct {
@@ -77,6 +83,7 @@ type fileTaskIn struct {
 	Skill       string `json:"skill,omitempty" jsonschema:"the Skill the Task needs; give this or aimed_at"`
 	AimedAt     string `json:"aimed_at,omitempty" jsonschema:"the Member the Task is aimed at by name; give this or skill"`
 	Blocks      string `json:"blocks,omitempty" jsonschema:"a Task the new one blocks: a question or Escalation, filed on that Task's Feature"`
+	Status      string `json:"status,omitempty" jsonschema:"the Status it starts in, such as Backlog, where next does not offer it; default the first todo Status"`
 }
 
 type blockIn struct {
@@ -92,12 +99,21 @@ type listTasksIn struct {
 	Feature string `json:"feature,omitempty" jsonschema:"only this Feature's Tasks"`
 	Team    string `json:"team,omitempty" jsonschema:"only this Team's Tasks, by key such as WEB"`
 	State   string `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
+	Status  string `json:"status,omitempty" jsonschema:"only Tasks in this Status, by name or id"`
 	Skill   string `json:"skill,omitempty" jsonschema:"only Tasks that need this Skill now"`
 	AimedAt string `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
 	Holder  string `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
 	Mine    bool   `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
 	Cursor  string `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
+}
+
+// taskListOut is a page of Tasks with the Statuses their status_id names, so the list reads
+// without a second call.
+type taskListOut struct {
+	Items      []client.Task   `json:"items"`
+	NextCursor *string         `json:"next_cursor,omitempty" jsonschema:"pass as cursor for the next page; absent on the last"`
+	Statuses   []client.Status `json:"statuses" jsonschema:"the Organisation's Statuses, in order"`
 }
 
 type observationsIn struct {
@@ -197,9 +213,11 @@ func (s *Server) addTools() {
 			s.keeper.Forget(res.JSON200.ID)
 			return *res.JSON200, nil
 		})
-	tool(s, "handover", "End your Claim and set the Skill the Task needs next, such as review. Hand over rather than skipping review.",
+	tool(s, "handover", "End your Claim and set the Skill the Task needs next, such as review. Hand over rather than skipping review. "+
+		"Name a status, such as In review, to move the Task there.",
 		func(ctx context.Context, in handoverIn) (client.Task, error) {
-			res, err := c.HandoverTaskWithResponse(ctx, in.Task, &client.HandoverTaskParams{}, client.HandoverTaskBody{Skill: in.Skill, Note: opt(in.Note)})
+			res, err := c.HandoverTaskWithResponse(ctx, in.Task, &client.HandoverTaskParams{},
+				client.HandoverTaskBody{Skill: in.Skill, Note: opt(in.Note), Status: opt(in.Status)})
 			if err := check(res, err, http.StatusOK); err != nil {
 				return client.Task{}, err
 			}
@@ -253,7 +271,7 @@ func (s *Server) addTools() {
 	tool(s, "file_task", "File a Task needing a Skill or aimed at a Member. With blocks, file a question that blocks a Task instead of guessing: aim it up your Reporting line or at the Feature owner.",
 		func(ctx context.Context, in fileTaskIn) (client.TaskDetail, error) {
 			res, err := c.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: opt(in.Feature), Title: in.Title,
-				Description: opt(in.Description), Skill: opt(in.Skill), AimedAt: opt(in.AimedAt), Blocks: opt(in.Blocks)})
+				Description: opt(in.Description), Skill: opt(in.Skill), AimedAt: opt(in.AimedAt), Blocks: opt(in.Blocks), Status: opt(in.Status)})
 			if err := check(res, err, http.StatusCreated); err != nil {
 				return client.TaskDetail{}, err
 			}
@@ -283,10 +301,10 @@ func (s *Server) addTools() {
 			}
 			return *res.JSON200, nil
 		})
-	tool(s, "list_tasks", "List Tasks by Feature Rank, filtered.",
-		func(ctx context.Context, in listTasksIn) (client.TaskList, error) {
+	tool(s, "list_tasks", "List Tasks by Feature Rank, filtered, with the Organisation's Statuses to read each Task's status_id by.",
+		func(ctx context.Context, in listTasksIn) (taskListOut, error) {
 			params := &client.ListTasksParams{Feature: opt(in.Feature), Team: opt(in.Team), Skill: opt(in.Skill),
-				AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Cursor: opt(in.Cursor)}
+				AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Status: opt(in.Status), Cursor: opt(in.Cursor)}
 			if in.State != "" {
 				st := client.TaskState(in.State)
 				params.State = &st
@@ -297,16 +315,37 @@ func (s *Server) addTools() {
 			if in.Mine {
 				me, err := c.GetMeWithResponse(ctx)
 				if err := check(me, err, http.StatusOK); err != nil {
-					return client.TaskList{}, err
+					return taskListOut{}, err
 				}
 				params.Holder = &me.JSON200.Member.ID
 			}
 			res, err := c.ListTasksWithResponse(ctx, params)
 			if err := check(res, err, http.StatusOK); err != nil {
-				return client.TaskList{}, err
+				return taskListOut{}, err
+			}
+			ss, err := c.ListStatusesWithResponse(ctx)
+			if err := check(ss, err, http.StatusOK); err != nil {
+				return taskListOut{}, err
+			}
+			return taskListOut{Items: res.JSON200.Items, NextCursor: res.JSON200.NextCursor, Statuses: ss.JSON200.Items}, nil
+		}, enum("state", "open", "done", "dropped"))
+	tool(s, "set_status", "Move a Task to another Status of kind backlog, todo or in_progress: one you hold, or one of your Team's or Feature's. "+
+		"A Task reaches done and dropped Statuses only by complete and drop; naming one is refused with use_complete or use_drop.",
+		func(ctx context.Context, in setStatusIn) (client.Task, error) {
+			res, err := c.SetTaskStatusWithResponse(ctx, in.Task, &client.SetTaskStatusParams{}, client.SetTaskStatusBody{Status: in.Status})
+			if err := check(res, err, http.StatusOK); err != nil {
+				return client.Task{}, err
 			}
 			return *res.JSON200, nil
-		}, enum("state", "open", "done", "dropped"))
+		})
+	tool(s, "workflow", "List the Organisation's Statuses in order, with their kinds: backlog (never offered by next), todo, in_progress, done and dropped.",
+		func(ctx context.Context, _ empty) (client.StatusList, error) {
+			res, err := c.ListStatusesWithResponse(ctx)
+			if err := check(res, err, http.StatusOK); err != nil {
+				return client.StatusList{}, err
+			}
+			return *res.JSON200, nil
+		})
 	tool(s, "feature_show", "Read a Feature with its Tasks and Evidence.",
 		func(ctx context.Context, in featureRef) (client.FeatureDetail, error) {
 			res, err := c.GetFeatureWithResponse(ctx, in.Feature)
