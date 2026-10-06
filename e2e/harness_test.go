@@ -146,8 +146,16 @@ type serveProc struct {
 	exited chan struct{}
 }
 
-// newInstall runs darkory init on a fresh database and starts one server.
+// newInstall runs darkory init --no-agents on a fresh database and starts one server: the
+// Organisation and ada, without the roster init seeds by default.
 func newInstall(t *testing.T) *install {
+	t.Helper()
+	return newInstallWith(t, "--no-agents")
+}
+
+// newInstallWith runs darkory init with initArgs on a fresh database and starts one server. Run
+// from this package's directory, init finds the repository it is in.
+func newInstallWith(t *testing.T, initArgs ...string) *install {
 	t.Helper()
 	needE2E(t)
 	in := &install{t: t, dir: t.TempDir()}
@@ -155,7 +163,7 @@ func newInstall(t *testing.T) *install {
 	if postgresURL() != "" {
 		in.db = newDatabase(t)
 	}
-	res := in.exec(in.env(), "init", "--org", "Acme", "--name", "ada", "--data", in.dir, "--db", in.db)
+	res := in.exec(in.env(), append([]string{"init", "--org", "Acme", "--name", "ada", "--data", in.dir, "--db", in.db}, initArgs...)...)
 	if res.code != 0 {
 		t.Fatalf("darkory init: exit %d\n%s%s", res.code, res.stdout, res.stderr)
 	}

@@ -34,8 +34,13 @@ import (
 // Then, with the bots stopped, every Task's Status agrees with its state and last Claim and with
 // a replay of its Activity, and the whole trail is gapless and in the order the scenarios imply.
 func TestBots(t *testing.T) {
-	in := newInstall(t)
+	// On an Install init seeded with its roster: Setup keeps planner, reviewer and retro, which
+	// init made with the same names and Skills.
+	in := newInstallWith(t)
 	ada := in.ada
+	if out := ada.ok("agent", "list"); !strings.Contains(out, "planner ") || !strings.Contains(out, "builder ") {
+		t.Fatalf("init seeded no roster:\n%s", out)
+	}
 	url := in.servers[0].url
 	ctx := t.Context()
 	admin := dialAs(t, url, ada)
