@@ -161,8 +161,11 @@ describe("the actions on a Task, by role", () => {
     expect(a.menu).not.toContain("take-back");
   });
 
-  it("makes the Status a fact outside the Feature's Team and on an ended Task", () => {
-    expect(taskActions({ ...base, teams: new Set(), me: mai.id, detail: owned(kai.id) }).status).toBe("fact");
+  it("lets the Feature's Team, its owner and the holder move the Status, and makes it a fact for anyone else and on an ended Task", () => {
+    const outside = { ...base, teams: new Set<string>() };
+    expect(taskActions({ ...outside, me: mai.id, detail: owned(kai.id) }).status).toBe("fact");
+    expect(taskActions({ ...outside, me: kai.id, detail: owned(kai.id) }).status).toBe("menu");
+    expect(taskActions({ ...outside, me: mai.id, detail: owned(kai.id, { claim: live(mai.id) }) }).status).toBe("menu");
     const ended = taskActions({ ...base, me: kai.id, detail: owned(kai.id, { state: "done" }) });
     expect(ended).toMatchObject({ status: "fact", menu: ["attach-evidence"] });
     expect(ended.primary).toBeUndefined();

@@ -7,15 +7,9 @@ import { useNow } from "@/clock";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
-import { Property, PropertiesRail, PropertyButton } from "@/components/PropertiesRail";
+import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { ClockTime } from "@/components/Time";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
 import type { TaskActions } from "./actions";
@@ -143,7 +137,7 @@ function StatusFact({ detail }: { detail: TaskDetail }) {
   return <StatusLabel status={detail.status} statuses={statuses} />;
 }
 
-/** The Status as a menu of the open-kind Statuses; Done and Dropped come only by Complete and Drop. */
+/** The Status as a select of the open-kind Statuses; Done and Dropped come only by Complete and Drop. */
 function StatusMenu({ detail }: { detail: TaskDetail }) {
   const statuses = useStatuses().data;
   const { task, status } = detail;
@@ -153,23 +147,24 @@ function StatusMenu({ detail }: { detail: TaskDetail }) {
   });
   const choices = (statuses ?? []).filter((s) => s.kind === "backlog" || s.kind === "todo" || s.kind === "in_progress");
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <PropertyButton aria-label={`Status: ${status.name}`}>
+    <Select value={status.id} onValueChange={(to) => to !== status.id && move.mutate(to)}>
+      <SelectTrigger
+        aria-label={`Status: ${status.name}`}
+        className="-ml-1.5 h-[26px] max-w-full gap-1.5 border-0 bg-transparent px-1.5 shadow-none hover:bg-accent data-[size=default]:h-[26px] dark:bg-transparent [&>svg]:hidden"
+      >
+        <SelectValue>
           <StatusLabel status={status} statuses={statuses} />
-        </PropertyButton>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-44">
-        <DropdownMenuRadioGroup value={status.id} onValueChange={(to) => to !== status.id && move.mutate(to)}>
-          {choices.map((s) => (
-            <DropdownMenuRadioItem key={s.id} value={s.id}>
-              <GlyphOf status={s} statuses={statuses} />
-              {s.name}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent position="popper" align="start" className="min-w-44">
+        {choices.map((s) => (
+          <SelectItem key={s.id} value={s.id}>
+            <GlyphOf status={s} statuses={statuses} />
+            {s.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
