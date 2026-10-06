@@ -37,8 +37,9 @@ func (o ClaimOptions) timeout(c *auth.Caller) time.Duration {
 // claimStmts claims taskID for c when the Task is takeable, as one conditional UPDATE carrying the
 // whole Takeable rule (ADR 0004). The UPDATE copies the Claim it replaces into the outgoing
 // columns, so the lapse of an expired Claim nobody has recorded yet is recorded here, numbered
-// before the new Claim's own Activity.
-func claimStmts(c *auth.Caller, taskID, claimID string, pre Task, version *int64, o ClaimOptions, now time.Time) []store.Stmt {
+// before the new Claim's own Activity; it also moves a todo Task to the first in_progress Status,
+// which the guard after it checks is status, the one the response names (ADR 0012).
+func claimStmts(c *auth.Caller, taskID, claimID string, pre Task, version *int64, status string, o ClaimOptions, now time.Time) []store.Stmt {
 	args := takeableArgs(c, now)
 	timeout := o.timeout(c)
 	var timeoutMS, expires *int64
@@ -47,7 +48,7 @@ func claimStmts(c *auth.Caller, taskID, claimID string, pre Task, version *int64
 	}
 	for k, v := range map[string]any{
 		"task": taskID, "claim": claimID, "session": c.SessionID, "timeout": timeoutMS, "expires": expires,
-		"label": o.ModelLabel, "skill": pre.SkillID, "version": version,
+		"label": o.ModelLabel, "skill": pre.SkillID, "version": version, "status": status,
 	} {
 		args[k] = v
 	}
@@ -73,11 +74,12 @@ WHERE ot.org_id = @org AND ot.id = @task AND oc.org_id = @org AND oc.ended_at IS
 AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.org_id = @org AND pc.task_id = @task AND pc.ended_at > @now)`, args)),
 		store.S(`UPDATE tasks AS t SET outgoing_claim_id = claim_id, outgoing_holder_id = claim_holder_id,
 outgoing_expires_at = claim_expires_at, claim_id = @claim, claim_holder_id = @member, claim_session_id = @session,
-claim_skill_id = skill_id, claim_timeout_ms = @timeout, claim_expires_at = @expires
+claim_skill_id = skill_id, claim_timeout_ms = @timeout, claim_expires_at = @expires, status_id = `+claimStatusSQL+`
 WHERE t.id = @task AND `+takeableSQL, args),
-		// The claim happened, on the Task as it was read: the same Skill, at the same version.
+		// The claim happened, on the Task as it was read: the same Skill, at the same version, and
+		// in the Status the response names.
 		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim
-AND t.skill_id IS NOT DISTINCT FROM @skill
+AND t.skill_id IS NOT DISTINCT FROM @skill AND t.status_id = @status
 AND (t.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.org_id = @org AND s.id = t.skill_id AND s.current_version = @version))`, args)),
 		store.S(`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at)
 SELECT @org, o.seq, NULL, 'task.lapsed', ot.id, '{"claim_id":"' || oc.id || '","holder_id":"' || oc.holder_id || '","how_ended":"lapsed"}', CAST(@now AS BIGINT)
@@ -118,6 +120,10 @@ func (s *Service) tryClaim(ctx context.Context, c *auth.Caller, taskID string, o
 		}
 		version = &sk.CurrentVersion
 	}
+	list, err := listStatuses(ctx, s.store, c.OrgID)
+	if err != nil {
+		return TaskDetail{}, err
+	}
 	claimID := newID()
 	timeout := o.timeout(c)
 	claim := Claim{
@@ -141,6 +147,8 @@ func (s *Service) tryClaim(ctx context.Context, c *auth.Caller, taskID string, o
 	}
 	out.Claims = append(out.Claims, claim)
 	out.Task.Claim = &claim
+	out.Status = list.afterClaim(pre.Task.StatusID)
+	out.Task.StatusID = out.Status.ID
 	if pre.Task.Claim == nil {
 		out.Feature.TaskCounts.Claimed++
 	}
@@ -149,7 +157,7 @@ func (s *Service) tryClaim(ctx context.Context, c *auth.Caller, taskID string, o
 	if err != nil {
 		return TaskDetail{}, err
 	}
-	stmts = append(stmts, claimStmts(c, taskID, claimID, pre.Task, version, o, now)...)
+	stmts = append(stmts, claimStmts(c, taskID, claimID, pre.Task, version, out.Status.ID, o, now)...)
 	if err := s.writeBatch(ctx, c.OrgID, stmts); err != nil {
 		return TaskDetail{}, err
 	}
@@ -212,6 +220,9 @@ func (s *Service) whyNotClaimed(ctx context.Context, c *auth.Caller, taskID stri
 	}
 	if t.Blocked {
 		return false, refuse(CodeNotTakeable, "Task %s is blocked", t.Key)
+	}
+	if st, err := getStatus(ctx, s.store, c.OrgID, t.StatusID); err == nil && st.Kind == KindBacklog {
+		return false, refuse(CodeNotTakeable, "Task %s is in %s, a backlog Status; it is takeable once moved out of it", t.Key, st.Name)
 	}
 	return false, refuse(CodeNotTakeable, "Task %s is not takeable by you", t.Key)
 }
@@ -368,7 +379,7 @@ WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim AND c.ended_at IS
 		activityStmt(orgID, nil, "task.lapsed", taskID, map[string]any{"claim_id": claimID, "holder_id": holder, "how_ended": "lapsed"}, now),
 		store.S(`UPDATE claims SET ended_at = (SELECT claim_expires_at FROM tasks WHERE org_id = @org AND id = @task), how_ended = 'lapsed'
 WHERE org_id = @org AND id = @claim`, args),
-		store.S(clearClaimSQL+` WHERE org_id = @org AND id = @task AND claim_id = @claim`, args),
+		store.S(clearClaimSQL+releaseStatusSQL+` WHERE org_id = @org AND id = @task AND claim_id = @claim`, args),
 	})
 	if errors.Is(err, store.ErrConditionFailed) {
 		return nil // someone else recorded it first
@@ -417,67 +428,85 @@ AND (t.claim_expires_at IS NULL OR t.claim_expires_at > @now)`
 
 // heldOp is a hot-path write on a Task the caller holds.
 type heldOp struct {
-	// build gets the Task as read, with the batch's arguments (org, task, claim, member, session,
-	// now), and returns the result the write will make true and the statements to run after the
-	// Claim guard.
-	build func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error)
+	// build gets the Task as read and its Organisation's Statuses, with the batch's arguments
+	// (org, task, claim, member, session, now), and returns the result the write will make true
+	// and the statements to run after the Claim guard.
+	build func(pre Task, list statuses, args map[string]any, now time.Time) (any, []store.Stmt, error)
 	// explain, when set, says why a refused batch was refused when the caller still holds the
 	// Task afterwards: a guard of build's own failed.
 	explain func(ctx context.Context, t Task) error
 }
 
 // heldWrite runs op as one batch (one round trip on Postgres): the Idempotency-Key's response,
-// the Claim guard, then op's statements. A refused batch is explained after the rollback.
+// the Claim guard, then op's statements. A refused batch is explained after the rollback. One
+// refused while the caller still holds the same Claim met a Task that changed between the read
+// and the write, such as its Status moved by a Member of its Team; it is tried again, at most
+// three times in all, as a claim is.
 func (s *Service) heldWrite(ctx context.Context, c *auth.Caller, ref string, idem Idem, op heldOp) (any, error) {
 	taskID, err := resolveTask(ctx, s.store, c.OrgID, ref)
 	if err != nil {
 		return nil, err
 	}
-	now := s.clock.Now()
-	pre, err := getTask(ctx, s.store, c.OrgID, taskID, now)
-	if err != nil {
-		return nil, err
-	}
-	// A retry under the key of a write that has just ended the Claim reads the Task after that
-	// write committed: it answers with the stored response, not the refusal.
-	if err := holds(c, pre); err != nil {
-		return nil, s.afterRefusal(ctx, c, idem, err)
-	}
-	args := map[string]any{"org": c.OrgID, "task": taskID, "claim": pre.Claim.ID, "member": c.MemberID,
-		"session": c.SessionID, "now": ms(now)}
-	result, body, err := op.build(pre, args, now)
-	if err != nil {
-		return nil, s.afterRefusal(ctx, c, idem, err)
-	}
-	stmts, err := idemStmts(c, idem, result, now)
-	if err != nil {
-		return nil, err
-	}
-	stmts = append(stmts, withGuard(store.S(holderGuard, args)))
-	stmts = append(stmts, body...)
-	err = s.writeBatch(ctx, c.OrgID, stmts)
-	if refused(err) {
-		if err := s.afterRefusal(ctx, c, idem, nil); err != nil {
+	for attempt := 1; ; attempt++ {
+		now := s.clock.Now()
+		pre, err := getTask(ctx, s.store, c.OrgID, taskID, now)
+		if err != nil {
 			return nil, err
 		}
-		t, rerr := getTask(ctx, s.store, c.OrgID, taskID, s.clock.Now())
-		if rerr != nil {
-			return nil, rerr
+		// A retry under the key of a write that has just ended the Claim reads the Task after that
+		// write committed: it answers with the stored response, not the refusal.
+		if err := holds(c, pre); err != nil {
+			return nil, s.afterRefusal(ctx, c, idem, err)
 		}
-		if herr := holds(c, t); herr != nil {
-			return nil, herr
+		list, err := listStatuses(ctx, s.store, c.OrgID)
+		if err != nil {
+			return nil, err
 		}
-		if op.explain != nil {
-			if eerr := op.explain(ctx, t); eerr != nil {
-				return nil, eerr
+		args := map[string]any{"org": c.OrgID, "task": taskID, "claim": pre.Claim.ID, "member": c.MemberID,
+			"session": c.SessionID, "now": ms(now)}
+		result, body, err := op.build(pre, list, args, now)
+		if err != nil {
+			return nil, s.afterRefusal(ctx, c, idem, err)
+		}
+		stmts, err := idemStmts(c, idem, result, now)
+		if err != nil {
+			return nil, err
+		}
+		stmts = append(stmts, withGuard(store.S(holderGuard, args)))
+		stmts = append(stmts, body...)
+		err = s.writeBatch(ctx, c.OrgID, stmts)
+		if refused(err) {
+			if err := s.afterRefusal(ctx, c, idem, nil); err != nil {
+				return nil, err
 			}
+			t, rerr := getTask(ctx, s.store, c.OrgID, taskID, s.clock.Now())
+			if rerr != nil {
+				return nil, rerr
+			}
+			if herr := holds(c, t); herr != nil {
+				return nil, herr
+			}
+			if op.explain != nil {
+				if eerr := op.explain(ctx, t); eerr != nil {
+					return nil, eerr
+				}
+			}
+			if t.Claim.ID == pre.Claim.ID && attempt < 3 {
+				continue
+			}
+			return nil, refuse(CodeNotHolder, "your Claim on %s changed while this request ran; read the Task and try again", t.Key)
 		}
-		return nil, refuse(CodeNotHolder, "your Claim on %s changed while this request ran; read the Task and try again", t.Key)
+		if err != nil {
+			return nil, err
+		}
+		return result, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+}
+
+// statusStmt is the guard a held write that answers with its Task ends with: the Task is in the
+// Status the response names.
+func statusStmt(args map[string]any, status string) store.Stmt {
+	return withGuard(store.S(statusGuard, with(args, map[string]any{"status": status})))
 }
 
 // with copies args and adds kv, so one op's statements can bind more than the guard.
@@ -514,19 +543,22 @@ func holds(c *auth.Caller, t Task) error {
 	return nil
 }
 
-// Release gives up the caller's Claim, leaving the Task needing the same Skill.
+// Release gives up the caller's Claim, leaving the Task needing the same Skill; a Task in an
+// in_progress Status returns to the first todo one.
 func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note *string, idem Idem) (Task, error) {
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, list statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 		out := pre
 		out.Claim = nil
+		out.StatusID = list.afterRelease(pre.StatusID).ID
 		stmts := []store.Stmt{
 			store.S(`UPDATE claims SET ended_at = @now, how_ended = 'released', ended_by = @member WHERE org_id = @org AND id = @claim`, args),
-			store.S(clearClaimSQL+` WHERE org_id = @org AND id = @task`, args),
+			store.S(clearClaimSQL+releaseStatusSQL+` WHERE org_id = @org AND id = @task`, args),
 		}
 		if note != nil && *note != "" {
 			stmts = append(stmts, noteStmt(pre, args, newID(), *note))
 		}
-		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.released", pre.ID, map[string]any{"claim_id": pre.Claim.ID}, now))
+		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.released", pre.ID, map[string]any{"claim_id": pre.Claim.ID}, now),
+			statusStmt(args, out.StatusID))
 		return out, stmts, nil
 	}})
 	if err != nil {
@@ -543,9 +575,9 @@ func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note 
 func (s *Service) Complete(ctx context.Context, c *auth.Caller, ref string, note *string, idem Idem) (Task, error) {
 	var review *SkillProposal
 	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{
-		build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+		build: func(pre Task, list statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 			out := pre
-			out.Claim, out.State, out.EndedAt = nil, "done", &now
+			out.Claim, out.State, out.EndedAt, out.StatusID = nil, "done", &now, list.first(KindDone).ID
 			var stmts []store.Stmt
 			p, err := s.pendingReview(ctx, c, pre)
 			if err != nil {
@@ -557,7 +589,8 @@ func (s *Service) Complete(ctx context.Context, c *auth.Caller, ref string, note
 			}
 			stmts = append(stmts,
 				store.S(`UPDATE claims SET ended_at = @now, how_ended = 'completed', ended_by = @member WHERE org_id = @org AND id = @claim`, args),
-				store.S(clearClaimSQL+`, state = 'done', ended_at = @now WHERE org_id = @org AND id = @task`, args),
+				store.S(clearClaimSQL+`, state = 'done', ended_at = @now, status_id = COALESCE(`+firstStatusSQL("@org", KindDone)+`, status_id)
+WHERE org_id = @org AND id = @task`, args),
 				store.S(supersedeSQL+` WHERE org_id = @org AND task_id = @task AND state = 'pending'`, args),
 			)
 			if pre.Kind == "retrospective" {
@@ -572,6 +605,7 @@ WHERE org_id = @org AND feature_id = @feature AND reviewed_by_task_id IS NULL`, 
 				stmts = append(stmts, nextSeqStmt(c.OrgID), activityStmt(c.OrgID, &c.MemberID, "skill.version_published", p.SkillID,
 					map[string]any{"version": p.BasedOnVersion + 1, "proposal_id": p.ID, "task_id": pre.ID}, now))
 			}
+			stmts = append(stmts, statusStmt(args, out.StatusID))
 			return out, stmts, nil
 		},
 		explain: func(ctx context.Context, t Task) error {

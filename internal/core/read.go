@@ -68,7 +68,7 @@ func scanFeature(row interface{ Scan(...any) error }) (Feature, error) {
 }
 
 // taskCols reads a Task with its current Claim; scanTask shows the Claim only while it is live.
-const taskCols = `t.id, t.display_key, t.feature_id, t.kind, t.title, t.description, t.state, t.skill_id,
+const taskCols = `t.id, t.display_key, t.feature_id, t.kind, t.title, t.description, t.state, t.status_id, t.skill_id,
 t.aimed_at_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
 t.claim_id, t.claim_holder_id, cs.chosen_id, t.claim_skill_id, cc.skill_version, cc.model_label,
 t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
@@ -79,17 +79,17 @@ const taskFrom = `tasks t LEFT JOIN claims cc ON cc.id = t.claim_id LEFT JOIN se
 
 func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) {
 	var t Task
-	var skill, aimed, claimID, holder, session, claimSkill, label sql.NullString
+	var status, skill, aimed, claimID, holder, session, claimSkill, label sql.NullString
 	var waiting, created int64
 	var ended, version, timeout, started, expires sql.NullInt64
-	err := row.Scan(&t.ID, &t.Key, &t.FeatureID, &t.Kind, &t.Title, &t.Description, &t.State, &skill,
+	err := row.Scan(&t.ID, &t.Key, &t.FeatureID, &t.Kind, &t.Title, &t.Description, &t.State, &status, &skill,
 		&aimed, &t.FiledBy, &waiting, &created, &ended,
 		&claimID, &holder, &session, &claimSkill, &version, &label,
 		&timeout, &started, &expires, &t.Blocked)
 	if err != nil {
 		return t, err
 	}
-	t.SkillID, t.AimedAtID = nullString(skill), nullString(aimed)
+	t.StatusID, t.SkillID, t.AimedAtID = status.String, nullString(skill), nullString(aimed)
 	t.WaitingSince, t.CreatedAt, t.EndedAt = fromMS(waiting), fromMS(created), nullTime(ended)
 	if holder.Valid && (!expires.Valid || expires.Int64 > ms(now)) {
 		c := &Claim{
@@ -384,6 +384,9 @@ func getTaskDetail(ctx context.Context, r store.Reader, orgID, id string, now ti
 	var err error
 	if d.Task, err = getTask(ctx, r, orgID, id, now); err != nil {
 		return d, err
+	}
+	if d.Status, err = getStatus(ctx, r, orgID, d.Task.StatusID); err != nil {
+		return d, fmt.Errorf("core: the Status of Task %s: %w", d.Task.Key, err)
 	}
 	if d.Feature, err = getFeature(ctx, r, orgID, d.Task.FeatureID, now); err != nil {
 		return d, err

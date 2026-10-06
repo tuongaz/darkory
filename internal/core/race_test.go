@@ -351,7 +351,7 @@ func TestRaceIdempotentRetriesOfHeldWrites(t *testing.T) {
 		}{
 			{"release", func(task string, idem core.Idem) (any, error) { return f.svc.Release(ctx, c, task, nil, idem) }},
 			{"handover", func(task string, idem core.Idem) (any, error) {
-				return f.svc.Handover(ctx, c, task, "review", nil, idem)
+				return f.svc.Handover(ctx, c, task, "review", nil, nil, idem)
 			}},
 			{"complete", func(task string, idem core.Idem) (any, error) { return f.svc.Complete(ctx, c, task, nil, idem) }},
 		} {

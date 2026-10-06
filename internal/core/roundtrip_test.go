@@ -65,7 +65,7 @@ func TestHotPathWritesAreOneRoundTripOnPostgres(t *testing.T) {
 			return err
 		}},
 		{"handover", func(task core.Task) error {
-			_, err := f.svc.Handover(ctx, c, task.ID, "build", nil, jsonIdem("handover-"+task.ID, "h"))
+			_, err := f.svc.Handover(ctx, c, task.ID, "build", nil, nil, jsonIdem("handover-"+task.ID, "h"))
 			return err
 		}},
 		{"claim", func(task core.Task) error {
@@ -91,7 +91,7 @@ func TestHotPathWritesAreOneRoundTripOnPostgres(t *testing.T) {
 			if _, err := f.svc.ProposeSkillVersion(ctx, c, review.ID, "qa-acme", current.Skill.CurrentVersion, "next", core.Idem{}); err != nil {
 				return err
 			}
-			if _, err := f.svc.Handover(ctx, c, review.ID, core.SkillSkillReview, nil, core.Idem{}); err != nil {
+			if _, err := f.svc.Handover(ctx, c, review.ID, core.SkillSkillReview, nil, nil, core.Idem{}); err != nil {
 				return err
 			}
 			_, err = f.svc.Claim(ctx, reviewer, review.ID, noTimeout, core.Idem{})

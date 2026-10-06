@@ -17,6 +17,8 @@ type NewTask struct {
 	// Blocks names a Task the new one blocks: a question or Escalation. The new Task joins that
 	// Task's Feature, even when the Feature has ended.
 	Blocks *string
+	// Status names the Status it starts in, of an open kind; nil for the first todo one.
+	Status *string
 }
 
 // FileTask files a Task on a Feature of any Team. A Task that blocks another (a question or an
@@ -88,11 +90,15 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 			}
 			aimed = &id
 		}
-		id, key, err := insertTask(t, f, "work", nt.Title, nt.Description, skill, aimed)
+		status, err := fileStatus(t, nt.Status)
 		if err != nil {
 			return nil, err
 		}
-		payload := map[string]any{"key": key, "title": nt.Title, "feature_id": f.ID, "kind": "work"}
+		id, key, err := insertTask(t, f, "work", nt.Title, nt.Description, skill, aimed, status.ID)
+		if err != nil {
+			return nil, err
+		}
+		payload := map[string]any{"key": key, "title": nt.Title, "feature_id": f.ID, "kind": "work", "status_id": status.ID}
 		if skill != nil {
 			payload["skill_id"] = *skill
 		} else {
@@ -121,8 +127,8 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 	return res.(TaskDetail), nil
 }
 
-// insertTask files an open Task on f, allocating its display key from f's Team.
-func insertTask(t *tx, f Feature, kind, title, description string, skill, aimed *string) (id, key string, err error) {
+// insertTask files an open Task on f in status, allocating its display key from f's Team.
+func insertTask(t *tx, f Feature, kind, title, description string, skill, aimed *string, status string) (id, key string, err error) {
 	var prefix string
 	var last int64
 	if err := t.QueryRow(t.ctx, `UPDATE teams SET last_number = last_number + 1 WHERE org_id = $1 AND id = $2 RETURNING key_prefix, last_number`,
@@ -131,8 +137,8 @@ func insertTask(t *tx, f Feature, kind, title, description string, skill, aimed 
 	}
 	id, key = newID(), prefix+"-"+itoa64(last)
 	_, err = t.Exec(t.ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, description, state, skill_id, aimed_at_id,
-filed_by, waiting_since, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9, $10, $11, $11)`,
-		id, t.caller.OrgID, f.ID, key, kind, title, description, skill, aimed, t.caller.MemberID, ms(t.now))
+filed_by, waiting_since, created_at, status_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9, $10, $11, $11, $12)`,
+		id, t.caller.OrgID, f.ID, key, kind, title, description, skill, aimed, t.caller.MemberID, ms(t.now), status)
 	return id, key, err
 }
 
@@ -147,9 +153,9 @@ func (s *Service) GetTask(ctx context.Context, c *auth.Caller, ref string) (Task
 
 // TaskFilter narrows ListTasks; nil fields do not.
 type TaskFilter struct {
-	Feature, Team, State, Skill, AimedAt, Holder *string
-	Limit                                        int
-	Cursor                                       string
+	Feature, Team, State, Skill, AimedAt, Holder, Status *string
+	Limit                                                int
+	Cursor                                               string
 }
 
 // ListTasks lists Tasks by their Feature's Rank, then by how long each has waited.
@@ -189,6 +195,17 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 	}
 	if tf.Holder != nil {
 		add("(t.claim_expires_at IS NULL OR t.claim_expires_at > ?)", ms(now))
+	}
+	if tf.Status != nil {
+		list, err := listStatuses(ctx, s.store, c.OrgID)
+		if err != nil {
+			return Page[Task]{}, err
+		}
+		st, err := list.find(*tf.Status)
+		if err != nil {
+			return Page[Task]{}, err
+		}
+		add("t.status_id = ?", st.ID)
 	}
 	if tf.State != nil {
 		add("t.state = ?", *tf.State)

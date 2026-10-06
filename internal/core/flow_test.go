@@ -33,7 +33,7 @@ func (f *fixture) complete(c *auth.Caller, ref string) core.Task {
 
 func (f *fixture) handover(c *auth.Caller, ref, skill string) core.Task {
 	f.t.Helper()
-	t, err := f.svc.Handover(f.t.Context(), c, ref, skill, nil, core.Idem{})
+	t, err := f.svc.Handover(f.t.Context(), c, ref, skill, nil, nil, core.Idem{})
 	if err != nil {
 		f.t.Fatalf("%s hands %s over to %s: %v", c.Name, ref, skill, err)
 	}
@@ -95,14 +95,14 @@ func TestHandoverKeepsNoSelfReview(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Only the holder hands over.
-		_, err := f.svc.Handover(ctx, tester, task.Key, "qa", nil, core.Idem{})
+		_, err := f.svc.Handover(ctx, tester, task.Key, "qa", nil, nil, core.Idem{})
 		wantCode(t, err, core.CodeNotHolder)
-		_, err = f.svc.Handover(ctx, builder, task.Key, "no-such-skill", nil, core.Idem{})
+		_, err = f.svc.Handover(ctx, builder, task.Key, "no-such-skill", nil, nil, core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
 
 		f.clock.Advance(time.Hour)
 		note := "ready for qa"
-		out, err := f.svc.Handover(ctx, builder, task.Key, "qa", &note, core.Idem{})
+		out, err := f.svc.Handover(ctx, builder, task.Key, "qa", nil, &note, core.Idem{})
 		if err != nil {
 			t.Fatal(err)
 		}

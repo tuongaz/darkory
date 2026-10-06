@@ -100,16 +100,29 @@ type Task struct {
 	Title       string
 	Description string
 	State       string
-	SkillID     *string
-	AimedAtID   *string
-	Claim       *Claim
-	Blocked     bool
+	// StatusID is the Task's Status, one of its Organisation's (ADR 0012).
+	StatusID  string
+	SkillID   *string
+	AimedAtID *string
+	Claim     *Claim
+	Blocked   bool
 	// OpenBlockers are the open Tasks blocking this one.
 	OpenBlockers []TaskBrief
 	FiledBy      string
 	WaitingSince time.Time
 	CreatedAt    time.Time
 	EndedAt      *time.Time
+}
+
+// Status is where a Task is in its workflow, from the list its Organisation defines and orders.
+// Darkory's rules read Kind, never Name.
+type Status struct {
+	ID   string
+	Name string
+	// Kind is backlog, todo, in_progress, done or dropped.
+	Kind string
+	// Position is its place in the list, 1 first.
+	Position int64
 }
 
 // TaskBrief names a Task by its id and display key.
@@ -136,7 +149,9 @@ type Claim struct {
 }
 
 type TaskDetail struct {
-	Task         Task
+	Task Task
+	// Status is the Task's Status.
+	Status       Status
 	Feature      Feature
 	Claims       []Claim
 	Notes        []Note

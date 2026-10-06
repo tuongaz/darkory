@@ -89,11 +89,16 @@ from_retrospective_task_id, filed_by, created_at) VALUES ($1, $2, $3, $4, $5, $6
 			return nil, err
 		}
 		title := "Break down: " + nf.Title
-		if _, err := t.Exec(ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, skill_id, filed_by, waiting_since, created_at)
-VALUES ($1, $2, $3, $4, 'breakdown', $5, 'open', $6, $7, $8, $8)`, taskID, c.OrgID, featureID, taskKey, title, breakdown, c.MemberID, ms(t.now)); err != nil {
+		status, err := fileStatus(t, nil)
+		if err != nil {
 			return nil, err
 		}
-		if err := t.recordByCaller("task.filed", taskID, map[string]any{"key": taskKey, "title": title, "feature_id": featureID, "kind": "breakdown", "skill_id": breakdown}); err != nil {
+		if _, err := t.Exec(ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, skill_id, filed_by, waiting_since, created_at, status_id)
+VALUES ($1, $2, $3, $4, 'breakdown', $5, 'open', $6, $7, $8, $8, $9)`, taskID, c.OrgID, featureID, taskKey, title, breakdown, c.MemberID, ms(t.now), status.ID); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("task.filed", taskID, map[string]any{"key": taskKey, "title": title, "feature_id": featureID, "kind": "breakdown",
+			"skill_id": breakdown, "status_id": status.ID}); err != nil {
 			return nil, err
 		}
 		return getFeatureDetail(ctx, t, c.OrgID, featureID, t.now)
@@ -281,11 +286,16 @@ func fileRetrospective(t *tx, f Feature) error {
 		return err
 	}
 	title := "Retrospective: " + f.Title
-	id, key, err := insertTask(t, f, "retrospective", title, "", &retro, nil)
+	status, err := fileStatus(t, nil)
 	if err != nil {
 		return err
 	}
-	return t.recordByCaller("task.filed", id, map[string]any{"key": key, "title": title, "feature_id": f.ID, "kind": "retrospective", "skill_id": retro})
+	id, key, err := insertTask(t, f, "retrospective", title, "", &retro, nil, status.ID)
+	if err != nil {
+		return err
+	}
+	return t.recordByCaller("task.filed", id, map[string]any{"key": key, "title": title, "feature_id": f.ID, "kind": "retrospective",
+		"skill_id": retro, "status_id": status.ID})
 }
 
 // PassFeatureOwnership makes another Member the Feature's owner: by the owner, or by someone

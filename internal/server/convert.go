@@ -80,7 +80,7 @@ func claimOut(c core.Claim) gen.Claim {
 
 func taskOut(t core.Task) gen.Task {
 	out := gen.Task{ID: t.ID, Key: t.Key, FeatureID: t.FeatureID, Kind: gen.TaskKind(t.Kind), Title: t.Title,
-		Description: t.Description, State: gen.TaskState(t.State), SkillID: t.SkillID, AimedAtID: t.AimedAtID,
+		Description: t.Description, State: gen.TaskState(t.State), StatusID: t.StatusID, SkillID: t.SkillID, AimedAtID: t.AimedAtID,
 		Blocked: t.Blocked, FiledBy: t.FiledBy, WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
 	if t.Claim != nil {
 		c := claimOut(*t.Claim)
@@ -95,7 +95,7 @@ func taskOut(t core.Task) gen.Task {
 
 func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 	out := gen.TaskDetail{
-		Task: taskOut(d.Task), Feature: featureOut(d.Feature), Claims: each(d.Claims, claimOut),
+		Task: taskOut(d.Task), Status: statusOut(d.Status), Feature: featureOut(d.Feature), Claims: each(d.Claims, claimOut),
 		Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut), Blockers: each(d.Blockers, taskOut),
 		Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
 	}
@@ -104,6 +104,10 @@ func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 		out.Proposal = &p
 	}
 	return out
+}
+
+func statusOut(s core.Status) gen.Status {
+	return gen.Status{ID: s.ID, Name: s.Name, Kind: gen.StatusKind(s.Kind), Position: s.Position}
 }
 
 func proposalOut(p core.SkillProposal) gen.SkillProposal {

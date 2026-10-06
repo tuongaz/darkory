@@ -49,7 +49,8 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 	if !ok {
 		return
 	}
-	nt := core.NewTask{Feature: body.Feature, Title: body.Title, Skill: body.Skill, AimedAt: body.AimedAt, Blocks: body.Blocks}
+	nt := core.NewTask{Feature: body.Feature, Title: body.Title, Skill: body.Skill, AimedAt: body.AimedAt, Blocks: body.Blocks,
+		Status: body.Status}
 	if body.Description != nil {
 		nt.Description = *body.Description
 	}
@@ -59,7 +60,7 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 
 func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.ListTasksParams) {
 	tf := core.TaskFilter{Feature: params.Feature, Team: params.Team, State: (*string)(params.State), Skill: params.Skill,
-		AimedAt: params.AimedAt, Holder: params.Holder}
+		AimedAt: params.AimedAt, Holder: params.Holder, Status: params.Status}
 	if params.Limit != nil {
 		tf.Limit = *params.Limit
 	}
