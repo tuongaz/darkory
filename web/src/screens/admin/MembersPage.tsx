@@ -19,11 +19,15 @@ import { firstTokenName, groupByKind } from "./model";
 import { GroupRow, MemberName, Segmented } from "./parts";
 import { useMemberDetails } from "./queries";
 import { OnceDialog, SignInLinkDialog, TokenShown } from "./secrets";
-import { createMember, issueToken } from "./writes";
+import { defaultModel, knownModels } from "./agent";
+import { createMember, issueToken, setAgentSettings } from "./writes";
 
-// Member · Teams · Skills · Reports to · Admin (F-D1). A phone keeps Member and Admin.
-const cols = "grid-cols-[minmax(0,1fr)_72px] md:grid-cols-[220px_180px_minmax(0,1fr)_160px_72px]";
+// Member · Model · Teams · Skills · Reports to · Admin (F-D1). A phone keeps Member and Admin; an
+// agent's model comes at the width of a laptop.
+const cols =
+  "grid-cols-[minmax(0,1fr)_72px] md:grid-cols-[220px_180px_minmax(0,1fr)_160px_72px] lg:grid-cols-[220px_150px_180px_minmax(0,1fr)_160px_72px]";
 const wide = "hidden md:flex";
+const wider = "hidden lg:flex";
 
 /** /admin/members (F-D1): every Member, grouped Humans / Agents. ?new=1 opens New Member. */
 export function MembersPage() {
@@ -63,6 +67,9 @@ export function MembersPage() {
         <div role="table" aria-label="Members" className="min-w-0">
           <div role="row" className={cn("grid h-8 items-center gap-3 border-b px-6 text-xs font-medium text-muted-foreground", cols)}>
             <span role="columnheader">Member</span>
+            <span role="columnheader" className={wider}>
+              Model
+            </span>
             <span role="columnheader" className={wide}>
               Teams
             </span>
@@ -118,6 +125,10 @@ function MemberRow({
           <MemberName member={member} you={you} />
         </Link>
         {deactivated && <Pill tone="dropped">Deactivated</Pill>}
+        {!deactivated && member.agent?.paused && <Pill tone="dropped">Paused</Pill>}
+      </span>
+      <span role="cell" className={cn(wider, "min-w-0", deactivated && "opacity-60")}>
+        {member.agent && <span className="truncate font-mono text-xs text-muted-foreground">{member.agent.model}</span>}
       </span>
       <span role="cell" className={cn(wide, "min-w-0 items-center gap-3 overflow-hidden", deactivated && "opacity-60")}>
         {detail?.teams.map((t) => (
@@ -145,11 +156,12 @@ function MemberRow({
   );
 }
 
-type Created = { member: Member; token?: IssuedToken; tokenError?: unknown };
+type Created = { member: Member; token?: IssuedToken; tokenError?: unknown; agentError?: unknown };
 
 /**
- * New Member (F-D2a): name, kind, email for a human, admin. An agent gets its first token in the
- * same step, its secret shown once (F-D2b); a human gets a Sign-in link button.
+ * New Member (F-D2a): name, kind, email for a human, model for an agent, admin. An agent gets its
+ * first token in the same step, its secret shown once (F-D2b), and its settings for the Runner:
+ * the Install's default command on the model asked for. A human gets a Sign-in link button.
  */
 function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agent"; onClose: () => void }) {
   const navigate = useNavigate();
@@ -157,8 +169,10 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
   const [kind, setKind] = useState(initialKind);
   const [email, setEmail] = useState("");
   const [admin, setAdmin] = useState(false);
+  const [model, setModel] = useState(defaultModel);
   const create = useMutation({
-    // /v1 has no create-with-token: an agent is created, then its first token is issued.
+    // /v1 has no create-with-token: an agent is created, then its first token is issued, then its
+    // settings are set. What fails after the create is said beside the token, the Member being made.
     mutationFn: async (): Promise<Created> => {
       const member = await createMember({
         name: name.trim(),
@@ -167,11 +181,18 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
         admin,
       });
       if (member.kind !== "agent") return { member };
+      const out: Created = { member };
       try {
-        return { member, token: await issueToken(member.id, firstTokenName) };
+        out.token = await issueToken(member.id, firstTokenName);
       } catch (tokenError) {
-        return { member, tokenError };
+        out.tokenError = tokenError;
       }
+      try {
+        out.member = await setAgentSettings(member.id, { model: model.trim() || defaultModel });
+      } catch (agentError) {
+        out.agentError = agentError;
+      }
+      return out;
     },
   });
   const done = (m: Member) => {
@@ -184,6 +205,7 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
     return (
       <OnceDialog open onDone={() => done(created.member)} title={`Token for ${created.member.name}`}>
         {created.token ? <TokenShown issued={created.token} /> : <Refusal error={created.tokenError} />}
+        <Refusal error={created.agentError} />
       </OnceDialog>
     );
   }
@@ -218,6 +240,23 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
         {kind === "human" && (
           <FormRow label="Email" htmlFor="member-email">
             <Input id="member-email" type="email" placeholder="Optional" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </FormRow>
+        )}
+        {kind === "agent" && (
+          <FormRow label="Model" htmlFor="member-model" help="The Runner starts it with the Install's default command.">
+            <Input
+              id="member-model"
+              list="member-models"
+              maxLength={200}
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="font-mono text-xs"
+            />
+            <datalist id="member-models">
+              {knownModels.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
           </FormRow>
         )}
         <FormRow label="Admin" htmlFor="member-admin">

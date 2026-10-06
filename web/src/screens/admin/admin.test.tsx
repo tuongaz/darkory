@@ -53,6 +53,7 @@ describe("Members", () => {
       ...details,
       "POST /v1/members": json(201, created),
       "POST /v1/members/:member/tokens": json(201, { token: { id: "t-1", member_id: "m-new", name: "default", prefix: "dk_s3cr", created_at: at }, secret: "dk_s3cret-shown-once" }),
+      "PATCH /v1/members/:member/agent": created,
     });
     renderApp("/admin/members?new=1&kind=agent");
     const dialog = await screen.findByRole("dialog", { name: "New Member" });
@@ -64,6 +65,7 @@ describe("Members", () => {
     const once = await screen.findByRole("dialog", { name: "Token for builder-9" });
     expect(within(once).getByRole("textbox", { name: "Secret of default" })).toHaveValue("dk_s3cret-shown-once");
     expect(within(once).getByText("It will not be shown again.")).toBeInTheDocument();
+    expect(within(once).queryByRole("alert")).not.toBeInTheDocument();
     const writes = api.calls.filter((c) => c.method === "POST");
     expect(writes.map((c) => c.path)).toEqual(["/v1/members", "/v1/members/m-new/tokens"]);
     expect(writes[0].body).toEqual({ name: "builder-9", kind: "agent", admin: false });

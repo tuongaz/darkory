@@ -22,7 +22,20 @@ export function SettingsForm({ children, label }: { children: ReactNode; label: 
   );
 }
 
-export function SettingsRow({ label, count, htmlFor, children }: { label: string; count?: number; htmlFor?: string; children: ReactNode }) {
+/** One setting: its label, then its controls; `help` is a line under them. */
+export function SettingsRow({
+  label,
+  count,
+  htmlFor,
+  help,
+  children,
+}: {
+  label: string;
+  count?: number;
+  htmlFor?: string;
+  help?: ReactNode;
+  children: ReactNode;
+}) {
   const Label = htmlFor ? "label" : "div";
   return (
     <>
@@ -33,7 +46,10 @@ export function SettingsRow({ label, count, htmlFor, children }: { label: string
         {label}
         {count !== undefined && <span className="font-normal tabular-nums">{count}</span>}
       </Label>
-      <div className="flex min-h-[52px] min-w-0 flex-wrap items-center gap-2 border-b py-2.5">{children}</div>
+      <div className="flex min-h-[52px] min-w-0 flex-wrap items-center gap-2 border-b py-2.5">
+        {children}
+        {help && <div className="basis-full text-xs text-muted-foreground">{help}</div>}
+      </div>
     </>
   );
 }
