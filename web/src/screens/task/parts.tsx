@@ -1,7 +1,6 @@
 import {
   BanIcon,
   CheckIcon,
-  ChevronsUpDownIcon,
   EyeIcon,
   FileDiffIcon,
   LinkIcon,
@@ -18,14 +17,7 @@ import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { StatusGlyph } from "@/components/StatusGlyph";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import type { TaskAction } from "./actions";
@@ -140,54 +132,6 @@ export function ActionItem({ action, reason, onSelect }: { action: TaskAction; r
         </Pill>
       )}
     </DropdownMenuItem>
-  );
-}
-
-export type ChoiceOption = { value: string; label: ReactNode };
-
-/**
- * One choice among a few, as a dialog's field (a Skill, a Status): a field-shaped button that
- * opens a menu of the options. It stands in for the Select primitive, whose Radix viewport adds a
- * <style> element the Install's Content-Security-Policy refuses.
- */
-export function Choice({
-  id,
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  id?: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: ChoiceOption[];
-  placeholder: string;
-}) {
-  const chosen = options.find((o) => o.value === value);
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          id={id}
-          type="button"
-          className="flex h-9 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border border-input bg-transparent px-3 text-left shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
-            {chosen ? chosen.label : <span className="text-muted-foreground">{placeholder}</span>}
-          </span>
-          <ChevronsUpDownIcon className="size-4 flex-none text-muted-foreground" aria-hidden />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-72 w-(--radix-dropdown-menu-trigger-width) overflow-y-auto">
-        <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-          {options.map((o) => (
-            <DropdownMenuRadioItem key={o.value} value={o.value}>
-              {o.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 
