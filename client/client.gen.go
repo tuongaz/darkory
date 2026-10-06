@@ -1191,6 +1191,9 @@ type RunnerSession struct {
 // RunnerSessionList defines model for RunnerSessionList.
 type RunnerSessionList struct {
 	Items []RunnerSession `json:"items"`
+
+	// Runner Whether a Runner is attached to this server; false with no sessions when none is.
+	Runner bool `json:"runner"`
 }
 
 // RunnerSessionState `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
@@ -2657,8 +2660,9 @@ type ClientInterface interface {
 	// ListRunnerSessions List the agent sessions the Runner is running now
 	//
 	// A read model of the Runner beside this server, not part of the record: what it runs now,
-	// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
-	// attached to this server, as with `serve --agents=off`).
+	// one session per Task it holds a Claim on for an agent. With no Runner attached to this
+	// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+	// error, so a page can poll it.
 	//
 	// Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
 	ListRunnerSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4102,8 +4106,9 @@ func (c *Client) IssueToken(ctx context.Context, member MemberRef, params *Issue
 // ListRunnerSessions List the agent sessions the Runner is running now
 //
 // A read model of the Runner beside this server, not part of the record: what it runs now,
-// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
-// attached to this server, as with `serve --agents=off`).
+// one session per Task it holds a Claim on for an agent. With no Runner attached to this
+// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+// error, so a page can poll it.
 //
 // Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
 func (c *Client) ListRunnerSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -9989,8 +9994,9 @@ type ClientWithResponsesInterface interface {
 	// ListRunnerSessionsWithResponse List the agent sessions the Runner is running now
 	//
 	// A read model of the Runner beside this server, not part of the record: what it runs now,
-	// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
-	// attached to this server, as with `serve --agents=off`).
+	// one session per Task it holds a Claim on for an agent. With no Runner attached to this
+	// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+	// error, so a page can poll it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -14909,8 +14915,9 @@ func (c *ClientWithResponses) IssueTokenWithResponse(ctx context.Context, member
 // ListRunnerSessionsWithResponse List the agent sessions the Runner is running now
 //
 // A read model of the Runner beside this server, not part of the record: what it runs now,
-// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
-// attached to this server, as with `serve --agents=off`).
+// one session per Task it holds a Claim on for an agent. With no Runner attached to this
+// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+// error, so a page can poll it.
 //
 // Returns a wrapper object for the known response body format(s).
 //

@@ -1188,6 +1188,9 @@ type RunnerSession struct {
 // RunnerSessionList defines model for RunnerSessionList.
 type RunnerSessionList struct {
 	Items []RunnerSession `json:"items"`
+
+	// Runner Whether a Runner is attached to this server; false with no sessions when none is.
+	Runner bool `json:"runner"`
 }
 
 // RunnerSessionState `running`: working. `nudged`: its turn ended with the Task still held, and the Runner

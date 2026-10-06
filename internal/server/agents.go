@@ -98,15 +98,16 @@ func runnerSessionOut(rs runnerapi.Session) gen.RunnerSession {
 		StartedAt: rs.StartedAt, State: gen.RunnerSessionState(rs.State), LogPath: rs.LogPath}
 }
 
-// ListRunnerSessions lists what the Runner runs now. A Local Install holds one Organisation, so
-// every session is the caller's Organisation's.
+// ListRunnerSessions lists what the Runner runs now, or says none is attached: a page polls it,
+// and a browser logs every refusal. A Local Install holds one Organisation, so every session is
+// the caller's Organisation's.
 func (s *Server) ListRunnerSessions(w http.ResponseWriter, r *http.Request) {
 	run := s.theRunner()
 	if run == nil {
-		noRunner(w)
+		writeJSON(w, http.StatusOK, gen.RunnerSessionList{Items: []gen.RunnerSession{}, Runner: false})
 		return
 	}
-	writeJSON(w, http.StatusOK, gen.RunnerSessionList{Items: each(run.Sessions(), runnerSessionOut)})
+	writeJSON(w, http.StatusOK, gen.RunnerSessionList{Items: each(run.Sessions(), runnerSessionOut), Runner: true})
 }
 
 // runnerSession finds the Runner and the session on task for a /v1/runner request, answering

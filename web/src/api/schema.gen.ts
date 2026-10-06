@@ -1279,8 +1279,9 @@ export interface paths {
         /**
          * List the agent sessions the Runner is running now
          * @description A read model of the Runner beside this server, not part of the record: what it runs now,
-         *     one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
-         *     attached to this server, as with `serve --agents=off`).
+         *     one session per Task it holds a Claim on for an agent. With no Runner attached to this
+         *     server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+         *     error, so a page can poll it.
          */
         get: operations["listRunnerSessions"];
         put?: never;
@@ -2175,6 +2176,8 @@ export interface components {
         RunnerSessionState: "running" | "nudged" | "ending";
         RunnerSessionList: {
             items: components["schemas"]["RunnerSession"][];
+            /** @description Whether a Runner is attached to this server; false with no sessions when none is. */
+            runner: boolean;
         };
     };
     responses: {

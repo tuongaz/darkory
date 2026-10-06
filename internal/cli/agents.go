@@ -328,7 +328,10 @@ func cmdSessions(c *call) error {
 		return err
 	}
 	return c.show(res.Body, func(w io.Writer) {
-		if len(res.JSON200.Items) == 0 {
+		switch {
+		case !res.JSON200.Runner:
+			fmt.Fprintln(w, "No Runner is attached to this server; it runs no agent sessions.")
+		case len(res.JSON200.Items) == 0:
 			fmt.Fprintln(w, "The Runner runs no sessions now.")
 		}
 		for _, s := range res.JSON200.Items {

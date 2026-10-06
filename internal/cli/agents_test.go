@@ -133,8 +133,11 @@ func TestAgentCommands(t *testing.T) {
 		}
 		ada.fails(ExitUsage, "agent", "set", "bob", "--env", "NOEQUALS")
 
-		if res := bob.fails(ExitFailed, "sessions"); !strings.Contains(res.stderr, "no_runner") {
-			t.Fatalf("sessions without a Runner: %s", res.stderr)
+		if out := bob.ok("sessions"); out != "No Runner is attached to this server; it runs no agent sessions.\n" {
+			t.Fatalf("sessions without a Runner: %q", out)
+		}
+		if res := ada.fails(ExitFailed, "sessions", "nudge", "WEB-2"); !strings.Contains(res.stderr, "no_runner") {
+			t.Fatalf("nudge without a Runner: %s", res.stderr)
 		}
 		var task client.TaskDetail
 		bob.json(&task, "show", "WEB-2")

@@ -1609,8 +1609,9 @@ paths:
       summary: List the agent sessions the Runner is running now
       description: |
         A read model of the Runner beside this server, not part of the record: what it runs now,
-        one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
-        attached to this server, as with `serve --agents=off`).
+        one session per Task it holds a Claim on for an agent. With no Runner attached to this
+        server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+        error, so a page can poll it.
       responses:
         "200":
           description: The sessions, oldest first.
@@ -2985,8 +2986,11 @@ components:
       x-enum-varnames: [RunnerSessionRunning, RunnerSessionNudged, RunnerSessionEnding]
     RunnerSessionList:
       type: object
-      required: [items]
+      required: [items, runner]
       properties:
         items:
           type: array
           items: {$ref: "#/components/schemas/RunnerSession"}
+        runner:
+          type: boolean
+          description: Whether a Runner is attached to this server; false with no sessions when none is.

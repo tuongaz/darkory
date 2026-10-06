@@ -203,7 +203,8 @@ func (f *fakeRunner) Attach(ctx context.Context, task string, readonly bool, con
 	}
 }
 
-// The Runner's endpoints: no_runner with none attached; with one, its sessions, an admin's nudge
+// The Runner's endpoints: with none attached, no_runner, and a list saying so; with one, its
+// sessions, an admin's nudge
 // and stop, and the terminal — read-write for an admin, read-only for anyone else or on asking,
 // refused from another origin, before the upgrade when there is no session or no tmux.
 func TestRunnerSessions(t *testing.T) {
@@ -223,9 +224,14 @@ func TestRunnerSessions(t *testing.T) {
 		got(ada.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusConflict)
 		got(ada.StopRunnerSessionWithResponse(ctx, held.Key, &client.StopRunnerSessionParams{})).want(t, http.StatusConflict)
 		got(ada.RunnerTerminalWithResponse(ctx, held.Key, &client.RunnerTerminalParams{})).want(t, http.StatusConflict)
-		res := got(bob.ListRunnerSessionsWithResponse(ctx)).want(t, http.StatusConflict)
+		res := got(ada.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusConflict)
 		if res.JSONDefault == nil || res.JSONDefault.Code != client.ErrorCodeNoRunner {
 			t.Fatalf("without a Runner: %s", res.Body)
+		}
+		// The list answers, saying there is none, so a page can poll it.
+		none := got(bob.ListRunnerSessionsWithResponse(ctx)).want(t, http.StatusOK)
+		if none.JSON200.Runner || none.JSON200.Items == nil || len(none.JSON200.Items) != 0 || !strings.Contains(string(none.Body), `"items":[]`) {
+			t.Fatalf("without a Runner: %s", none.Body)
 		}
 
 		fake := &fakeRunner{sessions: []runnerapi.Session{
@@ -235,8 +241,9 @@ func TestRunnerSessions(t *testing.T) {
 				State: runnerapi.StateNudged, LogPath: "/data/sessions/other.log"},
 		}}
 		h.srv.AttachRunner(fake)
-		list := got(bob.ListRunnerSessionsWithResponse(ctx)).want(t, http.StatusOK).JSON200.Items
-		if len(list) != 2 || list[0].TaskID != held.ID || list[0].Tmux == nil || *list[0].Tmux != "dk-"+held.Key ||
+		listed := got(bob.ListRunnerSessionsWithResponse(ctx)).want(t, http.StatusOK).JSON200
+		list := listed.Items
+		if !listed.Runner || len(list) != 2 || list[0].TaskID != held.ID || list[0].Tmux == nil || *list[0].Tmux != "dk-"+held.Key ||
 			list[0].State != client.RunnerSessionRunning || list[1].Tmux != nil || list[1].State != client.RunnerSessionNudged {
 			t.Fatalf("sessions %+v", list)
 		}
