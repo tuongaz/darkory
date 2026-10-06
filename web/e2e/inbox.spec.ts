@@ -69,14 +69,14 @@ test.beforeAll(async () => {
   await v1(admin, "POST", "/v1/teams", { key: "INB", name: "Inbox" });
   await v1(admin, "PUT", "/v1/teams/INB/members/ada");
   await v1(admin, "POST", "/v1/skills", { name: "inbox-engineer", kind: "generic", body: "Build what the Task asks for." });
-  await v1(admin, "POST", "/v1/members", { name: "builder-1", kind: "agent" });
-  await v1(admin, "PUT", "/v1/teams/INB/members/builder-1");
-  await v1(admin, "PUT", "/v1/members/builder-1/skills/inbox-engineer");
-  await v1(admin, "PUT", "/v1/members/builder-1/manager", { manager: "ada" });
+  await v1(admin, "POST", "/v1/members", { name: "inbox-builder", kind: "agent" });
+  await v1(admin, "PUT", "/v1/teams/INB/members/inbox-builder");
+  await v1(admin, "PUT", "/v1/members/inbox-builder/skills/inbox-engineer");
+  await v1(admin, "PUT", "/v1/members/inbox-builder/manager", { manager: "ada" });
   // ada has the Skill too, so a Task the agent lets go shows in her My work.
   await v1(admin, "PUT", "/v1/members/ada/skills/inbox-engineer");
-  const issued = await v1<{ secret: string }>(admin, "POST", "/v1/members/builder-1/tokens", { name: "seed" });
-  agent = await as(issued.secret, "sess-builder-1");
+  const issued = await v1<{ secret: string }>(admin, "POST", "/v1/members/inbox-builder/tokens", { name: "seed" });
+  agent = await as(issued.secret, "sess-inbox-builder");
 
   const filed = await v1<Detail>(admin, "POST", "/v1/features", { team: "INB", title: "Checkout flow" });
   feature = filed.feature.key;
@@ -93,7 +93,7 @@ test("a 2 s Claim lapses: Agents shows Lapsed, the Task returns to Todo, Darkory
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
   await page.goto(`${base()}/agents`);
-  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "builder-1", exact: true }) });
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
   await expect(row).toContainText("Nothing held");
   await expect(row).toContainText("reports to ada");
   await markLoaded(page);
@@ -119,7 +119,7 @@ test("a 2 s Claim lapses: Agents shows Lapsed, the Task returns to Todo, Darkory
   await expect(lapse).toHaveCount(1);
   await expect(lapse.getByRole("img", { name: "Darkory" })).toBeVisible();
   await expect(lapse).toContainText("Darkory Lapsed");
-  await expect(lapse).toContainText("held by builder-1");
+  await expect(lapse).toContainText("held by inbox-builder");
   await shot(page, "activity-lapse");
   expect(errors).toEqual([]);
 });
@@ -143,23 +143,23 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   await expect(aimed.getByText("Stripe keys for staging?")).toBeVisible();
   await expect(aimed.getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toBeVisible();
   await expect(aimed.getByText(`blocks ${cart}`)).toBeVisible();
-  await expect(aimed.getByText("builder-1")).toBeVisible();
+  await expect(aimed.getByText("inbox-builder")).toBeVisible();
   await expect(aimed.getByRole("link", { name: `Answer ${key}` })).toHaveAttribute("href", `/inbox?task=${key}`);
   await notReloaded(page);
   await shot(page, "inbox-aimed");
 
-  // On Agents, builder-1 holds the cart page and is stuck on the question.
+  // On Agents, inbox-builder holds the cart page and is stuck on the question.
   await page.goto(`${base()}/agents`);
-  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "builder-1", exact: true }) });
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
   await expect(row).toContainText("Build the cart page");
   await expect(row.getByText(`Blocked by ${key}`)).toBeVisible();
   await expect(row.getByRole("meter")).toBeVisible();
-  await expect(row).toContainText("sess-builder-1");
+  await expect(row).toContainText("sess-inbox-builder");
   await expect(row).toContainText("claude-opus-5-5");
   await shot(page, "agents");
 
-  await row.getByRole("link", { name: "builder-1", exact: true }).click();
-  const peek = page.getByRole("dialog", { name: "Agent builder-1" });
+  await row.getByRole("link", { name: "inbox-builder", exact: true }).click();
+  const peek = page.getByRole("dialog", { name: "Agent inbox-builder" });
   await expect(peek).toBeVisible();
   const claims = peek.getByRole("region", { name: "Claims today" });
   await expect(claims).toContainText("Claims today · 2");
@@ -168,7 +168,7 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   await expect(peek.getByRole("region", { name: "Tokens" })).toContainText("seed");
   await shot(page, "agent-peek");
   await peek.getByRole("link", { name: /^Activity · \d+ entries/ }).click();
-  await expect(page).toHaveURL(`${base()}/activity?member=builder-1`);
+  await expect(page).toHaveURL(`${base()}/activity?member=inbox-builder`);
   expect(errors).toEqual([]);
 });
 
@@ -181,16 +181,16 @@ test("Activity narrows to a Member and to a Kind", async ({ page }) => {
   await shot(page, "activity");
 
   await page.getByRole("button", { name: "Member" }).click();
-  await page.getByRole("menuitemradio", { name: "builder-1" }).click();
-  await expect(page).toHaveURL(`${base()}/activity?member=builder-1`);
+  await page.getByRole("menuitemradio", { name: "inbox-builder" }).click();
+  await expect(page).toHaveURL(`${base()}/activity?member=inbox-builder`);
   await expect(page.getByText("Member is")).toBeVisible();
   const rows = activityRows(page);
   await expect(rows.first()).toBeVisible();
   // Its own entries, and the lapse Darkory recorded on its Claim.
-  for (const text of await rows.allTextContents()) expect(text).toMatch(/^#\d+(B1builder-1|DDarkory Lapsed)/);
+  for (const text of await rows.allTextContents()) expect(text).toMatch(/^#\d+(IBinbox-builder|DDarkory Lapsed)/);
   // The Claim's own entry is on this page, so the lapse says how long it waited.
-  await expect(rows.filter({ hasText: "Darkory Lapsed" })).toContainText("held by builder-1 · no Heartbeat in 2 s");
-  await expect(rows.filter({ hasText: "builder-1 filed" })).toHaveCount(1);
+  await expect(rows.filter({ hasText: "Darkory Lapsed" })).toContainText("held by inbox-builder · no Heartbeat in 2 s");
+  await expect(rows.filter({ hasText: "inbox-builder filed" })).toHaveCount(1);
   await shot(page, "activity-member");
 
   await page.getByRole("button", { name: "Clear Member" }).click();
@@ -207,6 +207,7 @@ test("Activity narrows to a Member and to a Kind", async ({ page }) => {
 });
 
 test("at phone width the four pages do not scroll sideways", async ({ page }) => {
+  const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
   await page.setViewportSize({ width: 390, height: 844 });
   for (const path of ["/inbox", "/my-work", "/agents", "/activity"]) {
@@ -216,4 +217,5 @@ test("at phone width the four pages do not scroll sideways", async ({ page }) =>
     expect(scroll, path).toBe(client);
   }
   await shot(page, "phone-activity");
+  expect(errors).toEqual([]);
 });
