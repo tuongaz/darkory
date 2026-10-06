@@ -180,7 +180,7 @@ describe("the Inbox", () => {
       tasks: [question],
       features: [checkout],
       takeable: [question],
-      details: { "WEB-8": { feature: checkout, status: { id: "st-todo", name: "Todo", kind: "todo", position: 2 }, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] } },
+      details: { "WEB-8": { feature: checkout, status: { id: "st-todo", name: "Todo", kind: "todo", position: 2 }, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] } },
     });
     api.routes["POST /v1/tasks/:task/claim"] = () => {
       question.claim = claim(question.id, ada.id);

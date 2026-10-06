@@ -110,7 +110,7 @@ describe("Team › Tasks, board", () => {
   it("rings the card whose peek is open, and only that one", async () => {
     mockApi(
       routes({
-        "GET /v1/tasks/:task": { task: discount, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+        "GET /v1/tasks/:task": { task: discount, status: statuses[0], feature: checkout, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
         "GET /v1/teams/:team": { team: web, members: [me().member] },
         "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
       }),

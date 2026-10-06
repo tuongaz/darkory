@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { Claim, FeatureDetail, TaskDetail } from "@/api/client";
+import type { Claim, FeatureDetail, TaskDetail, Workspace } from "@/api/client";
 import { mockApi, refuse } from "@/test/api";
 import { ada, bob, builder, build, feature, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
@@ -95,7 +95,72 @@ describe("the Task page", () => {
   });
 });
 
+const shop: Workspace = { id: "w-shop", name: "shop", kind: "git", path: "/src/shop", mode: "plain", default_branch: "main", created_at: inFuture(-60) };
+const docs: Workspace = { ...shop, id: "w-docs", name: "docs", path: "/src/docs" };
+
+describe("where a Task is worked", () => {
+  it("names the Workspaces and the branch the Runner works it on", async () => {
+    const d = { ...detail({ workspace_ids: [shop.id, docs.id] }), workspaces: [shop, docs] };
+    mockApi(routes(d));
+    renderApp("/tasks/WEB-3");
+    const rail = await screen.findByRole("complementary", { name: "Properties" });
+    const task = within(rail).getByRole("region", { name: "Task" });
+    expect(within(task).getByText("Workspaces")).toBeInTheDocument();
+    expect(within(task).getByText("shop")).toBeInTheDocument();
+    expect(within(task).getByText("docs")).toBeInTheDocument();
+    expect(within(task).getByText("Branch")).toBeInTheDocument();
+    expect(within(task).getByText("WEB-3/build-the-cart-page")).toBeInTheDocument();
+  });
+
+  it("says nothing of a branch for a Task naming no Workspace", async () => {
+    mockApi(routes(detail()));
+    renderApp("/tasks/WEB-3");
+    const rail = await screen.findByRole("complementary", { name: "Properties" });
+    expect(within(rail).queryByText("Branch")).not.toBeInTheDocument();
+    expect(within(rail).queryByText("Workspaces")).not.toBeInTheDocument();
+  });
+});
+
 describe("the Feature page", () => {
+  function featureRoutes(fd: FeatureDetail) {
+    return { ...routes(detail()), "GET /v1/features/:feature": fd, "GET /v1/features/:feature/observations": { items: [] } };
+  }
+
+  it("marks a quick Feature, which has no feature branch and files no Retrospective when dropped", async () => {
+    const f = feature(1, 2, { title: "Fix the cart total", quick: true, ship_when_done: true });
+    const fd: FeatureDetail = { feature: f, tasks: [task(3, f.id, { title: "Fix the cart total", workspace_ids: [shop.id] })], evidence: [] };
+    mockApi(featureRoutes(fd));
+    renderApp("/features/WEB-1");
+    expect(await screen.findByRole("heading", { name: "Fix the cart total", level: 1 })).toBeInTheDocument();
+    expect(screen.getByText("Quick")).toBeInTheDocument();
+    expect(screen.getByText("Ships when done")).toBeInTheDocument();
+    expect(screen.queryByText("feature/WEB-1")).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "More Feature actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Drop Feature" }));
+    const confirm = await screen.findByRole("dialog", { name: /Drop WEB-1/ });
+    expect(confirm).toHaveTextContent("Drops 1 open Task");
+    expect(confirm).not.toHaveTextContent("Retrospective");
+  });
+
+  it("names the feature branch of a Feature whose Tasks name a Workspace", async () => {
+    const f = feature(1, 2, { title: "Checkout flow" });
+    const fd: FeatureDetail = { feature: f, tasks: [task(3, f.id, { workspace_ids: [shop.id] })], evidence: [] };
+    mockApi(featureRoutes(fd));
+    renderApp("/features/WEB-1");
+    expect(await screen.findByText("feature/WEB-1")).toBeInTheDocument();
+    expect(screen.queryByText("Quick")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ships when done")).not.toBeInTheDocument();
+  });
+
+  it("names no branch for a Feature whose Tasks name no Workspace", async () => {
+    const f = feature(1, 2, { title: "Checkout flow", ship_when_done: true });
+    mockApi(featureRoutes({ feature: f, tasks: [task(3, f.id)], evidence: [] }));
+    renderApp("/features/WEB-1");
+    expect(await screen.findByText("Ships when done")).toBeInTheDocument();
+    expect(screen.queryByText("feature/WEB-1")).not.toBeInTheDocument();
+  });
+
   it("names the open Tasks when Ship is refused", async () => {
     const f = feature(1, 2, { title: "Checkout flow", task_counts: { open: 1, claimed: 0, done: 1, dropped: 0 } });
     const open = task(3, f.id, { title: "Build the cart page" });
