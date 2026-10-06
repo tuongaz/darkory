@@ -17,29 +17,47 @@ import (
 // Readers for each record. They take a store.Reader so a write can read inside its own
 // transaction and a read can run outside any.
 
-const memberCols = `m.id, m.name, m.kind, m.email, m.admin, m.created_at, r.manager_id, m.deactivated_at`
+const memberCols = `m.id, m.name, m.kind, m.email, m.admin, m.created_at, r.manager_id, m.deactivated_at, m.agent`
 const memberFrom = `members m LEFT JOIN reporting_lines r ON r.member_id = m.id`
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
-	var email, manager sql.NullString
+	var email, manager, agent sql.NullString
 	var created int64
 	var deactivated sql.NullInt64
-	if err := row.Scan(&m.ID, &m.Name, &m.Kind, &email, &m.Admin, &created, &manager, &deactivated); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Kind, &email, &m.Admin, &created, &manager, &deactivated, &agent); err != nil {
 		return m, err
 	}
 	m.Email, m.ManagerID, m.CreatedAt, m.DeactivatedAt = nullString(email), nullString(manager), fromMS(created), nullTime(deactivated)
+	if agent.Valid {
+		var a AgentSettings
+		if err := json.Unmarshal([]byte(agent.String), &a); err != nil {
+			return m, fmt.Errorf("core: the agent settings of %s: %w", m.Name, err)
+		}
+		m.Agent = &a
+	}
 	return m, nil
 }
 
-const teamCols = `tm.id, tm.key_prefix, tm.name, tm.created_at`
+const teamCols = `tm.id, tm.key_prefix, tm.name, tm.default_workspace_id, tm.ship_when_done, tm.created_at`
 
 func scanTeam(row interface{ Scan(...any) error }) (Team, error) {
 	var t Team
+	var workspace sql.NullString
 	var created int64
-	err := row.Scan(&t.ID, &t.Key, &t.Name, &created)
-	t.CreatedAt = fromMS(created)
+	err := row.Scan(&t.ID, &t.Key, &t.Name, &workspace, &t.ShipWhenDone, &created)
+	t.DefaultWorkspaceID, t.CreatedAt = nullString(workspace), fromMS(created)
 	return t, err
+}
+
+const workspaceCols = `w.id, w.name, w.kind, w.path, w.mode, w.default_branch, w.created_at`
+
+func scanWorkspace(row interface{ Scan(...any) error }) (Workspace, error) {
+	var w Workspace
+	var created int64
+	err := row.Scan(&w.ID, &w.Name, &w.Kind, &w.Path, &w.Mode, &w.DefaultBranch, &created)
+	w.CreatedAt = fromMS(created)
+	return w, err
 }
 
 const skillCols = `sk.id, sk.name, sk.kind, sk.base_skill_id, sk.builtin, sk.current_version, sk.created_at`
@@ -54,7 +72,7 @@ func scanSkill(row interface{ Scan(...any) error }) (Skill, error) {
 }
 
 const featureCols = `f.id, f.display_key, f.team_id, f.title, f.description, f.owner_id, f.state, f.rank,
-f.from_retrospective_task_id, f.filed_by, f.created_at, f.ended_at`
+f.from_retrospective_task_id, f.quick, f.ship_when_done, f.filed_by, f.created_at, f.ended_at`
 
 func scanFeature(row interface{ Scan(...any) error }) (Feature, error) {
 	var f Feature
@@ -62,7 +80,7 @@ func scanFeature(row interface{ Scan(...any) error }) (Feature, error) {
 	var created int64
 	var ended sql.NullInt64
 	err := row.Scan(&f.ID, &f.Key, &f.TeamID, &f.Title, &f.Description, &f.OwnerID, &f.State, &f.Rank,
-		&fromRetro, &f.FiledBy, &created, &ended)
+		&fromRetro, &f.Quick, &f.ShipWhenDone, &f.FiledBy, &created, &ended)
 	f.FromRetrospectiveTaskID, f.CreatedAt, f.EndedAt = nullString(fromRetro), fromMS(created), nullTime(ended)
 	return f, err
 }
@@ -184,12 +202,45 @@ func getTask(ctx context.Context, r store.Reader, orgID, id string, now time.Tim
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, refuse(CodeNotFound, "no Task %s", id)
 	}
-	if err != nil || !t.Blocked {
+	if err != nil {
 		return t, err
 	}
 	ts := []Task{t}
-	err = fillOpenBlockers(ctx, r, orgID, ts)
+	if err := fillOpenBlockers(ctx, r, orgID, ts); err != nil {
+		return t, err
+	}
+	err = fillWorkspaceIDs(ctx, r, orgID, ts)
 	return ts[0], err
+}
+
+// fillWorkspaceIDs names the Workspaces each Task names, in the order named, in one query.
+func fillWorkspaceIDs(ctx context.Context, r store.Reader, orgID string, ts []Task) error {
+	if len(ts) == 0 {
+		return nil
+	}
+	args := []any{orgID}
+	at := map[string]int{}
+	marks := make([]string, len(ts))
+	for i, t := range ts {
+		args = append(args, t.ID)
+		marks[i] = "$" + itoa(len(args))
+		at[t.ID] = i
+	}
+	rows, err := r.Query(ctx, `SELECT task_id, workspace_id FROM task_workspaces
+WHERE org_id = $1 AND task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY task_id, position`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var task, ws string
+		if err := rows.Scan(&task, &ws); err != nil {
+			return err
+		}
+		i := at[task]
+		ts[i].WorkspaceIDs = append(ts[i].WorkspaceIDs, ws)
+	}
+	return rows.Err()
 }
 
 // fillOpenBlockers names the open blockers of each blocked Task, in one query.
@@ -250,7 +301,10 @@ func tasksWhere(ctx context.Context, r store.Reader, orgID string, now time.Time
 	if err != nil {
 		return nil, err
 	}
-	return ts, fillOpenBlockers(ctx, r, orgID, ts)
+	if err := fillOpenBlockers(ctx, r, orgID, ts); err != nil {
+		return nil, err
+	}
+	return ts, fillWorkspaceIDs(ctx, r, orgID, ts)
 }
 
 func memberTeams(ctx context.Context, r store.Reader, orgID, memberID string) ([]Team, error) {
@@ -389,6 +443,10 @@ func getTaskDetail(ctx context.Context, r store.Reader, orgID, id string, now ti
 		return d, fmt.Errorf("core: the Status of Task %s: %w", d.Task.Key, err)
 	}
 	if d.Feature, err = getFeature(ctx, r, orgID, d.Task.FeatureID, now); err != nil {
+		return d, err
+	}
+	if d.Workspaces, err = collect(ctx, r, scanWorkspace, `SELECT `+workspaceCols+` FROM workspaces w
+JOIN task_workspaces tw ON tw.workspace_id = w.id WHERE tw.org_id = $1 AND tw.task_id = $2 ORDER BY tw.position`, orgID, id); err != nil {
 		return d, err
 	}
 	if d.Claims, err = claimsOf(ctx, r, orgID, id, now); err != nil {

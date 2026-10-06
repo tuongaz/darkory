@@ -121,4 +121,32 @@ func TestHotPathWritesAreOneRoundTripOnPostgres(t *testing.T) {
 			}
 		}
 	}
+
+	// A complete that ships its Feature when done, and files the Retrospective, is still one
+	// batch. The lead owns the Feature and takes its Break down, which no one in WEB could.
+	for round := range 2 {
+		d, err := f.svc.FileFeature(ctx, lead, core.NewFeature{Team: "WEB", Title: name("ship", round), ShipWhenDone: ptrBool(true)}, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		breakdown := d.Tasks[0].ID
+		if _, err := f.svc.Claim(ctx, lead, breakdown, noTimeout, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		before := w.Snapshot()
+		if _, err := f.svc.Complete(ctx, lead, breakdown, nil, jsonIdem("ship-"+breakdown, "h")); err != nil {
+			t.Fatal(err)
+		}
+		got := w.Since(before)
+		if shipped, err := f.svc.GetFeature(ctx, lead, d.Feature.ID); err != nil || shipped.Feature.State != "shipped" || len(shipped.Tasks) != 2 {
+			t.Fatalf("the Feature after its last Task: %+v, %d Tasks, %v", shipped.Feature, len(shipped.Tasks), err)
+		}
+		if round == 0 {
+			continue
+		}
+		t.Logf("complete (shipping) write: %d batch in %d round trip; whole call: %d round trips", got.Batches, got.BatchRoundTrips, got.RoundTrips)
+		if got.Batches != 1 || got.BatchRoundTrips != 1 {
+			t.Errorf("complete (shipping): the write took %d batches in %d round trips, want 1 in 1", got.Batches, got.BatchRoundTrips)
+		}
+	}
 }

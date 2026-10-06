@@ -24,16 +24,48 @@ type NewFeature struct {
 	Owner *string
 	// FromRetrospective names the Retrospective Task filing the Feature.
 	FromRetrospective *string
+	// Quick files a quick Feature: its one Task, needing Skill, instead of the Break down (ADR
+	// 0014). Workspaces are that Task's, nil for the Team's default.
+	Quick      bool
+	Skill      *string
+	Workspaces *[]string
+	// ShipWhenDone is nil for the Team's default; a quick Feature always has it.
+	ShipWhenDone *bool
+}
+
+func (nf NewFeature) validate() error {
+	if err := validTitle(nf.Title); err != nil {
+		return err
+	}
+	switch {
+	case nf.Quick && nf.Skill == nil:
+		return refuse(CodeInvalid, "a quick Feature names the Skill its one Task needs in skill")
+	case nf.Quick && nf.FromRetrospective != nil:
+		return refuse(CodeInvalid, "a Retrospective files Features that are broken down; a quick Feature cannot name from_retrospective")
+	case nf.Quick && nf.ShipWhenDone != nil && !*nf.ShipWhenDone:
+		return refuse(CodeInvalid, "a quick Feature always ships when done")
+	case !nf.Quick && nf.Skill != nil:
+		return refuse(CodeInvalid, "skill names the Skill a quick Feature's one Task needs; this Feature is not quick")
+	case !nf.Quick && nf.Workspaces != nil:
+		return refuse(CodeInvalid, "workspaces names a quick Feature's Task's Workspaces; this Feature is not quick")
+	}
+	return nil
 }
 
 // FileFeature files a Feature at the bottom of its Team's Rank, and its Break down Task needing
-// the breakdown Skill, in one write (ADR 0010). The filer must be in the Team.
+// the breakdown Skill, in one write (ADR 0010); a quick Feature files its one work Task instead
+// (ADR 0014). The filer must be in the Team. Every Task filed names the Team's default Workspace,
+// unless a quick Feature names others.
 func (s *Service) FileFeature(ctx context.Context, c *auth.Caller, nf NewFeature, idem Idem) (FeatureDetail, error) {
-	if err := validTitle(nf.Title); err != nil {
+	if err := nf.validate(); err != nil {
 		return FeatureDetail{}, err
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		team, err := resolveTeam(ctx, t, c.OrgID, nf.Team)
+		if err != nil {
+			return nil, err
+		}
+		tm, err := getTeam(ctx, t, c.OrgID, team)
 		if err != nil {
 			return nil, err
 		}
@@ -63,11 +95,30 @@ func (s *Service) FileFeature(ctx context.Context, c *auth.Caller, nf NewFeature
 			}
 			fromRetro = &id
 		}
-		breakdown, err := skillByName(ctx, t, c.OrgID, SkillBreakdown)
+		shipWhenDone := tm.ShipWhenDone
+		if nf.ShipWhenDone != nil {
+			shipWhenDone = *nf.ShipWhenDone
+		}
+		kind, title, description := "breakdown", "Break down: "+nf.Title, ""
+		var skill string
+		if nf.Quick {
+			shipWhenDone, kind, title, description = true, "work", nf.Title, nf.Description
+			skill, err = resolveSkill(ctx, t, c.OrgID, *nf.Skill)
+		} else {
+			skill, err = skillByName(ctx, t, c.OrgID, SkillBreakdown)
+		}
 		if err != nil {
 			return nil, err
 		}
-		// The Feature and its Break down take two numbers from the Team's one counter.
+		workspaces, err := taskWorkspaces(t, team, nf.Workspaces)
+		if err != nil {
+			return nil, err
+		}
+		if nf.Quick && len(workspaces) == 0 {
+			return nil, refuse(CodeInvalid, "Team %s has no default Workspace, and a quick Feature's Task works in one: name it in workspaces, "+
+				"or set the Team's with darkory team set %s --default-workspace <workspace>", tm.Key, tm.Key)
+		}
+		// The Feature and its first Task take two numbers from the Team's one counter.
 		var prefix string
 		var last int64
 		if err := t.QueryRow(ctx, `UPDATE teams SET last_number = last_number + 2 WHERE org_id = $1 AND id = $2 RETURNING key_prefix, last_number`, c.OrgID, team).
@@ -81,24 +132,34 @@ func (s *Service) FileFeature(ctx context.Context, c *auth.Caller, nf NewFeature
 		featureID, taskID := newID(), newID()
 		featureKey, taskKey := prefix+"-"+itoa64(last-1), prefix+"-"+itoa64(last)
 		if _, err := t.Exec(ctx, `INSERT INTO features (id, org_id, team_id, display_key, title, description, owner_id, state, rank,
-from_retrospective_task_id, filed_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9, $10, $11)`,
-			featureID, c.OrgID, team, featureKey, nf.Title, nf.Description, owner, rank, fromRetro, c.MemberID, ms(t.now)); err != nil {
+from_retrospective_task_id, quick, ship_when_done, filed_by, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9, $10, $11, $12, $13)`,
+			featureID, c.OrgID, team, featureKey, nf.Title, nf.Description, owner, rank, fromRetro, nf.Quick, shipWhenDone, c.MemberID, ms(t.now)); err != nil {
 			return nil, err
 		}
-		if err := t.recordByCaller("feature.filed", featureID, map[string]any{"key": featureKey, "title": nf.Title, "team_id": team, "owner_id": owner}); err != nil {
+		filed := map[string]any{"key": featureKey, "title": nf.Title, "team_id": team, "owner_id": owner}
+		if nf.Quick {
+			filed["quick"] = true
+		}
+		if shipWhenDone {
+			filed["ship_when_done"] = true
+		}
+		if err := t.recordByCaller("feature.filed", featureID, filed); err != nil {
 			return nil, err
 		}
-		title := "Break down: " + nf.Title
 		status, err := fileStatus(t, nil)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, skill_id, filed_by, waiting_since, created_at, status_id)
-VALUES ($1, $2, $3, $4, 'breakdown', $5, 'open', $6, $7, $8, $8, $9)`, taskID, c.OrgID, featureID, taskKey, title, breakdown, c.MemberID, ms(t.now), status.ID); err != nil {
+		if _, err := t.Exec(ctx, `INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, description, state, skill_id, filed_by,
+waiting_since, created_at, status_id) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open', $8, $9, $10, $10, $11)`,
+			taskID, c.OrgID, featureID, taskKey, kind, title, description, skill, c.MemberID, ms(t.now), status.ID); err != nil {
 			return nil, err
 		}
-		if err := t.recordByCaller("task.filed", taskID, map[string]any{"key": taskKey, "title": title, "feature_id": featureID, "kind": "breakdown",
-			"skill_id": breakdown, "status_id": status.ID}); err != nil {
+		if err := nameWorkspaces(t, taskID, workspaces); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("task.filed", taskID, map[string]any{"key": taskKey, "title": title, "feature_id": featureID, "kind": kind,
+			"skill_id": skill, "status_id": status.ID}); err != nil {
 			return nil, err
 		}
 		return getFeatureDetail(ctx, t, c.OrgID, featureID, t.now)
@@ -219,13 +280,13 @@ func (s *Service) RankFeature(ctx context.Context, c *auth.Caller, ref string, p
 }
 
 // ShipFeature ends a Feature shipped, by its owner, once every one of its Tasks has ended, and
-// files its Retrospective in the same write (ADR 0010).
+// files its Retrospective in the same write (ADR 0010) unless it is quick (ADR 0014).
 func (s *Service) ShipFeature(ctx context.Context, c *auth.Caller, ref string, idem Idem) (FeatureDetail, error) {
 	return s.endFeature(ctx, c, ref, "shipped", idem)
 }
 
 // DropFeature ends a Feature dropped, by its owner: it drops the Feature's open Tasks, ending
-// their Claims, and files its Retrospective in the same write (ADR 0010).
+// their Claims, and files its Retrospective in the same write (ADR 0010) unless it is quick.
 func (s *Service) DropFeature(ctx context.Context, c *auth.Caller, ref string, idem Idem) (FeatureDetail, error) {
 	return s.endFeature(ctx, c, ref, "dropped", idem)
 }
@@ -267,8 +328,11 @@ func (s *Service) endFeature(ctx context.Context, c *auth.Caller, ref, state str
 				return nil, err
 			}
 		}
-		if err := fileRetrospective(t, f); err != nil {
-			return nil, err
+		// A quick Feature has no Retrospective (ADR 0014).
+		if !f.Quick {
+			if err := fileRetrospective(t, f); err != nil {
+				return nil, err
+			}
 		}
 		return getFeatureDetail(ctx, t, c.OrgID, f.ID, t.now)
 	})
@@ -292,6 +356,13 @@ func fileRetrospective(t *tx, f Feature) error {
 	}
 	id, key, err := insertTask(t, f, "retrospective", title, "", &retro, nil, status.ID)
 	if err != nil {
+		return err
+	}
+	workspaces, err := taskWorkspaces(t, f.TeamID, nil)
+	if err != nil {
+		return err
+	}
+	if err := nameWorkspaces(t, id, workspaces); err != nil {
 		return err
 	}
 	return t.recordByCaller("task.filed", id, map[string]any{"key": key, "title": title, "feature_id": f.ID, "kind": "retrospective",

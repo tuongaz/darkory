@@ -25,6 +25,43 @@ var builtinSkills = []struct{ name, body string }{
 	{SkillSkillReview, "Review a proposed Skill version. Complete the Task to publish it, or hand it back to retro with a Note saying what to fix. Nobody reviews their own proposal."},
 }
 
+// The roster `darkory init` seeds on a Local Install so it comes up with agents ready
+// (docs/build/agents-plan.md, D4): Team MAIN, the generic Skills engineer and review, and four
+// agents in the Team reporting to the first Member, each with agent settings and a token.
+const (
+	RosterTeamKey  = "MAIN"
+	RosterTeamName = "Main"
+	SkillEngineer  = "engineer"
+	SkillReview    = "review"
+	// RosterTokenName names the token each agent of the roster is issued, for the Runner.
+	RosterTokenName = "runner"
+	// RosterTokenTimeout is that token's default heartbeat timeout: the Runner sends Heartbeats
+	// while a session shows progress, and a session that shows none lapses on it.
+	RosterTokenTimeout = 5 * time.Minute
+)
+
+var rosterSkills = []struct{ name, body string }{
+	{SkillEngineer, "Build what the Task describes. Work on the Task's branch in its Workspace, test as you go, run the tests, and attach the test log as Evidence. " +
+		"Hand the Task over to review when it is built, with a Note saying what changed and how you checked it."},
+	{SkillReview, "Review the work a Task describes: read the change on its branch and its Evidence, run the tests, and check it does what the Task asks. " +
+		"Complete the Task when it is right, with a Note saying what you checked; hand it back with a Note saying what to fix when it is not. Nobody reviews their own work."},
+}
+
+// RosterAgent is one agent of the roster: its Skills and model.
+type RosterAgent struct {
+	Name   string
+	Skills []string
+	Model  string
+}
+
+// Roster is the agents `darkory init` seeds.
+var Roster = []RosterAgent{
+	{Name: "planner", Skills: []string{SkillBreakdown}, Model: "claude-opus-5-5"},
+	{Name: "builder", Skills: []string{SkillEngineer}, Model: "claude-sonnet-5-5"},
+	{Name: "reviewer", Skills: []string{SkillReview, SkillSkillReview}, Model: "claude-opus-5-5"},
+	{Name: "retro", Skills: []string{SkillRetro}, Model: "claude-opus-5-5"},
+}
+
 // LoginLinkTTL is how long a one-time login link works.
 const LoginLinkTTL = 15 * time.Minute
 
@@ -40,12 +77,39 @@ type Initialised struct {
 	Member       Member
 	Token        IssuedToken
 	Link         LoginLink
+	// Team, Workspace and Agents are the roster, when InitWith seeded one; Workspace is nil
+	// when none was given.
+	Team      *Team
+	Workspace *Workspace
+	Agents    []SeededAgent
+}
+
+// SeededAgent is an agent of the roster, with its token, whose secret is shown once.
+type SeededAgent struct {
+	Member Member
+	Skills []string
+	Token  IssuedToken
+}
+
+// InitOptions are what InitWith seeds besides what Init does.
+type InitOptions struct {
+	// Roster seeds Team MAIN with the first Member in it, the Skills engineer and review, and
+	// the Roster's agents in the Team, reporting to the first Member, each with agent settings
+	// and a token named RosterTokenName.
+	Roster bool
+	// Workspace, with Roster, is added and made Team MAIN's default.
+	Workspace *NewWorkspace
 }
 
 // Init creates the Install's Organisation, its first Member — a human admin — the built-in
 // Skills, the default Statuses, a token for that Member and a login link. It refuses when an
 // Organisation exists.
 func (s *Service) Init(ctx context.Context, orgName, memberName string) (Initialised, error) {
+	return s.InitWith(ctx, orgName, memberName, InitOptions{})
+}
+
+// InitWith is Init, seeding what o asks for in the same write.
+func (s *Service) InitWith(ctx context.Context, orgName, memberName string, o InitOptions) (Initialised, error) {
 	var out Initialised
 	var n int
 	if err := s.store.QueryRow(ctx, `SELECT COUNT(*) FROM organisations`).Scan(&n); err != nil {
@@ -87,8 +151,13 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 		if out.Token, err = issueToken(t, memberID, "init", 0); err != nil {
 			return err
 		}
-		out.Link, err = issueLoginLink(t, memberID, nil)
-		return err
+		if out.Link, err = issueLoginLink(t, memberID, nil); err != nil {
+			return err
+		}
+		if o.Roster {
+			return seedRoster(t, memberID, o.Workspace, &out)
+		}
+		return nil
 	})
 	if err != nil {
 		return out, fmt.Errorf("core: init: %w", err)
@@ -96,6 +165,82 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 	out.Organisation = Organisation{ID: orgID, Name: orgName, CreatedAt: now}
 	out.Member, err = getMember(ctx, s.store, orgID, memberID)
 	return out, err
+}
+
+// seedRoster seeds the roster inside Init's write, the first Member, human, being humanID.
+func seedRoster(t *tx, humanID string, nw *NewWorkspace, out *Initialised) error {
+	team, err := createTeam(t, RosterTeamKey, RosterTeamName)
+	if err != nil {
+		return err
+	}
+	if err := addTeamMember(t, team, humanID); err != nil {
+		return err
+	}
+	if nw != nil {
+		ws, err := createWorkspace(t, *nw)
+		if err != nil {
+			return err
+		}
+		if _, err := t.Exec(t.ctx, `UPDATE teams SET default_workspace_id = $1 WHERE org_id = $2 AND id = $3`, ws, t.caller.OrgID, team); err != nil {
+			return err
+		}
+		if err := t.recordByCaller("team.changed", team, map[string]any{"default_workspace_id": ws}); err != nil {
+			return err
+		}
+		w, err := getWorkspace(t.ctx, t, t.caller.OrgID, ws)
+		if err != nil {
+			return err
+		}
+		out.Workspace = &w
+	}
+	tm, err := getTeam(t.ctx, t, t.caller.OrgID, team)
+	if err != nil {
+		return err
+	}
+	out.Team = &tm
+	skills := map[string]string{}
+	for _, b := range rosterSkills {
+		if skills[b.name], err = createSkill(t, b.name, "generic", nil, b.body, false); err != nil {
+			return err
+		}
+	}
+	for _, name := range []string{SkillBreakdown, SkillRetro, SkillSkillReview} {
+		if skills[name], err = skillByName(t.ctx, t, t.caller.OrgID, name); err != nil {
+			return err
+		}
+	}
+	for _, a := range Roster {
+		id, err := createMember(t, NewMember{Name: a.Name, Kind: "agent"})
+		if err != nil {
+			return err
+		}
+		if err := addTeamMember(t, team, id); err != nil {
+			return err
+		}
+		for _, sk := range a.Skills {
+			if err := grantSkill(t, id, skills[sk]); err != nil {
+				return err
+			}
+		}
+		if err := setManager(t, id, humanID, a.Name, humanID); err != nil {
+			return err
+		}
+		settings := DefaultAgentSettings()
+		settings.Model = a.Model
+		if err := setAgent(t, id, settings, agentChanges(AgentSettings{}, settings)); err != nil {
+			return err
+		}
+		tok, err := issueToken(t, id, RosterTokenName, RosterTokenTimeout)
+		if err != nil {
+			return err
+		}
+		m, err := getMember(t.ctx, t, t.caller.OrgID, id)
+		if err != nil {
+			return err
+		}
+		out.Agents = append(out.Agents, SeededAgent{Member: m, Skills: a.Skills, Token: tok})
+	}
+	return nil
 }
 
 // StartupLink issues the login link `darkory serve` prints at start, for the Member `darkory init`

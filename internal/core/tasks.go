@@ -19,6 +19,9 @@ type NewTask struct {
 	Blocks *string
 	// Status names the Status it starts in, of an open kind; nil for the first todo one.
 	Status *string
+	// Workspaces names the Workspaces it names, in order; nil for its Team's default, an empty
+	// list for none.
+	Workspaces *[]string
 }
 
 // FileTask files a Task on a Feature of any Team. A Task that blocks another (a question or an
@@ -94,8 +97,15 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 		if err != nil {
 			return nil, err
 		}
+		workspaces, err := taskWorkspaces(t, f.TeamID, nt.Workspaces)
+		if err != nil {
+			return nil, err
+		}
 		id, key, err := insertTask(t, f, "work", nt.Title, nt.Description, skill, aimed, status.ID)
 		if err != nil {
+			return nil, err
+		}
+		if err := nameWorkspaces(t, id, workspaces); err != nil {
 			return nil, err
 		}
 		payload := map[string]any{"key": key, "title": nt.Title, "feature_id": f.ID, "kind": "work", "status_id": status.ID}

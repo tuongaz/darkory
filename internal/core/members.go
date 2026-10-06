@@ -54,15 +54,8 @@ func (s *Service) CreateMember(ctx context.Context, c *auth.Caller, nm NewMember
 		return Member{}, refuse(CodeInvalid, "kind must be human or agent")
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		if err := nameFree(t, "", nm.Name, nm.Email); err != nil {
-			return nil, err
-		}
-		id := newID()
-		if _, err := t.Exec(ctx, `INSERT INTO members (id, org_id, name, kind, email, admin, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`, id, c.OrgID, nm.Name, nm.Kind, nm.Email, nm.Admin, ms(t.now)); err != nil {
-			return nil, err
-		}
-		if err := t.recordByCaller("member.created", id, map[string]any{"name": nm.Name, "kind": nm.Kind, "admin": nm.Admin}); err != nil {
+		id, err := createMember(t, nm)
+		if err != nil {
 			return nil, err
 		}
 		return getMember(ctx, t, c.OrgID, id)
@@ -71,6 +64,19 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`, id, c.OrgID, nm.Name, nm.Kind, nm.Emai
 		return Member{}, err
 	}
 	return res.(Member), nil
+}
+
+// createMember creates a Member inside a write and records member.created.
+func createMember(t *tx, nm NewMember) (string, error) {
+	if err := nameFree(t, "", nm.Name, nm.Email); err != nil {
+		return "", err
+	}
+	id := newID()
+	if _, err := t.Exec(t.ctx, `INSERT INTO members (id, org_id, name, kind, email, admin, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`, id, t.caller.OrgID, nm.Name, nm.Kind, nm.Email, nm.Admin, ms(t.now)); err != nil {
+		return "", err
+	}
+	return id, t.recordByCaller("member.created", id, map[string]any{"name": nm.Name, "kind": nm.Kind, "admin": nm.Admin})
 }
 
 // nameFree refuses a name or email another Member (not except) already has.
@@ -206,39 +212,46 @@ func (s *Service) SetManager(ctx context.Context, c *auth.Caller, ref, managerRe
 		if err != nil {
 			return nil, err
 		}
-		// Walk up from the new manager; reaching the Member would close a loop.
-		for m, steps := manager, 0; m != ""; steps++ {
-			if m == id {
-				return nil, refuse(CodeCycle, "%s cannot report to %s: the Reporting line would loop", ref, managerRef)
-			}
-			if steps > 10000 {
-				return nil, refuse(CodeCycle, "the Reporting line above %s already loops", managerRef)
-			}
-			var up sql.NullString
-			err := t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, c.OrgID, m).Scan(&up)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				return nil, err
-			}
-			m = up.String
-		}
-		var current sql.NullString
-		err = t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, c.OrgID, id).Scan(&current)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, err
-		}
-		if current.String == manager {
-			return nil, nil
-		}
-		if _, err := t.Exec(ctx, `DELETE FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, c.OrgID, id); err != nil {
-			return nil, err
-		}
-		if _, err := t.Exec(ctx, `INSERT INTO reporting_lines (org_id, member_id, manager_id, set_by, set_at) VALUES ($1, $2, $3, $4, $5)`,
-			c.OrgID, id, manager, c.MemberID, ms(t.now)); err != nil {
-			return nil, err
-		}
-		return nil, t.recordByCaller("member.manager_set", id, map[string]any{"manager_id": manager})
+		return nil, setManager(t, id, manager, ref, managerRef)
 	})
 	return err
+}
+
+// setManager sets the Member who directs id inside a write, refusing a Reporting line that loops
+// (named in the refusal as ref and managerRef), and records member.manager_set.
+func setManager(t *tx, id, manager, ref, managerRef string) error {
+	ctx, orgID := t.ctx, t.caller.OrgID
+	// Walk up from the new manager; reaching the Member would close a loop.
+	for m, steps := manager, 0; m != ""; steps++ {
+		if m == id {
+			return refuse(CodeCycle, "%s cannot report to %s: the Reporting line would loop", ref, managerRef)
+		}
+		if steps > 10000 {
+			return refuse(CodeCycle, "the Reporting line above %s already loops", managerRef)
+		}
+		var up sql.NullString
+		err := t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, orgID, m).Scan(&up)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		m = up.String
+	}
+	var current sql.NullString
+	err := t.QueryRow(ctx, `SELECT manager_id FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, orgID, id).Scan(&current)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if current.String == manager {
+		return nil
+	}
+	if _, err := t.Exec(ctx, `DELETE FROM reporting_lines WHERE org_id = $1 AND member_id = $2`, orgID, id); err != nil {
+		return err
+	}
+	if _, err := t.Exec(ctx, `INSERT INTO reporting_lines (org_id, member_id, manager_id, set_by, set_at) VALUES ($1, $2, $3, $4, $5)`,
+		orgID, id, manager, t.caller.MemberID, ms(t.now)); err != nil {
+		return err
+	}
+	return t.recordByCaller("member.manager_set", id, map[string]any{"manager_id": manager})
 }
 
 // ClearManager removes a Member's Reporting line (admin).
@@ -277,21 +290,27 @@ func (s *Service) GrantSkill(ctx context.Context, c *auth.Caller, memberRef, ski
 		if err != nil {
 			return nil, err
 		}
-		var n int
-		if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM member_skills WHERE org_id = $1 AND member_id = $2 AND skill_id = $3`,
-			c.OrgID, member, skill).Scan(&n); err != nil {
-			return nil, err
-		}
-		if n > 0 {
-			return nil, nil
-		}
-		if _, err := t.Exec(ctx, `INSERT INTO member_skills (org_id, member_id, skill_id, granted_by, granted_at) VALUES ($1, $2, $3, $4, $5)`,
-			c.OrgID, member, skill, c.MemberID, ms(t.now)); err != nil {
-			return nil, err
-		}
-		return nil, t.recordByCaller("member.skill_granted", member, map[string]any{"skill_id": skill})
+		return nil, grantSkill(t, member, skill)
 	})
 	return err
+}
+
+// grantSkill gives a Member a Skill inside a write, recording member.skill_granted; a Skill the
+// Member has changes nothing.
+func grantSkill(t *tx, member, skill string) error {
+	var n int
+	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM member_skills WHERE org_id = $1 AND member_id = $2 AND skill_id = $3`,
+		t.caller.OrgID, member, skill).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	if _, err := t.Exec(t.ctx, `INSERT INTO member_skills (org_id, member_id, skill_id, granted_by, granted_at) VALUES ($1, $2, $3, $4, $5)`,
+		t.caller.OrgID, member, skill, t.caller.MemberID, ms(t.now)); err != nil {
+		return err
+	}
+	return t.recordByCaller("member.skill_granted", member, map[string]any{"skill_id": skill})
 }
 
 // RevokeSkill takes a Skill away from a Member (admin). Claims held under it are not ended.

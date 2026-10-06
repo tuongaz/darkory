@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -571,7 +572,8 @@ func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note 
 // skill-review and carries a pending proposal publishes it as the Skill's next version, only while
 // the version it was written against is still current and never by its author; completing a
 // Retrospective marks its Feature's unreviewed Observations reviewed by it (ADR 0010). A proposal
-// left pending on the Task is superseded.
+// left pending on the Task is superseded. Completing the last open Task of an open Feature with
+// ship_when_done ships it in the same batch (ADR 0014).
 func (s *Service) Complete(ctx context.Context, c *auth.Caller, ref string, note *string, idem Idem) (Task, error) {
 	var review *SkillProposal
 	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{
@@ -605,6 +607,11 @@ WHERE org_id = @org AND feature_id = @feature AND reviewed_by_task_id IS NULL`, 
 				stmts = append(stmts, nextSeqStmt(c.OrgID), activityStmt(c.OrgID, &c.MemberID, "skill.version_published", p.SkillID,
 					map[string]any{"version": p.BasedOnVersion + 1, "proposal_id": p.ID, "task_id": pre.ID}, now))
 			}
+			ship, err := s.shipWhenDoneStmts(ctx, c, pre, args)
+			if err != nil {
+				return nil, nil, err
+			}
+			stmts = append(stmts, ship...)
 			stmts = append(stmts, statusStmt(args, out.StatusID))
 			return out, stmts, nil
 		},
@@ -619,6 +626,78 @@ WHERE org_id = @org AND feature_id = @feature AND reviewed_by_task_id IS NULL`, 
 		return Task{}, err
 	}
 	return res.(Task), nil
+}
+
+// shipWhenDoneStmts are the statements a Complete batch ends with when the Task's Feature has
+// ship_when_done: when, with the Task done, the Feature is open and holds no open Task, they ship
+// it, recording feature.shipped with ship_when_done in its payload, and file its Retrospective
+// unless it is quick, as ShipFeature does. Whether it ships is decided inside the batch, which
+// holds the counter, so no other write can file or end one of the Feature's Tasks in between.
+// Statements after the ship cannot test its condition again (the Feature is no longer open), so
+// they find the ship in the entry it just recorded: the newest Activity is this Feature's
+// feature.shipped; and those after the Retrospective's own number is taken, in its row.
+func (s *Service) shipWhenDoneStmts(ctx context.Context, c *auth.Caller, pre Task, args map[string]any) ([]store.Stmt, error) {
+	// quick and ship_when_done are set when the Feature is filed and never change.
+	var teamID, title string
+	var quick, ship bool
+	if err := s.store.QueryRow(ctx, `SELECT team_id, title, quick, ship_when_done FROM features WHERE org_id = $1 AND id = $2`,
+		c.OrgID, pre.FeatureID).Scan(&teamID, &title, &quick, &ship); err != nil {
+		return nil, err
+	}
+	if !ship {
+		return nil, nil
+	}
+	payload := map[string]any{"ship_when_done": true}
+	if quick {
+		payload["quick"] = true
+	}
+	shipped, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	a := with(args, map[string]any{"feature": pre.FeatureID, "shipped": string(shipped)})
+	last := `EXISTS (SELECT 1 FROM features sf WHERE sf.org_id = @org AND sf.id = @feature AND sf.state = 'open')
+AND NOT EXISTS (SELECT 1 FROM tasks st WHERE st.org_id = @org AND st.feature_id = @feature AND st.state = 'open')`
+	stmts := []store.Stmt{
+		store.S(`UPDATE organisations SET seq = seq + 1 WHERE id = @org AND `+last, a),
+		store.S(`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at)
+SELECT @org, o.seq, CAST(@member AS TEXT), 'feature.shipped', CAST(@feature AS TEXT), CAST(@shipped AS TEXT), CAST(@now AS BIGINT)
+FROM organisations o WHERE o.id = @org AND `+last, a),
+		store.S(`UPDATE features SET state = 'shipped', ended_at = @now WHERE org_id = @org AND id = @feature AND `+last, a),
+	}
+	if quick {
+		return stmts, nil
+	}
+	retroSkill, err := skillByName(ctx, s.store, c.OrgID, SkillRetro)
+	if err != nil {
+		return nil, err
+	}
+	retroTitle := "Retrospective: " + title
+	titleJSON, err := json.Marshal(retroTitle)
+	if err != nil {
+		return nil, err
+	}
+	a = with(a, map[string]any{"team": teamID, "retro": newID(), "title": retroTitle, "title_json": string(titleJSON), "retro_skill": retroSkill})
+	justShipped := `EXISTS (SELECT 1 FROM activity sa JOIN organisations so ON so.id = sa.org_id AND so.seq = sa.seq
+WHERE sa.org_id = @org AND sa.kind = 'feature.shipped' AND sa.subject_id = @feature)`
+	return append(stmts,
+		store.S(`UPDATE teams SET last_number = last_number + 1 WHERE org_id = @org AND id = @team AND `+justShipped, a),
+		store.S(`INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, description, state, skill_id, filed_by,
+waiting_since, created_at, status_id)
+SELECT CAST(@retro AS TEXT), @org, CAST(@feature AS TEXT), tm.key_prefix || '-' || CAST(tm.last_number AS TEXT), 'retrospective',
+CAST(@title AS TEXT), '', 'open', CAST(@retro_skill AS TEXT), CAST(@member AS TEXT), CAST(@now AS BIGINT), CAST(@now AS BIGINT), `+
+			firstStatusSQL("@org", KindTodo)+`
+FROM teams tm WHERE tm.org_id = @org AND tm.id = @team AND `+justShipped, a),
+		store.S(`INSERT INTO task_workspaces (org_id, task_id, workspace_id, position)
+SELECT @org, rt.id, tm.default_workspace_id, 1 FROM tasks rt JOIN teams tm ON tm.org_id = rt.org_id AND tm.id = @team
+WHERE rt.org_id = @org AND rt.id = @retro AND tm.default_workspace_id IS NOT NULL`, a),
+		store.S(`UPDATE organisations SET seq = seq + 1 WHERE id = @org AND EXISTS (SELECT 1 FROM tasks WHERE org_id = @org AND id = @retro)`, a),
+		store.S(`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at)
+SELECT @org, o.seq, CAST(@member AS TEXT), 'task.filed', rt.id,
+'{"feature_id":"' || rt.feature_id || '","key":"' || rt.display_key || '","kind":"retrospective","skill_id":"' || rt.skill_id ||
+'","status_id":"' || rt.status_id || '","title":' || CAST(@title_json AS TEXT) || '}', CAST(@now AS BIGINT)
+FROM organisations o JOIN tasks rt ON rt.org_id = o.id AND rt.id = @retro WHERE o.id = @org`, a),
+	), nil
 }
 
 // nextSeqStmt takes the next number from the counter inside a batch, for a further Activity

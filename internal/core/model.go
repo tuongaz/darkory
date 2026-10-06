@@ -20,6 +20,26 @@ type Member struct {
 	CreatedAt time.Time
 	// DeactivatedAt is when an admin deactivated the Member; nil while active.
 	DeactivatedAt *time.Time
+	// Agent is how the Runner starts the Member's sessions; nil for humans and for agents it
+	// does not start.
+	Agent *AgentSettings
+}
+
+// AgentSettings are how the Runner starts an agent's sessions (ADR 0013). Command and each of
+// Args are templates: the Runner replaces {session_id}, {model}, {prompt_file}, {mcp_config},
+// {workspace} and {task}.
+type AgentSettings struct {
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Model   string            `json:"model"`
+	Env     map[string]string `json:"env"`
+	// Unattended: the session runs with the agent's permission checks skipped.
+	Unattended bool `json:"unattended"`
+	// Paused: the Runner starts no new session for the agent.
+	Paused bool `json:"paused"`
+	// ProgressFile is the file whose modified time shows progress, for a command other than
+	// Claude Code; empty for none.
+	ProgressFile string `json:"progress_file,omitempty"`
 }
 
 type MemberDetail struct {
@@ -30,10 +50,28 @@ type MemberDetail struct {
 }
 
 type Team struct {
-	ID        string
-	Key       string
-	Name      string
-	CreatedAt time.Time
+	ID   string
+	Key  string
+	Name string
+	// DefaultWorkspaceID is the Workspace a Task filed in the Team names when it names none.
+	DefaultWorkspaceID *string
+	// ShipWhenDone is what a Feature filed in the Team takes when its filer does not say.
+	ShipWhenDone bool
+	CreatedAt    time.Time
+}
+
+// Workspace is a place a session works in, named on the Install (ADR 0013). A git Workspace is
+// a repository at Path on the machine that runs the Install.
+type Workspace struct {
+	ID   string
+	Name string
+	// Kind is git.
+	Kind string
+	Path string
+	// Mode is plain or pull_request.
+	Mode          string
+	DefaultBranch string
+	CreatedAt     time.Time
 }
 
 type TeamDetail struct {
@@ -75,10 +113,14 @@ type Feature struct {
 	State                   string
 	Rank                    int64
 	FromRetrospectiveTaskID *string
-	FiledBy                 string
-	CreatedAt               time.Time
-	EndedAt                 *time.Time
-	TaskCounts              TaskCounts
+	// Quick: filed with its one Task and no Break down; it has no Retrospective (ADR 0014).
+	Quick bool
+	// ShipWhenDone: it ships itself when its last open Task is completed.
+	ShipWhenDone bool
+	FiledBy      string
+	CreatedAt    time.Time
+	EndedAt      *time.Time
+	TaskCounts   TaskCounts
 }
 
 // TaskCounts counts a Feature's Tasks by state; Claimed counts the open ones with a live Claim.
@@ -108,6 +150,8 @@ type Task struct {
 	Blocked   bool
 	// OpenBlockers are the open Tasks blocking this one.
 	OpenBlockers []TaskBrief
+	// WorkspaceIDs are the Workspaces the Task names, in the order named.
+	WorkspaceIDs []string
 	FiledBy      string
 	WaitingSince time.Time
 	CreatedAt    time.Time
@@ -151,8 +195,10 @@ type Claim struct {
 type TaskDetail struct {
 	Task Task
 	// Status is the Task's Status.
-	Status       Status
-	Feature      Feature
+	Status  Status
+	Feature Feature
+	// Workspaces are the Workspaces the Task names, in the order of Task.WorkspaceIDs.
+	Workspaces   []Workspace
 	Claims       []Claim
 	Notes        []Note
 	Evidence     []Evidence

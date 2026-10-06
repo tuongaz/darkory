@@ -12,7 +12,7 @@ import (
 )
 
 // activityKind matches a kind written as a literal in the core's source, in Go or in SQL.
-var activityKind = regexp.MustCompile(`["'](feature|task|skill|member|team|token|session|login_link|statuses)\.([a-z_]+)["']`)
+var activityKind = regexp.MustCompile(`["'](feature|task|skill|member|team|token|session|login_link|statuses|workspace)\.([a-z_]+)["']`)
 
 // Every kind of Activity the core writes is listed in core.ActivityKinds, which the API's
 // ActivityKind enum mirrors (internal/server checks that), and its subject type is listed too.

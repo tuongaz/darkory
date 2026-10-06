@@ -18,15 +18,16 @@ var ActivityKinds = []string{
 	"statuses.changed",
 	"skill.created", "skill.version_published",
 	"member.created", "member.updated", "member.manager_set", "member.manager_cleared", "member.skill_granted", "member.skill_revoked",
-	"member.deactivated", "member.reactivated",
-	"team.created", "team.member_added", "team.member_removed",
+	"member.deactivated", "member.reactivated", "member.agent_changed",
+	"team.created", "team.changed", "team.member_added", "team.member_removed",
+	"workspace.added", "workspace.changed", "workspace.removed",
 	"token.issued", "token.revoked",
 	"session.closed",
 	"login_link.issued", "login_link.redeemed",
 }
 
 // SubjectTypes lists the kinds of record an Activity entry can be about.
-var SubjectTypes = []string{"feature", "task", "skill", "member", "team", "token", "session", "login_link", "statuses"}
+var SubjectTypes = []string{"feature", "task", "skill", "member", "team", "token", "session", "login_link", "statuses", "workspace"}
 
 // ActivityQuery picks a page of Activity: the entries numbered above After and below Before
 // (zero for no bound), at most Limit of them. With Before the page is the entries closest below
