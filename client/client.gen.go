@@ -914,7 +914,7 @@ type FileFeatureBody struct {
 	Team  string `json:"team"`
 	Title string `json:"title"`
 
-	// Workspaces A quick Feature's only. Workspace ids or names its one Task names; default the Team's default.
+	// Workspaces A quick Feature's only. Workspace ids or names its one Task names; default the Team's default Workspace.
 	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
@@ -939,8 +939,9 @@ type FileTaskBody struct {
 	Status *string `json:"status,omitempty"`
 	Title  string  `json:"title"`
 
-	// Workspaces Workspace ids or names the Task names: where a session works it. Defaults to its
-	// Feature's Team's default Workspace, or none when the Team has none.
+	// Workspaces Workspace ids or names the Task names: where a session works it. Left out, the Task
+	// names its Feature's Team's default Workspace, or none when the Team has none; an
+	// empty list names none.
 	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 

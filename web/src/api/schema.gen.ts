@@ -1801,7 +1801,7 @@ export interface components {
             quick?: boolean;
             /** @description A quick Feature's only. Skill id or name its one Task needs. */
             skill?: string;
-            /** @description A quick Feature's only. Workspace ids or names its one Task names; default the Team's default. */
+            /** @description A quick Feature's only. Workspace ids or names its one Task names; default the Team's default Workspace. */
             workspaces?: string[];
             /** @description Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature. */
             ship_when_done?: boolean;
@@ -1991,8 +1991,9 @@ export interface components {
              */
             status?: string;
             /**
-             * @description Workspace ids or names the Task names: where a session works it. Defaults to its
-             *     Feature's Team's default Workspace, or none when the Team has none.
+             * @description Workspace ids or names the Task names: where a session works it. Left out, the Task
+             *     names its Feature's Team's default Workspace, or none when the Team has none; an
+             *     empty list names none.
              */
             workspaces?: string[];
         };

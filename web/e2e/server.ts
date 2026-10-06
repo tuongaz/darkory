@@ -24,7 +24,8 @@ export default async function startServer(): Promise<() => Promise<void>> {
   const env = { ...process.env, DARKORY_NO_UPDATE_CHECK: "1" };
 
   execFileSync("go", ["build", "-o", exe, "./cmd/darkory"], { cwd: repo, stdio: "inherit", env });
-  const init = execFileSync(exe, ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada"], { env, stdio: "pipe" });
+  // --no-agents: the specs start from an Install with no Team, as one made outside the roster is.
+  const init = execFileSync(exe, ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada", "--no-agents"], { env, stdio: "pipe" });
   // ada's token, which init prints once: a spec that runs after the startup link is used signs in
   // by asking /v1 for a login link of its own.
   process.env.DARKORY_E2E_ADMIN_TOKEN = /dk_\S+/.exec(init.toString())?.[0] ?? "";

@@ -52,7 +52,8 @@ type AgentChange struct {
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
 
-// template is a command, argument or path template: printable, on one line, bounded.
+// validTemplate refuses a command, argument or path template that is empty (unless empty may
+// be), longer than max, or not on one line.
 func validTemplate(what, v string, max int, empty bool) error {
 	if (!empty && strings.TrimSpace(v) == "") || utf8.RuneCountInString(v) > max || strings.ContainsAny(v, "\x00\n\r") {
 		return refuse(CodeInvalid, "%s is 1 to %d characters on one line", what, max)

@@ -81,3 +81,17 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 ## Not now
 
 Allowlist permissions (B/C), workers on other machines (the terminal relay and token hand-off), Workspace kinds other than git, templates and recurrence, due dates, Task forms, Clients, Cloud.
+
+## Found while building
+
+### R0
+
+- **Workspace required.** The lead's brief said a Task naming no Workspace in a Team with no default is `invalid`; read literally that refuses all filing on every Install today and in TestBots. Built permissively (decisions.md): such a Task names none, `workspaces: []` names none on purpose, and only a quick Feature with no Workspace to name is refused. The Runner (R1) must decide what a claimed Task with no Workspace means: a session in an empty directory, or a release with a Note.
+- **`darkory attach <task>`** (R2, the terminal) collides with the existing `darkory attach <task> <file>` that attaches Evidence. Suggest `darkory sessions join <task>`.
+- **`darkory agents`** (the Runner loop, R1) sits one letter from `darkory agent set|list` (the settings, R0). Consider `darkory runner` for the loop.
+- **`unattended` and `--dangerously-skip-permissions`.** The default args carry the flag, so `unattended: false` changes nothing by itself. R1 should drop the flag when `unattended` is false, or add an `{unattended}` placeholder.
+- **A Break down completed with nothing filed** ships a ship-when-done Feature at once, and files its Retrospective: the Break down is its last open Task. The planner's exit rules should say to file the Tasks before completing.
+- **No MCP `file_feature`.** There is none to give `quick` and `ship_when_done`; an agent files Features through the CLI or `/v1`.
+- **`init` seeds when run inside a repository**, so `make dev-init` on a fresh `.dev` now makes Team MAIN, a Workspace pointing at the checkout, and four agents with token files under `.dev/agents/`. An existing `.dev` Install is migrated by `serve` (SQLite migrates at start) and gets no roster.
+- **Generated names.** oapi-codegen spells `workspace_ids` as `WorkspaceIds` in Go; the other id fields keep `ID`.
+- **The Runner's Activity** (`task.session_started`, `task.session_ended`, `task.session_joined`, `task.merged`, `feature.branch_created`) is not in the spec yet; R1 and R2 add the kinds they write, with their payloads.
