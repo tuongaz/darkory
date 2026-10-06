@@ -135,6 +135,13 @@ describe("the Agents page", () => {
     const lapses = within(body[2]).getAllByRole("cell")[5];
     expect(lapses).toHaveTextContent("1WEB-5");
     expect(await within(body[1]).findByText("No Session")).toBeInTheDocument();
+    // Each dimmed row says why it is idle, once, under "Nothing held": no Session, or the lapse and when.
+    const holds = (row: HTMLElement) => within(row).getAllByRole("cell")[1];
+    const session = (row: HTMLElement) => within(row).getAllByRole("cell")[3];
+    expect(holds(body[1])).toHaveTextContent(/^Nothing heldNo Session$/);
+    expect(session(body[1])).toHaveTextContent(/^$/);
+    expect(holds(body[2])).toHaveTextContent(/^Nothing heldWEB-5Lapsed \d\d:\d\d$/);
+    expect(session(body[2])).toHaveTextContent("No Session");
     expect(screen.getByRole("link", { name: "New agent" })).toHaveAttribute("href", "/admin/members?new=1&kind=agent");
   });
 

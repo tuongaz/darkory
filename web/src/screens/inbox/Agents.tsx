@@ -1,5 +1,5 @@
 import { BotIcon, EllipsisIcon, PlusIcon } from "lucide-react";
-import { useCallback, type MouseEvent } from "react";
+import { useCallback, type MouseEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { Activity, Feature, Member, MemberDetail } from "@/api/client";
 import { useDirectory, useOpenTasks } from "@/api/queries";
@@ -188,8 +188,21 @@ function AgentTableRow({
   const idle = !claim;
   const manager = agent.manager_id ? members.get(agent.manager_id) : undefined;
   const actions = agentActions({ agent, held, me, members, features, sessions });
-  // An idle agent's last Claim, when it ended: the reason it is idle.
+  // Why an idle agent holds nothing, said once: deactivated, how its last Claim ended, or no Session open.
   const ended = idle && last && last.kind !== "task.claimed" ? last : undefined;
+  const endedKey = ended ? taskKey(ended.subject_id) : undefined;
+  const noSession = admin && sessions?.length === 0;
+  let why: ReactNode = null;
+  if (idle && agent.deactivated_at) why = <Pill tone="dropped">Deactivated</Pill>;
+  else if (ended && endedKey) {
+    why = (
+      <>
+        <Key to={taskOverAgents(endedKey)}>{endedKey}</Key>
+        <EndPill end={ended} when />
+      </>
+    );
+  } else if (idle && noSession) why = <Pill tone="dropped">No Session</Pill>;
+  const saidNoSession = idle && noSession && !agent.deactivated_at && !(ended && endedKey);
   const lapsedKeys = [...new Set(lapses.map((l) => taskKey(l.subject_id)).filter((k): k is string => !!k))];
 
   const open = (e: MouseEvent) => {
@@ -245,20 +258,14 @@ function AgentTableRow({
         ) : (
           <span className="flex min-w-0 flex-col gap-0.5">
             <span>Nothing held</span>
-            {ended && taskKey(ended.subject_id) && (
-              <small className="flex min-w-0 items-center gap-1.5 text-xs">
-                <Key to={taskOverAgents(taskKey(ended.subject_id)!)}>{taskKey(ended.subject_id)!}</Key>
-                <EndPill end={ended} />
-              </small>
-            )}
+            {/* A dimmed row says why, in one pill. */}
+            {why && <small className="flex min-w-0 items-center gap-1.5 text-xs">{why}</small>}
           </span>
         )}
       </td>
       <td>{claim && <HeartbeatMeter claim={claim} className="text-foreground" />}</td>
       <td>
-        {agent.deactivated_at ? (
-          <Pill tone="dropped">Deactivated</Pill>
-        ) : claim ? (
+        {agent.deactivated_at ? null : claim ? (
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate font-mono text-xs text-foreground">{claim.session_id}</span>
             {claim.model_label && <small className="truncate font-mono text-xs text-muted-foreground">{claim.model_label}</small>}
@@ -269,7 +276,7 @@ function AgentTableRow({
             {sessions.length > 1 && <small className="text-xs">+{sessions.length - 1} Sessions</small>}
           </span>
         ) : (
-          (!admin || sessions) && <Pill tone="dropped">No Session</Pill>
+          noSession && !saidNoSession && <Pill tone="dropped">No Session</Pill>
         )}
       </td>
       <td>

@@ -37,8 +37,13 @@ const claimEndWords: Record<string, string> = {
   member_deactivated: "Deactivated",
 };
 
-/** How a Claim ended, as a pill: Completed, Lapsed, Handed over, Released, Taken back, Dropped. */
-export function EndPill({ end }: { end: Activity }) {
+const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+/**
+ * How a Claim ended, as a pill: Completed, Lapsed, Handed over, Released, Taken back, Dropped.
+ * `when` adds the time of a lapse ("Lapsed 22:18"), where the row gives no other time.
+ */
+export function EndPill({ end, when }: { end: Activity; when?: boolean }) {
   switch (end.kind) {
     case "task.completed":
       return <Pill tone="done">Completed</Pill>;
@@ -46,7 +51,7 @@ export function EndPill({ end }: { end: Activity }) {
       return (
         <Pill tone="dropped">
           <HeartPulseIcon className="size-3" aria-hidden />
-          Lapsed
+          Lapsed{when && <time dateTime={end.at}> {clock.format(new Date(end.at))}</time>}
         </Pill>
       );
     case "task.handed_over":
