@@ -165,6 +165,41 @@ func (s *Service) SetAgentSettings(ctx context.Context, c *auth.Caller, ref stri
 	return res.(Member), nil
 }
 
+// ClearAgentSettings removes an agent's settings (admin), so the Runner starts no session for it:
+// it works through its own tokens only. An agent with none changes nothing; a human has none.
+func (s *Service) ClearAgentSettings(ctx context.Context, c *auth.Caller, ref string, idem Idem) (Member, error) {
+	if err := mustAdmin(c); err != nil {
+		return Member{}, err
+	}
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		id, err := resolveMember(ctx, t, c.OrgID, ref)
+		if err != nil {
+			return nil, err
+		}
+		m, err := getMember(ctx, t, c.OrgID, id)
+		if err != nil {
+			return nil, err
+		}
+		if m.Kind != "agent" {
+			return nil, refuse(CodeInvalid, "%s is a human; only an agent has agent settings", m.Name)
+		}
+		if m.Agent == nil {
+			return m, nil
+		}
+		if _, err := t.Exec(ctx, `UPDATE members SET agent = NULL, updated_at = $1 WHERE org_id = $2 AND id = $3`, ms(t.now), c.OrgID, id); err != nil {
+			return nil, err
+		}
+		if err := t.recordByCaller("member.agent_changed", id, map[string]any{"cleared": true}); err != nil {
+			return nil, err
+		}
+		return getMember(ctx, t, c.OrgID, id)
+	})
+	if err != nil {
+		return Member{}, err
+	}
+	return res.(Member), nil
+}
+
 // agentChanges says what differs between two settings, as member.agent_changed records it: the
 // new value of each field, and for env only the names of its variables.
 func agentChanges(was, next AgentSettings) map[string]any {

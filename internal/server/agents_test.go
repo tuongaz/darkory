@@ -152,6 +152,17 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 		if want := []string{"workspace.added:workspace", "workspace.changed:workspace", "team.changed:team", "member.agent_changed:member"}; !slices.Equal(seen, want) {
 			t.Fatalf("Activity %v, want %v", seen, want)
 		}
+		got(bob.ClearAgentSettingsWithResponse(ctx, "bob", &client.ClearAgentSettingsParams{})).want(t, http.StatusForbidden)
+		got(ada.ClearAgentSettingsWithResponse(ctx, "ada", &client.ClearAgentSettingsParams{})).want(t, http.StatusBadRequest)
+		cleared := got(ada.ClearAgentSettingsWithResponse(ctx, "bob", &client.ClearAgentSettingsParams{IdempotencyKey: ptrStr("clear-bob")})).
+			want(t, http.StatusOK)
+		if cleared.JSON200.Agent != nil || strings.Contains(string(cleared.Body), `"agent":`) {
+			t.Fatalf("cleared: %s", cleared.Body)
+		}
+		inUse := got(ada.RemoveWorkspaceWithResponse(ctx, "web", &client.RemoveWorkspaceParams{})).want(t, http.StatusConflict)
+		if !strings.Contains(inUse.JSONDefault.Message, " Tasks name Workspace web;") {
+			t.Fatalf("the refusal reads %q", inUse.JSONDefault.Message)
+		}
 	})
 }
 

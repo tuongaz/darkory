@@ -1786,6 +1786,13 @@ type UpdateMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ClearAgentSettingsParams defines parameters for ClearAgentSettings.
+type ClearAgentSettingsParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // SetAgentSettingsParams defines parameters for SetAgentSettings.
 type SetAgentSettingsParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2265,6 +2272,9 @@ type ServerInterface interface {
 	// UpdateMember Change a Member's name, email or admin mark (admin)
 	// (PATCH /v1/members/{member})
 	UpdateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params UpdateMemberParams)
+	// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no session for it (admin)
+	// (DELETE /v1/members/{member}/agent)
+	ClearAgentSettings(w http.ResponseWriter, r *http.Request, member MemberRef, params ClearAgentSettingsParams)
 	// SetAgentSettings Set how the Runner starts an agent Member's sessions (admin)
 	// (PATCH /v1/members/{member}/agent)
 	SetAgentSettings(w http.ResponseWriter, r *http.Request, member MemberRef, params SetAgentSettingsParams)
@@ -3398,6 +3408,56 @@ func (siw *ServerInterfaceWrapper) UpdateMember(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateMember(w, r, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClearAgentSettings operation middleware
+func (siw *ServerInterfaceWrapper) ClearAgentSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ClearAgentSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClearAgentSettings(w, r, member, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6022,6 +6082,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members", wrapper.CreateMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/members/{member}", wrapper.GetMember)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/members/{member}", wrapper.UpdateMember)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/members/{member}/agent", wrapper.ClearAgentSettings)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/members/{member}/agent", wrapper.SetAgentSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/deactivate", wrapper.DeactivateMember)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/reactivate", wrapper.ReactivateMember)

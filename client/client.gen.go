@@ -1789,6 +1789,13 @@ type UpdateMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ClearAgentSettingsParams defines parameters for ClearAgentSettings.
+type ClearAgentSettingsParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // SetAgentSettingsParams defines parameters for SetAgentSettings.
 type SetAgentSettingsParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2528,6 +2535,16 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMember(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no session for it (admin)
+	//
+	// The agent goes back to working through its own tokens only, as an agent the Runner does
+	// not start; a session running carries on until its Claim ends. Records
+	// `member.agent_changed` with `cleared: true` in its payload; an agent with no settings
+	// changes nothing. Errors: `forbidden` (not an admin), `invalid` (a human Member).
+	//
+	// Corresponds with DELETE /v1/members/{member}/agent (the `ClearAgentSettings` operationId).
+	ClearAgentSettings(ctx context.Context, member MemberRef, params *ClearAgentSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SetAgentSettingsWithBody Set how the Runner starts an agent Member's sessions (admin)
 	//
@@ -3825,6 +3842,26 @@ func (c *Client) UpdateMemberWithBody(ctx context.Context, member MemberRef, par
 // Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 func (c *Client) UpdateMember(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateMemberRequest(c.Server, member, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no session for it (admin)
+//
+// The agent goes back to working through its own tokens only, as an agent the Runner does
+// not start; a session running carries on until its Claim ends. Records
+// `member.agent_changed` with `cleared: true` in its payload; an agent with no settings
+// changes nothing. Errors: `forbidden` (not an admin), `invalid` (a human Member).
+//
+// Corresponds with DELETE /v1/members/{member}/agent (the `ClearAgentSettings` operationId).
+func (c *Client) ClearAgentSettings(ctx context.Context, member MemberRef, params *ClearAgentSettingsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewClearAgentSettingsRequest(c.Server, member, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6551,6 +6588,55 @@ func NewUpdateMemberRequestWithBody(server string, member MemberRef, params *Upd
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewClearAgentSettingsRequest constructs an http.Request for the ClearAgentSettings method
+func NewClearAgentSettingsRequest(server string, member MemberRef, params *ClearAgentSettingsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/members/%s/agent", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	if params != nil {
 
@@ -9847,6 +9933,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMemberWithResponse(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberResponse, error)
 
+	// ClearAgentSettingsWithResponse Clear an agent Member's settings, so the Runner starts no session for it (admin)
+	//
+	// The agent goes back to working through its own tokens only, as an agent the Runner does
+	// not start; a session running carries on until its Claim ends. Records
+	// `member.agent_changed` with `cleared: true` in its payload; an agent with no settings
+	// changes nothing. Errors: `forbidden` (not an admin), `invalid` (a human Member).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/members/{member}/agent (the `ClearAgentSettings` operationId).
+	ClearAgentSettingsWithResponse(ctx context.Context, member MemberRef, params *ClearAgentSettingsParams, reqEditors ...RequestEditorFn) (*ClearAgentSettingsResponse, error)
+
 	// SetAgentSettingsWithBodyWithResponse Set how the Runner starts an agent Member's sessions (admin)
 	//
 	// Changes the fields given and keeps the others. An agent with no settings yet starts from
@@ -11728,6 +11826,54 @@ func (r UpdateMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdateMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ClearAgentSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Member
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ClearAgentSettingsResponse) GetJSON200() *Member {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ClearAgentSettingsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ClearAgentSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ClearAgentSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ClearAgentSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ClearAgentSettingsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14684,6 +14830,24 @@ func (c *ClientWithResponses) UpdateMemberWithResponse(ctx context.Context, memb
 	return ParseUpdateMemberResponse(rsp)
 }
 
+// ClearAgentSettingsWithResponse Clear an agent Member's settings, so the Runner starts no session for it (admin)
+//
+// The agent goes back to working through its own tokens only, as an agent the Runner does
+// not start; a session running carries on until its Claim ends. Records
+// `member.agent_changed` with `cleared: true` in its payload; an agent with no settings
+// changes nothing. Errors: `forbidden` (not an admin), `invalid` (a human Member).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/members/{member}/agent (the `ClearAgentSettings` operationId).
+func (c *ClientWithResponses) ClearAgentSettingsWithResponse(ctx context.Context, member MemberRef, params *ClearAgentSettingsParams, reqEditors ...RequestEditorFn) (*ClearAgentSettingsResponse, error) {
+	rsp, err := c.ClearAgentSettings(ctx, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseClearAgentSettingsResponse(rsp)
+}
+
 // SetAgentSettingsWithBodyWithResponse Set how the Runner starts an agent Member's sessions (admin)
 //
 // Changes the fields given and keeps the others. An agent with no settings yet starts from
@@ -16708,6 +16872,39 @@ func ParseUpdateMemberResponse(rsp *http.Response) (*UpdateMemberResponse, error
 	}
 
 	response := &UpdateMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Member
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseClearAgentSettingsResponse parses an HTTP response from a ClearAgentSettingsWithResponse call
+func ParseClearAgentSettingsResponse(rsp *http.Response) (*ClearAgentSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ClearAgentSettingsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

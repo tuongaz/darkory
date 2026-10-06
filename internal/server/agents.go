@@ -88,6 +88,16 @@ func (s *Server) SetAgentSettings(w http.ResponseWriter, r *http.Request, member
 	s.respond(w, r, out, m, err)
 }
 
+func (s *Server) ClearAgentSettings(w http.ResponseWriter, r *http.Request, member gen.MemberRef, params gen.ClearAgentSettingsParams) {
+	out := as(http.StatusOK, func(m core.Member) any { return memberOut(m) })
+	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, out)
+	if !ok {
+		return
+	}
+	m, err := s.core.ClearAgentSettings(r.Context(), c, member, idem)
+	s.respond(w, r, out, m, err)
+}
+
 // noRunner answers a /v1/runner request when no Runner is attached.
 func noRunner(w http.ResponseWriter) {
 	writeError(w, http.StatusConflict, gen.ErrorCodeNoRunner, "no Runner is attached to this server; it runs no agent sessions (serve --agents=off, or darkory agents runs them elsewhere)")

@@ -18,6 +18,7 @@ var agentCommands = []command{
 	{path: "workspace remove", args: "<workspace>", short: "remove a Workspace no Task names (admin)", run: cmdWorkspaceRemove},
 	{path: "team set", args: "<team> [--name n] [--default-workspace ws|\"\"] [--ship-when-done=true|false]", short: "change a Team's name and defaults (admin)", run: cmdTeamSet},
 	{path: "agent set", args: "<member> [--command c] [--arg a]… [--model m] [--env K=V]… [--paused] [--unattended] [--progress-file f]", short: "set how the Runner starts an agent's sessions (admin)", run: cmdAgentSet},
+	{path: "agent clear", args: "<member>", short: "clear an agent's settings, so the Runner starts no session for it (admin)", run: cmdAgentClear},
 	{path: "agent list", short: "list the agents and how the Runner starts them", run: cmdAgentList},
 	{path: "sessions", short: "list the agent sessions the Runner runs now", run: cmdSessions},
 	{path: "sessions nudge", args: "<task>", short: "ask the agent in a Task's session to end the Task (admin)", run: cmdSessionsNudge},
@@ -291,6 +292,22 @@ func (c *call) printAgent(w io.Writer, m client.Member) {
 	if a.ProgressFile != nil {
 		fmt.Fprintf(w, "  progress file %s\n", one(*a.ProgressFile))
 	}
+}
+
+func cmdAgentClear(c *call) error {
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.ClearAgentSettingsWithResponse(c.ctx, args[0], &client.ClearAgentSettingsParams{})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.printAgent(w, *res.JSON200) })
 }
 
 func cmdAgentList(c *call) error {

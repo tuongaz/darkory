@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"encoding/json"
+	"strings"
 	"errors"
 	"slices"
 	"testing"
@@ -128,6 +129,9 @@ func TestWorkspaces(t *testing.T) {
 		}
 		err = f.svc.RemoveWorkspace(ctx, f.admin, "web", core.Idem{})
 		wantCode(t, err, core.CodeConflict)
+		if !strings.HasPrefix(err.Error(), "conflict: 1 Task names Workspace web;") {
+			t.Fatalf("the refusal reads %q", err)
+		}
 		err = f.svc.RemoveWorkspace(ctx, lead, "api", core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
 
@@ -523,6 +527,32 @@ func TestAgentSettings(t *testing.T) {
 		listed, err := f.svc.ListMembers(ctx, builder, nil, ptrStr("agent"))
 		if err != nil || listed[0].Agent == nil || !listed[0].Agent.Paused {
 			t.Fatalf("listed: %+v %v", listed, err)
+		}
+
+		// Cleared: the Runner starts nothing for it; clearing again writes nothing.
+		_, err = f.svc.ClearAgentSettings(ctx, builder, "builder", core.Idem{})
+		wantCode(t, err, core.CodeForbidden)
+		_, err = f.svc.ClearAgentSettings(ctx, f.admin, "ada", core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
+		cleared, err := f.svc.ClearAgentSettings(ctx, f.admin, "builder", core.Idem{})
+		if err != nil || cleared.Agent != nil {
+			t.Fatalf("cleared: %+v %v", cleared.Agent, err)
+		}
+		entries := f.activity("member.agent_changed")
+		if last := entries[len(entries)-1]; len(last.Payload) != 1 || last.Payload["cleared"] != true || last.SubjectID != m.ID {
+			t.Fatalf("the clearing entry: %+v", last)
+		}
+		before = f.checkActivity()
+		if again, err := f.svc.ClearAgentSettings(ctx, f.admin, "builder", core.Idem{}); err != nil || again.Agent != nil {
+			t.Fatalf("cleared again: %+v %v", again.Agent, err)
+		}
+		if n := f.checkActivity(); n != before {
+			t.Fatalf("clearing no settings wrote %d entries", n-before)
+		}
+		// Set again, it starts from the defaults.
+		if m, err = f.svc.SetAgentSettings(ctx, f.admin, "builder", core.AgentChange{Paused: ptrBool(true)}, core.Idem{}); err != nil ||
+			m.Agent.Model != core.DefaultAgentModel || len(m.Agent.Env) != 0 {
+			t.Fatalf("set after clearing: %+v %v", m.Agent, err)
 		}
 
 		for _, bad := range []core.AgentChange{

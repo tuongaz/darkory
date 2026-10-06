@@ -276,7 +276,14 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Clear an agent Member's settings, so the Runner starts no session for it (admin)
+         * @description The agent goes back to working through its own tokens only, as an agent the Runner does
+         *     not start; a session running carries on until its Claim ends. Records
+         *     `member.agent_changed` with `cleared: true` in its payload; an agent with no settings
+         *     changes nothing. Errors: `forbidden` (not an admin), `invalid` (a human Member).
+         */
+        delete: operations["clearAgentSettings"];
         options?: never;
         head?: never;
         /**
@@ -2671,6 +2678,36 @@ export interface operations {
         };
         responses: {
             /** @description The Member. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearAgentSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Member id or name. */
+                member: components["parameters"]["MemberRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Member, without settings. */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -128,6 +128,10 @@ func TestAgentCommands(t *testing.T) {
 		if !strings.HasPrefix(out, "bob              ready       claude-opus-5-5      claude -p {prompt_file}\n") || strings.Contains(out, "ada") {
 			t.Fatalf("agent list:\n%s", out)
 		}
+		if out := ada.ok("agent", "clear", "bob"); out != "bob              not started by the Runner\n" {
+			t.Fatalf("agent clear:\n%q", out)
+		}
+		bob.fails(ExitRefused, "agent", "clear", "bob")
 		if res := ada.fails(ExitFailed, "agent", "set", "ada", "--model", "x"); !strings.Contains(res.stderr, "human") {
 			t.Fatalf("agent set on a human: %s", res.stderr)
 		}

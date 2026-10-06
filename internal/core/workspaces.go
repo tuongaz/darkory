@@ -229,7 +229,10 @@ func (s *Service) RemoveWorkspace(ctx context.Context, c *auth.Caller, ref strin
 		if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM task_workspaces WHERE org_id = $1 AND workspace_id = $2`, c.OrgID, id).Scan(&n); err != nil {
 			return nil, err
 		}
-		if n > 0 {
+		switch {
+		case n == 1:
+			return nil, refuse(CodeConflict, "1 Task names Workspace %s; the record keeps where its work was done", w.Name)
+		case n > 1:
 			return nil, refuse(CodeConflict, "%d Tasks name Workspace %s; the record keeps where their work was done", n, w.Name)
 		}
 		teams, err := collect(ctx, t, func(row interface{ Scan(...any) error }) (string, error) {

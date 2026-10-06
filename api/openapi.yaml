@@ -401,6 +401,25 @@ paths:
             application/json:
               schema: {$ref: "#/components/schemas/Member"}
         default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: clearAgentSettings
+      tags: [members]
+      summary: Clear an agent Member's settings, so the Runner starts no session for it (admin)
+      description: |
+        The agent goes back to working through its own tokens only, as an agent the Runner does
+        not start; a session running carries on until its Claim ends. Records
+        `member.agent_changed` with `cleared: true` in its payload; an agent with no settings
+        changes nothing. Errors: `forbidden` (not an admin), `invalid` (a human Member).
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "200":
+          description: The Member, without settings.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Member"}
+        default: {$ref: "#/components/responses/Error"}
 
   /v1/members/{member}/deactivate:
     post:
