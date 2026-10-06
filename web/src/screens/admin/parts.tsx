@@ -1,18 +1,12 @@
-import { AlertTriangleIcon, CheckIcon, ChevronDownIcon, CopyIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
-import { useId, useRef, useState, type ReactNode } from "react";
+import { AlertTriangleIcon, CheckIcon, CopyIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
 import type { Member } from "@/api/client";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -150,69 +144,6 @@ export function Picker({
         </Command>
       </PopoverContent>
     </Popover>
-  );
-}
-
-/**
- * One value out of a few (kit `.select`): a button reading the value, opening the choices as a
- * menu. Radix's Select would do, but it writes an inline <style> the Install's CSP refuses.
- * `label` names it for screen readers, before its value, when no <label> does.
- */
-export function Choice<T extends string>({
-  id,
-  label,
-  value,
-  options,
-  onChange,
-  placeholder,
-  disabled,
-  className,
-}: {
-  id?: string;
-  label?: string;
-  value: T | "";
-  options: { value: T; label: ReactNode }[];
-  onChange: (value: T) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  className?: string;
-}) {
-  const current = options.find((o) => o.value === value);
-  const uid = useId();
-  return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild disabled={disabled}>
-        <button
-          id={id}
-          type="button"
-          // Named by `label` then the value, as a select reads.
-          aria-labelledby={label ? `${uid}-label ${uid}-value` : undefined}
-          className={cn(
-            "flex h-8 min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-left shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=open]:border-ring dark:bg-input/30 dark:hover:bg-input/50",
-            className,
-          )}
-        >
-          {label && (
-            <span id={`${uid}-label`} className="sr-only">
-              {label}
-            </span>
-          )}
-          <span id={`${uid}-value`} className="flex min-w-0 items-center gap-2 truncate">
-            {current ? current.label : <span className="text-muted-foreground">{placeholder}</span>}
-          </span>
-          <ChevronDownIcon className="size-4 flex-none opacity-50" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-(--radix-dropdown-menu-trigger-width)">
-        <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
-          {options.map((o) => (
-            <DropdownMenuRadioItem key={o.value} value={o.value}>
-              {o.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

@@ -173,8 +173,8 @@ describe("Workflow", () => {
     const user = userEvent.setup();
     const api = mockApi(routes());
     renderApp("/admin/workflow");
-    await user.click(await screen.findByRole("button", { name: "Kind of Todo Todo" }));
-    await user.click(await screen.findByRole("menuitemradio", { name: "Backlog" }));
+    await user.click(await screen.findByRole("combobox", { name: "Kind of Todo" }));
+    await user.click(await screen.findByRole("option", { name: "Backlog" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("invalid The list needs a Todo Status.");
     expect(api.calls.some((c) => c.method === "PUT")).toBe(false);
   });
@@ -188,7 +188,7 @@ describe("Workflow", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog", { name: "Delete In review?" });
     expect(dialog).toHaveTextContent("2 Tasks to");
-    expect(within(dialog).getByRole("button", { name: "Status that receives them In progress" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: "Status that receives them" })).toHaveTextContent("In progress");
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "PUT")).toBe(true));
     const put = api.calls.find((c) => c.method === "PUT")!.body as { items: { id?: string }[]; moves: Record<string, string> };
