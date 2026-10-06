@@ -83,3 +83,14 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 ## Not now
 
 Allowlist permissions (B/C), workers on other machines (the terminal relay and token hand-off), Workspace kinds other than git, templates and recurrence, due dates, Task forms, Clients, Cloud.
+
+## Found while building
+
+### R3 — Workspaces, agent settings and the switches in the web (2026-10-07)
+
+- `GET /v1/tasks` has no `workspace` filter, so the Workspaces table's counts and the Remove pre-check read every Task in the browser.
+- `Feature` carries no `workspaces`; whether a Feature has a feature branch is worked out from its Tasks' Workspaces.
+- `TaskDetail` carries no `branch`; the web copies the Runner's slug rule (`web/src/lib/branch.ts`) and will drift if the Runner's changes — a `branch` on the detail would fix it.
+- No endpoint returns the Install's default agent command; New Member relies on the PATCH filling in defaults.
+- New Member gives every agent settings, and `/v1` had no way to take them away; `DELETE /v1/members/{member}/agent` was added for it, and New Member gained a "Run with the Runner" switch (default on).
+- With the Runner on by default, the Playwright harness must start `serve --runner=off`, or every agent the specs create gets a session.
