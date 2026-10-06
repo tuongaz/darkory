@@ -66,8 +66,8 @@ function AdminTabs() {
     { to: "/admin/workspaces", label: "Workspaces", n: workspaces.data?.length },
   ];
   return (
-    // On a phone the five tabs fit the width: tighter padding, and they scroll inside the bar if
-    // the counts ever grow past it.
+    // On a phone the five tabs fit the width: tighter padding and no counts, and they scroll
+    // inside the bar if the names ever grow past it.
     <nav aria-label="Admin" className="flex flex-none gap-0.5 overflow-x-auto border-b px-2 sm:px-4">
       {tabs.map((t) => (
         <NavLink
@@ -81,7 +81,7 @@ function AdminTabs() {
           }
         >
           {t.label}
-          {t.n !== undefined && <span className="text-2xs text-muted-foreground tabular-nums">{t.n}</span>}
+          {t.n !== undefined && <span className="hidden text-2xs text-muted-foreground tabular-nums sm:inline">{t.n}</span>}
         </NavLink>
       ))}
     </nav>

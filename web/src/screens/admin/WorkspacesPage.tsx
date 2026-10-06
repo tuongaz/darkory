@@ -224,7 +224,7 @@ function InlineText({
             setEditing(false);
           }
         }}
-        className={cn("h-7 font-mono text-xs", className)}
+        className={cn("h-7 font-mono text-xs md:text-xs", className)}
       />
     );
   }
@@ -306,7 +306,7 @@ function NewWorkspaceDialog({ onClose }: { onClose: () => void }) {
           <Input id="workspace-name" required maxLength={63} value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!name.trim() && !nameOK} autoFocus />
         </FormRow>
         <FormRow label="Path" htmlFor="workspace-path" help="The git repository's absolute path on this machine.">
-          <Input id="workspace-path" required maxLength={4096} value={path} onChange={(e) => setPath(e.target.value)} placeholder="/home/ada/src/web" className="font-mono text-xs" />
+          <Input id="workspace-path" required maxLength={4096} value={path} onChange={(e) => setPath(e.target.value)} placeholder="/home/ada/src/web" className="font-mono text-xs md:text-xs" />
         </FormRow>
         <FormRow label="Mode" help={mode === "plain" ? "The Runner merges branches itself." : "Work lands through pull requests."}>
           <Segmented
@@ -320,7 +320,7 @@ function NewWorkspaceDialog({ onClose }: { onClose: () => void }) {
           />
         </FormRow>
         <FormRow label="Default branch" htmlFor="workspace-branch" help="Where shipped work lands.">
-          <Input id="workspace-branch" required maxLength={255} value={branch} onChange={(e) => setBranch(e.target.value)} className="w-40 font-mono text-xs" />
+          <Input id="workspace-branch" required maxLength={255} value={branch} onChange={(e) => setBranch(e.target.value)} className="w-40 font-mono text-xs md:text-xs" />
         </FormRow>
       </FormRows>
     </FormDialog>

@@ -187,7 +187,7 @@ function TextSetting({
     <SettingsRow label={label} htmlFor={id} help={help}>
       <Input
         id={id}
-        className={cn(w320, "font-mono text-xs")}
+        className={cn(w320, "font-mono text-xs md:text-xs")}
         maxLength={1000}
         list={list}
         placeholder={placeholder}

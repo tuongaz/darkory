@@ -175,12 +175,12 @@ function Workspaces({ detail }: { detail: TaskDetail }) {
   );
 }
 
-/** A branch name in mono, cut to the rail with the whole name on hover. */
+/** A branch name in mono, whole: it wraps in the rail rather than losing its end, so it can be copied. */
 export function Branch({ name }: { name: string }) {
   return (
-    <span className="inline-flex min-w-0 items-center gap-1.5" title={name}>
-      <GitBranchIcon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
-      <code className="truncate font-mono text-xs">{name}</code>
+    <span className="inline-flex min-w-0 items-start gap-1.5">
+      <GitBranchIcon className="mt-px size-3.5 flex-none text-muted-foreground" aria-hidden />
+      <code className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{name}</code>
     </span>
   );
 }

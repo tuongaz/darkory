@@ -41,7 +41,7 @@ export function MultiCombobox({
       <PopoverAnchor asChild>
         <div
           aria-invalid={invalid || undefined}
-          className="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background py-1 pr-1.5 pl-1.5 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30"
+          className="flex min-h-9 w-full min-w-0 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background py-[5px] pr-1.5 pl-1.5 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30"
         >
           {chosen.map((o) => (
             <span key={o.value} className="inline-flex h-6 min-w-0 items-center gap-1.5 rounded-md border bg-background pr-1 pl-2 text-xs whitespace-nowrap [&_svg]:size-3 [&_svg]:text-muted-foreground">
@@ -63,7 +63,7 @@ export function MultiCombobox({
               type="button"
               role="combobox"
               aria-expanded={open}
-              className="flex h-7 min-w-24 flex-1 items-center gap-2 rounded-sm px-1 text-left text-muted-foreground outline-none [&_svg]:size-3.5 [&_svg]:flex-none"
+              className="flex h-6 min-w-24 flex-1 items-center gap-2 rounded-sm px-1 text-left text-muted-foreground outline-none [&_svg]:size-3.5 [&_svg]:flex-none"
             >
               {chosen.length === 0 && icon}
               <span className="min-w-0 flex-1 truncate">{chosen.length === 0 ? placeholder : ""}</span>

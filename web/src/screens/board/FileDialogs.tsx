@@ -489,7 +489,10 @@ export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string
               <Combobox
                 id="file-feature-skill"
                 value={skillId}
-                onChange={setSkillId}
+                onChange={(v) => {
+                  setSkillId(v);
+                  setErrors((e) => ({ ...e, skill: undefined }));
+                }}
                 options={skillList.map((s) => ({ value: s.id, label: s.name }))}
                 placeholder="Choose a Skill"
                 searchPlaceholder="Search Skills"
@@ -503,7 +506,10 @@ export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string
                 id="file-feature-workspaces"
                 workspaces={workspaces}
                 values={workspaceIds}
-                onChange={setWorkspaces}
+                onChange={(v) => {
+                  setWorkspaces(v);
+                  setErrors((e) => ({ ...e, workspaces: undefined }));
+                }}
                 error={errors.workspaces}
                 className="sm:col-span-6"
               />

@@ -250,7 +250,7 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
               maxLength={200}
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="font-mono text-xs"
+              className="font-mono text-xs md:text-xs"
             />
             <datalist id="member-models">
               {knownModels.map((m) => (
