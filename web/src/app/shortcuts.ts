@@ -38,10 +38,13 @@ export const shortcutList: { section: string; keys: { label: string; ways: strin
   },
 ];
 
-/** Whether a key press belongs to a field being typed in rather than to the app. */
+/**
+ * Whether a key press belongs to a field being typed in rather than to the app: a select's
+ * trigger (role combobox) types ahead through its choices.
+ */
 function typing(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.getAttribute("role") === "combobox";
 }
 
 /**

@@ -373,6 +373,17 @@ describe("walking the Tasks with the keys", () => {
     expect(ringed()).toEqual([first]);
   });
 
+  it("leaves J and K to a Status select that has the focus", async () => {
+    mockApi(records());
+    renderApp("/teams/WEB/tasks?view=list&task=WEB-6");
+    const peek = await screen.findByRole("dialog", { name: "Task WEB-6" });
+    const status = await within(peek).findByRole("combobox", { name: "Status: Todo" });
+    status.focus();
+    await userEvent.keyboard("j");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole("dialog", { name: "Task WEB-6" })).toBeInTheDocument();
+  });
+
   it("G I, G M and G A go to the Inbox, My work and Agents; ? lists the keys", async () => {
     mockApi(records());
     renderApp("/activity");
