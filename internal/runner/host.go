@@ -196,7 +196,7 @@ func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 	if _, err := h.tmux(ctx, "new-session", "-d", "-s", s.Name, "-x", "200", "-y", "50", "-c", s.Dir, "/bin/sh "+ShellQuote(run)); err != nil {
 		return nil, err
 	}
-	if _, err := h.tmux(ctx, "pipe-pane", "-o", "-t", "="+s.Name, "cat >> "+ShellQuote(s.Log)); err != nil {
+	if _, err := h.tmux(ctx, "pipe-pane", "-o", "-t", pane(s.Name), "cat >> "+ShellQuote(s.Log)); err != nil {
 		h.tmux(ctx, "kill-session", "-t", "="+s.Name)
 		return nil, err
 	}
@@ -207,6 +207,9 @@ func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 	go p.watch()
 	return p, nil
 }
+
+// pane is the target of a session's one pane, the session matched by its exact name.
+func pane(session string) string { return "=" + session + ":" }
 
 type tmuxProc struct {
 	h              *tmuxHost
@@ -230,10 +233,10 @@ func (p *tmuxProc) watch() {
 }
 
 func (p *tmuxProc) Type(text string) error {
-	if _, err := p.h.tmux(context.Background(), "send-keys", "-t", "="+p.name, "-l", text); err != nil {
+	if _, err := p.h.tmux(context.Background(), "send-keys", "-t", pane(p.name), "-l", text); err != nil {
 		return err
 	}
-	_, err := p.h.tmux(context.Background(), "send-keys", "-t", "="+p.name, "Enter")
+	_, err := p.h.tmux(context.Background(), "send-keys", "-t", pane(p.name), "Enter")
 	return err
 }
 
@@ -264,7 +267,7 @@ func (p *tmuxProc) Kill() error {
 func (p *tmuxProc) Tmux() bool { return true }
 
 func (p *tmuxProc) Screen(lines int) string {
-	out, err := p.h.tmux(context.Background(), "capture-pane", "-p", "-J", "-t", "="+p.name, "-S", "-"+strconv.Itoa(lines*3))
+	out, err := p.h.tmux(context.Background(), "capture-pane", "-p", "-J", "-t", pane(p.name), "-S", "-"+strconv.Itoa(lines*3))
 	if err != nil {
 		return lastLines(p.log, lines)
 	}

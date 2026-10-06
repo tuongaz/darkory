@@ -146,8 +146,15 @@ func (f *fixture) setScenario(name, scenario string) {
 		Env: map[string]string{"FAKEAGENT_SCENARIO": scenario, asDarkory: "1", "FAKEAGENT_BREAKDOWN": "build:Cart page"}}
 }
 
-// run starts the runner with the named agents' tokens; it stops when the test ends.
+// run starts the runner with the named agents' tokens, sessions as child processes; it stops
+// when the test ends.
 func (f *fixture) run(agents ...string) *Runner {
+	f.t.Helper()
+	return f.runWith("off", agents...)
+}
+
+// runWith is run with tmux on or off.
+func (f *fixture) runWith(tmux string, agents ...string) *Runner {
 	f.t.Helper()
 	var tokens []Token
 	for _, a := range agents {
@@ -157,7 +164,7 @@ func (f *fixture) run(agents ...string) *Runner {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	r, err := New(Config{URL: f.ts.URL, Data: f.data, Tokens: tokens, Timings: testTimings, Tmux: "off", Darkory: exe,
+	r, err := New(Config{URL: f.ts.URL, Data: f.data, Tokens: tokens, Timings: testTimings, Tmux: tmux, Darkory: exe,
 		Log: slog.New(slog.NewTextHandler(f.log, nil)), GitHub: &fakeGitHub{},
 		Dial: func(url, token, session string, hc *http.Client) (Record, error) {
 			rec, err := Dial(url, token, session, hc)
@@ -410,4 +417,57 @@ func TestRunnerReleasesASilentSession(t *testing.T) {
 			t.Fatalf("%d session logs: %v", logs, evidenceNames(d.Evidence))
 		}
 	})
+}
+
+// In tmux: the session runs as dk-<TASK> on the runner's own tmux server, where a person could
+// join it, and is gone once the Claim ends; its pane's log is the Evidence.
+func TestRunnerInTmux(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.agent("builder", "complete", "build")
+	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	r := f.runWith("on", "builder")
+	t.Cleanup(func() { exec.Command("tmux", "-L", r.Socket(), "kill-server").Run() })
+
+	var seen RunnerSession
+	eventually(t, 20*time.Second, "a tmux session", func() bool {
+		for _, s := range r.Sessions() {
+			if s.Task == "WEB-3" && s.Tmux {
+				seen = s
+				return exec.Command("tmux", "-L", r.Socket(), "has-session", "-t", "=dk-WEB-3").Run() == nil
+			}
+		}
+		return false
+	})
+	if seen.TmuxSession != "dk-WEB-3" || seen.TmuxSocket != TmuxSocket(f.data) || seen.Member != "builder" {
+		t.Fatalf("the session: %+v", seen)
+	}
+	eventually(t, 20*time.Second, "WEB-3 done and its session gone", func() bool {
+		return f.task("WEB-3").Task.State == client.TaskStateDone && len(r.Sessions()) == 0
+	})
+	if exec.Command("tmux", "-L", r.Socket(), "has-session", "-t", "=dk-WEB-3").Run() == nil {
+		t.Fatal("the tmux session outlived its Claim")
+	}
+	var log *client.Evidence
+	for _, e := range f.task("WEB-3").Evidence {
+		if e.Filename == "session-WEB-3.log" {
+			log = &e
+		}
+	}
+	if log == nil {
+		t.Fatal("no session log")
+	}
+	var out bytes.Buffer
+	env := cli.Env{Stdout: &out, Stderr: &out, Getenv: func(k string) string {
+		return map[string]string{"DARKORY_URL": f.ts.URL, "DARKORY_TOKEN": f.tokens["ada"], "DARKORY_SESSION": "ada-cli"}[k]
+	}}
+	if err := cli.Run(t.Context(), []string{"evidence", "get", log.ID, "-o", "-"}, env); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "fakeagent: working WEB-3") || !strings.Contains(out.String(), "/exit") {
+		t.Fatalf("the pane's log:\n%s", out.String())
+	}
 }

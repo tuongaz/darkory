@@ -75,8 +75,9 @@ func newSession(a *agent, rec Record, d *client.TaskDetail, set AgentSettings) *
 	if d.Task.Claim != nil {
 		claimID = d.Task.Claim.ID
 	}
+	dir := filepath.Join(a.r.cfg.Data, "sessions", d.Task.Key)
 	return &session{r: a.r, a: a, rec: rec, d: d, set: set, key: d.Task.Key, taskID: d.Task.ID, claimID: claimID,
-		started: time.Now(), log: a.r.log.With("agent", a.name(), "task", d.Task.Key),
+		started: time.Now(), log: a.r.log.With("agent", a.name(), "task", d.Task.Key), dir: dir, logPath: filepath.Join(dir, "pane.log"),
 		ended: make(chan string, 1), cmds: make(chan sessionCmd), over: make(chan struct{}), state: StateRunning}
 }
 
@@ -184,11 +185,9 @@ func (s *session) waitForEarlier(ctx context.Context) error {
 // agent's command.
 func (s *session) start(ctx context.Context) error {
 	r := s.r
-	s.dir = filepath.Join(r.cfg.Data, "sessions", s.key)
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	s.logPath = filepath.Join(s.dir, "pane.log")
 	f, err := s.rec.Feature(ctx, s.d.Feature.Key)
 	if err != nil {
 		return fmt.Errorf("reading Feature %s: %w", s.d.Feature.Key, err)

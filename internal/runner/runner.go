@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -168,6 +169,11 @@ func New(cfg Config) (*Runner, error) {
 	if cfg.Data == "" {
 		return nil, errors.New("runner: no data directory")
 	}
+	data, err := filepath.Abs(cfg.Data)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Data = data
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
 		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), skills: map[string]client.Skill{}}
