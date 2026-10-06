@@ -338,7 +338,7 @@ export function Avatars({ members, max = 8 }: { members: Pick<Member, "id" | "na
 export function GroupRow({ icon, label, count }: { icon: ReactNode; label: string; count: number }) {
   return (
     <div role="row" className="flex h-[34px] items-center gap-2 border-b bg-muted pr-4 pl-6 font-medium [&_svg]:size-3.5">
-      <span role="rowheader" className="flex items-center gap-2">
+      <span role="rowheader" aria-label={`${label} ${count}`} className="flex items-center gap-2">
         {icon}
         {label}
         <span className="font-normal text-muted-foreground tabular-nums">{count}</span>

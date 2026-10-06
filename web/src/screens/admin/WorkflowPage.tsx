@@ -124,7 +124,7 @@ function StatusEditor({ current, adding, onAdded }: { current: Status[]; adding:
             Kind
             <InfoPopover label="About the kinds">
               <p className="mb-1.5 font-semibold">Kinds</p>
-              <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
+              <dl className="grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-1 whitespace-nowrap">
                 <dt className="text-muted-foreground">Backlog</dt>
                 <dd>
                   Not offered by <code>next</code>

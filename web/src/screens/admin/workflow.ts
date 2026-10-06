@@ -91,9 +91,13 @@ export function problem(rows: Row[], current: Status[], counts: Map<string, numb
   return undefined;
 }
 
-/** The Statuses a deleted Status's Tasks may move to: kept ones that end a Task the same way. */
+/**
+ * The Statuses a deleted Status's Tasks may move to: kept ones that end a Task the same way, those
+ * of its own kind first.
+ */
 export function moveTargets(deleted: Pick<Status, "id" | "kind">, rows: Row[]): Row[] {
-  return rows.filter((r) => r.id && r.id !== deleted.id && ending(r.kind) === ending(deleted.kind));
+  const kept = rows.filter((r) => r.id && r.id !== deleted.id && ending(r.kind) === ending(deleted.kind));
+  return [...kept.filter((r) => r.kind === deleted.kind), ...kept.filter((r) => r.kind !== deleted.kind)];
 }
 
 /** The body of `PUT /v1/statuses`: the whole list in order, ids on the kept ones, and the moves. */
