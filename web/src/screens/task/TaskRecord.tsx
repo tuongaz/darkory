@@ -128,7 +128,7 @@ function Entry({ entry, detail }: { entry: RecordEntry; detail: TaskDetail }) {
       const q = entry.question;
       return row(
         q.filed_by,
-        <span className="inline-flex min-w-0 items-baseline gap-1.5">
+        <span className="flex min-w-0 items-baseline gap-1.5">
           <b className="whitespace-nowrap">{name(q.filed_by)}</b> filed <TaskLink task={q} />
         </span>,
         <>

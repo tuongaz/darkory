@@ -11,12 +11,11 @@ import { Pill } from "@/components/Pill";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
-import { statusGlyph, useMemberName, useSkillName } from "./format";
-import { Avatar } from "./parts";
+import { useMemberName, useSkillName } from "./format";
+import { Avatar, Choice, GlyphOf } from "./parts";
 import { useSkillDetail, useStatuses, useTakers } from "./queries";
 
 type DialogProps = { detail: TaskDetail; open: boolean; onOpenChange: (open: boolean) => void };
@@ -125,40 +124,44 @@ export function HandOverDialog({ detail, open, onOpenChange }: DialogProps) {
       error={handover.error}
     >
       <Field label="Skill it needs next" htmlFor="handover-skill" help={skill ? <TakersLine detail={detail} skillId={skill} /> : undefined}>
-        <Select value={skill} onValueChange={setSkill}>
-          <SelectTrigger id="handover-skill" className="w-full">
-            <SelectValue placeholder="Choose a Skill" />
-          </SelectTrigger>
-          <SelectContent>
-            {skillList.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Choice
+          id="handover-skill"
+          value={skill}
+          onChange={setSkill}
+          placeholder="Choose a Skill"
+          options={skillList.map((s) => ({ value: s.id, label: s.name }))}
+        />
       </Field>
       <Field label="Status after hand over" htmlFor="handover-status">
-        <Select value={next} onValueChange={setNext}>
-          <SelectTrigger id="handover-status" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={unchanged}>
-              <StatusGlyph glyph={statusGlyph(status, statuses)} label="" />
-              {status.name}
-              <span className="text-muted-foreground">· unchanged</span>
-            </SelectItem>
-            {choices
+        <Choice
+          id="handover-status"
+          value={next}
+          onChange={setNext}
+          placeholder={status.name}
+          options={[
+            {
+              value: unchanged,
+              label: (
+                <>
+                  <GlyphOf status={status} statuses={statuses} />
+                  {status.name}
+                  <span className="text-muted-foreground">· unchanged</span>
+                </>
+              ),
+            },
+            ...choices
               .filter((s) => s.id !== status.id)
-              .map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  <StatusGlyph glyph={statusGlyph(s, statuses)} label="" />
-                  {s.name}
-                </SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
+              .map((s) => ({
+                value: s.id,
+                label: (
+                  <>
+                    <GlyphOf status={s} statuses={statuses} />
+                    {s.name}
+                  </>
+                ),
+              })),
+          ]}
+        />
       </Field>
       <Field label="Note" htmlFor="handover-note" optional>
         <Textarea id="handover-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="For whoever works the Task next" />
@@ -230,7 +233,7 @@ export function TakeBackDialog({ detail, open, onOpenChange }: DialogProps) {
     >
       <Consequences>
         {claim && <Consequence mark={<Avatar id={claim.holder_id} />}>{name(claim.holder_id)}&apos;s Claim ends now</Consequence>}
-        <Consequence mark={<StatusGlyph glyph={moves ? statusGlyph(todo, statuses) : statusGlyph(status, statuses)} label="" />}>
+        <Consequence mark={<GlyphOf status={moves ? todo : status} statuses={statuses} />}>
           {moves ? `Status → ${todo.name}` : `Status stays ${status.name}`}
         </Consequence>
         {claim?.heartbeat_timeout_seconds ? <Consequence mark={<HeartPulseIcon />}>Its next Heartbeat answers taken back</Consequence> : null}
@@ -275,7 +278,15 @@ export function DropTaskDialog({ detail, open, onOpenChange }: DialogProps) {
       error={drop.error}
     >
       <Consequences>
-        <Consequence mark={<StatusGlyph glyph="dropped" label="" />}>{task.key} ends Dropped</Consequence>
+        <Consequence
+          mark={
+            <span aria-hidden className="inline-flex">
+              <StatusGlyph glyph="dropped" />
+            </span>
+          }
+        >
+          {task.key} ends Dropped
+        </Consequence>
         {claim && <Consequence mark={<Avatar id={claim.holder_id} />}>{name(claim.holder_id)}&apos;s Claim ends</Consequence>}
         {proposal?.state === "pending" && <Consequence mark={<MessageSquareIcon />}>Its proposal is not published</Consequence>}
       </Consequences>
@@ -429,24 +440,16 @@ export function ProposeDialog({ detail, open, onOpenChange }: DialogProps) {
       size="lg"
     >
       <Field label="Skill" htmlFor="propose-skill">
-        <Select
+        <Choice
+          id="propose-skill"
           value={skill}
-          onValueChange={(s) => {
+          onChange={(s) => {
             setSkill(s);
             setBody(null);
           }}
-        >
-          <SelectTrigger id="propose-skill" className="w-full">
-            <SelectValue placeholder="Choose a company Skill" />
-          </SelectTrigger>
-          <SelectContent>
-            {company.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          placeholder="Choose a company Skill"
+          options={company.map((s) => ({ value: s.id, label: s.name }))}
+        />
       </Field>
       <Field label="Text" htmlFor="propose-body">
         <Textarea

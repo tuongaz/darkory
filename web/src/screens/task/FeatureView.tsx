@@ -225,8 +225,8 @@ function FeatureEvidence({ detail, tasks, pending }: { detail: FeatureDetail; ta
                     </TaskLink>
                   </>
                 )}
-                <span className="text-muted-foreground">·</span>
                 <span className="hidden min-w-0 items-center gap-1.5 text-muted-foreground sm:inline-flex">
+                  ·
                   <Avatar id={e.attached_by} />
                   <span className="truncate">{name(e.attached_by)}</span>
                 </span>

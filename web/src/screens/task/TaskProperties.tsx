@@ -8,7 +8,6 @@ import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail, PropertyButton } from "@/components/PropertiesRail";
-import { StatusGlyph } from "@/components/StatusGlyph";
 import { ClockTime } from "@/components/Time";
 import {
   DropdownMenu,
@@ -20,8 +19,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
 import type { TaskActions } from "./actions";
-import { featurePath, statusGlyph } from "./format";
-import { MemberName, Needs, StatusLabel, TaskLink } from "./parts";
+import { featurePath } from "./format";
+import { GlyphOf, MemberName, Needs, StatusLabel, TaskLink } from "./parts";
 import { useStatuses, useTakers } from "./queries";
 import { lapsedClaim } from "./record";
 
@@ -164,9 +163,7 @@ function StatusMenu({ detail }: { detail: TaskDetail }) {
         <DropdownMenuRadioGroup value={status.id} onValueChange={(to) => to !== status.id && move.mutate(to)}>
           {choices.map((s) => (
             <DropdownMenuRadioItem key={s.id} value={s.id}>
-              <span aria-hidden>
-                <StatusGlyph glyph={statusGlyph(s, statuses)} />
-              </span>
+              <GlyphOf status={s} statuses={statuses} />
               {s.name}
             </DropdownMenuRadioItem>
           ))}
