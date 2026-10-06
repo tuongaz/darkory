@@ -1,10 +1,14 @@
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 // The build goes to dist/app, which embed.go serves when present; the committed dist/index.html
 // is the placeholder a binary built without node serves instead.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  // `@/` is src/, as components.json tells the shadcn CLI.
+  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   build: {
     outDir: "dist/app",
     emptyOutDir: true,

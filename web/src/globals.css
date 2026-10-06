@@ -1,0 +1,248 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+/* Sonner also injects these at runtime, which the Install's CSP (style-src 'self') refuses. */
+@import "sonner/dist/styles.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Inter, served by the Install itself: the app's CSP allows fonts from 'self' only, and a Local
+   Install may have no internet. Named "Inter" so the token below finds it. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("../node_modules/@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF,
+    U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---- tokens.css from the mockup board, verbatim ---- */
+/* shadcn/ui default theme, base colour "neutral", transcribed verbatim from
+   apps/v4/content/docs/(root)/theming.mdx (light :root only; mockups are light-only).
+   Radius scale as shadcn derives it. Nothing below is paraphrased. */
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  /* Darkory additions (NEW, not shadcn): one hue per record state and per Member kind.
+     Used as ink on a tinted ground; every pair checked against white and --muted. */
+  --state-waiting: oklch(0.55 0.17 250);        /* open, takeable: blue */
+  --state-waiting-bg: oklch(0.96 0.03 250);
+  --state-claimed: oklch(0.60 0.16 60);         /* open, held: amber */
+  --state-claimed-bg: oklch(0.97 0.04 75);
+  --state-blocked: oklch(0.55 0.21 25);         /* open, blocked: red */
+  --state-blocked-bg: oklch(0.96 0.03 25);
+  --state-done: oklch(0.52 0.15 150);           /* done / shipped: green */
+  --state-done-bg: oklch(0.96 0.04 150);
+  --state-dropped: oklch(0.556 0 0);            /* dropped: muted */
+  --state-dropped-bg: oklch(0.97 0 0);
+  --agent: oklch(0.52 0.19 300);                /* an agent Member: violet */
+  --agent-bg: oklch(0.96 0.03 300);
+  --human: oklch(0.205 0 0);                    /* a human Member: foreground */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+/* ---- end of tokens.css ---- */
+
+/* Values the kit (kit.css) writes inline, named here so components use tokens only. */
+:root {
+  --agent-border: oklch(0.86 0.06 300);
+  --on-solid: oklch(0.985 0 0); /* text on a solid state fill: a Done glyph, the New tag */
+  --shadow-soft-color: oklch(0 0 0 / 0.04);
+  --shadow-pop-color: oklch(0 0 0 / 0.12);
+  --scrim: oklch(0 0 0 / 0.3);
+  --warn-border: oklch(0.85 0.08 75);
+  --danger-border: oklch(0.85 0.08 25);
+}
+
+/* shadcn's neutral dark theme, with the Darkory additions lifted for a dark ground. The app sets
+   .dark on <html> when the system asks for dark (src/lib/theme.ts). */
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+
+  --state-waiting: oklch(0.74 0.13 250);
+  --state-waiting-bg: oklch(0.3 0.06 250);
+  --state-claimed: oklch(0.8 0.13 70);
+  --state-claimed-bg: oklch(0.31 0.06 70);
+  --state-blocked: oklch(0.74 0.15 25);
+  --state-blocked-bg: oklch(0.3 0.07 25);
+  --state-done: oklch(0.74 0.14 150);
+  --state-done-bg: oklch(0.29 0.06 150);
+  --state-dropped: oklch(0.708 0 0);
+  --state-dropped-bg: oklch(0.269 0 0);
+  --agent: oklch(0.76 0.14 300);
+  --agent-bg: oklch(0.3 0.07 300);
+  --human: oklch(0.985 0 0);
+
+  --agent-border: oklch(0.42 0.1 300);
+  --on-solid: oklch(0.145 0 0);
+  --shadow-soft-color: oklch(0 0 0 / 0.3);
+  --shadow-pop-color: oklch(0 0 0 / 0.5);
+  --scrim: oklch(0 0 0 / 0.6);
+  --warn-border: oklch(0.45 0.08 75);
+  --danger-border: oklch(0.45 0.08 25);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-state-waiting: var(--state-waiting);
+  --color-state-waiting-bg: var(--state-waiting-bg);
+  --color-state-claimed: var(--state-claimed);
+  --color-state-claimed-bg: var(--state-claimed-bg);
+  --color-state-blocked: var(--state-blocked);
+  --color-state-blocked-bg: var(--state-blocked-bg);
+  --color-state-done: var(--state-done);
+  --color-state-done-bg: var(--state-done-bg);
+  --color-state-dropped: var(--state-dropped);
+  --color-state-dropped-bg: var(--state-dropped-bg);
+  --color-agent: var(--agent);
+  --color-agent-bg: var(--agent-bg);
+  --color-agent-border: var(--agent-border);
+  --color-human: var(--human);
+  --color-on-solid: var(--on-solid);
+  --color-scrim: var(--scrim);
+  --color-warn-border: var(--warn-border);
+  --color-danger-border: var(--danger-border);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --shadow-soft: 0 1px 2px var(--shadow-soft-color);
+  --shadow-pop: 0 8px 24px var(--shadow-pop-color);
+}
+
+/* Linear density: 13px body text. text-sm is the kit's 13px, text-xs its 12px, text-2xs its 11px. */
+@theme {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.45;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-sm text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+  code,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+}
