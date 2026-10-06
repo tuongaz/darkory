@@ -388,7 +388,9 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		}
 		return false
 	})
-	ri.wait(15*time.Second, "the hung session's log", func() bool { return strings.Contains(ri.evidence("MAIN-4", "session-MAIN-4.log"), "fakeagent: hanging") })
+	ri.wait(15*time.Second, "the hung session's log", func() bool {
+		return strings.Contains(ri.evidence("MAIN-4", "session-MAIN-4.log"), "fakeagent: hanging")
+	})
 	ada.ok("agent", "set", "stuck", "--paused")
 
 	// 7: taken back while it works.
