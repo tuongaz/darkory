@@ -31,6 +31,17 @@ func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request, params gen
 	if params.Limit != nil {
 		q.Limit = *params.Limit
 	}
+	if params.Member != nil {
+		q.Member = *params.Member
+	}
+	if params.Team != nil {
+		q.Team = *params.Team
+	}
+	if params.Kind != nil {
+		for _, k := range *params.Kind {
+			q.Kinds = append(q.Kinds, string(k))
+		}
+	}
 	p, err := s.core.ListActivity(r.Context(), caller(r), q)
 	s.respond(w, r, as(http.StatusOK, func(p core.ActivityPage) any {
 		out := gen.ActivityPage{Items: each(p.Items, activityOut), LastSeq: p.LastSeq}

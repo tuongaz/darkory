@@ -249,8 +249,10 @@ func (s *Service) SetStatuses(ctx context.Context, c *auth.Caller, items []Statu
 				return nil, refuse(CodeStatusInUse, "%d Tasks are in %s; say in moves which Status they go to", used[old.ID], old.Name)
 			}
 		}
+		// The result is a plain []Status: the response stored under the Idempotency-Key is
+		// rendered from it.
 		if unchangedList(current, items) {
-			return current, nil
+			return []Status(current), nil
 		}
 
 		moved := 0
@@ -303,12 +305,12 @@ func (s *Service) SetStatuses(ctx context.Context, c *auth.Caller, items []Statu
 		if err := t.recordByCaller("statuses.changed", c.OrgID, payload); err != nil {
 			return nil, err
 		}
-		return after, nil
+		return []Status(after), nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return res.(statuses), nil
+	return res.([]Status), nil
 }
 
 // validStatusList checks what a list of Statuses says on its own, before reading the record.
