@@ -62,8 +62,6 @@ type AgentSettings struct {
 // FeatureInfo is a Feature with what the runner reads of it.
 type FeatureInfo struct {
 	client.Feature
-	// Quick Features have no Break down and no feature branch (D10).
-	Quick bool
 	// Owner is the owner's name.
 	Owner string
 }
@@ -146,11 +144,15 @@ func (r *conn) Agent(ctx context.Context, member string) (AgentSettings, bool, e
 	if err := remote.Check(res, err, http.StatusOK); err != nil {
 		return AgentSettings{}, false, err
 	}
-	if res.JSON200.Member.Kind != client.Agent {
+	a := res.JSON200.Member.Agent
+	if res.JSON200.Member.Kind != client.Agent || a == nil {
 		return AgentSettings{}, false, nil
 	}
-	// Until Members carry agent settings (R0), every agent runs the default command unattended.
-	return AgentSettings{Unattended: true}, true, nil
+	set := AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended, Paused: a.Paused}
+	if a.ProgressFile != nil {
+		set.ProgressFile = *a.ProgressFile
+	}
+	return set, true, nil
 }
 
 func (r *conn) Next(ctx context.Context, wait, timeout time.Duration, model string) (*client.TaskDetail, error) {
@@ -196,13 +198,28 @@ func (r *conn) Feature(ctx context.Context, ref string) (*FeatureInfo, error) {
 	return f, nil
 }
 
-func (r *conn) Workspaces(ctx context.Context, task *client.TaskDetail) ([]Workspace, error) {
-	// Workspaces arrive with R0; until then a session works in an empty directory.
-	return nil, nil
+func workspace(w client.Workspace) Workspace {
+	return Workspace{ID: w.ID, Name: w.Name, Kind: string(w.Kind), Path: w.Path, Mode: string(w.Mode), DefaultBranch: w.DefaultBranch}
+}
+
+func (r *conn) Workspaces(_ context.Context, task *client.TaskDetail) ([]Workspace, error) {
+	out := make([]Workspace, len(task.Workspaces))
+	for i, w := range task.Workspaces {
+		out[i] = workspace(w)
+	}
+	return out, nil
 }
 
 func (r *conn) AllWorkspaces(ctx context.Context) ([]Workspace, error) {
-	return nil, nil
+	res, err := r.c.ListWorkspacesWithResponse(ctx)
+	if err := remote.Check(res, err, http.StatusOK); err != nil {
+		return nil, err
+	}
+	out := make([]Workspace, len(res.JSON200.Items))
+	for i, w := range res.JSON200.Items {
+		out[i] = workspace(w)
+	}
+	return out, nil
 }
 
 func (r *conn) Skill(ctx context.Context, ref string) (*client.SkillDetail, error) {

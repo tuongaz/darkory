@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli"
@@ -31,7 +33,7 @@ import (
 // the agents' command and the test binary standing in for darkory (TestMain), on both engines.
 // e2e/runner_test.go runs the same with the built binary.
 
-const asDarkory = "DARKORY_RUNNER_TEST_AS_DARKORY"
+const asDarkory = "RUNNER_TEST_AS_DARKORY"
 
 func TestMain(m *testing.M) {
 	if os.Getenv(asDarkory) == "1" {
@@ -80,25 +82,24 @@ func fakeAgent(t *testing.T) string {
 var testTimings = Timings{Wait: time.Second, ClaimTimeout: 3 * time.Second, Tick: 100 * time.Millisecond, Stale: 1500 * time.Millisecond,
 	Nudge: 400 * time.Millisecond, Exit: 2 * time.Second, Poll: 200 * time.Millisecond, Retry: 200 * time.Millisecond}
 
-// fixture is an Install with a git repository as its Workspace, ada as its human admin, and the
-// agents the runner runs.
+// fixture is an Install with a git repository as Team WEB's default Workspace, ada as its human
+// admin, and the agents the runner runs, set up through /v1 as a person would.
 type fixture struct {
 	t        *testing.T
+	srv      *server.Server
 	ts       *httptest.Server
+	timings  Timings
 	tokens   map[string]string
 	ids      map[string]string
 	repo     string
 	data     string
 	progress string
 	log      *lockedBuffer
-
-	mu       sync.Mutex
-	settings map[string]AgentSettings // by Member id
 }
 
 func newFixture(t *testing.T, st *store.Store) *fixture {
 	t.Helper()
-	fake := fakeAgent(t)
+	fakeAgent(t)
 	disk, err := blob.NewDisk(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -110,13 +111,14 @@ func newFixture(t *testing.T, st *store.Store) *fixture {
 	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	f := &fixture{t: t, ts: ts, tokens: map[string]string{"ada": init.Token.Secret}, ids: map[string]string{"ada": init.Member.ID},
-		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}, settings: map[string]AgentSettings{}}
+	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, ids: map[string]string{"ada": init.Member.ID},
+		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}}
 	f.ok("ada", "team", "create", "WEB", "Web")
 	f.ok("ada", "team", "add", "WEB", "ada")
 	f.ok("ada", "skill", "create", "build", "--kind", "generic", "--body", "Build it, with tests.")
 	f.ok("ada", "skill", "create", "review", "--kind", "generic", "--body", "Review it.")
-	_ = fake
+	f.ok("ada", "workspace", "add", "web", "--path", f.repo)
+	f.ok("ada", "team", "set", "WEB", "--default-workspace", "web")
 	return f
 }
 
@@ -137,13 +139,13 @@ func (f *fixture) agent(name, scenario string, skills ...string) {
 	f.setScenario(name, scenario)
 }
 
+// setScenario gives an agent the fake agent as its command, in scenario.
 func (f *fixture) setScenario(name, scenario string) {
+	f.t.Helper()
 	progress := filepath.Join(f.progress, "{session_id}.jsonl")
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.settings[f.ids[name]] = AgentSettings{Command: fakeBin, Args: []string{"--prompt-file", "{prompt_file}", "--progress", progress, "--mcp-config", "{mcp_config}"},
-		ProgressFile: progress, Model: "fake-1", Unattended: true,
-		Env: map[string]string{"FAKEAGENT_SCENARIO": scenario, asDarkory: "1", "FAKEAGENT_BREAKDOWN": "build:Cart page"}}
+	f.ok("ada", "agent", "set", name, "--command", fakeBin, "--model", "fake-1", "--unattended", "--progress-file", progress,
+		"--arg=--prompt-file", "--arg={prompt_file}", "--arg=--progress", "--arg="+progress, "--arg=--mcp-config", "--arg={mcp_config}",
+		"--env", "FAKEAGENT_SCENARIO="+scenario, "--env", asDarkory+"=1", "--env", "FAKEAGENT_BREAKDOWN=build:Cart page")
 }
 
 // run starts the runner with the named agents' tokens, sessions as child processes; it stops
@@ -164,15 +166,12 @@ func (f *fixture) runWith(tmux string, agents ...string) *Runner {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	r, err := New(Config{URL: f.ts.URL, Data: f.data, Tokens: tokens, Timings: testTimings, Tmux: tmux, Darkory: exe,
-		Log: slog.New(slog.NewTextHandler(f.log, nil)), GitHub: &fakeGitHub{},
-		Dial: func(url, token, session string, hc *http.Client) (Record, error) {
-			rec, err := Dial(url, token, session, hc)
-			return &testRecord{Record: rec, f: f}, err
-		}})
+	r, err := New(Config{URL: f.ts.URL, Data: f.data, Tokens: tokens, Timings: f.timings, Tmux: tmux, Darkory: exe,
+		Log: slog.New(slog.NewTextHandler(f.log, nil)), GitHub: &fakeGitHub{}})
 	if err != nil {
 		f.t.Fatal(err)
 	}
+	f.srv.AttachRunner(r)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- r.Run(ctx) }()
@@ -191,31 +190,6 @@ func (f *fixture) runWith(tmux string, agents ...string) *Runner {
 		}
 	})
 	return r
-}
-
-// testRecord gives the agents their settings and every Task the repository as its Workspace,
-// which the record does not carry yet.
-type testRecord struct {
-	Record
-	f *fixture
-}
-
-func (r *testRecord) Agent(ctx context.Context, member string) (AgentSettings, bool, error) {
-	if _, _, err := r.Record.Agent(ctx, member); err != nil {
-		return AgentSettings{}, false, err
-	}
-	r.f.mu.Lock()
-	defer r.f.mu.Unlock()
-	s, ok := r.f.settings[member]
-	return s, ok, nil
-}
-
-func (r *testRecord) Workspaces(context.Context, *client.TaskDetail) ([]Workspace, error) {
-	return []Workspace{{ID: "ws", Name: "web", Kind: "git", Path: r.f.repo, Mode: ModePlain}}, nil
-}
-
-func (r *testRecord) AllWorkspaces(ctx context.Context) ([]Workspace, error) {
-	return r.Workspaces(ctx, nil)
 }
 
 type fakeGitHub struct{}
@@ -316,7 +290,7 @@ func TestRunnerWorksAFeature(t *testing.T) {
 		eventually(t, 10*time.Second, "the merge of WEB-3", func() bool {
 			return slices.Contains(evidenceNames(f.task("WEB-3").Evidence), "merge-WEB-3.txt")
 		})
-		eventually(t, 10*time.Second, "the sessions to end", func() bool { return len(r.Sessions()) == 0 })
+		eventually(t, 10*time.Second, "the sessions to end", func() bool { return len(r.Running()) == 0 })
 		ctx := t.Context()
 		if !branchExists(ctx, f.repo, "feature/WEB-1") || !branchExists(ctx, f.repo, "WEB-3/cart-page") {
 			t.Fatal("no feature or Task branch")
@@ -386,7 +360,10 @@ func TestRunnerReleasesASilentSession(t *testing.T) {
 		f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
 		f.run("builder")
 
-		eventually(t, 30*time.Second, "a question blocking WEB-3", func() bool { return f.task("WEB-3").Task.Blocked })
+		eventually(t, 30*time.Second, "a question blocking WEB-3, released", func() bool {
+			d := f.task("WEB-3")
+			return d.Task.Blocked && d.Task.Claim == nil
+		})
 		d := f.task("WEB-3")
 		var released []string
 		for _, n := range d.Notes {
@@ -406,16 +383,10 @@ func TestRunnerReleasesASilentSession(t *testing.T) {
 		if d.Task.Claim != nil || d.Status.Name != "Todo" {
 			t.Fatalf("WEB-3 after the question: %s, Claim %+v", d.Status.Name, d.Task.Claim)
 		}
-		// Each session's log went with its release, and the nudges are in it.
-		logs := 0
-		for _, e := range d.Evidence {
-			if e.Filename == "session-WEB-3.log" {
-				logs++
-			}
-		}
-		if logs != 3 {
-			t.Fatalf("%d session logs: %v", logs, evidenceNames(d.Evidence))
-		}
+		// Each session's log went with its release.
+		eventually(t, 10*time.Second, "three session logs", func() bool {
+			return strings.Count(strings.Join(evidenceNames(f.task("WEB-3").Evidence), " "), "session-WEB-3.log") == 3
+		})
 	})
 }
 
@@ -434,7 +405,7 @@ func TestRunnerInTmux(t *testing.T) {
 
 	var seen RunnerSession
 	eventually(t, 20*time.Second, "a tmux session", func() bool {
-		for _, s := range r.Sessions() {
+		for _, s := range r.Running() {
 			if s.Task == "WEB-3" && s.Tmux {
 				seen = s
 				return exec.Command("tmux", "-L", r.Socket(), "has-session", "-t", "=dk-WEB-3").Run() == nil
@@ -446,7 +417,7 @@ func TestRunnerInTmux(t *testing.T) {
 		t.Fatalf("the session: %+v", seen)
 	}
 	eventually(t, 20*time.Second, "WEB-3 done and its session gone", func() bool {
-		return f.task("WEB-3").Task.State == client.TaskStateDone && len(r.Sessions()) == 0
+		return f.task("WEB-3").Task.State == client.TaskStateDone && len(r.Running()) == 0
 	})
 	if exec.Command("tmux", "-L", r.Socket(), "has-session", "-t", "=dk-WEB-3").Run() == nil {
 		t.Fatal("the tmux session outlived its Claim")
@@ -470,4 +441,96 @@ func TestRunnerInTmux(t *testing.T) {
 	if !strings.Contains(out.String(), "fakeagent: working WEB-3") || !strings.Contains(out.String(), "/exit") {
 		t.Fatalf("the pane's log:\n%s", out.String())
 	}
+}
+
+// The terminal: an admin joining through /v1/runner/sessions/{task}/terminal sees the session's
+// screen, types into it, resizes it, and is recorded in a Note; a Member who is not an admin only
+// watches.
+func TestRunnerTerminal(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	// The silent agent waits at its prompt, Heartbeats going, for the test.
+	f.timings.Nudge, f.timings.Stale = time.Minute, time.Minute
+	f.agent("builder", "silent", "build")
+	f.ok("ada", "member", "create", "mai", "--kind", "human")
+	var tok client.IssuedToken
+	f.json(&tok, "ada", "token", "issue", "mai", "--name", "mai")
+	f.tokens["mai"] = tok.Secret
+	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	r := f.runWith("on", "builder")
+	t.Cleanup(func() { exec.Command("tmux", "-L", r.Socket(), "kill-server").Run() })
+	eventually(t, 20*time.Second, "the session waiting at its prompt", func() bool {
+		for _, s := range r.Running() {
+			if s.Task == "WEB-3" && s.State == StateNudged {
+				return true
+			}
+		}
+		return false
+	})
+
+	dial := func(member, query string) *websocket.Conn {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		h := http.Header{}
+		h.Set("Authorization", "Bearer "+f.tokens[member])
+		h.Set("Darkory-Session", member+"-terminal")
+		url := strings.Replace(f.ts.URL, "http://", "ws://", 1) + "/v1/runner/sessions/WEB-3/terminal" + query
+		c, res, err := websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: h})
+		if err != nil {
+			t.Fatalf("dialling the terminal as %s: %v (%v)", member, err, res)
+		}
+		return c
+	}
+	// screen reads what the terminal shows until it holds want.
+	screen := func(c *websocket.Conn, want string) string {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+		var seen strings.Builder
+		for !strings.Contains(seen.String(), want) {
+			_, b, err := c.Read(ctx)
+			if err != nil {
+				t.Fatalf("waiting for %q: %v; the terminal showed:\n%s", want, err, tail(seen.String(), 30))
+			}
+			seen.Write(b)
+		}
+		return seen.String()
+	}
+
+	admin := dial("ada", "")
+	defer admin.CloseNow()
+	if err := admin.Write(t.Context(), websocket.MessageText, []byte(`{"cols":100,"rows":30}`)); err != nil {
+		t.Fatal(err)
+	}
+	screen(admin, "You stopped without ending the Task")
+	if err := admin.Write(t.Context(), websocket.MessageBinary, []byte("typed by ada\r")); err != nil {
+		t.Fatal(err)
+	}
+	screen(admin, `fakeagent: read "typed by ada"`)
+	eventually(t, 5*time.Second, "a Note that ada joined", func() bool {
+		return slices.ContainsFunc(f.task("WEB-3").Notes, func(n client.Note) bool { return n.Body == "ada joined the session." })
+	})
+
+	// mai, no admin, watches: what she types never reaches the session, and no Note says she came.
+	watcher := dial("mai", "")
+	defer watcher.CloseNow()
+	if err := watcher.Write(t.Context(), websocket.MessageBinary, []byte("typed by mai\r")); err != nil {
+		t.Fatal(err)
+	}
+	if err := admin.Write(t.Context(), websocket.MessageBinary, []byte("typed by ada again\r")); err != nil {
+		t.Fatal(err)
+	}
+	out := screen(watcher, `fakeagent: read "typed by ada again"`)
+	if strings.Contains(out, "typed by mai") {
+		t.Fatalf("a watcher's keys reached the session:\n%s", out)
+	}
+	if slices.ContainsFunc(f.task("WEB-3").Notes, func(n client.Note) bool { return strings.HasPrefix(n.Body, "mai") }) {
+		t.Fatal("a watcher was noted as joining")
+	}
+	admin.Close(websocket.StatusNormalClosure, "")
+	watcher.Close(websocket.StatusNormalClosure, "")
 }

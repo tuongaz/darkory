@@ -61,7 +61,6 @@ type session struct {
 
 type sessionCmd struct {
 	stop bool
-	by   string
 	done chan error
 }
 
@@ -107,8 +106,8 @@ func (s *session) claimEnded(kind string) {
 }
 
 // command hands an admin's nudge or stop to the session.
-func (s *session) command(ctx context.Context, stop bool, by string) error {
-	c := sessionCmd{stop: stop, by: by, done: make(chan error, 1)}
+func (s *session) command(ctx context.Context, stop bool) error {
+	c := sessionCmd{stop: stop, done: make(chan error, 1)}
 	select {
 	case s.cmds <- c:
 	case <-s.over:
@@ -352,9 +351,9 @@ func (s *session) watch(ctx context.Context) {
 			return
 		case c := <-s.cmds:
 			if c.stop {
-				s.log.Info("stopped", "by", c.by)
-				s.end(ctx, fmt.Sprintf("%s stopped the session.", or(c.by, "An admin")))
+				s.log.Info("an admin stopped the session")
 				c.done <- nil
+				s.end(ctx, "An admin stopped the session; the Task goes back for another.")
 				return
 			}
 			s.log.Info("nudged by an admin")

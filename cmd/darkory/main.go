@@ -317,6 +317,7 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	if run == nil {
 		close(runDone)
 	} else {
+		api.AttachRunner(run)
 		go func() {
 			defer close(runDone)
 			if err := run.Run(runCtx); err != nil {

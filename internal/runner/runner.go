@@ -22,6 +22,7 @@ import (
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/cli/remote"
+	"github.com/tuongaz/darkory/internal/runnerapi"
 )
 
 // Timings are the runner's clocks. The defaults are the plan's; tests shorten them through
@@ -128,13 +129,13 @@ type RunnerSession struct {
 
 // Session states.
 const (
-	StateRunning = "running"
-	StateNudged  = "nudged"
-	StateEnding  = "ending"
+	StateRunning = runnerapi.StateRunning
+	StateNudged  = runnerapi.StateNudged
+	StateEnding  = runnerapi.StateEnding
 )
 
 // ErrNoSession is a Task with no session running on this runner.
-var ErrNoSession = errors.New("no session of this runner works that Task")
+var ErrNoSession = runnerapi.ErrNoSession
 
 // Runner runs agent sessions.
 type Runner struct {
@@ -354,8 +355,21 @@ func (r *Runner) dial(token, session string) (Record, error) {
 	return Dial(r.cfg.URL, token, session, r.cfg.HTTP)
 }
 
-// Sessions are the sessions running now, oldest first.
-func (r *Runner) Sessions() []RunnerSession {
+var _ runnerapi.Runner = (*Runner)(nil)
+
+// Sessions are the sessions running now, oldest first, as the server serves them.
+func (r *Runner) Sessions() []runnerapi.Session {
+	running := r.Running()
+	out := make([]runnerapi.Session, len(running))
+	for i, s := range running {
+		out[i] = runnerapi.Session{TaskID: s.TaskID, MemberID: s.MemberID, SessionID: s.SessionID, Host: s.Host,
+			Tmux: s.TmuxSession, StartedAt: s.StartedAt, State: s.State, LogPath: s.LogPath}
+	}
+	return out
+}
+
+// Running are the sessions running now, oldest first.
+func (r *Runner) Running() []RunnerSession {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make([]RunnerSession, 0, len(r.sessions))
@@ -381,21 +395,26 @@ func (r *Runner) session(task string) *session {
 }
 
 // Nudge types the nudge into a Task's session now.
-func (r *Runner) Nudge(ctx context.Context, task string) error {
+func (r *Runner) Nudge(task string) error {
 	s := r.session(task)
 	if s == nil {
 		return ErrNoSession
 	}
-	return s.command(ctx, cmdNudge, "")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.command(ctx, cmdNudge)
 }
 
-// Stop ends a Task's session, releasing the Task with a Note that says who stopped it.
-func (r *Runner) Stop(ctx context.Context, task, by string) error {
+// Stop ends a Task's session and releases the Task with a Note. It returns once the session is
+// stopping; the release and the log follow.
+func (r *Runner) Stop(task string) error {
 	s := r.session(task)
 	if s == nil {
 		return ErrNoSession
 	}
-	return s.command(ctx, cmdStop, by)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return s.command(ctx, cmdStop)
 }
 
 // Socket is the tmux server the runner's sessions run on, for `tmux -L`.

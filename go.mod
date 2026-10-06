@@ -9,6 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.0
 	github.com/aws/smithy-go v1.28.2
 	github.com/coder/websocket v1.8.15
+	github.com/creack/pty v1.1.24
 	github.com/getkin/kin-openapi v0.142.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/google/uuid v1.6.0

@@ -25,6 +25,7 @@ func (a *agent) run(ctx context.Context) {
 	r := a.r
 	log := r.log.With("agent", a.name())
 	var pull Record // the Session the next Claim is made in; a fresh one after every Claim
+	unset := false  // said that the agent has no settings
 	for ctx.Err() == nil {
 		set, ok, err := a.rec.Agent(ctx, a.me.Member.ID)
 		if err != nil {
@@ -40,9 +41,15 @@ func (a *agent) run(ctx context.Context) {
 			continue
 		}
 		if !ok {
-			log.Warn("the Member has no agent settings; the runner does not run it")
-			return
+			// An admin may give it settings later (darkory agent set).
+			if !unset {
+				log.Warn("the agent has no agent settings, so the runner starts no session for it until it has")
+				unset = true
+			}
+			sleep(ctx, r.t.Wait)
+			continue
 		}
+		unset = false
 		if set.Paused {
 			sleep(ctx, r.t.Tick)
 			continue

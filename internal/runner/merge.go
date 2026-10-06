@@ -191,7 +191,7 @@ func (r *Runner) resolve(ctx context.Context, d *client.TaskDetail, f *FeatureIn
 }
 
 // buildSkill is the Skill that built a Task: the one its last Claim under a Skill other than
-// review was made under; build when there is none.
+// review was made under; engineer, the roster's, when there is none.
 func (r *Runner) buildSkill(ctx context.Context, d *client.TaskDetail) string {
 	for i := len(d.Claims) - 1; i >= 0; i-- {
 		if id := d.Claims[i].SkillID; id != nil {
@@ -200,7 +200,7 @@ func (r *Runner) buildSkill(ctx context.Context, d *client.TaskDetail) string {
 			}
 		}
 	}
-	return "build"
+	return "engineer"
 }
 
 // shipped merges a shipped Feature's branch into the default branch in every Workspace it has
