@@ -83,6 +83,13 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
 	}
+	return s.fromOwnPages(r)
+}
+
+// fromOwnPages reports whether a request signed in by the cookie was sent by a page of this
+// Install: Sec-Fetch-Site, when sent, says same-origin, and its Origin, or its Referer when it
+// sent no Origin, is this Install's.
+func (s *Server) fromOwnPages(r *http.Request) bool {
 	switch r.Header.Get("Sec-Fetch-Site") {
 	case "", "same-origin", "none":
 	default:

@@ -173,9 +173,12 @@ func (s *Server) StopRunnerSession(w http.ResponseWriter, r *http.Request, task 
 }
 
 // RunnerTerminal upgrades to a WebSocket and hands it to the Runner's Attach. Every refusal is
-// answered before the upgrade. A browser's upgrade carries the cookie and an Origin, which must be
-// the Install's own (cross-site WebSocket hijacking); a client sending no Origin, such as darkory
-// attach with its token, is not a browser.
+// answered before the upgrade. Joining is a write, though it arrives as a GET: an upgrade signed
+// in by the cookie must come from the Install's own pages, as a cookie write must (cross-site
+// WebSocket hijacking), and any Origin sent must be the Install's. A bearer request, such as
+// darkory join with its token, carries no ambient credential and may send none. The caller, not
+// the request, decides how they join: an admin types unless they ask for readonly; everyone else
+// watches, whatever they ask for.
 func (s *Server) RunnerTerminal(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.RunnerTerminalParams) {
 	run, rs, ok := s.runnerSession(w, r, task, false)
 	if !ok {
@@ -186,7 +189,8 @@ func (s *Server) RunnerTerminal(w http.ResponseWriter, r *http.Request, task gen
 		return
 	}
 	c := caller(r)
-	if origin := r.Header.Get("Origin"); origin != "" && !s.ownOrigin(r, origin) {
+	bearer := r.Header.Get("Authorization") != ""
+	if origin := r.Header.Get("Origin"); (!bearer && !s.fromOwnPages(r)) || (origin != "" && !s.ownOrigin(r, origin)) {
 		writeError(w, http.StatusForbidden, gen.ErrorCodeForbidden, "a terminal opened from a browser must come from this Install's own pages")
 		return
 	}

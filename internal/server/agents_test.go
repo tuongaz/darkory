@@ -311,9 +311,50 @@ func TestRunnerSessions(t *testing.T) {
 		}
 		conn.Close(websocket.StatusNormalClosure, "")
 
+		// A Member who is not an admin asking to type still only watches.
+		for _, ask := range []string{"?readonly=0", "?readonly=false"} {
+			conn, _, err = dial(h.secrets["bob"], "bob-term", ask, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if m := hello(conn); m["readonly"] != true {
+				t.Fatalf("bob asking %s joined %v", ask, m)
+			}
+			conn.Close(websocket.StatusNormalClosure, "")
+		}
+
 		_, resp, err := dial(h.adminSecret, "ada-term", "", "http://evil.example")
 		if err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
 			t.Fatalf("another origin: %v %v", resp, err)
+		}
+
+		// Signed in by the cookie, an upgrade is held to the rule of a cookie write: from this
+		// Install's own pages, or refused before upgrading.
+		cookie := h.signIn(t, "ada")
+		browser := func(headers map[string]string) (*websocket.Conn, *http.Response, error) {
+			hdr := http.Header{"Cookie": {cookie.Name + "=" + cookie.Value}}
+			for k, v := range headers {
+				hdr.Set(k, v)
+			}
+			return websocket.Dial(ctx, url, &websocket.DialOptions{HTTPHeader: hdr})
+		}
+		conn, _, err = browser(map[string]string{"Origin": h.ts.URL, "Sec-Fetch-Site": "same-origin"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := hello(conn); m["readonly"] != false || m["viewer"] != "ada" {
+			t.Fatalf("ada's browser joined %v", m)
+		}
+		conn.Close(websocket.StatusNormalClosure, "")
+		for name, headers := range map[string]map[string]string{
+			"no Origin":         {},
+			"another origin":    {"Origin": "http://evil.example"},
+			"a sibling port":    {"Origin": "http://127.0.0.1:1"},
+			"a cross-site page": {"Origin": h.ts.URL, "Sec-Fetch-Site": "cross-site"},
+		} {
+			if _, resp, err := browser(headers); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
+				t.Errorf("a cookie upgrade from %s: %v %v", name, resp, err)
+			}
 		}
 		if _, resp, err := dial("dk_nothing", "x", "", ""); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
 			t.Fatalf("no credential: %v %v", resp, err)
