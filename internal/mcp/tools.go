@@ -77,13 +77,14 @@ type attachIn struct {
 }
 
 type fileTaskIn struct {
-	Feature     string `json:"feature,omitempty" jsonschema:"the Feature the Task belongs to; may be left out when blocks is given"`
-	Title       string `json:"title" jsonschema:"the Task's title"`
-	Description string `json:"description,omitempty" jsonschema:"the Task's description"`
-	Skill       string `json:"skill,omitempty" jsonschema:"the Skill the Task needs; give this or aimed_at"`
-	AimedAt     string `json:"aimed_at,omitempty" jsonschema:"the Member the Task is aimed at by name; give this or skill"`
-	Blocks      string `json:"blocks,omitempty" jsonschema:"a Task the new one blocks: a question or Escalation, filed on that Task's Feature"`
-	Status      string `json:"status,omitempty" jsonschema:"the Status it starts in, such as Backlog, where next does not offer it; default the first todo Status"`
+	Feature     string   `json:"feature,omitempty" jsonschema:"the Feature the Task belongs to; may be left out when blocks is given"`
+	Title       string   `json:"title" jsonschema:"the Task's title"`
+	Description string   `json:"description,omitempty" jsonschema:"the Task's description"`
+	Skill       string   `json:"skill,omitempty" jsonschema:"the Skill the Task needs; give this or aimed_at"`
+	AimedAt     string   `json:"aimed_at,omitempty" jsonschema:"the Member the Task is aimed at by name; give this or skill"`
+	Blocks      string   `json:"blocks,omitempty" jsonschema:"a Task the new one blocks: a question or Escalation, filed on that Task's Feature"`
+	Status      string   `json:"status,omitempty" jsonschema:"the Status it starts in, such as Backlog, where next does not offer it; default the first todo Status"`
+	Workspaces  []string `json:"workspaces,omitempty" jsonschema:"the Workspaces the Task names, by name or id, where a session works it; default its Team's default Workspace"`
 }
 
 type blockIn struct {
@@ -270,8 +271,12 @@ func (s *Server) addTools() {
 		})
 	tool(s, "file_task", "File a Task needing a Skill or aimed at a Member. With blocks, file a question that blocks a Task instead of guessing: aim it up your Reporting line or at the Feature owner.",
 		func(ctx context.Context, in fileTaskIn) (client.TaskDetail, error) {
-			res, err := c.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: opt(in.Feature), Title: in.Title,
-				Description: opt(in.Description), Skill: opt(in.Skill), AimedAt: opt(in.AimedAt), Blocks: opt(in.Blocks), Status: opt(in.Status)})
+			body := client.FileTaskBody{Feature: opt(in.Feature), Title: in.Title, Description: opt(in.Description), Skill: opt(in.Skill),
+				AimedAt: opt(in.AimedAt), Blocks: opt(in.Blocks), Status: opt(in.Status)}
+			if len(in.Workspaces) > 0 {
+				body.Workspaces = &in.Workspaces
+			}
+			res, err := c.FileTaskWithResponse(ctx, &client.FileTaskParams{}, body)
 			if err := check(res, err, http.StatusCreated); err != nil {
 				return client.TaskDetail{}, err
 			}
@@ -293,7 +298,7 @@ func (s *Server) addTools() {
 			}
 			return done{OK: true}, nil
 		})
-	tool(s, "show_task", "Read a Task with its Feature, Claims, Notes, Evidence, blockers and Observations.",
+	tool(s, "show_task", "Read a Task with its Feature, Workspaces, Claims, Notes, Evidence, blockers and Observations.",
 		func(ctx context.Context, in taskRef) (client.TaskDetail, error) {
 			res, err := c.GetTaskWithResponse(ctx, in.Task)
 			if err := check(res, err, http.StatusOK); err != nil {

@@ -105,6 +105,13 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 	} else if t.SkillID != nil {
 		fmt.Fprintf(w, "  Needs      %s\n", c.skill(*t.SkillID))
 	}
+	for i, ws := range d.Workspaces {
+		label := "Workspace "
+		if i > 0 {
+			label = ""
+		}
+		fmt.Fprintf(w, "  %-10s %s (%s, %s) %s\n", label, one(ws.Name), one(string(ws.Kind)), one(ws.DefaultBranch), one(ws.Path))
+	}
 	if cl := t.Claim; cl != nil {
 		fmt.Fprintf(w, "  Claim      %s, Session %s", c.member(cl.HolderID), one(cl.SessionID))
 		if cl.SkillID != nil {
@@ -205,14 +212,35 @@ func (c *call) printEvidence(w io.Writer, e client.Evidence) {
 }
 
 func (c *call) printFeatureLine(w io.Writer, f client.Feature) {
-	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s  [%s]\n", one(f.Key), f.Rank, one(string(f.State)), c.member(f.OwnerID), one(f.Title), counts(f.TaskCounts))
+	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s  [%s]%s\n", one(f.Key), f.Rank, one(string(f.State)), c.member(f.OwnerID), one(f.Title),
+		counts(f.TaskCounts), flags(f))
+}
+
+// flags names a Feature's quick and ship-when-done marks.
+func flags(f client.Feature) string {
+	switch {
+	case f.Quick:
+		return " quick"
+	case f.ShipWhenDone:
+		return " ships when done"
+	}
+	return ""
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func (c *call) printFeatureDetail(w io.Writer, d client.FeatureDetail) {
 	f := d.Feature
 	fmt.Fprintf(w, "%s  %s\n", one(f.Key), one(f.Title))
 	fmt.Fprintf(w, "  Team       %s, Rank %d\n", c.team(f.TeamID), f.Rank)
-	fmt.Fprintf(w, "  State      %s\n", one(string(f.State)))
+	fmt.Fprintf(w, "  State      %s%s\n", one(string(f.State)), flags(f))
 	fmt.Fprintf(w, "  Owner      %s\n", c.member(f.OwnerID))
 	fmt.Fprintf(w, "  Tasks      %s, %d dropped\n", counts(f.TaskCounts), f.TaskCounts.Dropped)
 	fmt.Fprintf(w, "  Filed      by %s at %s\n", c.member(f.FiledBy), stamp(f.CreatedAt))

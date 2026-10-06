@@ -71,7 +71,7 @@ type command struct {
 var commands []command
 
 func init() {
-	commands = slices.Concat(workCommands, featureCommands, adminCommands)
+	commands = slices.Concat(workCommands, featureCommands, adminCommands, agentCommands)
 }
 
 // Usage lists every CLI command; cmd/darkory prints it after the server commands.
@@ -94,6 +94,7 @@ func Usage() string {
 	group("Work", workCommands)
 	group("Features", featureCommands)
 	group("Organisation, tokens and sign-in", adminCommands)
+	group("Agents, Workspaces and the Runner", agentCommands)
 	b.WriteString(`
 Global flags, accepted before or after the command:
   --url url          the Install (DARKORY_URL, default ` + remote.DefaultURL + `)

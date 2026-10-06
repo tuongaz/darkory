@@ -32,7 +32,7 @@ var workCommands = []command{
 	{path: "observe", args: "<task> --worked <text|-> | --didnt-work <text|->", short: "record an Observation", run: cmdObserve},
 	{path: "attach", args: "<task|feature> <file> [--type mime] [--name filename] [--feature]", short: "attach Evidence", run: cmdAttach},
 	{path: "evidence get", args: "<id> [-o file|-]", short: "show an Evidence record, or download its file", run: cmdEvidenceGet},
-	{path: "file", args: "--title t (--skill s | --aim member) (--feature f | --blocks task) [--status s] [--body text|-]", short: "file a Task; with --blocks, a question that blocks a Task", run: cmdFile},
+	{path: "file", args: "--title t (--skill s | --aim member) (--feature f | --blocks task) [--status s] [--workspace ws]… [--body text|-]", short: "file a Task; with --blocks, a question that blocks a Task", run: cmdFile},
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Claims, Notes, Evidence and Observations", run: cmdShow},
@@ -446,8 +446,14 @@ func cmdFile(c *call) error {
 	title := c.fs.String("title", "", "the Task's title")
 	body := c.fs.String("body", "", "the Task's description (- reads standard input)")
 	status := c.fs.String("status", "", "the Status it starts in, such as Backlog, where next does not offer it (default: the first todo Status)")
+	var workspaces strs
+	c.fs.Var(&workspaces, "workspace", "a Workspace the Task names, where a session works it; give it once per Workspace (default: its Team's)")
+	noWorkspace := c.fs.Bool("no-workspace", false, "name no Workspace, though the Team has a default")
 	if _, err := c.args(0, 0); err != nil {
 		return err
+	}
+	if *noWorkspace && workspaces.set {
+		return usagef("give --workspace or --no-workspace, not both")
 	}
 	switch {
 	case *title == "":
@@ -465,9 +471,15 @@ func cmdFile(c *call) error {
 	if err != nil {
 		return err
 	}
-	res, err := conn.FileTaskWithResponse(c.ctx, &client.FileTaskParams{}, client.FileTaskBody{
-		Feature: opt(*feature), Title: *title, Description: desc, Skill: opt(*skill), AimedAt: opt(*aim), Blocks: opt(*blocks),
-		Status: opt(*status)})
+	req := client.FileTaskBody{Feature: opt(*feature), Title: *title, Description: desc, Skill: opt(*skill), AimedAt: opt(*aim),
+		Blocks: opt(*blocks), Status: opt(*status)}
+	switch {
+	case workspaces.set:
+		req.Workspaces = &workspaces.v
+	case *noWorkspace:
+		req.Workspaces = &[]string{}
+	}
+	res, err := conn.FileTaskWithResponse(c.ctx, &client.FileTaskParams{}, req)
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return err
 	}

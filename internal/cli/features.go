@@ -10,7 +10,7 @@ import (
 )
 
 var featureCommands = []command{
-	{path: "feature create", args: "--team t --title t [--body text|-] [--owner m] [--from-retro task]", short: "file a Feature, with its Break down Task", run: cmdFeatureCreate},
+	{path: "feature create", args: "--team t --title t [--body text|-] [--owner m] [--from-retro task] [--ship-when-done] [--quick --skill s [--workspace ws]…]", short: "file a Feature, with its Break down Task, or a quick one with its one Task", run: cmdFeatureCreate},
 	{path: "feature list", args: "[--team t] [--state s] [--owner m]", short: "list Features by Team and Rank", run: cmdFeatureList},
 	{path: "feature show", args: "<feature>", short: "show a Feature with its Tasks and Evidence", run: cmdFeatureShow},
 	{path: "feature rank", args: "<feature> <position>", short: "move a Feature in its Team's Rank (1 is first)", run: cmdFeatureRank},
@@ -26,11 +26,20 @@ func cmdFeatureCreate(c *call) error {
 	body := c.fs.String("body", "", "the Feature's description (- reads standard input)")
 	owner := c.fs.String("owner", "", "the Feature owner (default: you)")
 	retro := c.fs.String("from-retro", "", "the Retrospective Task filing this Feature")
+	quick := c.fs.Bool("quick", false, "file a quick Feature: its one Task needing --skill, instead of a Break down; it ships when done")
+	skill := c.fs.String("skill", "", "the Skill a quick Feature's Task needs")
+	var workspaces strs
+	c.fs.Var(&workspaces, "workspace", "a Workspace a quick Feature's Task names; give it once per Workspace (default: the Team's)")
+	var ship optBool
+	c.fs.Var(&ship, "ship-when-done", "ship the Feature when its last Task is completed (default: the Team's; always for --quick)")
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}
 	if *team == "" || *title == "" {
 		return usagef("needs --team and --title")
+	}
+	if *quick != (*skill != "") {
+		return usagef("--quick and --skill go together: a quick Feature's one Task needs a Skill")
 	}
 	desc, err := c.optText(*body)
 	if err != nil {
@@ -40,8 +49,15 @@ func cmdFeatureCreate(c *call) error {
 	if err != nil {
 		return err
 	}
-	res, err := conn.FileFeatureWithResponse(c.ctx, &client.FileFeatureParams{}, client.FileFeatureBody{
-		Team: *team, Title: *title, Description: desc, Owner: opt(*owner), FromRetrospective: opt(*retro)})
+	req := client.FileFeatureBody{Team: *team, Title: *title, Description: desc, Owner: opt(*owner), FromRetrospective: opt(*retro),
+		Skill: opt(*skill), ShipWhenDone: ship.v}
+	if *quick {
+		req.Quick = quick
+	}
+	if workspaces.set {
+		req.Workspaces = &workspaces.v
+	}
+	res, err := conn.FileFeatureWithResponse(c.ctx, &client.FileFeatureParams{}, req)
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return err
 	}

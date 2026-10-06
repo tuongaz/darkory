@@ -216,7 +216,7 @@ func cmdTeamCreate(c *call) error {
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return err
 	}
-	return c.show(res.Body, func(w io.Writer) { fmt.Fprintf(w, "%-8s %s\n", res.JSON201.Key, res.JSON201.Name) })
+	return c.show(res.Body, func(w io.Writer) { c.printTeamLine(w, *res.JSON201) })
 }
 
 func cmdTeamList(c *call) error {
@@ -233,7 +233,7 @@ func cmdTeamList(c *call) error {
 	}
 	return c.show(res.Body, func(w io.Writer) {
 		for _, t := range res.JSON200.Items {
-			fmt.Fprintf(w, "%-8s %s\n", t.Key, t.Name)
+			c.printTeamLine(w, t)
 		}
 	})
 }
@@ -252,7 +252,7 @@ func cmdTeamShow(c *call) error {
 		return err
 	}
 	return c.show(res.Body, func(w io.Writer) {
-		fmt.Fprintf(w, "%s  %s\n", res.JSON200.Team.Key, res.JSON200.Team.Name)
+		c.printTeamLine(w, res.JSON200.Team)
 		for _, m := range res.JSON200.Members {
 			fmt.Fprint(w, "  ")
 			c.printMemberLine(w, m)
