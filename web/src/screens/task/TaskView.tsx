@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { api, call, isUnauthenticated, ApiError, type TaskDetail } from "@/api/client";
 import { useDirectory } from "@/api/queries";
-import { teamTasksPath } from "@/app/currentTeam";
+import { teamTasksPath, useReportTeam } from "@/app/currentTeam";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
 import { Key } from "@/components/Key";
@@ -35,6 +35,7 @@ export function TaskPage() {
   const { teams } = useDirectory();
   const d = q.data;
   const team = d ? teams.get(d.feature.team_id) : undefined;
+  useReportTeam(team?.key, "tasks");
   return (
     <>
       <TopBar

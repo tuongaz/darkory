@@ -1,15 +1,18 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { Activity } from "@/api/client";
 import { mockApi } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
-import { ada, bob, builder, feature, me, signedIn, task, web } from "@/test/fixtures";
+import { ada, bob, builder, feature, me, ops, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { sendIntent } from "./intents";
 
 const sidebar = () => screen.getByRole("navigation", { name: "Main" }).closest<HTMLElement>("[data-slot=sidebar]")!;
 const inFuture = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+
+// The Team last shown is remembered by the browser; each test starts in a fresh one.
+beforeEach(() => localStorage.clear());
 
 describe("the shell", () => {
   it("opens on the Inbox and draws the sidebar's places, Teams and the signed-in Member", async () => {
@@ -69,6 +72,60 @@ describe("the shell", () => {
     act(() => FakeEventSource.latest().emit("activity", entry, 7));
 
     expect(await within(sidebar()).findByRole("button", { name: "Platform" })).toBeInTheDocument();
+  });
+});
+
+describe("the sidebar on a record's page", () => {
+  const chores = feature(4, 1, { key: "OPS-1", team_id: ops.id, title: "Chores" });
+  const sweep = task(3, chores.id, { key: "OPS-3", title: "Sweep the logs" });
+  const statuses = [{ id: "st-todo", name: "Todo", kind: "todo", position: 1 }];
+  const records = () => ({
+    ...signedIn(),
+    "GET /v1/statuses": { items: statuses },
+    "GET /v1/features": { items: [chores] },
+    "GET /v1/tasks": { items: [sweep] },
+    "GET /v1/tasks/takeable": { items: [] },
+    "GET /v1/activity": { items: [], last_seq: 0 },
+    "GET /v1/tasks/:task": { task: sweep, status: statuses[0], feature: chores, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+    "GET /v1/features/:feature": { feature: chores, tasks: [sweep], evidence: [] },
+    "GET /v1/teams/:team": { team: ops, members: [me().member] },
+    "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
+  });
+  const subItem = (name: string) => within(sidebar()).getByRole("link", { name }).closest("[data-active]");
+
+  it("opens the Task's Team, not the Member's first, and marks its Tasks", async () => {
+    mockApi(records());
+    renderApp("/tasks/OPS-3");
+    expect(await screen.findByRole("heading", { name: "Sweep the logs", level: 1 })).toBeInTheDocument();
+    await waitFor(() => expect(within(sidebar()).getByRole("button", { name: "Ops" })).toHaveAttribute("aria-expanded", "true"));
+    expect(within(sidebar()).getByRole("button", { name: "Web" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(sidebar()).getByRole("link", { name: "Tasks" })).toHaveAttribute("href", "/teams/OPS/tasks");
+    expect(subItem("Tasks")).toHaveAttribute("data-active", "true");
+    expect(subItem("Features")).toHaveAttribute("data-active", "false");
+  });
+
+  it("opens the Feature's Team and marks its Features", async () => {
+    mockApi(records());
+    renderApp("/features/OPS-1");
+    await waitFor(() => expect(within(sidebar()).getByRole("button", { name: "Ops" })).toHaveAttribute("aria-expanded", "true"));
+    expect(within(sidebar()).getByRole("link", { name: "Features" })).toHaveAttribute("href", "/teams/OPS/features");
+    await waitFor(() => expect(subItem("Features")).toHaveAttribute("data-active", "true"));
+    expect(subItem("Tasks")).toHaveAttribute("data-active", "false");
+  });
+
+  it("G B opens the board of the Team last visited in this browser", async () => {
+    mockApi(records());
+    const first = renderApp("/tasks/OPS-3");
+    await screen.findByRole("heading", { name: "Sweep the logs", level: 1 });
+    await waitFor(() => expect(within(sidebar()).getByRole("button", { name: "Ops" })).toHaveAttribute("aria-expanded", "true"));
+    first.unmount();
+
+    // A new page load: the Member's first Team is Web, but Ops was the last one shown.
+    renderApp("/inbox");
+    await screen.findByRole("navigation", { name: "Main" });
+    await userEvent.keyboard("gb");
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Ops/Tasks"));
+    expect(screen.getByRole("heading", { name: "Tasks, board" })).toBeInTheDocument();
   });
 });
 

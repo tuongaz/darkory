@@ -5,7 +5,7 @@ import { Link, useParams, type To } from "react-router";
 import { toast } from "sonner";
 import { ApiError, api, call, evidenceURL, isUnauthenticated, type Evidence, type FeatureDetail, type Task, type TaskDetail } from "@/api/client";
 import { keys, useDirectory } from "@/api/queries";
-import { teamFeaturesPath, teamTasksPath } from "@/app/currentTeam";
+import { teamFeaturesPath, teamTasksPath, useReportTeam } from "@/app/currentTeam";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
@@ -43,6 +43,7 @@ export function FeaturePage() {
   const me = useCurrentMe();
   const d = q.data;
   const team = d ? teams.get(d.feature.team_id) : undefined;
+  useReportTeam(team?.key, "features");
   const owner = d?.feature.owner_id === me.member.id;
   return (
     <>

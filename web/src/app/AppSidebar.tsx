@@ -39,7 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { liveAgents } from "@/work";
-import { teamFeaturesPath, teamTasksPath, useCurrentTeam } from "./currentTeam";
+import { teamFeaturesPath, teamTasksPath, useCurrentTeam, useRecordTeam } from "./currentTeam";
 import { searchKeys } from "./shortcuts";
 
 /**
@@ -171,8 +171,11 @@ function TeamItem({ team, current }: { team: Team; current: boolean }) {
   const [open, setOpen] = useState(current);
   const tasks = teamTasksPath(team);
   const features = teamFeaturesPath(team);
-  const onTasks = useMatch(`/teams/${team.key}/tasks`) !== null;
-  const onFeatures = useMatch(`/teams/${team.key}/features`) !== null;
+  // A Task's page sits under its Team's Tasks, a Feature's under its Features.
+  const record = useRecordTeam();
+  const ofRecord = record?.team === team.key ? record.area : undefined;
+  const atTasks = useMatch(`/teams/${team.key}/tasks`) !== null;
+  const atFeatures = useMatch(`/teams/${team.key}/features`) !== null;
   return (
     <SidebarMenuItem>
       <SidebarMenuButton aria-expanded={open} onClick={() => setOpen((o) => !o)}>
@@ -187,16 +190,16 @@ function TeamItem({ team, current }: { team: Team; current: boolean }) {
       {open && (
         <SidebarMenuSub className="mx-0 translate-x-0 gap-0.5 border-l-0 px-0 py-0.5">
           <SidebarMenuSubItem>
-            <SidebarMenuSubButton asChild isActive={onTasks} className="h-[30px] pl-[30px]">
-              <Link to={tasks} aria-current={onTasks ? "page" : undefined}>
+            <SidebarMenuSubButton asChild isActive={atTasks || ofRecord === "tasks"} className="h-[30px] pl-[30px]">
+              <Link to={tasks} aria-current={atTasks ? "page" : undefined}>
                 <ListIcon />
                 <span>Tasks</span>
               </Link>
             </SidebarMenuSubButton>
           </SidebarMenuSubItem>
           <SidebarMenuSubItem>
-            <SidebarMenuSubButton asChild isActive={onFeatures} className="h-[30px] pl-[30px]">
-              <Link to={features} aria-current={onFeatures ? "page" : undefined}>
+            <SidebarMenuSubButton asChild isActive={atFeatures || ofRecord === "features"} className="h-[30px] pl-[30px]">
+              <Link to={features} aria-current={atFeatures ? "page" : undefined}>
                 <LayersIcon />
                 <span>Features</span>
               </Link>

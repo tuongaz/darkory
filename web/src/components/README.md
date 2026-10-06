@@ -48,7 +48,10 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 - **Peek** (`@/app/peek`): `usePeekLink()(key)` is a `To` for the current page with `?task=key`
   added (other parameters stay); link a row to it. The shell mounts `TaskPeek` while the parameter
   is there; `usePeek()` gives `{ taskKey, close }`.
-- **Current Team** (`@/app/currentTeam`): `useCurrentTeam()`; `teamTasksPath(team, "board")`,
+- **Current Team** (`@/app/currentTeam`): `useCurrentTeam()` (the Team in the URL or of the
+  record shown, else the one last shown in this browser); a Task's or Feature's page calls
+  `useReportTeam(team.key, "tasks" | "features")` so the sidebar opens that Team and marks the
+  list the record sits in; `teamTasksPath(team, "board")`,
   `teamFeaturesPath(team)`.
 - **Toasts**: `import { toast } from "sonner"`; the shell mounts the Toaster. A refused drag is a
   toast naming the resolving action ("Claim WEB-17").
