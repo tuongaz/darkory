@@ -313,4 +313,3 @@ func TestRunnerSessions(t *testing.T) {
 		}
 	})
 }
-

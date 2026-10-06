@@ -120,7 +120,7 @@ func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 	out := gen.TaskDetail{
 		Task: taskOut(d.Task), Status: statusOut(d.Status), Feature: featureOut(d.Feature), Workspaces: each(d.Workspaces, workspaceOut),
 		Claims: each(d.Claims, claimOut),
-		Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut), Blockers: each(d.Blockers, taskOut),
+		Notes:  each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut), Blockers: each(d.Blockers, taskOut),
 		Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
 	}
 	if d.Proposal != nil {
