@@ -49,6 +49,7 @@ export function task(n: number, featureId: string, extra: Partial<Task> = {}): T
     title: `Task ${n}`,
     description: "",
     state: "open",
+    status_id: "st-todo",
     skill_id: build.id,
     blocked: false,
     filed_by: ada.id,

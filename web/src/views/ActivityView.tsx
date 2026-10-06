@@ -91,6 +91,8 @@ const said: Record<ActivityKind, string> = {
   "task.blocker_removed": "removed a blocker from",
   "task.evidence_attached": "attached Evidence to",
   "task.skill_proposed": "proposed a Skill version on",
+  "task.status_set": "moved",
+  "statuses.changed": "changed the Statuses of",
   "skill.created": "created the Skill",
   "skill.version_published": "published a version of",
   "member.created": "created the Member",

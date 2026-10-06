@@ -487,6 +487,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/statuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the Organisation's Statuses, in their order */
+        get: operations["listStatuses"];
+        /**
+         * Replace the Organisation's list of Statuses (admin)
+         * @description Takes the whole list in its new order: a Status already in it carries its `id` and may be
+         *     renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+         *     Names are unique, ignoring case. The list must keep at least one Status of each kind
+         *     `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+         *     Status that Tasks are in needs `moves` to say where they go, or it is refused with
+         *     `status_in_use`; so is a Status that Tasks are in changing between an open kind
+         *     (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+         *     `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+         *     admin), `invalid`, `status_in_use`.
+         */
+        put: operations["setStatuses"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/features": {
         parameters: {
             query?: never;
@@ -673,9 +702,11 @@ export interface paths {
          *     question or Escalation: the new Task joins the Feature of the Task it blocks (which must
          *     then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
          *     even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-         *     Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-         *     `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-         *     `not_holder`, `forbidden`, `cycle`.
+         *     Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+         *     starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+         *     ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+         *     `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+         *     `dropped`).
          */
         post: operations["fileTask"];
         delete?: never;
@@ -757,8 +788,9 @@ export interface paths {
          * Claim a Task
          * @description One conditional write: it succeeds only when the Task is takeable by the caller. The
          *     Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-         *     bound to the calling Session, without one to the Member. Errors: `already_claimed`
-         *     (someone holds it; stop rather than retry), `not_takeable`.
+         *     bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+         *     to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+         *     than retry), `not_takeable`.
          */
         post: operations["claimTask"];
         delete?: never;
@@ -802,7 +834,7 @@ export interface paths {
         put?: never;
         /**
          * Give up the caller's Claim, leaving the Task needing the same Skill
-         * @description Errors: `not_holder`.
+         * @description A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
          */
         post: operations["releaseTask"];
         delete?: never;
@@ -824,7 +856,9 @@ export interface paths {
          * End the caller's Claim and set the Skill the Task needs next
          * @description The Task then waits for a Member with that Skill, from the moment of the Handover; it is
          *     no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-         *     again only under that Skill. Errors: `not_holder`.
+         *     again only under that Skill. The Status stays as it is unless `status` names another.
+         *     Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+         *     `dropped`).
          */
         post: operations["handoverTask"];
         delete?: never;
@@ -844,9 +878,10 @@ export interface paths {
         put?: never;
         /**
          * Complete a Task the caller holds
-         * @description Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-         *     proposal publishes it as the Skill's next version; completing a Retrospective marks its
-         *     Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+         * @description Ends the Task done, in the first `done` Status. Completing a Task that needs
+         *     `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+         *     completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+         *     Errors: `not_holder`, `proposal_stale`
          *     (the version the proposal was written against is no longer current; nothing changes, and
          *     the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
          */
@@ -868,7 +903,7 @@ export interface paths {
         put?: never;
         /**
          * Drop a Task (Feature owner)
-         * @description Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+         * @description Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
          */
         post: operations["dropTask"];
         delete?: never;
@@ -889,9 +924,35 @@ export interface paths {
         /**
          * End another Member's Claim on a Task
          * @description By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-         *     takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+         *     takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+         *     `forbidden`, `not_holder` (nobody holds it).
          */
         post: operations["takeBackTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a Task to another Status
+         * @description By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+         *     where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+         *     (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+         *     being completed or dropped. Naming the Status the Task is in changes nothing. Records
+         *     `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+         *     has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+         */
+        post: operations["setTaskStatus"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1064,7 +1125,9 @@ export interface paths {
          *     `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
          *     entries numbered just below it, still in sequence order, and its `first_seq` is the
          *     `before` of the page before it. A `before` past the newest entry (such as
-         *     9007199254740991) reads the latest page.
+         *     9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+         *     matching entries; the page is then the `limit` matching entries after `after` or just
+         *     below `before`, and its `first_seq` and `last_seq` are theirs.
          */
         get: operations["listActivity"];
         put?: never;
@@ -1118,11 +1181,12 @@ export interface components {
          *     `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
          *     `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
          *     `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-         *     `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+         *     `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
+         *     `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
          *     `not_implemented` 501.
          * @enum {string}
          */
-        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
+        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "status_in_use" | "use_complete" | "use_drop" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -1444,6 +1508,8 @@ export interface components {
             title: string;
             description: string;
             state: components["schemas"]["TaskState"];
+            /** @description The Task's Status, one of the Organisation's (`listStatuses`). */
+            status_id: string;
             /** @description The Skill the Task needs now. Absent when it is aimed at a Member. */
             skill_id?: string;
             /** @description The Member the Task is aimed at by name. */
@@ -1475,6 +1541,62 @@ export interface components {
          * @enum {string}
          */
         TaskState: "open" | "done" | "dropped";
+        /**
+         * @description Where a Task is in its workflow, from the list the Organisation defines and orders. The
+         *     rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
+         *     `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
+         *     a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
+         *     drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
+         *     lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
+         *     an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
+         *     holder names one. Claimed and blocked are not Statuses.
+         */
+        Status: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["StatusKind"];
+            /**
+             * Format: int64
+             * @description Its place in the Organisation's list, 1 first.
+             */
+            position: number;
+        };
+        /**
+         * @description What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+         *     `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+         *     `dropped`: reached only by completing or dropping the Task, which never leaves them.
+         * @enum {string}
+         */
+        StatusKind: "backlog" | "todo" | "in_progress" | "done" | "dropped";
+        StatusList: {
+            /** @description The Organisation's Statuses, in their order. */
+            items: components["schemas"]["Status"][];
+        };
+        SetStatusesBody: {
+            /**
+             * @description The whole list, in its new order. A Status already in the list carries its `id`; a
+             *     new one has none. A Status left out is deleted.
+             */
+            items: components["schemas"]["StatusInput"][];
+            /**
+             * @description Where the Tasks in a deleted Status go: the deleted Status's id to the id of a Status
+             *     kept in the list, of the same kind of ending (an open kind to an open kind, `done` to
+             *     `done`, `dropped` to `dropped`).
+             */
+            moves?: {
+                [key: string]: string;
+            };
+        };
+        StatusInput: {
+            /** @description The id of a Status in the list now; left out for a new one. */
+            id?: string;
+            name: string;
+            kind: components["schemas"]["StatusKind"];
+        };
+        SetTaskStatusBody: {
+            /** @description Status id or name, of kind `backlog`, `todo` or `in_progress`. */
+            status: string;
+        };
         /**
          * @description `breakdown` and `retrospective` Tasks are filed by Darkory.
          * @enum {string}
@@ -1513,6 +1635,7 @@ export interface components {
         /** @description The Task with its record. `proposal` is the latest Skill proposal written on it, when any. */
         TaskDetail: {
             task: components["schemas"]["Task"];
+            status: components["schemas"]["Status"];
             feature: components["schemas"]["Feature"];
             /** @description Every Claim on the Task, oldest first. */
             claims: components["schemas"]["Claim"][];
@@ -1542,6 +1665,12 @@ export interface components {
             aimed_at?: string;
             /** @description Id or display key of a Task the new one blocks (a question or Escalation). */
             blocks?: string;
+            /**
+             * @description Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
+             *     `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
+             *     Status.
+             */
+            status?: string;
         };
         ClaimTaskBody: {
             /** @description Seconds without a Heartbeat before the Claim lapses. 0 for none. Defaults to the token's default. */
@@ -1579,6 +1708,11 @@ export interface components {
             skill: string;
             /** @description Added to the Task's Notes in the same write. */
             note?: string;
+            /**
+             * @description Status id or name to move the Task to, of kind `backlog`, `todo` or `in_progress`,
+             *     such as In review. Left out, the Status stays as it is.
+             */
+            status?: string;
         };
         CompleteTaskBody: {
             /** @description Added to the Task's Notes in the same write. */
@@ -1665,12 +1799,13 @@ export interface components {
          *     within `/v1`; a client should skip a kind it does not know.
          * @enum {string}
          */
-        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "team.created" | "team.member_added" | "team.member_removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.status_set" | "statuses.changed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "team.created" | "team.member_added" | "team.member_removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
         /**
-         * @description The kind of record an Activity entry is about.
+         * @description The kind of record an Activity entry is about. `statuses` is the Organisation's list of
+         *     Statuses as a whole; its `subject_id` is the Organisation's id.
          * @enum {string}
          */
-        SubjectType: "feature" | "task" | "skill" | "member" | "team" | "token" | "session" | "login_link";
+        SubjectType: "feature" | "task" | "skill" | "member" | "team" | "token" | "session" | "login_link" | "statuses";
         ActivityPage: {
             items: components["schemas"]["Activity"][];
             /**
@@ -2626,6 +2761,58 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listStatuses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Statuses. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setStatuses: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetStatusesBody"];
+            };
+        };
+        responses: {
+            /** @description The Statuses, in their new order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listFeatures: {
         parameters: {
             query?: {
@@ -2917,6 +3104,8 @@ export interface operations {
                 aimed_at?: string;
                 /** @description Only Tasks this Member holds a live Claim on. */
                 holder?: string;
+                /** @description Only Tasks in this Status, by id or name. */
+                status?: string;
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
                 /** @description The `next_cursor` of the previous page. */
@@ -3291,6 +3480,40 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    setTaskStatus: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `WEB-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskStatusBody"];
+            };
+        };
+        responses: {
+            /** @description The Task in its new Status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     addNote: {
         parameters: {
             query?: never;
@@ -3546,6 +3769,15 @@ export interface operations {
                 after?: number;
                 /** @description Return the entries with a sequence number below this, closest first. */
                 before?: number;
+                /**
+                 * @description Only entries this Member (id or name) acted in, or that ended a Claim they held: a
+                 *     lapse, a take-back, a drop, a revoked token, a closed Session or a deactivation.
+                 */
+                member?: string;
+                /** @description Only entries of these kinds; repeat it for several. */
+                kind?: components["schemas"]["ActivityKind"][];
+                /** @description Only entries about a Feature of this Team (id or key), or about a Task of one. */
+                team?: string;
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
             };

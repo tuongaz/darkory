@@ -9,6 +9,7 @@ import { renderApp } from "../test/render";
 function detail(extra: Partial<TaskDetail> = {}): TaskDetail {
   return {
     task: task(42, "f-1"),
+    status: { id: "st-todo", name: "Todo", kind: "todo", position: 2 },
     feature: feature(1, 1, { owner_id: bob.id }),
     claims: [],
     notes: [],

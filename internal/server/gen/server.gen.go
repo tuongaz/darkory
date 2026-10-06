@@ -36,6 +36,7 @@ const (
 	ActivityKindSessionClosed           ActivityKind = "session.closed"
 	ActivityKindSkillCreated            ActivityKind = "skill.created"
 	ActivityKindSkillVersionPublished   ActivityKind = "skill.version_published"
+	ActivityKindStatusesChanged         ActivityKind = "statuses.changed"
 	ActivityKindTaskBlockerAdded        ActivityKind = "task.blocker_added"
 	ActivityKindTaskBlockerRemoved      ActivityKind = "task.blocker_removed"
 	ActivityKindTaskClaimEnded          ActivityKind = "task.claim_ended"
@@ -50,6 +51,7 @@ const (
 	ActivityKindTaskObserved            ActivityKind = "task.observed"
 	ActivityKindTaskReleased            ActivityKind = "task.released"
 	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
+	ActivityKindTaskStatusSet           ActivityKind = "task.status_set"
 	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
 	ActivityKindTeamCreated             ActivityKind = "team.created"
 	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
@@ -99,6 +101,8 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindSkillVersionPublished:
 		return true
+	case ActivityKindStatusesChanged:
+		return true
 	case ActivityKindTaskBlockerAdded:
 		return true
 	case ActivityKindTaskBlockerRemoved:
@@ -126,6 +130,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskReleased:
 		return true
 	case ActivityKindTaskSkillProposed:
+		return true
+	case ActivityKindTaskStatusSet:
 		return true
 	case ActivityKindTaskTakenBack:
 		return true
@@ -199,10 +205,13 @@ const (
 	ErrorCodeNotTakeable          ErrorCode = "not_takeable"
 	ErrorCodeProposalStale        ErrorCode = "proposal_stale"
 	ErrorCodeSessionRequired      ErrorCode = "session_required"
+	ErrorCodeStatusInUse          ErrorCode = "status_in_use"
 	ErrorCodeTasksOpen            ErrorCode = "tasks_open"
 	ErrorCodeTooLarge             ErrorCode = "too_large"
 	ErrorCodeTooManyRequests      ErrorCode = "too_many_requests"
 	ErrorCodeUnauthenticated      ErrorCode = "unauthenticated"
+	ErrorCodeUseComplete          ErrorCode = "use_complete"
+	ErrorCodeUseDrop              ErrorCode = "use_drop"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -236,6 +245,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeSessionRequired:
 		return true
+	case ErrorCodeStatusInUse:
+		return true
 	case ErrorCodeTasksOpen:
 		return true
 	case ErrorCodeTooLarge:
@@ -243,6 +254,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTooManyRequests:
 		return true
 	case ErrorCodeUnauthenticated:
+		return true
+	case ErrorCodeUseComplete:
+		return true
+	case ErrorCodeUseDrop:
 		return true
 	default:
 		return false
@@ -420,6 +435,33 @@ func (e SkillKind) Valid() bool {
 	}
 }
 
+// Defines values for StatusKind.
+const (
+	StatusKindBacklog    StatusKind = "backlog"
+	StatusKindDone       StatusKind = "done"
+	StatusKindDropped    StatusKind = "dropped"
+	StatusKindInProgress StatusKind = "in_progress"
+	StatusKindTodo       StatusKind = "todo"
+)
+
+// Valid indicates whether the value is a known member of the StatusKind enum.
+func (e StatusKind) Valid() bool {
+	switch e {
+	case StatusKindBacklog:
+		return true
+	case StatusKindDone:
+		return true
+	case StatusKindDropped:
+		return true
+	case StatusKindInProgress:
+		return true
+	case StatusKindTodo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SubjectType.
 const (
 	SubjectTypeFeature   SubjectType = "feature"
@@ -427,6 +469,7 @@ const (
 	SubjectTypeMember    SubjectType = "member"
 	SubjectTypeSession   SubjectType = "session"
 	SubjectTypeSkill     SubjectType = "skill"
+	SubjectTypeStatuses  SubjectType = "statuses"
 	SubjectTypeTask      SubjectType = "task"
 	SubjectTypeTeam      SubjectType = "team"
 	SubjectTypeToken     SubjectType = "token"
@@ -444,6 +487,8 @@ func (e SubjectType) Valid() bool {
 	case SubjectTypeSession:
 		return true
 	case SubjectTypeSkill:
+		return true
+	case SubjectTypeStatuses:
 		return true
 	case SubjectTypeTask:
 		return true
@@ -515,7 +560,8 @@ type Activity struct {
 	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID string `json:"subject_id"`
 
-	// SubjectType The kind of record an Activity entry is about.
+	// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
+	// Statuses as a whole; its `subject_id` is the Organisation's id.
 	SubjectType SubjectType `json:"subject_type"`
 }
 
@@ -630,7 +676,8 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
+	// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 	// `not_implemented` 501.
 	Code ErrorCode `json:"code"`
 
@@ -645,7 +692,8 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
+// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 // `not_implemented` 501.
 type ErrorCode string
 
@@ -736,7 +784,12 @@ type FileTaskBody struct {
 
 	// Skill Skill id or name the Task needs. Give this or `aimed_at`.
 	Skill *string `json:"skill,omitempty"`
-	Title string  `json:"title"`
+
+	// Status Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
+	// `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
+	// Status.
+	Status *string `json:"status,omitempty"`
+	Title  string  `json:"title"`
 }
 
 // HandoverTaskBody defines model for HandoverTaskBody.
@@ -746,6 +799,10 @@ type HandoverTaskBody struct {
 
 	// Skill Skill id or name the Task needs next.
 	Skill string `json:"skill"`
+
+	// Status Status id or name to move the Task to, of kind `backlog`, `todo` or `in_progress`,
+	// such as In review. Left out, the Status stays as it is.
+	Status *string `json:"status,omitempty"`
 }
 
 // Health defines model for Health.
@@ -978,6 +1035,24 @@ type SetManagerBody struct {
 	Manager string `json:"manager"`
 }
 
+// SetStatusesBody defines model for SetStatusesBody.
+type SetStatusesBody struct {
+	// Items The whole list, in its new order. A Status already in the list carries its `id`; a
+	// new one has none. A Status left out is deleted.
+	Items []StatusInput `json:"items"`
+
+	// Moves Where the Tasks in a deleted Status go: the deleted Status's id to the id of a Status
+	// kept in the list, of the same kind of ending (an open kind to an open kind, `done` to
+	// `done`, `dropped` to `dropped`).
+	Moves *map[string]string `json:"moves,omitempty"`
+}
+
+// SetTaskStatusBody defines model for SetTaskStatusBody.
+type SetTaskStatusBody struct {
+	// Status Status id or name, of kind `backlog`, `todo` or `in_progress`.
+	Status string `json:"status"`
+}
+
 // SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
 // `email_link`: login links emailed on request. More modes may be added within `/v1`.
 type SignInMode string
@@ -1051,7 +1126,52 @@ type SkillVersionList struct {
 	Items []SkillVersion `json:"items"`
 }
 
-// SubjectType The kind of record an Activity entry is about.
+// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
+// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
+// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
+// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
+// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
+// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
+// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
+// holder names one. Claimed and blocked are not Statuses.
+type Status struct {
+	ID string `json:"id"`
+
+	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
+	Kind StatusKind `json:"kind"`
+	Name string     `json:"name"`
+
+	// Position Its place in the Organisation's list, 1 first.
+	Position int64 `json:"position"`
+}
+
+// StatusInput defines model for StatusInput.
+type StatusInput struct {
+	// ID The id of a Status in the list now; left out for a new one.
+	ID *string `json:"id,omitempty"`
+
+	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
+	Kind StatusKind `json:"kind"`
+	Name string     `json:"name"`
+}
+
+// StatusKind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+// `dropped`: reached only by completing or dropping the Task, which never leaves them.
+type StatusKind string
+
+// StatusList defines model for StatusList.
+type StatusList struct {
+	// Items The Organisation's Statuses, in their order.
+	Items []Status `json:"items"`
+}
+
+// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
+// Statuses as a whole; its `subject_id` is the Organisation's id.
 type SubjectType string
 
 // TakeBackTaskBody defines model for TakeBackTaskBody.
@@ -1088,7 +1208,10 @@ type Task struct {
 
 	// State Claimed and lapsed are not states; they follow from the Task's Claim.
 	State TaskState `json:"state"`
-	Title string    `json:"title"`
+
+	// StatusID The Task's Status, one of the Organisation's (`listStatuses`).
+	StatusID string `json:"status_id"`
+	Title    string `json:"title"`
 
 	// WaitingSince When the Task was filed or last handed over.
 	WaitingSince time.Time `json:"waiting_since"`
@@ -1130,7 +1253,17 @@ type TaskDetail struct {
 	Notes        []Note         `json:"notes"`
 	Observations []Observation  `json:"observations"`
 	Proposal     *SkillProposal `json:"proposal,omitempty"`
-	Task         Task           `json:"task"`
+
+	// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
+	// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
+	// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
+	// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
+	// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
+	// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
+	// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
+	// holder names one. Claimed and blocked are not Statuses.
+	Status Status `json:"status"`
+	Task   Task   `json:"task"`
 }
 
 // TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
@@ -1248,6 +1381,16 @@ type ListActivityParams struct {
 
 	// Before Return the entries with a sequence number below this, closest first.
 	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
+
+	// Member Only entries this Member (id or name) acted in, or that ended a Claim they held: a
+	// lapse, a take-back, a drop, a revoked token, a closed Session or a deactivation.
+	Member *string `form:"member,omitempty" json:"member,omitempty"`
+
+	// Kind Only entries of these kinds; repeat it for several.
+	Kind *[]ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Team Only entries about a Feature of this Team (id or key), or about a Task of one.
+	Team *string `form:"team,omitempty" json:"team,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1454,6 +1597,13 @@ type CreateSkillParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetStatusesParams defines parameters for SetStatuses.
+type SetStatusesParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
 	Feature *string    `form:"feature,omitempty" json:"feature,omitempty"`
@@ -1468,6 +1618,9 @@ type ListTasksParams struct {
 
 	// Holder Only Tasks this Member holds a live Claim on.
 	Holder *string `form:"holder,omitempty" json:"holder,omitempty"`
+
+	// Status Only Tasks in this Status, by id or name.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1583,6 +1736,13 @@ type ProposeSkillVersionParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetTaskStatusParams defines parameters for SetTaskStatus.
+type SetTaskStatusParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // TakeBackTaskParams defines parameters for TakeBackTask.
 type TakeBackTaskParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -1645,6 +1805,9 @@ type RequestEmailSignInJSONRequestBody = EmailSignInBody
 // CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
 type CreateSkillJSONRequestBody = CreateSkillBody
 
+// SetStatusesJSONRequestBody defines body for SetStatuses for application/json ContentType.
+type SetStatusesJSONRequestBody = SetStatusesBody
+
 // FileTaskJSONRequestBody defines body for FileTask for application/json ContentType.
 type FileTaskJSONRequestBody = FileTaskBody
 
@@ -1674,6 +1837,9 @@ type ReleaseTaskJSONRequestBody = ReleaseTaskBody
 
 // ProposeSkillVersionJSONRequestBody defines body for ProposeSkillVersion for application/json ContentType.
 type ProposeSkillVersionJSONRequestBody = ProposeSkillVersionBody
+
+// SetTaskStatusJSONRequestBody defines body for SetTaskStatus for application/json ContentType.
+type SetTaskStatusJSONRequestBody = SetTaskStatusBody
 
 // TakeBackTaskJSONRequestBody defines body for TakeBackTask for application/json ContentType.
 type TakeBackTaskJSONRequestBody = TakeBackTaskBody
@@ -1800,6 +1966,12 @@ type ServerInterface interface {
 	// ListSkillVersions List a Skill's published versions
 	// (GET /v1/skills/{skill}/versions)
 	ListSkillVersions(w http.ResponseWriter, r *http.Request, skill SkillRef)
+	// ListStatuses List the Organisation's Statuses, in their order
+	// (GET /v1/statuses)
+	ListStatuses(w http.ResponseWriter, r *http.Request)
+	// SetStatuses Replace the Organisation's list of Statuses (admin)
+	// (PUT /v1/statuses)
+	SetStatuses(w http.ResponseWriter, r *http.Request, params SetStatusesParams)
 	// ListTasks List Tasks
 	// (GET /v1/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, params ListTasksParams)
@@ -1851,6 +2023,9 @@ type ServerInterface interface {
 	// ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
 	// (POST /v1/tasks/{task}/skill-proposals)
 	ProposeSkillVersion(w http.ResponseWriter, r *http.Request, task TaskRef, params ProposeSkillVersionParams)
+	// SetTaskStatus Move a Task to another Status
+	// (POST /v1/tasks/{task}/status)
+	SetTaskStatus(w http.ResponseWriter, r *http.Request, task TaskRef, params SetTaskStatusParams)
 	// TakeBackTask End another Member's Claim on a Task
 	// (POST /v1/tasks/{task}/take-back)
 	TakeBackTask(w http.ResponseWriter, r *http.Request, task TaskRef, params TakeBackTaskParams)
@@ -1914,6 +2089,45 @@ func (siw *ServerInterfaceWrapper) ListActivity(w http.ResponseWriter, r *http.R
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "member" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "member", r.URL.Query(), &params.Member, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "member"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "kind", r.URL.Query(), &params.Kind, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "kind"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "team" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
 		}
 		return
 	}
@@ -3568,6 +3782,61 @@ func (siw *ServerInterfaceWrapper) ListSkillVersions(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListStatuses operation middleware
+func (siw *ServerInterfaceWrapper) ListStatuses(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListStatuses(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetStatuses operation middleware
+func (siw *ServerInterfaceWrapper) SetStatuses(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetStatusesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetStatuses(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -3651,6 +3920,19 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "holder"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "holder", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
 		}
 		return
 	}
@@ -4464,6 +4746,56 @@ func (siw *ServerInterfaceWrapper) ProposeSkillVersion(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// SetTaskStatus operation middleware
+func (siw *ServerInterfaceWrapper) SetTaskStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetTaskStatusParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTaskStatus(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TakeBackTask operation middleware
 func (siw *ServerInterfaceWrapper) TakeBackTask(w http.ResponseWriter, r *http.Request) {
 
@@ -4915,6 +5247,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}", wrapper.GetSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}/versions", wrapper.ListSkillVersions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skill-proposals/{proposal}", wrapper.GetSkillProposal)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/statuses", wrapper.ListStatuses)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/statuses", wrapper.SetStatuses)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features", wrapper.ListFeatures)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features", wrapper.FileFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features/{feature}", wrapper.GetFeature)
@@ -4936,6 +5270,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/complete", wrapper.CompleteTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/drop", wrapper.DropTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/take-back", wrapper.TakeBackTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/status", wrapper.SetTaskStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/notes", wrapper.AddNote)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/observations", wrapper.Observe)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tasks/{task}/blockers/{blocker}", wrapper.RemoveBlocker)

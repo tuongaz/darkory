@@ -39,6 +39,7 @@ const (
 	ActivityKindSessionClosed           ActivityKind = "session.closed"
 	ActivityKindSkillCreated            ActivityKind = "skill.created"
 	ActivityKindSkillVersionPublished   ActivityKind = "skill.version_published"
+	ActivityKindStatusesChanged         ActivityKind = "statuses.changed"
 	ActivityKindTaskBlockerAdded        ActivityKind = "task.blocker_added"
 	ActivityKindTaskBlockerRemoved      ActivityKind = "task.blocker_removed"
 	ActivityKindTaskClaimEnded          ActivityKind = "task.claim_ended"
@@ -53,6 +54,7 @@ const (
 	ActivityKindTaskObserved            ActivityKind = "task.observed"
 	ActivityKindTaskReleased            ActivityKind = "task.released"
 	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
+	ActivityKindTaskStatusSet           ActivityKind = "task.status_set"
 	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
 	ActivityKindTeamCreated             ActivityKind = "team.created"
 	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
@@ -102,6 +104,8 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindSkillVersionPublished:
 		return true
+	case ActivityKindStatusesChanged:
+		return true
 	case ActivityKindTaskBlockerAdded:
 		return true
 	case ActivityKindTaskBlockerRemoved:
@@ -129,6 +133,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskReleased:
 		return true
 	case ActivityKindTaskSkillProposed:
+		return true
+	case ActivityKindTaskStatusSet:
 		return true
 	case ActivityKindTaskTakenBack:
 		return true
@@ -202,10 +208,13 @@ const (
 	ErrorCodeNotTakeable          ErrorCode = "not_takeable"
 	ErrorCodeProposalStale        ErrorCode = "proposal_stale"
 	ErrorCodeSessionRequired      ErrorCode = "session_required"
+	ErrorCodeStatusInUse          ErrorCode = "status_in_use"
 	ErrorCodeTasksOpen            ErrorCode = "tasks_open"
 	ErrorCodeTooLarge             ErrorCode = "too_large"
 	ErrorCodeTooManyRequests      ErrorCode = "too_many_requests"
 	ErrorCodeUnauthenticated      ErrorCode = "unauthenticated"
+	ErrorCodeUseComplete          ErrorCode = "use_complete"
+	ErrorCodeUseDrop              ErrorCode = "use_drop"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -239,6 +248,8 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeSessionRequired:
 		return true
+	case ErrorCodeStatusInUse:
+		return true
 	case ErrorCodeTasksOpen:
 		return true
 	case ErrorCodeTooLarge:
@@ -246,6 +257,10 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeTooManyRequests:
 		return true
 	case ErrorCodeUnauthenticated:
+		return true
+	case ErrorCodeUseComplete:
+		return true
+	case ErrorCodeUseDrop:
 		return true
 	default:
 		return false
@@ -423,6 +438,33 @@ func (e SkillKind) Valid() bool {
 	}
 }
 
+// Defines values for StatusKind.
+const (
+	StatusKindBacklog    StatusKind = "backlog"
+	StatusKindDone       StatusKind = "done"
+	StatusKindDropped    StatusKind = "dropped"
+	StatusKindInProgress StatusKind = "in_progress"
+	StatusKindTodo       StatusKind = "todo"
+)
+
+// Valid indicates whether the value is a known member of the StatusKind enum.
+func (e StatusKind) Valid() bool {
+	switch e {
+	case StatusKindBacklog:
+		return true
+	case StatusKindDone:
+		return true
+	case StatusKindDropped:
+		return true
+	case StatusKindInProgress:
+		return true
+	case StatusKindTodo:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SubjectType.
 const (
 	SubjectTypeFeature   SubjectType = "feature"
@@ -430,6 +472,7 @@ const (
 	SubjectTypeMember    SubjectType = "member"
 	SubjectTypeSession   SubjectType = "session"
 	SubjectTypeSkill     SubjectType = "skill"
+	SubjectTypeStatuses  SubjectType = "statuses"
 	SubjectTypeTask      SubjectType = "task"
 	SubjectTypeTeam      SubjectType = "team"
 	SubjectTypeToken     SubjectType = "token"
@@ -447,6 +490,8 @@ func (e SubjectType) Valid() bool {
 	case SubjectTypeSession:
 		return true
 	case SubjectTypeSkill:
+		return true
+	case SubjectTypeStatuses:
 		return true
 	case SubjectTypeTask:
 		return true
@@ -518,7 +563,8 @@ type Activity struct {
 	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID string `json:"subject_id"`
 
-	// SubjectType The kind of record an Activity entry is about.
+	// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
+	// Statuses as a whole; its `subject_id` is the Organisation's id.
 	SubjectType SubjectType `json:"subject_type"`
 }
 
@@ -633,7 +679,8 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
+	// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 	// `not_implemented` 501.
 	Code ErrorCode `json:"code"`
 
@@ -648,7 +695,8 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
+// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 // `not_implemented` 501.
 type ErrorCode string
 
@@ -739,7 +787,12 @@ type FileTaskBody struct {
 
 	// Skill Skill id or name the Task needs. Give this or `aimed_at`.
 	Skill *string `json:"skill,omitempty"`
-	Title string  `json:"title"`
+
+	// Status Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
+	// `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
+	// Status.
+	Status *string `json:"status,omitempty"`
+	Title  string  `json:"title"`
 }
 
 // HandoverTaskBody defines model for HandoverTaskBody.
@@ -749,6 +802,10 @@ type HandoverTaskBody struct {
 
 	// Skill Skill id or name the Task needs next.
 	Skill string `json:"skill"`
+
+	// Status Status id or name to move the Task to, of kind `backlog`, `todo` or `in_progress`,
+	// such as In review. Left out, the Status stays as it is.
+	Status *string `json:"status,omitempty"`
 }
 
 // Health defines model for Health.
@@ -981,6 +1038,24 @@ type SetManagerBody struct {
 	Manager string `json:"manager"`
 }
 
+// SetStatusesBody defines model for SetStatusesBody.
+type SetStatusesBody struct {
+	// Items The whole list, in its new order. A Status already in the list carries its `id`; a
+	// new one has none. A Status left out is deleted.
+	Items []StatusInput `json:"items"`
+
+	// Moves Where the Tasks in a deleted Status go: the deleted Status's id to the id of a Status
+	// kept in the list, of the same kind of ending (an open kind to an open kind, `done` to
+	// `done`, `dropped` to `dropped`).
+	Moves *map[string]string `json:"moves,omitempty"`
+}
+
+// SetTaskStatusBody defines model for SetTaskStatusBody.
+type SetTaskStatusBody struct {
+	// Status Status id or name, of kind `backlog`, `todo` or `in_progress`.
+	Status string `json:"status"`
+}
+
 // SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
 // `email_link`: login links emailed on request. More modes may be added within `/v1`.
 type SignInMode string
@@ -1054,7 +1129,52 @@ type SkillVersionList struct {
 	Items []SkillVersion `json:"items"`
 }
 
-// SubjectType The kind of record an Activity entry is about.
+// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
+// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
+// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
+// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
+// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
+// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
+// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
+// holder names one. Claimed and blocked are not Statuses.
+type Status struct {
+	ID string `json:"id"`
+
+	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
+	Kind StatusKind `json:"kind"`
+	Name string     `json:"name"`
+
+	// Position Its place in the Organisation's list, 1 first.
+	Position int64 `json:"position"`
+}
+
+// StatusInput defines model for StatusInput.
+type StatusInput struct {
+	// ID The id of a Status in the list now; left out for a new one.
+	ID *string `json:"id,omitempty"`
+
+	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
+	Kind StatusKind `json:"kind"`
+	Name string     `json:"name"`
+}
+
+// StatusKind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
+// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
+// `dropped`: reached only by completing or dropping the Task, which never leaves them.
+type StatusKind string
+
+// StatusList defines model for StatusList.
+type StatusList struct {
+	// Items The Organisation's Statuses, in their order.
+	Items []Status `json:"items"`
+}
+
+// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
+// Statuses as a whole; its `subject_id` is the Organisation's id.
 type SubjectType string
 
 // TakeBackTaskBody defines model for TakeBackTaskBody.
@@ -1091,7 +1211,10 @@ type Task struct {
 
 	// State Claimed and lapsed are not states; they follow from the Task's Claim.
 	State TaskState `json:"state"`
-	Title string    `json:"title"`
+
+	// StatusID The Task's Status, one of the Organisation's (`listStatuses`).
+	StatusID string `json:"status_id"`
+	Title    string `json:"title"`
 
 	// WaitingSince When the Task was filed or last handed over.
 	WaitingSince time.Time `json:"waiting_since"`
@@ -1133,7 +1256,17 @@ type TaskDetail struct {
 	Notes        []Note         `json:"notes"`
 	Observations []Observation  `json:"observations"`
 	Proposal     *SkillProposal `json:"proposal,omitempty"`
-	Task         Task           `json:"task"`
+
+	// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
+	// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
+	// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
+	// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
+	// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
+	// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
+	// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
+	// holder names one. Claimed and blocked are not Statuses.
+	Status Status `json:"status"`
+	Task   Task   `json:"task"`
 }
 
 // TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
@@ -1251,6 +1384,16 @@ type ListActivityParams struct {
 
 	// Before Return the entries with a sequence number below this, closest first.
 	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
+
+	// Member Only entries this Member (id or name) acted in, or that ended a Claim they held: a
+	// lapse, a take-back, a drop, a revoked token, a closed Session or a deactivation.
+	Member *string `form:"member,omitempty" json:"member,omitempty"`
+
+	// Kind Only entries of these kinds; repeat it for several.
+	Kind *[]ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Team Only entries about a Feature of this Team (id or key), or about a Task of one.
+	Team *string `form:"team,omitempty" json:"team,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1457,6 +1600,13 @@ type CreateSkillParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetStatusesParams defines parameters for SetStatuses.
+type SetStatusesParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
 	Feature *string    `form:"feature,omitempty" json:"feature,omitempty"`
@@ -1471,6 +1621,9 @@ type ListTasksParams struct {
 
 	// Holder Only Tasks this Member holds a live Claim on.
 	Holder *string `form:"holder,omitempty" json:"holder,omitempty"`
+
+	// Status Only Tasks in this Status, by id or name.
+	Status *string `form:"status,omitempty" json:"status,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1586,6 +1739,13 @@ type ProposeSkillVersionParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetTaskStatusParams defines parameters for SetTaskStatus.
+type SetTaskStatusParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // TakeBackTaskParams defines parameters for TakeBackTask.
 type TakeBackTaskParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -1648,6 +1808,9 @@ type RequestEmailSignInJSONRequestBody = EmailSignInBody
 // CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
 type CreateSkillJSONRequestBody = CreateSkillBody
 
+// SetStatusesJSONRequestBody defines body for SetStatuses for application/json ContentType.
+type SetStatusesJSONRequestBody = SetStatusesBody
+
 // FileTaskJSONRequestBody defines body for FileTask for application/json ContentType.
 type FileTaskJSONRequestBody = FileTaskBody
 
@@ -1677,6 +1840,9 @@ type ReleaseTaskJSONRequestBody = ReleaseTaskBody
 
 // ProposeSkillVersionJSONRequestBody defines body for ProposeSkillVersion for application/json ContentType.
 type ProposeSkillVersionJSONRequestBody = ProposeSkillVersionBody
+
+// SetTaskStatusJSONRequestBody defines body for SetTaskStatus for application/json ContentType.
+type SetTaskStatusJSONRequestBody = SetTaskStatusBody
 
 // TakeBackTaskJSONRequestBody defines body for TakeBackTask for application/json ContentType.
 type TakeBackTaskJSONRequestBody = TakeBackTaskBody
@@ -1764,7 +1930,9 @@ type ClientInterface interface {
 	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
-	// 9007199254740991) reads the latest page.
+	// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+	// matching entries; the page is then the `limit` matching entries after `after` or just
+	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
 	// Corresponds with GET /v1/activity (the `ListActivity` operationId).
 	ListActivity(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2157,6 +2325,45 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/skills/{skill}/versions (the `ListSkillVersions` operationId).
 	ListSkillVersions(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListStatuses List the Organisation's Statuses, in their order
+	//
+	// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
+	ListStatuses(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetStatusesWithBody Replace the Organisation's list of Statuses (admin)
+	//
+	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+	// Names are unique, ignoring case. The list must keep at least one Status of each kind
+	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+	// admin), `invalid`, `status_in_use`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+	SetStatusesWithBody(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetStatuses Replace the Organisation's list of Statuses (admin)
+	//
+	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+	// Names are unique, ignoring case. The list must keep at least one Status of each kind
+	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+	// admin), `invalid`, `status_in_use`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+	SetStatuses(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListTasks List Tasks
 	//
 	// Ordered by Feature Rank, then by how long each Task has waited.
@@ -2170,9 +2377,11 @@ type ClientInterface interface {
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-	// `not_holder`, `forbidden`, `cycle`.
+	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2185,9 +2394,11 @@ type ClientInterface interface {
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-	// `not_holder`, `forbidden`, `cycle`.
+	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2255,8 +2466,9 @@ type ClientInterface interface {
 	//
 	// One conditional write: it succeeds only when the Task is takeable by the caller. The
 	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-	// (someone holds it; stop rather than retry), `not_takeable`.
+	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+	// than retry), `not_takeable`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2267,8 +2479,9 @@ type ClientInterface interface {
 	//
 	// One conditional write: it succeeds only when the Task is takeable by the caller. The
 	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-	// (someone holds it; stop rather than retry), `not_takeable`.
+	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+	// than retry), `not_takeable`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2277,9 +2490,10 @@ type ClientInterface interface {
 
 	// CompleteTaskWithBody Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// Ends the Task done, in the first `done` Status. Completing a Task that needs
+	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+	// Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -2290,9 +2504,10 @@ type ClientInterface interface {
 
 	// CompleteTask Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// Ends the Task done, in the first `done` Status. Completing a Task that needs
+	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+	// Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -2303,7 +2518,7 @@ type ClientInterface interface {
 
 	// DropTaskWithBody Drop a Task (Feature owner)
 	//
-	// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2312,7 +2527,7 @@ type ClientInterface interface {
 
 	// DropTask Drop a Task (Feature owner)
 	//
-	// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2335,7 +2550,9 @@ type ClientInterface interface {
 	//
 	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. Errors: `not_holder`.
+	// again only under that Skill. The Status stays as it is unless `status` names another.
+	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2346,7 +2563,9 @@ type ClientInterface interface {
 	//
 	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. Errors: `not_holder`.
+	// again only under that Skill. The Status stays as it is unless `status` names another.
+	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2404,7 +2623,7 @@ type ClientInterface interface {
 
 	// ReleaseTaskWithBody Give up the caller's Claim, leaving the Task needing the same Skill
 	//
-	// Errors: `not_holder`.
+	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2413,7 +2632,7 @@ type ClientInterface interface {
 
 	// ReleaseTask Give up the caller's Claim, leaving the Task needing the same Skill
 	//
-	// Errors: `not_holder`.
+	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2446,10 +2665,39 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersion(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, body ProposeSkillVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SetTaskStatusWithBody Move a Task to another Status
+	//
+	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+	SetTaskStatusWithBody(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTaskStatus Move a Task to another Status
+	//
+	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+	SetTaskStatus(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// TakeBackTaskWithBody End another Member's Claim on a Task
 	//
 	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+	// `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2459,7 +2707,8 @@ type ClientInterface interface {
 	// TakeBackTask End another Member's Claim on a Task
 	//
 	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+	// `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2521,7 +2770,9 @@ type ClientInterface interface {
 // `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
-// 9007199254740991) reads the latest page.
+// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+// matching entries; the page is then the `limit` matching entries after `after` or just
+// below `before`, and its `first_seq` and `last_seq` are theirs.
 //
 // Corresponds with GET /v1/activity (the `ListActivity` operationId).
 func (c *Client) ListActivity(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3394,6 +3645,75 @@ func (c *Client) ListSkillVersions(ctx context.Context, skill SkillRef, reqEdito
 	return c.Client.Do(req)
 }
 
+// ListStatuses List the Organisation's Statuses, in their order
+//
+// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
+func (c *Client) ListStatuses(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListStatusesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetStatusesWithBody Replace the Organisation's list of Statuses (admin)
+//
+// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+// Names are unique, ignoring case. The list must keep at least one Status of each kind
+// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+// admin), `invalid`, `status_in_use`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+func (c *Client) SetStatusesWithBody(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetStatusesRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetStatuses Replace the Organisation's list of Statuses (admin)
+//
+// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+// Names are unique, ignoring case. The list must keep at least one Status of each kind
+// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+// admin), `invalid`, `status_in_use`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+func (c *Client) SetStatuses(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetStatusesRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListTasks List Tasks
 //
 // Ordered by Feature Rank, then by how long each Task has waited.
@@ -3417,9 +3737,11 @@ func (c *Client) ListTasks(ctx context.Context, params *ListTasksParams, reqEdit
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-// `not_holder`, `forbidden`, `cycle`.
+// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3442,9 +3764,11 @@ func (c *Client) FileTaskWithBody(ctx context.Context, params *FileTaskParams, c
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-// `not_holder`, `forbidden`, `cycle`.
+// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3582,8 +3906,9 @@ func (c *Client) AddBlocker(ctx context.Context, task TaskRef, blocker BlockerRe
 //
 // One conditional write: it succeeds only when the Task is takeable by the caller. The
 // Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-// (someone holds it; stop rather than retry), `not_takeable`.
+// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+// than retry), `not_takeable`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3604,8 +3929,9 @@ func (c *Client) ClaimTaskWithBody(ctx context.Context, task TaskRef, params *Cl
 //
 // One conditional write: it succeeds only when the Task is takeable by the caller. The
 // Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-// (someone holds it; stop rather than retry), `not_takeable`.
+// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+// than retry), `not_takeable`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3624,9 +3950,10 @@ func (c *Client) ClaimTask(ctx context.Context, task TaskRef, params *ClaimTaskP
 
 // CompleteTaskWithBody Complete a Task the caller holds
 //
-// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// Ends the Task done, in the first `done` Status. Completing a Task that needs
+// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+// Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -3647,9 +3974,10 @@ func (c *Client) CompleteTaskWithBody(ctx context.Context, task TaskRef, params 
 
 // CompleteTask Complete a Task the caller holds
 //
-// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// Ends the Task done, in the first `done` Status. Completing a Task that needs
+// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+// Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -3670,7 +3998,7 @@ func (c *Client) CompleteTask(ctx context.Context, task TaskRef, params *Complet
 
 // DropTaskWithBody Drop a Task (Feature owner)
 //
-// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3689,7 +4017,7 @@ func (c *Client) DropTaskWithBody(ctx context.Context, task TaskRef, params *Dro
 
 // DropTask Drop a Task (Feature owner)
 //
-// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3732,7 +4060,9 @@ func (c *Client) AttachTaskEvidenceWithBody(ctx context.Context, task TaskRef, p
 //
 // The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 // no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. Errors: `not_holder`.
+// again only under that Skill. The Status stays as it is unless `status` names another.
+// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3753,7 +4083,9 @@ func (c *Client) HandoverTaskWithBody(ctx context.Context, task TaskRef, params 
 //
 // The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 // no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. Errors: `not_holder`.
+// again only under that Skill. The Status stays as it is unless `status` names another.
+// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3871,7 +4203,7 @@ func (c *Client) Observe(ctx context.Context, task TaskRef, params *ObserveParam
 
 // ReleaseTaskWithBody Give up the caller's Claim, leaving the Task needing the same Skill
 //
-// Errors: `not_holder`.
+// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3890,7 +4222,7 @@ func (c *Client) ReleaseTaskWithBody(ctx context.Context, task TaskRef, params *
 
 // ReleaseTask Give up the caller's Claim, leaving the Task needing the same Skill
 //
-// Errors: `not_holder`.
+// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3953,10 +4285,59 @@ func (c *Client) ProposeSkillVersion(ctx context.Context, task TaskRef, params *
 	return c.Client.Do(req)
 }
 
+// SetTaskStatusWithBody Move a Task to another Status
+//
+// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+func (c *Client) SetTaskStatusWithBody(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTaskStatusRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetTaskStatus Move a Task to another Status
+//
+// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+func (c *Client) SetTaskStatus(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTaskStatusRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // TakeBackTaskWithBody End another Member's Claim on a Task
 //
 // By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+// `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes any type of body and a specified content type.
 //
@@ -3976,7 +4357,8 @@ func (c *Client) TakeBackTaskWithBody(ctx context.Context, task TaskRef, params 
 // TakeBackTask End another Member's Claim on a Task
 //
 // By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+// `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4154,6 +4536,42 @@ func NewListActivityRequest(server string, params *ListActivityParams) (*http.Re
 		if params.Before != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "before", *params.Before, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Member != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "member", *params.Member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Kind != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "kind", *params.Kind, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Team != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6151,6 +6569,88 @@ func NewListSkillVersionsRequest(server string, skill SkillRef) (*http.Request, 
 	return req, nil
 }
 
+// NewListStatusesRequest constructs an http.Request for the ListStatuses method
+func NewListStatusesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/statuses")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetStatusesRequest calls the generic SetStatuses builder with application/json body
+func NewSetStatusesRequest(server string, params *SetStatusesParams, body SetStatusesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetStatusesRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewSetStatusesRequestWithBody constructs an http.Request for the SetStatuses method, with any body, and a specified content type
+func NewSetStatusesRequestWithBody(server string, params *SetStatusesParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/statuses")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListTasksRequest constructs an http.Request for the ListTasks method
 func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request, error) {
 	var err error
@@ -6242,6 +6742,18 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 		if params.Holder != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "holder", *params.Holder, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7218,6 +7730,68 @@ func NewProposeSkillVersionRequestWithBody(server string, task TaskRef, params *
 	return req, nil
 }
 
+// NewSetTaskStatusRequest calls the generic SetTaskStatus builder with application/json body
+func NewSetTaskStatusRequest(server string, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTaskStatusRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewSetTaskStatusRequestWithBody constructs an http.Request for the SetTaskStatus method, with any body, and a specified content type
+func NewSetTaskStatusRequestWithBody(server string, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/status", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewTakeBackTaskRequest calls the generic TakeBackTask builder with application/json body
 func NewTakeBackTaskRequest(server string, task TaskRef, params *TakeBackTaskParams, body TakeBackTaskJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7607,7 +8181,9 @@ type ClientWithResponsesInterface interface {
 	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
-	// 9007199254740991) reads the latest page.
+	// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+	// matching entries; the page is then the `limit` matching entries after `after` or just
+	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8058,6 +8634,47 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/skills/{skill}/versions (the `ListSkillVersions` operationId).
 	ListSkillVersionsWithResponse(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*ListSkillVersionsResponse, error)
 
+	// ListStatusesWithResponse List the Organisation's Statuses, in their order
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
+	ListStatusesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListStatusesResponse, error)
+
+	// SetStatusesWithBodyWithResponse Replace the Organisation's list of Statuses (admin)
+	//
+	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+	// Names are unique, ignoring case. The list must keep at least one Status of each kind
+	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+	// admin), `invalid`, `status_in_use`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+	SetStatusesWithBodyWithResponse(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error)
+
+	// SetStatusesWithResponse Replace the Organisation's list of Statuses (admin)
+	//
+	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+	// Names are unique, ignoring case. The list must keep at least one Status of each kind
+	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+	// admin), `invalid`, `status_in_use`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+	SetStatusesWithResponse(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error)
+
 	// ListTasksWithResponse List Tasks
 	//
 	// Ordered by Feature Rank, then by how long each Task has waited.
@@ -8073,9 +8690,11 @@ type ClientWithResponsesInterface interface {
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-	// `not_holder`, `forbidden`, `cycle`.
+	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8088,9 +8707,11 @@ type ClientWithResponsesInterface interface {
 	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-	// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-	// `not_holder`, `forbidden`, `cycle`.
+	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8166,8 +8787,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// One conditional write: it succeeds only when the Task is takeable by the caller. The
 	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-	// (someone holds it; stop rather than retry), `not_takeable`.
+	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+	// than retry), `not_takeable`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8178,8 +8800,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// One conditional write: it succeeds only when the Task is takeable by the caller. The
 	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-	// (someone holds it; stop rather than retry), `not_takeable`.
+	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+	// than retry), `not_takeable`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8188,9 +8811,10 @@ type ClientWithResponsesInterface interface {
 
 	// CompleteTaskWithBodyWithResponse Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// Ends the Task done, in the first `done` Status. Completing a Task that needs
+	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+	// Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -8201,9 +8825,10 @@ type ClientWithResponsesInterface interface {
 
 	// CompleteTaskWithResponse Complete a Task the caller holds
 	//
-	// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-	// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-	// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+	// Ends the Task done, in the first `done` Status. Completing a Task that needs
+	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+	// Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -8214,7 +8839,7 @@ type ClientWithResponsesInterface interface {
 
 	// DropTaskWithBodyWithResponse Drop a Task (Feature owner)
 	//
-	// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8223,7 +8848,7 @@ type ClientWithResponsesInterface interface {
 
 	// DropTaskWithResponse Drop a Task (Feature owner)
 	//
-	// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8246,7 +8871,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. Errors: `not_holder`.
+	// again only under that Skill. The Status stays as it is unless `status` names another.
+	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8257,7 +8884,9 @@ type ClientWithResponsesInterface interface {
 	//
 	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. Errors: `not_holder`.
+	// again only under that Skill. The Status stays as it is unless `status` names another.
+	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+	// `dropped`).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8317,7 +8946,7 @@ type ClientWithResponsesInterface interface {
 
 	// ReleaseTaskWithBodyWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
 	//
-	// Errors: `not_holder`.
+	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8326,7 +8955,7 @@ type ClientWithResponsesInterface interface {
 
 	// ReleaseTaskWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
 	//
-	// Errors: `not_holder`.
+	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8359,10 +8988,39 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersionWithResponse(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, body ProposeSkillVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*ProposeSkillVersionResponse, error)
 
+	// SetTaskStatusWithBodyWithResponse Move a Task to another Status
+	//
+	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+	SetTaskStatusWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error)
+
+	// SetTaskStatusWithResponse Move a Task to another Status
+	//
+	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+	SetTaskStatusWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error)
+
 	// TakeBackTaskWithBodyWithResponse End another Member's Claim on a Task
 	//
 	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+	// `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8372,7 +9030,8 @@ type ClientWithResponsesInterface interface {
 	// TakeBackTaskWithResponse End another Member's Claim on a Task
 	//
 	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+	// `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10263,6 +10922,102 @@ func (r ListSkillVersionsResponse) ContentType() string {
 	return ""
 }
 
+type ListStatusesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StatusList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListStatusesResponse) GetJSON200() *StatusList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListStatusesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListStatusesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListStatusesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListStatusesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListStatusesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetStatusesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *StatusList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetStatusesResponse) GetJSON200() *StatusList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetStatusesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetStatusesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetStatusesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetStatusesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetStatusesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTasksResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11065,6 +11820,54 @@ func (r ProposeSkillVersionResponse) ContentType() string {
 	return ""
 }
 
+type SetTaskStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetTaskStatusResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetTaskStatusResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetTaskStatusResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTaskStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTaskStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetTaskStatusResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type TakeBackTaskResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11393,7 +12196,9 @@ func (r RevokeTokenResponse) ContentType() string {
 // `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
-// 9007199254740991) reads the latest page.
+// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+// matching entries; the page is then the `limit` matching entries after `after` or just
+// below `before`, and its `first_seq` and `last_seq` are theirs.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -12132,6 +12937,65 @@ func (c *ClientWithResponses) ListSkillVersionsWithResponse(ctx context.Context,
 	return ParseListSkillVersionsResponse(rsp)
 }
 
+// ListStatusesWithResponse List the Organisation's Statuses, in their order
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
+func (c *ClientWithResponses) ListStatusesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListStatusesResponse, error) {
+	rsp, err := c.ListStatuses(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListStatusesResponse(rsp)
+}
+
+// SetStatusesWithBodyWithResponse Replace the Organisation's list of Statuses (admin)
+//
+// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+// Names are unique, ignoring case. The list must keep at least one Status of each kind
+// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+// admin), `invalid`, `status_in_use`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+func (c *ClientWithResponses) SetStatusesWithBodyWithResponse(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error) {
+	rsp, err := c.SetStatusesWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetStatusesResponse(rsp)
+}
+
+// SetStatusesWithResponse Replace the Organisation's list of Statuses (admin)
+//
+// Takes the whole list in its new order: a Status already in it carries its `id` and may be
+// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
+// Names are unique, ignoring case. The list must keep at least one Status of each kind
+// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
+// Status that Tasks are in needs `moves` to say where they go, or it is refused with
+// `status_in_use`; so is a Status that Tasks are in changing between an open kind
+// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
+// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
+// admin), `invalid`, `status_in_use`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
+func (c *ClientWithResponses) SetStatusesWithResponse(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error) {
+	rsp, err := c.SetStatuses(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetStatusesResponse(rsp)
+}
+
 // ListTasksWithResponse List Tasks
 //
 // Ordered by Feature Rank, then by how long each Task has waited.
@@ -12153,9 +13017,11 @@ func (c *ClientWithResponses) ListTasksWithResponse(ctx context.Context, params 
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-// `not_holder`, `forbidden`, `cycle`.
+// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12174,9 +13040,11 @@ func (c *ClientWithResponses) FileTaskWithBodyWithResponse(ctx context.Context, 
 // question or Escalation: the new Task joins the Feature of the Task it blocks (which must
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. Errors:
-// `ended` (the Feature has ended and the Task blocks nothing, or the blocked Task has ended),
-// `not_holder`, `forbidden`, `cycle`.
+// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
+// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
+// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12294,8 +13162,9 @@ func (c *ClientWithResponses) AddBlockerWithResponse(ctx context.Context, task T
 //
 // One conditional write: it succeeds only when the Task is takeable by the caller. The
 // Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-// (someone holds it; stop rather than retry), `not_takeable`.
+// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+// than retry), `not_takeable`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12312,8 +13181,9 @@ func (c *ClientWithResponses) ClaimTaskWithBodyWithResponse(ctx context.Context,
 //
 // One conditional write: it succeeds only when the Task is takeable by the caller. The
 // Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. Errors: `already_claimed`
-// (someone holds it; stop rather than retry), `not_takeable`.
+// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
+// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
+// than retry), `not_takeable`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12328,9 +13198,10 @@ func (c *ClientWithResponses) ClaimTaskWithResponse(ctx context.Context, task Ta
 
 // CompleteTaskWithBodyWithResponse Complete a Task the caller holds
 //
-// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// Ends the Task done, in the first `done` Status. Completing a Task that needs
+// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+// Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -12347,9 +13218,10 @@ func (c *ClientWithResponses) CompleteTaskWithBodyWithResponse(ctx context.Conte
 
 // CompleteTaskWithResponse Complete a Task the caller holds
 //
-// Ends the Task done. Completing a Task that needs `skill-review` and carries a pending
-// proposal publishes it as the Skill's next version; completing a Retrospective marks its
-// Feature's unreviewed Observations reviewed by it. Errors: `not_holder`, `proposal_stale`
+// Ends the Task done, in the first `done` Status. Completing a Task that needs
+// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
+// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
+// Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -12366,7 +13238,7 @@ func (c *ClientWithResponses) CompleteTaskWithResponse(ctx context.Context, task
 
 // DropTaskWithBodyWithResponse Drop a Task (Feature owner)
 //
-// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12381,7 +13253,7 @@ func (c *ClientWithResponses) DropTaskWithBodyWithResponse(ctx context.Context, 
 
 // DropTaskWithResponse Drop a Task (Feature owner)
 //
-// Ends the Task dropped and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12416,7 +13288,9 @@ func (c *ClientWithResponses) AttachTaskEvidenceWithBodyWithResponse(ctx context
 //
 // The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 // no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. Errors: `not_holder`.
+// again only under that Skill. The Status stays as it is unless `status` names another.
+// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12433,7 +13307,9 @@ func (c *ClientWithResponses) HandoverTaskWithBodyWithResponse(ctx context.Conte
 //
 // The Task then waits for a Member with that Skill, from the moment of the Handover; it is
 // no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. Errors: `not_holder`.
+// again only under that Skill. The Status stays as it is unless `status` names another.
+// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
+// `dropped`).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12529,7 +13405,7 @@ func (c *ClientWithResponses) ObserveWithResponse(ctx context.Context, task Task
 
 // ReleaseTaskWithBodyWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
 //
-// Errors: `not_holder`.
+// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12544,7 +13420,7 @@ func (c *ClientWithResponses) ReleaseTaskWithBodyWithResponse(ctx context.Contex
 
 // ReleaseTaskWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
 //
-// Errors: `not_holder`.
+// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12595,10 +13471,51 @@ func (c *ClientWithResponses) ProposeSkillVersionWithResponse(ctx context.Contex
 	return ParseProposeSkillVersionResponse(rsp)
 }
 
+// SetTaskStatusWithBodyWithResponse Move a Task to another Status
+//
+// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+func (c *ClientWithResponses) SetTaskStatusWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error) {
+	rsp, err := c.SetTaskStatusWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTaskStatusResponse(rsp)
+}
+
+// SetTaskStatusWithResponse Move a Task to another Status
+//
+// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
+// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
+// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
+// being completed or dropped. Naming the Status the Task is in changes nothing. Records
+// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
+// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
+func (c *ClientWithResponses) SetTaskStatusWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error) {
+	rsp, err := c.SetTaskStatus(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTaskStatusResponse(rsp)
+}
+
 // TakeBackTaskWithBodyWithResponse End another Member's Claim on a Task
 //
 // By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+// `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12614,7 +13531,8 @@ func (c *ClientWithResponses) TakeBackTaskWithBodyWithResponse(ctx context.Conte
 // TakeBackTaskWithResponse End another Member's Claim on a Task
 //
 // By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again. Errors: `forbidden`, `not_holder` (nobody holds it).
+// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
+// `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14018,6 +14936,72 @@ func ParseListSkillVersionsResponse(rsp *http.Response) (*ListSkillVersionsRespo
 	return response, nil
 }
 
+// ParseListStatusesResponse parses an HTTP response from a ListStatusesWithResponse call
+func ParseListStatusesResponse(rsp *http.Response) (*ListStatusesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListStatusesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StatusList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetStatusesResponse parses an HTTP response from a SetStatusesWithResponse call
+func ParseSetStatusesResponse(rsp *http.Response) (*SetStatusesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetStatusesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest StatusList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListTasksResponse parses an HTTP response from a ListTasksWithResponse call
 func ParseListTasksResponse(rsp *http.Response) (*ListTasksResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14561,6 +15545,39 @@ func ParseProposeSkillVersionResponse(rsp *http.Response) (*ProposeSkillVersionR
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetTaskStatusResponse parses an HTTP response from a SetTaskStatusWithResponse call
+func ParseSetTaskStatusResponse(rsp *http.Response) (*SetTaskStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetTaskStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Task
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

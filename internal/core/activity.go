@@ -13,7 +13,8 @@ var ActivityKinds = []string{
 	"feature.filed", "feature.ranked", "feature.shipped", "feature.dropped", "feature.owner_passed", "feature.evidence_attached",
 	"task.filed", "task.claimed", "task.lapsed", "task.released", "task.handed_over", "task.completed", "task.dropped",
 	"task.taken_back", "task.claim_ended", "task.note_added", "task.observed", "task.blocker_added", "task.blocker_removed",
-	"task.evidence_attached", "task.skill_proposed",
+	"task.evidence_attached", "task.skill_proposed", "task.status_set",
+	"statuses.changed",
 	"skill.created", "skill.version_published",
 	"member.created", "member.updated", "member.manager_set", "member.manager_cleared", "member.skill_granted", "member.skill_revoked",
 	"member.deactivated", "member.reactivated",
@@ -24,7 +25,7 @@ var ActivityKinds = []string{
 }
 
 // SubjectTypes lists the kinds of record an Activity entry can be about.
-var SubjectTypes = []string{"feature", "task", "skill", "member", "team", "token", "session", "login_link"}
+var SubjectTypes = []string{"feature", "task", "skill", "member", "team", "token", "session", "login_link", "statuses"}
 
 // ActivityQuery picks a page of Activity: the entries numbered above After and below Before
 // (zero for no bound), at most Limit of them. With Before the page is the entries closest below
