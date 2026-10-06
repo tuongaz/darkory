@@ -82,9 +82,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
           <CommandGroup heading="Tasks">
             {taskHits.map((t: Task) => (
               <CommandItem key={t.id} value={`task ${t.key}`} onSelect={() => close(() => navigate(`/tasks/${t.key}`))}>
-                <StatusGlyph glyph={taskGlyph(t, now)} />
-                <Key>{t.key}</Key>
-                <span className="truncate">{t.title}</span>
+                <StatusGlyph glyph={taskGlyph(t, now)} /> <Key>{t.key}</Key> <span className="truncate">{t.title}</span>{" "}
                 <span className="ml-auto truncate text-xs text-muted-foreground">{featureTitles.get(t.feature_id)}</span>
               </CommandItem>
             ))}
@@ -95,8 +93,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
             {featureHits.map((f: Feature) => (
               <CommandItem key={f.id} value={`feature ${f.key}`} onSelect={() => close(() => navigate(`/features/${f.key}`))}>
                 <LayersIcon className="text-muted-foreground" />
-                <Key>{f.key}</Key>
-                <span className="truncate">{f.title}</span>
+                <Key>{f.key}</Key> <span className="truncate">{f.title}</span>{" "}
                 <span className="ml-auto truncate text-xs text-muted-foreground">{teams.get(f.team_id)?.name}</span>
               </CommandItem>
             ))}

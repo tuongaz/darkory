@@ -11,8 +11,7 @@ export function Refusal({ error, className }: { error: unknown; className?: stri
   const message = error instanceof Error ? error.message : String(error);
   return (
     <p role="alert" className={cn("flex items-baseline gap-2 text-xs text-state-blocked", className)}>
-      <code className="rounded-sm bg-state-blocked-bg px-1">{code}</code>
-      <span>{message}</span>
+      <code className="rounded-sm bg-state-blocked-bg px-1">{code}</code> <span>{message}</span>
     </p>
   );
 }

@@ -30,7 +30,17 @@ export function Peek({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" showCloseButton={false} className="w-full gap-0 sm:max-w-[560px]" aria-describedby={undefined}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-full gap-0 outline-none sm:max-w-[560px]"
+        aria-describedby={undefined}
+        // The sheet itself takes focus, not its first button: Enter must not close it.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <SheetTitle className="sr-only">{label}</SheetTitle>
         <div className="flex h-11 flex-none items-center gap-2 border-b pr-3 pl-4">
           <div className="flex min-w-0 items-center gap-2">{heading}</div>

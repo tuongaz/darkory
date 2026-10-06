@@ -5,6 +5,29 @@ import { FakeEventSource } from "./eventSource";
 
 globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
 
+// What Radix, cmdk and the Sidebar ask of the browser and jsdom lacks. The window is a desktop
+// one: no media query matches, so the Sidebar is not a sheet.
+window.matchMedia ??= (query: string) =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+Element.prototype.scrollIntoView ??= function () {};
+Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.setPointerCapture ??= () => {};
+Element.prototype.releasePointerCapture ??= () => {};
+
 afterEach(() => {
   cleanup();
   FakeEventSource.instances = [];

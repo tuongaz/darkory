@@ -1,6 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-/* Sonner also injects these at runtime, which the Install's CSP (style-src 'self') refuses. */
+/* Sonner's styles, which it would inject at run time; the build stops that (vite.config.ts). */
 @import "sonner/dist/styles.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -238,6 +238,11 @@
   body {
     @apply bg-background text-sm text-foreground antialiased;
     font-family: var(--font-sans);
+  }
+  /* Radix's scroll lock, whose own <style> the build stops (vite.config.ts). */
+  body[data-scroll-locked] {
+    overflow: hidden !important;
+    overscroll-behavior: contain;
   }
   code,
   kbd,

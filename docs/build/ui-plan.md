@@ -59,3 +59,19 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 ## Found while building
 
 (Agents append here: anything the mock drew that `/v1` cannot give, and how it was resolved.)
+
+### W1 skeleton
+
+- **The app's CSP refuses Google Fonts and injected styles.** `appCSP` is `style-src 'self'; font-src 'self'`. Inter is served from the bundle (`@fontsource-variable/inter`, registered as "Inter" so `tokens.css` stays verbatim) rather than from Google Fonts, which also suits a Local Install with no internet. Sonner and react-style-singleton (Radix's scroll lock) add `<style>` elements at run time; the build turns that off (`noInjectedStyles` in `vite.config.ts`, which fails the build if either package changes) and `globals.css` carries their CSS. The e2e suite fails on any console error, so a new CSP refusal shows.
+- **Stream state reads "Connected"** (the lead's word) on the sidebar's Member row, not the mock's "Live"; the others are Connecting, Reconnecting, Offline. "N live" beside Agents keeps "live".
+- **"N live" has no endpoint.** It counts the distinct agents holding a live Claim over `GET /v1/tasks?state=open` (every page), refetched when Task Activity arrives. Fine at this scale; an `agents` summary on `/v1` would replace it.
+- **⌘K has no search endpoint.** Opening it reads every Task and Feature (`useAllTasks`, `useAllFeatures`) and matches keys and words in the browser. Choosing a Task opens its page.
+- **The Install checklist stays until the Organisation has a Feature**, not only while it has no Team, so steps 2 and 3 are reachable from it (scenario 12); with no Feature there are no Tasks, so the Inbox would be empty anyway. Step 2 is done when the Organisation has a second Member. Create Team and Add Member go to `/admin/teams?new=1` and `/admin/members?new=1` (W5 opens the dialogs); File Feature sends the `file-feature` intent (W2). Filing needs the filer in the Team (`forbidden`), which W2's dialog must say.
+- **No Organisation switcher.** Local holds exactly one Organisation, so the sidebar's Organisation row has no chevron and opens nothing.
+- **The sidebar lists every Team** of the Organisation (`GET /v1/teams`), not only the Member's, so an admin who creates a Team without joining it still finds it.
+- **Admin has no Install tab**: the mock did not draw it.
+- **Statuses are not on `/v1` on this branch.** `StatusGlyph` takes a glyph, `glyphFor(kind, nth)` maps a Status kind to one, and `taskGlyph` derives a glyph from a Task's state and Claim until phase S merges.
+- **The shadcn Sidebar's ⌘B toggle is removed**: ⌘K, C and G B are the only keys the design claims.
+- **Account carries Sign out already** (placeholder), so a browser can leave before W5 lands.
+- **`make dev` shows Connecting for up to 25 s**: through Vite's proxy the Activity stream's headers arrive only with its first bytes (the keep-alive comment). The binary is unaffected. Writing a comment when the stream opens would fix it.
+- **The bundle is over Vite's 500 kB warning** (517 kB, 163 kB gzipped). Lazy-loading the screens in `routes.tsx` would split it once they are built.

@@ -62,7 +62,11 @@ export function health(extra: Partial<Health> = {}): Health {
   return { status: "ok", version: "v1.2.0", sign_in_modes: ["printed_link"], ...extra };
 }
 
-/** What every signed-in page reads: health, the caller, and the Members, Teams and Skills for names. */
+/**
+ * What every signed-in page reads: health, the caller, the Members, Teams and Skills for names, and
+ * the shell's reads of every open Task (the live count) and of Features (the Install checklist):
+ * none by default.
+ */
 export function signedIn(member: Member = ada): Record<string, Handler> {
   return {
     "GET /v1/health": health(),
@@ -70,5 +74,7 @@ export function signedIn(member: Member = ada): Record<string, Handler> {
     "GET /v1/members": { items: [ada, bob, builder] },
     "GET /v1/teams": { items: [ops, web] },
     "GET /v1/skills": { items: [build, review] },
+    "GET /v1/tasks": { items: [] },
+    "GET /v1/features": { items: [] },
   };
 }
