@@ -63,9 +63,9 @@ func (p *Planner) Run(ctx context.Context) error {
 		}
 		p.took(d)
 		if d.Task.Kind != client.Breakdown {
-			return true, p.release(ctx, d.Task.Key, "I only break Features down.")
+			return true, on(d.Task.Key, p.release(ctx, d.Task.Key, "I only break Features down."))
 		}
-		return true, p.breakDown(ctx, d)
+		return true, on(d.Task.Key, p.breakDown(ctx, d))
 	})
 }
 

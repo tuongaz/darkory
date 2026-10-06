@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/tuongaz/darkory/client"
 )
 
 // Lapser claims a Task with a short heartbeat timeout (Pace.LapseTimeout) and never heartbeats,
@@ -29,19 +31,23 @@ func (l *Lapser) Run(ctx context.Context) error {
 		if l.cfg.Pace.LapseEvery == 0 {
 			return false, nil
 		}
+		// A read shows the Claim ended at its expiry at once; the Task leaves In progress when
+		// Darkory records the lapse, or someone else holds it.
+		deadline := claimed.Add(time.Duration(l.cfg.Pace.LapseTimeout)*time.Second + 10*time.Second)
 		for sleep(ctx, l.cfg.Pace.Poll) {
 			res, err := l.c.GetTaskWithResponse(ctx, d.Task.Key)
 			if err := check(res, err, http.StatusOK); err != nil {
 				return true, err
 			}
-			if c := res.JSON200.Task.Claim; c == nil || c.ID != d.Task.Claim.ID {
+			r := res.JSON200
+			if c := r.Task.Claim; (c == nil && r.Status.Kind != client.StatusKindInProgress) || (c != nil && c.ID != d.Task.Claim.ID) || time.Now().After(deadline) {
 				how := "ended"
-				for _, cl := range res.JSON200.Claims {
+				for _, cl := range r.Claims {
 					if cl.ID == d.Task.Claim.ID && cl.HowEnded != nil {
 						how = string(*cl.HowEnded)
 					}
 				}
-				l.say(how, d.Task.Key, "Darkory recorded it; the Task is now in %s", res.JSON200.Status.Name)
+				l.say(how, d.Task.Key, "Darkory recorded it; the Task is now in %s", r.Status.Name)
 				break
 			}
 		}

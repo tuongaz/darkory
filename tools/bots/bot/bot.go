@@ -453,6 +453,23 @@ func (a *agent) release(ctx context.Context, key, note string) error {
 	return nil
 }
 
+// taskError is a failure while working a Task.
+type taskError struct {
+	key string
+	err error
+}
+
+func (e taskError) Error() string { return e.key + ": " + e.err.Error() }
+func (e taskError) Unwrap() error { return e.err }
+
+// on marks err as met while working the Task key, for the report.
+func on(key string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return taskError{key, err}
+}
+
 // loop runs step until ctx ends, pausing a Poll after a failure. step returns false when the bot
 // is done; an error that means the Install no longer accepts the bot ends the loop with it.
 func (a *agent) loop(ctx context.Context, step func() (bool, error)) error {
@@ -463,7 +480,12 @@ func (a *agent) loop(ctx context.Context, step func() (bool, error)) error {
 				a.say("stopped", "", "the Install no longer accepts this bot: %v", err)
 				return err
 			}
-			a.fail(ctx, "", err)
+			var te taskError
+			if errors.As(err, &te) {
+				a.fail(ctx, te.key, te.err)
+			} else {
+				a.fail(ctx, "", err)
+			}
 			sleep(ctx, a.cfg.Pace.Poll)
 		}
 		if !more {

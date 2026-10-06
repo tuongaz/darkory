@@ -356,7 +356,7 @@ func TestBots(t *testing.T) {
 		switch {
 		case en.SubjectID == help.ID && who == mai.id:
 		case (en.SubjectID == review.ID || en.SubjectID == qa.ID) && who == id("planner"):
-			if n := len(tr.of(client.ActivityKindTaskBlockerAdded, en.SubjectID)); n != 2 || tr.of(client.ActivityKindTaskBlockerAdded, en.SubjectID)[1].Seq > en.Seq {
+			if b := tr.of(client.ActivityKindTaskBlockerAdded, en.SubjectID); len(b) != 2 || b[1].Seq > en.Seq {
 				t.Errorf("seq %d: the planner moved %s before both its blockers were set", en.Seq, en.SubjectID)
 			}
 		default:

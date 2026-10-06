@@ -64,7 +64,7 @@ func (b *Builder) Run(ctx context.Context) error {
 			return true, nil
 		}
 		b.took(d)
-		return true, b.build(ctx, d)
+		return true, on(d.Task.Key, b.build(ctx, d))
 	})
 }
 

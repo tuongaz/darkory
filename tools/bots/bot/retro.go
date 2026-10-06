@@ -28,9 +28,9 @@ func (r *Retro) Run(ctx context.Context) error {
 		}
 		r.took(d)
 		if d.Task.Kind != client.Retrospective {
-			return true, r.release(ctx, d.Task.Key, "I only run Retrospectives.")
+			return true, on(d.Task.Key, r.release(ctx, d.Task.Key, "I only run Retrospectives."))
 		}
-		return true, r.retro(ctx, d)
+		return true, on(d.Task.Key, r.retro(ctx, d))
 	})
 }
 
@@ -81,11 +81,22 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 		_, err := r.complete(ctx, key, fmt.Sprintf("Read %s; no company Skill needs a change.", count(len(obs), "Observation")))
 		return gone(ctx, err)
 	}
-	body := skill.Current.Body + "\n\nFrom the Retrospective of " + d.Feature.Key + ":\n- " + strings.Join(lessons, "\n- ")
-	pres, err := r.c.ProposeSkillVersionWithResponse(wctx, key, &client.ProposeSkillVersionParams{},
-		client.ProposeSkillVersionBody{Skill: skill.Skill.Name, BasedOnVersion: skill.Skill.CurrentVersion, Body: body})
-	if err := check(pres, err, http.StatusCreated); err != nil {
-		return gone(wctx, err)
+	// Another Retrospective may publish a version between reading the Skill and proposing; then
+	// read it again and propose against the new one.
+	for try := 1; ; try++ {
+		body := skill.Current.Body + "\n\nFrom the Retrospective of " + d.Feature.Key + ":\n- " + strings.Join(lessons, "\n- ")
+		res, err := r.c.ProposeSkillVersionWithResponse(wctx, key, &client.ProposeSkillVersionParams{},
+			client.ProposeSkillVersionBody{Skill: skill.Skill.Name, BasedOnVersion: skill.Skill.CurrentVersion, Body: body})
+		err = check(res, err, http.StatusCreated)
+		if err == nil {
+			break
+		}
+		if Code(err) != client.ErrorCodeProposalStale || try == 3 {
+			return gone(wctx, err)
+		}
+		if skill, err = r.skill(wctx, skill.Skill.ID); err != nil {
+			return gone(wctx, err)
+		}
 	}
 	r.say("proposed", key, "%s v%d against v%d, adding what %s said", skill.Skill.Name, skill.Skill.CurrentVersion+1, skill.Skill.CurrentVersion,
 		count(len(lessons), "Observation"))
