@@ -49,10 +49,12 @@ tags:
   - name: teams
   - name: skills
   - name: statuses
+  - name: workspaces
   - name: features
   - name: tasks
   - name: evidence
   - name: activity
+  - name: runner
 
 paths:
   # ---------------------------------------------------------------- install
@@ -372,6 +374,34 @@ paths:
               schema: {$ref: "#/components/schemas/Member"}
         default: {$ref: "#/components/responses/Error"}
 
+  /v1/members/{member}/agent:
+    patch:
+      operationId: setAgentSettings
+      tags: [members]
+      summary: Set how the Runner starts an agent Member's sessions (admin)
+      description: |
+        Changes the fields given and keeps the others. An agent with no settings yet starts from
+        the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+        model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+        sessions only for agents that have settings and are not paused. Records
+        `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+        `invalid` (a human Member, or a value out of bounds).
+      parameters:
+        - {$ref: "#/components/parameters/MemberRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SetAgentSettingsBody"}
+      responses:
+        "200":
+          description: The Member with its settings.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Member"}
+        default: {$ref: "#/components/responses/Error"}
+
   /v1/members/{member}/deactivate:
     post:
       operationId: deactivateMember
@@ -518,6 +548,31 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/TeamDetail"}
+        default: {$ref: "#/components/responses/Error"}
+    patch:
+      operationId: updateTeam
+      tags: [teams]
+      summary: Change a Team's name, default Workspace or Ship-when-done default (admin)
+      description: |
+        Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+        A Task filed naming no Workspace takes the Team's default; a Feature filed without
+        `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+        Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+        Workspace).
+      parameters:
+        - {$ref: "#/components/parameters/TeamRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/UpdateTeamBody"}
+      responses:
+        "200":
+          description: The Team.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Team"}
         default: {$ref: "#/components/responses/Error"}
 
   /v1/teams/{team}/members/{member}:
@@ -673,6 +728,82 @@ paths:
               schema: {$ref: "#/components/schemas/StatusList"}
         default: {$ref: "#/components/responses/Error"}
 
+  # ---------------------------------------------------------------- workspaces
+  /v1/workspaces:
+    post:
+      operationId: createWorkspace
+      tags: [workspaces]
+      summary: Add a Workspace to the Install (admin)
+      description: |
+        A Workspace is a place a session works in; a `git` Workspace is a repository on the
+        machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+        (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+      parameters:
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/CreateWorkspaceBody"}
+      responses:
+        "201":
+          description: The new Workspace.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Workspace"}
+        default: {$ref: "#/components/responses/Error"}
+    get:
+      operationId: listWorkspaces
+      tags: [workspaces]
+      summary: List the Install's Workspaces
+      responses:
+        "200":
+          description: The Workspaces, by name.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/WorkspaceList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/workspaces/{workspace}:
+    patch:
+      operationId: updateWorkspace
+      tags: [workspaces]
+      summary: Change a Workspace's name, path, mode or default branch (admin)
+      description: |
+        Changes the fields given and keeps the others; the kind never changes. Records
+        `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+        `conflict` (name taken), `invalid`.
+      parameters:
+        - {$ref: "#/components/parameters/WorkspaceRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/UpdateWorkspaceBody"}
+      responses:
+        "200":
+          description: The Workspace.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Workspace"}
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: removeWorkspace
+      tags: [workspaces]
+      summary: Remove a Workspace (admin)
+      description: |
+        Refused with `conflict` while any Task, open or ended, names it: the record keeps where
+        its work was done. A Team whose default it was has no default afterwards. Records
+        `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
+      parameters:
+        - {$ref: "#/components/parameters/WorkspaceRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The Workspace is gone.
+        default: {$ref: "#/components/responses/Error"}
+
   # ---------------------------------------------------------------- features
   /v1/features:
     post:
@@ -682,7 +813,17 @@ paths:
       description: |
         Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
         the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-        by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+        by a Retrospective names it in `from_retrospective`.
+
+        A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+        down it files its one work Task, with the Feature's title and description, needing
+        `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+        done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+        Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+        open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+        quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+        `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+        default Workspace and none named).
       parameters:
         - {$ref: "#/components/parameters/IdempotencyKey"}
       requestBody:
@@ -692,7 +833,7 @@ paths:
             schema: {$ref: "#/components/schemas/FileFeatureBody"}
       responses:
         "201":
-          description: The Feature with its Break down Task.
+          description: The Feature with its Break down Task, or a quick Feature with its one Task.
           content:
             application/json:
               schema: {$ref: "#/components/schemas/FeatureDetail"}
@@ -769,8 +910,9 @@ paths:
       summary: Ship a Feature (Feature owner)
       description: |
         Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-        <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
-        `tasks_open`, `ended`.
+        <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
+        `ship_when_done` ships without this call when its last open Task is completed. Errors:
+        `forbidden` (not the owner), `tasks_open`, `ended`.
       parameters:
         - {$ref: "#/components/parameters/FeatureRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -789,7 +931,8 @@ paths:
       summary: Drop a Feature (Feature owner)
       description: |
         Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-        <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
+        <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
+        `forbidden` (not the owner), `ended`.
       parameters:
         - {$ref: "#/components/parameters/FeatureRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -883,7 +1026,9 @@ paths:
         then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
         even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
         Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-        starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+        starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+        Feature's Team's default Workspace, or none when the Team has no default. Errors:
+        `not_found` (no such Workspace), `ended` (the Feature has
         ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
         `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
         `dropped`).
@@ -1106,7 +1251,9 @@ paths:
         Ends the Task done, in the first `done` Status. Completing a Task that needs
         `skill-review` and carries a pending proposal publishes it as the Skill's next version;
         completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-        Errors: `not_holder`, `proposal_stale`
+        Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+        in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+        its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
         (the version the proposal was written against is no longer current; nothing changes, and
         the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
       parameters:
@@ -1450,6 +1597,84 @@ paths:
               schema: {type: string}
         default: {$ref: "#/components/responses/Error"}
 
+  # ---------------------------------------------------------------- runner
+  /v1/runner/sessions:
+    get:
+      operationId: listRunnerSessions
+      tags: [runner]
+      summary: List the agent sessions the Runner is running now
+      description: |
+        A read model of the Runner beside this server, not part of the record: what it runs now,
+        one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
+        attached to this server, as with `serve --agents=off`).
+      responses:
+        "200":
+          description: The sessions, oldest first.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RunnerSessionList"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/runner/sessions/{task}/nudge:
+    post:
+      operationId: nudgeRunnerSession
+      tags: [runner]
+      summary: Nudge the agent in a Task's session to end the Task (admin)
+      description: |
+        Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+        question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
+        Task).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The nudge was sent.
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/runner/sessions/{task}/stop:
+    post:
+      operationId: stopRunnerSession
+      tags: [runner]
+      summary: Stop a Task's session (admin)
+      description: |
+        Ends the agent's session and releases its Claim with a Note, as when a session ends
+        without a decision; the session's log is attached as Evidence. Errors: `forbidden` (not an
+        admin), `no_runner`, `not_found` (no session on the Task).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204":
+          description: The session is stopping.
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/runner/sessions/{task}/terminal:
+    get:
+      operationId: runnerTerminal
+      tags: [runner]
+      summary: Watch or join a Task's session through a terminal (WebSocket)
+      description: |
+        Upgrades to a WebSocket bridged to the session's terminal (`tmux attach`). Binary
+        messages carry the terminal's bytes both ways; a text message `{"cols": n, "rows": n}`
+        resizes the client's view. Admins may type unless they ask for `readonly`; every other
+        Member only watches, and what they send is ignored. Authenticated as every operation is,
+        by a bearer token with its Session or by the browser cookie; a browser's upgrade must
+        come from this Install's own origin. The Runner adds a Note on the Task when someone
+        joins. Errors, before the upgrade: `no_runner`, `not_found` (no session on the Task),
+        `conflict` (the session runs without tmux and cannot be joined), `forbidden` (another
+        origin).
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - name: readonly
+          in: query
+          description: Watch without typing, even as an admin.
+          schema: {type: boolean}
+      responses:
+        "101":
+          description: Switched to the WebSocket protocol; the terminal follows.
+        default: {$ref: "#/components/responses/Error"}
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1515,6 +1740,12 @@ components:
       name: token
       in: path
       required: true
+      schema: {type: string}
+    WorkspaceRef:
+      name: workspace
+      in: path
+      required: true
+      description: Workspace id or name.
       schema: {type: string}
     EvidenceID:
       name: evidence
@@ -1582,8 +1813,8 @@ components:
         `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
         `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
         `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-        `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
-        `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+        `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
+        `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
         `not_implemented` 501.
       enum:
         - invalid
@@ -1602,6 +1833,7 @@ components:
         - status_in_use
         - use_complete
         - use_drop
+        - no_runner
         - too_large
         - idempotency_key_reused
         - too_many_requests
@@ -1779,6 +2011,8 @@ components:
           type: string
           format: date-time
           description: When an admin deactivated the Member. Absent while the Member is active.
+        agent:
+          $ref: "#/components/schemas/AgentSettings"
     MemberKind:
       type: string
       enum: [human, agent]
@@ -1818,6 +2052,64 @@ components:
         name: {type: string, minLength: 1, maxLength: 100}
         email: {type: string, format: email}
         admin: {type: boolean}
+    AgentSettings:
+      type: object
+      description: |
+        How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+        Runner does not start (an agent working from elsewhere, through its own token). `command`
+        is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
+        session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+        `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+        directory) and `{task}` (the Task's display key). The defaults start Claude Code:
+        `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
+        --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
+        read these settings, `env` included: keep secrets in the server's own environment, which
+        sessions inherit.
+      required: [command, args, model, env, unattended, paused]
+      properties:
+        command:
+          type: string
+          description: The program to start, such as `claude`.
+        args:
+          type: array
+          description: Its arguments, each a template.
+          items: {type: string}
+        model:
+          type: string
+          description: The model the agent runs on, passed as `{model}` and reported as the Claim's model label.
+        env:
+          type: object
+          description: Variables added to the session's environment, besides `DARKORY_URL`, `DARKORY_TOKEN` and `DARKORY_SESSION`.
+          additionalProperties: {type: string}
+        unattended:
+          type: boolean
+          description: The session runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
+        paused:
+          type: boolean
+          description: The Runner starts no new session for the agent; one running carries on.
+        progress_file:
+          type: string
+          description: |
+            The file whose modified time shows the session making progress, for a command other
+            than Claude Code (whose transcript the Runner finds itself); it may use the same
+            placeholders. The Runner sends Heartbeats only while it changes.
+    SetAgentSettingsBody:
+      type: object
+      description: The settings to change; those left out stay as they are. `progress_file` set to `""` clears it.
+      properties:
+        command: {type: string, minLength: 1, maxLength: 1000}
+        args:
+          type: array
+          maxItems: 100
+          items: {type: string, maxLength: 1000}
+        model: {type: string, minLength: 1, maxLength: 200}
+        env:
+          type: object
+          description: The whole set of variables, replacing the one there.
+          additionalProperties: {type: string}
+        unattended: {type: boolean}
+        paused: {type: boolean}
+        progress_file: {type: string, maxLength: 1000}
     SetManagerBody:
       type: object
       required: [manager]
@@ -1829,13 +2121,19 @@ components:
     # ------------------------------------------------------------ teams
     Team:
       type: object
-      required: [id, key, name, created_at]
+      required: [id, key, name, ship_when_done, created_at]
       properties:
         id: {type: string}
         key:
           type: string
           description: The prefix of the Team's display keys, such as `WEB` in `WEB-42`.
         name: {type: string}
+        default_workspace_id:
+          type: string
+          description: The Workspace a Task filed in the Team names when it names none. Absent when the Team has none.
+        ship_when_done:
+          type: boolean
+          description: The `ship_when_done` a Feature filed in the Team takes when its filer does not say.
         created_at: {type: string, format: date-time}
     TeamDetail:
       type: object
@@ -1860,6 +2158,85 @@ components:
           type: string
           pattern: "^[A-Z][A-Z0-9]{1,9}$"
         name: {type: string, minLength: 1, maxLength: 100}
+    UpdateTeamBody:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        default_workspace:
+          type: string
+          description: Workspace id or name; `""` clears the Team's default.
+        ship_when_done: {type: boolean}
+
+    # ------------------------------------------------------------ workspaces
+    Workspace:
+      type: object
+      description: |
+        A place a session works in, named on the Install. A `git` Workspace is a repository at
+        `path` on the machine that runs the Install; a session works in a checkout of it on a
+        branch named after its Task. In `pull_request` mode, work lands through pull requests
+        instead of merges by the Runner.
+      required: [id, name, kind, path, mode, default_branch, created_at]
+      properties:
+        id: {type: string}
+        name:
+          type: string
+          description: Unique on the Install, ignoring case; it names the session's checkout directory.
+        kind: {$ref: "#/components/schemas/WorkspaceKind"}
+        path:
+          type: string
+          description: The repository's absolute path.
+        mode: {$ref: "#/components/schemas/WorkspaceMode"}
+        default_branch:
+          type: string
+          description: The branch work lands on, such as `main`.
+        created_at: {type: string, format: date-time}
+    WorkspaceKind:
+      type: string
+      description: The kind of place. Only `git` for now; more may be added within `/v1`.
+      enum: [git]
+      x-enum-varnames: [WorkspaceKindGit]
+    WorkspaceMode:
+      type: string
+      description: |
+        `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+        merged pull request carrying a Task's key completes that Task's review.
+      enum: [plain, pull_request]
+      x-enum-varnames: [WorkspaceModePlain, WorkspaceModePullRequest]
+    WorkspaceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/Workspace"}
+    CreateWorkspaceBody:
+      type: object
+      required: [name, path]
+      properties:
+        name:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
+        kind: {$ref: "#/components/schemas/WorkspaceKind"}
+        path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: The repository's absolute path.
+        mode: {$ref: "#/components/schemas/WorkspaceMode"}
+        default_branch:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Defaults to `main`.
+    UpdateWorkspaceBody:
+      type: object
+      properties:
+        name:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$"
+        path: {type: string, minLength: 1, maxLength: 4096}
+        mode: {$ref: "#/components/schemas/WorkspaceMode"}
+        default_branch: {type: string, minLength: 1, maxLength: 255}
 
     # ------------------------------------------------------------ skills
     Skill:
@@ -1976,7 +2353,7 @@ components:
     # ------------------------------------------------------------ features
     Feature:
       type: object
-      required: [id, key, team_id, title, description, owner_id, state, rank, filed_by, created_at, task_counts]
+      required: [id, key, team_id, title, description, owner_id, state, rank, quick, ship_when_done, filed_by, created_at, task_counts]
       properties:
         id: {type: string}
         key:
@@ -1994,6 +2371,12 @@ components:
         from_retrospective_task_id:
           type: string
           description: The Retrospective that filed this Feature.
+        quick:
+          type: boolean
+          description: A quick Feature was filed with its one Task and no Break down; it has no Retrospective.
+        ship_when_done:
+          type: boolean
+          description: The Feature ships itself when its last open Task is completed. Always true for a quick Feature.
         filed_by: {type: string}
         created_at: {type: string, format: date-time}
         ended_at: {type: string, format: date-time}
@@ -2050,6 +2433,19 @@ components:
         from_retrospective:
           type: string
           description: Id or display key of the Retrospective Task filing this Feature.
+        quick:
+          type: boolean
+          description: File a quick Feature, with its one Task instead of a Break down. Needs `skill`.
+        skill:
+          type: string
+          description: A quick Feature's only. Skill id or name its one Task needs.
+        workspaces:
+          type: array
+          description: A quick Feature's only. Workspace ids or names its one Task names; default the Team's default.
+          items: {type: string}
+        ship_when_done:
+          type: boolean
+          description: Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature.
     RankFeatureBody:
       type: object
       required: [position]
@@ -2098,6 +2494,10 @@ components:
           type: array
           description: The open Tasks blocking this one. Absent when none is open.
           items: {$ref: "#/components/schemas/TaskBrief"}
+        workspace_ids:
+          type: array
+          description: The Workspaces the Task names, in the order named. Absent when it names none.
+          items: {type: string}
         filed_by: {type: string}
         waiting_since:
           type: string
@@ -2226,13 +2626,17 @@ components:
       enum: [released, handed_over, completed, lapsed, taken_back, dropped, token_revoked, session_closed, member_deactivated]
     TaskDetail:
       type: object
-      required: [task, status, feature, claims, notes, evidence, blockers, blocking, observations]
+      required: [task, status, feature, workspaces, claims, notes, evidence, blockers, blocking, observations]
       description: The Task with its record. `proposal` is the latest Skill proposal written on it, when any.
       properties:
         task: {$ref: "#/components/schemas/Task"}
         status:
           $ref: "#/components/schemas/Status"
         feature: {$ref: "#/components/schemas/Feature"}
+        workspaces:
+          type: array
+          description: The Workspaces the Task names, in the order of `task.workspace_ids`.
+          items: {$ref: "#/components/schemas/Workspace"}
         claims:
           type: array
           description: Every Claim on the Task, oldest first.
@@ -2291,6 +2695,12 @@ components:
             Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
             `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
             Status.
+        workspaces:
+          type: array
+          description: |
+            Workspace ids or names the Task names: where a session works it. Defaults to its
+            Feature's Team's default Workspace, or none when the Team has none.
+          items: {type: string}
     ClaimTaskBody:
       type: object
       properties:
@@ -2500,9 +2910,14 @@ components:
         - member.skill_revoked
         - member.deactivated
         - member.reactivated
+        - member.agent_changed
         - team.created
+        - team.changed
         - team.member_added
         - team.member_removed
+        - workspace.added
+        - workspace.changed
+        - workspace.removed
         - token.issued
         - token.revoked
         - session.closed
@@ -2513,7 +2928,7 @@ components:
       description: |
         The kind of record an Activity entry is about. `statuses` is the Organisation's list of
         Statuses as a whole; its `subject_id` is the Organisation's id.
-      enum: [feature, task, skill, member, team, token, session, login_link, statuses]
+      enum: [feature, task, skill, member, team, token, session, login_link, statuses, workspace]
     ActivityPage:
       type: object
       required: [items, last_seq]
@@ -2529,3 +2944,44 @@ components:
           type: integer
           format: int64
           description: The sequence number of the first entry returned. Absent when none were. Pass it as `before` to read the page before.
+
+    # ------------------------------------------------------------ runner
+    RunnerSession:
+      type: object
+      description: |
+        An agent session the Runner runs for a Task it claimed as that agent. Not part of the
+        record: it lives as long as the session.
+      required: [task_id, member_id, session_id, host, started_at, state, log_path]
+      properties:
+        task_id: {type: string}
+        member_id:
+          type: string
+          description: The agent whose session it is.
+        session_id:
+          type: string
+          description: The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
+        host:
+          type: string
+          description: The machine the session runs on.
+        tmux:
+          type: string
+          description: The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined.
+        started_at: {type: string, format: date-time}
+        state: {$ref: "#/components/schemas/RunnerSessionState"}
+        log_path:
+          type: string
+          description: Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends.
+    RunnerSessionState:
+      type: string
+      description: |
+        `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
+        has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+      enum: [running, nudged, ending]
+      x-enum-varnames: [RunnerSessionRunning, RunnerSessionNudged, RunnerSessionEnding]
+    RunnerSessionList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: "#/components/schemas/RunnerSession"}

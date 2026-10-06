@@ -266,6 +266,31 @@ export interface paths {
         patch: operations["updateMember"];
         trace?: never;
     };
+    "/v1/members/{member}/agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set how the Runner starts an agent Member's sessions (admin)
+         * @description Changes the fields given and keeps the others. An agent with no settings yet starts from
+         *     the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+         *     model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+         *     sessions only for agents that have settings and are not paused. Records
+         *     `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+         *     `invalid` (a human Member, or a value out of bounds).
+         */
+        patch: operations["setAgentSettings"];
+        trace?: never;
+    };
     "/v1/members/{member}/deactivate": {
         parameters: {
             query?: never;
@@ -390,7 +415,15 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Change a Team's name, default Workspace or Ship-when-done default (admin)
+         * @description Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+         *     A Task filed naming no Workspace takes the Team's default; a Feature filed without
+         *     `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+         *     Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+         *     Workspace).
+         */
+        patch: operations["updateTeam"];
         trace?: never;
     };
     "/v1/teams/{team}/members/{member}": {
@@ -516,6 +549,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the Install's Workspaces */
+        get: operations["listWorkspaces"];
+        put?: never;
+        /**
+         * Add a Workspace to the Install (admin)
+         * @description A Workspace is a place a session works in; a `git` Workspace is a repository on the
+         *     machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+         *     (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+         */
+        post: operations["createWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/workspaces/{workspace}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a Workspace (admin)
+         * @description Refused with `conflict` while any Task, open or ended, names it: the record keeps where
+         *     its work was done. A Team whose default it was has no default afterwards. Records
+         *     `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
+         */
+        delete: operations["removeWorkspace"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a Workspace's name, path, mode or default branch (admin)
+         * @description Changes the fields given and keeps the others; the kind never changes. Records
+         *     `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+         *     `conflict` (name taken), `invalid`.
+         */
+        patch: operations["updateWorkspace"];
+        trace?: never;
+    };
     "/v1/features": {
         parameters: {
             query?: never;
@@ -533,7 +617,17 @@ export interface paths {
          * File a Feature
          * @description Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
          *     the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-         *     by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+         *     by a Retrospective names it in `from_retrospective`.
+         *
+         *     A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+         *     down it files its one work Task, with the Feature's title and description, needing
+         *     `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+         *     done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+         *     Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+         *     open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+         *     quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+         *     `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+         *     default Workspace and none named).
          */
         post: operations["fileFeature"];
         delete?: never;
@@ -593,8 +687,9 @@ export interface paths {
         /**
          * Ship a Feature (Feature owner)
          * @description Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-         *     <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
-         *     `tasks_open`, `ended`.
+         *     <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
+         *     `ship_when_done` ships without this call when its last open Task is completed. Errors:
+         *     `forbidden` (not the owner), `tasks_open`, `ended`.
          */
         post: operations["shipFeature"];
         delete?: never;
@@ -615,7 +710,8 @@ export interface paths {
         /**
          * Drop a Feature (Feature owner)
          * @description Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-         *     <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
+         *     <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
+         *     `forbidden` (not the owner), `ended`.
          */
         post: operations["dropFeature"];
         delete?: never;
@@ -703,7 +799,9 @@ export interface paths {
          *     then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
          *     even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
          *     Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-         *     starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+         *     starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+         *     Feature's Team's default Workspace, or none when the Team has no default. Errors:
+         *     `not_found` (no such Workspace), `ended` (the Feature has
          *     ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
          *     `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
          *     `dropped`).
@@ -881,7 +979,9 @@ export interface paths {
          * @description Ends the Task done, in the first `done` Status. Completing a Task that needs
          *     `skill-review` and carries a pending proposal publishes it as the Skill's next version;
          *     completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-         *     Errors: `not_holder`, `proposal_stale`
+         *     Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+         *     in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+         *     its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
          *     (the version the proposal was written against is no longer current; nothing changes, and
          *     the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
          */
@@ -1166,6 +1266,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/runner/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the agent sessions the Runner is running now
+         * @description A read model of the Runner beside this server, not part of the record: what it runs now,
+         *     one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
+         *     attached to this server, as with `serve --agents=off`).
+         */
+        get: operations["listRunnerSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runner/sessions/{task}/nudge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nudge the agent in a Task's session to end the Task (admin)
+         * @description Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+         *     question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
+         *     Task).
+         */
+        post: operations["nudgeRunnerSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runner/sessions/{task}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a Task's session (admin)
+         * @description Ends the agent's session and releases its Claim with a Note, as when a session ends
+         *     without a decision; the session's log is attached as Evidence. Errors: `forbidden` (not an
+         *     admin), `no_runner`, `not_found` (no session on the Task).
+         */
+        post: operations["stopRunnerSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/runner/sessions/{task}/terminal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Watch or join a Task's session through a terminal (WebSocket)
+         * @description Upgrades to a WebSocket bridged to the session's terminal (`tmux attach`). Binary
+         *     messages carry the terminal's bytes both ways; a text message `{"cols": n, "rows": n}`
+         *     resizes the client's view. Admins may type unless they ask for `readonly`; every other
+         *     Member only watches, and what they send is ignored. Authenticated as every operation is,
+         *     by a bearer token with its Session or by the browser cookie; a browser's upgrade must
+         *     come from this Install's own origin. The Runner adds a Note on the Task when someone
+         *     joins. Errors, before the upgrade: `no_runner`, `not_found` (no session on the Task),
+         *     `conflict` (the session runs without tmux and cannot be joined), `forbidden` (another
+         *     origin).
+         */
+        get: operations["runnerTerminal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1184,12 +1378,12 @@ export interface components {
          *     `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
          *     `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
          *     `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-         *     `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
-         *     `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+         *     `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
+         *     `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
          *     `not_implemented` 501.
          * @enum {string}
          */
-        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "status_in_use" | "use_complete" | "use_drop" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
+        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "status_in_use" | "use_complete" | "use_drop" | "no_runner" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -1310,6 +1504,7 @@ export interface components {
              * @description When an admin deactivated the Member. Absent while the Member is active.
              */
             deactivated_at?: string;
+            agent?: components["schemas"]["AgentSettings"];
         };
         /** @enum {string} */
         MemberKind: "human" | "agent";
@@ -1336,6 +1531,53 @@ export interface components {
             email?: string;
             admin?: boolean;
         };
+        /**
+         * @description How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+         *     Runner does not start (an agent working from elsewhere, through its own token). `command`
+         *     is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
+         *     session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+         *     `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+         *     directory) and `{task}` (the Task's display key). The defaults start Claude Code:
+         *     `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
+         *     --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
+         *     read these settings, `env` included: keep secrets in the server's own environment, which
+         *     sessions inherit.
+         */
+        AgentSettings: {
+            /** @description The program to start, such as `claude`. */
+            command: string;
+            /** @description Its arguments, each a template. */
+            args: string[];
+            /** @description The model the agent runs on, passed as `{model}` and reported as the Claim's model label. */
+            model: string;
+            /** @description Variables added to the session's environment, besides `DARKORY_URL`, `DARKORY_TOKEN` and `DARKORY_SESSION`. */
+            env: {
+                [key: string]: string;
+            };
+            /** @description The session runs with the agent's permission checks skipped; the worktree and the exit rules are the fence. */
+            unattended: boolean;
+            /** @description The Runner starts no new session for the agent; one running carries on. */
+            paused: boolean;
+            /**
+             * @description The file whose modified time shows the session making progress, for a command other
+             *     than Claude Code (whose transcript the Runner finds itself); it may use the same
+             *     placeholders. The Runner sends Heartbeats only while it changes.
+             */
+            progress_file?: string;
+        };
+        /** @description The settings to change; those left out stay as they are. `progress_file` set to `""` clears it. */
+        SetAgentSettingsBody: {
+            command?: string;
+            args?: string[];
+            model?: string;
+            /** @description The whole set of variables, replacing the one there. */
+            env?: {
+                [key: string]: string;
+            };
+            unattended?: boolean;
+            paused?: boolean;
+            progress_file?: string;
+        };
         SetManagerBody: {
             /** @description Member id or name. */
             manager: string;
@@ -1345,6 +1587,10 @@ export interface components {
             /** @description The prefix of the Team's display keys, such as `WEB` in `WEB-42`. */
             key: string;
             name: string;
+            /** @description The Workspace a Task filed in the Team names when it names none. Absent when the Team has none. */
+            default_workspace_id?: string;
+            /** @description The `ship_when_done` a Feature filed in the Team takes when its filer does not say. */
+            ship_when_done: boolean;
             /** Format: date-time */
             created_at: string;
         };
@@ -1358,6 +1604,60 @@ export interface components {
         CreateTeamBody: {
             key: string;
             name: string;
+        };
+        UpdateTeamBody: {
+            name?: string;
+            /** @description Workspace id or name; `""` clears the Team's default. */
+            default_workspace?: string;
+            ship_when_done?: boolean;
+        };
+        /**
+         * @description A place a session works in, named on the Install. A `git` Workspace is a repository at
+         *     `path` on the machine that runs the Install; a session works in a checkout of it on a
+         *     branch named after its Task. In `pull_request` mode, work lands through pull requests
+         *     instead of merges by the Runner.
+         */
+        Workspace: {
+            id: string;
+            /** @description Unique on the Install, ignoring case; it names the session's checkout directory. */
+            name: string;
+            kind: components["schemas"]["WorkspaceKind"];
+            /** @description The repository's absolute path. */
+            path: string;
+            mode: components["schemas"]["WorkspaceMode"];
+            /** @description The branch work lands on, such as `main`. */
+            default_branch: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description The kind of place. Only `git` for now; more may be added within `/v1`.
+         * @enum {string}
+         */
+        WorkspaceKind: "git";
+        /**
+         * @description `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+         *     merged pull request carrying a Task's key completes that Task's review.
+         * @enum {string}
+         */
+        WorkspaceMode: "plain" | "pull_request";
+        WorkspaceList: {
+            items: components["schemas"]["Workspace"][];
+        };
+        CreateWorkspaceBody: {
+            name: string;
+            kind?: components["schemas"]["WorkspaceKind"];
+            /** @description The repository's absolute path. */
+            path: string;
+            mode?: components["schemas"]["WorkspaceMode"];
+            /** @description Defaults to `main`. */
+            default_branch?: string;
+        };
+        UpdateWorkspaceBody: {
+            name?: string;
+            path?: string;
+            mode?: components["schemas"]["WorkspaceMode"];
+            default_branch?: string;
         };
         Skill: {
             id: string;
@@ -1456,6 +1756,10 @@ export interface components {
             rank: number;
             /** @description The Retrospective that filed this Feature. */
             from_retrospective_task_id?: string;
+            /** @description A quick Feature was filed with its one Task and no Break down; it has no Retrospective. */
+            quick: boolean;
+            /** @description The Feature ships itself when its last open Task is completed. Always true for a quick Feature. */
+            ship_when_done: boolean;
             filed_by: string;
             /** Format: date-time */
             created_at: string;
@@ -1493,6 +1797,14 @@ export interface components {
             owner?: string;
             /** @description Id or display key of the Retrospective Task filing this Feature. */
             from_retrospective?: string;
+            /** @description File a quick Feature, with its one Task instead of a Break down. Needs `skill`. */
+            quick?: boolean;
+            /** @description A quick Feature's only. Skill id or name its one Task needs. */
+            skill?: string;
+            /** @description A quick Feature's only. Workspace ids or names its one Task names; default the Team's default. */
+            workspaces?: string[];
+            /** @description Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature. */
+            ship_when_done?: boolean;
         };
         RankFeatureBody: {
             /** Format: int64 */
@@ -1522,6 +1834,8 @@ export interface components {
             blocked: boolean;
             /** @description The open Tasks blocking this one. Absent when none is open. */
             open_blockers?: components["schemas"]["TaskBrief"][];
+            /** @description The Workspaces the Task names, in the order named. Absent when it names none. */
+            workspace_ids?: string[];
             filed_by: string;
             /**
              * Format: date-time
@@ -1640,6 +1954,8 @@ export interface components {
             task: components["schemas"]["Task"];
             status: components["schemas"]["Status"];
             feature: components["schemas"]["Feature"];
+            /** @description The Workspaces the Task names, in the order of `task.workspace_ids`. */
+            workspaces: components["schemas"]["Workspace"][];
             /** @description Every Claim on the Task, oldest first. */
             claims: components["schemas"]["Claim"][];
             /** @description The running log, oldest first. */
@@ -1674,6 +1990,11 @@ export interface components {
              *     Status.
              */
             status?: string;
+            /**
+             * @description Workspace ids or names the Task names: where a session works it. Defaults to its
+             *     Feature's Team's default Workspace, or none when the Team has none.
+             */
+            workspaces?: string[];
         };
         ClaimTaskBody: {
             /** @description Seconds without a Heartbeat before the Claim lapses. 0 for none. Defaults to the token's default. */
@@ -1802,13 +2123,13 @@ export interface components {
          *     within `/v1`; a client should skip a kind it does not know.
          * @enum {string}
          */
-        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.status_set" | "statuses.changed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "team.created" | "team.member_added" | "team.member_removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.status_set" | "statuses.changed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "team.created" | "team.changed" | "team.member_added" | "team.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
         /**
          * @description The kind of record an Activity entry is about. `statuses` is the Organisation's list of
          *     Statuses as a whole; its `subject_id` is the Organisation's id.
          * @enum {string}
          */
-        SubjectType: "feature" | "task" | "skill" | "member" | "team" | "token" | "session" | "login_link" | "statuses";
+        SubjectType: "feature" | "task" | "skill" | "member" | "team" | "token" | "session" | "login_link" | "statuses" | "workspace";
         ActivityPage: {
             items: components["schemas"]["Activity"][];
             /**
@@ -1821,6 +2142,35 @@ export interface components {
              * @description The sequence number of the first entry returned. Absent when none were. Pass it as `before` to read the page before.
              */
             first_seq?: number;
+        };
+        /**
+         * @description An agent session the Runner runs for a Task it claimed as that agent. Not part of the
+         *     record: it lives as long as the session.
+         */
+        RunnerSession: {
+            task_id: string;
+            /** @description The agent whose session it is. */
+            member_id: string;
+            /** @description The Darkory Session the Runner holds the Claim through, which is also the agent's own session id. */
+            session_id: string;
+            /** @description The machine the session runs on. */
+            host: string;
+            /** @description The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined. */
+            tmux?: string;
+            /** Format: date-time */
+            started_at: string;
+            state: components["schemas"]["RunnerSessionState"];
+            /** @description Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends. */
+            log_path: string;
+        };
+        /**
+         * @description `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
+         *     has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+         * @enum {string}
+         */
+        RunnerSessionState: "running" | "nudged" | "ending";
+        RunnerSessionList: {
+            items: components["schemas"]["RunnerSession"][];
         };
     };
     responses: {
@@ -1853,6 +2203,8 @@ export interface components {
         /** @description Id or display key of the blocking Task. */
         BlockerRef: string;
         TokenID: string;
+        /** @description Workspace id or name. */
+        WorkspaceRef: string;
         EvidenceID: string;
         ProposalID: string;
         /** @description The id the running copy chose for its Session. */
@@ -2323,6 +2675,40 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    setAgentSettings: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Member id or name. */
+                member: components["parameters"]["MemberRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAgentSettingsBody"];
+            };
+        };
+        responses: {
+            /** @description The Member with its settings. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     deactivateMember: {
         parameters: {
             query?: never;
@@ -2579,6 +2965,40 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    updateTeam: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Team id or key, such as `WEB`. */
+                team: components["parameters"]["TeamRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeamBody"];
+            };
+        };
+        responses: {
+            /** @description The Team. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     addTeamMember: {
         parameters: {
             query?: never;
@@ -2816,6 +3236,120 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Workspaces, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createWorkspace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkspaceBody"];
+            };
+        };
+        responses: {
+            /** @description The new Workspace. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workspace"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    removeWorkspace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Workspace id or name. */
+                workspace: components["parameters"]["WorkspaceRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Workspace is gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateWorkspace: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Workspace id or name. */
+                workspace: components["parameters"]["WorkspaceRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceBody"];
+            };
+        };
+        responses: {
+            /** @description The Workspace. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workspace"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listFeatures: {
         parameters: {
             query?: {
@@ -2864,7 +3398,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The Feature with its Break down Task. */
+            /** @description The Feature with its Break down Task, or a quick Feature with its one Task. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3824,6 +4358,108 @@ export interface operations {
                 content: {
                     "text/event-stream": string;
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRunnerSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sessions, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunnerSessionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    nudgeRunnerSession: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `WEB-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The nudge was sent. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    stopRunnerSession: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `WEB-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session is stopping. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    runnerTerminal: {
+        parameters: {
+            query?: {
+                /** @description Watch without typing, even as an admin. */
+                readonly?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Task id or display key, such as `WEB-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switched to the WebSocket protocol; the terminal follows. */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

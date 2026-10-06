@@ -25,6 +25,7 @@ const (
 	ActivityKindFeatureShipped          ActivityKind = "feature.shipped"
 	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
 	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
+	ActivityKindMemberAgentChanged      ActivityKind = "member.agent_changed"
 	ActivityKindMemberCreated           ActivityKind = "member.created"
 	ActivityKindMemberDeactivated       ActivityKind = "member.deactivated"
 	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
@@ -53,11 +54,15 @@ const (
 	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
 	ActivityKindTaskStatusSet           ActivityKind = "task.status_set"
 	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
+	ActivityKindTeamChanged             ActivityKind = "team.changed"
 	ActivityKindTeamCreated             ActivityKind = "team.created"
 	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
 	ActivityKindTeamMemberRemoved       ActivityKind = "team.member_removed"
 	ActivityKindTokenIssued             ActivityKind = "token.issued"
 	ActivityKindTokenRevoked            ActivityKind = "token.revoked"
+	ActivityKindWorkspaceAdded          ActivityKind = "workspace.added"
+	ActivityKindWorkspaceChanged        ActivityKind = "workspace.changed"
+	ActivityKindWorkspaceRemoved        ActivityKind = "workspace.removed"
 )
 
 // Valid indicates whether the value is a known member of the ActivityKind enum.
@@ -78,6 +83,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindLoginLinkIssued:
 		return true
 	case ActivityKindLoginLinkRedeemed:
+		return true
+	case ActivityKindMemberAgentChanged:
 		return true
 	case ActivityKindMemberCreated:
 		return true
@@ -135,6 +142,8 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindTaskTakenBack:
 		return true
+	case ActivityKindTeamChanged:
+		return true
 	case ActivityKindTeamCreated:
 		return true
 	case ActivityKindTeamMemberAdded:
@@ -144,6 +153,12 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTokenIssued:
 		return true
 	case ActivityKindTokenRevoked:
+		return true
+	case ActivityKindWorkspaceAdded:
+		return true
+	case ActivityKindWorkspaceChanged:
+		return true
+	case ActivityKindWorkspaceRemoved:
 		return true
 	default:
 		return false
@@ -199,6 +214,7 @@ const (
 	ErrorCodeIdempotencyKeyReused ErrorCode = "idempotency_key_reused"
 	ErrorCodeInternal             ErrorCode = "internal"
 	ErrorCodeInvalid              ErrorCode = "invalid"
+	ErrorCodeNoRunner             ErrorCode = "no_runner"
 	ErrorCodeNotFound             ErrorCode = "not_found"
 	ErrorCodeNotHolder            ErrorCode = "not_holder"
 	ErrorCodeNotImplemented       ErrorCode = "not_implemented"
@@ -232,6 +248,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInternal:
 		return true
 	case ErrorCodeInvalid:
+		return true
+	case ErrorCodeNoRunner:
 		return true
 	case ErrorCodeNotFound:
 		return true
@@ -381,6 +399,27 @@ func (e ProposalState) Valid() bool {
 	}
 }
 
+// Defines values for RunnerSessionState.
+const (
+	RunnerSessionEnding  RunnerSessionState = "ending"
+	RunnerSessionNudged  RunnerSessionState = "nudged"
+	RunnerSessionRunning RunnerSessionState = "running"
+)
+
+// Valid indicates whether the value is a known member of the RunnerSessionState enum.
+func (e RunnerSessionState) Valid() bool {
+	switch e {
+	case RunnerSessionEnding:
+		return true
+	case RunnerSessionNudged:
+		return true
+	case RunnerSessionRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SessionKind.
 const (
 	SessionKindBrowser SessionKind = "browser"
@@ -473,6 +512,7 @@ const (
 	SubjectTypeTask      SubjectType = "task"
 	SubjectTypeTeam      SubjectType = "team"
 	SubjectTypeToken     SubjectType = "token"
+	SubjectTypeWorkspace SubjectType = "workspace"
 )
 
 // Valid indicates whether the value is a known member of the SubjectType enum.
@@ -495,6 +535,8 @@ func (e SubjectType) Valid() bool {
 	case SubjectTypeTeam:
 		return true
 	case SubjectTypeToken:
+		return true
+	case SubjectTypeWorkspace:
 		return true
 	default:
 		return false
@@ -543,6 +585,39 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for WorkspaceKind.
+const (
+	WorkspaceKindGit WorkspaceKind = "git"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceKind enum.
+func (e WorkspaceKind) Valid() bool {
+	switch e {
+	case WorkspaceKindGit:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkspaceMode.
+const (
+	WorkspaceModePlain       WorkspaceMode = "plain"
+	WorkspaceModePullRequest WorkspaceMode = "pull_request"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceMode enum.
+func (e WorkspaceMode) Valid() bool {
+	switch e {
+	case WorkspaceModePlain:
+		return true
+	case WorkspaceModePullRequest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activity defines model for Activity.
 type Activity struct {
 	// ActorID The Member who acted. Absent when Darkory acted, as when recording a lapse.
@@ -582,6 +657,41 @@ type ActivityPage struct {
 // AddNoteBody defines model for AddNoteBody.
 type AddNoteBody struct {
 	Body string `json:"body"`
+}
+
+// AgentSettings How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+// Runner does not start (an agent working from elsewhere, through its own token). `command`
+// is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
+// session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+// directory) and `{task}` (the Task's display key). The defaults start Claude Code:
+// `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
+// --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
+// read these settings, `env` included: keep secrets in the server's own environment, which
+// sessions inherit.
+type AgentSettings struct {
+	// Args Its arguments, each a template.
+	Args []string `json:"args"`
+
+	// Command The program to start, such as `claude`.
+	Command string `json:"command"`
+
+	// Env Variables added to the session's environment, besides `DARKORY_URL`, `DARKORY_TOKEN` and `DARKORY_SESSION`.
+	Env map[string]string `json:"env"`
+
+	// Model The model the agent runs on, passed as `{model}` and reported as the Claim's model label.
+	Model string `json:"model"`
+
+	// Paused The Runner starts no new session for the agent; one running carries on.
+	Paused bool `json:"paused"`
+
+	// ProgressFile The file whose modified time shows the session making progress, for a command other
+	// than Claude Code (whose transcript the Runner finds itself); it may use the same
+	// placeholders. The Runner sends Heartbeats only while it changes.
+	ProgressFile *string `json:"progress_file,omitempty"`
+
+	// Unattended The session runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
+	Unattended bool `json:"unattended"`
 }
 
 // Claim defines model for Claim.
@@ -660,6 +770,23 @@ type CreateTeamBody struct {
 	Name string `json:"name"`
 }
 
+// CreateWorkspaceBody defines model for CreateWorkspaceBody.
+type CreateWorkspaceBody struct {
+	// DefaultBranch Defaults to `main`.
+	DefaultBranch *string `json:"default_branch,omitempty"`
+
+	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
+	Kind *WorkspaceKind `json:"kind,omitempty"`
+
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+	// merged pull request carrying a Task's key completes that Task's review.
+	Mode *WorkspaceMode `json:"mode,omitempty"`
+	Name string         `json:"name"`
+
+	// Path The repository's absolute path.
+	Path string `json:"path"`
+}
+
 // DropTaskBody defines model for DropTaskBody.
 type DropTaskBody struct {
 	Reason *string `json:"reason,omitempty"`
@@ -676,8 +803,8 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
-	// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
+	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 	// `not_implemented` 501.
 	Code ErrorCode `json:"code"`
 
@@ -692,8 +819,8 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
-// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
+// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 // `not_implemented` 501.
 type ErrorCode string
 
@@ -727,9 +854,15 @@ type Feature struct {
 	Key     string `json:"key"`
 	OwnerID string `json:"owner_id"`
 
+	// Quick A quick Feature was filed with its one Task and no Break down; it has no Retrospective.
+	Quick bool `json:"quick"`
+
 	// Rank Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-	Rank  int64        `json:"rank"`
-	State FeatureState `json:"state"`
+	Rank int64 `json:"rank"`
+
+	// ShipWhenDone The Feature ships itself when its last open Task is completed. Always true for a quick Feature.
+	ShipWhenDone bool         `json:"ship_when_done"`
+	State        FeatureState `json:"state"`
 
 	// TaskCounts How many of the Feature's Tasks are in each state.
 	TaskCounts TaskCounts `json:"task_counts"`
@@ -765,9 +898,21 @@ type FileFeatureBody struct {
 	// Owner Member id or name. Defaults to the caller.
 	Owner *string `json:"owner,omitempty"`
 
+	// Quick File a quick Feature, with its one Task instead of a Break down. Needs `skill`.
+	Quick *bool `json:"quick,omitempty"`
+
+	// ShipWhenDone Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature.
+	ShipWhenDone *bool `json:"ship_when_done,omitempty"`
+
+	// Skill A quick Feature's only. Skill id or name its one Task needs.
+	Skill *string `json:"skill,omitempty"`
+
 	// Team Team id or key.
 	Team  string `json:"team"`
 	Title string `json:"title"`
+
+	// Workspaces A quick Feature's only. Workspace ids or names its one Task names; default the Team's default.
+	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
 // FileTaskBody defines model for FileTaskBody.
@@ -790,6 +935,10 @@ type FileTaskBody struct {
 	// Status.
 	Status *string `json:"status,omitempty"`
 	Title  string  `json:"title"`
+
+	// Workspaces Workspace ids or names the Task names: where a session works it. Defaults to its
+	// Feature's Team's default Workspace, or none when the Team has none.
+	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
 // HandoverTaskBody defines model for HandoverTaskBody.
@@ -874,8 +1023,20 @@ type Me struct {
 // Member defines model for Member.
 type Member struct {
 	// Admin Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
-	Admin     bool      `json:"admin"`
-	CreatedAt time.Time `json:"created_at"`
+	Admin bool `json:"admin"`
+
+	// Agent How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+	// Runner does not start (an agent working from elsewhere, through its own token). `command`
+	// is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
+	// session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+	// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+	// directory) and `{task}` (the Task's display key). The defaults start Claude Code:
+	// `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
+	// --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
+	// read these settings, `env` included: keep secrets in the server's own environment, which
+	// sessions inherit.
+	Agent     *AgentSettings `json:"agent,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
 
 	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
@@ -998,6 +1159,40 @@ type ReleaseTaskBody struct {
 	Note *string `json:"note,omitempty"`
 }
 
+// RunnerSession An agent session the Runner runs for a Task it claimed as that agent. Not part of the
+// record: it lives as long as the session.
+type RunnerSession struct {
+	// Host The machine the session runs on.
+	Host string `json:"host"`
+
+	// LogPath Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends.
+	LogPath string `json:"log_path"`
+
+	// MemberID The agent whose session it is.
+	MemberID string `json:"member_id"`
+
+	// SessionID The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
+	SessionID string    `json:"session_id"`
+	StartedAt time.Time `json:"started_at"`
+
+	// State `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
+	// has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+	State  RunnerSessionState `json:"state"`
+	TaskID string             `json:"task_id"`
+
+	// Tmux The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined.
+	Tmux *string `json:"tmux,omitempty"`
+}
+
+// RunnerSessionList defines model for RunnerSessionList.
+type RunnerSessionList struct {
+	Items []RunnerSession `json:"items"`
+}
+
+// RunnerSessionState `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
+// has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+type RunnerSessionState string
+
 // Session defines model for Session.
 type Session struct {
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
@@ -1027,6 +1222,19 @@ type SessionList struct {
 
 	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// SetAgentSettingsBody The settings to change; those left out stay as they are. `progress_file` set to `""` clears it.
+type SetAgentSettingsBody struct {
+	Args    *[]string `json:"args,omitempty"`
+	Command *string   `json:"command,omitempty"`
+
+	// Env The whole set of variables, replacing the one there.
+	Env          *map[string]string `json:"env,omitempty"`
+	Model        *string            `json:"model,omitempty"`
+	Paused       *bool              `json:"paused,omitempty"`
+	ProgressFile *string            `json:"progress_file,omitempty"`
+	Unattended   *bool              `json:"unattended,omitempty"`
 }
 
 // SetManagerBody defines model for SetManagerBody.
@@ -1215,6 +1423,9 @@ type Task struct {
 
 	// WaitingSince When the Task was filed or last handed over.
 	WaitingSince time.Time `json:"waiting_since"`
+
+	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
+	WorkspaceIds *[]string `json:"workspace_ids,omitempty"`
 }
 
 // TaskBrief A Task named by its id and display key.
@@ -1264,6 +1475,9 @@ type TaskDetail struct {
 	// holder names one. Claimed and blocked are not Statuses.
 	Status Status `json:"status"`
 	Task   Task   `json:"task"`
+
+	// Workspaces The Workspaces the Task names, in the order of `task.workspace_ids`.
+	Workspaces []Workspace `json:"workspaces"`
 }
 
 // TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
@@ -1283,11 +1497,17 @@ type TaskState string
 // Team defines model for Team.
 type Team struct {
 	CreatedAt time.Time `json:"created_at"`
-	ID        string    `json:"id"`
+
+	// DefaultWorkspaceID The Workspace a Task filed in the Team names when it names none. Absent when the Team has none.
+	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
+	ID                 string  `json:"id"`
 
 	// Key The prefix of the Team's display keys, such as `WEB` in `WEB-42`.
 	Key  string `json:"key"`
 	Name string `json:"name"`
+
+	// ShipWhenDone The `ship_when_done` a Feature filed in the Team takes when its filer does not say.
+	ShipWhenDone bool `json:"ship_when_done"`
 }
 
 // TeamDetail defines model for TeamDetail.
@@ -1328,6 +1548,62 @@ type UpdateMemberBody struct {
 	Email *openapi_types.Email `json:"email,omitempty"`
 	Name  *string              `json:"name,omitempty"`
 }
+
+// UpdateTeamBody defines model for UpdateTeamBody.
+type UpdateTeamBody struct {
+	// DefaultWorkspace Workspace id or name; `""` clears the Team's default.
+	DefaultWorkspace *string `json:"default_workspace,omitempty"`
+	Name             *string `json:"name,omitempty"`
+	ShipWhenDone     *bool   `json:"ship_when_done,omitempty"`
+}
+
+// UpdateWorkspaceBody defines model for UpdateWorkspaceBody.
+type UpdateWorkspaceBody struct {
+	DefaultBranch *string `json:"default_branch,omitempty"`
+
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+	// merged pull request carrying a Task's key completes that Task's review.
+	Mode *WorkspaceMode `json:"mode,omitempty"`
+	Name *string        `json:"name,omitempty"`
+	Path *string        `json:"path,omitempty"`
+}
+
+// Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
+// `path` on the machine that runs the Install; a session works in a checkout of it on a
+// branch named after its Task. In `pull_request` mode, work lands through pull requests
+// instead of merges by the Runner.
+type Workspace struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DefaultBranch The branch work lands on, such as `main`.
+	DefaultBranch string `json:"default_branch"`
+	ID            string `json:"id"`
+
+	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
+	Kind WorkspaceKind `json:"kind"`
+
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+	// merged pull request carrying a Task's key completes that Task's review.
+	Mode WorkspaceMode `json:"mode"`
+
+	// Name Unique on the Install, ignoring case; it names the session's checkout directory.
+	Name string `json:"name"`
+
+	// Path The repository's absolute path.
+	Path string `json:"path"`
+}
+
+// WorkspaceKind The kind of place. Only `git` for now; more may be added within `/v1`.
+type WorkspaceKind string
+
+// WorkspaceList defines model for WorkspaceList.
+type WorkspaceList struct {
+	Items []Workspace `json:"items"`
+}
+
+// WorkspaceMode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+// merged pull request carrying a Task's key completes that Task's review.
+type WorkspaceMode string
 
 // BlockerRef defines model for BlockerRef.
 type BlockerRef = string
@@ -1373,6 +1649,9 @@ type TeamRef = string
 
 // TokenID defines model for TokenID.
 type TokenID = string
+
+// WorkspaceRef defines model for WorkspaceRef.
+type WorkspaceRef = string
 
 // ListActivityParams defines parameters for ListActivity.
 type ListActivityParams struct {
@@ -1503,6 +1782,13 @@ type UpdateMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetAgentSettingsParams defines parameters for SetAgentSettings.
+type SetAgentSettingsParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // DeactivateMemberParams defines parameters for DeactivateMember.
 type DeactivateMemberParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -1566,6 +1852,26 @@ type IssueTokenParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// NudgeRunnerSessionParams defines parameters for NudgeRunnerSession.
+type NudgeRunnerSessionParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// StopRunnerSessionParams defines parameters for StopRunnerSession.
+type StopRunnerSessionParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RunnerTerminalParams defines parameters for RunnerTerminal.
+type RunnerTerminalParams struct {
+	// Readonly Watch without typing, even as an admin.
+	Readonly *bool `form:"readonly,omitempty" json:"readonly,omitempty"`
 }
 
 // CloseSessionParams defines parameters for CloseSession.
@@ -1757,6 +2063,13 @@ type CreateTeamParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// UpdateTeamParams defines parameters for UpdateTeam.
+type UpdateTeamParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // RemoveTeamMemberParams defines parameters for RemoveTeamMember.
 type RemoveTeamMemberParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -1778,6 +2091,27 @@ type RevokeTokenParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// CreateWorkspaceParams defines parameters for CreateWorkspace.
+type CreateWorkspaceParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RemoveWorkspaceParams defines parameters for RemoveWorkspace.
+type RemoveWorkspaceParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateWorkspaceParams defines parameters for UpdateWorkspace.
+type UpdateWorkspaceParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // FileFeatureJSONRequestBody defines body for FileFeature for application/json ContentType.
 type FileFeatureJSONRequestBody = FileFeatureBody
 
@@ -1792,6 +2126,9 @@ type CreateMemberJSONRequestBody = CreateMemberBody
 
 // UpdateMemberJSONRequestBody defines body for UpdateMember for application/json ContentType.
 type UpdateMemberJSONRequestBody = UpdateMemberBody
+
+// SetAgentSettingsJSONRequestBody defines body for SetAgentSettings for application/json ContentType.
+type SetAgentSettingsJSONRequestBody = SetAgentSettingsBody
 
 // SetManagerJSONRequestBody defines body for SetManager for application/json ContentType.
 type SetManagerJSONRequestBody = SetManagerBody
@@ -1846,6 +2183,15 @@ type TakeBackTaskJSONRequestBody = TakeBackTaskBody
 
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody = CreateTeamBody
+
+// UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
+type UpdateTeamJSONRequestBody = UpdateTeamBody
+
+// CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
+type CreateWorkspaceJSONRequestBody = CreateWorkspaceBody
+
+// UpdateWorkspaceJSONRequestBody defines body for UpdateWorkspace for application/json ContentType.
+type UpdateWorkspaceJSONRequestBody = UpdateWorkspaceBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1915,6 +2261,9 @@ type ServerInterface interface {
 	// UpdateMember Change a Member's name, email or admin mark (admin)
 	// (PATCH /v1/members/{member})
 	UpdateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params UpdateMemberParams)
+	// SetAgentSettings Set how the Runner starts an agent Member's sessions (admin)
+	// (PATCH /v1/members/{member}/agent)
+	SetAgentSettings(w http.ResponseWriter, r *http.Request, member MemberRef, params SetAgentSettingsParams)
 	// DeactivateMember Deactivate a Member (admin)
 	// (POST /v1/members/{member}/deactivate)
 	DeactivateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params DeactivateMemberParams)
@@ -1945,6 +2294,18 @@ type ServerInterface interface {
 	// IssueToken Issue a token for a Member (admin)
 	// (POST /v1/members/{member}/tokens)
 	IssueToken(w http.ResponseWriter, r *http.Request, member MemberRef, params IssueTokenParams)
+	// ListRunnerSessions List the agent sessions the Runner is running now
+	// (GET /v1/runner/sessions)
+	ListRunnerSessions(w http.ResponseWriter, r *http.Request)
+	// NudgeRunnerSession Nudge the agent in a Task's session to end the Task (admin)
+	// (POST /v1/runner/sessions/{task}/nudge)
+	NudgeRunnerSession(w http.ResponseWriter, r *http.Request, task TaskRef, params NudgeRunnerSessionParams)
+	// StopRunnerSession Stop a Task's session (admin)
+	// (POST /v1/runner/sessions/{task}/stop)
+	StopRunnerSession(w http.ResponseWriter, r *http.Request, task TaskRef, params StopRunnerSessionParams)
+	// RunnerTerminal Watch or join a Task's session through a terminal (WebSocket)
+	// (GET /v1/runner/sessions/{task}/terminal)
+	RunnerTerminal(w http.ResponseWriter, r *http.Request, task TaskRef, params RunnerTerminalParams)
 	// CloseSession Close one of the caller's Sessions
 	// (POST /v1/sessions/{session}/close)
 	CloseSession(w http.ResponseWriter, r *http.Request, session SessionID, params CloseSessionParams)
@@ -2038,6 +2399,9 @@ type ServerInterface interface {
 	// GetTeam Get a Team and its Members
 	// (GET /v1/teams/{team})
 	GetTeam(w http.ResponseWriter, r *http.Request, team TeamRef)
+	// UpdateTeam Change a Team's name, default Workspace or Ship-when-done default (admin)
+	// (PATCH /v1/teams/{team})
+	UpdateTeam(w http.ResponseWriter, r *http.Request, team TeamRef, params UpdateTeamParams)
 	// RemoveTeamMember Remove a Member from a Team (admin)
 	// (DELETE /v1/teams/{team}/members/{member})
 	RemoveTeamMember(w http.ResponseWriter, r *http.Request, team TeamRef, member MemberRef, params RemoveTeamMemberParams)
@@ -2047,6 +2411,18 @@ type ServerInterface interface {
 	// RevokeToken Revoke a token
 	// (POST /v1/tokens/{token}/revoke)
 	RevokeToken(w http.ResponseWriter, r *http.Request, token TokenID, params RevokeTokenParams)
+	// ListWorkspaces List the Install's Workspaces
+	// (GET /v1/workspaces)
+	ListWorkspaces(w http.ResponseWriter, r *http.Request)
+	// CreateWorkspace Add a Workspace to the Install (admin)
+	// (POST /v1/workspaces)
+	CreateWorkspace(w http.ResponseWriter, r *http.Request, params CreateWorkspaceParams)
+	// RemoveWorkspace Remove a Workspace (admin)
+	// (DELETE /v1/workspaces/{workspace})
+	RemoveWorkspace(w http.ResponseWriter, r *http.Request, workspace WorkspaceRef, params RemoveWorkspaceParams)
+	// UpdateWorkspace Change a Workspace's name, path, mode or default branch (admin)
+	// (PATCH /v1/workspaces/{workspace})
+	UpdateWorkspace(w http.ResponseWriter, r *http.Request, workspace WorkspaceRef, params UpdateWorkspaceParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -3027,6 +3403,56 @@ func (siw *ServerInterfaceWrapper) UpdateMember(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// SetAgentSettings operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAgentSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentSettings(w, r, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeactivateMember operation middleware
 func (siw *ServerInterfaceWrapper) DeactivateMember(w http.ResponseWriter, r *http.Request) {
 
@@ -3517,6 +3943,162 @@ func (siw *ServerInterfaceWrapper) IssueToken(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.IssueToken(w, r, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRunnerSessions operation middleware
+func (siw *ServerInterfaceWrapper) ListRunnerSessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRunnerSessions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// NudgeRunnerSession operation middleware
+func (siw *ServerInterfaceWrapper) NudgeRunnerSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params NudgeRunnerSessionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.NudgeRunnerSession(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StopRunnerSession operation middleware
+func (siw *ServerInterfaceWrapper) StopRunnerSession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StopRunnerSessionParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StopRunnerSession(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunnerTerminal operation middleware
+func (siw *ServerInterfaceWrapper) RunnerTerminal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RunnerTerminalParams
+
+	// ------------- Optional query parameter "readonly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "readonly", r.URL.Query(), &params.Readonly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "readonly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "readonly", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunnerTerminal(w, r, task, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4927,6 +5509,56 @@ func (siw *ServerInterfaceWrapper) GetTeam(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// UpdateTeam operation middleware
+func (siw *ServerInterfaceWrapper) UpdateTeam(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "team" -------------
+	var team TeamRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateTeamParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateTeam(w, r, team, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveTeamMember operation middleware
 func (siw *ServerInterfaceWrapper) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
 
@@ -5095,6 +5727,161 @@ func (siw *ServerInterfaceWrapper) RevokeToken(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkspaces operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkspaces(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateWorkspaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateWorkspace(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) RemoveWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace WorkspaceRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveWorkspaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveWorkspace(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateWorkspace operation middleware
+func (siw *ServerInterfaceWrapper) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspace" -------------
+	var workspace WorkspaceRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspace", r.PathValue("workspace"), &workspace, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspace", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateWorkspaceParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateWorkspace(w, r, workspace, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -5231,6 +6018,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members", wrapper.CreateMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/members/{member}", wrapper.GetMember)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/members/{member}", wrapper.UpdateMember)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/members/{member}/agent", wrapper.SetAgentSettings)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/deactivate", wrapper.DeactivateMember)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/members/{member}/reactivate", wrapper.ReactivateMember)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/members/{member}/skills/{skill}", wrapper.RevokeSkill)
@@ -5240,6 +6028,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/teams", wrapper.ListTeams)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/teams", wrapper.CreateTeam)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/teams/{team}", wrapper.GetTeam)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/teams/{team}", wrapper.UpdateTeam)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/teams/{team}/members/{member}", wrapper.RemoveTeamMember)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/teams/{team}/members/{member}", wrapper.AddTeamMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills", wrapper.ListSkills)
@@ -5249,6 +6038,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skill-proposals/{proposal}", wrapper.GetSkillProposal)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/statuses", wrapper.ListStatuses)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/statuses", wrapper.SetStatuses)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces", wrapper.ListWorkspaces)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces", wrapper.CreateWorkspace)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}", wrapper.RemoveWorkspace)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/workspaces/{workspace}", wrapper.UpdateWorkspace)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features", wrapper.ListFeatures)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features", wrapper.FileFeature)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features/{feature}", wrapper.GetFeature)
@@ -5281,6 +6074,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/evidence/{evidence}/content", wrapper.DownloadEvidence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.ListActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity/stream", wrapper.StreamActivity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/runner/sessions", wrapper.ListRunnerSessions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/runner/sessions/{task}/nudge", wrapper.NudgeRunnerSession)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/runner/sessions/{task}/stop", wrapper.StopRunnerSession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/runner/sessions/{task}/terminal", wrapper.RunnerTerminal)
 
 	return m
 }

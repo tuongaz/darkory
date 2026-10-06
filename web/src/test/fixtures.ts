@@ -7,8 +7,8 @@ export const ada: Member = { id: "m-ada", name: "ada", kind: "human", admin: tru
 export const bob: Member = { id: "m-bob", name: "bob", kind: "human", admin: false, manager_id: "m-ada", created_at: at };
 export const builder: Member = { id: "m-builder", name: "builder", kind: "agent", admin: false, manager_id: "m-ada", created_at: at };
 
-export const web: Team = { id: "t-web", key: "WEB", name: "Web", created_at: at };
-export const ops: Team = { id: "t-ops", key: "OPS", name: "Ops", created_at: at };
+export const web: Team = { id: "t-web", key: "WEB", name: "Web", ship_when_done: false, created_at: at };
+export const ops: Team = { id: "t-ops", key: "OPS", name: "Ops", ship_when_done: false, created_at: at };
 
 export const build: Skill = { id: "s-build", name: "build", kind: "generic", builtin: false, current_version: 1, created_at: at };
 export const review: Skill = { id: "s-review", name: "review", kind: "generic", builtin: false, current_version: 1, created_at: at };
@@ -33,6 +33,8 @@ export function feature(n: number, rank: number, extra: Partial<Feature> = {}): 
     owner_id: ada.id,
     state: "open",
     rank,
+    quick: false,
+    ship_when_done: false,
     filed_by: ada.id,
     created_at: at,
     task_counts: { open: 1, claimed: 0, done: 0, dropped: 0 },

@@ -23,6 +23,7 @@ function detail(extra: Partial<TaskDetail["task"]> = {}): TaskDetail {
     task: t,
     status: extra.claim ? statuses[1] : statuses[0],
     feature: feature(1, 1, { title: "Checkout flow", owner_id: bob.id }),
+    workspaces: [],
     claims: extra.claim ? [extra.claim] : [],
     notes: [],
     evidence: [],

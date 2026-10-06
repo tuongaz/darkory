@@ -28,6 +28,7 @@ const (
 	ActivityKindFeatureShipped          ActivityKind = "feature.shipped"
 	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
 	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
+	ActivityKindMemberAgentChanged      ActivityKind = "member.agent_changed"
 	ActivityKindMemberCreated           ActivityKind = "member.created"
 	ActivityKindMemberDeactivated       ActivityKind = "member.deactivated"
 	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
@@ -56,11 +57,15 @@ const (
 	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
 	ActivityKindTaskStatusSet           ActivityKind = "task.status_set"
 	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
+	ActivityKindTeamChanged             ActivityKind = "team.changed"
 	ActivityKindTeamCreated             ActivityKind = "team.created"
 	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
 	ActivityKindTeamMemberRemoved       ActivityKind = "team.member_removed"
 	ActivityKindTokenIssued             ActivityKind = "token.issued"
 	ActivityKindTokenRevoked            ActivityKind = "token.revoked"
+	ActivityKindWorkspaceAdded          ActivityKind = "workspace.added"
+	ActivityKindWorkspaceChanged        ActivityKind = "workspace.changed"
+	ActivityKindWorkspaceRemoved        ActivityKind = "workspace.removed"
 )
 
 // Valid indicates whether the value is a known member of the ActivityKind enum.
@@ -81,6 +86,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindLoginLinkIssued:
 		return true
 	case ActivityKindLoginLinkRedeemed:
+		return true
+	case ActivityKindMemberAgentChanged:
 		return true
 	case ActivityKindMemberCreated:
 		return true
@@ -138,6 +145,8 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindTaskTakenBack:
 		return true
+	case ActivityKindTeamChanged:
+		return true
 	case ActivityKindTeamCreated:
 		return true
 	case ActivityKindTeamMemberAdded:
@@ -147,6 +156,12 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTokenIssued:
 		return true
 	case ActivityKindTokenRevoked:
+		return true
+	case ActivityKindWorkspaceAdded:
+		return true
+	case ActivityKindWorkspaceChanged:
+		return true
+	case ActivityKindWorkspaceRemoved:
 		return true
 	default:
 		return false
@@ -202,6 +217,7 @@ const (
 	ErrorCodeIdempotencyKeyReused ErrorCode = "idempotency_key_reused"
 	ErrorCodeInternal             ErrorCode = "internal"
 	ErrorCodeInvalid              ErrorCode = "invalid"
+	ErrorCodeNoRunner             ErrorCode = "no_runner"
 	ErrorCodeNotFound             ErrorCode = "not_found"
 	ErrorCodeNotHolder            ErrorCode = "not_holder"
 	ErrorCodeNotImplemented       ErrorCode = "not_implemented"
@@ -235,6 +251,8 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeInternal:
 		return true
 	case ErrorCodeInvalid:
+		return true
+	case ErrorCodeNoRunner:
 		return true
 	case ErrorCodeNotFound:
 		return true
@@ -384,6 +402,27 @@ func (e ProposalState) Valid() bool {
 	}
 }
 
+// Defines values for RunnerSessionState.
+const (
+	RunnerSessionEnding  RunnerSessionState = "ending"
+	RunnerSessionNudged  RunnerSessionState = "nudged"
+	RunnerSessionRunning RunnerSessionState = "running"
+)
+
+// Valid indicates whether the value is a known member of the RunnerSessionState enum.
+func (e RunnerSessionState) Valid() bool {
+	switch e {
+	case RunnerSessionEnding:
+		return true
+	case RunnerSessionNudged:
+		return true
+	case RunnerSessionRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SessionKind.
 const (
 	SessionKindBrowser SessionKind = "browser"
@@ -476,6 +515,7 @@ const (
 	SubjectTypeTask      SubjectType = "task"
 	SubjectTypeTeam      SubjectType = "team"
 	SubjectTypeToken     SubjectType = "token"
+	SubjectTypeWorkspace SubjectType = "workspace"
 )
 
 // Valid indicates whether the value is a known member of the SubjectType enum.
@@ -498,6 +538,8 @@ func (e SubjectType) Valid() bool {
 	case SubjectTypeTeam:
 		return true
 	case SubjectTypeToken:
+		return true
+	case SubjectTypeWorkspace:
 		return true
 	default:
 		return false
@@ -546,6 +588,39 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for WorkspaceKind.
+const (
+	WorkspaceKindGit WorkspaceKind = "git"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceKind enum.
+func (e WorkspaceKind) Valid() bool {
+	switch e {
+	case WorkspaceKindGit:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WorkspaceMode.
+const (
+	WorkspaceModePlain       WorkspaceMode = "plain"
+	WorkspaceModePullRequest WorkspaceMode = "pull_request"
+)
+
+// Valid indicates whether the value is a known member of the WorkspaceMode enum.
+func (e WorkspaceMode) Valid() bool {
+	switch e {
+	case WorkspaceModePlain:
+		return true
+	case WorkspaceModePullRequest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activity defines model for Activity.
 type Activity struct {
 	// ActorID The Member who acted. Absent when Darkory acted, as when recording a lapse.
@@ -585,6 +660,41 @@ type ActivityPage struct {
 // AddNoteBody defines model for AddNoteBody.
 type AddNoteBody struct {
 	Body string `json:"body"`
+}
+
+// AgentSettings How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+// Runner does not start (an agent working from elsewhere, through its own token). `command`
+// is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
+// session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+// directory) and `{task}` (the Task's display key). The defaults start Claude Code:
+// `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
+// --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
+// read these settings, `env` included: keep secrets in the server's own environment, which
+// sessions inherit.
+type AgentSettings struct {
+	// Args Its arguments, each a template.
+	Args []string `json:"args"`
+
+	// Command The program to start, such as `claude`.
+	Command string `json:"command"`
+
+	// Env Variables added to the session's environment, besides `DARKORY_URL`, `DARKORY_TOKEN` and `DARKORY_SESSION`.
+	Env map[string]string `json:"env"`
+
+	// Model The model the agent runs on, passed as `{model}` and reported as the Claim's model label.
+	Model string `json:"model"`
+
+	// Paused The Runner starts no new session for the agent; one running carries on.
+	Paused bool `json:"paused"`
+
+	// ProgressFile The file whose modified time shows the session making progress, for a command other
+	// than Claude Code (whose transcript the Runner finds itself); it may use the same
+	// placeholders. The Runner sends Heartbeats only while it changes.
+	ProgressFile *string `json:"progress_file,omitempty"`
+
+	// Unattended The session runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
+	Unattended bool `json:"unattended"`
 }
 
 // Claim defines model for Claim.
@@ -663,6 +773,23 @@ type CreateTeamBody struct {
 	Name string `json:"name"`
 }
 
+// CreateWorkspaceBody defines model for CreateWorkspaceBody.
+type CreateWorkspaceBody struct {
+	// DefaultBranch Defaults to `main`.
+	DefaultBranch *string `json:"default_branch,omitempty"`
+
+	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
+	Kind *WorkspaceKind `json:"kind,omitempty"`
+
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+	// merged pull request carrying a Task's key completes that Task's review.
+	Mode *WorkspaceMode `json:"mode,omitempty"`
+	Name string         `json:"name"`
+
+	// Path The repository's absolute path.
+	Path string `json:"path"`
+}
+
 // DropTaskBody defines model for DropTaskBody.
 type DropTaskBody struct {
 	Reason *string `json:"reason,omitempty"`
@@ -679,8 +806,8 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
-	// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
+	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 	// `not_implemented` 501.
 	Code ErrorCode `json:"code"`
 
@@ -695,8 +822,8 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `too_large` 413 ·
-// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
+// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 // `not_implemented` 501.
 type ErrorCode string
 
@@ -730,9 +857,15 @@ type Feature struct {
 	Key     string `json:"key"`
 	OwnerID string `json:"owner_id"`
 
+	// Quick A quick Feature was filed with its one Task and no Break down; it has no Retrospective.
+	Quick bool `json:"quick"`
+
 	// Rank Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-	Rank  int64        `json:"rank"`
-	State FeatureState `json:"state"`
+	Rank int64 `json:"rank"`
+
+	// ShipWhenDone The Feature ships itself when its last open Task is completed. Always true for a quick Feature.
+	ShipWhenDone bool         `json:"ship_when_done"`
+	State        FeatureState `json:"state"`
 
 	// TaskCounts How many of the Feature's Tasks are in each state.
 	TaskCounts TaskCounts `json:"task_counts"`
@@ -768,9 +901,21 @@ type FileFeatureBody struct {
 	// Owner Member id or name. Defaults to the caller.
 	Owner *string `json:"owner,omitempty"`
 
+	// Quick File a quick Feature, with its one Task instead of a Break down. Needs `skill`.
+	Quick *bool `json:"quick,omitempty"`
+
+	// ShipWhenDone Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature.
+	ShipWhenDone *bool `json:"ship_when_done,omitempty"`
+
+	// Skill A quick Feature's only. Skill id or name its one Task needs.
+	Skill *string `json:"skill,omitempty"`
+
 	// Team Team id or key.
 	Team  string `json:"team"`
 	Title string `json:"title"`
+
+	// Workspaces A quick Feature's only. Workspace ids or names its one Task names; default the Team's default.
+	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
 // FileTaskBody defines model for FileTaskBody.
@@ -793,6 +938,10 @@ type FileTaskBody struct {
 	// Status.
 	Status *string `json:"status,omitempty"`
 	Title  string  `json:"title"`
+
+	// Workspaces Workspace ids or names the Task names: where a session works it. Defaults to its
+	// Feature's Team's default Workspace, or none when the Team has none.
+	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
 // HandoverTaskBody defines model for HandoverTaskBody.
@@ -877,8 +1026,20 @@ type Me struct {
 // Member defines model for Member.
 type Member struct {
 	// Admin Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
-	Admin     bool      `json:"admin"`
-	CreatedAt time.Time `json:"created_at"`
+	Admin bool `json:"admin"`
+
+	// Agent How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+	// Runner does not start (an agent working from elsewhere, through its own token). `command`
+	// is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
+	// session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+	// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+	// directory) and `{task}` (the Task's display key). The defaults start Claude Code:
+	// `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
+	// --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
+	// read these settings, `env` included: keep secrets in the server's own environment, which
+	// sessions inherit.
+	Agent     *AgentSettings `json:"agent,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
 
 	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
@@ -1001,6 +1162,40 @@ type ReleaseTaskBody struct {
 	Note *string `json:"note,omitempty"`
 }
 
+// RunnerSession An agent session the Runner runs for a Task it claimed as that agent. Not part of the
+// record: it lives as long as the session.
+type RunnerSession struct {
+	// Host The machine the session runs on.
+	Host string `json:"host"`
+
+	// LogPath Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends.
+	LogPath string `json:"log_path"`
+
+	// MemberID The agent whose session it is.
+	MemberID string `json:"member_id"`
+
+	// SessionID The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
+	SessionID string    `json:"session_id"`
+	StartedAt time.Time `json:"started_at"`
+
+	// State `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
+	// has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+	State  RunnerSessionState `json:"state"`
+	TaskID string             `json:"task_id"`
+
+	// Tmux The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined.
+	Tmux *string `json:"tmux,omitempty"`
+}
+
+// RunnerSessionList defines model for RunnerSessionList.
+type RunnerSessionList struct {
+	Items []RunnerSession `json:"items"`
+}
+
+// RunnerSessionState `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
+// has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+type RunnerSessionState string
+
 // Session defines model for Session.
 type Session struct {
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
@@ -1030,6 +1225,19 @@ type SessionList struct {
 
 	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// SetAgentSettingsBody The settings to change; those left out stay as they are. `progress_file` set to `""` clears it.
+type SetAgentSettingsBody struct {
+	Args    *[]string `json:"args,omitempty"`
+	Command *string   `json:"command,omitempty"`
+
+	// Env The whole set of variables, replacing the one there.
+	Env          *map[string]string `json:"env,omitempty"`
+	Model        *string            `json:"model,omitempty"`
+	Paused       *bool              `json:"paused,omitempty"`
+	ProgressFile *string            `json:"progress_file,omitempty"`
+	Unattended   *bool              `json:"unattended,omitempty"`
 }
 
 // SetManagerBody defines model for SetManagerBody.
@@ -1218,6 +1426,9 @@ type Task struct {
 
 	// WaitingSince When the Task was filed or last handed over.
 	WaitingSince time.Time `json:"waiting_since"`
+
+	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
+	WorkspaceIds *[]string `json:"workspace_ids,omitempty"`
 }
 
 // TaskBrief A Task named by its id and display key.
@@ -1267,6 +1478,9 @@ type TaskDetail struct {
 	// holder names one. Claimed and blocked are not Statuses.
 	Status Status `json:"status"`
 	Task   Task   `json:"task"`
+
+	// Workspaces The Workspaces the Task names, in the order of `task.workspace_ids`.
+	Workspaces []Workspace `json:"workspaces"`
 }
 
 // TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
@@ -1286,11 +1500,17 @@ type TaskState string
 // Team defines model for Team.
 type Team struct {
 	CreatedAt time.Time `json:"created_at"`
-	ID        string    `json:"id"`
+
+	// DefaultWorkspaceID The Workspace a Task filed in the Team names when it names none. Absent when the Team has none.
+	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
+	ID                 string  `json:"id"`
 
 	// Key The prefix of the Team's display keys, such as `WEB` in `WEB-42`.
 	Key  string `json:"key"`
 	Name string `json:"name"`
+
+	// ShipWhenDone The `ship_when_done` a Feature filed in the Team takes when its filer does not say.
+	ShipWhenDone bool `json:"ship_when_done"`
 }
 
 // TeamDetail defines model for TeamDetail.
@@ -1331,6 +1551,62 @@ type UpdateMemberBody struct {
 	Email *openapi_types.Email `json:"email,omitempty"`
 	Name  *string              `json:"name,omitempty"`
 }
+
+// UpdateTeamBody defines model for UpdateTeamBody.
+type UpdateTeamBody struct {
+	// DefaultWorkspace Workspace id or name; `""` clears the Team's default.
+	DefaultWorkspace *string `json:"default_workspace,omitempty"`
+	Name             *string `json:"name,omitempty"`
+	ShipWhenDone     *bool   `json:"ship_when_done,omitempty"`
+}
+
+// UpdateWorkspaceBody defines model for UpdateWorkspaceBody.
+type UpdateWorkspaceBody struct {
+	DefaultBranch *string `json:"default_branch,omitempty"`
+
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+	// merged pull request carrying a Task's key completes that Task's review.
+	Mode *WorkspaceMode `json:"mode,omitempty"`
+	Name *string        `json:"name,omitempty"`
+	Path *string        `json:"path,omitempty"`
+}
+
+// Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
+// `path` on the machine that runs the Install; a session works in a checkout of it on a
+// branch named after its Task. In `pull_request` mode, work lands through pull requests
+// instead of merges by the Runner.
+type Workspace struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// DefaultBranch The branch work lands on, such as `main`.
+	DefaultBranch string `json:"default_branch"`
+	ID            string `json:"id"`
+
+	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
+	Kind WorkspaceKind `json:"kind"`
+
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+	// merged pull request carrying a Task's key completes that Task's review.
+	Mode WorkspaceMode `json:"mode"`
+
+	// Name Unique on the Install, ignoring case; it names the session's checkout directory.
+	Name string `json:"name"`
+
+	// Path The repository's absolute path.
+	Path string `json:"path"`
+}
+
+// WorkspaceKind The kind of place. Only `git` for now; more may be added within `/v1`.
+type WorkspaceKind string
+
+// WorkspaceList defines model for WorkspaceList.
+type WorkspaceList struct {
+	Items []Workspace `json:"items"`
+}
+
+// WorkspaceMode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
+// merged pull request carrying a Task's key completes that Task's review.
+type WorkspaceMode string
 
 // BlockerRef defines model for BlockerRef.
 type BlockerRef = string
@@ -1376,6 +1652,9 @@ type TeamRef = string
 
 // TokenID defines model for TokenID.
 type TokenID = string
+
+// WorkspaceRef defines model for WorkspaceRef.
+type WorkspaceRef = string
 
 // ListActivityParams defines parameters for ListActivity.
 type ListActivityParams struct {
@@ -1506,6 +1785,13 @@ type UpdateMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetAgentSettingsParams defines parameters for SetAgentSettings.
+type SetAgentSettingsParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // DeactivateMemberParams defines parameters for DeactivateMember.
 type DeactivateMemberParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -1569,6 +1855,26 @@ type IssueTokenParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// NudgeRunnerSessionParams defines parameters for NudgeRunnerSession.
+type NudgeRunnerSessionParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// StopRunnerSessionParams defines parameters for StopRunnerSession.
+type StopRunnerSessionParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RunnerTerminalParams defines parameters for RunnerTerminal.
+type RunnerTerminalParams struct {
+	// Readonly Watch without typing, even as an admin.
+	Readonly *bool `form:"readonly,omitempty" json:"readonly,omitempty"`
 }
 
 // CloseSessionParams defines parameters for CloseSession.
@@ -1760,6 +2066,13 @@ type CreateTeamParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// UpdateTeamParams defines parameters for UpdateTeam.
+type UpdateTeamParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // RemoveTeamMemberParams defines parameters for RemoveTeamMember.
 type RemoveTeamMemberParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -1781,6 +2094,27 @@ type RevokeTokenParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// CreateWorkspaceParams defines parameters for CreateWorkspace.
+type CreateWorkspaceParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RemoveWorkspaceParams defines parameters for RemoveWorkspace.
+type RemoveWorkspaceParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateWorkspaceParams defines parameters for UpdateWorkspace.
+type UpdateWorkspaceParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // FileFeatureJSONRequestBody defines body for FileFeature for application/json ContentType.
 type FileFeatureJSONRequestBody = FileFeatureBody
 
@@ -1795,6 +2129,9 @@ type CreateMemberJSONRequestBody = CreateMemberBody
 
 // UpdateMemberJSONRequestBody defines body for UpdateMember for application/json ContentType.
 type UpdateMemberJSONRequestBody = UpdateMemberBody
+
+// SetAgentSettingsJSONRequestBody defines body for SetAgentSettings for application/json ContentType.
+type SetAgentSettingsJSONRequestBody = SetAgentSettingsBody
 
 // SetManagerJSONRequestBody defines body for SetManager for application/json ContentType.
 type SetManagerJSONRequestBody = SetManagerBody
@@ -1849,6 +2186,15 @@ type TakeBackTaskJSONRequestBody = TakeBackTaskBody
 
 // CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
 type CreateTeamJSONRequestBody = CreateTeamBody
+
+// UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
+type UpdateTeamJSONRequestBody = UpdateTeamBody
+
+// CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
+type CreateWorkspaceJSONRequestBody = CreateWorkspaceBody
+
+// UpdateWorkspaceJSONRequestBody defines body for UpdateWorkspace for application/json ContentType.
+type UpdateWorkspaceJSONRequestBody = UpdateWorkspaceBody
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -1974,7 +2320,17 @@ type ClientInterface interface {
 	//
 	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+	// by a Retrospective names it in `from_retrospective`.
+	//
+	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+	// down it files its one work Task, with the Feature's title and description, needing
+	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+	// default Workspace and none named).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1985,7 +2341,17 @@ type ClientInterface interface {
 	//
 	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+	// by a Retrospective names it in `from_retrospective`.
+	//
+	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+	// down it files its one work Task, with the Feature's title and description, needing
+	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+	// default Workspace and none named).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2000,7 +2366,8 @@ type ClientInterface interface {
 	// DropFeature Drop a Feature (Feature owner)
 	//
 	// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
+	// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
+	// `forbidden` (not the owner), `ended`.
 	//
 	// Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
 	DropFeature(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2064,8 +2431,9 @@ type ClientInterface interface {
 	// ShipFeature Ship a Feature (Feature owner)
 	//
 	// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
-	// `tasks_open`, `ended`.
+	// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
+	// `ship_when_done` ships without this call when its last open Task is completed. Errors:
+	// `forbidden` (not the owner), `tasks_open`, `ended`.
 	//
 	// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
 	ShipFeature(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2156,6 +2524,34 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMember(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAgentSettingsWithBody Set how the Runner starts an agent Member's sessions (admin)
+	//
+	// Changes the fields given and keeps the others. An agent with no settings yet starts from
+	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// sessions only for agents that have settings and are not paused. Records
+	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `invalid` (a human Member, or a value out of bounds).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+	SetAgentSettingsWithBody(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetAgentSettings Set how the Runner starts an agent Member's sessions (admin)
+	//
+	// Changes the fields given and keeps the others. An agent with no settings yet starts from
+	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// sessions only for agents that have settings and are not paused. Records
+	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `invalid` (a human Member, or a value out of bounds).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+	SetAgentSettings(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, body SetAgentSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeactivateMember Deactivate a Member (admin)
 	//
@@ -2256,6 +2652,48 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/members/{member}/tokens (the `IssueToken` operationId).
 	IssueToken(ctx context.Context, member MemberRef, params *IssueTokenParams, body IssueTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRunnerSessions List the agent sessions the Runner is running now
+	//
+	// A read model of the Runner beside this server, not part of the record: what it runs now,
+	// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
+	// attached to this server, as with `serve --agents=off`).
+	//
+	// Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
+	ListRunnerSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// NudgeRunnerSession Nudge the agent in a Task's session to end the Task (admin)
+	//
+	// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+	// question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
+	// Task).
+	//
+	// Corresponds with POST /v1/runner/sessions/{task}/nudge (the `NudgeRunnerSession` operationId).
+	NudgeRunnerSession(ctx context.Context, task TaskRef, params *NudgeRunnerSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StopRunnerSession Stop a Task's session (admin)
+	//
+	// Ends the agent's session and releases its Claim with a Note, as when a session ends
+	// without a decision; the session's log is attached as Evidence. Errors: `forbidden` (not an
+	// admin), `no_runner`, `not_found` (no session on the Task).
+	//
+	// Corresponds with POST /v1/runner/sessions/{task}/stop (the `StopRunnerSession` operationId).
+	StopRunnerSession(ctx context.Context, task TaskRef, params *StopRunnerSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RunnerTerminal Watch or join a Task's session through a terminal (WebSocket)
+	//
+	// Upgrades to a WebSocket bridged to the session's terminal (`tmux attach`). Binary
+	// messages carry the terminal's bytes both ways; a text message `{"cols": n, "rows": n}`
+	// resizes the client's view. Admins may type unless they ask for `readonly`; every other
+	// Member only watches, and what they send is ignored. Authenticated as every operation is,
+	// by a bearer token with its Session or by the browser cookie; a browser's upgrade must
+	// come from this Install's own origin. The Runner adds a Note on the Task when someone
+	// joins. Errors, before the upgrade: `no_runner`, `not_found` (no session on the Task),
+	// `conflict` (the session runs without tmux and cannot be joined), `forbidden` (another
+	// origin).
+	//
+	// Corresponds with GET /v1/runner/sessions/{task}/terminal (the `RunnerTerminal` operationId).
+	RunnerTerminal(ctx context.Context, task TaskRef, params *RunnerTerminalParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CloseSession Close one of the caller's Sessions
 	//
@@ -2379,7 +2817,9 @@ type ClientInterface interface {
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+	// `not_found` (no such Workspace), `ended` (the Feature has
 	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 	// `dropped`).
@@ -2396,7 +2836,9 @@ type ClientInterface interface {
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+	// `not_found` (no such Workspace), `ended` (the Feature has
 	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 	// `dropped`).
@@ -2494,7 +2936,9 @@ type ClientInterface interface {
 	// Ends the Task done, in the first `done` Status. Completing a Task that needs
 	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Errors: `not_holder`, `proposal_stale`
+	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -2508,7 +2952,9 @@ type ClientInterface interface {
 	// Ends the Task done, in the first `done` Status. Completing a Task that needs
 	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Errors: `not_holder`, `proposal_stale`
+	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -2748,6 +3194,32 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/teams/{team} (the `GetTeam` operationId).
 	GetTeam(ctx context.Context, team TeamRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UpdateTeamWithBody Change a Team's name, default Workspace or Ship-when-done default (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+	UpdateTeamWithBody(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateTeam Change a Team's name, default Workspace or Ship-when-done default (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+	UpdateTeam(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RemoveTeamMember Remove a Member from a Team (admin)
 	//
 	// Claims the Member holds on the Team's Tasks are not ended.
@@ -2767,6 +3239,64 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tokens/{token}/revoke (the `RevokeToken` operationId).
 	RevokeToken(ctx context.Context, token TokenID, params *RevokeTokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListWorkspaces List the Install's Workspaces
+	//
+	// Corresponds with GET /v1/workspaces (the `ListWorkspaces` operationId).
+	ListWorkspaces(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateWorkspaceWithBody Add a Workspace to the Install (admin)
+	//
+	// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+	// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+	// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+	CreateWorkspaceWithBody(ctx context.Context, params *CreateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateWorkspace Add a Workspace to the Install (admin)
+	//
+	// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+	// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+	// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+	CreateWorkspace(ctx context.Context, params *CreateWorkspaceParams, body CreateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveWorkspace Remove a Workspace (admin)
+	//
+	// Refused with `conflict` while any Task, open or ended, names it: the record keeps where
+	// its work was done. A Team whose default it was has no default afterwards. Records
+	// `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
+	//
+	// Corresponds with DELETE /v1/workspaces/{workspace} (the `RemoveWorkspace` operationId).
+	RemoveWorkspace(ctx context.Context, workspace WorkspaceRef, params *RemoveWorkspaceParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWorkspaceWithBody Change a Workspace's name, path, mode or default branch (admin)
+	//
+	// Changes the fields given and keeps the others; the kind never changes. Records
+	// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `conflict` (name taken), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+	UpdateWorkspaceWithBody(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateWorkspace Change a Workspace's name, path, mode or default branch (admin)
+	//
+	// Changes the fields given and keeps the others; the kind never changes. Records
+	// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `conflict` (name taken), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+	UpdateWorkspace(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, body UpdateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // ListActivity Read Activity after, or before, a sequence number
@@ -2869,7 +3399,17 @@ func (c *Client) ListFeatures(ctx context.Context, params *ListFeaturesParams, r
 //
 // Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 // the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+// by a Retrospective names it in `from_retrospective`.
+//
+// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+// down it files its one work Task, with the Feature's title and description, needing
+// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+// default Workspace and none named).
 //
 // Takes any type of body and a specified content type.
 //
@@ -2890,7 +3430,17 @@ func (c *Client) FileFeatureWithBody(ctx context.Context, params *FileFeaturePar
 //
 // Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 // the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+// by a Retrospective names it in `from_retrospective`.
+//
+// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+// down it files its one work Task, with the Feature's title and description, needing
+// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+// default Workspace and none named).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2925,7 +3475,8 @@ func (c *Client) GetFeature(ctx context.Context, feature FeatureRef, reqEditors 
 // DropFeature Drop a Feature (Feature owner)
 //
 // Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
+// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
+// `forbidden` (not the owner), `ended`.
 //
 // Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
 func (c *Client) DropFeature(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3059,8 +3610,9 @@ func (c *Client) RankFeature(ctx context.Context, feature FeatureRef, params *Ra
 // ShipFeature Ship a Feature (Feature owner)
 //
 // Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
-// `tasks_open`, `ended`.
+// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
+// `ship_when_done` ships without this call when its last open Task is completed. Errors:
+// `forbidden` (not the owner), `tasks_open`, `ended`.
 //
 // Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
 func (c *Client) ShipFeature(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3262,6 +3814,54 @@ func (c *Client) UpdateMemberWithBody(ctx context.Context, member MemberRef, par
 // Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 func (c *Client) UpdateMember(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateMemberRequest(c.Server, member, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetAgentSettingsWithBody Set how the Runner starts an agent Member's sessions (admin)
+//
+// Changes the fields given and keeps the others. An agent with no settings yet starts from
+// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// sessions only for agents that have settings and are not paused. Records
+// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `invalid` (a human Member, or a value out of bounds).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+func (c *Client) SetAgentSettingsWithBody(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAgentSettingsRequestWithBody(c.Server, member, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetAgentSettings Set how the Runner starts an agent Member's sessions (admin)
+//
+// Changes the fields given and keeps the others. An agent with no settings yet starts from
+// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// sessions only for agents that have settings and are not paused. Records
+// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `invalid` (a human Member, or a value out of bounds).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+func (c *Client) SetAgentSettings(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, body SetAgentSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetAgentSettingsRequest(c.Server, member, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3482,6 +4082,88 @@ func (c *Client) IssueTokenWithBody(ctx context.Context, member MemberRef, param
 // Corresponds with POST /v1/members/{member}/tokens (the `IssueToken` operationId).
 func (c *Client) IssueToken(ctx context.Context, member MemberRef, params *IssueTokenParams, body IssueTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewIssueTokenRequest(c.Server, member, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRunnerSessions List the agent sessions the Runner is running now
+//
+// A read model of the Runner beside this server, not part of the record: what it runs now,
+// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
+// attached to this server, as with `serve --agents=off`).
+//
+// Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
+func (c *Client) ListRunnerSessions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRunnerSessionsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// NudgeRunnerSession Nudge the agent in a Task's session to end the Task (admin)
+//
+// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+// question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
+// Task).
+//
+// Corresponds with POST /v1/runner/sessions/{task}/nudge (the `NudgeRunnerSession` operationId).
+func (c *Client) NudgeRunnerSession(ctx context.Context, task TaskRef, params *NudgeRunnerSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewNudgeRunnerSessionRequest(c.Server, task, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// StopRunnerSession Stop a Task's session (admin)
+//
+// Ends the agent's session and releases its Claim with a Note, as when a session ends
+// without a decision; the session's log is attached as Evidence. Errors: `forbidden` (not an
+// admin), `no_runner`, `not_found` (no session on the Task).
+//
+// Corresponds with POST /v1/runner/sessions/{task}/stop (the `StopRunnerSession` operationId).
+func (c *Client) StopRunnerSession(ctx context.Context, task TaskRef, params *StopRunnerSessionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStopRunnerSessionRequest(c.Server, task, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RunnerTerminal Watch or join a Task's session through a terminal (WebSocket)
+//
+// Upgrades to a WebSocket bridged to the session's terminal (`tmux attach`). Binary
+// messages carry the terminal's bytes both ways; a text message `{"cols": n, "rows": n}`
+// resizes the client's view. Admins may type unless they ask for `readonly`; every other
+// Member only watches, and what they send is ignored. Authenticated as every operation is,
+// by a bearer token with its Session or by the browser cookie; a browser's upgrade must
+// come from this Install's own origin. The Runner adds a Note on the Task when someone
+// joins. Errors, before the upgrade: `no_runner`, `not_found` (no session on the Task),
+// `conflict` (the session runs without tmux and cannot be joined), `forbidden` (another
+// origin).
+//
+// Corresponds with GET /v1/runner/sessions/{task}/terminal (the `RunnerTerminal` operationId).
+func (c *Client) RunnerTerminal(ctx context.Context, task TaskRef, params *RunnerTerminalParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRunnerTerminalRequest(c.Server, task, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3744,7 +4426,9 @@ func (c *Client) ListTasks(ctx context.Context, params *ListTasksParams, reqEdit
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 // Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+// `not_found` (no such Workspace), `ended` (the Feature has
 // ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 // `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 // `dropped`).
@@ -3771,7 +4455,9 @@ func (c *Client) FileTaskWithBody(ctx context.Context, params *FileTaskParams, c
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 // Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+// `not_found` (no such Workspace), `ended` (the Feature has
 // ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 // `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 // `dropped`).
@@ -3959,7 +4645,9 @@ func (c *Client) ClaimTask(ctx context.Context, task TaskRef, params *ClaimTaskP
 // Ends the Task done, in the first `done` Status. Completing a Task that needs
 // `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 // completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Errors: `not_holder`, `proposal_stale`
+// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -3983,7 +4671,9 @@ func (c *Client) CompleteTaskWithBody(ctx context.Context, task TaskRef, params 
 // Ends the Task done, in the first `done` Status. Completing a Task that needs
 // `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 // completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Errors: `not_holder`, `proposal_stale`
+// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -4453,6 +5143,52 @@ func (c *Client) GetTeam(ctx context.Context, team TeamRef, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
+// UpdateTeamWithBody Change a Team's name, default Workspace or Ship-when-done default (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+func (c *Client) UpdateTeamWithBody(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateTeamRequestWithBody(c.Server, team, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateTeam Change a Team's name, default Workspace or Ship-when-done default (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+func (c *Client) UpdateTeam(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateTeamRequest(c.Server, team, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // RemoveTeamMember Remove a Member from a Team (admin)
 //
 // Claims the Member holds on the Team's Tasks are not ended.
@@ -4493,6 +5229,124 @@ func (c *Client) AddTeamMember(ctx context.Context, team TeamRef, member MemberR
 // Corresponds with POST /v1/tokens/{token}/revoke (the `RevokeToken` operationId).
 func (c *Client) RevokeToken(ctx context.Context, token TokenID, params *RevokeTokenParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeTokenRequest(c.Server, token, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListWorkspaces List the Install's Workspaces
+//
+// Corresponds with GET /v1/workspaces (the `ListWorkspaces` operationId).
+func (c *Client) ListWorkspaces(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListWorkspacesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateWorkspaceWithBody Add a Workspace to the Install (admin)
+//
+// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+func (c *Client) CreateWorkspaceWithBody(ctx context.Context, params *CreateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateWorkspaceRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateWorkspace Add a Workspace to the Install (admin)
+//
+// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+func (c *Client) CreateWorkspace(ctx context.Context, params *CreateWorkspaceParams, body CreateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateWorkspaceRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveWorkspace Remove a Workspace (admin)
+//
+// Refused with `conflict` while any Task, open or ended, names it: the record keeps where
+// its work was done. A Team whose default it was has no default afterwards. Records
+// `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
+//
+// Corresponds with DELETE /v1/workspaces/{workspace} (the `RemoveWorkspace` operationId).
+func (c *Client) RemoveWorkspace(ctx context.Context, workspace WorkspaceRef, params *RemoveWorkspaceParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveWorkspaceRequest(c.Server, workspace, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWorkspaceWithBody Change a Workspace's name, path, mode or default branch (admin)
+//
+// Changes the fields given and keeps the others; the kind never changes. Records
+// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `conflict` (name taken), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+func (c *Client) UpdateWorkspaceWithBody(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWorkspaceRequestWithBody(c.Server, workspace, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateWorkspace Change a Workspace's name, path, mode or default branch (admin)
+//
+// Changes the fields given and keeps the others; the kind never changes. Records
+// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `conflict` (name taken), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+func (c *Client) UpdateWorkspace(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, body UpdateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateWorkspaceRequest(c.Server, workspace, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5698,6 +6552,68 @@ func NewUpdateMemberRequestWithBody(server string, member MemberRef, params *Upd
 	return req, nil
 }
 
+// NewSetAgentSettingsRequest calls the generic SetAgentSettings builder with application/json body
+func NewSetAgentSettingsRequest(server string, member MemberRef, params *SetAgentSettingsParams, body SetAgentSettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetAgentSettingsRequestWithBody(server, member, params, "application/json", bodyReader)
+}
+
+// NewSetAgentSettingsRequestWithBody constructs an http.Request for the SetAgentSettings method, with any body, and a specified content type
+func NewSetAgentSettingsRequestWithBody(server string, member MemberRef, params *SetAgentSettingsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/members/%s/agent", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewDeactivateMemberRequest constructs an http.Request for the DeactivateMember method
 func NewDeactivateMemberRequest(server string, member MemberRef, params *DeactivateMemberParams) (*http.Request, error) {
 	var err error
@@ -6232,6 +7148,192 @@ func NewIssueTokenRequestWithBody(server string, member MemberRef, params *Issue
 			req.Header.Set("Idempotency-Key", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewListRunnerSessionsRequest constructs an http.Request for the ListRunnerSessions method
+func NewListRunnerSessionsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/runner/sessions")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewNudgeRunnerSessionRequest constructs an http.Request for the NudgeRunnerSession method
+func NewNudgeRunnerSessionRequest(server string, task TaskRef, params *NudgeRunnerSessionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/runner/sessions/%s/nudge", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewStopRunnerSessionRequest constructs an http.Request for the StopRunnerSession method
+func NewStopRunnerSessionRequest(server string, task TaskRef, params *StopRunnerSessionParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/runner/sessions/%s/stop", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRunnerTerminalRequest constructs an http.Request for the RunnerTerminal method
+func NewRunnerTerminalRequest(server string, task TaskRef, params *RunnerTerminalParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/runner/sessions/%s/terminal", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Readonly != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "readonly", *params.Readonly, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -7980,6 +9082,68 @@ func NewGetTeamRequest(server string, team TeamRef) (*http.Request, error) {
 	return req, nil
 }
 
+// NewUpdateTeamRequest calls the generic UpdateTeam builder with application/json body
+func NewUpdateTeamRequest(server string, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateTeamRequestWithBody(server, team, params, "application/json", bodyReader)
+}
+
+// NewUpdateTeamRequestWithBody constructs an http.Request for the UpdateTeam method, with any body, and a specified content type
+func NewUpdateTeamRequestWithBody(server string, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/teams/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewRemoveTeamMemberRequest constructs an http.Request for the RemoveTeamMember method
 func NewRemoveTeamMemberRequest(server string, team TeamRef, member MemberRef, params *RemoveTeamMemberParams) (*http.Request, error) {
 	var err error
@@ -8141,6 +9305,199 @@ func NewRevokeTokenRequest(server string, token TokenID, params *RevokeTokenPara
 	return req, nil
 }
 
+// NewListWorkspacesRequest constructs an http.Request for the ListWorkspaces method
+func NewListWorkspacesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateWorkspaceRequest calls the generic CreateWorkspace builder with application/json body
+func NewCreateWorkspaceRequest(server string, params *CreateWorkspaceParams, body CreateWorkspaceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateWorkspaceRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateWorkspaceRequestWithBody constructs an http.Request for the CreateWorkspace method, with any body, and a specified content type
+func NewCreateWorkspaceRequestWithBody(server string, params *CreateWorkspaceParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRemoveWorkspaceRequest constructs an http.Request for the RemoveWorkspace method
+func NewRemoveWorkspaceRequest(server string, workspace WorkspaceRef, params *RemoveWorkspaceParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUpdateWorkspaceRequest calls the generic UpdateWorkspace builder with application/json body
+func NewUpdateWorkspaceRequest(server string, workspace WorkspaceRef, params *UpdateWorkspaceParams, body UpdateWorkspaceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateWorkspaceRequestWithBody(server, workspace, params, "application/json", bodyReader)
+}
+
+// NewUpdateWorkspaceRequestWithBody constructs an http.Request for the UpdateWorkspace method, with any body, and a specified content type
+func NewUpdateWorkspaceRequestWithBody(server string, workspace WorkspaceRef, params *UpdateWorkspaceParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "workspace", workspace, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/workspaces/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -8245,7 +9602,17 @@ type ClientWithResponsesInterface interface {
 	//
 	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+	// by a Retrospective names it in `from_retrospective`.
+	//
+	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+	// down it files its one work Task, with the Feature's title and description, needing
+	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+	// default Workspace and none named).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8256,7 +9623,17 @@ type ClientWithResponsesInterface interface {
 	//
 	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+	// by a Retrospective names it in `from_retrospective`.
+	//
+	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+	// down it files its one work Task, with the Feature's title and description, needing
+	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+	// default Workspace and none named).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8273,7 +9650,8 @@ type ClientWithResponsesInterface interface {
 	// DropFeatureWithResponse Drop a Feature (Feature owner)
 	//
 	// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
+	// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
+	// `forbidden` (not the owner), `ended`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8341,8 +9719,9 @@ type ClientWithResponsesInterface interface {
 	// ShipFeatureWithResponse Ship a Feature (Feature owner)
 	//
 	// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
-	// `tasks_open`, `ended`.
+	// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
+	// `ship_when_done` ships without this call when its last open Task is completed. Errors:
+	// `forbidden` (not the owner), `tasks_open`, `ended`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8449,6 +9828,34 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMemberWithResponse(ctx context.Context, member MemberRef, params *UpdateMemberParams, body UpdateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMemberResponse, error)
+
+	// SetAgentSettingsWithBodyWithResponse Set how the Runner starts an agent Member's sessions (admin)
+	//
+	// Changes the fields given and keeps the others. An agent with no settings yet starts from
+	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// sessions only for agents that have settings and are not paused. Records
+	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `invalid` (a human Member, or a value out of bounds).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+	SetAgentSettingsWithBodyWithResponse(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAgentSettingsResponse, error)
+
+	// SetAgentSettingsWithResponse Set how the Runner starts an agent Member's sessions (admin)
+	//
+	// Changes the fields given and keeps the others. An agent with no settings yet starts from
+	// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+	// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+	// sessions only for agents that have settings and are not paused. Records
+	// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `invalid` (a human Member, or a value out of bounds).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+	SetAgentSettingsWithResponse(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, body SetAgentSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentSettingsResponse, error)
 
 	// DeactivateMemberWithResponse Deactivate a Member (admin)
 	//
@@ -8565,6 +9972,56 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/members/{member}/tokens (the `IssueToken` operationId).
 	IssueTokenWithResponse(ctx context.Context, member MemberRef, params *IssueTokenParams, body IssueTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueTokenResponse, error)
+
+	// ListRunnerSessionsWithResponse List the agent sessions the Runner is running now
+	//
+	// A read model of the Runner beside this server, not part of the record: what it runs now,
+	// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
+	// attached to this server, as with `serve --agents=off`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
+	ListRunnerSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRunnerSessionsResponse, error)
+
+	// NudgeRunnerSessionWithResponse Nudge the agent in a Task's session to end the Task (admin)
+	//
+	// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+	// question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
+	// Task).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/runner/sessions/{task}/nudge (the `NudgeRunnerSession` operationId).
+	NudgeRunnerSessionWithResponse(ctx context.Context, task TaskRef, params *NudgeRunnerSessionParams, reqEditors ...RequestEditorFn) (*NudgeRunnerSessionResponse, error)
+
+	// StopRunnerSessionWithResponse Stop a Task's session (admin)
+	//
+	// Ends the agent's session and releases its Claim with a Note, as when a session ends
+	// without a decision; the session's log is attached as Evidence. Errors: `forbidden` (not an
+	// admin), `no_runner`, `not_found` (no session on the Task).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/runner/sessions/{task}/stop (the `StopRunnerSession` operationId).
+	StopRunnerSessionWithResponse(ctx context.Context, task TaskRef, params *StopRunnerSessionParams, reqEditors ...RequestEditorFn) (*StopRunnerSessionResponse, error)
+
+	// RunnerTerminalWithResponse Watch or join a Task's session through a terminal (WebSocket)
+	//
+	// Upgrades to a WebSocket bridged to the session's terminal (`tmux attach`). Binary
+	// messages carry the terminal's bytes both ways; a text message `{"cols": n, "rows": n}`
+	// resizes the client's view. Admins may type unless they ask for `readonly`; every other
+	// Member only watches, and what they send is ignored. Authenticated as every operation is,
+	// by a bearer token with its Session or by the browser cookie; a browser's upgrade must
+	// come from this Install's own origin. The Runner adds a Note on the Task when someone
+	// joins. Errors, before the upgrade: `no_runner`, `not_found` (no session on the Task),
+	// `conflict` (the session runs without tmux and cannot be joined), `forbidden` (another
+	// origin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/runner/sessions/{task}/terminal (the `RunnerTerminal` operationId).
+	RunnerTerminalWithResponse(ctx context.Context, task TaskRef, params *RunnerTerminalParams, reqEditors ...RequestEditorFn) (*RunnerTerminalResponse, error)
 
 	// CloseSessionWithResponse Close one of the caller's Sessions
 	//
@@ -8702,7 +10159,9 @@ type ClientWithResponsesInterface interface {
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+	// `not_found` (no such Workspace), `ended` (the Feature has
 	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 	// `dropped`).
@@ -8719,7 +10178,9 @@ type ClientWithResponsesInterface interface {
 	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+	// `not_found` (no such Workspace), `ended` (the Feature has
 	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 	// `dropped`).
@@ -8825,7 +10286,9 @@ type ClientWithResponsesInterface interface {
 	// Ends the Task done, in the first `done` Status. Completing a Task that needs
 	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Errors: `not_holder`, `proposal_stale`
+	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -8839,7 +10302,9 @@ type ClientWithResponsesInterface interface {
 	// Ends the Task done, in the first `done` Status. Completing a Task that needs
 	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Errors: `not_holder`, `proposal_stale`
+	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 	// (the version the proposal was written against is no longer current; nothing changes, and
 	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 	//
@@ -9085,6 +10550,32 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/teams/{team} (the `GetTeam` operationId).
 	GetTeamWithResponse(ctx context.Context, team TeamRef, reqEditors ...RequestEditorFn) (*GetTeamResponse, error)
 
+	// UpdateTeamWithBodyWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+	UpdateTeamWithBodyWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error)
+
+	// UpdateTeamWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+	UpdateTeamWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error)
+
 	// RemoveTeamMemberWithResponse Remove a Member from a Team (admin)
 	//
 	// Claims the Member holds on the Team's Tasks are not ended.
@@ -9110,6 +10601,68 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tokens/{token}/revoke (the `RevokeToken` operationId).
 	RevokeTokenWithResponse(ctx context.Context, token TokenID, params *RevokeTokenParams, reqEditors ...RequestEditorFn) (*RevokeTokenResponse, error)
+
+	// ListWorkspacesWithResponse List the Install's Workspaces
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/workspaces (the `ListWorkspaces` operationId).
+	ListWorkspacesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListWorkspacesResponse, error)
+
+	// CreateWorkspaceWithBodyWithResponse Add a Workspace to the Install (admin)
+	//
+	// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+	// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+	// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+	CreateWorkspaceWithBodyWithResponse(ctx context.Context, params *CreateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateWorkspaceResponse, error)
+
+	// CreateWorkspaceWithResponse Add a Workspace to the Install (admin)
+	//
+	// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+	// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+	// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+	CreateWorkspaceWithResponse(ctx context.Context, params *CreateWorkspaceParams, body CreateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateWorkspaceResponse, error)
+
+	// RemoveWorkspaceWithResponse Remove a Workspace (admin)
+	//
+	// Refused with `conflict` while any Task, open or ended, names it: the record keeps where
+	// its work was done. A Team whose default it was has no default afterwards. Records
+	// `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/workspaces/{workspace} (the `RemoveWorkspace` operationId).
+	RemoveWorkspaceWithResponse(ctx context.Context, workspace WorkspaceRef, params *RemoveWorkspaceParams, reqEditors ...RequestEditorFn) (*RemoveWorkspaceResponse, error)
+
+	// UpdateWorkspaceWithBodyWithResponse Change a Workspace's name, path, mode or default branch (admin)
+	//
+	// Changes the fields given and keeps the others; the kind never changes. Records
+	// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `conflict` (name taken), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+	UpdateWorkspaceWithBodyWithResponse(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWorkspaceResponse, error)
+
+	// UpdateWorkspaceWithResponse Change a Workspace's name, path, mode or default branch (admin)
+	//
+	// Changes the fields given and keeps the others; the kind never changes. Records
+	// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+	// `conflict` (name taken), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+	UpdateWorkspaceWithResponse(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, body UpdateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkspaceResponse, error)
 }
 
 type ListActivityResponse struct {
@@ -10156,6 +11709,54 @@ func (r UpdateMemberResponse) ContentType() string {
 	return ""
 }
 
+type SetAgentSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Member
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetAgentSettingsResponse) GetJSON200() *Member {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetAgentSettingsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetAgentSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetAgentSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetAgentSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetAgentSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type DeactivateMemberResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10602,6 +12203,177 @@ func (r IssueTokenResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r IssueTokenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRunnerSessionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RunnerSessionList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRunnerSessionsResponse) GetJSON200() *RunnerSessionList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListRunnerSessionsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRunnerSessionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRunnerSessionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRunnerSessionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRunnerSessionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type NudgeRunnerSessionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r NudgeRunnerSessionResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r NudgeRunnerSessionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r NudgeRunnerSessionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r NudgeRunnerSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r NudgeRunnerSessionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type StopRunnerSessionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r StopRunnerSessionResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r StopRunnerSessionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StopRunnerSessionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StopRunnerSessionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StopRunnerSessionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RunnerTerminalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r RunnerTerminalResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RunnerTerminalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RunnerTerminalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RunnerTerminalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RunnerTerminalResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12075,6 +13847,54 @@ func (r GetTeamResponse) ContentType() string {
 	return ""
 }
 
+type UpdateTeamResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Team
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateTeamResponse) GetJSON200() *Team {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateTeamResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateTeamResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateTeamResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateTeamResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateTeamResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type RemoveTeamMemberResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12205,6 +14025,191 @@ func (r RevokeTokenResponse) ContentType() string {
 	return ""
 }
 
+type ListWorkspacesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *WorkspaceList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListWorkspacesResponse) GetJSON200() *WorkspaceList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListWorkspacesResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListWorkspacesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListWorkspacesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListWorkspacesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListWorkspacesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateWorkspaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Workspace
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateWorkspaceResponse) GetJSON201() *Workspace {
+	return r.JSON201
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateWorkspaceResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateWorkspaceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateWorkspaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateWorkspaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateWorkspaceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveWorkspaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r RemoveWorkspaceResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveWorkspaceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveWorkspaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveWorkspaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveWorkspaceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateWorkspaceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Workspace
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateWorkspaceResponse) GetJSON200() *Workspace {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateWorkspaceResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateWorkspaceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateWorkspaceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateWorkspaceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateWorkspaceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // ListActivityWithResponse Read Activity after, or before, a sequence number
 //
 // Activity is numbered per Organisation in commit order. Pass the `last_seq` of one page as
@@ -12295,7 +14300,17 @@ func (c *ClientWithResponses) ListFeaturesWithResponse(ctx context.Context, para
 //
 // Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 // the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+// by a Retrospective names it in `from_retrospective`.
+//
+// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+// down it files its one work Task, with the Feature's title and description, needing
+// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+// default Workspace and none named).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12312,7 +14327,17 @@ func (c *ClientWithResponses) FileFeatureWithBodyWithResponse(ctx context.Contex
 //
 // Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
 // the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`. Errors: `forbidden` (not in the Team).
+// by a Retrospective names it in `from_retrospective`.
+//
+// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
+// down it files its one work Task, with the Feature's title and description, needing
+// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
+// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
+// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
+// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
+// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
+// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
+// default Workspace and none named).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12341,7 +14366,8 @@ func (c *ClientWithResponses) GetFeatureWithResponse(ctx context.Context, featur
 // DropFeatureWithResponse Drop a Feature (Feature owner)
 //
 // Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner), `ended`.
+// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
+// `forbidden` (not the owner), `ended`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -12451,8 +14477,9 @@ func (c *ClientWithResponses) RankFeatureWithResponse(ctx context.Context, featu
 // ShipFeatureWithResponse Ship a Feature (Feature owner)
 //
 // Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write. Errors: `forbidden` (not the owner),
-// `tasks_open`, `ended`.
+// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
+// `ship_when_done` ships without this call when its last open Task is completed. Errors:
+// `forbidden` (not the owner), `tasks_open`, `ended`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -12630,6 +14657,46 @@ func (c *ClientWithResponses) UpdateMemberWithResponse(ctx context.Context, memb
 		return nil, err
 	}
 	return ParseUpdateMemberResponse(rsp)
+}
+
+// SetAgentSettingsWithBodyWithResponse Set how the Runner starts an agent Member's sessions (admin)
+//
+// Changes the fields given and keeps the others. An agent with no settings yet starts from
+// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// sessions only for agents that have settings and are not paused. Records
+// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `invalid` (a human Member, or a value out of bounds).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+func (c *ClientWithResponses) SetAgentSettingsWithBodyWithResponse(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetAgentSettingsResponse, error) {
+	rsp, err := c.SetAgentSettingsWithBody(ctx, member, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAgentSettingsResponse(rsp)
+}
+
+// SetAgentSettingsWithResponse Set how the Runner starts an agent Member's sessions (admin)
+//
+// Changes the fields given and keeps the others. An agent with no settings yet starts from
+// the defaults: `command` `claude` with the Claude Code arguments shown on `AgentSettings`,
+// model `claude-sonnet-5-5`, no `env`, `unattended` true, `paused` false. The Runner starts
+// sessions only for agents that have settings and are not paused. Records
+// `member.agent_changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `invalid` (a human Member, or a value out of bounds).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/members/{member}/agent (the `SetAgentSettings` operationId).
+func (c *ClientWithResponses) SetAgentSettingsWithResponse(ctx context.Context, member MemberRef, params *SetAgentSettingsParams, body SetAgentSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetAgentSettingsResponse, error) {
+	rsp, err := c.SetAgentSettings(ctx, member, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetAgentSettingsResponse(rsp)
 }
 
 // DeactivateMemberWithResponse Deactivate a Member (admin)
@@ -12818,6 +14885,80 @@ func (c *ClientWithResponses) IssueTokenWithResponse(ctx context.Context, member
 		return nil, err
 	}
 	return ParseIssueTokenResponse(rsp)
+}
+
+// ListRunnerSessionsWithResponse List the agent sessions the Runner is running now
+//
+// A read model of the Runner beside this server, not part of the record: what it runs now,
+// one session per Task it holds a Claim on for an agent. Errors: `no_runner` (no Runner is
+// attached to this server, as with `serve --agents=off`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
+func (c *ClientWithResponses) ListRunnerSessionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRunnerSessionsResponse, error) {
+	rsp, err := c.ListRunnerSessions(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRunnerSessionsResponse(rsp)
+}
+
+// NudgeRunnerSessionWithResponse Nudge the agent in a Task's session to end the Task (admin)
+//
+// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+// question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
+// Task).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/runner/sessions/{task}/nudge (the `NudgeRunnerSession` operationId).
+func (c *ClientWithResponses) NudgeRunnerSessionWithResponse(ctx context.Context, task TaskRef, params *NudgeRunnerSessionParams, reqEditors ...RequestEditorFn) (*NudgeRunnerSessionResponse, error) {
+	rsp, err := c.NudgeRunnerSession(ctx, task, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseNudgeRunnerSessionResponse(rsp)
+}
+
+// StopRunnerSessionWithResponse Stop a Task's session (admin)
+//
+// Ends the agent's session and releases its Claim with a Note, as when a session ends
+// without a decision; the session's log is attached as Evidence. Errors: `forbidden` (not an
+// admin), `no_runner`, `not_found` (no session on the Task).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/runner/sessions/{task}/stop (the `StopRunnerSession` operationId).
+func (c *ClientWithResponses) StopRunnerSessionWithResponse(ctx context.Context, task TaskRef, params *StopRunnerSessionParams, reqEditors ...RequestEditorFn) (*StopRunnerSessionResponse, error) {
+	rsp, err := c.StopRunnerSession(ctx, task, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStopRunnerSessionResponse(rsp)
+}
+
+// RunnerTerminalWithResponse Watch or join a Task's session through a terminal (WebSocket)
+//
+// Upgrades to a WebSocket bridged to the session's terminal (`tmux attach`). Binary
+// messages carry the terminal's bytes both ways; a text message `{"cols": n, "rows": n}`
+// resizes the client's view. Admins may type unless they ask for `readonly`; every other
+// Member only watches, and what they send is ignored. Authenticated as every operation is,
+// by a bearer token with its Session or by the browser cookie; a browser's upgrade must
+// come from this Install's own origin. The Runner adds a Note on the Task when someone
+// joins. Errors, before the upgrade: `no_runner`, `not_found` (no session on the Task),
+// `conflict` (the session runs without tmux and cannot be joined), `forbidden` (another
+// origin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/runner/sessions/{task}/terminal (the `RunnerTerminal` operationId).
+func (c *ClientWithResponses) RunnerTerminalWithResponse(ctx context.Context, task TaskRef, params *RunnerTerminalParams, reqEditors ...RequestEditorFn) (*RunnerTerminalResponse, error) {
+	rsp, err := c.RunnerTerminal(ctx, task, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRunnerTerminalResponse(rsp)
 }
 
 // CloseSessionWithResponse Close one of the caller's Sessions
@@ -13034,7 +15175,9 @@ func (c *ClientWithResponses) ListTasksWithResponse(ctx context.Context, params 
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 // Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+// `not_found` (no such Workspace), `ended` (the Feature has
 // ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 // `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 // `dropped`).
@@ -13057,7 +15200,9 @@ func (c *ClientWithResponses) FileTaskWithBodyWithResponse(ctx context.Context, 
 // then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
 // even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
 // Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. Errors: `ended` (the Feature has
+// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
+// Feature's Team's default Workspace, or none when the Team has no default. Errors:
+// `not_found` (no such Workspace), `ended` (the Feature has
 // ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
 // `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
 // `dropped`).
@@ -13217,7 +15362,9 @@ func (c *ClientWithResponses) ClaimTaskWithResponse(ctx context.Context, task Ta
 // Ends the Task done, in the first `done` Status. Completing a Task that needs
 // `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 // completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Errors: `not_holder`, `proposal_stale`
+// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -13237,7 +15384,9 @@ func (c *ClientWithResponses) CompleteTaskWithBodyWithResponse(ctx context.Conte
 // Ends the Task done, in the first `done` Status. Completing a Task that needs
 // `skill-review` and carries a pending proposal publishes it as the Skill's next version;
 // completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Errors: `not_holder`, `proposal_stale`
+// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
+// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
+// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
 // (the version the proposal was written against is no longer current; nothing changes, and
 // the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
 //
@@ -13621,6 +15770,44 @@ func (c *ClientWithResponses) GetTeamWithResponse(ctx context.Context, team Team
 	return ParseGetTeamResponse(rsp)
 }
 
+// UpdateTeamWithBodyWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+func (c *ClientWithResponses) UpdateTeamWithBodyWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error) {
+	rsp, err := c.UpdateTeamWithBody(ctx, team, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateTeamResponse(rsp)
+}
+
+// UpdateTeamWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// A Task filed naming no Workspace takes the Team's default; a Feature filed without
+// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
+func (c *ClientWithResponses) UpdateTeamWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error) {
+	rsp, err := c.UpdateTeam(ctx, team, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateTeamResponse(rsp)
+}
+
 // RemoveTeamMemberWithResponse Remove a Member from a Team (admin)
 //
 // Claims the Member holds on the Team's Tasks are not ended.
@@ -13663,6 +15850,104 @@ func (c *ClientWithResponses) RevokeTokenWithResponse(ctx context.Context, token
 		return nil, err
 	}
 	return ParseRevokeTokenResponse(rsp)
+}
+
+// ListWorkspacesWithResponse List the Install's Workspaces
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/workspaces (the `ListWorkspaces` operationId).
+func (c *ClientWithResponses) ListWorkspacesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListWorkspacesResponse, error) {
+	rsp, err := c.ListWorkspaces(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListWorkspacesResponse(rsp)
+}
+
+// CreateWorkspaceWithBodyWithResponse Add a Workspace to the Install (admin)
+//
+// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+func (c *ClientWithResponses) CreateWorkspaceWithBodyWithResponse(ctx context.Context, params *CreateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateWorkspaceResponse, error) {
+	rsp, err := c.CreateWorkspaceWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateWorkspaceResponse(rsp)
+}
+
+// CreateWorkspaceWithResponse Add a Workspace to the Install (admin)
+//
+// A Workspace is a place a session works in; a `git` Workspace is a repository on the
+// machine that runs the Install, at `path`. Records `workspace.added`. Errors: `forbidden`
+// (not an admin), `conflict` (name taken, ignoring case), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/workspaces (the `CreateWorkspace` operationId).
+func (c *ClientWithResponses) CreateWorkspaceWithResponse(ctx context.Context, params *CreateWorkspaceParams, body CreateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateWorkspaceResponse, error) {
+	rsp, err := c.CreateWorkspace(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateWorkspaceResponse(rsp)
+}
+
+// RemoveWorkspaceWithResponse Remove a Workspace (admin)
+//
+// Refused with `conflict` while any Task, open or ended, names it: the record keeps where
+// its work was done. A Team whose default it was has no default afterwards. Records
+// `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/workspaces/{workspace} (the `RemoveWorkspace` operationId).
+func (c *ClientWithResponses) RemoveWorkspaceWithResponse(ctx context.Context, workspace WorkspaceRef, params *RemoveWorkspaceParams, reqEditors ...RequestEditorFn) (*RemoveWorkspaceResponse, error) {
+	rsp, err := c.RemoveWorkspace(ctx, workspace, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveWorkspaceResponse(rsp)
+}
+
+// UpdateWorkspaceWithBodyWithResponse Change a Workspace's name, path, mode or default branch (admin)
+//
+// Changes the fields given and keeps the others; the kind never changes. Records
+// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `conflict` (name taken), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+func (c *ClientWithResponses) UpdateWorkspaceWithBodyWithResponse(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateWorkspaceResponse, error) {
+	rsp, err := c.UpdateWorkspaceWithBody(ctx, workspace, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWorkspaceResponse(rsp)
+}
+
+// UpdateWorkspaceWithResponse Change a Workspace's name, path, mode or default branch (admin)
+//
+// Changes the fields given and keeps the others; the kind never changes. Records
+// `workspace.changed` with the fields that changed. Errors: `forbidden` (not an admin),
+// `conflict` (name taken), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/workspaces/{workspace} (the `UpdateWorkspace` operationId).
+func (c *ClientWithResponses) UpdateWorkspaceWithResponse(ctx context.Context, workspace WorkspaceRef, params *UpdateWorkspaceParams, body UpdateWorkspaceJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateWorkspaceResponse, error) {
+	rsp, err := c.UpdateWorkspace(ctx, workspace, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateWorkspaceResponse(rsp)
 }
 
 // ParseListActivityResponse parses an HTTP response from a ListActivityWithResponse call
@@ -14415,6 +16700,39 @@ func ParseUpdateMemberResponse(rsp *http.Response) (*UpdateMemberResponse, error
 	return response, nil
 }
 
+// ParseSetAgentSettingsResponse parses an HTTP response from a SetAgentSettingsWithResponse call
+func ParseSetAgentSettingsResponse(rsp *http.Response) (*SetAgentSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetAgentSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Member
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseDeactivateMemberResponse parses an HTTP response from a DeactivateMemberWithResponse call
 func ParseDeactivateMemberResponse(rsp *http.Response) (*DeactivateMemberResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14716,6 +17034,126 @@ func ParseIssueTokenResponse(rsp *http.Response) (*IssueTokenResponse, error) {
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRunnerSessionsResponse parses an HTTP response from a ListRunnerSessionsWithResponse call
+func ParseListRunnerSessionsResponse(rsp *http.Response) (*ListRunnerSessionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRunnerSessionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RunnerSessionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseNudgeRunnerSessionResponse parses an HTTP response from a NudgeRunnerSessionWithResponse call
+func ParseNudgeRunnerSessionResponse(rsp *http.Response) (*NudgeRunnerSessionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &NudgeRunnerSessionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStopRunnerSessionResponse parses an HTTP response from a StopRunnerSessionWithResponse call
+func ParseStopRunnerSessionResponse(rsp *http.Response) (*StopRunnerSessionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StopRunnerSessionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRunnerTerminalResponse parses an HTTP response from a RunnerTerminalWithResponse call
+func ParseRunnerTerminalResponse(rsp *http.Response) (*RunnerTerminalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RunnerTerminalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 101:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error
@@ -15743,6 +18181,39 @@ func ParseGetTeamResponse(rsp *http.Response) (*GetTeamResponse, error) {
 	return response, nil
 }
 
+// ParseUpdateTeamResponse parses an HTTP response from a UpdateTeamWithResponse call
+func ParseUpdateTeamResponse(rsp *http.Response) (*UpdateTeamResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateTeamResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Team
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseRemoveTeamMemberResponse parses an HTTP response from a RemoveTeamMemberWithResponse call
 func ParseRemoveTeamMemberResponse(rsp *http.Response) (*RemoveTeamMemberResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -15817,6 +18288,134 @@ func ParseRevokeTokenResponse(rsp *http.Response) (*RevokeTokenResponse, error) 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Token
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListWorkspacesResponse parses an HTTP response from a ListWorkspacesWithResponse call
+func ParseListWorkspacesResponse(rsp *http.Response) (*ListWorkspacesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListWorkspacesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest WorkspaceList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateWorkspaceResponse parses an HTTP response from a CreateWorkspaceWithResponse call
+func ParseCreateWorkspaceResponse(rsp *http.Response) (*CreateWorkspaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateWorkspaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Workspace
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveWorkspaceResponse parses an HTTP response from a RemoveWorkspaceWithResponse call
+func ParseRemoveWorkspaceResponse(rsp *http.Response) (*RemoveWorkspaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveWorkspaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateWorkspaceResponse parses an HTTP response from a UpdateWorkspaceWithResponse call
+func ParseUpdateWorkspaceResponse(rsp *http.Response) (*UpdateWorkspaceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateWorkspaceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Workspace
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

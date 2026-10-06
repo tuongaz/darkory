@@ -63,6 +63,7 @@ const affected: Record<SubjectType, Root[]> = {
   session: [...organisation, ...work],
   login_link: [],
   statuses: [...work, "statuses"],
+  workspace: [...organisation, ...work],
 };
 
 /** The query roots an Activity entry may have changed. */

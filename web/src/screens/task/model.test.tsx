@@ -20,6 +20,7 @@ function detail(extra: Partial<TaskDetail> = {}, taskExtra: Parameters<typeof ta
     task: task(3, "f-1", { created_at: at(0), waiting_since: at(0), ...taskExtra }),
     status: { id: "st-todo", name: "Todo", kind: "todo", position: 2 },
     feature: feature(1, 1),
+    workspaces: [],
     claims: [],
     notes: [],
     evidence: [],
