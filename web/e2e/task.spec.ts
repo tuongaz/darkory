@@ -137,7 +137,8 @@ test("15 · the peek opens from the Feature's list, and the page from the peek",
   await expect(peek.getByRole("article", { name: "Note by tsk-builder" })).toContainText("quantity stepper done");
   await shot(page, "peek");
 
-  await peek.getByRole("link", { name: "Open page" }).click();
+  await peek.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Open as page" }).click();
   await expect(page).toHaveURL(`${base()}/tasks/${cart.key}`);
   await expect(page.getByRole("heading", { name: "Build the cart page", level: 1 })).toBeVisible();
   await expect(rail(page).getByText("tsk-builder", { exact: true })).toBeVisible();

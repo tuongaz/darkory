@@ -167,7 +167,8 @@ test("the shell: sign in, the checklist, live updates, keys, the peek, a phone",
     const peek = page.getByRole("dialog", { name: "Task WEB-2" });
     await expect(peek).toBeVisible();
     await shot(page, "peek");
-    await peek.getByRole("link", { name: "Open page" }).click();
+    await peek.getByRole("button", { name: "More" }).click();
+    await page.getByRole("menuitem", { name: "Open as page" }).click();
     await expect(page).toHaveURL(`${base()}/tasks/WEB-2`);
   });
 

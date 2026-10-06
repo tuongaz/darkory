@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { EllipsisIcon, MessageSquareIcon, SearchXIcon } from "lucide-react";
+import { EllipsisIcon, ExternalLinkIcon, MessageSquareIcon, SearchXIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { api, call, isUnauthenticated, ApiError, type TaskDetail } from "@/api/client";
@@ -14,7 +14,7 @@ import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { TeamMark } from "@/components/TeamMark";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { TaskActions } from "./actions";
@@ -87,15 +87,17 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
         onOpenChange={(o) => !o && onClose()}
         label={`Task ${taskKey}`}
         heading={<Key className="text-xs">{taskKey}</Key>}
-        menu={ui.menu.length > 0 ? ui.menu : undefined}
-        actions={
-          <>
-            {ui.primary}
-            <Button asChild variant="ghost" size="xs">
-              <Link to={taskPath(taskKey)}>Open page</Link>
-            </Button>
-          </>
-        }
+        // The header is key · primary · ⋯ · ×; the page is the ⋯ menu's first item (F-T4).
+        menu={[
+          <DropdownMenuItem key="page" asChild>
+            <Link to={taskPath(taskKey)}>
+              <ExternalLinkIcon />
+              Open as page
+            </Link>
+          </DropdownMenuItem>,
+          ...(ui.menu.length > 0 ? [<DropdownMenuSeparator key="page-sep" />, ...ui.menu] : []),
+        ]}
+        actions={ui.primary}
       >
         {d ? (
           // Keyed, so a Note being written stays with its Task when J or K moves the peek on.

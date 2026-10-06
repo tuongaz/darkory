@@ -415,7 +415,14 @@ describe("the Task peek", () => {
     renderApp("/teams/WEB/tasks?view=board&task=WEB-3");
 
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
-    expect(within(peek).getByRole("link", { name: "Open page" })).toHaveAttribute("href", "/tasks/WEB-3");
+    // The header is the key, the primary, ⋯ and ×; the page is in ⋯ (F-T4).
+    expect(within(peek).queryByRole("link", { name: /Open/ })).not.toBeInTheDocument();
+    await userEvent.click(within(peek).getByRole("button", { name: "More" }));
+    const items = within(await screen.findByRole("menu")).getAllByRole("menuitem");
+    expect(items[0]).toHaveTextContent("Open as page");
+    expect(items[0]).toHaveAttribute("href", "/tasks/WEB-3");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
     await userEvent.click(within(peek).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     // The board underneath kept its view.
