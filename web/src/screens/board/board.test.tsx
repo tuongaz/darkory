@@ -142,6 +142,20 @@ describe("Team › Tasks, board", () => {
     expect(within(card).getByRole("img", { name: "builder (agent)" })).toBeInTheDocument();
   });
 
+  it("renames a column when the Workflow changes, and marks a lapse as the stream reports it", async () => {
+    const api = mockApi(routes());
+    renderApp("/teams/WEB/tasks?view=board");
+    await screen.findByRole("region", { name: "In review" });
+    act(() => FakeEventSource.latest().open());
+
+    api.routes["GET /v1/statuses"] = { items: statuses.map((s) => (s.id === "st-review" ? { ...s, name: "Review" } : s)) };
+    act(() => FakeEventSource.latest().emit("activity", { seq: 10, kind: "statuses.changed", subject_type: "statuses", subject_id: "o-1", at: inFuture(0), payload: {} }, 10));
+    expect(await screen.findByRole("region", { name: "Review" })).toBeInTheDocument();
+
+    act(() => FakeEventSource.latest().emit("activity", { seq: 11, kind: "task.lapsed", subject_type: "task", subject_id: "k-10", at: inFuture(0), payload: {} }, 11));
+    expect(await within(await screen.findByRole("link", { name: /WEB-10/ })).findByText(/^Lapsed /)).toBeInTheDocument();
+  });
+
   it("a column's + opens File Task in that Status", async () => {
     const api = mockApi(routes({ "POST /v1/tasks": { task: { ...discount, id: "k-30", key: "WEB-30", title: "Gift cards" } } }));
     renderApp("/teams/WEB/tasks?view=board");

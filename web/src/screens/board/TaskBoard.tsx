@@ -18,7 +18,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { ChevronsLeftIcon, PlusIcon } from "lucide-react";
+import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Task } from "@/api/client";
@@ -61,7 +61,7 @@ export function TaskBoard({
   model: BoardModel;
   columns: Column[];
   onMove: (task: Task, to: Status) => void;
-  onExpand: (status: Status, expanded: boolean) => void;
+  onExpand: (status: Status) => void;
   onAdd: (status: Status) => void;
 }) {
   const sensors = useSensors(
@@ -142,7 +142,7 @@ function BoardColumn({
   column: Column;
   model: BoardModel;
   dropTarget: boolean;
-  onExpand: (status: Status, expanded: boolean) => void;
+  onExpand: (status: Status) => void;
   onAdd: (status: Status) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: status.id });
@@ -153,7 +153,7 @@ function BoardColumn({
       <section ref={setNodeRef} aria-label={status.name} data-status={status.name} className={cn("flex w-9 flex-none flex-col", outline)}>
         <button
           type="button"
-          onClick={() => onExpand(status, true)}
+          onClick={() => onExpand(status)}
           aria-label={`Show ${status.name}, ${tasks.length}`}
           className="flex items-center gap-1.5 rounded-md py-2 font-medium [writing-mode:vertical-rl] hover:bg-accent"
         >
@@ -171,13 +171,10 @@ function BoardColumn({
         {glyph}
         <h2>{status.name}</h2>
         <span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
-        {open ? (
+        {/* Done and Dropped are reached by Complete and Drop, so nothing is filed into them. */}
+        {open && (
           <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground" aria-label={`File a Task in ${status.name}`} onClick={() => onAdd(status)}>
             <PlusIcon />
-          </Button>
-        ) : (
-          <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground" aria-label={`Hide ${status.name}`} onClick={() => onExpand(status, false)}>
-            <ChevronsLeftIcon />
           </Button>
         )}
       </div>

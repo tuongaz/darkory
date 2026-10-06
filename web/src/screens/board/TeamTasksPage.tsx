@@ -268,7 +268,7 @@ function Board({
       model={model}
       columns={columns}
       onMove={(task, to) => setStatus.mutate({ task, status: to }, { onError: (err) => void refused(task, to, err) })}
-      onExpand={(status, expanded) => changeDisplay(status.kind === "done" ? { showDone: expanded } : { showDropped: expanded })}
+      onExpand={(status) => changeDisplay(status.kind === "done" ? { showDone: true } : { showDropped: true })}
       onAdd={(status) => openFileTask({ team: team.key, status: status.id })}
     />
   );
