@@ -708,17 +708,9 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 		default:
 			r.problem("%s is %s; nothing in the soak drops a Task", tk.Key, d.Task.State)
 		}
-		// Nobody in the soak names a Status, so Darkory's own moves decide it (ADR 0012): done in
-		// Done; open in In progress when its last Claim was handed over, which leaves the Status,
-		// and in Todo when it ended any other way or there was none.
-		want := client.StatusKindTodo
-		switch {
-		case d.Task.State == client.TaskStateDone:
-			want = client.StatusKindDone
-		case len(cs) > 0 && cs[len(cs)-1].HowEnded != nil && *cs[len(cs)-1].HowEnded == client.ClaimEndHandedOver:
-			want = client.StatusKindInProgress
-		}
-		if d.Status.ID != d.Task.StatusID || d.Status.Kind != want {
+		// Nobody in the soak names a Status, so Darkory's own moves decide it, and a Task never
+		// claimed is in Todo, where filing put it.
+		if want := restingKind(*d, cs, client.StatusKindTodo); d.Status.ID != d.Task.StatusID || d.Status.Kind != want {
 			r.problem("%s is %s, its last Claim ended %v, and it is in %s (%s, Task says %s); want a %s Status",
 				tk.Key, d.Task.State, lastEnd(cs), d.Status.Name, d.Status.Kind, d.Task.StatusID, want)
 		}
@@ -732,6 +724,24 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 		r.problem("no Claims at all")
 	}
 	return tasks
+}
+
+// restingKind is the kind of Status a Task nobody holds must be in when no Member has named one
+// since its last Claim, cs oldest first (ADR 0012): done or dropped as it ended; in progress when
+// its last Claim was handed over, which leaves the Status; todo when that Claim ended any other
+// way; and unclaimed, the kind it was filed into or moved to, when it has had no Claim.
+func restingKind(d client.TaskDetail, cs []client.Claim, unclaimed client.StatusKind) client.StatusKind {
+	switch {
+	case d.Task.State == client.TaskStateDone:
+		return client.StatusKindDone
+	case d.Task.State == client.TaskStateDropped:
+		return client.StatusKindDropped
+	case len(cs) == 0:
+		return unclaimed
+	case cs[len(cs)-1].HowEnded != nil && *cs[len(cs)-1].HowEnded == client.ClaimEndHandedOver:
+		return client.StatusKindInProgress
+	}
+	return client.StatusKindTodo
 }
 
 // lastEnd says how the last of cs ended, or "none" without Claims.

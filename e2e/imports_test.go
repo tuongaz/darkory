@@ -12,11 +12,18 @@ import (
 
 // The end-to-end tests reach Darkory only as its users do: the binary, MCP over stdio and the
 // generated client. Nothing here may import an internal package, which Go would allow since the
-// package sits inside the module.
+// package sits inside the module, and neither may the bots the tests run (tools/bots).
 func TestImportsNothingInternal(t *testing.T) {
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
+	var files []string
+	for _, pattern := range []string{"*.go", "../tools/bots/*.go", "../tools/bots/bot/*.go"} {
+		found, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, found...)
+	}
+	if len(files) < 10 {
+		t.Fatalf("found only %d files to check: %v", len(files), files)
 	}
 	for _, name := range files {
 		src, err := os.ReadFile(name)
