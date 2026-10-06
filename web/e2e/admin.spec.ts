@@ -313,7 +313,10 @@ test("scenario 9: deactivating an agent ends its live Claim and its token stops 
 
   await test.step("Account: my token, this browser, the CLI line", async () => {
     await page.goto(`${base}/account`);
-    await expect(page.getByRole("listitem", { name: "This browser" })).toBeVisible();
+    await expect(page.getByRole("listitem", { name: "This browser" }).getByRole("button", { name: "Sign out" })).toBeVisible();
+    // At rest a token shows its ⋯, not Revoke.
+    await expect(page.getByRole("button", { name: /^More for token / }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(0);
     await expect(page.getByText("darkory login ada")).toBeVisible();
     await shot(page, "account");
   });

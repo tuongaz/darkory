@@ -128,6 +128,44 @@ describe("a Member's page", () => {
   });
 });
 
+describe("Account", () => {
+  const tokens: Token[] = [{ id: "t-init", member_id: ada.id, name: "init", prefix: "dk_O1vgU1", created_at: at }];
+  const sessions: Session[] = [
+    { id: "browser-1", member_id: ada.id, kind: "browser", started_at: at, last_seen_at: at },
+    { id: "browser-2", member_id: ada.id, kind: "browser", started_at: at, last_seen_at: at },
+  ];
+
+  it("gives each token and each other Session one ⋯, and Sign out to this browser only", async () => {
+    const user = userEvent.setup();
+    const api = mockApi({
+      ...signedIn(),
+      "GET /v1/members/:member/tokens": { items: tokens },
+      "GET /v1/members/:member/sessions": { items: sessions },
+    });
+    renderApp("/account");
+
+    const token = await screen.findByRole("listitem", { name: "Token init" });
+    expect(within(token).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["More for token init"]);
+    const here = await screen.findByRole("listitem", { name: "This browser" });
+    expect(within(here).getAllByRole("button").map((b) => b.textContent)).toEqual(["Sign out"]);
+    const other = screen.getByRole("listitem", { name: "Session browser-2" });
+    expect(within(other).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["More for Session browser-2"]);
+    expect(screen.getAllByRole("button", { name: /Sign out/ })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /^(Revoke|Close)$/ })).not.toBeInTheDocument();
+
+    await user.click(within(token).getByRole("button", { name: "More for token init" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Revoke" }));
+    expect(await screen.findByRole("dialog", { name: "Revoke init?" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    await user.click(within(other).getByRole("button", { name: "More for Session browser-2" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Close Session" }));
+    const confirm = await screen.findByRole("dialog", { name: "Close browser-2?" });
+    expect(api.calls.some((c) => c.method !== "GET" && c.path.includes("browser-2"))).toBe(false);
+    expect(within(confirm).getByRole("button", { name: "Close Session" })).toBeInTheDocument();
+  });
+});
+
 describe("Workflow", () => {
   const statuses: Status[] = [
     { id: "st-backlog", name: "Backlog", kind: "backlog", position: 1 },

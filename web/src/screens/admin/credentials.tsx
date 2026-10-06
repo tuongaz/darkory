@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRoundIcon, LogOutIcon, MonitorIcon, ZapIcon } from "lucide-react";
+import { BanIcon, KeyRoundIcon, LogOutIcon, MonitorIcon, XIcon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import type { Member, Token } from "@/api/client";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
@@ -7,8 +7,9 @@ import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { boundToSession, count, madeThrough, revokeSummary, type Held, type Session } from "./model";
-import { ConfirmDialog, Fact, Facts, RecordRow } from "./parts";
+import { ConfirmDialog, Fact, Facts, MoreMenu, RecordRow } from "./parts";
 import { closeSession, logout, revokeToken } from "./writes";
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -26,7 +27,7 @@ export function Stamp({ at }: { at: string }) {
   );
 }
 
-/** A Member's live tokens, each with Revoke, which asks first and says what it stops. */
+/** A Member's live tokens, each with Revoke in its ⋯, which asks first and says what it stops. */
 export function TokenRows({ tokens, sessions, held }: { tokens: Token[]; sessions: Session[]; held: Held[] }) {
   const [revoking, setRevoking] = useState<Token | null>(null);
   const revoke = useMutation({ mutationFn: (t: Token) => revokeToken(t.id), onSuccess: () => setRevoking(null) });
@@ -40,9 +41,12 @@ export function TokenRows({ tokens, sessions, held }: { tokens: Token[]; session
           label={`Token ${t.name}`}
           icon={<KeyRoundIcon />}
           action={
-            <Button variant="outline" size="xs" className="text-destructive" onClick={() => setRevoking(t)}>
-              Revoke
-            </Button>
+            <MoreMenu label={`More for token ${t.name}`} size="icon-xs">
+              <DropdownMenuItem variant="destructive" onSelect={() => setRevoking(t)}>
+                <BanIcon />
+                Revoke
+              </DropdownMenuItem>
+            </MoreMenu>
           }
         >
           <b className="font-medium">{t.name}</b>
@@ -100,8 +104,8 @@ export function TokenRows({ tokens, sessions, held }: { tokens: Token[]; session
 }
 
 /**
- * A Member's open Sessions: the id, what it holds, and Close, which asks first. On Account,
- * `current` marks this browser, whose row signs out instead.
+ * A Member's open Sessions: the id, what it holds, and Close Session in its ⋯, which asks first.
+ * On Account, `current` marks this browser, whose row has Sign out instead.
  */
 export function SessionRows({ member, sessions, held, current }: { member: Member; sessions: Session[]; held: Held[]; current?: string }) {
   const [closing, setClosing] = useState<Session | null>(null);
@@ -124,15 +128,19 @@ export function SessionRows({ member, sessions, held, current }: { member: Membe
             label={here ? "This browser" : `Session ${s.id}`}
             icon={s.kind === "browser" ? <MonitorIcon /> : <ZapIcon />}
             action={
+              // This browser signs out; any other Session is closed from its ⋯, which asks first.
               here ? (
                 <Button variant="outline" size="xs" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
                   <LogOutIcon />
                   Sign out
                 </Button>
               ) : (
-                <Button variant="outline" size="xs" onClick={() => setClosing(s)}>
-                  Close
-                </Button>
+                <MoreMenu label={`More for Session ${s.id}`} size="icon-xs">
+                  <DropdownMenuItem variant="destructive" onSelect={() => setClosing(s)}>
+                    <XIcon />
+                    Close Session
+                  </DropdownMenuItem>
+                </MoreMenu>
               )
             }
           >
