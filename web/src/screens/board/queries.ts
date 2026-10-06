@@ -73,10 +73,13 @@ export function useClaimTrails(team: string | undefined) {
   }, [history.data, live]);
 }
 
-/** The Tasks the signed-in Member can take now; read when a refused drag needs to know. */
+/**
+ * The Tasks the signed-in Member can take now; read when a refused drag needs to know. Its own key
+ * under the "takeable" root, which work refreshes: other screens keep other shapes at keys.takeable.
+ */
 export function fetchTakeable(qc: QueryClient): Promise<Task[]> {
   return qc.fetchQuery({
-    queryKey: keys.takeable,
+    queryKey: [...keys.takeable, { all: true }],
     queryFn: () => call(api.GET("/v1/tasks/takeable", { params: { query: { limit: 500 } } })).then((r) => r.items),
   });
 }

@@ -187,8 +187,8 @@ function BoardColumn({
 
 function TaskCard({ task, model }: { task: Task; model: BoardModel }) {
   const peek = usePeekLink();
-  // Only a Member of the Team moves its Tasks, and an ended Task stays in its Status.
-  const movable = model.inTeam && task.state === "open";
+  // A Member of the Team, the Feature's owner or the holder moves an open Task; an ended one stays.
+  const movable = model.canMove(task);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !movable });
   // The card stays a link to the Task; the drag adds its description, not a button role.
   const dragAttributes = { ...attributes, role: undefined };

@@ -4,31 +4,36 @@ import type { FeatureDetail, IssuedToken, LoginLink, TaskDetail } from "../src/a
 import startServer from "./server";
 
 // The Board's journeys (docs/build/ui-plan.md, scenarios 1–4, 13 and 14) against the real binary.
-// They run on an Install of their own: flow.spec.ts needs the shared one fresh, and its startup
-// login link unused. Records are seeded through /v1 as a human (ada, in the browser) and as an
+// They run on an Install of their own, since this file runs before flow.spec.ts, which needs the
+// shared one fresh. ada signs in with a login link she asks /v1 for with her token, as the specs on
+// the shared Install do. Records are seeded through /v1 as a human (ada, in the browser) and as an
 // agent (builder-1, with a bearer token, as the CLI calls).
 test.describe.configure({ mode: "serial" });
 // The size of the mockup's frames, so the screenshots pair with them.
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const shots = fileURLToPath(new URL("./screenshots/board/", import.meta.url));
+// startServer sets these for the Install it starts; the specs after this one read the shared one's.
 const env = ["DARKORY_E2E_LOGIN_LINK", "DARKORY_E2E_BASE_URL", "DARKORY_E2E_DATA", "DARKORY_E2E_ADMIN_TOKEN"] as const;
 
 let stop: (() => Promise<void>) | undefined;
 let base = "";
-let startLink = "";
+let adminToken = "";
 
 test.beforeAll(async () => {
   // Building the binary again is quick (Go caches it); starting it takes a moment.
   test.setTimeout(180_000);
   const saved = env.map((k) => process.env[k]);
-  stop = await startServer();
-  base = process.env.DARKORY_E2E_BASE_URL!;
-  startLink = process.env.DARKORY_E2E_LOGIN_LINK!;
-  env.forEach((k, i) => {
-    if (saved[i] === undefined) delete process.env[k];
-    else process.env[k] = saved[i];
-  });
+  try {
+    stop = await startServer();
+    base = process.env.DARKORY_E2E_BASE_URL!;
+    adminToken = process.env.DARKORY_E2E_ADMIN_TOKEN!;
+  } finally {
+    env.forEach((k, i) => {
+      if (saved[i] === undefined) delete process.env[k];
+      else process.env[k] = saved[i];
+    });
+  }
 });
 
 test.afterAll(async () => {
@@ -68,7 +73,7 @@ async function v1<T>(page: Page, method: string, path: string, body?: unknown): 
 
 /** An agent Member calling /v1 as the CLI does: a bearer token and the Session it chose. */
 function agent(token: string, session: string) {
-  return async (method: string, path: string, body?: unknown) => {
+  return async <T = unknown>(method: string, path: string, body?: unknown) => {
     const r = await fetch(`${base}${path}`, {
       method,
       headers: {
@@ -80,7 +85,7 @@ function agent(token: string, session: string) {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await r.text();
-    return { status: r.status, body: (text ? JSON.parse(text) : undefined) as TaskDetail | undefined };
+    return { status: r.status, body: (text ? JSON.parse(text) : undefined) as T | undefined };
   };
 }
 
@@ -117,7 +122,10 @@ async function noSidewaysScroll(page: Page) {
 
 test("the Board: live Claims, drags that set a Status or are refused, File Task, a phone", async ({ page, browser }) => {
   const errors = consoleErrors(page, [/status of 409/]);
-  await signIn(page, startLink);
+  const ada = agent(adminToken, "ada-e2e-board");
+  const adaLink = await ada<LoginLink>("POST", "/v1/members/ada/login-links");
+  expect(adaLink.status).toBe(201);
+  await signIn(page, adaLink.body!.url);
 
   // ada (admin) sets up Web; builder-1 is an agent with `build`; mai is a Member outside Web.
   await v1(page, "POST", "/v1/teams", { key: "WEB", name: "Web" });
@@ -168,7 +176,7 @@ test("the Board: live Claims, drags that set a Status or are refused, File Task,
     await expect.poll(async () => (await v1<TaskDetail>(page, "GET", `/v1/tasks/${discount}`)).status.name).toBe("Todo");
     await shot(page, "2-backlog-to-todo");
 
-    const next = await bot("POST", "/v1/tasks/next", { wait_seconds: 0, heartbeat_timeout_seconds: 900 });
+    const next = await bot<TaskDetail>("POST", "/v1/tasks/next", { wait_seconds: 0, heartbeat_timeout_seconds: 900 });
     expect(next.status).toBe(200);
     expect(next.body?.task.key).toBe(discount);
     await expect(column(page, "In progress").locator(`[data-task="${discount}"]`)).toBeVisible();

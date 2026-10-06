@@ -15,6 +15,7 @@ import {
   refusalNote,
   statusGlyphs,
   taskBar,
+  mayMove,
   visibleTasks,
 } from "./derive";
 import { statuses } from "./testData";
@@ -156,6 +157,22 @@ describe("marks", () => {
   });
 });
 
+describe("who may drag a card", () => {
+  const owned = { owner_id: ada.id };
+  const held = task(3, "f-1", { claim: { id: "c", task_id: "k-3", holder_id: builder.id, session_id: "s", started_at: at(1) } });
+
+  it("a Member of the Team, the Feature's owner, or the holder", () => {
+    expect(mayMove(task(3, "f-1"), { member: "m-x", inTeam: true, feature: owned, now })).toBe(true);
+    expect(mayMove(task(3, "f-1"), { member: ada.id, inTeam: false, feature: owned, now })).toBe(true);
+    expect(mayMove(held, { member: builder.id, inTeam: false, feature: owned, now })).toBe(true);
+    expect(mayMove(held, { member: "m-x", inTeam: false, feature: owned, now })).toBe(false);
+  });
+
+  it("nobody, once the Task has ended", () => {
+    expect(mayMove(task(4, "f-1", { state: "done" }), { member: ada.id, inTeam: true, feature: owned, now })).toBe(false);
+  });
+});
+
 describe("a refused drag", () => {
   const base = { task: { key: "WEB-17" }, takeable: false, holds: false, owns: false, ownerName: "Mai Tran", teamName: "Web", message: "refused" };
   const done = { name: "Done" };
@@ -183,7 +200,11 @@ describe("a refused drag", () => {
   });
 
   it("by a Member outside the Team says who may move it", () => {
-    expect(refusalNote("forbidden", { ...base, target: { name: "Todo" } }).body).toBe("Only Members of Web move its Tasks.");
+    expect(refusalNote("forbidden", { ...base, target: { name: "Todo" } }).body).toBe("Only Members of Web, the Feature owner or its holder move WEB-17.");
+  });
+
+  it("of an ended Task says it stays", () => {
+    expect(refusalNote("ended", { ...base, target: { name: "Todo" } }).body).toBe("WEB-17 has ended and stays where it is.");
   });
 
   it("for anything else passes the server's words on", () => {
