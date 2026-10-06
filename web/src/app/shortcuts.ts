@@ -14,9 +14,9 @@ function typing(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
-/** Whether a dialog or a sheet is open over the page: keys then belong to it. */
+/** Whether a dialog, a sheet, a menu or a list of choices is open over the page: keys then belong to it. */
 function dialogOpen(): boolean {
-  return document.querySelector('[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]') !== null;
+  return document.querySelector(':is([role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"])[data-state="open"]') !== null;
 }
 
 /**
