@@ -351,8 +351,8 @@ claim_holder_id, claim_expires_at) VALUES ($1, 'o1', 'o1-f', $1, 'work', 'T', $2
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !slices.Equal(res.Applied, []int{3}) {
-				t.Fatalf("applied %v, want [3]", res.Applied)
+			if len(res.Applied) == 0 || res.Applied[0] != 3 {
+				t.Fatalf("applied %v, want 3 first", res.Applied)
 			}
 
 			for _, org := range []string{"o1", "o2"} {
@@ -394,6 +394,101 @@ claim_holder_id, claim_expires_at) VALUES ($1, 'o1', 'o1-f', $1, 'work', 'T', $2
 			}
 			if err := exec(`INSERT INTO statuses (id, org_id, name, kind, position, created_at) VALUES ('x', 'o1', 'Later', 'someday', 9, 0)`); err == nil {
 				t.Error("a kind outside the five was accepted")
+			}
+		})
+	}
+}
+
+// migrateTo applies the migrations in migrations/ numbered up to last, from their files.
+func migrateTo(t *testing.T, s *store.Store, last int) {
+	t.Helper()
+	set := fstest.MapFS{}
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		var n int
+		if _, err := fmt.Sscanf(e.Name(), "%04d_", &n); err != nil || n > last {
+			continue
+		}
+		b, err := os.ReadFile("migrations/" + e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		set[e.Name()] = file(string(b))
+	}
+	if res, err := s.MigrateFS(t.Context(), set, now); err != nil || len(res.Applied) != last {
+		t.Fatalf("migrating to %04d: %+v %v", last, res, err)
+	}
+}
+
+// Migration 0004 adds Workspaces and the agent settings to a database written under 0003: what
+// is there keeps its rows, Teams and Features take the defaults (no default Workspace, nothing
+// shipped when done, no quick Feature), Members have no agent settings, and the new tables take
+// rows under their checks.
+func TestMigration4AddsWorkspacesAndAgents(t *testing.T) {
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			migrateTo(t, s, 3)
+			exec := func(q string, args ...any) error {
+				return s.WriteNoSeq(ctx, func(tx store.Tx) error {
+					_, err := tx.Exec(ctx, q, args...)
+					return err
+				})
+			}
+			must := func(q string, args ...any) {
+				t.Helper()
+				if err := exec(q, args...); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			must(`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`)
+			must(`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`)
+			must(`INSERT INTO teams (id, org_id, key_prefix, name, created_at) VALUES ('tm', 'o', 'WEB', 'Web', 0)`)
+			must(`INSERT INTO features (id, org_id, team_id, display_key, title, owner_id, state, rank, filed_by, created_at) VALUES ('f', 'o', 'tm', 'WEB-1', 'F', 'm', 'open', 1, 'm', 0)`)
+			must(`INSERT INTO statuses (id, org_id, name, kind, position, created_at) VALUES ('st', 'o', 'Todo', 'todo', 1, 0)`)
+			must(`INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, filed_by, waiting_since, created_at, status_id)
+VALUES ('t', 'o', 'f', 'WEB-2', 'work', 'T', 'open', 'm', 0, 0, 'st')`)
+
+			res, err := s.Migrate(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(res.Applied, []int{4}) {
+				t.Fatalf("applied %v, want [4]", res.Applied)
+			}
+
+			var teamDefault sql.NullString
+			var teamShip, quick, featureShip bool
+			var agent sql.NullString
+			if err := s.QueryRow(ctx, `SELECT default_workspace_id, ship_when_done FROM teams WHERE id = 'tm'`).Scan(&teamDefault, &teamShip); err != nil ||
+				teamDefault.Valid || teamShip {
+				t.Errorf("the Team after the migration: %v %v %v", teamDefault, teamShip, err)
+			}
+			if err := s.QueryRow(ctx, `SELECT quick, ship_when_done FROM features WHERE id = 'f'`).Scan(&quick, &featureShip); err != nil || quick || featureShip {
+				t.Errorf("the Feature after the migration: quick %v, ship_when_done %v, %v", quick, featureShip, err)
+			}
+			if err := s.QueryRow(ctx, `SELECT agent FROM members WHERE id = 'm'`).Scan(&agent); err != nil || agent.Valid {
+				t.Errorf("the Member after the migration: agent %v, %v", agent, err)
+			}
+
+			must(`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws', 'o', 'web', 'git', '/src/web', 'plain', 'main', 0)`)
+			must(`INSERT INTO task_workspaces (org_id, task_id, workspace_id, position) VALUES ('o', 't', 'ws', 1)`)
+			must(`UPDATE teams SET default_workspace_id = 'ws', ship_when_done = TRUE WHERE id = 'tm'`)
+			must(`UPDATE features SET quick = TRUE, ship_when_done = TRUE WHERE id = 'f'`)
+			must(`UPDATE members SET agent = '{"command":"claude"}' WHERE id = 'm'`)
+			for _, q := range []string{
+				`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws2', 'o', 'web', 'git', '/src/x', 'plain', 'main', 0)`,
+				`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws3', 'o', 'svn', 'svn', '/src/x', 'plain', 'main', 0)`,
+				`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws4', 'o', 'pr', 'git', '/src/x', 'merge_queue', 'main', 0)`,
+				`INSERT INTO task_workspaces (org_id, task_id, workspace_id, position) VALUES ('o', 't', 'ws', 2)`,
+			} {
+				if err := exec(q); err == nil {
+					t.Errorf("accepted: %s", q)
+				}
 			}
 		})
 	}
