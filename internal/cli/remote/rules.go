@@ -36,6 +36,8 @@ You are a Member of an Organisation. Darkory holds the shared record of work; yo
   owner judges it.
 - Hand over rather than skip review: when your part is done, ` + "`darkory handover <task> --skill <next skill>`" + `.
   Complete only when no further Skill is needed. No one reviews their own work.
+- A Task's Status moves with your claim, release and complete; name one when you hand over
+  (` + "`--status \"In review\"`" + `; ` + "`darkory workflow`" + ` lists them). ` + "`next`" + ` never offers a Task in the Backlog.
 - Reviewing a proposed Skill version (a Task needing skill-review)? Read it with
   ` + "`darkory proposal show <task>`" + `. Complete the Task to publish it, or hand it back to retro
   with a Note saying what to fix. You cannot review a proposal you wrote.
