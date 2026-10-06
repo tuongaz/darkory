@@ -383,8 +383,10 @@ func tasksByStatus(t *tx) (map[string]int, error) {
 }
 
 // SetTaskStatus moves a Task to another Status of an open kind (ADR 0012, D3): by any Member of
-// its Feature's Team, whether or not someone holds it, since the Status says where the Task is in
-// its workflow and the Claim stays as it is. Naming the Status it is in writes nothing.
+// its Feature's Team, its Feature's owner, or the Member holding it, whether or not someone holds
+// it, since the Status says where the Task is in its workflow and the Claim stays as it is. The
+// holder may be from another Team (a reviewer, the Member a question is aimed at) and still move
+// the card they are working. Naming the Status it is in writes nothing.
 func (s *Service) SetTaskStatus(ctx context.Context, c *auth.Caller, ref, statusRef string, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		taskID, err := resolveTask(ctx, t, c.OrgID, ref)
@@ -396,20 +398,24 @@ func (s *Service) SetTaskStatus(ctx context.Context, c *auth.Caller, ref, status
 			return nil, err
 		}
 		if task.State != "open" {
-			return nil, refuse(CodeConflict, "Task %s is %s, and stays in its Status", task.Key, task.State)
+			return nil, refuse(CodeEnded, "Task %s is %s, and stays in its Status", task.Key, task.State)
 		}
 		f, err := getFeature(ctx, t, c.OrgID, task.FeatureID, t.now)
 		if err != nil {
 			return nil, err
 		}
-		if in, err := inTeam(ctx, t, c.OrgID, f.TeamID, c.MemberID); err != nil {
-			return nil, err
-		} else if !in {
-			team, err := getTeam(ctx, t, c.OrgID, f.TeamID)
-			if err != nil {
+		holder := task.Claim != nil && task.Claim.HolderID == c.MemberID
+		if f.OwnerID != c.MemberID && !holder {
+			if in, err := inTeam(ctx, t, c.OrgID, f.TeamID, c.MemberID); err != nil {
 				return nil, err
+			} else if !in {
+				team, err := getTeam(ctx, t, c.OrgID, f.TeamID)
+				if err != nil {
+					return nil, err
+				}
+				return nil, refuse(CodeForbidden, "only a Member of Team %s, the owner of Feature %s or the holder of Task %s may move it",
+					team.Key, f.Key, task.Key)
 			}
-			return nil, refuse(CodeForbidden, "only a Member of Team %s may move Task %s", team.Key, task.Key)
 		}
 		list, err := listStatuses(ctx, t, c.OrgID)
 		if err != nil {

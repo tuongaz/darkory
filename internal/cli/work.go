@@ -37,7 +37,7 @@ var workCommands = []command{
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Claims, Notes, Evidence and Observations", run: cmdShow},
 	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--status s] [--skill s] [--aimed-at m] [--holder m | --mine]", short: "list Tasks", run: cmdTasks},
-	{path: "status", args: "<task> <status>", short: "move a Task to another Status (a Member of its Feature's Team)", run: cmdStatus},
+	{path: "status", args: "<task> <status>", short: "move a Task to another Status (its Feature's Team or owner, or its holder)", run: cmdStatus},
 	{path: "workflow", short: "list the Organisation's Statuses, in order, with their kinds", run: cmdWorkflow},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
 	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposal written on a Task, or one by id", run: cmdProposalShow},
