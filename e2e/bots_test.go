@@ -232,7 +232,7 @@ func TestBots(t *testing.T) {
 		t.Fatalf("GET /v1/tasks shows the waiting Task as %+v", listed)
 	}
 	if !slices.Contains(takeableKeys(mai), question.Key) {
-		t.Fatalf("mai cannot take the question %s aimed at her", question.Key)
+		t.Fatalf("mai cannot take the question %s aimed at mai", question.Key)
 	}
 	builder := dialAs(t, url, &member{name: asker, token: crew.Members[asker].Token, session: bot.NewSession()})
 	if keys := builder.takeable(); slices.Contains(keys, question.Key) {
