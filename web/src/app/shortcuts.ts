@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { ownsKeys } from "@/lib/keys";
 import { teamTasksPath, useCurrentTeam } from "./currentTeam";
 import { sendIntent } from "./intents";
 import { peekParam, usePeek } from "./peek";
@@ -65,8 +66,8 @@ function inPeek(target: EventTarget | null): boolean {
 }
 
 /**
- * The keys of `shortcutList`. ⌘K (Ctrl K) toggles search; the rest do nothing while typing or
- * while a dialog or a menu is open. J, K, ↓ and ↑ walk the Tasks the page lists (its
+ * The keys of `shortcutList`, none of them while a terminal has the focus. ⌘K (Ctrl K) toggles
+ * search; the rest do nothing while typing or while a dialog or a menu is open. J, K, ↓ and ↑ walk the Tasks the page lists (its
  * `[data-task]` rows), and with the peek open move the peek along them; Enter opens the selected
  * Task's peek. Esc, which closes the peek, is the peek's own.
  */
@@ -117,7 +118,8 @@ export function useShortcuts({
     };
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing) return;
+      // A focused terminal takes every key, ⌘K and Ctrl K too (Ctrl K is the shell's).
+      if (e.defaultPrevented || e.isComposing || ownsKeys(e.target)) return;
       const { navigate, team, taskKey, selected, setSearchOpen, setShortcutsOpen } = latest.current;
       const key = e.key.toLowerCase();
       if (key === "k" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {

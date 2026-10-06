@@ -2,8 +2,10 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach } from "vitest";
 import { FakeEventSource } from "./eventSource";
+import { FakeWebSocket } from "./webSocket";
 
 globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
+globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
 
 // What Radix, cmdk and the Sidebar ask of the browser and jsdom lacks. The window is a desktop
 // one: no media query matches, so the Sidebar is not a sheet.
@@ -33,4 +35,5 @@ Element.prototype.releasePointerCapture ??= () => {};
 afterEach(() => {
   cleanup();
   FakeEventSource.instances = [];
+  FakeWebSocket.instances = [];
 });

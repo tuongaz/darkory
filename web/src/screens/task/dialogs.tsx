@@ -1,8 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
-import { HeartPulseIcon, LinkIcon, MessageSquareIcon } from "lucide-react";
+import { FileTextIcon, HeartPulseIcon, LinkIcon, MessageSquareIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { api, call, type TaskDetail } from "@/api/client";
+import { api, call, type RunnerSession, type TaskDetail } from "@/api/client";
 import { useDirectory, useOpenTasks } from "@/api/queries";
 import { useNow } from "@/clock";
 import { FormDialog } from "@/components/FormDialog";
@@ -248,6 +248,40 @@ export function TakeBackDialog({ detail, open, onOpenChange }: DialogProps) {
       <Field label="Reason" htmlFor="take-back-reason" optional>
         <Textarea id="take-back-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why you took it back" />
       </Field>
+    </FormDialog>
+  );
+}
+
+/** An admin ends the Runner's session on the Task: the Runner releases the Claim with a Note. */
+export function StopSessionDialog({ detail, session, open, onOpenChange }: DialogProps & { session: RunnerSession }) {
+  const { task, status } = detail;
+  const name = useMemberName();
+  const { status: todo, statuses } = useFirstOf("todo");
+  const stop = useMutation({
+    mutationFn: () => call(api.POST("/v1/runner/sessions/{task}/stop", { params: { path: { task: task.id } } })),
+    onSuccess: done(`The session on ${task.key} is stopping`, onOpenChange),
+  });
+  const moves = status.kind === "in_progress" && todo;
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Stop the session on ${task.key}?`}
+      description={task.title}
+      submitLabel="Stop session"
+      destructive
+      onSubmit={() => stop.mutate()}
+      pending={stop.isPending}
+      error={stop.error}
+    >
+      <Consequences>
+        <Consequence mark={<Avatar id={session.member_id} />}>{name(session.member_id)}&apos;s session ends now</Consequence>
+        <Consequence mark={<MessageSquareIcon />}>Its Claim is released, with a Note saying so</Consequence>
+        <Consequence mark={<GlyphOf status={moves ? todo : status} statuses={statuses} />}>
+          {moves ? `Status → ${todo.name}` : `Status stays ${status.name}`}
+        </Consequence>
+        <Consequence mark={<FileTextIcon />}>The session&apos;s log is attached as Evidence</Consequence>
+      </Consequences>
     </FormDialog>
   );
 }

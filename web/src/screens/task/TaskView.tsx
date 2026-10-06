@@ -2,8 +2,8 @@ import { useMutation } from "@tanstack/react-query";
 import { EllipsisIcon, ExternalLinkIcon, MessageSquareIcon, SearchXIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
-import { api, call, isUnauthenticated, ApiError, type TaskDetail } from "@/api/client";
-import { useDirectory } from "@/api/queries";
+import { api, call, isUnauthenticated, ApiError, type RunnerSession, type TaskDetail } from "@/api/client";
+import { useDirectory, useRunnerSession } from "@/api/queries";
 import { teamTasksPath, useReportTeam } from "@/app/currentTeam";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
@@ -21,6 +21,8 @@ import type { TaskActions } from "./actions";
 import { featurePath, taskPath, useMemberName } from "./format";
 import { ProposalCard, RetrospectiveObservations } from "./Proposal";
 import { useTask } from "./queries";
+import { useSessionActions } from "./SessionActions";
+import { SessionPanel } from "./SessionPanel";
 import { useTaskActionsUI } from "./TaskActions";
 import { TaskProperties } from "./TaskProperties";
 import { TaskRecord } from "./TaskRecord";
@@ -34,6 +36,9 @@ export function TaskPage() {
   const ui = useTaskActionsUI(q.data, "default");
   const { teams } = useDirectory();
   const d = q.data;
+  const session = useRunnerSession(d?.task.id);
+  const runner = useSessionActions(d, session);
+  const menu = [...ui.menu, ...(ui.menu.length > 0 && runner.menu.length > 0 ? [<DropdownMenuSeparator key="session-sep" />] : []), ...runner.menu];
   const team = d ? teams.get(d.feature.team_id) : undefined;
   useReportTeam(team?.key, "tasks");
   return (
@@ -48,13 +53,13 @@ export function TaskPage() {
               ]
             : [{ label: "Task" }, { label: ref }]
         }
-        actions={ui.menu.length > 0 && <MoreMenu items={ui.menu} />}
+        actions={menu.length > 0 && <MoreMenu items={menu} />}
         primary={ui.primary}
       />
       {d ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:flex-row lg:overflow-hidden">
           <div className="min-w-0 flex-1 px-6 py-7 lg:overflow-auto lg:px-12">
-            <TaskBody detail={d} actions={ui.actions} heading="h1" />
+            <TaskBody detail={d} actions={ui.actions} heading="h1" session={session} />
           </div>
           <aside aria-label="Properties" className="w-full flex-none border-t p-4 lg:w-[300px] lg:overflow-auto lg:border-t-0 lg:border-l">
             <TaskProperties detail={d} actions={ui.actions} grouped />
@@ -66,6 +71,7 @@ export function TaskPage() {
         </Content>
       )}
       {ui.dialogs}
+      {runner.dialogs}
     </>
   );
 }
@@ -80,6 +86,8 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
   const answering = (useLocation().state as { note?: boolean } | null)?.note === true;
   const ui = useTaskActionsUI(q.data, "xs");
   const d = q.data;
+  const session = useRunnerSession(d?.task.id);
+  const runner = useSessionActions(d, session);
   return (
     <>
       <Peek
@@ -96,6 +104,7 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
             </Link>
           </DropdownMenuItem>,
           ...(ui.menu.length > 0 ? [<DropdownMenuSeparator key="page-sep" />, ...ui.menu] : []),
+          ...(runner.menu.length > 0 ? [<DropdownMenuSeparator key="session-sep" />, ...runner.menu] : []),
         ]}
         actions={ui.primary}
       >
@@ -108,12 +117,14 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
             heading="h2"
             properties={<TaskProperties detail={d} actions={ui.actions} />}
             focusNote={answering}
+            session={session}
           />
         ) : (
           <TaskMissing query={q} />
         )}
       </Peek>
       {ui.dialogs}
+      {runner.dialogs}
     </>
   );
 }
@@ -151,19 +162,24 @@ function TaskMissing({ query }: { query: ReturnType<typeof useTask> }) {
   return isUnauthenticated(query.error) ? null : <Refusal error={query.error} />;
 }
 
-/** What the peek and the page both show: the title, the facts (in the peek), the proposal, the record. */
+/**
+ * What the peek and the page both show: the title, the facts (in the peek), the Runner's session
+ * while it runs one, the proposal, the record.
+ */
 function TaskBody({
   detail,
   actions,
   heading,
   properties,
   focusNote,
+  session,
 }: {
   detail: TaskDetail;
   actions: TaskActions;
   heading: "h1" | "h2";
   properties?: ReactNode;
   focusNote?: boolean;
+  session: RunnerSession | undefined;
 }) {
   const { task, proposal } = detail;
   const H = heading;
@@ -180,6 +196,7 @@ function TaskBody({
         {task.description && <p className="whitespace-pre-wrap">{task.description}</p>}
       </header>
       {properties}
+      {session && <SessionPanel detail={detail} session={session} tall={heading === "h1"} />}
       {proposal && <ProposalCard detail={detail} proposal={proposal} />}
       {task.kind === "retrospective" && <RetrospectiveObservations detail={detail} />}
       <section aria-label="Activity" className="flex flex-col gap-2">
