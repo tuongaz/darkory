@@ -37,10 +37,13 @@ export function useStatuses() {
   });
 }
 
-/** The ids of the Tasks the signed-in Member can take now: Claim shows only on those. */
+/**
+ * The ids of the Tasks the signed-in Member can take now: Claim shows only on those. Its own key
+ * under the `takeable` root: the Inbox caches the Tasks themselves under `keys.takeable`.
+ */
 export function useTakeable() {
   return useQuery({
-    queryKey: keys.takeable,
+    queryKey: [...keys.takeable, { ids: true }],
     queryFn: () => call(api.GET("/v1/tasks/takeable", { params: { query: { limit: 500 } } })).then((r) => new Set(r.items.map((t) => t.id))),
   });
 }

@@ -184,3 +184,37 @@ describe("the Task peek", () => {
     expect(screen.getByRole("heading", { name: "Tasks, board" })).toBeInTheDocument();
   });
 });
+
+describe("screens share one query cache", () => {
+  it("a Task opened from ⌘K after the Inbox renders, and G B still opens the board", async () => {
+    const checkout = feature(1, 1, { title: "Checkout flow" });
+    const cart = task(3, checkout.id, { title: "Build the cart page", status_id: "st-todo" });
+    const statuses = [
+      { id: "st-todo", name: "Todo", kind: "todo", position: 1 },
+      { id: "st-done", name: "Done", kind: "done", position: 2 },
+    ];
+    mockApi({
+      ...signedIn(),
+      "GET /v1/statuses": { items: statuses },
+      "GET /v1/features": { items: [checkout] },
+      "GET /v1/tasks": { items: [cart] },
+      // The Inbox and the Task page both read what the caller can take.
+      "GET /v1/tasks/takeable": { items: [cart] },
+      "GET /v1/tasks/:task": { task: cart, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+      "GET /v1/teams/:team": { team: web, members: [me().member] },
+      "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
+    });
+    renderApp("/inbox");
+    await screen.findByRole("heading", { name: "Inbox" });
+    await waitFor(() => expect(screen.queryByText(/Loading/)).not.toBeInTheDocument());
+
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "WEB-3");
+    await userEvent.click(await within(search).findByRole("option", { name: /WEB-3 Build the cart page/ }));
+    expect(await screen.findByRole("heading", { name: "Build the cart page", level: 1 })).toBeInTheDocument();
+
+    await userEvent.keyboard("gb");
+    expect(await screen.findByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Web/Tasks");
+  });
+});

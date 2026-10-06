@@ -55,7 +55,10 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   current Team's board. They are ignored while typing or while a dialog is open.
 - **Live data**: every query key's first element names what it reads (`src/api/queries.ts`); an
   Activity entry marks the matching queries stale, so open views refetch without reloading. Put a
-  new query under an existing root (`["tasks", …]`) and it stays live.
+  new query under an existing root (`["tasks", …]`) and it stays live. Screens share one cache:
+  a key holds one shape everywhere. Reading the same endpoint into a different shape takes its
+  own key under the root (`[...keys.takeable, { ids: true }]`) or `select`, never the shared key
+  with another `queryFn`.
 - **Shared reads** in `@/api/queries`: `useMe`, `useMembers`, `useTeams`, `useSkills`,
   `useDirectory` (by id), `useOpenTasks` (every open Task: the sidebar's live count),
   `useAllTasks`, `useAllFeatures` (⌘K). `@/work`: `liveClaim`, `boundTo`, `liveAgents`,
