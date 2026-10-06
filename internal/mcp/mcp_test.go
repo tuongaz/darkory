@@ -165,7 +165,7 @@ func TestToolsAndRules(t *testing.T) {
 	}
 	for _, want := range []string{"next", "takeable", "claim", "heartbeat", "release", "handover", "complete", "note", "observe",
 		"attach_evidence", "file_task", "block", "unblock", "show_task", "list_tasks", "feature_show", "observations",
-		"skill_show", "propose_skill_version", "show_proposal", "me", "activity"} {
+		"skill_show", "propose_skill_version", "show_proposal", "me", "activity", "set_status", "workflow"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("no tool %s in %v", want, names)
 		}
