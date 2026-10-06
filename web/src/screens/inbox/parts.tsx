@@ -1,12 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { Link, type To } from "react-router";
+import { Link, useNavigate, type To } from "react-router";
 import { api, call, type Feature, type Task } from "@/api/client";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { Button } from "@/components/ui/button";
+import { usePeekLink } from "@/app/peek";
 import { cn } from "@/lib/utils";
 import { startOfDay } from "./derive";
 import { refusalToast } from "./toast";
@@ -101,6 +102,37 @@ export function ClaimButton({ task, primary }: { task: Task; primary?: boolean }
       onClick={() => claim.mutate()}
     >
       Claim
+    </Button>
+  );
+}
+
+/**
+ * Answers a question aimed at me: claims it, then opens its peek with the Note composer focused
+ * and Complete as the primary. The row moves to Held by me. A refusal is a toast.
+ */
+export function AnswerButton({ task, primary }: { task: Task; primary?: boolean }) {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const peek = usePeekLink();
+  const answer = useMutation({
+    mutationFn: () => call(api.POST("/v1/tasks/{task}/claim", { params: { path: { task: task.key } }, body: {} })),
+    onSuccess: () => {
+      // The Claim's Activity refreshes these too; not waiting for it puts the composer up at once.
+      for (const root of ["tasks", "task", "takeable"]) void qc.invalidateQueries({ queryKey: [root] });
+      navigate(peek(task.key), { state: { note: true } });
+    },
+    onError: refusalToast,
+  });
+  return (
+    <Button
+      size="xs"
+      variant={primary ? "default" : "outline"}
+      className="relative z-10"
+      disabled={answer.isPending}
+      aria-label={`Answer ${task.key}`}
+      onClick={() => answer.mutate()}
+    >
+      Answer
     </Button>
   );
 }

@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { EllipsisIcon, MessageSquareIcon, SearchXIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { api, call, isUnauthenticated, ApiError, type TaskDetail } from "@/api/client";
 import { useDirectory } from "@/api/queries";
 import { teamTasksPath, useReportTeam } from "@/app/currentTeam";
@@ -76,6 +76,8 @@ export function TaskPage() {
  */
 export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () => void }) {
   const q = useTask(taskKey);
+  // Opened to answer it (the Inbox's Answer claims it first): the Note composer takes the focus.
+  const answering = (useLocation().state as { note?: boolean } | null)?.note === true;
   const ui = useTaskActionsUI(q.data, "xs");
   const d = q.data;
   return (
@@ -97,7 +99,14 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
       >
         {d ? (
           // Keyed, so a Note being written stays with its Task when J or K moves the peek on.
-          <TaskBody key={d.task.id} detail={d} actions={ui.actions} heading="h2" properties={<TaskProperties detail={d} actions={ui.actions} />} />
+          <TaskBody
+            key={d.task.id}
+            detail={d}
+            actions={ui.actions}
+            heading="h2"
+            properties={<TaskProperties detail={d} actions={ui.actions} />}
+            focusNote={answering}
+          />
         ) : (
           <TaskMissing query={q} />
         )}
@@ -146,11 +155,13 @@ function TaskBody({
   actions,
   heading,
   properties,
+  focusNote,
 }: {
   detail: TaskDetail;
   actions: TaskActions;
   heading: "h1" | "h2";
   properties?: ReactNode;
+  focusNote?: boolean;
 }) {
   const { task, proposal } = detail;
   const H = heading;
@@ -172,7 +183,7 @@ function TaskBody({
       <section aria-label="Activity" className="flex flex-col gap-2">
         <SectionHeader title="Activity" />
         <TaskRecord detail={detail} />
-        {actions.notes && "composer" in actions.notes && <NoteComposer detail={detail} />}
+        {actions.notes && "composer" in actions.notes && <NoteComposer detail={detail} autoFocus={focusNote} />}
         {actions.notes && "onlyHolder" in actions.notes && <OnlyHolder holder={actions.notes.onlyHolder} />}
       </section>
     </div>
@@ -180,7 +191,7 @@ function TaskBody({
 }
 
 /** The holder's Note: the running log a Handover carries to the next Member. */
-function NoteComposer({ detail }: { detail: TaskDetail }) {
+function NoteComposer({ detail, autoFocus }: { detail: TaskDetail; autoFocus?: boolean }) {
   const [body, setBody] = useState("");
   const add = useMutation({
     mutationFn: () => call(api.POST("/v1/tasks/{task}/notes", { params: { path: { task: detail.task.id } }, body: { body: body.trim() } })),
@@ -196,6 +207,7 @@ function NoteComposer({ detail }: { detail: TaskDetail }) {
     >
       <Textarea
         aria-label="Note"
+        autoFocus={autoFocus}
         value={body}
         onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => {

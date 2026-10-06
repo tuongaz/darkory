@@ -11,13 +11,12 @@ import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
 import { blocksOf, featureBar, skillOf, featuresIOwn, myProposals, retrospectivesIn, takeableNow, type OwnedFeature } from "./derive";
-import { ClaimButton, FeatureCell, GroupHeader, KindPill, NoneLine, RowLink, ShortTime, StatusCell } from "./parts";
+import { AnswerButton, ClaimButton, FeatureCell, GroupHeader, KindPill, NoneLine, RowLink, ShortTime, StatusCell } from "./parts";
 import { useAimedAt, useFeatureMap, useHeldBy, useOwnedFeatures, useStatuses, useTakeable, useTaskDetails, type StatusView } from "./queries";
 
 // Kit `.irow`: Status · key · title · marks · Feature · from / Skill · time · action. On a phone a
@@ -48,7 +47,9 @@ export function InboxPage() {
   const failed = reads.find((q) => q.isError);
   const loading = reads.some((q) => q.isPending);
 
-  const aimedAtMe = aimed.data ?? [];
+  const now = useNow();
+  // A question I have claimed to answer is held by me, and listed there.
+  const aimedAtMe = (aimed.data ?? []).filter((t) => liveClaim(t, now)?.holder_id !== id);
   const heldByMe = held.data ?? [];
   const { shown: takeNow, total: takeTotal } = takeableNow(takeable.data ?? [], aimedAtMe);
   const mine = featuresIOwn(owned.data ?? [], open.data ?? []);
@@ -199,7 +200,7 @@ export function TaskRow({
   );
 }
 
-/** A question or Escalation aimed at me: its text, what it blocks, who asked; Answer opens it. */
+/** A question or Escalation aimed at me: its text, what it blocks, who asked; Answer claims and opens it. */
 function AimedRow({
   task,
   status,
@@ -215,7 +216,6 @@ function AimedRow({
   blocks: Task[];
   primary: boolean;
 }) {
-  const peek = usePeekLink();
   const question = task.description.split("\n").find((l) => l.trim());
   return (
     <TaskRow
@@ -241,13 +241,7 @@ function AimedRow({
         )
       }
       when={task.created_at}
-      action={
-        <Button asChild size="xs" variant={primary ? "default" : "outline"} className="relative z-10">
-          <Link to={peek(task.key)} aria-label={`Answer ${task.key}`}>
-            Answer
-          </Link>
-        </Button>
-      }
+      action={<AnswerButton task={task} primary={primary} />}
     />
   );
 }

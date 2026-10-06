@@ -116,7 +116,7 @@ describe("the Inbox", () => {
     expect(within(aimed).getByText("Stripe keys for staging?")).toBeInTheDocument();
     expect(within(aimed).getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toBeInTheDocument();
     expect(within(aimed).getByText(/blocks WEB-3/)).toBeInTheDocument();
-    expect(within(aimed).getByRole("link", { name: "Answer WEB-8" })).toHaveAttribute("href", "/inbox?task=WEB-8");
+    expect(within(aimed).getByRole("button", { name: "Answer WEB-8" })).toBeInTheDocument();
 
     const held = await section("Held by me");
     expect(within(held).getByText("Session expiry")).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("the Inbox", () => {
     const order = within(screen.getByRole("main")).getAllByRole("region").map((r) => r.getAttribute("aria-label"));
     expect(order).toEqual(["Aimed at me", "Held by me", "Takeable now", "Features I own", "My proposals"]);
     // Answer is the page's one primary.
-    expect(screen.getAllByRole("link", { name: /^Answer/ })[0]).toHaveAttribute("data-variant", "default");
+    expect(screen.getAllByRole("button", { name: /^Answer/ })[0]).toHaveAttribute("data-variant", "default");
   });
 
   it("says in one line that nothing is aimed at me and I hold nothing, and leads with what I can take", async () => {
@@ -167,6 +167,33 @@ describe("the Inbox", () => {
     renderApp("/inbox");
     await userEvent.click(await screen.findByRole("button", { name: "Claim WEB-2" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-2/claim")).toBe(true));
+  });
+
+  it("Answer claims the question and opens it to write the Note, Complete first; the row moves to Held by me", async () => {
+    const checkout = feature(1, 2);
+    const question = task(8, checkout.id, { title: "Stripe keys for staging?", skill_id: undefined, aimed_at_id: ada.id, filed_by: builder.id });
+    const api = inboxApi({
+      tasks: [question],
+      features: [checkout],
+      takeable: [question],
+      details: { "WEB-8": { feature: checkout, status: { id: "st-todo", name: "Todo", kind: "todo", position: 2 }, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] } },
+    });
+    api.routes["POST /v1/tasks/:task/claim"] = () => {
+      question.claim = claim(question.id, ada.id);
+      return question;
+    };
+    renderApp("/inbox");
+
+    await userEvent.click(await screen.findByRole("button", { name: "Answer WEB-8" }));
+    expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-8/claim")).toBe(true);
+    const peek = await screen.findByRole("dialog", { name: "Task WEB-8" });
+    await waitFor(() => expect(within(peek).getByRole("textbox", { name: "Note" })).toHaveFocus());
+    expect(within(peek).getByRole("button", { name: "Complete" })).toBeInTheDocument();
+    expect(within(peek).queryByRole("button", { name: "Claim" })).not.toBeInTheDocument();
+
+    const held = await section("Held by me");
+    expect(within(held).getByText("Stripe keys for staging?")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Aimed at me" })).not.toBeInTheDocument();
   });
 
   it("keeps the Inbox heading for a Member with nothing at all", async () => {

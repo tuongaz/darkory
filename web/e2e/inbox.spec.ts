@@ -144,7 +144,7 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   await expect(aimed.getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toBeVisible();
   await expect(aimed.getByText(`blocks ${cart}`)).toBeVisible();
   await expect(aimed.getByText("inbox-builder")).toBeVisible();
-  await expect(aimed.getByRole("link", { name: `Answer ${key}` })).toHaveAttribute("href", `/inbox?task=${key}`);
+  await expect(aimed.getByRole("button", { name: `Answer ${key}` })).toBeVisible();
   await notReloaded(page);
   await shot(page, "inbox-aimed");
 
@@ -169,6 +169,16 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   await shot(page, "agent-peek");
   await peek.getByRole("link", { name: /^Activity · \d+ entries/ }).click();
   await expect(page).toHaveURL(`${base()}/activity?member=inbox-builder`);
+
+  // Answer claims the question and opens it to write the Note, with Complete as the primary.
+  await page.goto(`${base()}/inbox`);
+  await page.getByRole("region", { name: "Aimed at me" }).getByRole("button", { name: `Answer ${key}` }).click();
+  const answer = page.getByRole("dialog", { name: `Task ${key}` });
+  await expect(answer.getByRole("textbox", { name: "Note" })).toBeFocused();
+  await expect(answer.getByRole("button", { name: "Complete" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Held by me" }).getByText("Stripe keys for staging?")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Aimed at me" })).toHaveCount(0);
+  await shot(page, "inbox-answer");
   expect(errors).toEqual([]);
 });
 
