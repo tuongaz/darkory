@@ -12,6 +12,10 @@ const startTimeoutMs = 60_000;
  * just built), runs `darkory init` in a fresh data directory, and starts `darkory serve` on a free
  * port. The startup login link printed on stdout and the address it names reach the tests through
  * the environment. The returned function stops the server and removes the directories.
+ *
+ * A spec that starts an Install of its own with this restores every variable it sets
+ * (DARKORY_E2E_LOGIN_LINK, _BASE_URL, _DATA and _ADMIN_TOKEN) afterwards: the specs after it in
+ * the same worker talk to the shared Install.
  */
 export default async function startServer(): Promise<() => Promise<void>> {
   const bin = mkdtempSync(join(tmpdir(), "darkory-e2e-bin-"));

@@ -12,7 +12,7 @@ test.describe.configure({ mode: "serial" });
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const shots = fileURLToPath(new URL("./screenshots/board/", import.meta.url));
-const env = ["DARKORY_E2E_LOGIN_LINK", "DARKORY_E2E_BASE_URL", "DARKORY_E2E_DATA"] as const;
+const env = ["DARKORY_E2E_LOGIN_LINK", "DARKORY_E2E_BASE_URL", "DARKORY_E2E_DATA", "DARKORY_E2E_ADMIN_TOKEN"] as const;
 
 let stop: (() => Promise<void>) | undefined;
 let base = "";
