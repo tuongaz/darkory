@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { Activity } from "@/api/client";
 import { mockApi } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
-import { bob, builder, feature, me, signedIn, task, web } from "@/test/fixtures";
+import { ada, bob, builder, feature, me, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { sendIntent } from "./intents";
 
@@ -141,7 +141,87 @@ describe("keys", () => {
     await userEvent.click(within(sidebar()).getByRole("button", { name: /Search/ }));
     const search = await screen.findByRole("dialog", { name: "Search" });
     expect(within(search).getByRole("option", { name: /File a Task/ })).toBeInTheDocument();
-    expect(within(search).getByRole("option", { name: /Go to Web › Tasks board/ })).toBeInTheDocument();
+    const goTo = within(search).getByRole("group", { name: "Go to" });
+    const places = within(goTo).getAllByRole("option").map((o) => o.textContent?.replace(/[GIMAB]+$/, ""));
+    expect(places).toEqual([
+      "Inbox",
+      "My work",
+      "Agents",
+      "Activity",
+      "Ops › Tasks",
+      "Ops › Features",
+      "Web › Tasks",
+      "Web › Tasks board",
+      "Web › Features",
+      "Admin › Members",
+      "Admin › Teams",
+      "Admin › Skills",
+      "Admin › Workflow",
+      "Account",
+    ]);
+  });
+
+  it("⌘K puts the record whose key is typed whole first, whichever group holds it", async () => {
+    const checkout = feature(1, 1, { title: "Checkout" });
+    mockApi({
+      ...records(),
+      "GET /v1/features": { items: [checkout] },
+      "GET /v1/tasks": { items: [10, 11, 12].map((n) => task(n, checkout.id, { title: `Polish ${n}` })) },
+    });
+    renderApp("/inbox");
+    await screen.findByRole("navigation", { name: "Main" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "WEB-1");
+    await within(search).findByRole("option", { name: /WEB-1 Checkout/ });
+
+    expect([...search.querySelectorAll("[cmdk-group-heading]")].map((h) => h.textContent)).toEqual(["Features", "Tasks"]);
+    const options = within(search).getAllByRole("option");
+    expect(options[0]).toHaveTextContent(/^WEB-1\s*Checkout/);
+    expect(options[0]).toHaveAttribute("aria-selected", "true");
+    expect(options.slice(1).map((o) => /WEB-\d+/.exec(o.textContent ?? "")?.[0])).toEqual(["WEB-10", "WEB-11", "WEB-12"]);
+  });
+
+  it("⌘K finds Members: an agent opens its peek on Agents, a human their Member page for an admin", async () => {
+    mockApi({
+      ...records(),
+      "GET /v1/members/:member": ({ params }: { params: Record<string, string> }) => ({
+        member: [ada, bob, builder].find((m) => m.id === params.member || m.name === params.member),
+        teams: [web],
+        skills: [],
+        reports: [],
+      }),
+      "GET /v1/members/:member/tokens": { items: [] },
+      "GET /v1/members/:member/sessions": { items: [] },
+      "GET /v1/activity": { items: [], last_seq: 0 },
+    });
+    renderApp("/inbox");
+    await screen.findByRole("navigation", { name: "Main" });
+
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    let search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "builder");
+    await userEvent.click(await within(search).findByRole("option", { name: /builder.*Agent/ }));
+    expect(await screen.findByRole("dialog", { name: "Agent builder" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Agents" })).toBeInTheDocument();
+
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "bob");
+    await userEvent.click(await within(search).findByRole("option", { name: /bob.*Human/ }));
+    await waitFor(() => expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent(/Admin.*Members.*bob/));
+  });
+
+  it("⌘K offers no Admin pages and no human Members to a Member who is not an admin", async () => {
+    mockApi({ ...records(), "GET /v1/me": me(bob) });
+    renderApp("/inbox");
+    await screen.findByRole("link", { name: "Account, bob" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "a");
+    await within(search).findByRole("option", { name: /Agents/ });
+    expect(within(search).queryByRole("option", { name: /Admin ›/ })).not.toBeInTheDocument();
+    expect(within(search).queryByRole("option", { name: /ada/ })).not.toBeInTheDocument();
   });
 
   it("C opens File Task, and not while typing", async () => {

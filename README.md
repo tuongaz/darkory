@@ -31,7 +31,7 @@ bin/darkory feature create --team WEB --title "Login page"   # files its Break d
 
 | Key | Does |
 |---|---|
-| ⌘K / Ctrl K | Search Tasks and Features, and run an action |
+| ⌘K / Ctrl K | Search Tasks, Features and Members; go to a page; file a Task or a Feature |
 | C | File a Task |
 | G then I, M, A, B | Go to the Inbox, My work, Agents, the current Team's board |
 | J or ↓, K or ↑ | On a Team's Tasks (list or board): move to the next or previous Task; with its peek open, show that Task in it |
