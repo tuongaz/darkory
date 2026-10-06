@@ -23,6 +23,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import type { Task } from "@/api/client";
 import { usePeekLink } from "@/app/peek";
+import { useSelectedTask } from "@/app/selection";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { StatusGlyph } from "@/components/StatusGlyph";
@@ -113,7 +114,8 @@ export function TaskBoard({
         },
       }}
     >
-      <div className="flex min-h-full w-max items-stretch gap-3 p-4">
+      {/* While a card is carried the keys are the drag's, not the shell's (J, K, the arrows). */}
+      <div className="flex min-h-full w-max items-stretch gap-3 p-4" data-dragging={active ? "" : undefined}>
         {columns.map((c) => (
           <BoardColumn
             key={c.status.id}
@@ -187,6 +189,8 @@ function BoardColumn({
 
 function TaskCard({ task, model }: { task: Task; model: BoardModel }) {
   const peek = usePeekLink();
+  // The keys' ring: the card walked to, or the one whose peek is open.
+  const selected = useSelectedTask() === task.key;
   // A Member of the Team, the Feature's owner or the holder moves an open Task; an ended one stays.
   const movable = model.canMove(task);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id, disabled: !movable });
@@ -199,8 +203,14 @@ function TaskCard({ task, model }: { task: Task; model: BoardModel }) {
       aria-label={`${task.key} ${task.title}`}
       data-task={task.key}
       data-movable={movable}
+      data-selected={selected || undefined}
       {...(movable ? { ...dragAttributes, ...listeners } : {})}
-      className={cn("block rounded-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none", movable && "touch-manipulation", isDragging && "opacity-40")}
+      className={cn(
+        "block rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        selected && "ring-2 ring-ring",
+        movable && "touch-manipulation",
+        isDragging && "opacity-40",
+      )}
     >
       <CardBody task={task} model={model} />
     </Link>

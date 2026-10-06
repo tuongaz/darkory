@@ -3,6 +3,7 @@ import { LayersIcon } from "lucide-react";
 import { Link } from "react-router";
 import type { Task } from "@/api/client";
 import { usePeekLink } from "@/app/peek";
+import { useSelectedTask } from "@/app/selection";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
@@ -78,6 +79,8 @@ function GroupHeader({ group: g, model }: { group: Group; model: BoardModel }) {
 
 function TaskRow({ task, model }: { task: Task; model: BoardModel }) {
   const peek = usePeekLink();
+  // The keys' ring: the row walked to, or the one whose peek is open.
+  const selected = useSelectedTask() === task.key;
   const ended = task.state !== "open";
   const feature = featureOf(model, task);
   const holder = holderOf(task, model);
@@ -94,10 +97,12 @@ function TaskRow({ task, model }: { task: Task; model: BoardModel }) {
       to={peek(task.key)}
       aria-label={`${task.key} ${task.title}`}
       data-task={task.key}
+      data-selected={selected || undefined}
       className={cn(
         rowGrid,
         "h-9 items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
         ended && "text-muted-foreground",
+        selected && "ring-2 ring-ring ring-inset",
       )}
     >
       <StatusGlyph glyph={model.glyphs.get(task.status_id) ?? "todo"} label={status?.name} />

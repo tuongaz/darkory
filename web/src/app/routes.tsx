@@ -34,7 +34,8 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route
-        element={<Shell dialogs={<BoardDialogs />} peek={(taskKey, close) => <TaskPeek key={taskKey} taskKey={taskKey} onClose={close} />} />}
+        // One peek for every Task it shows: J and K move it along the list without opening a new sheet.
+        element={<Shell dialogs={<BoardDialogs />} peek={(taskKey, close) => <TaskPeek taskKey={taskKey} onClose={close} />} />}
       >
         <Route index element={<Navigate to="/inbox" replace />} />
         <Route path="inbox" element={<InboxRoute />} />

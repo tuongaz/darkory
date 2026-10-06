@@ -69,7 +69,10 @@ export function TaskPage() {
   );
 }
 
-/** The Task opened over any page by ?task=<key>; the shell mounts it and closes it by dropping the parameter (F-T1). */
+/**
+ * The Task opened over any page by ?task=<key>; the shell mounts it and closes it by dropping the
+ * parameter (F-T1). The same sheet shows the next Task when the key changes.
+ */
 export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () => void }) {
   const q = useTask(taskKey);
   const ui = useTaskActionsUI(q.data, "xs");
@@ -92,7 +95,8 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
         }
       >
         {d ? (
-          <TaskBody detail={d} actions={ui.actions} heading="h2" properties={<TaskProperties detail={d} actions={ui.actions} />} />
+          // Keyed, so a Note being written stays with its Task when J or K moves the peek on.
+          <TaskBody key={d.task.id} detail={d} actions={ui.actions} heading="h2" properties={<TaskProperties detail={d} actions={ui.actions} />} />
         ) : (
           <TaskMissing query={q} />
         )}

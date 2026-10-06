@@ -134,6 +134,34 @@ test("the shell: sign in, the checklist, live updates, keys, the peek, a phone",
     await expect(page.getByRole("heading", { name: "Tasks, board" })).toBeVisible();
   });
 
+  await test.step("J walks the list, Enter opens the peek beside it, Esc returns to the row; G I and ? answer", async () => {
+    await page.goto(`${base()}/teams/WEB/tasks?view=list`);
+    const row = page.locator("#main [data-task=WEB-2]");
+    await expect(row).toBeVisible();
+    await page.keyboard.press("j");
+    await expect(row).toHaveAttribute("data-selected", "true");
+    await expect(row).toBeFocused();
+    await page.keyboard.press("Enter");
+    const peek = page.getByRole("dialog", { name: "Task WEB-2" });
+    await expect(peek).toBeVisible();
+    // Not modal: no scrim, and the row under it keeps the ring.
+    await expect(page.locator("[data-slot=sheet-overlay]")).toHaveCount(0);
+    await expect(row).toHaveAttribute("data-selected", "true");
+    await shot(page, "peek-keys");
+    await page.keyboard.press("Escape");
+    await expect(peek).toHaveCount(0);
+    await expect(row).toBeFocused();
+
+    await page.keyboard.press("?");
+    const keys = page.getByRole("dialog", { name: "Shortcuts" });
+    await expect(keys.getByText("Go to Inbox")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(keys).toHaveCount(0);
+    await page.keyboard.press("g");
+    await page.keyboard.press("i");
+    await expect(page).toHaveURL(`${base()}/inbox`);
+  });
+
   await test.step("?task= opens the peek over the board, and the page from it", async () => {
     await page.goto(`${base()}/teams/WEB/tasks?view=board&task=WEB-2`);
     const peek = page.getByRole("dialog", { name: "Task WEB-2" });

@@ -52,8 +52,16 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   `teamFeaturesPath(team)`.
 - **Toasts**: `import { toast } from "sonner"`; the shell mounts the Toaster. A refused drag is a
   toast naming the resolving action ("Claim WEB-17").
-- **Keys** the design claims, and no others: ⌘K / Ctrl K search, C file a Task, G then B the
-  current Team's board. They are ignored while typing or while a dialog is open.
+- **Keys** (`shortcutList` in `@/app/shortcuts`, which the ? sheet lists), and no others: ⌘K /
+  Ctrl K search, C file a Task, G then I / M / A / B the Inbox, My work, Agents and the last
+  Team's board, ? the shortcuts; on a list of Tasks J / ↓ and K / ↑ move the ring, Enter opens the
+  ringed Task's peek, Esc closes it and returns the focus to its row, and with the peek open J and
+  K move it along the list. They are ignored while typing, while a dialog or a menu is open, and
+  while a card is carried; the peek is not modal and does not count.
+- **Selection** (`@/app/selection`): a page joins the walk by marking each Task row or card
+  `data-task={key}` inside `#main`, in the order it shows them, and drawing the ring
+  (`ring-2 ring-ring`) where `useSelectedTask() === key`: the Task walked to or focused, or the
+  one whose peek is open.
 - **Live data**: every query key's first element names what it reads (`src/api/queries.ts`); an
   Activity entry marks the matching queries stale, so open views refetch without reloading. Put a
   new query under an existing root (`["tasks", …]`) and it stays live. Screens share one cache:
@@ -76,7 +84,7 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | `TeamMark team size` | `.team-dot` | A Team's lettered square, coloured by its key. |
 | `PageHeader title mark meta actions` | `.page-h1` | The head of a record page. `SectionHeader title count actions` heads a section. |
 | `PropertiesRail compact` + `Property label stack` + `PropertyButton` | `.props`, `.prop-btn` | A record's facts: label column, value column. `compact` for the 300px rail. |
-| `Peek open onOpenChange label heading menu actions` | `.sheet` | The 560px sheet from the right with the key, the ⋯ menu (pass `DropdownMenuItem`s as `menu`) and ×. |
+| `Peek open onOpenChange label heading menu actions` | `.sheet` | The 560px sheet from the right with the key, the ⋯ menu (pass `DropdownMenuItem`s as `menu`) and ×. Not modal: no scrim, the page beside it keeps working; Esc and × close it. |
 | `FormDialog title description hint submitLabel onSubmit pending error size` + `FormRows`, `FormRow label htmlFor help` | `.dialog`, `.dform` | A dialog that does one thing: one label column, one control column (320px), Cancel and the one primary; the refusal shows above the footer. `size` `sm` 480 · `md` 560 · `lg` 600. |
 | `Timeline` + `TimelineDay` + `TimelineRow who when` + `SystemMark` | `.tl` | Activity and a Task's record. `SystemMark` stands for Darkory when no Member acted (a lapse). |
 | `EmptyState icon title action` | `.empty` | A heading of at most three words and the one next thing. |

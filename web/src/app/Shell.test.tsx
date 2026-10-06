@@ -172,6 +172,106 @@ describe("keys", () => {
   });
 });
 
+describe("walking the Tasks with the keys", () => {
+  const statuses = [
+    { id: "st-todo", name: "Todo", kind: "todo", position: 1 },
+    { id: "st-done", name: "Done", kind: "done", position: 2 },
+  ];
+  const checkout = feature(1, 1, { title: "Checkout flow" });
+  const tasks = [3, 6, 8].map((n, i) => task(n, checkout.id, { title: `Task ${n}`, waiting_since: `2026-10-01T09:0${i}:00Z` }));
+  const records = () => ({
+    ...signedIn(),
+    "GET /v1/statuses": { items: statuses },
+    "GET /v1/features": { items: [checkout] },
+    "GET /v1/tasks": { items: tasks },
+    "GET /v1/tasks/takeable": { items: [] },
+    "GET /v1/activity": { items: [], last_seq: 0 },
+    "GET /v1/tasks/:task": ({ params }: { params: Record<string, string> }) => {
+      const t = tasks.find((x) => x.key === params.task)!;
+      return { task: t, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] };
+    },
+    "GET /v1/teams/:team": { team: web, members: [me().member] },
+    "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
+  });
+  const rows = () => [...document.querySelectorAll<HTMLElement>("#main [data-task]")];
+  const ringed = () => rows().filter((r) => r.dataset.selected === "true").map((r) => r.dataset.task);
+
+  it("J, K and the arrows move a ring along the list; Enter opens the peek, which leaves the list working; Esc returns to the row", async () => {
+    mockApi(records());
+    renderApp("/teams/WEB/tasks?view=list");
+    await screen.findByRole("link", { name: /WEB-8 Task 8/ });
+    const [first, second, third] = rows().map((r) => r.dataset.task!);
+    expect(ringed()).toEqual([]);
+
+    await userEvent.keyboard("j");
+    expect(ringed()).toEqual([first]);
+    expect(rows()[0]).toHaveClass("ring-2", "ring-ring");
+    expect(rows()[0]).toHaveFocus();
+    await userEvent.keyboard("j");
+    expect(ringed()).toEqual([second]);
+    await userEvent.keyboard("k");
+    expect(ringed()).toEqual([first]);
+    await userEvent.keyboard("{ArrowDown}");
+    expect(ringed()).toEqual([second]);
+
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("dialog", { name: `Task ${second}` })).toBeInTheDocument();
+    // No scrim: the row under the peek keeps its ring, and the list stays clickable.
+    expect(document.querySelector("[data-slot=sheet-overlay]")).toBeNull();
+    expect(ringed()).toEqual([second]);
+    await userEvent.click(rows()[2]);
+    expect(await screen.findByRole("dialog", { name: `Task ${third}` })).toBeInTheDocument();
+    expect(ringed()).toEqual([third]);
+
+    // Inside the peek, K and J step it along the list behind it.
+    await userEvent.keyboard("k");
+    expect(await screen.findByRole("dialog", { name: `Task ${second}` })).toBeInTheDocument();
+    expect(ringed()).toEqual([second]);
+    await userEvent.keyboard("k");
+    expect(await screen.findByRole("dialog", { name: `Task ${first}` })).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(rows()[0]).toHaveFocus());
+    expect(ringed()).toEqual([first]);
+  });
+
+  it("G I, G M and G A go to the Inbox, My work and Agents; ? lists the keys", async () => {
+    mockApi(records());
+    renderApp("/activity");
+    await screen.findByRole("heading", { name: "Activity" });
+
+    await userEvent.keyboard("gm");
+    expect(await screen.findByRole("heading", { name: "My work" })).toBeInTheDocument();
+    await userEvent.keyboard("ga");
+    expect(await screen.findByRole("heading", { name: "Agents" })).toBeInTheDocument();
+    await userEvent.keyboard("gi");
+    expect(await screen.findByRole("heading", { name: "Inbox" })).toBeInTheDocument();
+
+    await userEvent.keyboard("?");
+    const sheet = await screen.findByRole("dialog", { name: "Shortcuts" });
+    const listed = within(sheet).getAllByRole("term").map((t) => t.textContent);
+    expect(listed).toEqual([
+      "Search",
+      "File a Task",
+      "Go to Inbox",
+      "Go to My work",
+      "Go to Agents",
+      "Go to the board",
+      "Shortcuts",
+      "Next Task",
+      "Previous Task",
+      "Open the Task",
+      "Close the Task",
+    ]);
+    // While it is open the keys are its own.
+    await userEvent.keyboard("c");
+    expect(screen.queryByRole("dialog", { name: "File a Task" })).not.toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+});
+
 describe("the Task peek", () => {
   it("opens over the page for ?task= and closes back to it", async () => {
     mockApi(signedIn());

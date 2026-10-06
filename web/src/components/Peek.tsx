@@ -6,7 +6,9 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
 /**
  * A record opened over the list it was picked from (kit `.sheet`): a 560px Sheet from the right,
- * a 44px header with the record's key, its ⋯ menu and ×, and a scrolling body.
+ * a 44px header with the record's key, its ⋯ menu and ×, and a scrolling body. It is not modal:
+ * no scrim, and the list beside it stays clickable and walkable with the keys (a click there opens
+ * another record rather than closing this one). Esc and × close it.
  *
  * `label` names the sheet for screen readers ("WEB-3 Build the cart page"); `menu` is the ⋯
  * menu's items (DropdownMenuItem elements) and is absent when there are none.
@@ -29,12 +31,16 @@ export function Peek({
   children: ReactNode;
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
         side="right"
         showCloseButton={false}
+        data-peek=""
         className="w-full gap-0 outline-none sm:max-w-[560px]"
         aria-describedby={undefined}
+        onInteractOutside={(e) => e.preventDefault()}
+        // Whoever opened the record returns the focus (the shell, to the Task's row).
+        onCloseAutoFocus={(e) => e.preventDefault()}
         // The sheet itself takes focus, not its first button: Enter must not close it.
         onOpenAutoFocus={(e) => {
           e.preventDefault();

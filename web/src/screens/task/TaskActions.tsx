@@ -40,7 +40,10 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "d
     : none;
   const taskId = detail?.task.id ?? "";
   const taskKey = detail?.task.key ?? "";
-  const [open, setOpen] = useState<TaskAction | null>(null);
+  // The dialog open, for the Task it was opened on: the peek moving to another Task closes it.
+  const [opened, setOpened] = useState<{ task: string; action: TaskAction } | null>(null);
+  const open = opened && opened.task === taskId ? opened.action : null;
+  const setOpen = (a: TaskAction | null) => setOpened(a ? { task: taskId, action: a } : null);
   const file = useRef<HTMLInputElement>(null);
 
   // A Claim from the browser has no Heartbeat timeout: it is bound to the Member, not a Session.

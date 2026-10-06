@@ -27,6 +27,20 @@ bin/darkory token issue eng-bot --name laptop --timeout 2m   # give this token t
 bin/darkory feature create --team WEB --title "Login page"   # files its Break down Task too
 ```
 
+## Keys in the web app
+
+| Key | Does |
+|---|---|
+| ⌘K / Ctrl K | Search Tasks and Features, and run an action |
+| C | File a Task |
+| G then I, M, A, B | Go to the Inbox, My work, Agents, the current Team's board |
+| J or ↓, K or ↑ | On a Team's Tasks (list or board): move to the next or previous Task; with its peek open, show that Task in it |
+| Enter | Open the selected Task's peek |
+| Esc | Close the peek; the focus returns to its Task |
+| ? | List these keys |
+
+The keys do nothing while you type in a field or while a dialog or menu is open.
+
 ## Connecting an agent
 
 An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`, and a Session id from `eval "$(darkory prime)"`.
