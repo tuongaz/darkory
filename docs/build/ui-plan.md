@@ -99,7 +99,7 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 - **Account carries Sign out already** (placeholder), so a browser can leave before W5 lands.
 - **`make dev` shows Connecting for up to 25 s**: through Vite's proxy the Activity stream's headers arrive only with its first bytes (the keep-alive comment). The binary is unaffected. Writing a comment when the stream opens would fix it.
 - **The bundle is over Vite's 500 kB warning** (517 kB, 163 kB gzipped). Lazy-loading the screens in `routes.tsx` would split it once they are built.
-||||||| c171694
+### S — Status model
 
 - **Phase S, the Status model.** `fileTask` takes an optional `status` (open kinds; default the first todo Status), so File Task's Status field and the planner bot's "file into Backlog" are one write. `TaskDetail` carries the whole `status`; a `Task` in a list carries only `status_id`, so the board reads `listStatuses` once for its columns and names. The web's live-update map needs the new subject type `statuses` (`statuses.changed`, subject id the Organisation's); the old app maps it to the work queries.
 - Handover leaves the Status unless the holder names one, so a Task can sit in an in_progress Status with nobody holding it (after a Handover, or a lapse not yet recorded); the board must show the holder from `claim`, never infer it from the column.
