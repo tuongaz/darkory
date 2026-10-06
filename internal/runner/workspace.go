@@ -213,51 +213,12 @@ func (r *Runner) Prepare(ctx context.Context, task, feature string, plan []Check
 	for i := range out {
 		c := &out[i]
 		repo := c.Workspace.Path
-		if c.Workspace.DefaultBranch == "" {
-			c.Workspace.DefaultBranch = defaultBranch(ctx, repo)
-			if c.Base == "main" {
-				c.Base = c.Workspace.DefaultBranch
-			}
-		}
-		if _, err := os.Stat(filepath.Join(c.Dir, ".git")); err == nil {
-			// An earlier session's worktree, kept while the Task is open.
-			if branch, err := runGit(ctx, c.Dir, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil && strings.HasPrefix(branch, task+"/") {
-				c.Branch = branch
-				continue
-			}
-			return nil, fmt.Errorf("%s exists and is not on a branch of %s; remove it to start again", c.Dir, task)
-		}
-		runGit(ctx, repo, "worktree", "prune")
-		existing, err := branchesWithPrefix(ctx, repo, task+"/")
+		// Two sessions of one runner prepare in one repository at once, as two builders on one
+		// Feature do; git's worktree list and branches are the repository's own.
+		unlock := r.lockRepo(repo)
+		err := r.prepareOne(ctx, task, feature, c)
+		unlock()
 		if err != nil {
-			return nil, err
-		}
-		if len(existing) > 0 {
-			ok, err := r.ledger.made(repo, existing[0])
-			if err != nil {
-				return nil, err
-			}
-			if !ok {
-				return nil, fmt.Errorf("the branch %s in %s was not made by the runner; it will not work on it", existing[0], repo)
-			}
-			c.Branch = existing[0]
-			if _, err := runGit(ctx, repo, "worktree", "add", c.Dir, c.Branch); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if !branchExists(ctx, repo, c.Base) {
-			if c.Base != FeatureBranch(feature) {
-				return nil, fmt.Errorf("%s has no branch %s", repo, c.Base)
-			}
-			if err := r.makeFeatureBranch(ctx, c.Workspace, feature); err != nil {
-				return nil, err
-			}
-		}
-		if _, err := runGit(ctx, repo, "worktree", "add", "-b", c.Branch, c.Dir, c.Base); err != nil {
-			return nil, err
-		}
-		if err := r.ledger.add(Made{Repo: repo, Branch: c.Branch, Base: c.Base, Task: task, At: time.Now().UTC()}); err != nil {
 			return nil, err
 		}
 	}
@@ -268,6 +229,72 @@ func (r *Runner) Prepare(ctx context.Context, task, feature string, plan []Check
 	}
 	b, _ := json.MarshalIndent(list, "", "  ")
 	return out, os.WriteFile(filepath.Join(dir, checkoutsFile), b, 0o600)
+}
+
+// lockRepo holds the runner's lock on a repository until the function it returns is called.
+func (r *Runner) lockRepo(repo string) func() {
+	r.mu.Lock()
+	l, ok := r.repos[filepath.Clean(repo)]
+	if !ok {
+		l = &sync.Mutex{}
+		r.repos[filepath.Clean(repo)] = l
+	}
+	r.mu.Unlock()
+	l.Lock()
+	return l.Unlock
+}
+
+// prepareOne makes or finds one checkout of a Task.
+func (r *Runner) prepareOne(ctx context.Context, task, feature string, c *Checkout) error {
+	repo := c.Workspace.Path
+	if c.Workspace.DefaultBranch == "" {
+		c.Workspace.DefaultBranch = defaultBranch(ctx, repo)
+		if c.Base == "main" {
+			c.Base = c.Workspace.DefaultBranch
+		}
+	}
+	if _, err := os.Stat(filepath.Join(c.Dir, ".git")); err == nil {
+		// An earlier session's worktree, kept while the Task is open.
+		if branch, err := runGit(ctx, c.Dir, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil && strings.HasPrefix(branch, task+"/") {
+			c.Branch = branch
+			return nil
+		}
+		return fmt.Errorf("%s exists and is not on a branch of %s; remove it to start again", c.Dir, task)
+	}
+	runGit(ctx, repo, "worktree", "prune")
+	existing, err := branchesWithPrefix(ctx, repo, task+"/")
+	if err != nil {
+		return err
+	}
+	if len(existing) > 0 {
+		ok, err := r.ledger.made(repo, existing[0])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("the branch %s in %s was not made by the runner; it will not work on it", existing[0], repo)
+		}
+		c.Branch = existing[0]
+		if _, err := runGit(ctx, repo, "worktree", "add", c.Dir, c.Branch); err != nil {
+			return err
+		}
+		return nil
+	}
+	if !branchExists(ctx, repo, c.Base) {
+		if c.Base != FeatureBranch(feature) {
+			return fmt.Errorf("%s has no branch %s", repo, c.Base)
+		}
+		if err := r.makeFeatureBranch(ctx, c.Workspace, feature); err != nil {
+			return err
+		}
+	}
+	if _, err := runGit(ctx, repo, "worktree", "add", "-b", c.Branch, c.Dir, c.Base); err != nil {
+		return err
+	}
+	if err := r.ledger.add(Made{Repo: repo, Branch: c.Branch, Base: c.Base, Task: task, At: time.Now().UTC()}); err != nil {
+		return err
+	}
+	return nil
 }
 
 // makeFeatureBranch makes feature/<KEY> from the Workspace's default branch, and pushes it when

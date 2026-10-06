@@ -118,15 +118,18 @@ func (r *Runner) mergeTask(ctx context.Context, d *client.TaskDetail, via string
 		}
 		def := or(ws.DefaultBranch, defaultBranch(ctx, ws.Path))
 		target := FeatureBranch(f.Key)
+		unlock := r.lockRepo(ws.Path)
 		if f.Quick {
 			target = def
 		} else if !branchExists(ctx, ws.Path, target) {
 			if err := r.makeFeatureBranch(ctx, ws, f.Key); err != nil {
+				unlock()
 				lines = append(lines, fmt.Sprintf("%s: could not make %s: %v", ws.Name, target, err))
 				continue
 			}
 		}
 		res, err := mergeBranch(ctx, ws.Path, branch, target, fmt.Sprintf("Merge %s into %s\n\n%s: %s", branch, target, key, d.Task.Title))
+		unlock()
 		var dirty ErrDirty
 		switch {
 		case errors.As(err, &dirty):
@@ -241,7 +244,9 @@ func (r *Runner) shipped(ctx context.Context, featureID string) {
 			lines = append(lines, fmt.Sprintf("%s: opened %s, the pull request of %s into %s.", ws.Name, url, branch, def))
 			continue
 		}
+		unlock := r.lockRepo(m.Repo)
 		res, err := mergeBranch(ctx, m.Repo, branch, def, fmt.Sprintf("Merge %s into %s\n\nShip %s: %s", branch, def, f.Key, f.Title))
+		unlock()
 		switch {
 		case err != nil:
 			lines = append(lines, fmt.Sprintf("%s: could not merge %s into %s: %v. Merge it by hand.", ws.Name, branch, def, err))

@@ -9,8 +9,11 @@
 //	question  file a question aimed at the manager the prompt names, blocking the Task, and exit
 //	silent    end the turn without a decision (TURN_ENDED), and answer every nudge the same way
 //	hang      stop writing progress and sleep, deaf to /exit
+//	busy      keep working, writing progress every 200 ms, until /exit
 //	crash     exit 1
 //
+// The commit is of fakeagent-<KEY>.txt, or of the file FAKEAGENT_FILE names, so two Tasks can
+// make a conflict.
 // Like Claude Code it then waits at its prompt until the runner types /exit. It imports nothing
 // under internal/.
 package main
@@ -74,6 +77,9 @@ func run() error {
 	if len(a.dirs) > 0 {
 		dir := a.dirs[0]
 		name := "fakeagent-" + a.key + ".txt"
+		if f := os.Getenv("FAKEAGENT_FILE"); f != "" {
+			name = f
+		}
 		content := fmt.Sprintf("%s worked by fakeagent in session %s\n", a.key, os.Getenv("DARKORY_SESSION"))
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 			return err
@@ -121,13 +127,22 @@ func run() error {
 		fmt.Println("fakeagent: hanging")
 		time.Sleep(time.Hour)
 		return nil
+	case "busy":
+		fmt.Println("fakeagent: busy until /exit")
+		go func() {
+			for {
+				a.tool("sleep 0.2")
+				time.Sleep(200 * time.Millisecond)
+				a.result("")
+			}
+		}()
 	case "crash":
 		fmt.Println("fakeagent: crashing")
 		os.Exit(1)
 	default:
 		return fmt.Errorf("no scenario %q", scenario)
 	}
-	if scenario != "silent" {
+	if scenario != "silent" && scenario != "busy" {
 		a.answer("Done with " + a.key + ".")
 	}
 	return a.wait(scenario)
@@ -192,12 +207,12 @@ func (a *agent) read() error {
 	return nil
 }
 
-// breakDown files the Tasks FAKEAGENT_BREAKDOWN lists, as skill:title;skill:title (one build
+// breakDown files the Tasks FAKEAGENT_BREAKDOWN lists, as skill:title;skill:title (one engineer
 // Task by default), each naming the Workspaces FAKEAGENT_WORKSPACES lists, comma-separated.
 func (a *agent) breakDown() error {
 	plan := os.Getenv("FAKEAGENT_BREAKDOWN")
 	if plan == "" {
-		plan = "build:Build it"
+		plan = "engineer:Build it"
 	}
 	for item := range strings.SplitSeq(plan, ";") {
 		skill, title, ok := strings.Cut(item, ":")

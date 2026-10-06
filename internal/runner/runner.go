@@ -157,6 +157,8 @@ type Runner struct {
 	reader Record
 	// skills names Skills by id.
 	skills map[string]client.Skill
+	// repos are the locks on the repositories the runner changes, by path.
+	repos map[string]*sync.Mutex
 }
 
 // New returns a Runner; nothing runs until Run.
@@ -177,7 +179,8 @@ func New(cfg Config) (*Runner, error) {
 	cfg.Data = data
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
-		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), skills: map[string]client.Skill{}}
+		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), skills: map[string]client.Skill{},
+		repos: map[string]*sync.Mutex{}}
 	if r.host == nil {
 		switch cfg.Tmux {
 		case "", "auto":
