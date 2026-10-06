@@ -256,12 +256,22 @@ export function refusalNote(
       if (ctx.owns) return { title, body: `Drop ${key} to move it to ${ctx.target.name}.`, action: { kind: "open", label: `Open ${key}` } };
       return { title, body: `Only the Feature owner${ctx.ownerName ? `, ${ctx.ownerName},` : ""} can drop ${key}.` };
     case "forbidden":
-      return { title, body: `Only Members of ${ctx.teamName} move its Tasks.` };
+      return { title, body: `Only Members of ${ctx.teamName}, the Feature owner or its holder move ${key}.` };
+    case "ended":
     case "conflict":
       return { title, body: `${key} has ended and stays where it is.` };
     default:
       return { title, body: ctx.message };
   }
+}
+
+/**
+ * Whether `member` may move the Task between open Statuses, as setTaskStatus allows: an open Task,
+ * moved by a Member of its Feature's Team, the Feature's owner, or the Member holding it.
+ */
+export function mayMove(task: Task, ctx: { member: string; inTeam: boolean; feature: Pick<Feature, "owner_id"> | undefined; now: number }): boolean {
+  if (task.state !== "open") return false;
+  return ctx.inTeam || ctx.feature?.owner_id === ctx.member || liveClaim(task, ctx.now)?.holder_id === ctx.member;
 }
 
 /** The 1-based position a Feature dropped onto `overId` takes in the Team's whole Rank, ended Features counted. */

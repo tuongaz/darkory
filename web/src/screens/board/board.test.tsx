@@ -114,12 +114,22 @@ describe("Team › Tasks, board", () => {
     expect(screen.getByRole("link", { name: /WEB-20 Welcome email/ })).toHaveAttribute("data-movable", "false");
   });
 
-  it("does not let a Member outside the Team move any card", async () => {
-    mockApi(routes({}, bob));
+  it("does not let a Member outside the Team move a card, unless they hold it or own its Feature", async () => {
+    // bob reviews WEB-12 from outside Web: a holder moves the card they work.
+    const review = task(12, "f-1", { title: "Review the cart", claim: { id: "c-12", task_id: "k-12", holder_id: bob.id, session_id: "s-b", started_at: inFuture(-1) } });
+    mockApi(routes({ "GET /v1/tasks": { items: [cart, discount, review] } }, bob));
     renderApp("/teams/WEB/tasks?view=board");
     const card = await screen.findByRole("link", { name: /WEB-5 Discount codes/ });
     expect(card).toHaveAttribute("data-movable", "false");
     expect(card).not.toHaveAttribute("aria-roledescription");
+    expect(screen.getByRole("link", { name: /WEB-12 Review the cart/ })).toHaveAttribute("data-movable", "true");
+  });
+
+  it("lets the Feature's owner move its cards from outside the Team", async () => {
+    mockApi(routes({ "GET /v1/features": { items: [{ ...checkout, owner_id: bob.id }, search, onboarding] } }, bob));
+    renderApp("/teams/WEB/tasks?view=board");
+    expect(await screen.findByRole("link", { name: /WEB-5 Discount codes/ })).toHaveAttribute("data-movable", "true");
+    expect(screen.getByRole("link", { name: /WEB-10/ })).toHaveAttribute("data-movable", "false");
   });
 
   it("shows a bot's Claim as it arrives, without reloading", async () => {

@@ -4,7 +4,7 @@ import { useDirectory, useTeams } from "@/api/queries";
 import { useNow } from "@/clock";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
-import { blocking, statusGlyphs, type Status } from "./derive";
+import { blocking, mayMove, statusGlyphs, type Status } from "./derive";
 import { useClaimTrails, useStatuses, useTeamFeatures, useTeamTasks } from "./queries";
 
 /** Everything the Team's Tasks views read, joined: the records, lookups by id, and who is looking. */
@@ -44,8 +44,10 @@ export function useBoardModel(teamRef: string) {
     members: dir.members,
     skills: dir.skills,
     me,
-    /** Whether the signed-in Member is in the Team, and so may move its Tasks between Statuses. */
+    /** Whether the signed-in Member is in the Team. */
     inTeam,
+    /** Whether the signed-in Member may drag the Task to another Status. */
+    canMove: (task: Task) => mayMove(task, { member: me.member.id, inTeam, feature: lookups.featureById.get(task.feature_id), now }),
     now,
     ...lookups,
   };
