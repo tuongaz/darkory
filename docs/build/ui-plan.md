@@ -56,6 +56,13 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 14. The board at 390 px does not scroll sideways.
 15. The Task peek opens from the Board, list, Inbox and Activity; the page opens from the peek.
 
+## State at the end of the build (2026-10-07)
+
+- **Shipped on main** (84e117d): the Status model (migration 0003, rules, `/v1`, CLI, MCP), the rebuilt web app (shell, Board list and kanban, Features, Task peek and page, Feature page, Inbox, My work, Agents, Activity, Admin with Workflow, Account, sign-in), the agent bots (`tools/bots`, `e2e/bots_test.go`).
+- **Verified:** `make check` on SQLite and Postgres (32 packages each); 151 Vitest tests; 15 Playwright scenarios against the real binary (`cd web && npm run e2e`); the Go end-to-end suites on both engines (`make e2e`, `make e2e-pg`: bots, lapse and recovery, MCP, two servers on one Postgres, the soak with the Status invariant). Evidence with screenshots: https://claude.ai/artifact/H3bog6Bsyv52FVKBD97xhf
+- **Known limits:** the Lapsed mark on a list row reads the Team's latest 500 claim/lapse/complete Activity entries; "Takeable by" leaves out blocking and the no-self-review clause; Sessions and tokens of another Member are admin-only, so a non-admin's Agents page shows no Session ids; each Playwright spec starts its own Install (the binary is built once per spec).
+- **For the human's `make dev`:** the Install in `.dev` was migrated to 0003 by the restarted server (backup `darkory.db.pre-0003.*.bak`); `make dev` now runs `npm ci` when the lockfile is newer than `node_modules`; `make serve` needs `make web` first (dist/app is not committed).
+
 ## Found while building
 
 (Agents append here: anything the mock drew that `/v1` cannot give, and how it was resolved.)
