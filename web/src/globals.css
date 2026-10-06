@@ -3,6 +3,19 @@
 /* Sonner's styles, which it would inject at run time; the build stops that (vite.config.ts). */
 @import "sonner/dist/styles.css";
 
+/* Radix Select's and ScrollArea's viewports, whose own <style> the build stops (vite.config.ts).
+   Unlayered, as the injected element was. */
+[data-radix-select-viewport],
+[data-radix-scroll-area-viewport] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+[data-radix-select-viewport]::-webkit-scrollbar,
+[data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 /* Inter, served by the Install itself: the app's CSP allows fonts from 'self' only, and a Local
