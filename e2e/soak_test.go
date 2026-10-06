@@ -708,6 +708,20 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 		default:
 			r.problem("%s is %s; nothing in the soak drops a Task", tk.Key, d.Task.State)
 		}
+		// Nobody in the soak names a Status, so Darkory's own moves decide it (ADR 0012): done in
+		// Done; open in In progress when its last Claim was handed over, which leaves the Status,
+		// and in Todo when it ended any other way or there was none.
+		want := client.StatusKindTodo
+		switch {
+		case d.Task.State == client.TaskStateDone:
+			want = client.StatusKindDone
+		case len(cs) > 0 && cs[len(cs)-1].HowEnded != nil && *cs[len(cs)-1].HowEnded == client.ClaimEndHandedOver:
+			want = client.StatusKindInProgress
+		}
+		if d.Status.ID != d.Task.StatusID || d.Status.Kind != want {
+			r.problem("%s is %s, its last Claim ended %v, and it is in %s (%s, Task says %s); want a %s Status",
+				tk.Key, d.Task.State, lastEnd(cs), d.Status.Name, d.Status.Kind, d.Task.StatusID, want)
+		}
 		if tk.Kind == client.Work && !strings.HasPrefix(tk.Title, "question ") {
 			if _, ok := r.titles.Load(tk.Title); !ok {
 				r.problem("%s %q was filed but no filer saw it filed", tk.Key, tk.Title)
@@ -718,6 +732,14 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 		r.problem("no Claims at all")
 	}
 	return tasks
+}
+
+// lastEnd says how the last of cs ended, or "none" without Claims.
+func lastEnd(cs []client.Claim) string {
+	if len(cs) == 0 || cs[len(cs)-1].HowEnded == nil {
+		return "none"
+	}
+	return string(*cs[len(cs)-1].HowEnded)
 }
 
 // checkTables reads the database, read-only, for what the API does not show: every Claim row

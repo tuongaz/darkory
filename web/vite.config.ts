@@ -5,23 +5,36 @@ import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
 /**
- * Sonner, and react-style-singleton under Radix's scroll lock, add <style> elements at run time,
- * which the Install's Content-Security-Policy (style-src 'self') refuses and reports as errors.
- * Their CSS is in globals.css instead, so the build turns the injection off. A patch that no
- * longer matches its package fails the build rather than letting the errors back.
+ * Sonner, Radix Select's viewport, Radix ScrollArea, and react-style-singleton under Radix's
+ * scroll lock add <style> elements at run time, which the Install's Content-Security-Policy
+ * (style-src 'self') refuses and reports as errors. Their CSS is in globals.css instead, so the
+ * build (and Vitest, which inlines these packages to run them through this) turns the injection
+ * off. A patch that no longer matches its package fails rather than letting the errors back.
  */
+const stylePatches: { file: string; from: RegExp; to: string }[] = [
+  { file: "/sonner/dist/index.mjs", from: /if \(!code \|\| typeof document == 'undefined'\) return/, to: "return" },
+  { file: "/react-style-singleton/dist/es2015/singleton.js", from: /if \(counter == 0\) \{/, to: "if (false) {" },
+  // jsx("style", { dangerouslySetInnerHTML: { __html: `[data-radix-…-viewport]{…}` }, nonce }) → null
+  {
+    file: "/@radix-ui/react-select/dist/index.mjs",
+    from: /jsx\(\s*"style",\s*\{\s*dangerouslySetInnerHTML:\s*\{\s*__html:\s*`\[data-radix-select-viewport\][^`]*`\s*\},\s*nonce\s*\}\s*\)/,
+    to: "null",
+  },
+  {
+    file: "/@radix-ui/react-scroll-area/dist/index.mjs",
+    from: /jsx\(\s*"style",\s*\{\s*dangerouslySetInnerHTML:\s*\{\s*__html:\s*`\[data-radix-scroll-area-viewport\][^`]*`\s*\},\s*nonce\s*\}\s*\)/,
+    to: "null",
+  },
+];
+
 function noInjectedStyles(): Plugin {
-  const patches = [
-    { file: "/sonner/dist/index.mjs", from: "if (!code || typeof document == 'undefined') return", to: "return" },
-    { file: "/react-style-singleton/dist/es2015/singleton.js", from: "if (counter == 0) {", to: "if (false) {" },
-  ];
   return {
     name: "darkory:no-injected-styles",
-    apply: "build",
     transform(code, id) {
-      const patch = patches.find((p) => id.split("?")[0].endsWith(p.file));
+      const patch = stylePatches.find((p) => id.split("?")[0].endsWith(p.file));
       if (!patch) return;
-      if (!code.includes(patch.from)) this.error(`${patch.file} no longer injects styles as expected; update noInjectedStyles`);
+      const found = code.match(new RegExp(patch.from.source, "g"))?.length ?? 0;
+      if (found !== 1) this.error(`${patch.file} no longer injects styles as expected (${found} matches); update noInjectedStyles`);
       return code.replace(patch.from, patch.to);
     },
   };
@@ -55,6 +68,16 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     setupFiles: ["src/test/setup.ts"],
+    // Run the packages stylePatches changes, and those that import them, through Vite, so the
+    // tests see what the build ships. Vitest would take the scroll lock's CommonJS builds, which
+    // load each other outside Vite; their ES builds are what the app bundles.
+    server: {
+      deps: { inline: ["sonner", "radix-ui", /@radix-ui\//, "react-remove-scroll", "react-remove-scroll-bar", "react-style-singleton"] },
+    },
+    alias: ["react-remove-scroll", "react-remove-scroll-bar", "react-style-singleton"].map((pkg) => ({
+      find: new RegExp(`^${pkg}$`),
+      replacement: `${pkg}/dist/es2015/index.js`,
+    })),
     restoreMocks: true,
   },
 });

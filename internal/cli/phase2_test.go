@@ -68,7 +68,10 @@ func (rc *recorder) take() []recorded {
 }
 
 const (
-	taskJSON     = `{"id":"t3","key":"WEB-3","feature_id":"f1","kind":"work","title":"Build","description":"","state":"open","blocked":false,"filed_by":"m1","waiting_since":"2026-10-06T00:00:00Z","created_at":"2026-10-06T00:00:00Z"}`
+	taskJSON     = `{"id":"t3","key":"WEB-3","feature_id":"f1","kind":"work","title":"Build","description":"","state":"open","status_id":"st3","blocked":false,"filed_by":"m1","waiting_since":"2026-10-06T00:00:00Z","created_at":"2026-10-06T00:00:00Z"}`
+	statusesJSON = `{"id":"st1","name":"Backlog","kind":"backlog","position":1},{"id":"st2","name":"Todo","kind":"todo","position":2},` +
+		`{"id":"st3","name":"In progress","kind":"in_progress","position":3},{"id":"st5","name":"Done","kind":"done","position":4},` +
+		`{"id":"st6","name":"Dropped","kind":"dropped","position":5}`
 	featureJSON  = `{"id":"f1","key":"WEB-1","team_id":"tm1","title":"Search","description":"","owner_id":"m1","state":"open","rank":2,"filed_by":"m1","created_at":"2026-10-06T00:00:00Z"}`
 	evidenceJSON = `{"id":"ev1","feature_id":"f1","filename":"shot.png","content_type":"image/png","size":4,"sha256":"x","attached_by":"m1","created_at":"2026-10-06T00:00:00Z"}`
 )
@@ -80,7 +83,10 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 	png := filepath.Join(dir, "shot.png")
 	report := filepath.Join(dir, "report")
 	proposal := filepath.Join(dir, "proposal.md")
-	for path, content := range map[string]string{png: "\x89PNG\r\n\x1a\n", report: "all green\n", proposal: "Test the edges.\n"} {
+	// A list as `workflow --json` prints it, positions and all, with a move added.
+	list := filepath.Join(dir, "statuses.json")
+	for path, content := range map[string]string{png: "\x89PNG\r\n\x1a\n", report: "all green\n", proposal: "Test the edges.\n",
+		list: `{"items":[` + statusesJSON + `],"moves":{"st9":"st2"}}`} {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -107,6 +113,11 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 		"GET /v1/features/WEB-1/observations":   {200, `{"items":[]}`},
 		"POST /v1/tasks/WEB-9/skill-proposals":  {201, `{"id":"p1","skill_id":"s1","task_id":"t9","based_on_version":3,"body":"x","author_id":"m1","state":"pending","created_at":"2026-10-06T00:00:00Z"}`},
 		"POST /v1/tasks":                        {201, detail},
+		"POST /v1/tasks/WEB-3/status":           {200, taskJSON},
+		"GET /v1/statuses":                      {200, `{"items":[` + statusesJSON + `]}`},
+		"PUT /v1/statuses":                      {200, `{"items":[` + statusesJSON + `]}`},
+		"GET /v1/tasks":                         {200, `{"items":[` + taskJSON + `]}`},
+		"GET /v1/activity":                      {200, `{"items":[],"last_seq":0}`},
 		"POST /v1/sign-in/email":                {202, ""},
 		"GET /v1/skill-proposals/p1":            {200, `{"id":"p1","skill_id":"s1","task_id":"t9","based_on_version":3,"body":"x","author_id":"m1","state":"pending","created_at":"2026-10-06T00:00:00Z"}`},
 	}}
@@ -168,6 +179,19 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 			method: "POST", path: "/v1/tasks/WEB-9/skill-proposals", body: `{"skill":"qa-acme","based_on_version":3,"body":"Test the edges.\n"}`},
 		{name: "file a question", args: []string{"file", "--blocks", "WEB-3", "--aim", "ada", "--title", "Which index?"},
 			method: "POST", path: "/v1/tasks", body: `{"blocks":"WEB-3","aimed_at":"ada","title":"Which index?"}`},
+		{name: "handover into a Status", args: []string{"handover", "WEB-3", "--skill", "review", "--status", "In review"},
+			method: "POST", path: "/v1/tasks/WEB-3/handover", body: `{"skill":"review","status":"In review"}`},
+		{name: "file into the Backlog", args: []string{"file", "--feature", "WEB-1", "--skill", "build", "--title", "Later", "--status", "Backlog"},
+			method: "POST", path: "/v1/tasks", body: `{"feature":"WEB-1","skill":"build","title":"Later","status":"Backlog"}`},
+		{name: "status", args: []string{"status", "WEB-3", "In review"},
+			method: "POST", path: "/v1/tasks/WEB-3/status", body: `{"status":"In review"}`},
+		{name: "workflow", args: []string{"workflow"}, method: "GET", path: "/v1/statuses"},
+		{name: "workflow set", args: []string{"workflow", "set", "--file", list},
+			method: "PUT", path: "/v1/statuses", body: `{"items":[{"id":"st1","name":"Backlog","kind":"backlog"},{"id":"st2","name":"Todo","kind":"todo"},` +
+				`{"id":"st3","name":"In progress","kind":"in_progress"},{"id":"st5","name":"Done","kind":"done"},{"id":"st6","name":"Dropped","kind":"dropped"}],"moves":{"st9":"st2"}}`},
+		{name: "tasks by Status", args: []string{"tasks", "--status", "Backlog"}, method: "GET", path: "/v1/tasks", query: "status=Backlog"},
+		{name: "activity filtered", args: []string{"activity", "--member", "bob", "--kind", "task.claimed,task.lapsed", "--team", "WEB"},
+			method: "GET", path: "/v1/activity", query: "before=9007199254740991&member=bob&kind=task.claimed&kind=task.lapsed&team=WEB"},
 		{name: "login by email", args: []string{"login", "--email", "ada@example.com"},
 			method: "POST", path: "/v1/sign-in/email", body: `{"email":"ada@example.com"}`},
 	} {

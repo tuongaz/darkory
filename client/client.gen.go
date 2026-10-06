@@ -1943,7 +1943,8 @@ type ClientInterface interface {
 	// the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 	// clients that cannot set headers) and receives every entry after it; `0` sends the whole
 	// history. With neither, the stream starts from now: it sends only entries written after
-	// it opened. A Member may have a limited number of streams open at once (an Install
+	// it opened. It opens with the comment `: connected` and sends `: keep-alive` while idle;
+	// clients skip comments. A Member may have a limited number of streams open at once (an Install
 	// setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Corresponds with GET /v1/activity/stream (the `StreamActivity` operationId).
@@ -2667,12 +2668,14 @@ type ClientInterface interface {
 
 	// SetTaskStatusWithBody Move a Task to another Status
 	//
-	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+	// `dropped` Status).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2681,12 +2684,14 @@ type ClientInterface interface {
 
 	// SetTaskStatus Move a Task to another Status
 	//
-	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+	// `dropped` Status).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2793,7 +2798,8 @@ func (c *Client) ListActivity(ctx context.Context, params *ListActivityParams, r
 // the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 // clients that cannot set headers) and receives every entry after it; `0` sends the whole
 // history. With neither, the stream starts from now: it sends only entries written after
-// it opened. A Member may have a limited number of streams open at once (an Install
+// it opened. It opens with the comment `: connected` and sends `: keep-alive` while idle;
+// clients skip comments. A Member may have a limited number of streams open at once (an Install
 // setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Corresponds with GET /v1/activity/stream (the `StreamActivity` operationId).
@@ -4287,12 +4293,14 @@ func (c *Client) ProposeSkillVersion(ctx context.Context, task TaskRef, params *
 
 // SetTaskStatusWithBody Move a Task to another Status
 //
-// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+// `dropped` Status).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4311,12 +4319,14 @@ func (c *Client) SetTaskStatusWithBody(ctx context.Context, task TaskRef, params
 
 // SetTaskStatus Move a Task to another Status
 //
-// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+// `dropped` Status).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8196,7 +8206,8 @@ type ClientWithResponsesInterface interface {
 	// the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 	// clients that cannot set headers) and receives every entry after it; `0` sends the whole
 	// history. With neither, the stream starts from now: it sends only entries written after
-	// it opened. A Member may have a limited number of streams open at once (an Install
+	// it opened. It opens with the comment `: connected` and sends `: keep-alive` while idle;
+	// clients skip comments. A Member may have a limited number of streams open at once (an Install
 	// setting, 16 by default); one more is refused with `too_many_requests`.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -8990,12 +9001,14 @@ type ClientWithResponsesInterface interface {
 
 	// SetTaskStatusWithBodyWithResponse Move a Task to another Status
 	//
-	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+	// `dropped` Status).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9004,12 +9017,14 @@ type ClientWithResponsesInterface interface {
 
 	// SetTaskStatusWithResponse Move a Task to another Status
 	//
-	// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-	// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-	// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-	// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-	// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-	// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+	// `dropped` Status).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12217,7 +12232,8 @@ func (c *ClientWithResponses) ListActivityWithResponse(ctx context.Context, para
 // the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
 // clients that cannot set headers) and receives every entry after it; `0` sends the whole
 // history. With neither, the stream starts from now: it sends only entries written after
-// it opened. A Member may have a limited number of streams open at once (an Install
+// it opened. It opens with the comment `: connected` and sends `: keep-alive` while idle;
+// clients skip comments. A Member may have a limited number of streams open at once (an Install
 // setting, 16 by default); one more is refused with `too_many_requests`.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -13473,12 +13489,14 @@ func (c *ClientWithResponses) ProposeSkillVersionWithResponse(ctx context.Contex
 
 // SetTaskStatusWithBodyWithResponse Move a Task to another Status
 //
-// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+// `dropped` Status).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -13493,12 +13511,14 @@ func (c *ClientWithResponses) SetTaskStatusWithBodyWithResponse(ctx context.Cont
 
 // SetTaskStatusWithResponse Move a Task to another Status
 //
-// By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-// where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-// (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-// being completed or dropped. Naming the Status the Task is in changes nothing. Records
-// `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-// has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+// whether or not someone holds it: the Status is where the Task is in its workflow, and the
+// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+// `dropped` Status).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
