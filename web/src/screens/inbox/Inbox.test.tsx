@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Claim, Feature, Task, TaskDetail } from "@/api/client";
+import { keys } from "@/api/queries";
 import { mockApi, type Handler } from "@/test/api";
 import { ada, bob, builder, build, feature, me, review, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
@@ -167,6 +168,15 @@ describe("the Inbox", () => {
     renderApp("/inbox");
     await userEvent.click(await screen.findByRole("button", { name: "Claim WEB-2" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-2/claim")).toBe(true));
+  });
+
+  it("keeps its Takeable list out of the entry the Task screens read as a set of ids", async () => {
+    const search = feature(9, 3);
+    const t = task(2, search.id);
+    inboxApi({ tasks: [t], features: [search], takeable: [t] });
+    const { client } = renderApp("/inbox");
+    await screen.findByRole("button", { name: "Claim WEB-2" });
+    expect(client.getQueryData(keys.takeable)).toBeUndefined();
   });
 
   it("keeps the Inbox heading for a Member with nothing at all", async () => {

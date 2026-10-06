@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { api, call, type Activity, type ActivityKind, type Feature, type Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { allPages } from "@/api/pages";
-import { keys } from "@/api/queries";
+import { keys, useAllFeatures, useAllTasks } from "@/api/queries";
 import type { components } from "@/api/schema.gen";
 import { glyphFor, type Glyph, type StatusKind } from "@/lib/status";
 
@@ -60,19 +60,13 @@ export function useStatuses() {
 
 /** Every Feature by id: Feature names and Ranks on rows. */
 export function useFeatureMap(): Map<string, Feature> {
-  const q = useQuery({
-    queryKey: keys.allFeatures,
-    queryFn: () => allPages<Feature>((cursor) => call(api.GET("/v1/features", { params: { query: { limit: 500, cursor } } }))),
-  });
+  const q = useAllFeatures();
   return useMemo(() => new Map((q.data ?? []).map((f) => [f.id, f])), [q.data]);
 }
 
 /** Every Task by id: the subjects of Activity entries, whose payloads rarely name them. */
 export function useTaskMap(): Map<string, Task> {
-  const q = useQuery({
-    queryKey: keys.allTasks,
-    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { limit: 500, cursor } } }))),
-  });
+  const q = useAllTasks();
   return useMemo(() => new Map((q.data ?? []).map((t) => [t.id, t])), [q.data]);
 }
 
@@ -91,10 +85,13 @@ export function useHeldBy(member: string) {
   });
 }
 
-/** What the caller can take now, in `next` order: the first 100, as `next` would offer them. */
+/**
+ * What the caller can take now, in `next` order: the first 100, as `next` would offer them. Its
+ * key is its own under the `takeable` root: the Task screens keep the ids under `keys.takeable`.
+ */
 export function useTakeable() {
   return useQuery({
-    queryKey: keys.takeable,
+    queryKey: [...keys.takeable, { queue: 100 }],
     queryFn: () => call(api.GET("/v1/tasks/takeable", { params: { query: { limit: 100 } } })).then((r) => r.items),
   });
 }
@@ -148,7 +145,7 @@ export function useSessions(ids: string[], enabled: boolean) {
 /** A Member's tokens, newest first: the Member's own, or anyone's for an admin. */
 export function useTokens(member: string, enabled: boolean) {
   return useQuery({
-    queryKey: keys.tokens(member),
+    queryKey: [...keys.tokens(member), "items"],
     queryFn: () => call(api.GET("/v1/members/{member}/tokens", { params: { path: { member } } })).then((r) => r.items),
     enabled,
   });
