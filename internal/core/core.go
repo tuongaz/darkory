@@ -72,6 +72,7 @@ const (
 	CodeStatusInUse          Code = "status_in_use"
 	CodeUseComplete          Code = "use_complete"
 	CodeUseDrop              Code = "use_drop"
+	CodeNoRunner             Code = "no_runner"
 	CodeTooLarge             Code = "too_large"
 	CodeIdempotencyKeyReused Code = "idempotency_key_reused"
 	CodeNotImplemented       Code = "not_implemented"

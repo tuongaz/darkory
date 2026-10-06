@@ -26,8 +26,21 @@ func each[T, U any](in []T, conv func(T) U) []U {
 }
 
 func memberOut(m core.Member) gen.Member {
-	return gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID,
+	out := gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID,
 		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt}
+	if a := m.Agent; a != nil {
+		out.Agent = &gen.AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended,
+			Paused: a.Paused, ProgressFile: optional(a.ProgressFile)}
+	}
+	return out
+}
+
+// optional is s, or nil when it is empty.
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
@@ -35,7 +48,12 @@ func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
 }
 
 func teamOut(t core.Team) gen.Team {
-	return gen.Team{ID: t.ID, Key: t.Key, Name: t.Name, CreatedAt: t.CreatedAt}
+	return gen.Team{ID: t.ID, Key: t.Key, Name: t.Name, DefaultWorkspaceID: t.DefaultWorkspaceID, ShipWhenDone: t.ShipWhenDone, CreatedAt: t.CreatedAt}
+}
+
+func workspaceOut(w core.Workspace) gen.Workspace {
+	return gen.Workspace{ID: w.ID, Name: w.Name, Kind: gen.WorkspaceKind(w.Kind), Path: w.Path, Mode: gen.WorkspaceMode(w.Mode),
+		DefaultBranch: w.DefaultBranch, CreatedAt: w.CreatedAt}
 }
 
 func teamDetailOut(d core.TeamDetail) gen.TeamDetail {
@@ -58,7 +76,8 @@ func skillDetailOut(d core.SkillDetail) gen.SkillDetail {
 
 func featureOut(f core.Feature) gen.Feature {
 	return gen.Feature{ID: f.ID, Key: f.Key, TeamID: f.TeamID, Title: f.Title, Description: f.Description, OwnerID: f.OwnerID,
-		State: gen.FeatureState(f.State), Rank: f.Rank, FromRetrospectiveTaskID: f.FromRetrospectiveTaskID, FiledBy: f.FiledBy,
+		State: gen.FeatureState(f.State), Rank: f.Rank, FromRetrospectiveTaskID: f.FromRetrospectiveTaskID, Quick: f.Quick,
+		ShipWhenDone: f.ShipWhenDone, FiledBy: f.FiledBy,
 		CreatedAt: f.CreatedAt, EndedAt: f.EndedAt,
 		TaskCounts: gen.TaskCounts{Open: f.TaskCounts.Open, Claimed: f.TaskCounts.Claimed, Done: f.TaskCounts.Done, Dropped: f.TaskCounts.Dropped}}
 }
@@ -90,12 +109,17 @@ func taskOut(t core.Task) gen.Task {
 		bs := each(t.OpenBlockers, func(b core.TaskBrief) gen.TaskBrief { return gen.TaskBrief{ID: b.ID, Key: b.Key} })
 		out.OpenBlockers = &bs
 	}
+	if len(t.WorkspaceIDs) > 0 {
+		ws := append([]string(nil), t.WorkspaceIDs...)
+		out.WorkspaceIds = &ws
+	}
 	return out
 }
 
 func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 	out := gen.TaskDetail{
-		Task: taskOut(d.Task), Status: statusOut(d.Status), Feature: featureOut(d.Feature), Claims: each(d.Claims, claimOut),
+		Task: taskOut(d.Task), Status: statusOut(d.Status), Feature: featureOut(d.Feature), Workspaces: each(d.Workspaces, workspaceOut),
+		Claims: each(d.Claims, claimOut),
 		Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut), Blockers: each(d.Blockers, taskOut),
 		Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
 	}

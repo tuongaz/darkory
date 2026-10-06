@@ -15,9 +15,13 @@ func (s *Server) FileFeature(w http.ResponseWriter, r *http.Request, params gen.
 	if !ok {
 		return
 	}
-	nf := core.NewFeature{Team: body.Team, Title: body.Title, Owner: body.Owner, FromRetrospective: body.FromRetrospective}
+	nf := core.NewFeature{Team: body.Team, Title: body.Title, Owner: body.Owner, FromRetrospective: body.FromRetrospective,
+		Skill: body.Skill, Workspaces: body.Workspaces, ShipWhenDone: body.ShipWhenDone}
 	if body.Description != nil {
 		nf.Description = *body.Description
+	}
+	if body.Quick != nil {
+		nf.Quick = *body.Quick
 	}
 	d, err := s.core.FileFeature(r.Context(), c, nf, idem)
 	s.respond(w, r, out, d, err)
@@ -50,7 +54,7 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 		return
 	}
 	nt := core.NewTask{Feature: body.Feature, Title: body.Title, Skill: body.Skill, AimedAt: body.AimedAt, Blocks: body.Blocks,
-		Status: body.Status}
+		Status: body.Status, Workspaces: body.Workspaces}
 	if body.Description != nil {
 		nt.Description = *body.Description
 	}

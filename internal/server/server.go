@@ -14,6 +14,7 @@ import (
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/mail"
+	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/update"
@@ -45,7 +46,13 @@ type Server struct {
 	streams, nexts *waiting
 	// update is the last check for a newer release, for /v1/health; nil until one ran.
 	updateStatus atomic.Pointer[update.Status]
+	// runner is the Runner beside this server; nil when none is attached, and /v1/runner then
+	// answers no_runner.
+	runner atomic.Pointer[runnerHolder]
 }
+
+// runnerHolder lets the Runner be attached after the Server is made.
+type runnerHolder struct{ runnerapi.Runner }
 
 var _ gen.ServerInterface = (*Server)(nil)
 
@@ -80,6 +87,9 @@ type Options struct {
 	// MaxWaiting is how many Activity streams, and separately how many waiting `next` calls, one
 	// Member may have open on this process at once. Defaults to DefaultMaxWaiting.
 	MaxWaiting int
+	// Runner is the Runner beside this server, which /v1/runner serves; nil for none, as with
+	// serve --agents=off. AttachRunner sets one later.
+	Runner runnerapi.Runner
 }
 
 // DefaultMaxEvidenceSize is the largest Evidence file an Install takes unless set otherwise.
@@ -114,7 +124,7 @@ func New(st *store.Store, o Options) *Server {
 	if o.MaxWaiting <= 0 {
 		o.MaxWaiting = DefaultMaxWaiting
 	}
-	return &Server{
+	s := &Server{
 		store:       st,
 		core:        core.New(st, o.Clock, o.Wake, o.Log).WithBrowserLimits(o.BrowserSessions),
 		auth:        auth.New(st, o.Clock).WithBrowserLimits(o.BrowserSessions),
@@ -130,6 +140,26 @@ func New(st *store.Store, o Options) *Server {
 		streams:     newWaiting("Activity streams", o.MaxWaiting),
 		nexts:       newWaiting("waiting next calls", o.MaxWaiting),
 	}
+	s.AttachRunner(o.Runner)
+	return s
+}
+
+// AttachRunner makes r the Runner /v1/runner serves, or none when r is nil. The Runner may need
+// the server running before it starts, so it can be attached after.
+func (s *Server) AttachRunner(r runnerapi.Runner) {
+	if r == nil {
+		s.runner.Store(nil)
+		return
+	}
+	s.runner.Store(&runnerHolder{r})
+}
+
+// theRunner is the attached Runner, or nil.
+func (s *Server) theRunner() runnerapi.Runner {
+	if h := s.runner.Load(); h != nil {
+		return h.Runner
+	}
+	return nil
 }
 
 // Core returns the domain service the Server runs on.

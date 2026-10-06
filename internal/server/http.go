@@ -96,6 +96,12 @@ func (s *Server) sameOrigin(r *http.Request) bool {
 		}
 		origin = ref.Scheme + "://" + ref.Host
 	}
+	return s.ownOrigin(r, origin)
+}
+
+// ownOrigin reports whether origin is this Install's: the address the request came to, or the
+// public URL.
+func (s *Server) ownOrigin(r *http.Request, origin string) bool {
 	got := normalOrigin(origin)
 	if got == "" {
 		return false
@@ -220,6 +226,7 @@ var statusOf = map[core.Code]int{
 	core.CodeStatusInUse:          http.StatusConflict,
 	core.CodeUseComplete:          http.StatusConflict,
 	core.CodeUseDrop:              http.StatusConflict,
+	core.CodeNoRunner:             http.StatusConflict,
 	core.CodeTooLarge:             http.StatusRequestEntityTooLarge,
 	core.CodeIdempotencyKeyReused: http.StatusUnprocessableEntity,
 	core.CodeNotImplemented:       http.StatusNotImplemented,
