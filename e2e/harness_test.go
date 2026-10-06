@@ -132,10 +132,14 @@ func (l *logBuffer) String() string {
 type install struct {
 	t *testing.T
 	// dir is the data directory, and HOME for every process, so pid files and caches stay in it.
-	dir     string
-	db      string
+	dir string
+	db  string
+	// wd is the working directory of every process; "" for this package's.
+	wd      string
 	ada     *member // the human admin darkory init created
 	servers []*serveProc
+	// initOutput is what darkory init printed.
+	initOutput string
 }
 
 // serveProc is one `darkory serve` process.
@@ -157,13 +161,21 @@ func newInstall(t *testing.T) *install {
 // from this package's directory, init finds the repository it is in.
 func newInstallWith(t *testing.T, initArgs ...string) *install {
 	t.Helper()
+	return newInstallIn(t, "", initArgs...)
+}
+
+// newInstallIn is newInstallWith with wd as every process's working directory, as when a person
+// runs darkory init in a repository of theirs.
+func newInstallIn(t *testing.T, wd string, initArgs ...string) *install {
+	t.Helper()
 	needE2E(t)
-	in := &install{t: t, dir: t.TempDir()}
+	in := &install{t: t, dir: t.TempDir(), wd: wd}
 	in.db = filepath.Join(in.dir, "darkory.db")
 	if postgresURL() != "" {
 		in.db = newDatabase(t)
 	}
 	res := in.exec(in.env(), append([]string{"init", "--org", "Acme", "--name", "ada", "--data", in.dir, "--db", in.db}, initArgs...)...)
+	in.initOutput = res.stdout
 	if res.code != 0 {
 		t.Fatalf("darkory init: exit %d\n%s%s", res.code, res.stdout, res.stderr)
 	}
@@ -196,7 +208,7 @@ func (in *install) exec(env []string, args ...string) result {
 	ctx, cancel := context.WithTimeout(in.t.Context(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = env
+	cmd.Env, cmd.Dir = env, in.wd
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := cmd.Run()
