@@ -1,5 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { FitAddon } from "@xterm/addon-fit";
+import { Terminal } from "@xterm/xterm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -58,5 +60,24 @@ describe("no <style> at run time", () => {
     expect(await screen.findByText("Not moved to Done")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "File a Task" })).toBeInTheDocument();
     expect(styles()).toEqual([]);
+  });
+
+  // xterm.js computes its theme and cell size into <style> elements and a truecolor cell's colour
+  // into a style attribute, which the policy refuses too; noInjectedStyles writes both through
+  // the CSSOM instead.
+  it("from the Session panel's terminal, nor a style attribute", async () => {
+    const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
+    const el = document.createElement("div");
+    document.body.append(el);
+    const term = new Terminal({ fontSize: 13 });
+    term.loadAddon(new FitAddon());
+    term.open(el);
+    await new Promise<void>((done) => term.write("plain \x1b[31mred\x1b[0m \x1b[38;2;255;120;0mtruecolor\x1b[0m\r\n", done));
+    await new Promise((done) => requestAnimationFrame(done));
+    expect(el.querySelector(".xterm-rows")).toHaveTextContent("plain red truecolor");
+    expect(styles()).toEqual([]);
+    expect(setAttribute.mock.calls.filter(([name]) => name === "style")).toEqual([]);
+    term.dispose();
+    el.remove();
   });
 });

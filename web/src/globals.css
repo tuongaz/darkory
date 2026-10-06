@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 /* Sonner's styles, which it would inject at run time; the build stops that (vite.config.ts). */
 @import "sonner/dist/styles.css";
+/* xterm.js's own, for the Session panel's terminal: the app's CSP takes styles from its own CSS only. */
+@import "@xterm/xterm/css/xterm.css";
 
 /* A toast's action is the kit's outline button (`.btn.xs.outline`, F-B4), not sonner's solid one.
    Unlayered, to win over sonner's own rule. */
