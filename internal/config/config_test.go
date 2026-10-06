@@ -154,6 +154,10 @@ func TestLoadInit(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
+	got, err = LoadInit([]string{"--no-agents", "--data", "/d"}, env(map[string]string{"USER": "ada"}), io.Discard)
+	if err != nil || !got.NoAgents {
+		t.Fatalf("--no-agents: %+v %v", got, err)
+	}
 }
 
 func TestBaseURL(t *testing.T) {

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	"github.com/tuongaz/darkory/internal/clock"
 	"github.com/tuongaz/darkory/internal/config"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/gitinfo"
 	"github.com/tuongaz/darkory/internal/mail"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
@@ -33,7 +35,8 @@ import (
 var usage = `darkory: management for a software factory of agents and humans.
 
 Usage:
-  darkory init [--org name] [--name member] [--data dir] [--db dsn]   create the Organisation and its first Member
+  darkory init [--org name] [--name member] [--data dir] [--db dsn] [--no-agents]
+                                                                       create the Organisation, its first Member and its agents
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                 [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
                 [--no-update-check]
@@ -120,24 +123,42 @@ func openStore(ctx context.Context, cfg config.Store, migrate bool, log *slog.Lo
 }
 
 // initInstall creates the Install's Organisation, its first Member as a human admin, and the
-// built-in Skills, and prints that Member's first token and a login link (ADR 0006).
+// built-in Skills, and prints that Member's first token and a login link (ADR 0006). Unless told
+// --no-agents it seeds the roster too (docs/build/agents-plan.md, D4): Team MAIN, the git
+// repository init runs in as its default Workspace, and the agents, whose tokens it writes to
+// <data>/agents/<name>.token for the Runner.
 func initInstall(args []string, stdout, stderr io.Writer) error {
 	cfg, err := config.LoadInit(args, os.Getenv, stderr)
 	if err != nil {
 		return err
 	}
 	ctx := context.Background()
+	opts := core.InitOptions{Roster: !cfg.NoAgents}
+	if opts.Roster {
+		if wd, err := os.Getwd(); err == nil {
+			if repo, ok := gitinfo.Find(ctx, wd); ok {
+				opts.Workspace = &core.NewWorkspace{Name: gitinfo.Name(repo.Root), Path: repo.Root, DefaultBranch: repo.DefaultBranch}
+			}
+		}
+	}
 	st, err := openStore(ctx, cfg.Store, true, slog.New(slog.NewTextHandler(stderr, nil)))
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	out, err := core.New(st, clock.Real{}, wake.New(), nil).Init(ctx, cfg.Org, cfg.Name)
+	out, err := core.New(st, clock.Real{}, wake.New(), nil).InitWith(ctx, cfg.Org, cfg.Name, opts)
 	if errors.Is(err, core.ErrInitialised) {
 		return fmt.Errorf("%s already holds an Organisation; darkory init runs once", cfg.Database)
 	}
 	if err != nil {
 		return err
+	}
+	tokens := filepath.Join(cfg.DataDir, "agents")
+	for _, a := range out.Agents {
+		if err := writeToken(tokens, a.Member.Name, a.Token.Secret); err != nil {
+			return fmt.Errorf("the Organisation is made, but %s's token could not be kept: %w; an admin issues another with darkory token issue %s --name runner",
+				a.Member.Name, err, a.Member.Name)
+		}
 	}
 	link := server.LoginURL(config.BaseURL(cfg.PublicURL, cfg.Listen), out.Link.Code)
 	fmt.Fprintf(stdout, `Initialised the Organisation %q in %s.
@@ -149,11 +170,49 @@ Token for %s, shown once; keep it safe:
 
 Sign in with a browser within %d minutes, once darkory serve is running:
   %s
-
-darkory serve prints a fresh login link every time it starts.
 `, out.Organisation.Name, cfg.Database, out.Member.Name, out.Member.Name, out.Token.Secret,
 		int(core.LoginLinkTTL.Minutes()), link)
+	if out.Team != nil {
+		printRoster(stdout, out, tokens)
+	}
+	fmt.Fprint(stdout, "\ndarkory serve prints a fresh login link every time it starts.\n")
 	return nil
+}
+
+// printRoster says what init seeded besides the first Member.
+func printRoster(w io.Writer, out core.Initialised, tokens string) {
+	fmt.Fprintf(w, "\nTeam %s (%s) holds %s and the agents below.\n", out.Team.Key, out.Team.Name, out.Member.Name)
+	if ws := out.Workspace; ws != nil {
+		fmt.Fprintf(w, "Workspace %s: %s (git, default branch %s), Team %s's default.\n", ws.Name, ws.Path, ws.DefaultBranch, out.Team.Key)
+	} else {
+		fmt.Fprintf(w, "No Workspace: init ran outside a git repository. Add one with darkory workspace add --path <repository>,\n"+
+			"then make it the Team's default with darkory team set %s --default-workspace <name>.\n", out.Team.Key)
+	}
+	fmt.Fprintf(w, "Agents, reporting to %s, each with a token in %s:\n", out.Member.Name, filepath.Join(tokens, "<name>.token"))
+	for _, a := range out.Agents {
+		fmt.Fprintf(w, "  %-9s %-22s %s\n", a.Member.Name, strings.Join(a.Skills, ", "), a.Member.Agent.Model)
+	}
+}
+
+// writeToken keeps an agent's token secret in dir/<name>.token, readable by this user alone.
+func writeToken(dir, name, secret string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(dir, name+".token"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	// A file left by an earlier Install keeps its mode on open; this one is the secret's.
+	if err := f.Chmod(0o600); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.WriteString(secret + "\n"); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // sweepEvery is how often the server records the lapses of expired Claims, for visibility.

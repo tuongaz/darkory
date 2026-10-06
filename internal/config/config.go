@@ -144,6 +144,9 @@ type Init struct {
 	// Org names the Organisation (--org); Name is the first Member's name (--name, default $USER).
 	Org  string
 	Name string
+	// NoAgents skips the roster: Team MAIN, the Workspace for the git repository init runs in,
+	// and the agents (--no-agents).
+	NoAgents bool
 }
 
 func storeFlags(fs *flag.FlagSet, getenv func(string) string, s *Store) {
@@ -328,6 +331,7 @@ func LoadInit(args []string, getenv func(string) string, usage io.Writer) (Init,
 	storeFlags(fs, getenv, &c.Store)
 	fs.StringVar(&c.Org, "org", DefaultOrg, "name of the Organisation")
 	fs.StringVar(&c.Name, "name", or(getenv("USER"), "admin"), "name of the first Member, a human admin")
+	fs.BoolVar(&c.NoAgents, "no-agents", false, "seed no Team MAIN, Workspace or agents: just the Organisation and its first Member")
 	if err := fs.Parse(args); err != nil {
 		return Init{}, err
 	}

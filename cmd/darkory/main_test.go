@@ -18,7 +18,7 @@ import (
 func TestInitRunsOnce(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
-	if err := run([]string{"init", "--data", dir, "--org", "Acme", "--name", "ada"}, &out, io.Discard); err != nil {
+	if err := run([]string{"init", "--data", dir, "--org", "Acme", "--name", "ada", "--no-agents"}, &out, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	printed := out.String()
@@ -37,7 +37,7 @@ func TestInitRunsOnce(t *testing.T) {
 // told not to.
 func TestServePrintsAStartupLink(t *testing.T) {
 	dir := t.TempDir()
-	if err := run([]string{"init", "--data", dir, "--name", "ada"}, io.Discard, io.Discard); err != nil {
+	if err := run([]string{"init", "--data", dir, "--name", "ada", "--no-agents"}, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	ctx := t.Context()
