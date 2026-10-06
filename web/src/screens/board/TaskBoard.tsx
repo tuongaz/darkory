@@ -4,9 +4,10 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
   pointerWithin,
   rectIntersection,
+  TouchSensor,
   useDraggable,
   useDroppable,
   useSensor,
@@ -64,8 +65,10 @@ export function TaskBoard({
   onAdd: (status: Status) => void;
 }) {
   const sensors = useSensors(
-    // A press that moves less than 5px is a click, which opens the Task.
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // A press that moves less than 5px is a click, which opens the Task. On a touch screen a card
+    // is picked up by holding it, so a swipe still scrolls the board.
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, {
       coordinateGetter: columnJump,
       keyboardCodes: { start: ["Space"], cancel: ["Escape"], end: ["Space", "Enter"] },
@@ -200,7 +203,7 @@ function TaskCard({ task, model }: { task: Task; model: BoardModel }) {
       data-task={task.key}
       data-movable={movable}
       {...(movable ? { ...dragAttributes, ...listeners } : {})}
-      className={cn("block rounded-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none", movable && "touch-none", isDragging && "opacity-40")}
+      className={cn("block rounded-md focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none", movable && "touch-manipulation", isDragging && "opacity-40")}
     >
       <CardBody task={task} model={model} />
     </Link>

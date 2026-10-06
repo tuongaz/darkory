@@ -72,12 +72,11 @@ export function HeartbeatLine({ task, now }: { task: Task; now: number }) {
 }
 
 /** "aimed at" and the Member's avatar, for a Task aimed at one Member by name. */
-export function AimedAt({ member, withName }: { member: Member; withName?: boolean }) {
+export function AimedAt({ member }: { member: Member }) {
   return (
     <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
       <span className="text-[11.5px] whitespace-nowrap">aimed at</span>
       <MemberAvatar member={member} />
-      {withName && <span className="truncate">{member.name}</span>}
     </span>
   );
 }

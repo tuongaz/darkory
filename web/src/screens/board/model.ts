@@ -4,7 +4,7 @@ import { useDirectory, useTeams } from "@/api/queries";
 import { useNow } from "@/clock";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
-import { blocking, statusGlyphs, type ClaimTrail, type Status } from "./derive";
+import { blocking, statusGlyphs, type Status } from "./derive";
 import { useClaimTrails, useStatuses, useTeamFeatures, useTeamTasks } from "./queries";
 
 /** Everything the Team's Tasks views read, joined: the records, lookups by id, and who is looking. */
@@ -40,8 +40,8 @@ export function useBoardModel(teamRef: string) {
     statuses,
     features,
     tasks,
-    trails: trails as Map<string, ClaimTrail>,
-    members: dir.members as Map<string, Member>,
+    trails,
+    members: dir.members,
     skills: dir.skills,
     me,
     /** Whether the signed-in Member is in the Team, and so may move its Tasks between Statuses. */
