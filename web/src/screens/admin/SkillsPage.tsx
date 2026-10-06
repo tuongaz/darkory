@@ -12,14 +12,13 @@ import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { Loaded } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { AdminFrame } from "./AdminLayout";
 import { Stamp } from "./credentials";
 import { holdersBySkill, humansFirst, lineDiff, pendingProposal, skillNamePattern } from "./model";
-import { Avatars, Segmented } from "./parts";
+import { Avatars, Choice, Segmented } from "./parts";
 import { useMemberDetails, useRetrospectives, useSkillDetail, useSkillTasks, useSkillVersions } from "./queries";
 import { createSkill } from "./writes";
 
@@ -166,18 +165,14 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
         </FormRow>
         {kind === "company" && (
           <FormRow label="Builds on" htmlFor="skill-base">
-            <Select value={base} onValueChange={setBase}>
-              <SelectTrigger id="skill-base" size="sm" className="h-8 w-full">
-                <SelectValue placeholder="A generic Skill" />
-              </SelectTrigger>
-              <SelectContent position="popper" align="start">
-                {generics.map((s) => (
-                  <SelectItem key={s.id} value={s.name}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Choice
+              id="skill-base"
+              className="w-full"
+              value={base}
+              onChange={setBase}
+              placeholder="A generic Skill"
+              options={generics.map((s) => ({ value: s.name, label: s.name }))}
+            />
           </FormRow>
         )}
         <FormRow label="Text" htmlFor="skill-body" help="Published as version 1.">
