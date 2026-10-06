@@ -6,6 +6,7 @@ import { mockApi } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
 import { bob, builder, feature, me, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { sendIntent } from "./intents";
 
 const sidebar = () => screen.getByRole("navigation", { name: "Main" }).closest<HTMLElement>("[data-slot=sidebar]")!;
 const inFuture = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
@@ -216,5 +217,24 @@ describe("screens share one query cache", () => {
 
     await userEvent.keyboard("gb");
     expect(await screen.findByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Web/Tasks");
+  });
+});
+
+describe("the file-task intent", () => {
+  it("opens File Task in the Status and the Feature it names", async () => {
+    const checkout = feature(1, 1, { title: "Checkout flow" });
+    const statuses = [
+      { id: "st-backlog", name: "Backlog", kind: "backlog", position: 1 },
+      { id: "st-todo", name: "Todo", kind: "todo", position: 2 },
+      { id: "st-done", name: "Done", kind: "done", position: 3 },
+    ];
+    mockApi({ ...signedIn(), "GET /v1/statuses": { items: statuses }, "GET /v1/features": { items: [checkout] } });
+    renderApp("/my-work");
+    await screen.findByRole("navigation", { name: "Main" });
+
+    act(() => sendIntent({ kind: "file-task", team: "WEB", status: "st-backlog", feature: "WEB-1" }));
+    const dialog = await screen.findByRole("dialog", { name: "File a Task" });
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Status" })).toHaveTextContent("Backlog"));
+    expect(within(dialog).getByRole("combobox", { name: "Feature" })).toHaveTextContent("Checkout flow");
   });
 });

@@ -40,7 +40,8 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 
 ## Shell services
 
-- **Intents** (`@/app/intents`): `sendIntent({ kind: "file-task", team })` and `"file-feature"`.
+- **Intents** (`@/app/intents`): `sendIntent({ kind: "file-task", team, status?, feature? })` (a
+  Status id and a Feature key or id to start in) and `{ kind: "file-feature", team }`.
   The shell sends `file-task` for the C key and ⌘K; the Install checklist and ⌘K send
   `file-feature`. `useIntent("file-task", (i) => …)` receives them; `BoardDialogs` answers both.
   The DOM event is `darkory:intent`.
