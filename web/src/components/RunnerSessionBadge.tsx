@@ -16,14 +16,15 @@ export function SessionStateDot({ state, className }: { state: RunnerSessionStat
 
 /**
  * The session the Runner runs for a Task, in one line: "Session · running since 04:25 · mac-mini".
- * A fact, not a button.
+ * A fact, not a button. `bare` leaves out "Session ·" where a column already says it.
  */
-export function RunnerSessionBadge({ session, className }: { session: RunnerSession; className?: string }) {
+export function RunnerSessionBadge({ session, bare, className }: { session: RunnerSession; bare?: boolean; className?: string }) {
   return (
     <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
       <SessionStateDot state={session.state} />
       <span className="truncate">
-        Session · {session.state === "running" ? "running since" : `${session.state} · started`} <ClockTime at={session.started_at} /> · {session.host}
+        {!bare && "Session · "}
+        {session.state === "running" ? "running since" : `${session.state} · started`} <ClockTime at={session.started_at} /> · {session.host}
       </span>
     </span>
   );

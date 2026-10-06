@@ -4,6 +4,13 @@ import { useLocation, useSearchParams, type To } from "react-router";
 /** The search parameter that opens a Task's Peek over whatever page is showing. */
 export const peekParam = "task";
 
+/**
+ * The anchor of the Task's Session panel, in its peek and on its page: a link with it opens the
+ * record scrolled to the panel. The location state `{ join: true }` also joins an admin to the
+ * session's terminal.
+ */
+export const sessionAnchor = "session";
+
 /** A link to the current page with the Task's Peek open over it; other parameters (?view=) stay. */
 export function usePeekLink(): (taskKey: string) => To {
   const location = useLocation();

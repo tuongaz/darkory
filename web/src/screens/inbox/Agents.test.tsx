@@ -1,10 +1,11 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { Activity, Claim, Member } from "@/api/client";
+import type { Activity, AgentSettings, Claim, Member, RunnerSession } from "@/api/client";
 import { mockApi } from "@/test/api";
 import { ada, bob, build, builder, feature, me, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { FakeWebSocket } from "@/test/webSocket";
 import { agentRows, claimsSince, lapsesIn24h, lastClaimEntry } from "./derive";
 import { statuses } from "./testing";
 
@@ -173,5 +174,122 @@ describe("the Agents page", () => {
     expect(within(peek).getByText("sess-m-planner")).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.endsWith("/sessions") || c.path.endsWith("/tokens"))).toBe(false);
     expect(within(peek).queryByRole("button", { name: "More" })).not.toBeInTheDocument();
+  });
+});
+
+describe("the Agents page with the Runner", () => {
+  const settings = (extra: Partial<AgentSettings> = {}): AgentSettings => ({
+    command: "claude",
+    args: [],
+    model: "claude-sonnet-5-5",
+    env: {},
+    unattended: true,
+    paused: false,
+    ...extra,
+  });
+  const checkout = feature(1, 1);
+  const held = task(10, checkout.id, { title: "Break down: Search", claim: claim(10, "m-planner", 10) });
+  const session: RunnerSession = {
+    task_id: held.id,
+    member_id: "m-planner",
+    session_id: "sess-m-planner",
+    host: "mac-mini",
+    tmux: "dk-WEB-10",
+    started_at: new Date(2026, 9, 7, 4, 25).toISOString(),
+    state: "running",
+    log_path: "/data/sessions/WEB-10/pane.log",
+  };
+
+  function runnerAgentsApi(caller: Member = ada) {
+    let planner = agent("planner", { agent: settings() });
+    const reviewer = agent("reviewer", { agent: settings({ model: "claude-opus-5-5" }) });
+    const api = mockApi({
+      ...signedIn(caller),
+      "GET /v1/me": me(caller),
+      "GET /v1/members": () => ({ items: [ada, bob, planner, reviewer] }),
+      "GET /v1/statuses": statuses,
+      "GET /v1/features": { items: [checkout] },
+      "GET /v1/tasks": { items: [held] },
+      "GET /v1/tasks/takeable": { items: [] },
+      "GET /v1/tasks/:task": {
+        task: held,
+        status: statuses.items[2],
+        feature: checkout,
+        workspaces: [],
+        claims: [held.claim],
+        notes: [],
+        evidence: [],
+        blockers: [],
+        blocking: [],
+        observations: [],
+      },
+      "GET /v1/teams/:team": { team: web, members: [ada, bob, planner, reviewer] },
+      "GET /v1/members/:member": ({ params }) => ({ member: { id: params.member }, teams: [web], skills: [build], reports: [] }),
+      "GET /v1/members/:member/sessions": { items: [] },
+      "GET /v1/members/:member/tokens": { items: [] },
+      "GET /v1/activity": { items: [], last_seq: 0 },
+      "GET /v1/runner/sessions": { items: [session] },
+      "PATCH /v1/members/:member/agent": ({ body }) => {
+        planner = { ...planner, agent: settings(body as Partial<AgentSettings>) };
+        return planner;
+      },
+    });
+    return api;
+  }
+
+  it("shows the Runner's session and the model, and View opens the Task at its Session panel", async () => {
+    runnerAgentsApi();
+    renderApp("/agents");
+    const rows = await screen.findAllByRole("row");
+    const [planner, reviewer] = rows.slice(1);
+    const session = (row: HTMLElement) => within(row).getAllByRole("cell")[3];
+    await waitFor(() => expect(session(planner)).toHaveTextContent(/^running since 04:25 · mac-miniViewclaude-opus-5-5$/));
+    expect(within(planner).getByRole("link", { name: "View" })).toHaveAttribute("href", "/agents?task=WEB-10#session");
+    // Idle, the model is the agent settings'.
+    expect(session(reviewer)).toHaveTextContent("claude-opus-5-5");
+    expect(within(reviewer).queryByRole("link", { name: "View" })).not.toBeInTheDocument();
+  });
+
+  it("pauses and resumes an agent for an admin, and the row says Paused", async () => {
+    const api = runnerAgentsApi();
+    renderApp("/agents");
+    const rows = await screen.findAllByRole("row");
+    const planner = rows[1];
+    expect(within(planner).queryByText("Paused")).not.toBeInTheDocument();
+
+    await userEvent.click(within(planner).getByRole("button", { name: "More for planner" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Pause" }));
+    expect(api.calls.find((c) => c.method === "PATCH")).toMatchObject({ path: "/v1/members/m-planner/agent", body: { paused: true } });
+    expect(await within(planner).findByText("Paused")).toBeInTheDocument();
+
+    await userEvent.click(within(planner).getByRole("button", { name: "More for planner" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Resume" }));
+    expect(api.calls.filter((c) => c.method === "PATCH").at(-1)?.body).toEqual({ paused: false });
+    await waitFor(() => expect(within(planner).queryByText("Paused")).not.toBeInTheDocument());
+  });
+
+  it("offers no Pause to a Member who is not an admin", async () => {
+    runnerAgentsApi(bob);
+    renderApp("/agents?agent=planner");
+    const peek = await screen.findByRole("dialog", { name: "Agent planner" });
+    expect(await within(peek).findByRole("region", { name: "Runner session" })).toBeInTheDocument();
+    expect(within(peek).queryByRole("button", { name: "Join" })).not.toBeInTheDocument();
+    expect(within(peek).queryByRole("button", { name: "More" })).not.toBeInTheDocument();
+  });
+
+  it("shows the session's facts in the agent's peek, and Join opens the Task's terminal joined", async () => {
+    runnerAgentsApi();
+    renderApp("/agents?agent=planner");
+    const peek = await screen.findByRole("dialog", { name: "Agent planner" });
+    const now = await within(peek).findByRole("region", { name: "Runner session" });
+    expect(now).toHaveTextContent(/planner·started 04:25·Running·mac-mini·tmux dk-WEB-10/);
+    expect(within(peek).getByText("claude-sonnet-5-5")).toBeInTheDocument();
+    expect(within(now).getByRole("link", { name: "View" })).toHaveAttribute("href", "/agents?task=WEB-10#session");
+
+    await userEvent.click(within(now).getByRole("button", { name: "Join" }));
+    const taskPeek = await screen.findByRole("dialog", { name: "Task WEB-10" });
+    expect(await within(taskPeek).findByRole("region", { name: "Session" })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
+    expect(FakeWebSocket.latest().url).toBe("ws://localhost:3000/v1/runner/sessions/WEB-10/terminal");
   });
 });

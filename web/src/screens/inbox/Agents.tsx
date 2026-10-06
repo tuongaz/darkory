@@ -1,8 +1,8 @@
 import { BotIcon, EllipsisIcon, PlusIcon } from "lucide-react";
 import { useCallback, type MouseEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import type { Activity, Feature, Member, MemberDetail } from "@/api/client";
-import { useDirectory, useOpenTasks } from "@/api/queries";
+import type { Activity, Feature, Member, MemberDetail, RunnerSession } from "@/api/client";
+import { useDirectory, useOpenTasks, useRunnerSessions } from "@/api/queries";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
@@ -11,6 +11,7 @@ import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
+import { RunnerSessionBadge } from "@/components/RunnerSessionBadge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
 import { AgentMenuItems, AgentPeek, EndPill } from "./AgentPeek";
-import { agentActions, agentParam, taskOverAgents } from "./agentActions";
+import { agentActions, agentParam, sessionOverAgents, taskOverAgents } from "./agentActions";
 import { agentRows, claimKinds, lapsesIn24h, lastClaimEntry, type AgentRow } from "./derive";
 import { useFeatureMap, useMemberDetails, useRecentActivity, useSessions, useTaskMap, type Session } from "./queries";
 
@@ -42,6 +43,7 @@ export function AgentsPage() {
   const ids = rows.map((r) => r.agent.id);
   const details = useMemberDetails(ids);
   const sessions = useSessions(ids, admin);
+  const runner = useRunnerSessions().data?.items ?? [];
   const lapses = useRecentActivity({ kind: ["task.lapsed"] }, (e) => e.kind === "task.lapsed");
   const history = useRecentActivity({ kind: [...claimKinds] }, (e) => claimKindSet.has(e.kind));
 
@@ -111,7 +113,7 @@ export function AgentsPage() {
                 <th className="w-[132px] md:w-[220px]">Agent</th>
                 <th>Holds</th>
                 <th className="w-[92px] md:w-[136px]">Heartbeat</th>
-                <th className={cn(wide, "w-[176px]")}>Session · model</th>
+                <th className={cn(wide, "w-[196px]")}>Session · model</th>
                 <th className={cn(wide, "w-[200px]")}>Skills · Teams</th>
                 <th className={cn(wide, "w-[104px] text-right")}>Lapses, 24 h</th>
                 <th className={cn(wide, "w-12")}>
@@ -126,6 +128,7 @@ export function AgentsPage() {
                   row={row}
                   detail={details[i]?.data}
                   sessions={admin ? sessions[i]?.data : undefined}
+                  runnerSession={runner.find((s) => s.member_id === row.agent.id)}
                   admin={admin}
                   lapses={lapsesIn24h(lapses.entries, row.agent.id, now)}
                   last={lastClaimEntry(history.entries, row.agent.id)}
@@ -151,6 +154,7 @@ function AgentTableRow({
   row,
   detail,
   sessions,
+  runnerSession,
   admin,
   lapses,
   last,
@@ -165,6 +169,7 @@ function AgentTableRow({
   row: AgentRow;
   detail: MemberDetail | undefined;
   sessions: Session[] | undefined;
+  runnerSession: RunnerSession | undefined;
   admin: boolean;
   lapses: Activity[];
   last: Activity | undefined;
@@ -199,6 +204,9 @@ function AgentTableRow({
   } else if (idle && noSession) why = <Pill tone="dropped">No Session</Pill>;
   const saidNoSession = idle && noSession && !agent.deactivated_at && !(ended && endedKey);
   const lapsedKeys = [...new Set(lapses.map((l) => taskKey(l.subject_id)).filter((k): k is string => !!k))];
+  // The model the agent runs on: the live Claim's label, else its agent settings'.
+  const model = claim?.model_label ?? agent.agent?.model;
+  const runnerKey = runnerSession && (held.find((t) => t.id === runnerSession.task_id)?.key ?? taskKey(runnerSession.task_id));
 
   const open = (e: MouseEvent) => {
     // A click on a link or a button inside the row does its own thing.
@@ -230,7 +238,12 @@ function AgentTableRow({
             >
               {agent.name}
             </Link>
-            {manager && <small className="truncate text-xs text-muted-foreground">reports to {manager.name}</small>}
+            {(manager || agent.agent?.paused) && (
+              <small className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {agent.agent?.paused && <Pill tone="secondary">Paused</Pill>}
+                {manager && <span className="truncate">reports to {manager.name}</span>}
+              </small>
+            )}
           </span>
         </span>
       </td>
@@ -260,18 +273,32 @@ function AgentTableRow({
       </td>
       <td>{claim && <HeartbeatMeter claim={claim} className="flex-wrap text-foreground" />}</td>
       <td className={wide}>
-        {agent.deactivated_at ? null : claim ? (
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="truncate font-mono text-xs text-foreground">{claim.session_id}</span>
-            {claim.model_label && <small className="truncate font-mono text-xs text-muted-foreground">{claim.model_label}</small>}
+        {agent.deactivated_at ? null : (
+          <span className="flex min-w-0 flex-col items-start gap-0.5">
+            {runnerSession && runnerKey ? (
+              // The Runner runs it: since when and where, and View opens the Task at its terminal.
+              <RunnerSessionBadge session={runnerSession} bare className="max-w-full text-foreground" />
+            ) : claim ? (
+              <span className="max-w-full truncate font-mono text-xs text-foreground">{claim.session_id}</span>
+            ) : admin && sessions && sessions.length > 0 ? (
+              <span className="flex max-w-full min-w-0 items-baseline gap-1.5">
+                <span className="truncate font-mono text-xs">{sessions[0].id}</span>
+                {sessions.length > 1 && <small className="text-xs whitespace-nowrap">+{sessions.length - 1} Sessions</small>}
+              </span>
+            ) : (
+              noSession && !saidNoSession && <Pill tone="dropped">No Session</Pill>
+            )}
+            {(model || (runnerSession && runnerKey)) && (
+              <small className="flex max-w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                {runnerSession && runnerKey && (
+                  <Link to={sessionOverAgents(runnerKey)} className="font-medium text-foreground hover:underline">
+                    View
+                  </Link>
+                )}
+                {model && <span className="truncate font-mono">{model}</span>}
+              </small>
+            )}
           </span>
-        ) : admin && sessions && sessions.length > 0 ? (
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="truncate font-mono text-xs">{sessions[0].id}</span>
-            {sessions.length > 1 && <small className="text-xs">+{sessions.length - 1} Sessions</small>}
-          </span>
-        ) : (
-          noSession && !saidNoSession && <Pill tone="dropped">No Session</Pill>
         )}
       </td>
       <td className={wide}>
@@ -314,7 +341,7 @@ function AgentTableRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <AgentMenuItems actions={actions} />
+              <AgentMenuItems agent={agent} actions={actions} />
             </DropdownMenuContent>
           </DropdownMenu>
         )}

@@ -26,6 +26,3 @@ export function resizeFrame(cols: number, rows: number): string {
 export function joinCommand(task: string): string {
   return `darkory join ${task}`;
 }
-
-/** The anchor of a Task's Session panel: the Agents page's View opens the Task's peek at it. */
-export const sessionAnchor = "session";

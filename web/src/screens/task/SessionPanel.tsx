@@ -3,13 +3,14 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import type { RunnerSession, TaskDetail } from "@/api/client";
 import { useDirectory } from "@/api/queries";
+import { sessionAnchor } from "@/app/peek";
 import { searchKeys } from "@/app/shortcuts";
 import { SectionHeader } from "@/components/PageHeader";
 import { SessionFacts } from "@/components/RunnerSessionBadge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { joinCommand, sessionAnchor, type TerminalMode, type TerminalStatus } from "./terminal";
+import { joinCommand, type TerminalMode, type TerminalStatus } from "./terminal";
 
 // xterm.js is loaded only when a panel shows a terminal.
 const SessionTerminal = lazy(() => import("./SessionTerminal"));
