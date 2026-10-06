@@ -945,12 +945,14 @@ export interface paths {
         put?: never;
         /**
          * Move a Task to another Status
-         * @description By any Member of the Feature's Team, whether or not someone holds the Task: the Status is
-         *     where the Task is in its workflow, and the Claim stays as it is. Only an open kind
-         *     (`backlog`, `todo`, `in_progress`) can be named; a Task reaches `done` and `dropped` by
-         *     being completed or dropped. Naming the Status the Task is in changes nothing. Records
-         *     `task.status_set`. Errors: `forbidden` (not in the Feature's Team), `conflict` (the Task
-         *     has ended), `use_complete` (a `done` Status), `use_drop` (a `dropped` Status).
+         * @description By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
+         *     (who may be from another Team, as a reviewer or the Member a question is aimed at is),
+         *     whether or not someone holds it: the Status is where the Task is in its workflow, and the
+         *     Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
+         *     Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
+         *     Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
+         *     those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
+         *     `dropped` Status).
          */
         post: operations["setTaskStatus"];
         delete?: never;

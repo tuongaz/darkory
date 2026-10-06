@@ -329,7 +329,7 @@ func (s *Server) addTools() {
 			}
 			return taskListOut{Items: res.JSON200.Items, NextCursor: res.JSON200.NextCursor, Statuses: ss.JSON200.Items}, nil
 		}, enum("state", "open", "done", "dropped"))
-	tool(s, "set_status", "Move a Task to another Status of kind backlog, todo or in_progress, as a Member of its Feature's Team. "+
+	tool(s, "set_status", "Move a Task to another Status of kind backlog, todo or in_progress: one you hold, or one of your Team's or Feature's. "+
 		"A Task reaches done and dropped Statuses only by complete and drop; naming one is refused with use_complete or use_drop.",
 		func(ctx context.Context, in setStatusIn) (client.Task, error) {
 			res, err := c.SetTaskStatusWithResponse(ctx, in.Task, &client.SetTaskStatusParams{}, client.SetTaskStatusBody{Status: in.Status})
