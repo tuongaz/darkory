@@ -24,7 +24,7 @@ var workCommands = []command{
 	{path: "heartbeat run", args: "[--background] [--watch-pid pid]", short: "heartbeat this Session's Claims until stopped", run: cmdHeartbeatRun, long: true},
 	{path: "heartbeat stop", args: "", short: "stop this Session's background heartbeat", run: cmdHeartbeatStop},
 	{path: "release", args: "<task> [--note text]", short: "give up your Claim; the Task needs the same Skill", run: cmdRelease},
-	{path: "handover", args: "<task> --skill skill [--note text]", short: "end your Claim and set the Skill the Task needs next", run: cmdHandover},
+	{path: "handover", args: "<task> --skill skill [--status s] [--note text]", short: "end your Claim and set the Skill the Task needs next", run: cmdHandover},
 	{path: "complete", args: "<task> [--note text]", short: "complete a Task you hold", run: cmdComplete},
 	{path: "drop", args: "<task> [--reason text]", short: "drop a Task (Feature owner)", run: cmdDrop},
 	{path: "take-back", args: "<task> [--reason text]", short: "end another Member's Claim (Reporting line or Feature owner)", run: cmdTakeBack},
@@ -32,14 +32,16 @@ var workCommands = []command{
 	{path: "observe", args: "<task> --worked <text|-> | --didnt-work <text|->", short: "record an Observation", run: cmdObserve},
 	{path: "attach", args: "<task|feature> <file> [--type mime] [--name filename] [--feature]", short: "attach Evidence", run: cmdAttach},
 	{path: "evidence get", args: "<id> [-o file|-]", short: "show an Evidence record, or download its file", run: cmdEvidenceGet},
-	{path: "file", args: "--title t (--skill s | --aim member) (--feature f | --blocks task) [--body text|-]", short: "file a Task; with --blocks, a question that blocks a Task", run: cmdFile},
+	{path: "file", args: "--title t (--skill s | --aim member) (--feature f | --blocks task) [--status s] [--body text|-]", short: "file a Task; with --blocks, a question that blocks a Task", run: cmdFile},
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Claims, Notes, Evidence and Observations", run: cmdShow},
-	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--skill s] [--aimed-at m] [--holder m | --mine]", short: "list Tasks", run: cmdTasks},
+	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--status s] [--skill s] [--aimed-at m] [--holder m | --mine]", short: "list Tasks", run: cmdTasks},
+	{path: "status", args: "<task> <status>", short: "move a Task to another Status (its Feature's Team or owner, or its holder)", run: cmdStatus},
+	{path: "workflow", short: "list the Organisation's Statuses, in order, with their kinds", run: cmdWorkflow},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
 	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposal written on a Task, or one by id", run: cmdProposalShow},
-	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
+	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--team t] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
 }
 
 // maxWait is the longest one `next` request waits; longer waits are made of several.
@@ -211,6 +213,7 @@ func (c *call) done(w io.Writer, what string, t client.Task) {
 
 func cmdHandover(c *call) error {
 	skill := c.fs.String("skill", "", "the Skill the Task needs next")
+	status := c.fs.String("status", "", "the Status to move the Task to, such as \"In review\" (default: it stays where it is)")
 	note := c.noteFlag()
 	args, err := c.args(1, 1)
 	if err != nil {
@@ -227,7 +230,8 @@ func cmdHandover(c *call) error {
 	if err != nil {
 		return err
 	}
-	res, err := conn.HandoverTaskWithResponse(c.ctx, args[0], &client.HandoverTaskParams{}, client.HandoverTaskBody{Skill: *skill, Note: n})
+	res, err := conn.HandoverTaskWithResponse(c.ctx, args[0], &client.HandoverTaskParams{},
+		client.HandoverTaskBody{Skill: *skill, Note: n, Status: opt(*status)})
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
@@ -441,6 +445,7 @@ func cmdFile(c *call) error {
 	blocks := c.fs.String("blocks", "", "a Task the new one blocks: a question or Escalation, filed on that Task's Feature")
 	title := c.fs.String("title", "", "the Task's title")
 	body := c.fs.String("body", "", "the Task's description (- reads standard input)")
+	status := c.fs.String("status", "", "the Status it starts in, such as Backlog, where next does not offer it (default: the first todo Status)")
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}
@@ -461,7 +466,8 @@ func cmdFile(c *call) error {
 		return err
 	}
 	res, err := conn.FileTaskWithResponse(c.ctx, &client.FileTaskParams{}, client.FileTaskBody{
-		Feature: opt(*feature), Title: *title, Description: desc, Skill: opt(*skill), AimedAt: opt(*aim), Blocks: opt(*blocks)})
+		Feature: opt(*feature), Title: *title, Description: desc, Skill: opt(*skill), AimedAt: opt(*aim), Blocks: opt(*blocks),
+		Status: opt(*status)})
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return err
 	}
@@ -528,6 +534,7 @@ func cmdTasks(c *call) error {
 	feature := c.fs.String("feature", "", "only this Feature's Tasks")
 	team := c.fs.String("team", "", "only this Team's Tasks")
 	state := c.fs.String("state", "", "only Tasks in this state: open, done or dropped")
+	status := c.fs.String("status", "", "only Tasks in this Status, by name or id")
 	skill := c.fs.String("skill", "", "only Tasks that need this Skill now")
 	aimed := c.fs.String("aimed-at", "", "only Tasks aimed at this Member")
 	holder := c.fs.String("holder", "", "only Tasks this Member holds")
@@ -542,7 +549,7 @@ func cmdTasks(c *call) error {
 		return err
 	}
 	params := &client.ListTasksParams{Feature: opt(*feature), Team: opt(*team), Skill: opt(*skill), AimedAt: opt(*aimed),
-		Holder: opt(*holder), Cursor: opt(*cursor)}
+		Holder: opt(*holder), Status: opt(*status), Cursor: opt(*cursor)}
 	if *state != "" {
 		params.State = ptr(client.TaskState(*state))
 	}

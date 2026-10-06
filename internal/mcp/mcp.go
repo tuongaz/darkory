@@ -56,7 +56,8 @@ type Server struct {
 
 // mcpPreamble comes before the working rules in the server's instructions.
 const mcpPreamble = `This MCP server is the darkory CLI as tools: next, claim, show_task, note, observe,
-attach_evidence, handover, complete, release, file_task (with blocks for a question), and so on.
+attach_evidence, handover, complete, release, file_task (with blocks for a question), set_status
+(darkory status), workflow, and so on.
 Where the rules below name a darkory command, call the tool of that name. This server sends
 Heartbeats for the Claims its Session makes while it runs, so you need not call heartbeat
 yourself; when a Claim lapses or is taken back, the next tool result says so — then stop working

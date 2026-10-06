@@ -82,7 +82,7 @@ func (c *call) printTasks(w io.Writer, ts []client.Task, next *string) {
 }
 
 func (c *call) printTaskLine(w io.Writer, t client.Task) {
-	line := fmt.Sprintf("%-9s %-13s %-14s %s", one(t.Key), stateOf(t), c.needsOf(t), one(t.Title))
+	line := fmt.Sprintf("%-9s %-13s %-12s %-14s %s", one(t.Key), stateOf(t), c.status(t.StatusID), c.needsOf(t), one(t.Title))
 	if h := c.claimOf(t.Claim); h != "" {
 		line += "  [" + h + "]"
 	}
@@ -97,6 +97,9 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 	fmt.Fprintf(w, "%s  %s\n", one(t.Key), one(t.Title))
 	fmt.Fprintf(w, "  Feature    %s %s\n", one(d.Feature.Key), one(d.Feature.Title))
 	fmt.Fprintf(w, "  State      %s (%s)\n", stateOf(t), one(string(t.Kind)))
+	if d.Status.ID != "" {
+		fmt.Fprintf(w, "  Status     %s (%s)\n", one(d.Status.Name), one(string(d.Status.Kind)))
+	}
 	if t.AimedAtID != nil {
 		fmt.Fprintf(w, "  Aimed at   %s\n", c.member(*t.AimedAtID))
 	} else if t.SkillID != nil {

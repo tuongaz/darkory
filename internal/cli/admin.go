@@ -29,6 +29,7 @@ var adminCommands = []command{
 	{path: "skill list", args: "[--kind k]", short: "list Skills", run: cmdSkillList},
 	{path: "skill show", args: "<skill>", short: "show a Skill and its current version's text", run: cmdSkillShow},
 	{path: "skill versions", args: "<skill>", short: "list a Skill's published versions", run: cmdSkillVersions},
+	{path: "workflow set", args: "--file path|-", short: "replace the Organisation's Statuses with a list, as workflow --json prints it (admin)", run: cmdWorkflowSet},
 	{path: "grant", args: "<member> <skill>", short: "grant a Skill to a Member (admin)", run: cmdGrant},
 	{path: "ungrant", args: "<member> <skill>", short: "take a Skill away from a Member (admin)", run: cmdUngrant},
 	{path: "report-to", args: "<member> <manager> | <member> --none", short: "set or clear a Member's Reporting line (admin)", run: cmdReportTo},
