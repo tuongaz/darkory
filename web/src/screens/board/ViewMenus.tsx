@@ -1,0 +1,226 @@
+// The top bar's controls on the Board screens: the List | Board switch, Filter, Display, and the
+// chips that show (and clear) what is filtered.
+import { CheckIcon, FilterIcon, KanbanIcon, LayersIcon, ListIcon, SlidersHorizontalIcon, UserIcon, XIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { Link, useSearchParams } from "react-router";
+import { StatusGlyph } from "@/components/StatusGlyph";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import type { Display, GroupBy, Order } from "./derive";
+import type { FilterParams } from "./state";
+
+/** The segmented List | Board switch (kit `.seg`); the other search parameters stay. */
+export function ViewSwitch({ view }: { view: "list" | "board" }) {
+  const [params] = useSearchParams();
+  const to = (v: "list" | "board") => {
+    const next = new URLSearchParams(params);
+    next.set("view", v);
+    next.delete("task");
+    return { search: `?${next}` };
+  };
+  const item = (v: "list" | "board", icon: ReactNode, label: string) => (
+    <Link
+      to={to(v)}
+      aria-current={view === v ? "page" : undefined}
+      aria-label={label}
+      className={cn(
+        "inline-flex h-[26px] items-center gap-1.5 rounded-[6px] px-2.5 font-medium text-muted-foreground [&_svg]:size-3.5",
+        view === v && "bg-background text-foreground shadow-soft",
+      )}
+    >
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </Link>
+  );
+  return (
+    <nav aria-label="View" className="inline-flex rounded-md bg-muted p-0.5">
+      {item("list", <ListIcon aria-hidden />, "List")}
+      {item("board", <KanbanIcon aria-hidden />, "Board")}
+    </nav>
+  );
+}
+
+/** An outline top-bar button whose label hides on a phone. */
+function BarButton({ icon, label, active, ...props }: { icon: ReactNode; label: string; active?: boolean } & React.ComponentProps<typeof Button>) {
+  return (
+    <Button variant="outline" aria-label={label} className={cn(active && "bg-accent")} {...props}>
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+    </Button>
+  );
+}
+
+export type FilterChoice = { id: string; name: string };
+
+/** Filter (F-B2's toolbar): the Skill a Task needs, who holds it, blocked only. */
+export function FilterMenu({
+  filters,
+  change,
+  skills,
+  holders,
+}: {
+  filters: FilterParams;
+  change: (c: Partial<FilterParams>) => void;
+  skills: FilterChoice[];
+  holders: FilterChoice[];
+}) {
+  const any = !!(filters.skill || filters.holder || filters.blocked);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <BarButton icon={<FilterIcon />} label="Filter" active={any} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger disabled={skills.length === 0}>Skill</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup value={filters.skill ?? ""} onValueChange={(v) => change({ skill: v || undefined })}>
+              {skills.map((s) => (
+                <DropdownMenuRadioItem key={s.id} value={s.name}>
+                  {s.name}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger disabled={holders.length === 0}>Held by</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup value={filters.holder ?? ""} onValueChange={(v) => change({ holder: v || undefined })}>
+              {holders.map((m) => (
+                <DropdownMenuRadioItem key={m.id} value={m.name}>
+                  {m.name}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuCheckboxItem checked={!!filters.blocked} onCheckedChange={(c) => change({ blocked: c === true })}>
+          Blocked
+        </DropdownMenuCheckboxItem>
+        {any && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => change({ skill: undefined, holder: undefined, blocked: false })}>Clear</DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** The toolbar under the top bar while anything is filtered: one chip per choice, × clears it. */
+export function FilterChips({ chips }: { chips: { label: string; clear: () => void }[] }) {
+  if (chips.length === 0) return null;
+  return (
+    <div className="flex h-10 flex-none items-center gap-1.5 overflow-x-auto border-b px-4">
+      {chips.map((c) => (
+        <span key={c.label} className="inline-flex h-6 flex-none items-center gap-1 rounded-md border bg-accent pr-0.5 pl-2 text-xs whitespace-nowrap">
+          {c.label}
+          <button type="button" aria-label={`Clear ${c.label}`} onClick={c.clear} className="grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-background">
+            <XIcon className="size-3" />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn("flex h-[30px] w-full items-center gap-2 rounded-[6px] px-2 text-left hover:bg-accent [&_svg]:size-3.5", on && "bg-accent")}
+    >
+      {children}
+      {on && <CheckIcon className="ml-auto" aria-hidden />}
+    </button>
+  );
+}
+
+function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="flex h-[30px] cursor-pointer items-center gap-2 rounded-[6px] px-2 hover:bg-accent">
+      {label}
+      <Switch checked={on} onCheckedChange={onChange} aria-label={label} className="ml-auto" />
+    </label>
+  );
+}
+
+function SectionLabel({ children }: { children: ReactNode }) {
+  return <div className="px-2 pt-1.5 pb-1 text-2xs font-medium text-muted-foreground">{children}</div>;
+}
+
+/** Display (F-B2): grouping (the list only), the order within a group, and what to show. */
+export function DisplayMenu({ display, change, view }: { display: Display; change: (c: Partial<Display>) => void; view: "list" | "board" }) {
+  const groups: { by: GroupBy; label: string; icon: ReactNode }[] = [
+    {
+      by: "status",
+      label: "Status",
+      icon: (
+        <span aria-hidden className="inline-flex">
+          <StatusGlyph glyph="todo" className="size-3" />
+        </span>
+      ),
+    },
+    { by: "feature", label: "Feature", icon: <LayersIcon aria-hidden /> },
+    { by: "holder", label: "Holder", icon: <UserIcon aria-hidden /> },
+  ];
+  const orders: { order: Order; label: string }[] = [
+    { order: "rank", label: "Rank, then waiting time" },
+    { order: "waiting", label: "Waiting time" },
+  ];
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <BarButton icon={<SlidersHorizontalIcon />} label="Display" className="data-[state=open]:bg-accent" />
+      </PopoverTrigger>
+      <PopoverContent align="end" aria-label="Display" className="w-[300px] p-1">
+        {view === "list" && (
+          <div role="group" aria-label="Group by">
+            <SectionLabel>Group by</SectionLabel>
+            {groups.map((g) => (
+              <Choice key={g.by} on={display.group === g.by} onClick={() => change({ group: g.by })}>
+                {g.icon}
+                {g.label}
+              </Choice>
+            ))}
+            <div className="-mx-1 my-1 h-px bg-border" />
+          </div>
+        )}
+        <div role="group" aria-label={view === "list" ? "Order within a group" : "Order within a column"}>
+          <SectionLabel>{view === "list" ? "Order within a group" : "Order within a column"}</SectionLabel>
+          {orders.map((o) => (
+            <Choice key={o.order} on={display.order === o.order} onClick={() => change({ order: o.order })}>
+              {o.label}
+            </Choice>
+          ))}
+        </div>
+        <div className="-mx-1 my-1 h-px bg-border" />
+        <div role="group" aria-label="Show">
+          <SectionLabel>Show</SectionLabel>
+          <Toggle label="Done" on={display.showDone} onChange={(on) => change({ showDone: on })} />
+          <Toggle label="Dropped" on={display.showDropped} onChange={(on) => change({ showDropped: on })} />
+          <Toggle label="Shipped and dropped Features' Tasks" on={display.showEndedFeatures} onChange={(on) => change({ showEndedFeatures: on })} />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
