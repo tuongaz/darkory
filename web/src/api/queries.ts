@@ -1,6 +1,7 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Member, type Skill, type SubjectType, type Team } from "./client";
+import { api, call, type Feature, type Member, type Skill, type SubjectType, type Task, type Team } from "./client";
+import { allPages } from "./pages";
 
 // The first element of every query key names what it reads; live updates invalidate by it.
 export const keys = {
@@ -18,6 +19,9 @@ export const keys = {
   feature: (ref: string) => ["feature", ref] as const,
   featureObservations: (ref: string) => ["feature-observations", ref] as const,
   heldTasks: (member: string) => ["tasks", { holder: member }] as const,
+  openTasks: ["tasks", { state: "open" }] as const,
+  allTasks: ["tasks", { all: true }] as const,
+  allFeatures: ["features", { all: true }] as const,
   task: (ref: string) => ["task", ref] as const,
   takeable: ["takeable"] as const,
   activity: ["activity"] as const,
@@ -127,4 +131,32 @@ export function useDirectory() {
     }),
     [members.data, teams.data, skills.data],
   );
+}
+
+/** Every open Task in the Organisation, in `next` order: what the sidebar's live count reads. */
+export function useOpenTasks() {
+  return useQuery({
+    queryKey: keys.openTasks,
+    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { state: "open", limit: 500, cursor } } }))),
+  });
+}
+
+/**
+ * Every Task and every Feature in the Organisation, read when ⌘K opens: /v1 has no search, so the
+ * palette matches keys and words in the browser.
+ */
+export function useAllTasks(enabled = true) {
+  return useQuery({
+    queryKey: keys.allTasks,
+    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { limit: 500, cursor } } }))),
+    enabled,
+  });
+}
+
+export function useAllFeatures(enabled = true) {
+  return useQuery({
+    queryKey: keys.allFeatures,
+    queryFn: () => allPages<Feature>((cursor) => call(api.GET("/v1/features", { params: { query: { limit: 500, cursor } } }))),
+    enabled,
+  });
 }

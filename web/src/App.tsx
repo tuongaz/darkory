@@ -1,21 +1,13 @@
-import { QueryClientProvider, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { NavLink, Outlet, Route, Routes } from "react-router";
-import { api, call, isUnauthenticated } from "./api/client";
-import { LiveActivity, LiveActivityContext, useActivityStream, useStreamState } from "./api/live";
-import { useHealth, useMe } from "./api/queries";
-import { Refusal } from "./components/ui";
-import { MeContext, useCurrentMe } from "./me";
-import { newQueryClient } from "./queryClient";
-import { Account } from "./views/Account";
-import { ActivityView } from "./views/ActivityView";
-import { AdminRoutes } from "./views/admin/AdminRoutes";
-import { Board } from "./views/Board";
-import { FeatureView } from "./views/FeatureView";
-import { MyWork } from "./views/MyWork";
-import { NotFound } from "./views/NotFound";
-import { SignedOut } from "./views/SignedOut";
-import { TaskView } from "./views/TaskView";
+import { isUnauthenticated } from "@/api/client";
+import { LiveActivity, LiveActivityContext } from "@/api/live";
+import { useMe } from "@/api/queries";
+import { AppRoutes } from "@/app/routes";
+import { SignedOut } from "@/app/SignedOut";
+import { Refusal } from "@/components/Refusal";
+import { MeContext } from "@/me";
+import { newQueryClient } from "@/queryClient";
 
 /** The query cache and the live Activity store the app runs inside. */
 export function Providers({ client, live, children }: { client: QueryClient; live: LiveActivity; children: ReactNode }) {
@@ -39,12 +31,12 @@ export function App({ router }: { router: (children: ReactNode) => ReactNode }) 
 /** Asks /v1/me who is signed in: the app when someone is, the signed-out page on 401. */
 export function Root() {
   const me = useMe();
-  if (me.isPending) return <p className="page muted">Loading…</p>;
+  if (me.isPending) return <p className="p-6 text-muted-foreground">Loading…</p>;
   if (me.isError) {
     if (isUnauthenticated(me.error)) return <SignedOut />;
     return (
-      <main className="page">
-        <h1>Darkory</h1>
+      <main className="mx-auto flex max-w-[520px] flex-col gap-3 px-4 pt-[72px]">
+        <h1 className="text-xl font-semibold">Darkory</h1>
         <p>The server did not say who is signed in.</p>
         <Refusal error={me.error} />
       </main>
@@ -52,122 +44,7 @@ export function Root() {
   }
   return (
     <MeContext.Provider value={me.data}>
-      <Routes>
-        <Route element={<Shell />}>
-          <Route index element={<Board />} />
-          <Route path="features/:feature" element={<FeatureView />} />
-          <Route path="tasks/:task" element={<TaskView />} />
-          <Route path="my-work" element={<MyWork />} />
-          <Route path="activity" element={<ActivityView />} />
-          <Route path="account" element={<Account />} />
-          <Route path="admin/*" element={<AdminRoutes />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
+      <AppRoutes />
     </MeContext.Provider>
-  );
-}
-
-function Shell() {
-  useActivityStream();
-  const me = useCurrentMe();
-  return (
-    <>
-      <a className="skip" href="#main">
-        Skip to content
-      </a>
-      <header className="top">
-        <div className="brand">
-          <span className="logo">Darkory</span>
-          <span className="org">{me.organisation.name}</span>
-        </div>
-        <nav aria-label="Main">
-          <NavLink to="/" end>
-            Board
-          </NavLink>
-          <NavLink to="/my-work">My work</NavLink>
-          <NavLink to="/activity">Activity</NavLink>
-          {me.member.admin && <NavLink to="/admin">Admin</NavLink>}
-          <NavLink to="/account">My account</NavLink>
-        </nav>
-        <div className="who">
-          <StreamIndicator />
-          <span>{me.member.name}</span>
-          <SignOut />
-        </div>
-      </header>
-      <UpdateBanner />
-      <main id="main" className="page">
-        <Outlet />
-      </main>
-    </>
-  );
-}
-
-const dismissedKey = "darkory.update-dismissed";
-
-function readDismissed(): string | null {
-  try {
-    return localStorage.getItem(dismissedKey);
-  } catch {
-    return null;
-  }
-}
-
-/** Says when a newer release exists, until dismissed; this browser remembers the dismissed version. */
-function UpdateBanner() {
-  const health = useHealth();
-  const [dismissed, setDismissed] = useState(readDismissed);
-  const h = health.data;
-  if (!h?.update_available || !h.latest_version || h.latest_version === dismissed) return null;
-  const latest = h.latest_version;
-  return (
-    <aside className="banner" aria-label="Update available">
-      <p>
-        Update available: <strong>{latest}</strong>. This server runs {h.version}; run <code>darkory update</code> where
-        it runs.
-      </p>
-      <button
-        type="button"
-        className="link"
-        onClick={() => {
-          try {
-            localStorage.setItem(dismissedKey, latest);
-          } catch {
-            // Dismissed for this page load only.
-          }
-          setDismissed(latest);
-        }}
-      >
-        Dismiss
-      </button>
-    </aside>
-  );
-}
-
-function StreamIndicator() {
-  const state = useStreamState();
-  const label = { connecting: "Connecting…", live: "Live", reconnecting: "Reconnecting…", closed: "Live updates off" }[state];
-  return (
-    <span className={`stream stream-${state}`} role="status" title="Live updates from the Activity stream">
-      {label}
-    </span>
-  );
-}
-
-function SignOut() {
-  const qc = useQueryClient();
-  const logout = useMutation({
-    mutationFn: () => call(api.POST("/v1/logout")),
-    // Forget everything read as this Member; /v1/me then answers 401.
-    onSuccess: () => qc.resetQueries(),
-  });
-  return (
-    <>
-      <button type="button" className="link" onClick={() => logout.mutate()} disabled={logout.isPending}>
-        Sign out
-      </button>
-      {logout.isError && <Refusal error={logout.error} />}
-    </>
   );
 }

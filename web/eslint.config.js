@@ -21,8 +21,9 @@ export default defineConfig([
     },
   },
   {
-    // Tests and the test helpers export what they like.
-    files: ["src/test/**", "**/*.test.{ts,tsx}"],
+    // Tests and the test helpers export what they like, and so do the shadcn/ui components, which
+    // export their variants beside them.
+    files: ["src/test/**", "**/*.test.{ts,tsx}", "src/components/ui/**"],
     rules: { "react-refresh/only-export-components": "off" },
   },
 ]);
