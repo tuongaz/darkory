@@ -95,14 +95,18 @@ async function signIn(page: Page, link: string) {
   await expect(page).toHaveURL(`${base}/inbox`);
 }
 
-/** Drags with the mouse, as dnd-kit needs: press, move past its 5px threshold, travel, release. */
-async function drag(page: Page, from: Locator, to: Locator) {
+/**
+ * Drags with the mouse, as dnd-kit needs: press, move past its 5px threshold, travel, release.
+ * `over` runs while the card is held over the target, before the release.
+ */
+async function drag(page: Page, from: Locator, to: Locator, over?: () => Promise<void>) {
   const a = (await from.boundingBox())!;
   const b = (await to.boundingBox())!;
   await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
   await page.mouse.down();
   await page.mouse.move(a.x + a.width / 2 + 12, a.y + a.height / 2, { steps: 4 });
   await page.mouse.move(b.x + b.width / 2, b.y + 60, { steps: 16 });
+  await over?.();
   await page.mouse.up();
 }
 
@@ -171,7 +175,8 @@ test("the Board: live Claims, drags that set a Status or are refused, File Task,
     expect((await bot("POST", "/v1/tasks/next", { wait_seconds: 0 })).status).toBe(204);
 
     await expect(column(page, "Backlog").locator(`[data-task="${discount}"]`)).toBeVisible();
-    await drag(page, card(page, discount), column(page, "Todo"));
+    // An open column invites the drop with a dashed outline.
+    await drag(page, card(page, discount), column(page, "Todo"), () => expect(column(page, "Todo")).toHaveClass(/outline-dashed/));
     await expect(column(page, "Todo").locator(`[data-task="${discount}"]`)).toBeVisible();
     await expect.poll(async () => (await v1<TaskDetail>(page, "GET", `/v1/tasks/${discount}`)).status.name).toBe("Todo");
     await shot(page, "2-backlog-to-todo");
@@ -183,11 +188,21 @@ test("the Board: live Claims, drags that set a Status or are refused, File Task,
   });
 
   await test.step("3. dragging to Done without holding the Task is refused: the toast names Claim, the card snaps back", async () => {
-    await drag(page, card(page, payment), column(page, "Done"));
+    // Done will refuse it, so it shows no outline inviting the drop.
+    await drag(page, card(page, payment), column(page, "Done"), async () => {
+      await page.waitForTimeout(100);
+      await expect(column(page, "Done")).not.toHaveClass(/outline-dashed/);
+    });
     const toast = page.getByRole("region", { name: /Notifications/ }).getByRole("listitem").filter({ hasText: "Not moved to Done" });
     await expect(toast).toBeVisible();
     await expect(toast).toContainText("Done is reached by completing a Task you hold.");
-    await expect(toast.getByRole("button", { name: `Claim ${payment}` })).toBeVisible();
+    const claimIt = toast.getByRole("button", { name: `Claim ${payment}` });
+    await expect(claimIt).toBeVisible();
+    // Its action is an outline button (F-B4): the page's ground, a 1px border, 26px tall.
+    const ground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    await expect(claimIt).toHaveCSS("background-color", ground);
+    await expect(claimIt).toHaveCSS("border-top-width", "1px");
+    await expect(claimIt).toHaveCSS("height", "26px");
     // The card has snapped back: it is in Todo, no longer the faded place of a card in flight.
     await expect(column(page, "Todo").locator(`[data-task="${payment}"]`)).not.toHaveClass(/opacity-40/);
     await expect(column(page, "Done").locator(`[data-task="${payment}"]`)).toHaveCount(0);

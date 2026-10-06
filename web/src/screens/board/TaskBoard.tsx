@@ -121,7 +121,8 @@ export function TaskBoard({
             key={c.status.id}
             column={c}
             model={model}
-            dropTarget={!!active && over?.id === c.status.id && c.status.id !== active.status_id}
+            // Done and Dropped refuse a drop (Complete and Drop reach them), so they never invite one.
+            dropTarget={!!active && isOpenKind(c.status.kind) && over?.id === c.status.id && c.status.id !== active.status_id}
             onExpand={onExpand}
             onAdd={onAdd}
           />

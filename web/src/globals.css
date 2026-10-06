@@ -3,6 +3,23 @@
 /* Sonner's styles, which it would inject at run time; the build stops that (vite.config.ts). */
 @import "sonner/dist/styles.css";
 
+/* A toast's action is the kit's outline button (`.btn.xs.outline`, F-B4), not sonner's solid one.
+   Unlayered, to win over sonner's own rule. */
+[data-sonner-toast][data-styled="true"] [data-button][data-action] {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+[data-sonner-toast][data-styled="true"] [data-button][data-action]:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
 /* Radix Select's and ScrollArea's viewports, whose own <style> the build stops (vite.config.ts).
    Unlayered, as the injected element was. */
 [data-radix-select-viewport],

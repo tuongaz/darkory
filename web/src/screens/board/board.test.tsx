@@ -107,6 +107,22 @@ describe("Team › Tasks, board", () => {
     expect(await within(screen.getByRole("region", { name: "Dropped" })).findByRole("link", { name: /WEB-15/ })).toBeInTheDocument();
   });
 
+  it("rings the card whose peek is open, and only that one", async () => {
+    mockApi(
+      routes({
+        "GET /v1/tasks/:task": { task: discount, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+        "GET /v1/teams/:team": { team: web, members: [me().member] },
+        "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
+      }),
+    );
+    renderApp("/teams/WEB/tasks?view=board&task=WEB-5");
+    expect(await screen.findByRole("dialog", { name: "Task WEB-5" })).toBeInTheDocument();
+    const ringed = await screen.findByRole("link", { name: /WEB-5 Discount codes/ });
+    expect(ringed).toHaveAttribute("data-selected", "true");
+    expect(ringed).toHaveClass("ring-2", "ring-ring");
+    expect(document.querySelectorAll("#main [data-selected]")).toHaveLength(1);
+  });
+
   it("lets a Member of the Team move open cards, and nobody move ended ones", async () => {
     mockApi(routes());
     renderApp("/teams/WEB/tasks?view=board");
