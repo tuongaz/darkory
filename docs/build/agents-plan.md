@@ -8,7 +8,7 @@ A Local Install should come up with agents ready: file a Feature, and agents bre
 |---|---|---|
 | D1 | What runs an agent | A per-agent **command template** (pluggable); Claude Code is the default; each agent has a **model**. External agents (not started by Darkory) keep working as today. |
 | D2 | What a session works in | **Workspaces**: a list on the Install, each of a kind (`git` now), with a Team default; a Task names **one or more**; the runner prepares a workspace directory with one checkout per Workspace. |
-| D3 | Who pulls and starts | A **runner inside `darkory serve`** (on by default on Local when agents are configured); the same loop as `darkory agents` for a worker machine later. The runner calls `next` per agent, then starts the session with the Task in hand. |
+| D3 | Who pulls and starts | A **runner inside `darkory serve`** (on by default on Local when agents are configured); the same loop as `darkory runner` for a worker machine later. The runner calls `next` per agent, then starts the session with the Task in hand. |
 | D4 | What `init` seeds | Team `MAIN`; the current git repository as the first Workspace; agents `planner` (breakdown), `builder` (engineer), `reviewer` (review, skill-review), `retro` (retro), reporting to the first human; tokens in `<data>/agents/`. |
 | D5 | How a session runs and ends | Interactive Claude Code **in tmux** `dk-<TASK-KEY>`; the prompt carries the Skill text, the record and the exit rules; the agent ends the Task itself through MCP (complete / hand over / a question), the runner then exits the session (0) and attaches the log as Evidence. Turn ended without a decision → nudge twice → release with a Note. |
 | D6 | Watching and joining | **xterm.js in the web** over a WebSocket to `tmux attach` (admins read-write, others read-only, a Note on join); `darkory join <task>` in a shell. |
@@ -26,17 +26,17 @@ A Local Install should come up with agents ready: file a Feature, and agents bre
 - **Workspace** `{id, org_id, name, kind: git, path, mode: plain | pull_request, default_branch, created_at}`; `teams.default_workspace_id`; `task_workspaces (task_id, workspace_id)` — a Task names one or more; default the Team's.
 - **Feature** gains `quick` (bool) and `ship_when_done` (bool); `teams.ship_when_done` default.
 - **Member** gains agent settings (agents only): `agent: {command, args[], model, env{}, unattended: true, paused: false}`; `command` is a template with `{prompt_file}`, `{workspace}`, `{session_id}`, `{model}`; the default renders to `claude --session-id {session_id} --model {model} --dangerously-skip-permissions --mcp-config <file> --append-system-prompt-file {prompt_file}` (flags verified against Claude Code 2.1.289: `--session-id`, `--model`, `--mcp-config`, `--settings`, `--append-system-prompt`, `--add-dir`, `--dangerously-skip-permissions`).
-- **Runner sessions** (read model, not Activity): `{task_id, member_id, session_id, host, tmux, started_at, state: running | nudged | ending, log_path}` served by `GET /v1/runner/sessions`; the terminal at `GET /v1/runner/sessions/{task}/terminal` (WebSocket); `POST …/nudge` and `POST …/stop` for admins.
+- **Runner sessions** (read model, not Activity): `{task_id, member_id, session_id, host, tmux, started_at, state: running | nudged | ending, log_path}` served by `GET /v1/runner/sessions` (always 200: `{items, runner: bool}`, `runner: false` when no Runner is attached); the terminal at `GET /v1/runner/sessions/{task}/terminal` (WebSocket); `POST …/nudge` and `POST …/stop` for admins.
 - **Merges and sessions** are recorded as Notes on the Task ("Merged <branch> into <target> at <sha>", the conflict, "<name> joined the session") and the session log as Evidence; a conflict files a new work Task on the Feature ("Resolve the merge of <branch> into <target>") because a Done Task never reopens. To write those Notes the runner acts as the Member whose token it holds, so **a Note on a Task nobody holds is allowed for the Feature's owner and any active Member of the Feature's Team** (a held Task keeps the holder-only rule).
 - Activity kinds: `workspace.added/changed/removed`, `member.agent_changed`, `team.changed`.
 
 ## `/v1` additions (spec first, then `make gen`, `npm run gen`)
 
-`GET/POST /v1/workspaces`, `PATCH/DELETE /v1/workspaces/{ws}`; `workspaces` on `FileTaskBody`, `TaskDetail.workspaces`; `quick`, `ship_when_done` on `FileFeatureBody` and `Feature`; `default_workspace`, `ship_when_done` on Team; `PATCH /v1/members/{m}/agent`; `GET /v1/runner/sessions`, `…/{task}/terminal` (WebSocket, cookie or token, Origin-checked), `…/{task}/nudge`, `…/{task}/stop`; `darkory join <task> [--readonly]`, `darkory agents [--member …]`, `darkory workspace add|list|remove`, `darkory feature create --quick --skill … --ship-when-done`, `darkory file --workspace …`.
+`GET/POST /v1/workspaces`, `PATCH/DELETE /v1/workspaces/{ws}`; `workspaces` on `FileTaskBody`, `TaskDetail.workspaces`; `quick`, `ship_when_done` on `FileFeatureBody` and `Feature`; `default_workspace`, `ship_when_done` on Team; `PATCH /v1/members/{m}/agent`; `GET /v1/runner/sessions`, `…/{task}/terminal` (WebSocket, cookie or token, Origin-checked), `…/{task}/nudge`, `…/{task}/stop`; `darkory join <task> [--readonly]`, `darkory runner [--member …]`, `darkory workspace add|list|remove`, `darkory feature create --quick --skill … --ship-when-done`, `darkory file --workspace …`.
 
 ## The runner
 
-One goroutine per agent Member whose settings exist and are not paused, started by `serve` (`--agents=off` disables; `darkory agents` runs the same with tokens read from `<data>/agents/` or `--token`):
+One goroutine per agent Member whose settings exist and are not paused, started by `serve` (`--runner=off` disables; `darkory runner` runs the same with tokens read from `<data>/agents/` or `--token`):
 
 1. `next` as the agent (wait 30 s, loop) with the agent's model label; the Claim's Heartbeat timeout is 5 min.
 2. **Workspace:** for each Workspace the Task names (default the Team's): `git worktree add <data>/workspaces/<task-key>/<ws-name> -b <task-key>/<slug>` from the Feature's branch (`feature/<FEATURE-KEY>`, created at Break down from the default branch) or from the default branch for a quick Feature. Everything under `<data>/workspaces/` is the runner's; it never touches a branch it did not create and never force-pushes.
@@ -58,7 +58,7 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 ## Phases
 
 - **R0 — Spec and model.** Migration 0004 (workspaces, task_workspaces, feature flags, team defaults, member agent settings as JSON), the `/v1` additions, generated code, CLI commands, MCP (`workspaces` in `show_task`), `init` seeding the Team, the Workspace from the current repo, the roster and its tokens. Tests on both engines.
-- **R1 — Runner core**, with a **fake agent** (a script that acts through the CLI: note, attach, complete / handover / question) so the loop is tested end to end on both engines without a model: `next` → workspace → start → heartbeat gating → exit → Evidence; nudge and release; the merge flow (feature branch, review-complete merge, conflict, Ship, quick, ship-when-done); the `gh` poll stubbed. `darkory agents` and `--agents=off`.
+- **R1 — Runner core**, with a **fake agent** (a script that acts through the CLI: note, attach, complete / handover / question) so the loop is tested end to end on both engines without a model: `next` → workspace → start → heartbeat gating → exit → Evidence; nudge and release; the merge flow (feature branch, review-complete merge, conflict, Ship, quick, ship-when-done); the `gh` poll stubbed. `darkory runner` and `--runner=off`.
 - **R2 — tmux and the terminal**: tmux sessions, `pipe-pane`, `darkory join`, the WebSocket terminal endpoint, xterm.js panel, Agents page state, admin nudge/stop. A real Claude Code smoke run by hand against a scratch Install, recorded as evidence.
 - **R3 — Web settings**: Admin → Workspaces, agent settings on the Member page, File Feature/Task switches, Session panel polish.
 - **R4 — Proof**: the fake-agent scenarios in `e2e/`, the bots extended to run under the runner, Playwright scenarios below, screenshots, and a review round against Linear's conventions by a reviewer who did not build it. The proof covers **two kinds of Organisation**, each a preset of `tools/bots` (`--preset software | accounting`) that seeds Teams, Skills, Statuses, Workspaces and Features and runs agents and human personas against them:
@@ -78,7 +78,7 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 9. A merge conflict: the build Task returns to Todo with the conflict Note; the next session resolves it.
 10. `pull_request` Workspace: the PR's merge completes the review Task.
 11. Two builders, one Feature, two Workspaces named on one Task: one workspace directory with two checkouts.
-12. `darkory agents` on the same machine with the server's `--agents=off`: identical behaviour.
+12. `darkory runner` on the same machine with the server's `--runner=off`: identical behaviour.
 
 ## Not now
 
