@@ -40,6 +40,10 @@ _Avoid_: Epic, project, story
 The unit of work a Member claims and works. Every Task belongs to exactly one Feature.
 _Avoid_: Issue, ticket, job, sub-issue
 
+**Status**:
+Where a Task is in its workflow, chosen from the list the Organisation defines and orders, such as Backlog, Todo, In progress, In review, Done. Every Status is of one of five kinds — Backlog, Todo, In progress, Done, Dropped — and the kind is what Darkory's rules read: a Task in a Backlog Status is not takeable; a Task reaches a Done or Dropped Status only by being completed or dropped, and ends there. Claimed and blocked are not Statuses: they follow from a Claim and from Blocking, whatever the Status.
+_Avoid_: State, column, stage, workflow step
+
 **Claim**:
 A Member's exclusive hold on a Task; at most one Member holds a Task at a time. The Member may attach a heartbeat timeout when claiming. If so, the Claim is bound to the Session that made it and lapses when no Heartbeat arrives in time; otherwise it is bound to the Member. It also ends when the Member releases, hands over, or completes the Task, when someone on the holder's Reporting line or the Feature owner takes it back, when the Task is dropped, or when the token or Session it is bound to is revoked.
 _Avoid_: Assignment, lock, lease
