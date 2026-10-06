@@ -11,11 +11,12 @@ import { Pill } from "@/components/Pill";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import { useMemberName, useSkillName } from "./format";
-import { Avatar, Choice, GlyphOf } from "./parts";
+import { Avatar, GlyphOf } from "./parts";
 import { useSkillDetail, useStatuses, useTakers } from "./queries";
 
 type DialogProps = { detail: TaskDetail; open: boolean; onOpenChange: (open: boolean) => void };
@@ -124,44 +125,40 @@ export function HandOverDialog({ detail, open, onOpenChange }: DialogProps) {
       error={handover.error}
     >
       <Field label="Skill it needs next" htmlFor="handover-skill" help={skill ? <TakersLine detail={detail} skillId={skill} /> : undefined}>
-        <Choice
-          id="handover-skill"
-          value={skill}
-          onChange={setSkill}
-          placeholder="Choose a Skill"
-          options={skillList.map((s) => ({ value: s.id, label: s.name }))}
-        />
+        <Select value={skill} onValueChange={setSkill}>
+          <SelectTrigger id="handover-skill" className="w-full">
+            <SelectValue placeholder="Choose a Skill" />
+          </SelectTrigger>
+          <SelectContent>
+            {skillList.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Status after hand over" htmlFor="handover-status">
-        <Choice
-          id="handover-status"
-          value={next}
-          onChange={setNext}
-          placeholder={status.name}
-          options={[
-            {
-              value: unchanged,
-              label: (
-                <>
-                  <GlyphOf status={status} statuses={statuses} />
-                  {status.name}
-                  <span className="text-muted-foreground">· unchanged</span>
-                </>
-              ),
-            },
-            ...choices
+        <Select value={next} onValueChange={setNext}>
+          <SelectTrigger id="handover-status" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={unchanged}>
+              <GlyphOf status={status} statuses={statuses} />
+              {status.name}
+              <span className="text-muted-foreground">· unchanged</span>
+            </SelectItem>
+            {choices
               .filter((s) => s.id !== status.id)
-              .map((s) => ({
-                value: s.id,
-                label: (
-                  <>
-                    <GlyphOf status={s} statuses={statuses} />
-                    {s.name}
-                  </>
-                ),
-              })),
-          ]}
-        />
+              .map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  <GlyphOf status={s} statuses={statuses} />
+                  {s.name}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Note" htmlFor="handover-note" optional>
         <Textarea id="handover-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="For whoever works the Task next" />
@@ -440,16 +437,24 @@ export function ProposeDialog({ detail, open, onOpenChange }: DialogProps) {
       size="lg"
     >
       <Field label="Skill" htmlFor="propose-skill">
-        <Choice
-          id="propose-skill"
+        <Select
           value={skill}
-          onChange={(s) => {
+          onValueChange={(s) => {
             setSkill(s);
             setBody(null);
           }}
-          placeholder="Choose a company Skill"
-          options={company.map((s) => ({ value: s.id, label: s.name }))}
-        />
+        >
+          <SelectTrigger id="propose-skill" className="w-full">
+            <SelectValue placeholder="Choose a company Skill" />
+          </SelectTrigger>
+          <SelectContent>
+            {company.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </Field>
       <Field label="Text" htmlFor="propose-body">
         <Textarea

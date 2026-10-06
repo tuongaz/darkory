@@ -24,7 +24,7 @@ export type TaskActions = {
   menu: TaskAction[];
   /** Menu items shown dimmed, with the pill saying why. */
   dimmed: Partial<Record<TaskAction, string>>;
-  /** Whether the Status is a menu (any Member of the Feature's Team) or a fact. */
+  /** Whether the Status is a menu (the Feature's Team, its owner, the holder) or a fact. */
   status: "menu" | "fact";
   /** Where the Note composer goes: the holder writes, anyone else sees who may. */
   notes: { composer: true } | { onlyHolder: string } | null;
@@ -58,7 +58,9 @@ export function taskActions({ me, detail, members, takeable, teams, now }: Actio
   const mine = claim?.holder_id === me;
   const owner = feature.owner_id === me;
   const inTeam = teams.has(feature.team_id);
-  const out: TaskActions = { caret: [], menu: [], dimmed: {}, status: open && inTeam ? "menu" : "fact", notes: null };
+  // The holder may be from another Team, as a reviewer or the Member a question is aimed at is.
+  const movesStatus = open && (inTeam || owner || mine);
+  const out: TaskActions = { caret: [], menu: [], dimmed: {}, status: movesStatus ? "menu" : "fact", notes: null };
 
   if (mine) {
     out.primary = "complete";

@@ -1,0 +1,323 @@
+import { BotIcon, EllipsisIcon, PlusIcon } from "lucide-react";
+import { useCallback, type MouseEvent } from "react";
+import { Link, useSearchParams } from "react-router";
+import type { Activity, Feature, Member, MemberDetail } from "@/api/client";
+import { useDirectory, useOpenTasks } from "@/api/queries";
+import { Content, TopBar } from "@/app/TopBar";
+import { useNow } from "@/clock";
+import { EmptyState } from "@/components/EmptyState";
+import { HeartbeatMeter } from "@/components/HeartbeatMeter";
+import { Key } from "@/components/Key";
+import { MemberAvatar } from "@/components/MemberAvatar";
+import { Pill } from "@/components/Pill";
+import { Refusal } from "@/components/Refusal";
+import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { useCurrentMe } from "@/me";
+import { liveClaim } from "@/work";
+import { AgentMenuItems, AgentPeek, EndPill } from "./AgentPeek";
+import { agentActions, agentParam, taskOverAgents } from "./agentActions";
+import { agentRows, claimKinds, lapsesIn24h, lastClaimEntry, type AgentRow } from "./derive";
+import { useFeatureMap, useMemberDetails, useRecentActivity, useSessions, useTaskMap, type Session } from "./queries";
+
+const claimKindSet = new Set<string>(claimKinds);
+
+/** /agents: who is working right now, and is anyone stuck. ?agent=<name> opens one agent's peek. */
+export function AgentsPage() {
+  const me = useCurrentMe();
+  const admin = me.member.admin;
+  const now = useNow();
+  const { memberList, members, skills } = useDirectory();
+  const open = useOpenTasks();
+  const features = useFeatureMap();
+  const tasks = useTaskMap();
+  const [params, setParams] = useSearchParams();
+  const selected = params.get(agentParam);
+
+  const rows = agentRows(memberList, open.data ?? [], now);
+  const ids = rows.map((r) => r.agent.id);
+  const details = useMemberDetails(ids);
+  const sessions = useSessions(ids, admin);
+  const lapses = useRecentActivity({ kind: ["task.lapsed"] }, (e) => e.kind === "task.lapsed");
+  const history = useRecentActivity({ kind: [...claimKinds] }, (e) => claimKindSet.has(e.kind));
+
+  const openPeek = useCallback(
+    (name: string) =>
+      setParams((p) => {
+        const next = new URLSearchParams(p);
+        next.set(agentParam, name);
+        return next;
+      }),
+    [setParams],
+  );
+  const closePeek = useCallback(
+    () =>
+      setParams((p) => {
+        const next = new URLSearchParams(p);
+        next.delete(agentParam);
+        return next;
+      }),
+    [setParams],
+  );
+
+  return (
+    <>
+      <TopBar
+        crumbs={[{ label: "Agents" }]}
+        primary={
+          admin && (
+            <Button asChild>
+              <Link to="/admin/members?new=1&kind=agent">
+                <PlusIcon />
+                New agent
+              </Link>
+            </Button>
+          )
+        }
+      />
+      <Content>
+        <h1 className="sr-only">Agents</h1>
+        {open.isError ? (
+          <Refusal error={open.error} className="px-6 py-5" />
+        ) : open.isPending || memberList.length === 0 ? (
+          <div className="flex flex-col gap-2 px-6 py-5">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={<BotIcon />}
+            title="No agents"
+            action={
+              admin && (
+                <Button asChild variant="outline">
+                  <Link to="/admin/members?new=1&kind=agent">New agent</Link>
+                </Button>
+              )
+            }
+          >
+            Add an agent Member to see its Claims here.
+          </EmptyState>
+        ) : (
+          <table className="w-full min-w-[1020px] table-fixed border-collapse">
+            <colgroup>
+              <col className="w-[220px]" />
+              <col />
+              <col className="w-[136px]" />
+              <col className="w-[176px]" />
+              <col className="w-[200px]" />
+              <col className="w-[104px]" />
+              <col className="w-12" />
+            </colgroup>
+            <thead>
+              <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-6">
+                <th>Agent</th>
+                <th>Holds</th>
+                <th>Heartbeat</th>
+                <th>Session · model</th>
+                <th>Skills · Teams</th>
+                <th className="text-right">Lapses, 24 h</th>
+                <th>
+                  <span className="sr-only">Actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => (
+                <AgentTableRow
+                  key={row.agent.id}
+                  row={row}
+                  detail={details[i]?.data}
+                  sessions={admin ? sessions[i]?.data : undefined}
+                  admin={admin}
+                  lapses={lapsesIn24h(lapses.entries, row.agent.id, now)}
+                  last={lastClaimEntry(history.entries, row.agent.id)}
+                  selected={selected === row.agent.name}
+                  onOpen={openPeek}
+                  me={me.member}
+                  members={members}
+                  features={features}
+                  skills={skills}
+                  taskKey={(id) => tasks.get(id)?.key}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Content>
+      {selected && <AgentPeek key={selected} name={selected} onClose={closePeek} />}
+    </>
+  );
+}
+
+function AgentTableRow({
+  row,
+  detail,
+  sessions,
+  admin,
+  lapses,
+  last,
+  selected,
+  onOpen,
+  me,
+  members,
+  features,
+  skills,
+  taskKey,
+}: {
+  row: AgentRow;
+  detail: MemberDetail | undefined;
+  sessions: Session[] | undefined;
+  admin: boolean;
+  lapses: Activity[];
+  last: Activity | undefined;
+  selected: boolean;
+  onOpen: (name: string) => void;
+  me: Member;
+  members: Map<string, Member>;
+  features: Map<string, Feature>;
+  skills: Map<string, { name: string }>;
+  taskKey: (id: string) => string | undefined;
+}) {
+  const now = useNow();
+  const { agent, held } = row;
+  const task = held[0];
+  const claim = task && liveClaim(task, now);
+  const idle = !claim;
+  const manager = agent.manager_id ? members.get(agent.manager_id) : undefined;
+  const actions = agentActions({ agent, held, me, members, features, sessions });
+  // An idle agent's last Claim, when it ended: the reason it is idle.
+  const ended = idle && last && last.kind !== "task.claimed" ? last : undefined;
+  const lapsedKeys = [...new Set(lapses.map((l) => taskKey(l.subject_id)).filter((k): k is string => !!k))];
+
+  const open = (e: MouseEvent) => {
+    // A click on a link or a button inside the row does its own thing.
+    if ((e.target as HTMLElement).closest("a, button, [role=menuitem]")) return;
+    onOpen(agent.name);
+  };
+
+  return (
+    <tr
+      onClick={open}
+      aria-selected={selected}
+      className={cn(
+        "group h-[58px] cursor-pointer border-b hover:bg-accent [&>td]:px-2.5 [&>td]:py-2 [&>td:first-child]:pl-6",
+        idle && "text-muted-foreground",
+        selected && "bg-accent [&>td:first-child]:shadow-[inset_2px_0_0_var(--primary)]",
+      )}
+    >
+      <td>
+        <span className="flex min-w-0 items-center gap-2">
+          <MemberAvatar member={agent} size="md" className={cn(idle && "opacity-60")} />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <Link
+              to={{ search: `?${agentParam}=${encodeURIComponent(agent.name)}` }}
+              onClick={(e) => {
+                e.preventDefault();
+                onOpen(agent.name);
+              }}
+              className={cn("truncate font-medium hover:underline", !idle && "text-foreground")}
+            >
+              {agent.name}
+            </Link>
+            {manager && <small className="truncate text-xs text-muted-foreground">reports to {manager.name}</small>}
+          </span>
+        </span>
+      </td>
+      <td>
+        {claim ? (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Key to={taskOverAgents(task.key)}>{task.key}</Key>
+              <span className="truncate font-medium text-foreground">{task.title}</span>
+              {held.length > 1 && <span className="text-xs whitespace-nowrap text-muted-foreground">+{held.length - 1}</span>}
+            </span>
+            <small className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+              {task.blocked && task.open_blockers?.[0] ? (
+                <Pill tone="blocked">Blocked by {task.open_blockers[0].key}</Pill>
+              ) : (
+                claim.skill_id && <span className="truncate">{skills.get(claim.skill_id)?.name}</span>
+              )}
+            </small>
+          </span>
+        ) : (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span>Nothing held</span>
+            {ended && taskKey(ended.subject_id) && (
+              <small className="flex min-w-0 items-center gap-1.5 text-xs">
+                <Key to={taskOverAgents(taskKey(ended.subject_id)!)}>{taskKey(ended.subject_id)!}</Key>
+                <EndPill end={ended} />
+              </small>
+            )}
+          </span>
+        )}
+      </td>
+      <td>{claim && <HeartbeatMeter claim={claim} className="text-foreground" />}</td>
+      <td>
+        {agent.deactivated_at ? (
+          <Pill tone="dropped">Deactivated</Pill>
+        ) : claim ? (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate font-mono text-xs text-foreground">{claim.session_id}</span>
+            {claim.model_label && <small className="truncate font-mono text-xs text-muted-foreground">{claim.model_label}</small>}
+          </span>
+        ) : admin && sessions && sessions.length > 0 ? (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate font-mono text-xs">{sessions[0].id}</span>
+            {sessions.length > 1 && <small className="text-xs">+{sessions.length - 1} Sessions</small>}
+          </span>
+        ) : (
+          (!admin || sessions) && <Pill tone="dropped">No Session</Pill>
+        )}
+      </td>
+      <td>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex min-w-0 gap-1 overflow-hidden">
+            {detail?.skills.map((s) => (
+              <Pill key={s.id} tone="outline">
+                {s.name}
+              </Pill>
+            ))}
+          </span>
+          <small className="truncate text-xs text-muted-foreground">{detail?.teams.map((t) => t.name).join(" · ")}</small>
+        </span>
+      </td>
+      <td className="text-right tabular-nums">
+        <span className="flex flex-col items-end gap-0.5">
+          <span className={cn(lapses.length > 0 && "text-foreground")}>{lapses.length}</span>
+          {lapsedKeys.length > 0 && (
+            <small className="flex gap-1">
+              {lapsedKeys.slice(0, 3).map((k) => (
+                <Key key={k} to={taskOverAgents(k)}>
+                  {k}
+                </Key>
+              ))}
+            </small>
+          )}
+        </span>
+      </td>
+      <td>
+        {actions.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                aria-label={`More for ${agent.name}`}
+              >
+                <EllipsisIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <AgentMenuItems actions={actions} />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </td>
+    </tr>
+  );
+}
+
