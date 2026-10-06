@@ -1151,7 +1151,8 @@ export interface paths {
          *     the `Activity` as JSON. A reconnecting client sends `Last-Event-ID` (or `after`, for
          *     clients that cannot set headers) and receives every entry after it; `0` sends the whole
          *     history. With neither, the stream starts from now: it sends only entries written after
-         *     it opened. A Member may have a limited number of streams open at once (an Install
+         *     it opened. It opens with the comment `: connected` and sends `: keep-alive` while idle;
+         *     clients skip comments. A Member may have a limited number of streams open at once (an Install
          *     setting, 16 by default); one more is refused with `too_many_requests`.
          */
         get: operations["streamActivity"];

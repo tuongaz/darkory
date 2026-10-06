@@ -288,6 +288,28 @@ func TestActivityStream(t *testing.T) {
 	})
 }
 
+// The stream sends a comment the moment it opens. A proxy that holds the headers back until the
+// body's first bytes, as Vite's dev proxy does, then shows the client connected at once rather
+// than at the first event or keep-alive, which here is an hour away.
+func TestActivityStreamSendsItsFirstBytesAtOnce(t *testing.T) {
+	h := newHarnessWith(t, storetest.Open(t, store.SQLite), Options{KeepAlive: time.Hour})
+	stream := h.openStream(t, "")
+	defer stream.close()
+	first := make(chan string, 1)
+	go func() {
+		line, _ := stream.r.ReadString('\n')
+		first <- line
+	}()
+	select {
+	case line := <-first:
+		if line != ": connected\n" {
+			t.Fatalf("the stream opened with %q, want the comment \": connected\"", line)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no bytes within two seconds of the stream opening")
+	}
+}
+
 type sseStream struct {
 	res *http.Response
 	r   *bufio.Reader
@@ -345,7 +367,7 @@ func (s *sseStream) events(t *testing.T, n int) []int64 {
 	return ids
 }
 
-// keepAlive reads until a comment line arrives.
+// keepAlive reads until a keep-alive comment arrives; the comment a stream opens with is not one.
 func (s *sseStream) keepAlive(t *testing.T) bool {
 	deadline := time.AfterFunc(5*time.Second, func() { s.res.Body.Close() })
 	defer deadline.Stop()
@@ -354,7 +376,7 @@ func (s *sseStream) keepAlive(t *testing.T) bool {
 		if err != nil {
 			return false
 		}
-		if strings.HasPrefix(line, ":") {
+		if line == ": keep-alive\n" {
 			return true
 		}
 	}
