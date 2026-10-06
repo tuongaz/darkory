@@ -3,6 +3,7 @@ import type { Claim, Member, TaskDetail } from "@/api/client";
 import { ada, bob, builder, feature, task } from "@/test/fixtures";
 import { canTakeBack, taskActions } from "./actions";
 import { diffSummary, lineDiff } from "./diff";
+import { orderTasks } from "./format";
 import { durationText, lapsedClaim, taskRecord } from "./record";
 import { whoCanTake } from "./takers";
 
@@ -205,5 +206,21 @@ describe("who could take a Task", () => {
   it("is the Member it is aimed at, or the owner when no one has the Skill", () => {
     expect(whoCanTake({ aimedAt: mai.id, pool, skillsOf, claims: [], owner: tuongaz.id })).toEqual([mai.id]);
     expect(whoCanTake({ skillId: "s-qa", pool, skillsOf, claims: [], owner: tuongaz.id })).toEqual([tuongaz.id]);
+  });
+});
+
+describe("the Feature's Tasks", () => {
+  it("sort by Status, then by how long each has waited; open before ended until the Statuses load", () => {
+    const statuses = [
+      { id: "st-backlog", name: "Backlog", kind: "backlog" as const },
+      { id: "st-todo", name: "Todo", kind: "todo" as const },
+      { id: "st-done", name: "Done", kind: "done" as const },
+    ];
+    const done = task(2, "f-1", { status_id: "st-done", state: "done", waiting_since: at(0) });
+    const later = task(4, "f-1", { status_id: "st-todo", waiting_since: at(5) });
+    const sooner = task(5, "f-1", { status_id: "st-todo", waiting_since: at(1) });
+    const backlog = task(6, "f-1", { status_id: "st-backlog", waiting_since: at(9) });
+    expect(orderTasks([done, later, sooner, backlog], statuses).map((t) => t.key)).toEqual(["WEB-6", "WEB-5", "WEB-4", "WEB-2"]);
+    expect(orderTasks([done, later], undefined).map((t) => t.key)).toEqual(["WEB-4", "WEB-2"]);
   });
 });

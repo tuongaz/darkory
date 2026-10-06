@@ -45,12 +45,14 @@ export function dayText(at: string, now: number): string {
   return d.toDateString() === new Date(now).toDateString() ? "Today" : day.format(d);
 }
 
-/** Tasks by Status, in the Organisation's order of Statuses, then by how long each has waited. */
+const byState = { open: 0, done: 1, dropped: 2 };
+
+/**
+ * Tasks by Status, in the Organisation's order of Statuses, then by how long each has waited.
+ * Until the Statuses load, open Tasks come before ended ones.
+ */
 export function orderTasks(tasks: Task[], statuses: StatusLike[] | undefined): Task[] {
   const position = new Map((statuses ?? []).map((s, i) => [s.id, i]));
-  return [...tasks].sort(
-    (a, b) =>
-      (position.get(a.status_id) ?? 0) - (position.get(b.status_id) ?? 0) ||
-      new Date(a.waiting_since).getTime() - new Date(b.waiting_since).getTime(),
-  );
+  const rank = (t: Task) => position.get(t.status_id) ?? byState[t.state];
+  return [...tasks].sort((a, b) => rank(a) - rank(b) || new Date(a.waiting_since).getTime() - new Date(b.waiting_since).getTime());
 }
