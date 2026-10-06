@@ -120,6 +120,24 @@ _Avoid_: Engine, provider setting, model config
 The append-only trail of every change to the record: who did what and when. That includes claims, lapses, take-backs, Handovers, blocks, ships and drops. It is written with the change it describes, and is never the source of truth.
 _Avoid_: Audit log, event, history
 
+### Agents at work
+
+**Runner**:
+The part of a Local Install, beside the Tracker, that runs agent sessions: it pulls Tasks through `next` as an agent Member, prepares the Workspace, starts the agent's command, keeps its Heartbeats while the session shows progress, and ends the session when the Claim ends. It is a client of the record, never a second scheduler; the Tracker still starts nothing itself.
+_Avoid_: Orchestrator, scheduler, supervisor
+
+**Workspace**:
+A place a session works in, named on the Install and given a kind — a git repository is the first. A Team has a default Workspace, and a Task names one or more. In a git Workspace the session works in a checkout on a branch named after the Task.
+_Avoid_: Repo (when the kind is not fixed), project folder
+
+**Quick Feature**:
+A Feature small enough for one branch: filed with its one Task, no Break down, no feature branch, no Retrospective; it ships when that Task's review completes.
+_Avoid_: Bug, hotfix, ticket
+
+**Ship when done**:
+A Feature's standing instruction that it ships itself when its last Task ends Done, with no owner's click. Off unless the filer or the Team's default says so; a Quick Feature always has it.
+_Avoid_: Auto-merge, auto-close
+
 ### Deployment
 
 **Install**:
