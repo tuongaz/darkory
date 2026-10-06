@@ -10,8 +10,10 @@ import (
 
 // takeableSQL is the one Takeable rule (CONTEXT.md, ADR 0004), written once and used by the claim
 // UPDATE, by `next` and by the takeable list, over a Task aliased t. It binds @org, @member (the
-// caller) and @now. A Task is takeable by the caller when it is open; has no live Claim (none, or
-// one whose expiry has passed); has no open blocker; and is aimed at the caller, or needs a Skill
+// caller) and @now. A Task is takeable by the caller when it is open; is in a todo or in_progress
+// Status, not a backlog one (ADR 0012; in_progress, so that a lapsed Claim's Task can be taken
+// again before anyone records the lapse); has no live Claim (none, or one whose expiry has
+// passed); has no open blocker; and is aimed at the caller, or needs a Skill
 // the caller has and belongs to a Feature in one of the caller's Teams, or needs skill-review,
 // which the caller has, from any Team, or belongs to a Feature the caller owns and no active
 // Member could take it by its Skill: none in the Feature's Team has the Skill, or, for
@@ -19,6 +21,7 @@ import (
 // may take it again only under that Skill: no one judges their own work.
 const takeableSQL = `t.org_id = @org
 AND t.state = 'open'
+AND EXISTS (SELECT 1 FROM statuses ts WHERE ts.org_id = @org AND ts.id = t.status_id AND ts.kind IN ('todo', 'in_progress'))
 AND (t.claim_holder_id IS NULL OR (t.claim_expires_at IS NOT NULL AND t.claim_expires_at <= @now))
 AND NOT EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
 	WHERE b.org_id = @org AND b.task_id = t.id AND bt.state = 'open')

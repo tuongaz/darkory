@@ -17,19 +17,35 @@ import (
 // Handover ends the caller's Claim and sets the Skill the Task needs next, in one batch (ADR
 // 0001). The Task waits for that Skill from now; it is no longer aimed at a Member. The Claim
 // rows keep who held it under which Skill, which is what keeps a builder from reviewing their own
-// work (the Takeable rule's last clause).
-func (s *Service) Handover(ctx context.Context, c *auth.Caller, ref, skillRef string, note *string, idem Idem) (Task, error) {
+// work (the Takeable rule's last clause). The Status stays as it is unless statusRef names one of
+// an open kind, such as In review (ADR 0012).
+func (s *Service) Handover(ctx context.Context, c *auth.Caller, ref, skillRef string, statusRef, note *string, idem Idem) (Task, error) {
 	skillID, err := resolveSkill(ctx, s.store, c.OrgID, skillRef)
 	if err != nil {
 		return Task{}, err
 	}
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, list statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 		out := pre
 		out.Claim, out.SkillID, out.AimedAtID, out.WaitingSince = nil, &skillID, nil, now
-		a := with(args, map[string]any{"to": skillID})
+		if statusRef != nil {
+			st, err := list.openStatus(*statusRef)
+			if err != nil {
+				return nil, nil, err
+			}
+			out.StatusID = st.ID
+		}
+		// A Status deleted since the read leaves the Task where it was, and the guard at the end
+		// refuses the batch, which is then tried again and finds the Status gone. With none named,
+		// the guard refuses a batch that would answer with a Status a Member has just changed.
+		setStatus := ""
+		if statusRef != nil {
+			setStatus = `, status_id = COALESCE((SELECT hs.id FROM statuses hs WHERE hs.org_id = @org AND hs.id = @status
+	AND hs.kind IN ('backlog', 'todo', 'in_progress')), status_id)`
+		}
+		a := with(args, map[string]any{"to": skillID, "status": out.StatusID})
 		stmts := []store.Stmt{
 			store.S(`UPDATE claims SET ended_at = @now, how_ended = 'handed_over', ended_by = @member WHERE org_id = @org AND id = @claim`, a),
-			store.S(clearClaimSQL+`, skill_id = @to, aimed_at_id = NULL, waiting_since = @now WHERE org_id = @org AND id = @task`, a),
+			store.S(clearClaimSQL+`, skill_id = @to, aimed_at_id = NULL, waiting_since = @now`+setStatus+` WHERE org_id = @org AND id = @task`, a),
 		}
 		if note != nil && *note != "" {
 			stmts = append(stmts, noteStmt(pre, args, newID(), *note))
@@ -38,7 +54,10 @@ func (s *Service) Handover(ctx context.Context, c *auth.Caller, ref, skillRef st
 		if pre.SkillID != nil {
 			payload["from_skill_id"] = *pre.SkillID
 		}
-		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.handed_over", pre.ID, payload, now))
+		if out.StatusID != pre.StatusID {
+			payload["from_status_id"], payload["status_id"] = pre.StatusID, out.StatusID
+		}
+		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.handed_over", pre.ID, payload, now), statusStmt(args, out.StatusID))
 		return out, stmts, nil
 	}})
 	if err != nil {
@@ -53,7 +72,7 @@ func (s *Service) AddNote(ctx context.Context, c *auth.Caller, ref, body string,
 	if strings.TrimSpace(body) == "" {
 		return Note{}, refuse(CodeInvalid, "a Note has a body")
 	}
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, _ statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 		n := Note{ID: newID(), TaskID: pre.ID, AuthorID: c.MemberID, SkillID: pre.Claim.SkillID, Body: body, CreatedAt: now}
 		return n, []store.Stmt{
 			noteStmt(pre, args, n.ID, body),
@@ -75,7 +94,7 @@ func (s *Service) Observe(ctx context.Context, c *auth.Caller, ref, outcome, bod
 	if strings.TrimSpace(body) == "" {
 		return Observation{}, refuse(CodeInvalid, "an Observation has a body")
 	}
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, _ statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 		o := Observation{ID: newID(), TaskID: pre.ID, FeatureID: pre.FeatureID, AuthorID: c.MemberID, SkillID: pre.Claim.SkillID,
 			Outcome: outcome, Body: body, CreatedAt: now}
 		a := with(args, map[string]any{"id": o.ID, "feature": o.FeatureID, "skill": o.SkillID, "outcome": outcome, "body": body})
@@ -93,7 +112,8 @@ VALUES (@id, @org, @task, @feature, @member, CAST(@skill AS TEXT), @outcome, @bo
 
 // TakeBack ends another Member's Claim on a Task: by anyone above the holder on their Reporting
 // line, or by the Feature owner (plan invariant 6's exception). The Task becomes takeable again,
-// and the holder's next Heartbeat reports taken_back.
+// in the first todo Status if it was in an in_progress one, and the holder's next Heartbeat
+// reports taken_back.
 func (s *Service) TakeBack(ctx context.Context, c *auth.Caller, ref string, reason *string, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		taskID, err := resolveTask(ctx, t, c.OrgID, ref)
@@ -125,7 +145,7 @@ func (s *Service) TakeBack(ctx context.Context, c *auth.Caller, ref string, reas
 			ms(t.now), c.MemberID, c.OrgID, claim.ID); err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, clearClaimSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, c.OrgID, taskID, claim.ID); err != nil {
+		if _, err := t.Exec(ctx, clearClaimSQL+releaseStatusSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, c.OrgID, taskID, claim.ID); err != nil {
 			return nil, err
 		}
 		payload := map[string]any{"claim_id": claim.ID, "holder_id": claim.HolderID}
@@ -180,8 +200,8 @@ func (s *Service) DropTask(ctx context.Context, c *auth.Caller, ref string, reas
 	return res.(Task), nil
 }
 
-// dropTask ends an open Task dropped inside a write: it ends the Task's Claim, supersedes a
-// proposal left pending on it and records task.dropped with payload.
+// dropTask ends an open Task dropped, in the first dropped Status, inside a write: it ends the
+// Task's Claim, supersedes a proposal left pending on it and records task.dropped with payload.
 func dropTask(t *tx, taskID string, payload map[string]any) error {
 	claim, holder, live, err := endClaimOf(t, taskID, "dropped")
 	if err != nil {
@@ -190,7 +210,8 @@ func dropTask(t *tx, taskID string, payload map[string]any) error {
 	if live {
 		payload["claim_id"], payload["holder_id"] = claim, holder
 	}
-	if _, err := t.Exec(t.ctx, `UPDATE tasks SET state = 'dropped', ended_at = $1 WHERE org_id = $2 AND id = $3`,
+	if _, err := t.Exec(t.ctx, `UPDATE tasks SET state = 'dropped', ended_at = $1,
+status_id = COALESCE(`+firstStatusSQL("$2", KindDropped)+`, status_id) WHERE org_id = $2 AND id = $3`,
 		ms(t.now), t.caller.OrgID, taskID); err != nil {
 		return err
 	}

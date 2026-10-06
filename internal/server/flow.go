@@ -17,7 +17,7 @@ func (s *Server) HandoverTask(w http.ResponseWriter, r *http.Request, task gen.T
 	if !ok {
 		return
 	}
-	t, err := s.core.Handover(r.Context(), c, task, body.Skill, body.Note, idem)
+	t, err := s.core.Handover(r.Context(), c, task, body.Skill, body.Status, body.Note, idem)
 	s.respond(w, r, out, t, err)
 }
 

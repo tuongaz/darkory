@@ -43,7 +43,8 @@ type Initialised struct {
 }
 
 // Init creates the Install's Organisation, its first Member — a human admin — the built-in
-// Skills, a token for that Member and a login link. It refuses when an Organisation exists.
+// Skills, the default Statuses, a token for that Member and a login link. It refuses when an
+// Organisation exists.
 func (s *Service) Init(ctx context.Context, orgName, memberName string) (Initialised, error) {
 	var out Initialised
 	var n int
@@ -79,6 +80,9 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 			if _, err := createSkill(t, b.name, "generic", nil, b.body, true); err != nil {
 				return err
 			}
+		}
+		if err := seedStatuses(t); err != nil {
+			return err
 		}
 		if out.Token, err = issueToken(t, memberID, "init", 0); err != nil {
 			return err

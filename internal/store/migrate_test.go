@@ -4,12 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -288,6 +291,109 @@ func TestMigration2KeepsClaims(t *testing.T) {
 			}
 			if err := exec(`UPDATE claims SET how_ended = 'unheard_of' WHERE id = 'c'`); err == nil {
 				t.Fatal("the check on how_ended is gone")
+			}
+		})
+	}
+}
+
+// Migration 0003 gives every Organisation of a database written under 0002 the six default
+// Statuses, and every Task a Status by rule: done → Done, dropped → Dropped, open with a live
+// Claim → In progress, else Todo, a lapsed Claim included.
+func TestMigration3GivesTasksAStatus(t *testing.T) {
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			upTo2 := fstest.MapFS{}
+			for _, name := range []string{"0001_init.sql", "0002_member_deactivation.sqlite.sql", "0002_member_deactivation.postgres.sql"} {
+				b, err := os.ReadFile("migrations/" + name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				upTo2[name] = file(string(b))
+			}
+			if res, err := s.MigrateFS(ctx, upTo2, now); err != nil || len(res.Applied) != 2 {
+				t.Fatalf("migrating to 0002: %+v %v", res, err)
+			}
+			exec := func(q string, args ...any) error {
+				return s.WriteNoSeq(ctx, func(tx store.Tx) error {
+					_, err := tx.Exec(ctx, q, args...)
+					return err
+				})
+			}
+			must := func(q string, args ...any) {
+				t.Helper()
+				if err := exec(q, args...); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			future, past := time.Now().Add(time.Hour).UnixMilli(), time.Now().Add(-time.Hour).UnixMilli()
+			for _, org := range []string{"o1", "o2"} {
+				must(`INSERT INTO organisations (id, name, created_at) VALUES ($1, $1, 0)`, org)
+				must(`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ($1, $2, 'ada', 'human', 0, 0)`, org+"-m", org)
+				must(`INSERT INTO teams (id, org_id, key_prefix, name, created_at) VALUES ($1, $2, 'WEB', 'Web', 0)`, org+"-tm", org)
+				must(`INSERT INTO features (id, org_id, team_id, display_key, title, owner_id, state, rank, filed_by, created_at)
+VALUES ($1, $2, $3, 'WEB-1', 'F', $4, 'open', 1, $4, 0)`, org+"-f", org, org+"-tm", org+"-m")
+			}
+			task := func(id, state string, holder *string, expires *int64) {
+				must(`INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, filed_by, waiting_since, created_at,
+claim_holder_id, claim_expires_at) VALUES ($1, 'o1', 'o1-f', $1, 'work', 'T', $2, 'o1-m', 0, 0, $3, $4)`, id, state, holder, expires)
+			}
+			ada := "o1-m"
+			task("done", "done", nil, nil)
+			task("dropped", "dropped", nil, nil)
+			task("held", "open", &ada, &future)
+			task("held-no-timeout", "open", &ada, nil)
+			task("lapsed", "open", &ada, &past)
+			task("waiting", "open", nil, nil)
+
+			res, err := s.Migrate(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(res.Applied, []int{3}) {
+				t.Fatalf("applied %v, want [3]", res.Applied)
+			}
+
+			for _, org := range []string{"o1", "o2"} {
+				rows, err := s.Query(ctx, `SELECT id, name, kind, position FROM statuses WHERE org_id = $1 ORDER BY position`, org)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var got []string
+				for rows.Next() {
+					var id, name, kind string
+					var pos int64
+					if err := rows.Scan(&id, &name, &kind, &pos); err != nil {
+						t.Fatal(err)
+					}
+					if u, err := uuid.Parse(id); err != nil || u.Version() != 7 || u.Variant() != uuid.RFC4122 {
+						t.Errorf("Status %s has id %q, not shaped as a UUIDv7 (%v)", name, id, err)
+					}
+					got = append(got, fmt.Sprintf("%d %s %s", pos, name, kind))
+				}
+				rows.Close()
+				want := []string{"1 Backlog backlog", "2 Todo todo", "3 In progress in_progress", "4 In review in_progress", "5 Done done", "6 Dropped dropped"}
+				if !slices.Equal(got, want) {
+					t.Errorf("%s's Statuses %q, want %q", org, got, want)
+				}
+			}
+			for task, want := range map[string]string{
+				"done": "Done", "dropped": "Dropped", "held": "In progress", "held-no-timeout": "In progress",
+				"lapsed": "Todo", "waiting": "Todo",
+			} {
+				var name string
+				if err := s.QueryRow(ctx, `SELECT s.name FROM tasks t JOIN statuses s ON s.id = t.status_id AND s.org_id = t.org_id WHERE t.id = $1`, task).
+					Scan(&name); err != nil || name != want {
+					t.Errorf("Task %s is in %q (%v), want %q", task, name, err, want)
+				}
+			}
+			// A Status name is unique within an Organisation, and its kind is one of the five.
+			if err := exec(`INSERT INTO statuses (id, org_id, name, kind, position, created_at) VALUES ('x', 'o1', 'Todo', 'todo', 9, 0)`); err == nil {
+				t.Error("a second Todo was accepted")
+			}
+			if err := exec(`INSERT INTO statuses (id, org_id, name, kind, position, created_at) VALUES ('x', 'o1', 'Later', 'someday', 9, 0)`); err == nil {
+				t.Error("a kind outside the five was accepted")
 			}
 		})
 	}
