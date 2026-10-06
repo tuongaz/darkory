@@ -76,6 +76,32 @@ At the human pace a builder spends 30–90 s on a Task and heartbeats every 15 s
 | `--darkory` | built from `./cmd/darkory` | the binary stuck runs |
 | `--insecure` | off | let stuck's CLI use plain `http://` to another host |
 
+## Runner
+
+The Runner (`internal/runner`, [ADR 0013](../adr/0013-a-runner-starts-agent-sessions.md)) pulls Tasks through `next` as each agent Member it has a token for, prepares a git worktree per Workspace the Task names under `<data>/workspaces/<KEY>/`, writes `<data>/sessions/<KEY>/prompt.md` and `mcp.json`, starts the agent's command — in tmux when the machine has it, as a child process otherwise, logging to `pane.log` — sends Heartbeats while the session's progress file moves, nudges an agent that stops without a decision, ends the session when the Claim ends and attaches the log as Evidence. It merges a Task's branch into `feature/<FEATURE-KEY>` when its review completes, and that into the default branch at Ship ([ADR 0014](../adr/0014-feature-branches-and-shipping.md)).
+
+```sh
+darkory serve --data .dev                 # runs the Runner too when .dev/agents holds <member>.token files (--agents=auto)
+darkory serve --data .dev --agents=off    # the server alone; then, in another terminal:
+DARKORY_URL=http://127.0.0.1:7357 darkory agents --data .dev [--member builder]…
+darkory sessions                          # what the Runner runs now (no_runner when serve has none)
+darkory attach WEB-12 [--readonly] [--data .dev]   # join the session's tmux pane; detach with the prefix and d
+darkory sessions nudge WEB-12 | darkory sessions stop WEB-12   # admins
+```
+
+The sessions run on a tmux server of the Runner's own, `tmux -L darkory-<8 hex of the data directory's path>`, so `tmux ls` does not show them; `darkory attach` finds it from `--data`. `DARKORY_RUNNER_TMUX=off` (or `darkory agents --tmux off`) runs them as child processes, which cannot be joined.
+
+`tools/fakeagent` stands in for Claude Code: set an agent's command to it (`darkory agent set builder --command <path>/fakeagent --arg=--prompt-file --arg={prompt_file} --arg=--progress --arg=/tmp/p/{session_id}.jsonl --arg=--mcp-config --arg={mcp_config} --progress-file /tmp/p/{session_id}.jsonl --env FAKEAGENT_SCENARIO=handover`). It reads the prompt, writes its progress as a transcript, notes, commits in the first Workspace, attaches a test log, then per `FAKEAGENT_SCENARIO`: `complete` (default; a Break down first files `FAKEAGENT_BREAKDOWN`, `skill:title;…`, naming `FAKEAGENT_WORKSPACES`), `handover`, `question`, `silent`, `hang`, `busy` or `crash`. `FAKEAGENT_FILE` names the file it commits, so two Tasks can conflict.
+
+`DARKORY_RUNNER_TIMINGS` shortens the Runner's clocks for tests, as `name=duration` pairs: `wait` (next's wait, 30s), `timeout` (the Claims' heartbeat timeout, 5m), `tick` (progress read and Heartbeat, 30s), `stale` (no Heartbeat after, 2m), `nudge` (between nudges and before the release, 2m), `exit` (after /exit, 30s), `poll` (merged pull requests, 1m), `retry` (after a failure, 5s). The e2e tests use `wait=1s,timeout=4s,tick=200ms,stale=2s,nudge=700ms,exit=3s,poll=1s,retry=300ms`.
+
+What the tests hold:
+
+- `internal/runner` unit tests: the command template (placeholders, Claude Code's defaults and first message, the permission skip, a misspelt placeholder), shell quoting through a real `sh`; the transcript's project slug and real path, the turn-ended reading of Claude Code 2.1's records and of `TURN_ENDED`, a transcript longer than the tail read; the prompt (golden files in `testdata/`, `go test ./internal/runner -run TestBuildPrompt -update` rewrites them), escapes and quoted record text included; the checkout planner; `Prepare` against real git (the Break down making `feature/<KEY>`, a later session reusing the worktree or the branch, removal keeping the branch and a dirty worktree, a person's branch refused, a quick Feature from main); every merge path (merge-tree into a branch checked out nowhere, two parents, nothing touched; again is a no-op; a conflict moves nothing; into the checked-out main, clean, and its conflict aborted; uncommitted changes refusing it); the child and tmux hosts (environment from a 0600 file, typed lines, the pane's log, exit status, kill); the pane tail with escapes taken out.
+- `internal/runner` in-process tests (`runner_test.go`, both engines, the test binary standing in for darkory and the fake agent built once): a Feature from filing to Ship (the planner's Break down, the builder's Handover, the reviewer's Complete, the merge into `feature/WEB-1` and Ship into main's checkout, two session logs, worktrees gone); a silent session nudged twice, released three times and escalated to the owner; a session in tmux on the Runner's own server, gone once its Claim ends, its log the Evidence; the terminal through `/v1/runner/sessions/{task}/terminal` (an admin's keys reach the agent and a Note says they joined; a watcher's never do).
+- `internal/mcp` `TestNoHeartbeatsLeavesTheClaimToTheRunner`; `cmd/darkory` `TestAttachJoinsASessionOrAttachesEvidence`, `TestAgentsNeedsTokens`; `internal/config` the `--agents` setting.
+- `e2e/runner_test.go` (`make e2e`, `make e2e-pg`): darkory init's roster in a fresh repository, every agent on the fake agent, serve's Runner with the timings above: `TestRunnerWorksAFeature` (scenarios 2, 3, 4, 11: two Workspaces on each Task, two builders, merges in both repositories, Ship), `TestRunnerEndsSessionsWithoutADecision` (5, 6, 7), `TestRunnerQuickAndShipWhenDone` (4), `TestRunnerMergeConflict` (9), `TestRunnerAlone` (12: `darkory agents` beside `serve --agents=off`), `TestRunnerInTmux` (skipped without tmux: `dk-MAIN-2` on the Runner's tmux server, stopped by an admin through `/v1`). The harness starts every other test's server with `--agents=off`.
+
 ## The Postgres the tests need
 
 Postgres 14 or newer, and a role that may create databases. The URL names any database the role can connect to (`postgres` is fine); tests never write to it. Each test creates its own database, `dk_test_<random>`, from `template0`, and drops it `WITH (FORCE)` when the test ends, so packages can run in parallel against one server.
