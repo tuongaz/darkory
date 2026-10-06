@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { Terminal } from "@xterm/xterm";
 import { describe, expect, it, vi } from "vitest";
 import type { Claim, Member, RunnerSession, TaskDetail } from "@/api/client";
-import { mockApi, refuse } from "@/test/api";
+import { mockApi } from "@/test/api";
 import { ada, bob, build, builder, feature, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { FakeWebSocket } from "@/test/webSocket";
@@ -59,7 +59,7 @@ function detail(): TaskDetail {
   };
 }
 
-function runnerApi(caller: Member, sessions: () => Response | object = () => ({ items: [session] })) {
+function runnerApi(caller: Member, sessions: () => object = () => ({ items: [session], runner: true })) {
   return mockApi({
     ...signedIn(caller),
     "GET /v1/members": { items: [ada, bob, agent] },
@@ -87,7 +87,7 @@ function rows(panel: HTMLElement) {
 
 describe("the Session panel", () => {
   it("is absent while the Runner runs no session on the Task, and when no Runner is attached", async () => {
-    const api = runnerApi(ada, () => ({ items: [] }));
+    const api = runnerApi(ada, () => ({ items: [], runner: true }));
     const { unmount } = renderApp("/tasks/WEB-3");
     expect(await screen.findByRole("heading", { name: "Build the cart page", level: 1 })).toBeInTheDocument();
     await waitFor(() => expect(api.calls.some((c) => c.path === "/v1/runner/sessions")).toBe(true));
@@ -97,7 +97,7 @@ describe("the Session panel", () => {
     expect(screen.queryByRole("menuitem", { name: "Nudge" })).not.toBeInTheDocument();
     unmount();
 
-    runnerApi(ada, () => refuse(409, "no_runner", "no Runner is attached to this server"));
+    runnerApi(ada, () => ({ items: [], runner: false }));
     renderApp("/tasks/WEB-3");
     expect(await screen.findByRole("heading", { name: "Build the cart page", level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Session" })).not.toBeInTheDocument();
@@ -180,7 +180,7 @@ describe("the Session panel", () => {
   });
 
   it("says a session without tmux cannot be joined, and opens no terminal", async () => {
-    runnerApi(ada, () => ({ items: [{ ...session, tmux: undefined }] }));
+    runnerApi(ada, () => ({ items: [{ ...session, tmux: undefined }], runner: true }));
     renderApp("/tasks/WEB-3");
     const panel = await screen.findByRole("region", { name: "Session" });
     expect(panel).toHaveTextContent("no tmux");

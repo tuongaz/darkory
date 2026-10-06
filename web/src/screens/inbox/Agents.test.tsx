@@ -172,7 +172,7 @@ describe("the Agents page", () => {
     expect(screen.queryByRole("link", { name: "New agent" })).not.toBeInTheDocument();
     // The Session comes from the live Claim, not from the admin-only list.
     expect(within(peek).getByText("sess-m-planner")).toBeInTheDocument();
-    expect(api.calls.some((c) => c.path.endsWith("/sessions") || c.path.endsWith("/tokens"))).toBe(false);
+    expect(api.calls.some((c) => c.path.startsWith("/v1/members/") && (c.path.endsWith("/sessions") || c.path.endsWith("/tokens")))).toBe(false);
     expect(within(peek).queryByRole("button", { name: "More" })).not.toBeInTheDocument();
   });
 });
@@ -228,7 +228,7 @@ describe("the Agents page with the Runner", () => {
       "GET /v1/members/:member/sessions": { items: [] },
       "GET /v1/members/:member/tokens": { items: [] },
       "GET /v1/activity": { items: [], last_seq: 0 },
-      "GET /v1/runner/sessions": { items: [session] },
+      "GET /v1/runner/sessions": { items: [session], runner: true },
       "PATCH /v1/members/:member/agent": ({ body }) => {
         planner = { ...planner, agent: settings(body as Partial<AgentSettings>) };
         return planner;

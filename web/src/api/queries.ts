@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, ApiError, call, type Feature, type Member, type RunnerSession, type Skill, type SubjectType, type Task, type Team } from "./client";
+import { api, call, type Feature, type Member, type RunnerSession, type Skill, type SubjectType, type Task, type Team } from "./client";
 import { allPages } from "./pages";
 
 // The first element of every query key names what it reads; live updates invalidate by it.
@@ -168,28 +168,16 @@ export function useAllFeatures(enabled = true) {
   });
 }
 
-/** What the Runner beside this server runs now; `runner` is false when none is attached. */
-export type RunnerSessions = { runner: boolean; items: RunnerSession[] };
-
 /**
- * The agent sessions the Runner runs now, read every 5 s and on Task Activity. Read only while an
- * agent has agent settings (the Runner starts no other), and no more once the server answers that
- * no Runner is attached (`no_runner`): every refused request is an error in the browser's console.
+ * The agent sessions the Runner beside this server runs now (`runner` is false when none is
+ * attached), read every 5 s and again on Task, Member and Session Activity. With no Runner it asks
+ * no more for the page's life: one starts only with the server.
  */
 export function useRunnerSessions() {
-  const members = useMembers();
-  const configured = members.data?.some((m) => m.kind === "agent" && m.agent && !m.deactivated_at) ?? false;
   return useQuery({
     queryKey: keys.runnerSessions,
-    queryFn: async (): Promise<RunnerSessions> => {
-      try {
-        return { runner: true, items: (await call(api.GET("/v1/runner/sessions"))).items };
-      } catch (err) {
-        if (err instanceof ApiError && err.code === "no_runner") return { runner: false, items: [] };
-        throw err;
-      }
-    },
-    enabled: (q) => configured && q.state.data?.runner !== false,
+    queryFn: () => call(api.GET("/v1/runner/sessions")),
+    enabled: (q) => q.state.data?.runner !== false,
     refetchInterval: 5_000,
   });
 }

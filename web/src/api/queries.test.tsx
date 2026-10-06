@@ -2,10 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
-import { mockApi, refuse } from "@/test/api";
-import { ada, builder } from "@/test/fixtures";
+import { mockApi } from "@/test/api";
+import { builder } from "@/test/fixtures";
 import { newQueryClient } from "@/queryClient";
-import type { Activity, Member, RunnerSession } from "./client";
+import type { Activity, RunnerSession } from "./client";
 import { affectedBy, invalidateFor, keys, useRunnerSessions } from "./queries";
 
 describe("live invalidation", () => {
@@ -57,7 +57,6 @@ describe("live invalidation", () => {
 });
 
 describe("the Runner's sessions", () => {
-  const configured: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false } };
   const session: RunnerSession = {
     task_id: "k-12",
     member_id: builder.id,
@@ -69,8 +68,8 @@ describe("the Runner's sessions", () => {
     log_path: "/data/sessions/WEB-12/pane.log",
   };
 
-  function render(members: Member[], sessions: () => Response | object) {
-    const api = mockApi({ "GET /v1/members": { items: members }, "GET /v1/runner/sessions": sessions });
+  function render(list: object) {
+    const api = mockApi({ "GET /v1/runner/sessions": list });
     const qc = newQueryClient();
     const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
     const hook = renderHook(() => useRunnerSessions(), { wrapper });
@@ -79,24 +78,18 @@ describe("the Runner's sessions", () => {
   }
 
   it("lists them, and reads again when a Task's Activity arrives", async () => {
-    const { qc, hook, asked } = render([ada, configured], () => ({ items: [session] }));
-    await waitFor(() => expect(hook.result.current.data).toEqual({ runner: true, items: [session] }));
+    const { qc, hook, asked } = render({ items: [session], runner: true });
+    await waitFor(() => expect(hook.result.current.data).toEqual({ items: [session], runner: true }));
     act(() => invalidateFor(qc, { kind: "task.completed" }));
     await waitFor(() => expect(asked()).toBe(2));
   });
 
-  it("asks nothing while no agent has agent settings: the Runner starts no other", async () => {
-    const { hook, asked } = render([ada, builder], () => ({ items: [] }));
-    await waitFor(() => expect(hook.result.current.fetchStatus).toBe("idle"));
-    expect(asked()).toBe(0);
-    expect(hook.result.current.data).toBeUndefined();
-  });
-
-  it("says no Runner is attached on no_runner, and asks no more", async () => {
-    const { qc, hook, asked } = render([ada, configured], () => refuse(409, "no_runner", "no Runner is attached to this server"));
-    await waitFor(() => expect(hook.result.current.data).toEqual({ runner: false, items: [] }));
+  it("asks no more once the server says no Runner is attached", async () => {
+    const { qc, hook, asked } = render({ items: [], runner: false });
+    await waitFor(() => expect(hook.result.current.data).toEqual({ items: [], runner: false }));
     act(() => invalidateFor(qc, { kind: "task.claimed" }));
     await new Promise((done) => setTimeout(done, 20));
     expect(asked()).toBe(1);
+    expect(hook.result.current.fetchStatus).toBe("idle");
   });
 });

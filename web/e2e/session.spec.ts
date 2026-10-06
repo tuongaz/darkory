@@ -3,11 +3,10 @@ import { fileURLToPath } from "node:url";
 import startServer from "./server";
 
 // The Session panel and the Agents page's Runner state (docs/build/agents-plan.md, R2) against the
-// real binary. They run on an Install of their own, as admin.spec.ts does: once an agent has agent
-// settings, every Task page asks for the Runner's sessions, and on an Install with no Runner that
-// first ask is refused (no_runner), which the browser logs as an error the other specs fail on.
-// This branch's server has no Runner, so the panel must be absent; the live terminal is played
-// by Playwright (page.route and page.routeWebSocket) until the Runner lands.
+// real binary. They run on an Install of their own, as admin.spec.ts does: the agent here has
+// agent settings, which a Runner attached to the shared Install would start sessions for. This
+// branch's server has no Runner, so the panel must be absent; the live terminal is played by
+// Playwright (page.route and page.routeWebSocket) until the Runner lands.
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/session/", import.meta.url));
@@ -111,7 +110,7 @@ test("no Runner attached: the panel is absent, Nudge and Stop answer no_runner, 
 
   await page.goto(`${base}/tasks/${taskKey}`);
   await expect(page.getByRole("heading", { name: "Build the cart page", level: 1 })).toBeVisible();
-  await expect.poll(() => asked).toEqual([409]);
+  await expect.poll(() => asked).toEqual([200]);
   await expect(page.getByRole("complementary", { name: "Properties" })).toContainText("sess-ses-builder");
   await expect(page.getByRole("region", { name: "Session" })).toHaveCount(0);
   await page.getByRole("button", { name: "More" }).click();
@@ -120,7 +119,8 @@ test("no Runner attached: the panel is absent, Nudge and Stop answer no_runner, 
   await page.keyboard.press("Escape");
   // No Runner: the page asks once, not every 5 s.
   await page.waitForTimeout(6_000);
-  expect(asked).toEqual([409]);
+  expect(asked).toEqual([200]);
+  expect(await v1(token, "e2e-session-ada", "GET", "/v1/runner/sessions")).toEqual({ items: [], runner: false });
   await shot(page, "1-no-runner-task");
 
   for (const what of ["nudge", "stop"]) {
@@ -145,9 +145,7 @@ test("no Runner attached: the panel is absent, Nudge and Stop answer no_runner, 
   await page.getByRole("menuitem", { name: "Resume" }).click();
   await expect(row.getByText("Paused")).toHaveCount(0);
 
-  // The one refusal is the Runner's list, once per page load.
-  expect(errors.filter((e) => !/status of 409/.test(e))).toEqual([]);
-  expect(errors.length).toBeLessThanOrEqual(2);
+  expect(errors).toEqual([]);
   await ctx.close();
 });
 
@@ -165,7 +163,7 @@ test("the terminal under the Install's CSP, the Runner played by the test: watch
   };
   const members = (await v1(token, "e2e-session-ada", "GET", "/v1/members")) as { items: { id: string; name: string }[] };
   session.member_id = members.items.find((m) => m.name === "ses-builder")!.id;
-  await page.route("**/v1/runner/sessions", (route) => route.fulfill({ json: { items: [session] } }));
+  await page.route("**/v1/runner/sessions", (route) => route.fulfill({ json: { items: [session], runner: true } }));
 
   const sockets: { url: string; text: string[]; typed: string }[] = [];
   await page.routeWebSocket(/\/v1\/runner\/sessions\/[^/]+\/terminal/, (ws) => {

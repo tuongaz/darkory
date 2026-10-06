@@ -130,10 +130,10 @@ a **Session panel** (`src/screens/task/SessionPanel.tsx`) between the facts and 
   gives the focus back to the page; joined, Esc goes to the session. Unfocused, J, K, Esc and
   the rest work as everywhere.
 
-The panel shows only while `useRunnerSessions` lists a session on the Task. That read is asked
-only when an agent has agent settings (the Runner starts no other), every 5 s and on Task,
-Member and Session Activity; `no_runner` reads as "no Runner" and stops it for the page's life,
-because every refused request is an error in the browser's console.
+The panel shows only while `useRunnerSessions` lists a session on the Task. That read
+(`GET /v1/runner/sessions`, `{items, runner}`) is asked every 5 s and on Task, Member and Session
+Activity; `runner: false` (no Runner attached) stops it for the page's life, since a Runner
+starts only with the server. Nudge, Stop and the terminal still answer `no_runner` then.
 
 **The WebSocket** (`api/openapi.yaml`, `runnerTerminal`; `src/screens/task/terminal.ts`):
 
