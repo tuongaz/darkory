@@ -1,7 +1,7 @@
 import { ShieldIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router";
-import { useMembers, useSkills, useTeams } from "@/api/queries";
+import { useMembers, useSkills, useTeams, useWorkspaces } from "@/api/queries";
 import { Content, TopBar, type Crumb } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
@@ -57,14 +57,16 @@ function AdminTabs() {
   const members = useMembers();
   const teams = useTeams();
   const skills = useSkills();
+  const workspaces = useWorkspaces();
   const tabs = [
     { to: "/admin/members", label: "Members", n: members.data?.length },
     { to: "/admin/teams", label: "Teams", n: teams.data?.length },
     { to: "/admin/skills", label: "Skills", n: skills.data?.length },
     { to: "/admin/workflow", label: "Workflow" },
+    { to: "/admin/workspaces", label: "Workspaces", n: workspaces.data?.length },
   ];
   return (
-    // On a phone the four tabs fit the width: tighter padding, and they scroll inside the bar if
+    // On a phone the five tabs fit the width: tighter padding, and they scroll inside the bar if
     // the counts ever grow past it.
     <nav aria-label="Admin" className="flex flex-none gap-0.5 overflow-x-auto border-b px-2 sm:px-4">
       {tabs.map((t) => (

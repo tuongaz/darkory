@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Feature, type Member, type Skill, type SubjectType, type Task, type Team } from "./client";
+import { api, call, type Feature, type Member, type Skill, type SubjectType, type Task, type Team, type Workspace } from "./client";
 import { allPages } from "./pages";
 
 // The first element of every query key names what it reads; live updates invalidate by it.
@@ -25,6 +25,7 @@ export const keys = {
   task: (ref: string) => ["task", ref] as const,
   takeable: ["takeable"] as const,
   activity: ["activity"] as const,
+  workspaces: ["workspaces"] as const,
 };
 
 type Root =
@@ -45,6 +46,7 @@ type Root =
   | "task"
   | "takeable"
   | "statuses"
+  | "workspaces"
   | "activity";
 
 const work: Root[] = ["features", "feature", "feature-observations", "tasks", "task", "takeable"];
@@ -63,7 +65,7 @@ const affected: Record<SubjectType, Root[]> = {
   session: [...organisation, ...work],
   login_link: [],
   statuses: [...work, "statuses"],
-  workspace: [...organisation, ...work],
+  workspace: [...organisation, ...work, "workspaces"],
 };
 
 /** The query roots an Activity entry may have changed. */
@@ -134,6 +136,17 @@ export function useDirectory() {
     }),
     [members.data, teams.data, skills.data],
   );
+}
+
+/** The Install's Workspaces, by name: where a Task's session works. */
+export function useWorkspaces() {
+  return useQuery({ queryKey: keys.workspaces, queryFn: () => call(api.GET("/v1/workspaces")).then((r) => r.items) });
+}
+
+/** Workspaces by id, for showing names where the API gives ids. */
+export function useWorkspaceNames(): Map<string, Workspace> {
+  const workspaces = useWorkspaces();
+  return useMemo(() => byId<Workspace>(workspaces.data), [workspaces.data]);
 }
 
 /** Every open Task in the Organisation, in `next` order: what the sidebar's live count reads. */

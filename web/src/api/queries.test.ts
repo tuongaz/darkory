@@ -10,6 +10,9 @@ describe("live invalidation", () => {
     expect(affectedBy("member.created")).toEqual(expect.arrayContaining(["members", "me"]));
     expect(affectedBy("token.revoked")).toEqual(expect.arrayContaining(["tokens", "task"]));
     expect(affectedBy("login_link.redeemed")).toEqual([]);
+    // A Workspace added, changed or removed refetches the list, the Teams that name it and the Tasks.
+    expect(affectedBy("workspace.added")).toEqual(expect.arrayContaining(["workspaces", "teams", "task"]));
+    expect(affectedBy("team.changed")).not.toContain("workspaces");
     expect(affectedBy("something.new")).toBe("all");
   });
 

@@ -13,6 +13,7 @@ import {
   TeamPage,
   TeamsPage,
   WorkflowPage,
+  WorkspacesPage,
 } from "@/screens/admin";
 import { BoardDialogs, TeamFeaturesPage, TeamTasksPage } from "@/screens/board";
 import { ActivityPage, AgentsPage, InboxPage, MyWorkPage } from "@/screens/inbox";
@@ -55,6 +56,7 @@ export function AppRoutes() {
           <Route path="skills" element={<SkillsPage />} />
           <Route path="skills/:skill" element={<SkillPage />} />
           <Route path="workflow" element={<WorkflowPage />} />
+          <Route path="workspaces" element={<WorkspacesPage />} />
         </Route>
         <Route path="account" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />

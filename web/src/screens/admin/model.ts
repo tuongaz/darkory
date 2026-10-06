@@ -1,4 +1,4 @@
-import type { Claim, Member, MemberDetail, Skill, SkillProposal, Task, TaskDetail, Token } from "@/api/client";
+import type { Claim, Member, MemberDetail, Skill, SkillProposal, Task, TaskDetail, Team, Token, Workspace, WorkspaceMode } from "@/api/client";
 import type { components } from "@/api/schema.gen";
 
 /** One running copy of a Member (src/api/client.ts names no type for it). */
@@ -129,4 +129,19 @@ export function suggestKey(name: string): string {
   const letters = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const key = letters.replace(/^[0-9]+/, "").slice(0, 3);
   return key.length >= 2 ? key : "";
+}
+
+/** A Workspace name as /v1 takes it. */
+export const workspaceNamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/;
+
+export const modeNames: Record<WorkspaceMode, string> = { plain: "Plain", pull_request: "Pull request" };
+
+/** The Teams whose Tasks work in a Workspace when they name none. */
+export function defaultOf(w: Pick<Workspace, "id">, teams: Team[]): Team[] {
+  return teams.filter((t) => t.default_workspace_id === w.id);
+}
+
+/** The Tasks that name a Workspace. */
+export function naming(w: Pick<Workspace, "id">, tasks: Task[]): Task[] {
+  return tasks.filter((t) => t.workspace_ids?.includes(w.id));
 }
