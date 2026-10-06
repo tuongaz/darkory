@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Feature, type Member, type Skill, type SubjectType, type Task, type Team } from "./client";
+import { api, ApiError, call, type Feature, type Member, type RunnerSession, type Skill, type SubjectType, type Task, type Team } from "./client";
 import { allPages } from "./pages";
 
 // The first element of every query key names what it reads; live updates invalidate by it.
@@ -24,6 +24,7 @@ export const keys = {
   allFeatures: ["features", { all: true }] as const,
   task: (ref: string) => ["task", ref] as const,
   takeable: ["takeable"] as const,
+  runnerSessions: ["runner", "sessions"] as const,
   activity: ["activity"] as const,
 };
 
@@ -45,6 +46,7 @@ type Root =
   | "task"
   | "takeable"
   | "statuses"
+  | "runner"
   | "activity";
 
 const work: Root[] = ["features", "feature", "feature-observations", "tasks", "task", "takeable"];
@@ -53,14 +55,16 @@ const organisation: Root[] = ["me", "members", "member", "tokens", "teams", "tea
 // Which queries an Activity entry can change, by its subject type: the part of its kind before
 // the dot (`task.claimed` is about a Task). A kind added later with a new subject type refreshes
 // everything.
+// The Runner's sessions start and end with Claims (Task entries), and with its agents' settings
+// and Sessions.
 const affected: Record<SubjectType, Root[]> = {
-  task: work,
+  task: [...work, "runner"],
   feature: work,
-  member: [...organisation, "task", "feature"],
+  member: [...organisation, "task", "feature", "runner"],
   team: organisation,
   skill: [...organisation, "task"],
   token: [...organisation, ...work],
-  session: [...organisation, ...work],
+  session: [...organisation, ...work, "runner"],
   login_link: [],
   statuses: [...work, "statuses"],
   workspace: [...organisation, ...work],
@@ -162,4 +166,36 @@ export function useAllFeatures(enabled = true) {
     queryFn: () => allPages<Feature>((cursor) => call(api.GET("/v1/features", { params: { query: { limit: 500, cursor } } }))),
     enabled,
   });
+}
+
+/** What the Runner beside this server runs now; `runner` is false when none is attached. */
+export type RunnerSessions = { runner: boolean; items: RunnerSession[] };
+
+/**
+ * The agent sessions the Runner runs now, read every 5 s and on Task Activity. Read only while an
+ * agent has agent settings (the Runner starts no other), and no more once the server answers that
+ * no Runner is attached (`no_runner`): every refused request is an error in the browser's console.
+ */
+export function useRunnerSessions() {
+  const members = useMembers();
+  const configured = members.data?.some((m) => m.kind === "agent" && m.agent && !m.deactivated_at) ?? false;
+  return useQuery({
+    queryKey: keys.runnerSessions,
+    queryFn: async (): Promise<RunnerSessions> => {
+      try {
+        return { runner: true, items: (await call(api.GET("/v1/runner/sessions"))).items };
+      } catch (err) {
+        if (err instanceof ApiError && err.code === "no_runner") return { runner: false, items: [] };
+        throw err;
+      }
+    },
+    enabled: (q) => configured && q.state.data?.runner !== false,
+    refetchInterval: 5_000,
+  });
+}
+
+/** The Runner's session on a Task (by id), if it runs one. */
+export function useRunnerSession(taskId: string | undefined): RunnerSession | undefined {
+  const items = useRunnerSessions().data?.items;
+  return taskId ? items?.find((s) => s.task_id === taskId) : undefined;
 }

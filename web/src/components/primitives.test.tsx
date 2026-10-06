@@ -17,6 +17,7 @@ import { MemberAvatar } from "./MemberAvatar";
 import { Peek } from "./Peek";
 import { Pill } from "./Pill";
 import { PropertiesRail, Property } from "./PropertiesRail";
+import { RunnerSessionBadge } from "./RunnerSessionBadge";
 import { StatusGlyph } from "./StatusGlyph";
 import { StatusSelect } from "./StatusSelect";
 import { Timeline, TimelineDay, TimelineRow } from "./Timeline";
@@ -120,6 +121,17 @@ describe("Pill, Key, PropertiesRail, Timeline, EmptyState", () => {
     expect(screen.getByRole("definition")).toHaveTextContent("builder-1");
     expect(screen.getByRole("list", { name: "Activity" })).toHaveTextContent("planner filed the Task22:18");
     expect(screen.getByRole("heading", { name: "No Tasks" })).toBeInTheDocument();
+  });
+});
+
+describe("RunnerSessionBadge", () => {
+  it("says the session's state, since when and where, in one line", () => {
+    const started = new Date(2026, 9, 7, 4, 25).toISOString();
+    const base = { task_id: "k-12", member_id: "m-builder", session_id: "s", host: "mac-mini", started_at: started, log_path: "/x" };
+    const { rerender, container } = render(<RunnerSessionBadge session={{ ...base, state: "running" }} />);
+    expect(container).toHaveTextContent("Session · running since 04:25 · mac-mini");
+    rerender(<RunnerSessionBadge session={{ ...base, state: "nudged" }} />);
+    expect(container).toHaveTextContent("Session · nudged · started 04:25 · mac-mini");
   });
 });
 
