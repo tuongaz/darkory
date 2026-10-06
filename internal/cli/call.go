@@ -30,7 +30,7 @@ type call struct {
 	// warned is set once the --token warning has been printed.
 	warned bool
 
-	members, skills, teams map[string]string
+	members, skills, teams, statuses map[string]string
 }
 
 // args parses the command's flags, which may come before, between or after its arguments (a

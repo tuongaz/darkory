@@ -25,6 +25,7 @@ export function FormDialog({
   submitDisabled,
   error,
   size = "sm",
+  destructive,
   children,
 }: {
   open: boolean;
@@ -38,6 +39,8 @@ export function FormDialog({
   submitDisabled?: boolean;
   error?: unknown;
   size?: keyof typeof widths;
+  /** The primary ends something for good (Drop): drawn in the destructive colour. */
+  destructive?: boolean;
   children: ReactNode;
 }) {
   const submit = (e: FormEvent) => {
@@ -65,7 +68,7 @@ export function FormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={pending || submitDisabled}>
+            <Button type="submit" variant={destructive ? "destructive" : "default"} disabled={pending || submitDisabled}>
               {submitLabel}
             </Button>
           </div>

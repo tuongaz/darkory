@@ -356,8 +356,9 @@ func TestALateHeartbeatsLapseReturnsTheTaskToTodo(t *testing.T) {
 }
 
 // Any Member of the Feature's Team moves an open Task between the open kinds, held or not (ADR
-// 0012, D3); nobody else may, done and dropped are refused, an ended Task stays where it is, and
-// naming the Status it is in writes nothing.
+// 0012, D3), and so do the Feature's owner and the Task's holder from outside the Team; nobody
+// else may. Done and dropped are refused, an ended Task stays where it is (ended), and naming the
+// Status it is in writes nothing.
 func TestSettingATasksStatus(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newStatusFixture(t, st)
@@ -400,11 +401,36 @@ func TestSettingATasksStatus(t *testing.T) {
 		_, err = f.svc.SetTaskStatus(ctx, f.builder, task.Key, "Someday", core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
 
+		// A question aimed at a Member of another Team: they move it while they hold it, not after.
+		asked := f.member("asked", []string{"OPS"}, nil)
+		question := f.aimed(f.lead, f.feature, "Which index?", "asked")
+		_, err = f.svc.SetTaskStatus(ctx, asked, question.Key, "In review", core.Idem{})
+		wantCode(t, err, core.CodeForbidden)
+		if _, err := f.svc.Claim(ctx, asked, question.Key, noTimeout, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.svc.SetTaskStatus(ctx, asked, question.Key, "In review", core.Idem{}); err != nil {
+			t.Fatalf("the holder from another Team: %v", err)
+		}
+		if _, err := f.svc.Release(ctx, asked, question.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.svc.SetTaskStatus(ctx, asked, question.Key, "Backlog", core.Idem{})
+		wantCode(t, err, core.CodeForbidden)
+
+		// The Feature's owner from another Team moves a Task another Member holds.
+		if _, err := f.svc.PassFeatureOwnership(ctx, f.lead, f.feature, "outsider", core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.svc.SetTaskStatus(ctx, f.outsider, task.Key, "In progress", core.Idem{}); err != nil {
+			t.Fatalf("the owner from another Team: %v", err)
+		}
+
 		if _, err := f.svc.Complete(ctx, f.builder, task.Key, nil, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		_, err = f.svc.SetTaskStatus(ctx, f.lead, task.Key, "Todo", core.Idem{})
-		wantCode(t, err, core.CodeConflict)
+		wantCode(t, err, core.CodeEnded)
 		f.wantIn(task.Key, "Done")
 	})
 }

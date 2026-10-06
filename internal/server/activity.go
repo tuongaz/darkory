@@ -94,6 +94,12 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 	h.Set("Cache-Control", "no-cache")
 	h.Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
+	// A comment at once: a proxy that holds the headers back until the first bytes of the body
+	// (Vite's dev proxy does) would otherwise keep the client waiting for the first event or the
+	// first keep-alive.
+	if _, err := fmt.Fprint(w, ": connected\n\n"); err != nil {
+		return
+	}
 	flusher.Flush()
 
 	ctx := r.Context()
