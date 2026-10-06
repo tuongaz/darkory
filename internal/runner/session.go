@@ -85,7 +85,8 @@ func (s *session) snapshot() RunnerSession {
 	defer s.mu.Unlock()
 	rs := RunnerSession{TaskID: s.taskID, Task: s.key, MemberID: s.a.me.Member.ID, Member: s.a.name(), SessionID: s.rec.Session(),
 		Host: s.r.machine, StartedAt: s.started, State: s.state, LogPath: s.logPath}
-	if s.proc != nil && s.proc.Tmux() {
+	// A session being prepared on a tmux host is shown in tmux already: that is where it starts.
+	if s.r.host.Tmux() && (s.proc == nil || s.proc.Tmux()) {
 		rs.Tmux, rs.TmuxSession, rs.TmuxSocket = true, TmuxName(s.key), s.r.Socket()
 	}
 	return rs

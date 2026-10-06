@@ -95,6 +95,7 @@ type fixture struct {
 	data     string
 	progress string
 	log      *lockedBuffer
+	gh       GitHub
 }
 
 func newFixture(t *testing.T, st *store.Store) *fixture {
@@ -112,7 +113,7 @@ func newFixture(t *testing.T, st *store.Store) *fixture {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, ids: map[string]string{"ada": init.Member.ID},
-		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}}
+		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}, gh: &fakeGitHub{}}
 	f.ok("ada", "team", "create", "WEB", "Web")
 	f.ok("ada", "team", "add", "WEB", "ada")
 	f.ok("ada", "skill", "create", "build", "--kind", "generic", "--body", "Build it, with tests.")
@@ -167,7 +168,7 @@ func (f *fixture) runWith(tmux string, agents ...string) *Runner {
 		f.t.Fatal(err)
 	}
 	r, err := New(Config{URL: f.ts.URL, Data: f.data, Tokens: tokens, Timings: f.timings, Tmux: tmux, Darkory: exe,
-		Log: slog.New(slog.NewTextHandler(f.log, nil)), GitHub: &fakeGitHub{}})
+		Log: slog.New(slog.NewTextHandler(f.log, nil)), GitHub: f.gh})
 	if err != nil {
 		f.t.Fatal(err)
 	}
