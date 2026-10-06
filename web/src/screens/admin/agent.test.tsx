@@ -55,9 +55,11 @@ describe("an agent's settings", () => {
     expect(envText({ A: "1", B: "2" })).toBe("A = 1\nB = 2");
   });
 
-  it("shows the settings, and saves each field on its own when it is left", async () => {
-    const user = userEvent.setup();
-    const api = mockApi(routes([ada, bob, runBuilder]));
+  // Typing without a pause between keys: these tests type whole command lines.
+  const typist = () => userEvent.setup({ delay: null });
+
+  it("shows the settings with the placeholders and the model ids it suggests", async () => {
+    mockApi(routes([ada, bob, runBuilder]));
     renderApp("/admin/members/m-builder");
     const card = await screen.findByRole("group", { name: "Agent settings of builder" });
     expect(within(card).getByLabelText("Command")).toHaveValue("claude");
@@ -65,12 +67,20 @@ describe("an agent's settings", () => {
     expect(within(card).getByLabelText("Model")).toHaveValue("claude-sonnet-5-5");
     expect(within(card).getByLabelText("Environment")).toHaveValue("HTTP_PROXY = http://proxy:3128");
     expect(within(card).getByLabelText("Progress file")).toHaveValue("");
+    expect(within(card).getByRole("switch", { name: "Paused" })).not.toBeChecked();
+    expect(within(card).getByRole("switch", { name: "Unattended" })).toBeChecked();
     for (const p of ["{session_id}", "{model}", "{prompt_file}", "{mcp_config}", "{workspace}", "{task}"]) {
       expect(within(card).getByText(p)).toBeInTheDocument();
     }
-    // The model field suggests the known ids.
     expect(within(card).getByLabelText("Model")).toHaveAttribute("list", "agent-models");
     expect([...document.querySelectorAll("#agent-models option")].map((o) => o.getAttribute("value"))).toContain("claude-opus-5-5");
+  });
+
+  it("saves a one-line field on its own when it is left or on Enter", async () => {
+    const user = typist();
+    const api = mockApi(routes([ada, bob, runBuilder]));
+    renderApp("/admin/members/m-builder");
+    const card = await screen.findByRole("group", { name: "Agent settings of builder" });
 
     const model = within(card).getByLabelText("Model");
     await user.clear(model);
@@ -83,43 +93,56 @@ describe("an agent's settings", () => {
     await user.tab();
     await waitFor(() => expect(patches(api.calls)).toHaveLength(2));
 
+    await user.type(within(card).getByLabelText("Progress file"), "{{workspace}/progress.log{Enter}");
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(3));
+
+    expect(patches(api.calls).map((c) => c.path)).toEqual(Array(3).fill("/v1/members/m-builder/agent"));
+    expect(patches(api.calls).map((c) => c.body)).toEqual([
+      { model: "claude-opus-5-5" },
+      { command: "/usr/local/bin/my-agent" },
+      { progress_file: "{workspace}/progress.log" },
+    ]);
+  });
+
+  it("saves the arguments and the environment whole, one per line, when left", async () => {
+    const user = typist();
+    const api = mockApi(routes([ada, bob, runBuilder]));
+    renderApp("/admin/members/m-builder");
+    const card = await screen.findByRole("group", { name: "Agent settings of builder" });
+
     const args = within(card).getByLabelText("Arguments");
     await user.clear(args);
     await user.type(args, "--task{Enter}{{task}{Enter}{Enter}--prompt{Enter}{{prompt_file}");
     await user.tab();
-    await waitFor(() => expect(patches(api.calls)).toHaveLength(3));
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
 
     const env = within(card).getByLabelText("Environment");
-    await user.clear(env);
-    await user.type(env, "HTTP_PROXY = http://proxy:3128{Enter}LOG_LEVEL=debug");
+    await user.type(env, "{Enter}LOG_LEVEL=debug");
     await user.tab();
-    await waitFor(() => expect(patches(api.calls)).toHaveLength(4));
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(2));
 
-    const progress = within(card).getByLabelText("Progress file");
-    await user.type(progress, "{{workspace}/progress.log{Enter}");
-    await waitFor(() => expect(patches(api.calls)).toHaveLength(5));
-
-    await user.click(within(card).getByRole("switch", { name: "Paused" }));
-    await waitFor(() => expect(patches(api.calls)).toHaveLength(6));
-    await user.click(within(card).getByRole("switch", { name: "Unattended" }));
-    await waitFor(() => expect(patches(api.calls)).toHaveLength(7));
-
-    expect(patches(api.calls).map((c) => c.path)).toEqual(Array(7).fill("/v1/members/m-builder/agent"));
     expect(patches(api.calls).map((c) => c.body)).toEqual([
-      { model: "claude-opus-5-5" },
-      { command: "/usr/local/bin/my-agent" },
       { args: ["--task", "{task}", "--prompt", "{prompt_file}"] },
       { env: { HTTP_PROXY: "http://proxy:3128", LOG_LEVEL: "debug" } },
-      { progress_file: "{workspace}/progress.log" },
-      { paused: true },
-      { unattended: false },
     ]);
+  });
+
+  it("pauses the agent and sets Unattended with their switches", async () => {
+    const user = typist();
+    const api = mockApi(routes([ada, bob, runBuilder]));
+    renderApp("/admin/members/m-builder");
+    const card = await screen.findByRole("group", { name: "Agent settings of builder" });
+    await user.click(within(card).getByRole("switch", { name: "Paused" }));
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
+    await user.click(within(card).getByRole("switch", { name: "Unattended" }));
+    await waitFor(() => expect(patches(api.calls)).toHaveLength(2));
+    expect(patches(api.calls).map((c) => c.body)).toEqual([{ paused: true }, { unattended: false }]);
     // Paused shows on the page's head.
     expect(await screen.findByText("Paused", { selector: "[data-tone]" })).toBeInTheDocument();
   });
 
   it("sends nothing for a field left as it was, a blank command or a line /v1 would refuse", async () => {
-    const user = userEvent.setup();
+    const user = typist();
     const api = mockApi(routes([ada, bob, runBuilder]));
     renderApp("/admin/members/m-builder");
     const card = await screen.findByRole("group", { name: "Agent settings of builder" });
