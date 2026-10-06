@@ -60,6 +60,23 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 
 (Agents append here: anything the mock drew that `/v1` cannot give, and how it was resolved.)
 
+### W2 Board, W3 Task and Feature, W4 Inbox and Agents, W5 Admin (2026-10-07)
+
+- **Lapsed on a list row** has no field: `GET /v1/tasks` carries a Claim only while it is live and `how_ended` only in the Task detail. The Board derives the mark from one Activity read of the Team's latest 500 `task.claimed` / `task.lapsed` / `task.completed` entries joined with the stream; a lapse older than that window shows nothing. The Done card's avatar is the completer from the same read. A `last_claim_end` on the list record would replace it.
+- **Status moves by Darkory record no Activity** (`decisions.md`); `task.status_set` comes only from a Member's move, so the Task record shows a Claim's start and end, not the moves they imply.
+- **Who took a Claim back, who dropped a Task, and why** are in Activity only, not in the Task detail; the record reads "X's Claim was taken back" and "Dropped" without the actor. A Claim does not carry the Skill it was handed over to; the page takes it from the next Claim or the Task's current Skill.
+- **`tasks_open` names no Tasks**: the Feature page re-reads the Feature and names its open Tasks in the toast.
+- **Feature Evidence**: `GET /v1/features/{feature}` carries the Feature's own Evidence only; the page reads each Task's detail and merges, one request per Task.
+- **"Takeable by"** is computed in the browser from the Team's Members' Skills (one request per Member) and leaves out blocking and the no-self-review clause; "N Tasks takeable" for an idle agent is not drawn (no per-Member takeable read for another Member). "No Session yet" is not drawn either: only the Member or an admin may list a Member's Sessions, and tokens and Sessions live at `/v1/members/{member}/sessions` and `/tokens`.
+- **The proposal diff** is taken against the version it was based on (`GET /v1/skills/{skill}/versions`), and a stale base shows a warning in place of "Completing this review publishes version N".
+- **File Task and `forbidden`**: the server checks Team membership only when filing a Feature, or a Task that blocks another; the dialog words both.
+- **Live Statuses**: the shell's live-update map had no root for `statuses.changed`; the Board and the Workflow page refetch the list themselves (a `statuses` root is being added to the shell).
+- **Intent** carries only `team`; the Board's column "+" and the Feature preset use a board-local event (an optional `status` / `feature` on the intent is being added to the shell).
+- **Not shipped from the mock**: the "New" tag chips (review chrome); the Evidence count and "Proposal · version 2" line on cards (the list record lacks them); a × in a dialog header (Cancel and Esc close it).
+- **Pass ownership** is offered to the owner only, although `/v1` also lets someone above the owner on the Reporting line pass it; Add blocker and Attach Evidence are offered to the owner and the Feature's Team when nobody holds the Task, as `/v1` allows.
+- **Each e2e spec starts its own Install** (`startServer()` in `web/e2e/server.ts`, which also exports `DARKORY_E2E_ADMIN_TOKEN`), because spec files run alphabetically and the smoke spec needs a fresh Install with its startup link unused; `npm run e2e` therefore builds the binary once per spec.
+- **Dev gotcha**: writes through the Vite proxy need the server's `--public-url` (or `DARKORY_PUBLIC_URL`) set to the Vite address, as `make dev` does; otherwise the Origin check answers `forbidden`.
+
 ### W1 skeleton
 
 - **The app's CSP refuses Google Fonts and injected styles.** `appCSP` is `style-src 'self'; font-src 'self'`. Inter is served from the bundle (`@fontsource-variable/inter`, registered as "Inter" so `tokens.css` stays verbatim) rather than from Google Fonts, which also suits a Local Install with no internet. Sonner, Radix Select's viewport, Radix ScrollArea and react-style-singleton (Radix's scroll lock) add `<style>` elements at run time; the build turns that off (`noInjectedStyles` in `vite.config.ts`, which fails the build if any of them changes) and `globals.css` carries their CSS. Vitest runs those packages through the same patch, and `src/components/csp.test.tsx` fails if an open Select, a ScrollArea, a Dialog or a toast adds a `<style>`; the e2e suite fails on any console error, so a new CSP refusal shows.
