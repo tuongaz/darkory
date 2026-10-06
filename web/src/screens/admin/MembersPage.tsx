@@ -159,9 +159,10 @@ function MemberRow({
 type Created = { member: Member; token?: IssuedToken; tokenError?: unknown; agentError?: unknown };
 
 /**
- * New Member (F-D2a): name, kind, email for a human, model for an agent, admin. An agent gets its
- * first token in the same step, its secret shown once (F-D2b), and its settings for the Runner:
- * the Install's default command on the model asked for. A human gets a Sign-in link button.
+ * New Member (F-D2a): name, kind, email for a human, admin. An agent gets its first token in the
+ * same step, its secret shown once (F-D2b), and, unless Run with the Runner is off, its settings
+ * for the Runner: the Install's default command on the model asked for. Off, it brings its own
+ * session through that token, as the test bots do. A human gets a Sign-in link button.
  */
 function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agent"; onClose: () => void }) {
   const navigate = useNavigate();
@@ -169,10 +170,12 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
   const [kind, setKind] = useState(initialKind);
   const [email, setEmail] = useState("");
   const [admin, setAdmin] = useState(false);
+  const [runner, setRunner] = useState(true);
   const [model, setModel] = useState(defaultModel);
   const create = useMutation({
     // /v1 has no create-with-token: an agent is created, then its first token is issued, then its
-    // settings are set. What fails after the create is said beside the token, the Member being made.
+    // settings are set when the Runner is to run it. What fails after the create is said beside the
+    // token, the Member being made.
     mutationFn: async (): Promise<Created> => {
       const member = await createMember({
         name: name.trim(),
@@ -187,6 +190,7 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
       } catch (tokenError) {
         out.tokenError = tokenError;
       }
+      if (!runner) return out;
       try {
         out.member = await setAgentSettings(member.id, { model: model.trim() || defaultModel });
       } catch (agentError) {
@@ -243,7 +247,15 @@ function NewMemberDialog({ kind: initialKind, onClose }: { kind: "human" | "agen
           </FormRow>
         )}
         {kind === "agent" && (
-          <FormRow label="Model" htmlFor="member-model" help="The Runner starts it with the Install's default command.">
+          <FormRow
+            label="Runner"
+            help={runner ? "The Runner starts its sessions with the Install's default command." : "It brings its own session, through its token."}
+          >
+            <Switch checked={runner} onCheckedChange={setRunner} aria-label="Run with the Runner" className="self-start" />
+          </FormRow>
+        )}
+        {kind === "agent" && runner && (
+          <FormRow label="Model" htmlFor="member-model">
             <Input
               id="member-model"
               list="member-models"

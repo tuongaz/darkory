@@ -7,27 +7,72 @@ import { SectionHeader } from "@/components/PageHeader";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { argsOf, argsText, envOf, envText, knownModels, placeholders } from "./agent";
-import { SettingsForm, SettingsRow, w320 } from "./parts";
-import { setAgentSettings } from "./writes";
+import { count } from "./model";
+import { ConfirmDialog, Fact, Facts, MoreMenu, SettingsForm, SettingsRow, w320 } from "./parts";
+import { clearAgentSettings, setAgentSettings } from "./writes";
 
 type Body = components["schemas"]["SetAgentSettingsBody"];
 
 /**
  * An agent's Agent card: how the Runner starts its sessions. Each field saves on its own when it
  * is left, and sends only itself (PATCH /v1/members/{member}/agent keeps the rest). An agent
- * with no settings works from elsewhere through its own token until an admin hands it to the Runner.
+ * with no settings works from elsewhere through its own token until an admin hands it to the
+ * Runner; Stop using the Runner, behind ⋯, clears them again.
  */
 export function AgentCard({ member }: { member: Member }) {
   const s = member.agent;
+  const [stopping, setStopping] = useState(false);
   return (
     <section aria-label="Agent" className="mt-8 flex flex-col gap-2">
-      <SectionHeader title="Agent" />
+      <SectionHeader
+        title="Agent"
+        actions={
+          s && (
+            <MoreMenu label={`More for the Agent settings of ${member.name}`} size="icon-xs">
+              <DropdownMenuItem variant="destructive" onSelect={() => setStopping(true)}>
+                Stop using the Runner
+              </DropdownMenuItem>
+            </MoreMenu>
+          )
+        }
+      />
       {s ? <AgentForm member={member} settings={s} /> : <NotRun member={member} />}
+      {s && stopping && <StopRunnerDialog member={member} settings={s} onClose={() => setStopping(false)} />}
     </section>
+  );
+}
+
+/** Asks before clearing an agent's settings, and says what goes with them. */
+function StopRunnerDialog({ member, settings: s, onClose }: { member: Member; settings: AgentSettings; onClose: () => void }) {
+  const stop = useMutation({ mutationFn: () => clearAgentSettings(member.id), onSuccess: onClose });
+  const vars = Object.keys(s.env).length;
+  return (
+    <ConfirmDialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title={`Stop using the Runner for ${member.name}?`}
+      confirmLabel="Stop using the Runner"
+      onConfirm={() => stop.mutate()}
+      pending={stop.isPending}
+      error={stop.error}
+    >
+      <Facts>
+        <Fact label="Clears">
+          <code className="font-mono text-[11.5px] font-normal">{s.command}</code>
+          {count(s.args.length, "argument")}
+          <code className="font-mono text-[11.5px] font-normal">{s.model}</code>
+          {vars > 0 && count(vars, "variable")}
+        </Fact>
+        <Fact label="Then">
+          <span className="font-normal">The Runner starts no session for {member.name}; it works through its own token.</span>
+        </Fact>
+      </Facts>
+    </ConfirmDialog>
   );
 }
 

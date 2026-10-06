@@ -410,6 +410,19 @@ test("agents plan R3: a Workspace, a Team's default, an agent's model and Paused
     await shot(page, "r3-members");
   });
 
+  await test.step("New Member as an Agent with Run with the Runner off has no agent settings", async () => {
+    await page.goto(`${base}/admin/members?new=1&kind=agent`);
+    const dialog = page.getByRole("dialog", { name: "New Member" });
+    await dialog.getByLabel("Name").fill("bot-1");
+    await dialog.getByRole("switch", { name: "Run with the Runner" }).click();
+    await expect(dialog.getByLabel("Model")).toHaveCount(0);
+    await shot(page, "r3-new-agent-own-session");
+    await dialog.getByRole("button", { name: "Create Member" }).click();
+    await page.getByRole("dialog", { name: "Token for bot-1" }).getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("group", { name: "Agent settings of bot-1" })).toContainText("the Runner does not start it");
+    expect((await v1<{ member: { agent?: unknown } }>(page, "GET", "/v1/members/bot-1")).member.agent).toBeUndefined();
+  });
+
   await test.step("at 390px none of them scrolls sideways", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     const screens: [string, () => ReturnType<Page["getByRole"]>][] = [

@@ -38,6 +38,11 @@ function routes(members: Member[], extra: Record<string, Handler> = {}): Record<
       byId.set(m.id, next);
       return next;
     },
+    "DELETE /v1/members/:member/agent": ({ params }) => {
+      const m: Member = { ...byId.get(params.member)!, agent: undefined };
+      byId.set(m.id, m);
+      return m;
+    },
     ...extra,
   };
 }
@@ -171,6 +176,25 @@ describe("an agent's settings", () => {
     expect(patches(api.calls).map((c) => c.body)).toEqual([{}]);
   });
 
+  it("Stop using the Runner, behind ⋯, says what it clears, then clears the settings", async () => {
+    const user = typist();
+    const api = mockApi(routes([ada, bob, runBuilder]));
+    renderApp("/admin/members/m-builder");
+    await screen.findByRole("group", { name: "Agent settings of builder" });
+    await user.click(screen.getByRole("button", { name: "More for the Agent settings of builder" }));
+    await user.click(await screen.findByRole("menuitem", { name: "Stop using the Runner" }));
+    const confirm = await screen.findByRole("dialog", { name: "Stop using the Runner for builder?" });
+    expect(confirm).toHaveTextContent("Clearsclaude4 argumentsclaude-sonnet-5-51 variable");
+    expect(confirm).toHaveTextContent("The Runner starts no session for builder; it works through its own token.");
+    expect(api.calls.some((c) => c.method === "DELETE")).toBe(false);
+
+    await user.click(within(confirm).getByRole("button", { name: "Stop using the Runner" }));
+    expect(await screen.findByRole("button", { name: "Use the Runner" })).toBeInTheDocument();
+    expect(api.calls.filter((c) => c.method === "DELETE").map((c) => c.path)).toEqual(["/v1/members/m-builder/agent"]);
+    // Nothing left to stop.
+    expect(screen.queryByRole("button", { name: "More for the Agent settings of builder" })).not.toBeInTheDocument();
+  });
+
   it("a human has no Agent card", async () => {
     mockApi(routes([ada, bob, runBuilder]));
     renderApp("/admin/members/m-bob");
@@ -204,9 +228,10 @@ describe("Members and agents", () => {
     );
     renderApp("/admin/members?new=1&kind=agent");
     const dialog = await screen.findByRole("dialog", { name: "New Member" });
+    expect(within(dialog).getByRole("switch", { name: "Run with the Runner" })).toBeChecked();
+    expect(within(dialog).getByText("The Runner starts its sessions with the Install's default command.")).toBeInTheDocument();
     const model = within(dialog).getByLabelText("Model");
     expect(model).toHaveValue("claude-sonnet-5-5");
-    expect(within(dialog).getByText("The Runner starts it with the Install's default command.")).toBeInTheDocument();
     await user.type(within(dialog).getByLabelText("Name"), "builder-9");
     await user.clear(model);
     await user.type(model, "claude-opus-5-5");
@@ -218,10 +243,33 @@ describe("Members and agents", () => {
     expect(writes[2].body).toEqual({ model: "claude-opus-5-5" });
   });
 
+  it("New Member with Run with the Runner off makes an agent with no settings, for one that brings its own session", async () => {
+    const user = userEvent.setup();
+    const created: Member = { id: "m-bot", name: "bot-1", kind: "agent", admin: false, created_at: at };
+    const api = mockApi(
+      routes([ada, bob, created], {
+        "POST /v1/members": json(201, created),
+        "POST /v1/members/:member/tokens": json(201, { token: { id: "t-2", member_id: "m-bot", name: "default", prefix: "dk_b0t", created_at: at }, secret: "dk_b0t" }),
+      }),
+    );
+    renderApp("/admin/members?new=1&kind=agent");
+    const dialog = await screen.findByRole("dialog", { name: "New Member" });
+    await user.type(within(dialog).getByLabelText("Name"), "bot-1");
+    await user.click(within(dialog).getByRole("switch", { name: "Run with the Runner" }));
+    expect(within(dialog).queryByLabelText("Model")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("It brings its own session, through its token.")).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Create Member" }));
+
+    expect(await screen.findByRole("dialog", { name: "Token for bot-1" })).toBeInTheDocument();
+    const writes = api.calls.filter((c) => c.method !== "GET");
+    expect(writes.map((c) => `${c.method} ${c.path}`)).toEqual(["POST /v1/members", "POST /v1/members/m-bot/tokens"]);
+  });
+
   it("New Member asks a human no model", async () => {
     mockApi(routes([ada, bob]));
     renderApp("/admin/members?new=1");
     const dialog = await screen.findByRole("dialog", { name: "New Member" });
     expect(within(dialog).queryByLabelText("Model")).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("switch", { name: "Run with the Runner" })).not.toBeInTheDocument();
   });
 });
