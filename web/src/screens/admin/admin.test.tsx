@@ -191,6 +191,8 @@ describe("Workflow", () => {
     expect(names).toEqual(["Backlog", "Todo", "In progress", "In review", "Done", "Dropped"]);
     expect(await within(within(table).getByRole("row", { name: "In review" })).findByText("2 Tasks")).toBeInTheDocument();
     expect(within(within(table).getByRole("row", { name: "Backlog" })).getByText("0 Tasks")).toBeInTheDocument();
+    // The tab is a place like the others, with no review chip.
+    expect(within(screen.getByRole("navigation", { name: "Admin" })).getByRole("link", { name: "Workflow" })).toHaveTextContent(/^Workflow$/);
   });
 
   it("a rename is sent as the whole list", async () => {

@@ -10,15 +10,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/compon
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-/** The kit's `.tag`: a small solid chip marking something new. */
-export function Tag({ children }: { children: ReactNode }) {
-  return (
-    <span className="inline-flex h-4 items-center rounded-[4px] bg-chart-1 px-[5px] text-[10px] font-semibold tracking-[0.02em] text-on-solid">
-      {children}
-    </span>
-  );
-}
-
 /**
  * A record page's settings (kit `.sform`): one label column, one control column, a row per
  * setting. Controls keep fixed widths (320px); on a phone the label goes above.

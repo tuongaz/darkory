@@ -6,7 +6,6 @@ import { Content, TopBar, type Crumb } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { Tag } from "./parts";
 
 const adminCrumb: Crumb = { label: "Admin", icon: <ShieldIcon className="size-3.5 text-muted-foreground" /> };
 
@@ -62,7 +61,7 @@ function AdminTabs() {
     { to: "/admin/members", label: "Members", n: members.data?.length },
     { to: "/admin/teams", label: "Teams", n: teams.data?.length },
     { to: "/admin/skills", label: "Skills", n: skills.data?.length },
-    { to: "/admin/workflow", label: "Workflow", tag: "New" },
+    { to: "/admin/workflow", label: "Workflow" },
   ];
   return (
     <nav aria-label="Admin" className="flex flex-none gap-0.5 overflow-x-auto border-b px-4">
@@ -79,7 +78,6 @@ function AdminTabs() {
         >
           {t.label}
           {t.n !== undefined && <span className="text-2xs text-muted-foreground tabular-nums">{t.n}</span>}
-          {t.tag && <Tag>{t.tag}</Tag>}
         </NavLink>
       ))}
     </nav>
