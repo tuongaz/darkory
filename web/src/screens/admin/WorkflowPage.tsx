@@ -19,12 +19,13 @@ import { StatusGlyph } from "@/components/StatusGlyph";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { glyphFor, type StatusKind } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { AdminFrame } from "./AdminLayout";
 import { count } from "./model";
-import { Choice, ConfirmDialog, Fact, Facts, MoreMenu } from "./parts";
+import { ConfirmDialog, Fact, Facts, MoreMenu } from "./parts";
 import { statusesKey, useStatuses, useTasksByStatus } from "./queries";
 import { insertAt, kindNames, kinds, moveTargets, problem, rowsOf, setStatusesBody, unchanged, type Problem, type Row } from "./workflow";
 import { setStatuses } from "./writes";
@@ -294,14 +295,18 @@ function StatusRow({
 
 function KindSelect({ label, value, onChange, disabled }: { label: string; value: StatusKind; onChange: (k: StatusKind) => void; disabled?: boolean }) {
   return (
-    <Choice
-      label={label}
-      className="w-full sm:w-[168px]"
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-      options={kinds.map((k) => ({ value: k, label: kindNames[k] }))}
-    />
+    <Select value={value} onValueChange={(v) => onChange(v as StatusKind)} disabled={disabled}>
+      <SelectTrigger size="sm" aria-label={label} className="h-8 w-full sm:w-[168px]">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper" align="start">
+        {kinds.map((k) => (
+          <SelectItem key={k} value={k}>
+            {kindNames[k]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 
@@ -406,13 +411,18 @@ function DeleteStatusDialog({
           <Fact label="Moves">
             {count(n, "Task")} to
             {targets.length > 0 && (
-              <Choice
-                label="Status that receives them"
-                className="w-[168px] font-normal"
-                value={to}
-                onChange={setTo}
-                options={targets.map((r) => ({ value: r.id!, label: r.name }))}
-              />
+              <Select value={to} onValueChange={setTo}>
+                <SelectTrigger size="sm" aria-label="Status that receives them" className="h-8 w-[168px] font-normal">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" align="start">
+                  {targets.map((r) => (
+                    <SelectItem key={r.key} value={r.id!}>
+                      {r.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </Fact>
         </Facts>

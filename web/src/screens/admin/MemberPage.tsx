@@ -14,13 +14,15 @@ import { Time } from "@/components/Time";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { AdminFrame } from "./AdminLayout";
 import { SessionRows, TokenRows } from "./credentials";
 import { count, deactivateSummary, heldClaims, liveTokens } from "./model";
-import { Chip, Choice, ConfirmDialog, Fact, Facts, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
+import { Chip, ConfirmDialog, Fact, Facts, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
 import { useHeldTasks, useMemberDetail, useSessions, useTokens } from "./queries";
 import { IssueTokenDialog, SignInLinkDialog } from "./secrets";
 import {
@@ -300,26 +302,31 @@ const noOne = "none";
 
 /** Reports to: the Member who directs this one, or no one. */
 function ManagerRow({ member }: { member: Member }) {
-  const { memberList } = useDirectory();
+  const { memberList, members } = useDirectory();
   const save = useMutation({
     mutationFn: (manager: string) => (manager === noOne ? clearManager(member.id) : setManager(member.id, manager)),
   });
   const value = save.isPending ? save.variables : (member.manager_id ?? noOne);
   // Anyone active may direct them; a deactivated manager stays listed while they are the one.
   const choices = memberList.filter((c) => c.id !== member.id && (!c.deactivated_at || c.id === member.manager_id));
+  const current = member.manager_id ? members.get(member.manager_id) : undefined;
   return (
     <SettingsRow label="Reports to" htmlFor="member-manager">
-      <Choice
-        id="member-manager"
-        className={w320}
-        value={value}
-        onChange={(v) => save.mutate(v)}
-        disabled={save.isPending}
-        options={[
-          { value: noOne, label: <span className="text-muted-foreground">No one</span> },
-          ...choices.map((c) => ({ value: c.id, label: <MemberName member={c} /> })),
-        ]}
-      />
+      <Select value={value} onValueChange={(v) => save.mutate(v)} disabled={save.isPending}>
+        <SelectTrigger id="member-manager" size="sm" className={cn(w320, "h-8")} aria-label="Reports to">
+          <SelectValue>
+            {value === noOne ? <span className="text-muted-foreground">No one</span> : current && <MemberName member={current} />}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent position="popper" align="start">
+          <SelectItem value={noOne}>No one</SelectItem>
+          {choices.map((c) => (
+            <SelectItem key={c.id} value={c.id}>
+              <MemberName member={c} />
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Refusal error={save.error} />
     </SettingsRow>
   );

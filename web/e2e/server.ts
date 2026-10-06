@@ -20,7 +20,10 @@ export default async function startServer(): Promise<() => Promise<void>> {
   const env = { ...process.env, DARKORY_NO_UPDATE_CHECK: "1" };
 
   execFileSync("go", ["build", "-o", exe, "./cmd/darkory"], { cwd: repo, stdio: "inherit", env });
-  execFileSync(exe, ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada"], { env, stdio: "pipe" });
+  const init = execFileSync(exe, ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada"], { env, stdio: "pipe" });
+  // ada's token, which init prints once: a spec that runs after the startup link is used signs in
+  // by asking /v1 for a login link of its own.
+  process.env.DARKORY_E2E_ADMIN_TOKEN = /dk_\S+/.exec(init.toString())?.[0] ?? "";
 
   // Port 0: the kernel picks a free port, and serve prints its link with the port it got.
   const server = spawn(exe, ["serve", "--no-browser", "--listen", "127.0.0.1:0", "--data", data], {

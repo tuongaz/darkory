@@ -3,12 +3,12 @@ import { fileURLToPath } from "node:url";
 import startServer from "./server";
 
 // Admin's journeys (scenarios 8, 9 and 12 of docs/build/ui-plan.md) against the real binary. They
-// run on an Install of their own, started with e2e/server.ts as the shared one is: flow.spec.ts
-// needs that one fresh, its startup login link unused.
+// run on an Install of their own, started with e2e/server.ts as the shared one is: this file runs
+// before flow.spec.ts, which needs the shared Install fresh (no Team, no Feature).
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/admin/", import.meta.url));
-const envKeys = ["DARKORY_E2E_LOGIN_LINK", "DARKORY_E2E_BASE_URL", "DARKORY_E2E_DATA"] as const;
+const envKeys = ["DARKORY_E2E_LOGIN_LINK", "DARKORY_E2E_BASE_URL", "DARKORY_E2E_DATA", "DARKORY_E2E_ADMIN_TOKEN"] as const;
 
 let stop: (() => Promise<void>) | undefined;
 let base = "";
@@ -17,21 +17,28 @@ let signedIn: Awaited<ReturnType<BrowserContext["storageState"]>>;
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000);
   const saved = envKeys.map((k) => [k, process.env[k]] as const);
-  let link: string;
+  let token: string;
   try {
     stop = await startServer();
-    link = process.env.DARKORY_E2E_LOGIN_LINK!;
     base = process.env.DARKORY_E2E_BASE_URL!;
+    token = process.env.DARKORY_E2E_ADMIN_TOKEN!;
   } finally {
     for (const [k, v] of saved) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
   }
-  // Sign in once with the startup link; every test starts from that browser's cookie.
+  // Sign in once with a login link asked of /v1 with ada's token, as any spec can whatever became
+  // of the startup link; every test starts from that browser's cookie.
+  const issued = await fetch(`${base}/v1/members/ada/login-links`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Darkory-Session": "e2e-admin", "Idempotency-Key": crypto.randomUUID() },
+  });
+  expect(issued.status).toBe(201);
+  const { url } = (await issued.json()) as { url: string };
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await page.goto(link);
+  await page.goto(url);
   await page.getByRole("button", { name: /^Sign in as / }).click();
   await expect(page).toHaveURL(`${base}/inbox`);
   signedIn = await ctx.storageState();
@@ -138,9 +145,9 @@ test("scenario 12: Create Team, Add Member, New Skill from the admin pages", asy
     await page.getByRole("button", { name: "Add to Team" }).click();
     await page.getByRole("option", { name: /Web/ }).click();
     await expect(page.getByRole("button", { name: "Remove from Web" })).toBeVisible();
-    await page.getByRole("button", { name: "Reports to" }).click();
-    await page.getByRole("menuitemradio", { name: "ada" }).click();
-    await expect(page.getByRole("button", { name: "Reports to" })).toHaveText(/ada/);
+    await page.getByRole("combobox", { name: "Reports to" }).click();
+    await page.getByRole("option", { name: "ada" }).click();
+    await expect(page.getByRole("combobox", { name: "Reports to" })).toHaveText(/ada/);
     await shot(page, "member-human");
   });
 
@@ -158,8 +165,8 @@ test("scenario 12: Create Team, Add Member, New Skill from the admin pages", asy
     dialog = page.getByRole("dialog", { name: "New Skill" });
     await dialog.getByLabel("Name").fill("web-engineer");
     await dialog.getByRole("radio", { name: "Company" }).click();
-    await dialog.getByRole("button", { name: "Builds on" }).click();
-    await page.getByRole("menuitemradio", { name: "engineer" }).click();
+    await dialog.getByRole("combobox", { name: "Builds on" }).click();
+    await page.getByRole("option", { name: "engineer" }).click();
     await dialog.getByLabel("Text").fill("1. Reuse the cart component.\n2. Ship behind a flag.");
     await shot(page, "new-skill");
     await dialog.getByRole("button", { name: "Create Skill" }).click();
@@ -211,8 +218,8 @@ test("scenario 8: an admin renames In review and adds a Status; GET /v1/statuses
     .toEqual(["Backlog:backlog", "Todo:todo", "In progress:in_progress", "Code review:in_progress", "QA:in_progress", "Done:done", "Dropped:dropped"]);
 
   // A kind change that leaves no Todo Status is refused in words, and nothing is sent.
-  await page.getByRole("button", { name: "Kind of Todo Todo" }).click();
-  await page.getByRole("menuitemradio", { name: "Backlog" }).click();
+  await page.getByRole("combobox", { name: "Kind of Todo" }).click();
+  await page.getByRole("option", { name: "Backlog" }).click();
   await expect(page.getByRole("alert")).toContainText("The list needs a Todo Status.");
   await shot(page, "workflow");
 
