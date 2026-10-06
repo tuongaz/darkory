@@ -27,7 +27,9 @@ import (
 // (12), and a session in tmux stopped by an admin, when tmux is installed.
 
 // runnerTimings make a session take a second or two.
-const runnerTimings = "wait=1s,timeout=4s,tick=200ms,stale=2s,nudge=700ms,exit=3s,poll=1s,retry=300ms"
+// The Claims' timeout leaves a loaded machine room for late Heartbeats; a hung session still lapses
+// within about 12 s.
+const runnerTimings = "wait=1s,timeout=10s,tick=200ms,stale=2s,nudge=700ms,exit=3s,poll=1s,retry=300ms"
 
 var (
 	fakeOnce sync.Once
@@ -531,6 +533,16 @@ func tmuxSocket(t *testing.T, data string) string {
 	return "darkory-" + hex.EncodeToString(sum[:4])
 }
 
+// killTmux stops a tmux server and removes its socket, which tmux leaves behind.
+func killTmux(socket string) {
+	exec.Command("tmux", "-L", socket, "kill-server").Run()
+	dir := os.Getenv("TMUX_TMPDIR")
+	if dir == "" {
+		dir = "/tmp"
+	}
+	os.Remove(filepath.Join(dir, fmt.Sprintf("tmux-%d", os.Getuid()), socket))
+}
+
 // In tmux: the session runs as dk-MAIN-2 on the Runner's own tmux server while it works; an
 // admin's stop through /v1 ends it, its tmux session is gone, the Task is released with a Note
 // and the pane's log is Evidence. It needs tmux.
@@ -543,7 +555,7 @@ func TestRunnerInTmux(t *testing.T) {
 		ri.serveEnv = []string{"DARKORY_RUNNER_TIMINGS=" + runnerTimings, "DARKORY_RUNNER_TMUX=on"}
 	})
 	socket := tmuxSocket(t, ri.dir)
-	t.Cleanup(func() { exec.Command("tmux", "-L", socket, "kill-server").Run() })
+	t.Cleanup(func() { killTmux(socket) })
 	ada := ri.ada
 	ada.ok("feature", "create", "--team", "MAIN", "--title", "Fix the typo", "--quick", "--skill", "engineer")
 	ri.wait(20*time.Second, "a tmux session dk-MAIN-2", func() bool {

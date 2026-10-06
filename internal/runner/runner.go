@@ -255,7 +255,10 @@ func (r *Runner) Run(ctx context.Context) error {
 	var wg sync.WaitGroup
 	after, err := retry(ctx, r.t.Retry, func() (int64, error) { return r.reader.LastSeq(ctx) })
 	if err != nil {
-		return nil // ctx ended
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("runner: reading Activity as %s: %w", r.agents[0].name(), err)
 	}
 	wg.Go(func() { r.follow(ctx, after) })
 	wg.Go(func() { r.merger(ctx) })

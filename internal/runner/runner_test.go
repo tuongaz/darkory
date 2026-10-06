@@ -402,7 +402,7 @@ func TestRunnerInTmux(t *testing.T) {
 	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
 	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
 	r := f.runWith("on", "builder")
-	t.Cleanup(func() { exec.Command("tmux", "-L", r.Socket(), "kill-server").Run() })
+	t.Cleanup(func() { killTmux(r.Socket()) })
 
 	var seen RunnerSession
 	eventually(t, 20*time.Second, "a tmux session", func() bool {
@@ -462,7 +462,7 @@ func TestRunnerTerminal(t *testing.T) {
 	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
 	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
 	r := f.runWith("on", "builder")
-	t.Cleanup(func() { exec.Command("tmux", "-L", r.Socket(), "kill-server").Run() })
+	t.Cleanup(func() { killTmux(r.Socket()) })
 	eventually(t, 20*time.Second, "the session waiting at its prompt", func() bool {
 		for _, s := range r.Running() {
 			if s.Task == "WEB-3" && s.State == StateNudged {

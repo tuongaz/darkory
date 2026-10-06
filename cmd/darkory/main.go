@@ -341,8 +341,8 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	stopRunner()
 	select {
 	case <-runDone:
-	case <-time.After(30 * time.Second):
-		log.Warn("the Runner did not stop within 30 s")
+	case <-time.After(10 * time.Second):
+		log.Warn("the Runner did not stop within 10 s")
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

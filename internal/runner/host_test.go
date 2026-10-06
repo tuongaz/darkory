@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,7 +63,7 @@ func TestTmuxHost(t *testing.T) {
 		t.Skip("no tmux")
 	}
 	h := &tmuxHost{socket: TmuxSocket(t.TempDir()), every: 50 * time.Millisecond}
-	t.Cleanup(func() { exec.Command("tmux", "-L", h.socket, "kill-server").Run() })
+	t.Cleanup(func() { killTmux(h.socket) })
 	s := hostSpec(t, "dk-WEB-1")
 	p, err := h.Start(t.Context(), s)
 	if err != nil {
@@ -111,6 +112,16 @@ func TestTmuxHost(t *testing.T) {
 	if p.ExitCode() != -1 {
 		t.Fatalf("a killed session's exit %d", p.ExitCode())
 	}
+}
+
+// killTmux stops a tmux server and removes its socket, which tmux leaves behind.
+func killTmux(socket string) {
+	exec.Command("tmux", "-L", socket, "kill-server").Run()
+	dir := os.Getenv("TMUX_TMPDIR")
+	if dir == "" {
+		dir = "/tmp"
+	}
+	os.Remove(filepath.Join(dir, fmt.Sprintf("tmux-%d", os.Getuid()), socket))
 }
 
 func TestTail(t *testing.T) {
