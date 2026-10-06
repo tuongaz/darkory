@@ -24,7 +24,7 @@ func TestLoadServe(t *testing.T) {
 		want Serve
 	}{
 		{"defaults", nil, nil, Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")},
-			Evidence: blob.Settings{Dir: "evidence"}, SMTP: SMTP{MaxPerHour: 300}, EvidenceMaxMB: 100, SessionIdle: DefaultSessionIdle, SessionLifetime: DefaultSessionLifetime, MaxWaiting: DefaultMaxWaiting}},
+			Evidence: blob.Settings{Dir: "evidence"}, SMTP: SMTP{MaxPerHour: 300}, EvidenceMaxMB: 100, SessionIdle: DefaultSessionIdle, SessionLifetime: DefaultSessionLifetime, MaxWaiting: DefaultMaxWaiting, Agents: "auto"}},
 		{"environment", nil,
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DATA": "/var/lib/darkory", "DARKORY_PUBLIC_URL": "https://dk.example.com",
 				"DARKORY_NO_BROWSER": "1", "DARKORY_NO_LOGIN_LINK": "1", "DARKORY_DB": "postgres://pgbouncer/dk",
@@ -32,24 +32,25 @@ func TestLoadServe(t *testing.T) {
 				"DARKORY_EVIDENCE": "s3://bucket/install/1/", "DARKORY_S3_ENDPOINT": "http://minio:9000", "DARKORY_S3_ACCESS_KEY": "ak",
 				"DARKORY_S3_SECRET_KEY": "sk", "DARKORY_S3_PATH_STYLE": "1", "DARKORY_EVIDENCE_MAX_MB": "20",
 				"DARKORY_SMTP_URL": "smtp://u:p@mail:587", "DARKORY_SMTP_FROM": "Darkory <dk@example.com>", "DARKORY_SMTP_MAX_PER_HOUR": "50",
-				"DARKORY_NO_UPDATE_CHECK": "yes", "DARKORY_SESSION_IDLE": "24h", "DARKORY_SESSION_LIFETIME": "168h", "DARKORY_MAX_WAITING": "4"},
+				"DARKORY_NO_UPDATE_CHECK": "yes", "DARKORY_SESSION_IDLE": "24h", "DARKORY_SESSION_LIFETIME": "168h", "DARKORY_MAX_WAITING": "4", "DARKORY_AGENTS": "off"},
 			Serve{Listen: ":8080", Store: Store{"/var/lib/darkory", "postgres://pgbouncer/dk"}, PublicURL: "https://dk.example.com",
 				NoBrowser: true, NoLoginLink: true, NoUpdateCheck: true, DatabaseListen: "postgres://db/dk", Migrate: true, ProxyHops: 1,
 				Evidence: blob.Settings{S3: &blob.S3Settings{Bucket: "bucket", Prefix: "install/1", Endpoint: "http://minio:9000",
 					Region: "us-east-1", AccessKey: "ak", SecretKey: "sk", PathStyle: true}},
 				SMTP: SMTP{URL: "smtp://u:p@mail:587", From: "Darkory <dk@example.com>", MaxPerHour: 50}, EvidenceMaxMB: 20,
-				SessionIdle: 24 * time.Hour, SessionLifetime: 168 * time.Hour, MaxWaiting: 4}},
+				SessionIdle: 24 * time.Hour, SessionLifetime: 168 * time.Hour, MaxWaiting: 4, Agents: "off"}},
 		{"flags win", []string{"--listen", ":9000", "--db", "postgres://x/y", "--no-browser", "--no-login-link", "--migrate",
 			"--proxy-hops", "2", "--evidence", "/srv/evidence", "--evidence-max-mb", "5", "--no-update-check",
-			"--session-idle", "1h", "--session-lifetime", "2h", "--max-waiting", "2"},
+			"--session-idle", "1h", "--session-lifetime", "2h", "--max-waiting", "2", "--agents=on"},
 			map[string]string{"DARKORY_LISTEN": ":8080", "DARKORY_DB": "other.db", "DARKORY_PROXY_HOPS": "1", "DARKORY_EVIDENCE": "/elsewhere",
-				"DARKORY_EVIDENCE_MAX_MB": "20", "DARKORY_NO_UPDATE_CHECK": "0", "DARKORY_SESSION_IDLE": "24h", "DARKORY_MAX_WAITING": "4"},
+				"DARKORY_EVIDENCE_MAX_MB": "20", "DARKORY_NO_UPDATE_CHECK": "0", "DARKORY_SESSION_IDLE": "24h", "DARKORY_MAX_WAITING": "4",
+				"DARKORY_AGENTS": "off"},
 			Serve{Listen: ":9000", Store: Store{".", "postgres://x/y"}, NoBrowser: true, NoLoginLink: true, NoUpdateCheck: true, Migrate: true,
 				ProxyHops: 2, Evidence: blob.Settings{Dir: "/srv/evidence"}, SMTP: SMTP{MaxPerHour: 300}, EvidenceMaxMB: 5,
-				SessionIdle: time.Hour, SessionLifetime: 2 * time.Hour, MaxWaiting: 2}},
+				SessionIdle: time.Hour, SessionLifetime: 2 * time.Hour, MaxWaiting: 2, Agents: "on"}},
 		{"DARKORY_NO_UPDATE_CHECK=false leaves the check on", nil, map[string]string{"DARKORY_NO_UPDATE_CHECK": "false"},
 			Serve{Listen: DefaultListen, Store: Store{".", filepath.Join(".", "darkory.db")},
-				Evidence: blob.Settings{Dir: "evidence"}, SMTP: SMTP{MaxPerHour: 300}, EvidenceMaxMB: 100, SessionIdle: DefaultSessionIdle, SessionLifetime: DefaultSessionLifetime, MaxWaiting: DefaultMaxWaiting}},
+				Evidence: blob.Settings{Dir: "evidence"}, SMTP: SMTP{MaxPerHour: 300}, EvidenceMaxMB: 100, SessionIdle: DefaultSessionIdle, SessionLifetime: DefaultSessionLifetime, MaxWaiting: DefaultMaxWaiting, Agents: "auto"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -64,6 +65,9 @@ func TestLoadServe(t *testing.T) {
 	}
 	if _, err := LoadServe([]string{"extra"}, env(nil), io.Discard); err == nil {
 		t.Fatal("accepted a stray argument")
+	}
+	if _, err := LoadServe([]string{"--agents", "sometimes"}, env(nil), io.Discard); err == nil {
+		t.Fatal("accepted --agents=sometimes")
 	}
 	if _, err := LoadServe([]string{"--evidence-max-mb", "0"}, env(nil), io.Discard); err == nil {
 		t.Fatal("accepted an Evidence limit of nothing")

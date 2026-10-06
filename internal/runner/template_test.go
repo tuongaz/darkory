@@ -22,6 +22,18 @@ func TestRenderTheDefaultCommand(t *testing.T) {
 		t.Fatalf("got  %q\nwant %q", got, want)
 	}
 
+	// The arguments R0 stores as the default: the first message is added.
+	got, err = Render("claude", []string{"--session-id", "{session_id}", "--model", "{model}", "--dangerously-skip-permissions",
+		"--mcp-config", "{mcp_config}", "--append-system-prompt-file", "{prompt_file}"}, true, values)
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("stored defaults: got %q, %v", got, err)
+	}
+	// Arguments that name the Task already get no first message.
+	got, err = Render("claude", []string{"-p", "do {task}"}, true, values)
+	if err != nil || !slices.Equal(got, []string{"claude", "-p", "do WEB-12"}) {
+		t.Fatalf("got %q, %v", got, err)
+	}
+
 	// No model: the flag goes with its value. Not unattended: no permission skip.
 	v := values
 	v.Model = ""
@@ -46,6 +58,11 @@ func TestRenderAnotherCommand(t *testing.T) {
 		"claude-sonnet-5-5", "run WEB-12 in /d/workspaces/WEB-12/web"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+	// Not unattended: the skip goes from any command's arguments.
+	got, err = Render("agent", []string{"--dangerously-skip-permissions", "x"}, false, values)
+	if err != nil || !slices.Equal(got, []string{"agent", "x"}) {
+		t.Fatalf("got %q, %v", got, err)
 	}
 	// Another command with no arguments gets none.
 	got, err = Render("fakeagent", nil, true, values)

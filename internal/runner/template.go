@@ -13,15 +13,13 @@ import (
 const DefaultCommand = "claude"
 
 // DefaultArgs are the arguments of DefaultCommand when an agent's settings name none. The runner
-// chooses the session id, so it knows where Claude Code writes the transcript; the last argument
-// is the session's first message.
+// chooses the session id, so it knows where Claude Code writes the transcript.
 var DefaultArgs = []string{
 	"--session-id", "{session_id}",
 	"--model", "{model}",
 	"--dangerously-skip-permissions",
 	"--mcp-config", "{mcp_config}",
 	"--append-system-prompt-file", "{prompt_file}",
-	"Work on Task {task}: the system prompt holds the Task, its record and the rules for ending it.",
 }
 
 // skipPermissions is the flag DefaultArgs drop for an agent that is not unattended.
@@ -82,19 +80,29 @@ func Expand(s string, v Values) (string, error) {
 	return out, nil
 }
 
+// firstMessage is the session's first message to Claude Code, which otherwise waits at its prompt.
+const firstMessage = "Work on Task {task}: the system prompt holds the Task, its record and the rules for ending it."
+
 // Render turns an agent's command and arguments into the argv the runner starts. An empty command
-// is DefaultCommand, and empty arguments for it are DefaultArgs, without the permission skip when
-// the agent is not unattended. An argument that is only a placeholder with no value is left out,
-// with the flag before it, so "--model {model}" disappears for an agent with no model.
+// is DefaultCommand, and empty arguments for it are DefaultArgs. Claude Code gets the session's
+// first message as its last argument unless an argument names {task} already. An agent that is
+// not unattended runs without the permission skip, whatever its arguments say. An argument that is
+// only a placeholder with no value is left out, with the flag before it, so "--model {model}"
+// disappears for an agent with no model.
 func Render(command string, args []string, unattended bool, v Values) ([]string, error) {
 	if command == "" {
 		command = DefaultCommand
 	}
-	if len(args) == 0 && IsClaude(command) {
-		args = DefaultArgs
-		if !unattended {
-			args = slices.DeleteFunc(slices.Clone(args), func(a string) bool { return a == skipPermissions })
+	if IsClaude(command) {
+		if len(args) == 0 {
+			args = DefaultArgs
 		}
+		if !slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, "{task}") }) {
+			args = append(slices.Clone(args), firstMessage)
+		}
+	}
+	if !unattended {
+		args = slices.DeleteFunc(slices.Clone(args), func(a string) bool { return a == skipPermissions })
 	}
 	prog, err := Expand(command, v)
 	if err != nil {

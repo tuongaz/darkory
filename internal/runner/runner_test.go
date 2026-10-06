@@ -207,7 +207,9 @@ func (r *testRecord) Workspaces(context.Context, *client.TaskDetail) ([]Workspac
 	return []Workspace{{ID: "ws", Name: "web", Kind: "git", Path: r.f.repo, Mode: ModePlain}}, nil
 }
 
-func (r *testRecord) AllWorkspaces(ctx context.Context) ([]Workspace, error) { return r.Workspaces(ctx, nil) }
+func (r *testRecord) AllWorkspaces(ctx context.Context) ([]Workspace, error) {
+	return r.Workspaces(ctx, nil)
+}
 
 type fakeGitHub struct{}
 

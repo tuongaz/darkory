@@ -26,6 +26,7 @@ import (
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/gitinfo"
 	"github.com/tuongaz/darkory/internal/mail"
+	"github.com/tuongaz/darkory/internal/runner"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/version"
@@ -39,10 +40,13 @@ Usage:
                                                                        create the Organisation, its first Member and its agents
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                 [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
-                [--no-update-check]
-                                                                       run the server
+                [--no-update-check] [--agents auto|on|off]
+                                                                       run the server, and the Runner beside it
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
   darkory mcp                                                          serve the agent operations to an MCP client over stdio
+  darkory agents [--data dir] [--url url] [--token-dir dir] [--member name]…
+                                                                       run the Runner alone: agent sessions for the agents' tokens
+  darkory attach <task> [--readonly] [--data dir]                      join the tmux session the Runner runs for a Task
   darkory update [--check] [--version v]                               replace this binary with a newer release
   darkory version                                                      print the version
 ` + cli.Usage()
@@ -79,6 +83,13 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	case "mcp":
 		return runMCP(args[1:], stderr)
+	case "agents":
+		return runAgents(args[1:], stderr)
+	case "attach":
+		// One Task and no file joins its session; with a file it is the Evidence command.
+		if attachesSession(args[1:]) {
+			return attachSession(args[1:], stderr)
+		}
 	}
 	if cli.Handles(args) {
 		return runCLI(args, stdout, stderr)
@@ -292,6 +303,28 @@ func serve(args []string, stdout, stderr io.Writer) error {
 		log.Info("listening on every network interface, so other machines can reach this Install; every request still needs a token or a signed-in browser (--listen 127.0.0.1:7357 keeps it to this machine)")
 	}
 
+	// The Runner is a client of the server it sits beside (plan invariant 9): it reaches it on the
+	// listen address, whatever the public URL. It stops before the server does, so its last
+	// releases and Evidence still reach it.
+	run, err := serveRunner(cfg, ln.Addr().String(), log)
+	if err != nil {
+		srv.Close()
+		return err
+	}
+	runCtx, stopRunner := context.WithCancel(context.Background())
+	defer stopRunner()
+	runDone := make(chan struct{})
+	if run == nil {
+		close(runDone)
+	} else {
+		go func() {
+			defer close(runDone)
+			if err := run.Run(runCtx); err != nil {
+				log.Warn("the Runner is not running agents", "err", err)
+			}
+		}()
+	}
+
 	go housekeeping(ctx, api.Core(), log)
 	if !cfg.NoUpdateCheck {
 		go api.WatchForUpdates(ctx)
@@ -304,9 +337,35 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	case <-ctx.Done():
 	}
 	log.Info("shutting down")
+	stopRunner()
+	select {
+	case <-runDone:
+	case <-time.After(30 * time.Second):
+		log.Warn("the Runner did not stop within 30 s")
+	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// serveRunner is the Runner serve runs beside the server, or nil: with --agents=auto, only when
+// <data>/agents holds agent tokens.
+func serveRunner(cfg config.Serve, listen string, log *slog.Logger) (*runner.Runner, error) {
+	if cfg.Agents == "off" {
+		return nil, nil
+	}
+	dir := runner.TokenDir(cfg.DataDir)
+	tokens, err := runner.ReadTokens(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(tokens) == 0 {
+		if cfg.Agents == "on" {
+			return nil, fmt.Errorf("--agents=on, but %s holds no agent tokens", dir)
+		}
+		return nil, nil
+	}
+	return newRunner(config.BaseURL("", listen), cfg.DataDir, tokens, nil, or(os.Getenv("DARKORY_RUNNER_TMUX"), "auto"), log)
 }
 
 // openDatabase opens the record cfg names, creating the data directory for SQLite.
