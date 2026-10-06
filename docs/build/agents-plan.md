@@ -95,3 +95,4 @@ Allowlist permissions (B/C), workers on other machines (the terminal relay and t
 - **`init` seeds when run inside a repository**, so `make dev-init` on a fresh `.dev` now makes Team MAIN, a Workspace pointing at the checkout, and four agents with token files under `.dev/agents/`. An existing `.dev` Install is migrated by `serve` (SQLite migrates at start) and gets no roster.
 - **Generated names.** oapi-codegen spells `workspace_ids` as `WorkspaceIds` in Go; the other id fields keep `ID`.
 - **The Runner's Activity** (`task.session_started`, `task.session_ended`, `task.session_joined`, `task.merged`, `feature.branch_created`) is not in the spec yet; R1 and R2 add the kinds they write, with their payloads.
+- **Activity's `team` filter** keeps only entries about a Feature or Task of the Team, so `team.changed` (and `team.created`, `team.member_added`) never show under it. Admin → Teams (R3) will want them; widening the filter is an additive change to `listActivity`.
