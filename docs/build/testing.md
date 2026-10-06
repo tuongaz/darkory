@@ -10,7 +10,7 @@ make test-pg    # every test on SQLite and Postgres
 make check      # generated code up to date, go vet, then both of the above
 DARKORY_TEST_S3=1 DARKORY_TEST_SMTP=1 make test   # also MinIO and Mailpit in Docker
 make web-check  # the web app: typecheck, eslint, vitest (needs node; run `npm ci` in web/ first)
-make e2e        # the real binary end to end, and the soak, on SQLite (about 3 minutes)
+make e2e        # the real binary end to end, the bots and the soak, on SQLite (about 3 minutes)
 make e2e-pg     # the same on Postgres, plus two server processes on one database (about 6 minutes)
 cd web && npm run e2e   # build the web app and the binary, then drive a real server in Chromium (needs node and go; `npx playwright install chromium` once)
 ```

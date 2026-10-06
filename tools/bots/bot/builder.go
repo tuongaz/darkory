@@ -104,10 +104,13 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 	if m := questionRe.FindStringSubmatch(d.Task.Description); m != nil && !asked {
 		asked = true
 		answered, err := b.ask(wctx, d, m[1], m[2])
-		if err != nil || !answered {
+		if err != nil || wctx.Err() != nil {
+			return gone(wctx, err) // the Claim was lost while waiting, or the bot is stopping
+		}
+		if !answered {
 			stop()
-			if err != nil || ctx.Err() != nil {
-				return gone(wctx, err)
+			if ctx.Err() != nil {
+				return nil
 			}
 			return gone(ctx, b.release(ctx, key, fmt.Sprintf("Waiting for %s to answer; whoever takes it next can carry on once they have.", m[1])))
 		}
