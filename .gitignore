@@ -7,5 +7,8 @@
 /web/dist/app/
 /dist/
 /.dev/
+/.dev.bak-*/
+/.playwright-mcp/
+.DS_Store
 /local.mk
 /darkory
