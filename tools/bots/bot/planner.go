@@ -92,7 +92,7 @@ func (p *Planner) breakDown(ctx context.Context, d *client.TaskDetail) error {
 	if err != nil {
 		return gone(wctx, err)
 	}
-	backlog, _ := firstOfKind(list, client.StatusKindBacklog)
+	backlog, backlogName := firstOfKind(list, client.StatusKindBacklog)
 	todo, todoName := firstOfKind(list, client.StatusKindTodo)
 	steps := p.Plan(d.Feature, p.ask)
 	keys := map[string]string{}
@@ -144,7 +144,7 @@ func (p *Planner) breakDown(ctx context.Context, d *client.TaskDetail) error {
 	if ctx.Err() != nil {
 		return nil
 	}
-	_, err = p.complete(ctx, d.Task.Key, fmt.Sprintf("Filed %d Tasks: %s. %d wait on others; %d wait in the Backlog until someone moves them.",
-		len(filed), strings.Join(filed, ", "), waiting, ahead))
+	_, err = p.complete(ctx, d.Task.Key, fmt.Sprintf("Filed %d Tasks (%s), with %d waiting on others and %d in %s until someone moves them.",
+		len(filed), strings.Join(filed, ", "), waiting, ahead, or(backlogName, "the Backlog")))
 	return gone(ctx, err)
 }

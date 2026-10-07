@@ -62,7 +62,9 @@ func (r *Reviewer) review(ctx context.Context, d *client.TaskDetail) error {
 	if d.Task.Kind != client.Retrospective || p == nil || p.State != client.Pending {
 		note := fmt.Sprintf("Read %q with its %s and %s; it does what it says.", d.Task.Title, count(len(d.Notes), "Note"),
 			count(len(d.Evidence), "Evidence file"))
-		if len(d.Blockers) > 0 {
+		// A review Task filed for others' work is blocked by that work; a Task handed over to
+		// review is the work.
+		if len(d.Blockers) > 0 && len(d.Claims) == 1 {
 			var keys []string
 			for _, bl := range d.Blockers {
 				keys = append(keys, bl.Key)
@@ -90,7 +92,7 @@ func (r *Reviewer) review(ctx context.Context, d *client.TaskDetail) error {
 	// A version published since the proposal was written makes it stale: it goes back to retro
 	// to be written again, as the refusal to complete would say.
 	if p.BasedOnVersion == s.Skill.CurrentVersion {
-		_, err = r.complete(ctx, key, fmt.Sprintf("Reviewed the proposal for %s v%d: it says what the builders missed. Publishing.",
+		_, err = r.complete(ctx, key, fmt.Sprintf("Reviewed the proposal for %s v%d, which says what the workers missed, and published it.",
 			s.Skill.Name, p.BasedOnVersion+1))
 		if err == nil {
 			r.say("published", key, "%s v%d", s.Skill.Name, p.BasedOnVersion+1)

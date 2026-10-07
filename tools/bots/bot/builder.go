@@ -111,7 +111,7 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 	switch {
 	case step == nil || step.Workpaper == "":
 		first, _, _ := strings.Cut(d.Task.Description, "\n")
-		note = fmt.Sprintf("Starting on %q. %s", d.Task.Title, first)
+		note = fmt.Sprintf("Starting on %q: %s", d.Task.Title, strings.TrimSuffix(first, ".")) + "."
 	case rework:
 		note = fmt.Sprintf("Back from review, fixing %s.", step.Workpaper)
 	default:
@@ -163,7 +163,7 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 		if ctx.Err() != nil {
 			return nil
 		}
-		hnote := fmt.Sprintf("Built; %s is attached. Ready for %s.", name, handover)
+		hnote := fmt.Sprintf("Built, with %s attached; ready for %s.", name, handover)
 		if step != nil && step.Workpaper != "" {
 			hnote = fmt.Sprintf("The workpaper %s is attached and ready for %s.", name, handover)
 		}
