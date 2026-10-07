@@ -135,10 +135,11 @@ func (s *session) run(ctx context.Context) bool {
 	r.sessions[s.rec.Session()] = s
 	r.mu.Unlock()
 	defer func() {
-		close(s.over)
+		// Gone from the list before over closes, so a session waiting on it starts at once.
 		r.mu.Lock()
 		delete(r.sessions, s.rec.Session())
 		r.mu.Unlock()
+		close(s.over)
 		s.cleanUp(context.WithoutCancel(ctx))
 	}()
 	s.log.Info("took a Task", "title", s.d.Task.Title, "status", s.d.Status.Name, "session", s.rec.Session())
@@ -162,25 +163,32 @@ func (s *session) run(ctx context.Context) bool {
 	return true
 }
 
-// waitForEarlier waits, heartbeating, while an earlier session of the Task ends, as the builder's
-// does after it hands over to a review this runner takes at once: the two share the Task's
-// worktree, log and tmux session.
+// waitForEarlier waits while an earlier session of the Task ends, as the builder's does after it
+// hands over to a review this runner takes at once: the two share the Task's worktree, log and
+// tmux session. It returns as soon as the earlier one has ended, heartbeating each Tick until then.
 func (s *session) waitForEarlier(ctx context.Context) error {
+	t := time.NewTicker(s.r.t.Tick)
+	defer t.Stop()
 	for {
+		var earlier *session
 		s.r.mu.Lock()
-		busy := false
 		for _, o := range s.r.sessions {
-			busy = busy || o != s && o.taskID == s.taskID
+			if o != s && o.taskID == s.taskID {
+				earlier = o
+			}
 		}
 		s.r.mu.Unlock()
-		if !busy {
+		if earlier == nil {
 			return nil
 		}
-		if !sleep(ctx, s.r.t.Tick) {
+		select {
+		case <-earlier.over:
+		case <-ctx.Done():
 			return ctx.Err()
-		}
-		if _, err := s.rec.Heartbeat(ctx, s.key); err != nil && ctx.Err() == nil {
-			s.log.Warn("heartbeat while an earlier session ends", "err", err)
+		case <-t.C:
+			if _, err := s.rec.Heartbeat(ctx, s.key); err != nil && ctx.Err() == nil {
+				s.log.Warn("heartbeat while an earlier session ends", "err", err)
+			}
 		}
 	}
 }

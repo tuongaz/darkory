@@ -379,6 +379,44 @@ func TestRunnerWorksAFeature(t *testing.T) {
 	})
 }
 
+// After a Handover the reviewer's session starts as soon as the builder's has ended, not a progress
+// check later, though the reviewer's runner claimed the Task while the builder's still ran.
+func TestRunnerStartsTheNextSessionOnceTheEarlierEnds(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Tick, f.timings.Stale, f.timings.ClaimTimeout = 5*time.Second, 20*time.Second, 30*time.Second
+	f.agent("builder", "handover", "build")
+	f.agent("reviewer", "complete", "review")
+	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	r := f.run("builder", "reviewer")
+
+	eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
+	eventually(t, 10*time.Second, "the sessions to end", func() bool { return len(r.Running()) == 0 })
+	log := f.log.String()
+	ended := logTime(t, log, "attached the session's log", "builder")
+	started := logTime(t, log, "started the session", "reviewer")
+	if gap := started.Sub(ended); gap < 0 || gap > 2*time.Second {
+		t.Fatalf("the reviewer's session started %s after the builder's ended", gap)
+	}
+}
+
+// logTime is when the runner's log first says msg (a prefix) for agent.
+func logTime(t *testing.T, log, msg, agent string) time.Time {
+	t.Helper()
+	for l := range strings.Lines(log) {
+		if strings.Contains(l, `msg="`+msg) && strings.Contains(l, " agent="+agent+" ") {
+			at, _, _ := strings.Cut(strings.TrimPrefix(l, "time="), " ")
+			ts, err := time.Parse(time.RFC3339Nano, at)
+			if err != nil {
+				t.Fatalf("the log's time %q: %v", at, err)
+			}
+			return ts
+		}
+	}
+	t.Fatalf("the log never says %q for %s", msg, agent)
+	return time.Time{}
+}
+
 // An agent that stops without a decision is nudged twice and released with a Note; the third
 // release files a question to the Feature owner that blocks the Task.
 func TestRunnerReleasesASilentSession(t *testing.T) {
