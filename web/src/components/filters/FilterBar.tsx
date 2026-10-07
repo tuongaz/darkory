@@ -5,13 +5,27 @@
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon, XIcon } from "lucide-react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useNow } from "@/clock";
 import { cn } from "@/lib/utils";
+import { dateBounds, dateText, datePresets, pillDays, presetText } from "./dates";
 import type { FilterPill } from "./filterState";
 import { filterLabels, type FilterLabels } from "./labels";
-import { commitOp, defaultOp, multiPick, opDisabledReason, operatorRows, type FilterField, type FilterOption } from "./operators";
+import {
+  commitOp,
+  dateMode,
+  defaultOp,
+  multiPick,
+  opDisabledReason,
+  operatorRows,
+  pickOp,
+  revalue,
+  type FilterField,
+  type FilterOption,
+} from "./operators";
 
 export type FilterBarProps = {
   /** The axes, in the order the menu lists them and the chips read. */
@@ -30,6 +44,23 @@ const seg = "border-border bg-background text-foreground";
 const segHover = "hover:bg-accent";
 /** The axis name, a label rather than a control, the height of the chip's buttons (28px). */
 const segLabel = "inline-flex h-7 items-center whitespace-nowrap rounded-l-md border px-2 text-muted-foreground";
+
+/**
+ * The chips' layout: under 640px (or always, `stacked`) each chip is a line of its own whose value
+ * takes the slack, as enably stacks them on a narrow rail; wider, the chips wrap in a row.
+ */
+function layout(stacked: boolean) {
+  const pick = (narrow: string, wide: string) => (stacked ? narrow : cn(narrow, wide));
+  return {
+    row: pick("flex-col items-stretch gap-1", "sm:flex-row sm:flex-wrap sm:items-center sm:gap-1.5"),
+    chip: pick("flex w-full min-w-0", "sm:inline-flex sm:w-auto sm:max-w-full sm:flex-none"),
+    value: pick("flex-1 justify-start", "sm:flex-none sm:justify-center"),
+    text: pick("truncate", "sm:max-w-56"),
+    // On a phone Reset is the Filters menu's alone, as in enably, so the chips keep the lines.
+    reset: stacked ? "self-end" : "hidden sm:ml-auto sm:inline-flex",
+  };
+}
+type Layout = ReturnType<typeof layout>;
 
 /** What both halves of the bar read from the props: the axes by key, which are set, which fold. */
 function useBar(props: FilterBarProps) {
@@ -244,27 +275,17 @@ function SearchField({ labels, value, onChange }: { labels: FilterLabels; value:
 
 /**
  * The row under the header while anything is set: a chip per set axis (and the Search chip), with
- * Reset at its right. Nothing renders while nothing is set. `stacked` (a phone) gives each chip a
- * line of its own instead of wrapping.
+ * Reset at its right. Nothing renders while nothing is set. On a phone, or `stacked`, each chip
+ * takes a line of its own instead of wrapping.
  */
 export function FilterChipRow({ stacked = false, ...props }: FilterBarProps & { stacked?: boolean }) {
   const bar = useBar(props);
   const { labels } = bar;
+  const lay = layout(stacked);
   if (bar.activeCount === 0) return null;
-  const reset = (
-    <Button variant="ghost" size="sm" className={cn("flex-none font-normal text-muted-foreground", !stacked && "ml-auto")} onClick={props.onClearAll}>
-      <XIcon />
-      {labels.reset}
-    </Button>
-  );
   return (
-    <div
-      role="toolbar"
-      aria-label={labels.filters}
-      data-testid="filter-chips"
-      className={cn("flex flex-none border-b px-4 py-1.5", stacked ? "flex-col items-stretch gap-1" : "flex-wrap items-center gap-1.5")}
-    >
-      {bar.text && bar.textValue && <SearchChip labels={labels} value={bar.textValue} onChange={bar.setText} stacked={stacked} />}
+    <div role="toolbar" aria-label={labels.filters} data-testid="filter-chips" className={cn("flex flex-none border-b px-4 py-1.5", lay.row)}>
+      {bar.text && bar.textValue && <SearchChip labels={labels} value={bar.textValue} onChange={bar.setText} lay={lay} />}
       {bar.set.map((field) => (
         <FieldChip
           key={field.key}
@@ -272,12 +293,15 @@ export function FilterChipRow({ stacked = false, ...props }: FilterBarProps & { 
           pill={bar.pillFor(field.key)!}
           options={props.optionsFor(field.key)}
           labels={labels}
-          stacked={stacked}
+          lay={lay}
           onSetFilter={props.onSetFilter}
           onRemoveFilter={props.onRemoveFilter}
         />
       ))}
-      {stacked ? <div className="flex justify-end">{reset}</div> : reset}
+      <Button variant="ghost" size="sm" className={cn("flex-none font-normal text-muted-foreground", lay.reset)} onClick={props.onClearAll}>
+        <XIcon />
+        {labels.reset}
+      </Button>
     </div>
   );
 }
@@ -297,7 +321,7 @@ function FieldChip({
   pill,
   options,
   labels,
-  stacked,
+  lay,
   onSetFilter,
   onRemoveFilter,
 }: {
@@ -305,18 +329,24 @@ function FieldChip({
   pill: FilterPill;
   options: readonly FilterOption[] | undefined;
   labels: FilterLabels;
-  stacked: boolean;
+  lay: Layout;
   onSetFilter: (pill: FilterPill) => void;
   onRemoveFilter: (field: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const now = useNow();
   const [first, ...rest] = pill.values;
-  // One value is named with its glyph or avatar; several read "first +N".
+  // One value is named with its glyph or avatar; several read "first +N"; a date reads its days.
   const lone = rest.length === 0 ? options?.find((o) => o.value === first) : undefined;
-  const shown = rest.length > 0 ? `${labelOf(options, first)} ${labels.more(rest.length)}` : labelOf(options, first);
+  const shown =
+    field.type === "date"
+      ? dateText(pill.op, pill.values, now)
+      : rest.length > 0
+        ? `${labelOf(options, first)} ${labels.more(rest.length)}`
+        : labelOf(options, first);
   const rows = operatorRows(field, pill.op);
   return (
-    <div className={cn("inline-flex max-w-full flex-none", stacked && "flex w-full min-w-0")}>
+    <div className={lay.chip}>
       <span className={cn(segLabel, seg)}>{field.label}</span>
       {rows.length > 1 && (
         <OperatorSegment
@@ -324,8 +354,8 @@ function FieldChip({
           pill={pill}
           activeOp={pill.op}
           labels={labels}
-          // Same values, another operator: flipping never loses the pick.
-          onChoose={(op) => onSetFilter({ field: field.key, op, values: pill.values })}
+          // Same values (a date, the same days), another operator: flipping never loses the pick.
+          onChoose={(op) => onSetFilter({ field: field.key, op, values: revalue(field, op, pill.values) })}
         />
       )}
       <Popover open={open} onOpenChange={setOpen}>
@@ -335,10 +365,10 @@ function FieldChip({
             size="sm"
             aria-label={`${field.label}: ${shown}`}
             title={shown}
-            className={cn("-ml-px min-w-0 gap-1.5 rounded-none font-normal shadow-none", seg, segHover, stacked && "flex-1 justify-start")}
+            className={cn("-ml-px min-w-0 gap-1.5 rounded-none font-normal shadow-none", seg, segHover, lay.value)}
           >
             {lone?.icon && <span aria-hidden className="inline-flex flex-none">{lone.icon}</span>}
-            <span className={cn("truncate", !stacked && "max-w-56")}>{shown}</span>
+            <span className={lay.text}>{shown}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className={cn("flex w-72 flex-col overflow-hidden p-0", field.type === "date" && "w-auto")}>
@@ -367,10 +397,10 @@ function FieldChip({
 }
 
 /** A live search as a chip: Search · its words · ×. The words open a field to change them. */
-function SearchChip({ labels, value, onChange, stacked }: { labels: FilterLabels; value: string; onChange: (value: string) => void; stacked: boolean }) {
+function SearchChip({ labels, value, onChange, lay }: { labels: FilterLabels; value: string; onChange: (value: string) => void; lay: Layout }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn("inline-flex max-w-full flex-none", stacked && "flex w-full min-w-0")}>
+    <div className={lay.chip}>
       <span className={cn(segLabel, seg)}>{labels.searchAxis}</span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
@@ -378,9 +408,9 @@ function SearchChip({ labels, value, onChange, stacked }: { labels: FilterLabels
             variant="outline"
             size="sm"
             aria-label={`${labels.searchAxis}: ${value}`}
-            className={cn("-ml-px min-w-0 rounded-none font-normal shadow-none", seg, segHover, stacked && "flex-1 justify-start")}
+            className={cn("-ml-px min-w-0 rounded-none font-normal shadow-none", seg, segHover, lay.value)}
           >
-            <span className={cn("truncate", !stacked && "max-w-56")}>{value}</span>
+            <span className={lay.text}>{value}</span>
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-1.5">
@@ -458,7 +488,7 @@ function OperatorSegment({
           <CommandList>
             <CommandGroup>
               {rows.map((op) => {
-                const reason = opDisabledReason(op, pill);
+                const reason = opDisabledReason(op, pill, field);
                 return (
                   <CommandItem
                     key={op}
@@ -523,7 +553,7 @@ function AxisEditor(props: EditorProps) {
         onChoose={(op) => {
           setPendingOp(op);
           // A set axis is amended in place; an unset one has nothing to write yet.
-          if (pill) props.onCommit(op, pill.values, true);
+          if (pill) props.onCommit(op, revalue(field, op, pill.values), true);
         }}
       />
     </div>
@@ -531,8 +561,59 @@ function AxisEditor(props: EditorProps) {
   return (
     <>
       {operator}
-      <ChoiceEditor {...props} activeOp={activeOp} />
+      {field.type === "date" ? <DateEditor {...props} activeOp={activeOp} /> : <ChoiceEditor {...props} activeOp={activeOp} />}
     </>
+  );
+}
+
+/**
+ * A date axis: All and the windows (Last 7, 30 and 90 days) beside a calendar drawn for the
+ * operator in force: a span for "is between", where one click is one day and a second makes the
+ * span, or one day for the open ends. A window or a day finishes the pick; a span waits for its
+ * second click.
+ */
+function DateEditor({ field, pill, labels, activeOp, onCommit, onClear }: EditorProps & { activeOp: string }) {
+  const preset = pill?.op === "last" ? pill.values[0] : undefined;
+  const days = pill && !preset ? pillDays(pill.values) : [];
+  const presets = pickOp(field, "last") ? datePresets : [];
+  return (
+    <div className="flex flex-col sm:flex-row">
+      <div className="flex flex-none gap-1 overflow-x-auto border-b p-1.5 sm:flex-col sm:border-r sm:border-b-0">
+        <Button variant="ghost" size="sm" className="justify-start font-normal" onClick={() => onClear()}>
+          {labels.all}
+        </Button>
+        {presets.map((token) => (
+          <Button
+            key={token}
+            variant={preset === token ? "secondary" : "ghost"}
+            size="sm"
+            aria-pressed={preset === token}
+            className="justify-start font-normal"
+            onClick={() => onCommit("last", [token])}
+          >
+            {presetText(token)}
+          </Button>
+        ))}
+      </div>
+      {dateMode(activeOp) === "range" ? (
+        <Calendar
+          mode="range"
+          selected={days.length > 0 ? { from: days[0], to: days[days.length - 1] } : undefined}
+          defaultMonth={days[0]}
+          onSelect={(range) => {
+            if (!range?.from) onClear(true);
+            else onCommit("btw", dateBounds("btw", [range.from, range.to ?? range.from]), true);
+          }}
+        />
+      ) : (
+        <Calendar
+          mode="single"
+          selected={days[0]}
+          defaultMonth={days[0]}
+          onSelect={(day) => (day ? onCommit(activeOp, dateBounds(activeOp, [day])) : onClear())}
+        />
+      )}
+    </div>
   );
 }
 

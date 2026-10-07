@@ -3,6 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
+import { Calendar } from "@/components/ui/calendar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,6 +61,14 @@ describe("no <style> at run time", () => {
     expect(await screen.findByText("Not moved to Done")).toBeInTheDocument();
     expect(screen.getByRole("dialog", { name: "File a Task" })).toBeInTheDocument();
     expect(styles()).toEqual([]);
+  });
+
+  it("from the Filter's calendar, nor a style attribute", () => {
+    const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
+    render(<Calendar mode="range" defaultMonth={new Date(2026, 9, 1)} selected={{ from: new Date(2026, 9, 4), to: new Date(2026, 9, 6) }} />);
+    expect(screen.getByRole("grid")).toBeInTheDocument();
+    expect(styles()).toEqual([]);
+    expect(setAttribute.mock.calls.filter(([name]) => name === "style")).toEqual([]);
   });
 
   // xterm.js computes its theme and cell size into <style> elements and a truecolor cell's colour

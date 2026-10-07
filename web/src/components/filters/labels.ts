@@ -18,7 +18,7 @@ const opWords: Record<string, string> = {
 
 const disabledWords: Record<OpDisabledReason, string> = {
   oneValue: "one value only",
-  twoDates: "a range only",
+  oneDay: "one day only",
   dateValue: "not with Last N days",
 };
 
@@ -36,7 +36,6 @@ export const filterLabels = {
   searchPlaceholder: "Search keys and titles",
   noneFound: "No matches",
   more: (n: number) => `+${n}`,
-  datePreset: (token: string) => `Last ${token.replace(/d$/, "")} days`,
 };
 
 export type FilterLabels = typeof filterLabels;

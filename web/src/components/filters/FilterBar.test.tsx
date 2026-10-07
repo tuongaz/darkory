@@ -2,7 +2,8 @@
 // what a chip says, and the operator the person may choose.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { endOf, startOf } from "./dates";
 import { FilterChipRow, FilterMenuButton, type FilterBarProps } from "./FilterBar";
 import type { FilterPill } from "./filterState";
 import type { FilterField, FilterOption } from "./operators";
@@ -13,6 +14,7 @@ const holder: FilterField = { key: "holder", type: "ref", ops: polarity, label: 
 const aimed: FilterField = { key: "aimed_at", type: "ref", ops: ["is", "not", "in"], label: "Aimed at" };
 const blocked: FilterField = { key: "blocked", type: "boolean", ops: ["is"], label: "Blocked" };
 const search: FilterField = { key: "q", type: "text", ops: ["contains"], label: "Search" };
+const filed: FilterField = { key: "filed_at", type: "date", ops: ["btw", "after", "before", "gte", "lte", "last"], label: "Filed" };
 
 const options: Record<string, FilterOption[]> = {
   status: [
@@ -265,5 +267,96 @@ describe("on a phone", () => {
     expect(valueSegment("Status").closest("div")).toHaveClass("w-full");
     await userEvent.click(screen.getByRole("button", { name: "Clear Held by" }));
     expect(onRemoveFilter).toHaveBeenCalledWith("holder");
+  });
+});
+
+describe("a date axis", () => {
+  // The calendar opens on today's month, so the clock is pinned to click a known day.
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date(2026, 6, 15, 10));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const july = (day: number) => new Date(2026, 6, day);
+  const dayCell = (ymd: string) => {
+    const button = document.querySelector<HTMLElement>(`[data-day="${ymd}"] button`);
+    if (!button) throw new Error(`no day ${ymd}`);
+    return button;
+  };
+  const openFiled = async () => {
+    await openMenu();
+    await userEvent.click(screen.getByRole("option", { name: "Filed" }));
+  };
+
+  it("offers windows beside the calendar and writes last", async () => {
+    const { onSetFilter } = setup({ fields: [filed] });
+    await openFiled();
+    await userEvent.click(screen.getByRole("button", { name: "Last 7 days" }));
+    expect(onSetFilter).toHaveBeenCalledWith(set("filed_at", "last", "7d"));
+  });
+
+  it("writes one day as the span of that day, its local bounds on the wire", async () => {
+    const { onSetFilter } = setup({ fields: [filed] });
+    await openFiled();
+    await userEvent.click(dayCell("2026-07-01"));
+    expect(onSetFilter).toHaveBeenCalledWith(set("filed_at", "btw", startOf(july(1)), endOf(july(1))));
+  });
+
+  it("completes the span with a second day", async () => {
+    const { onSetFilter } = setup({ fields: [filed], pills: [set("filed_at", "btw", startOf(july(1)), endOf(july(1)))] });
+    await userEvent.click(valueSegment("Filed"));
+    await userEvent.click(dayCell("2026-07-04"));
+    expect(onSetFilter).toHaveBeenLastCalledWith(set("filed_at", "btw", startOf(july(1)), endOf(july(4))));
+  });
+
+  it("writes an open end the calendar alone cannot: after a day is after its end", async () => {
+    const { onSetFilter } = setup({ fields: [filed] });
+    await openFiled();
+    await userEvent.click(operatorSegment("Filed"));
+    await userEvent.click(await screen.findByRole("option", { name: "is after" }));
+    await userEvent.click(dayCell("2026-07-04"));
+    expect(onSetFilter).toHaveBeenCalledTimes(1);
+    expect(onSetFilter).toHaveBeenCalledWith(set("filed_at", "after", endOf(july(4))));
+  });
+
+  it("clears from All rather than writing a bare operator", async () => {
+    const { onSetFilter, onRemoveFilter } = setup({ fields: [filed], pills: [set("filed_at", "last", "7d")] });
+    await userEvent.click(valueSegment("Filed"));
+    expect(screen.getByRole("button", { name: "Last 7 days" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(onRemoveFilter).toHaveBeenCalledWith("filed_at");
+    expect(onSetFilter).not.toHaveBeenCalled();
+  });
+
+  it("reads its operator and days on the chip", () => {
+    setup({ fields: [filed], pills: [set("filed_at", "last", "30d")] });
+    expect(valueSegment("Filed")).toHaveAccessibleName("Filed: Last 30 days");
+    expect(operatorSegment("Filed")).toHaveAccessibleName("Filed — is within");
+  });
+
+  it("offers a span, its open ends and nothing else against a window", async () => {
+    setup({ fields: [filed], pills: [set("filed_at", "last", "7d")] });
+    await userEvent.click(operatorSegment("Filed"));
+    const rows = screen.getAllByRole("option").map((o) => [o.querySelector("span")?.textContent, o.getAttribute("aria-disabled") === "true"]);
+    expect(rows).toEqual([
+      ["is between", true],
+      ["is after", true],
+      ["is before", true],
+      ["is within", false],
+    ]);
+  });
+
+  it("flips one day to an open end, bounded as that end compares", async () => {
+    const { onSetFilter } = setup({ fields: [filed], pills: [set("filed_at", "btw", startOf(july(1)), endOf(july(1)))] });
+    await userEvent.click(operatorSegment("Filed"));
+    await userEvent.click(screen.getByRole("option", { name: "is before" }));
+    expect(onSetFilter).toHaveBeenCalledWith(set("filed_at", "before", startOf(july(1))));
+  });
+
+  it("says why an open end cannot take a span", async () => {
+    setup({ fields: [filed], pills: [set("filed_at", "btw", startOf(july(1)), endOf(july(4)))] });
+    await userEvent.click(operatorSegment("Filed"));
+    expect(screen.getByRole("option", { name: "is after" })).toHaveAccessibleDescription("one day only");
   });
 });

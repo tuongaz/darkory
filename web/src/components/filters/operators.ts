@@ -2,6 +2,7 @@
 // chip offers, and which operator a pick writes. The person chooses only the sign (is ⇄ is not);
 // how many values are ticked chooses singular or plural (is ⇄ is one of).
 import type { ReactNode } from "react";
+import { dateBounds, datePresets, pillDays } from "./dates";
 import type { FilterPill } from "./filterState";
 
 /**
@@ -36,7 +37,7 @@ export type FilterOption = {
 };
 
 /** Why an operator row cannot be chosen against the values the axis holds. */
-export type OpDisabledReason = "oneValue" | "twoDates" | "dateValue";
+export type OpDisabledReason = "oneValue" | "oneDay" | "dateValue";
 
 /** The first candidate operator the field accepts. */
 export function pickOp(field: FilterField, ...candidates: string[]): string | undefined {
@@ -75,14 +76,26 @@ export function opArity(op: string): "one" | "many" | "two" | "window" {
   return "one";
 }
 
-/** Why `op` cannot be chosen against the pill's values, or undefined when it can. */
-export function opDisabledReason(op: string, pill: FilterPill | undefined): OpDisabledReason | undefined {
+/**
+ * Why `op` cannot be chosen against the pill's values, or undefined when it can. A date pill is
+ * read by the days it covers: one day takes every operator, a span only "is between", and a
+ * window (Last 7 days) only its own.
+ */
+export function opDisabledReason(op: string, pill: FilterPill | undefined, field?: FilterField): OpDisabledReason | undefined {
   if (!pill || pill.values.length === 0) return undefined;
   const arity = opArity(op);
   if (opArity(pill.op) === "window") return arity === "window" ? undefined : "dateValue";
+  if (field?.type === "date") return arity === "one" && pillDays(pill.values).length > 1 ? "oneDay" : undefined;
   if (arity === "one" && pill.values.length > 1) return "oneValue";
-  if (arity === "two" && pill.values.length !== 2) return "twoDates";
   return undefined;
+}
+
+/**
+ * The values a pill carries over to another operator: the same ones, or on a date axis the same
+ * days, bounded as the new operator compares them (after reads a day's end, before its start).
+ */
+export function revalue(field: FilterField, op: string, values: string[]): string[] {
+  return field.type === "date" ? dateBounds(op, pillDays(values)) : values;
 }
 
 /** Whether the operator says "not": is not, is none of. */
@@ -115,19 +128,23 @@ export function multiPick(field: FilterField, op: string): boolean {
 export function usablePills(pills: readonly FilterPill[], fields: readonly FilterField[]): FilterPill[] {
   return pills.filter((p) => {
     const field = fields.find((f) => f.key === p.field);
-    return !!field && field.ops.includes(p.op) && p.values.length > 0 && p.values.every((v) => v !== "");
+    if (!field || !field.ops.includes(p.op) || p.values.length === 0 || p.values.some((v) => v === "")) return false;
+    if (field.type !== "date") return true;
+    if (p.op === "last") return p.values.length === 1 && (datePresets as readonly string[]).includes(p.values[0]);
+    return p.values.length === (p.op === "btw" ? 2 : 1) && p.values.every((v) => !Number.isNaN(Date.parse(v)));
   });
 }
 
 /** The operator an unset axis starts on. */
 export function defaultOp(field: FilterField): string {
   if (field.type === "text") return pickOp(field, "contains") ?? field.ops[0] ?? "contains";
+  if (field.type === "date") return pickOp(field, "btw") ?? field.ops[0] ?? "btw";
   return pickOp(field, "is", "in") ?? field.ops[0] ?? "is";
 }
 
 /**
  * Which calendar a date axis draws for the operator in force: a span for `btw` (one click is one
- * day, a second completes the span) and when unset, one day for the open ends.
+ * day, a second completes the span), and for a window or nothing set; one day for the open ends.
  */
 export function dateMode(op: string | undefined): "single" | "range" {
   if (op === "after" || op === "before" || op === "gte" || op === "lte") return "single";
