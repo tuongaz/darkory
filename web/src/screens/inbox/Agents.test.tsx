@@ -60,6 +60,17 @@ describe("the Agents rules", () => {
     expect(rows[3].held).toEqual([]);
   });
 
+  it("puts an agent whose runner session is Stalled first, then one Waiting, whatever their Heartbeats", () => {
+    const one = agent("builder-1");
+    const two = agent("builder-2");
+    const three = agent("builder-3");
+    const idle = agent("idle-bot");
+    const tasks = [task(3, "f-1", { claim: claim(3, one.id, 5) }), task(4, "f-1", { claim: claim(4, two.id, 10) }), task(5, "f-1", { claim: claim(5, three.id, 15) })];
+    const states: Record<string, RunnerSession["state"]> = { [three.id]: "stalled", [two.id]: "waiting", [one.id]: "running" };
+    const rows = agentRows([idle, one, two, three], tasks, Date.now(), (id) => states[id]);
+    expect(rows.map((r) => r.agent.name)).toEqual(["builder-3", "builder-2", "builder-1", "idle-bot"]);
+  });
+
   it("counts an agent's lapses in the last 24 hours, by the holder the lapse names", () => {
     const entries = [
       entry("task.lapsed", "k-5", { holder_id: builder.id, claim_id: "c-5" }),
@@ -130,15 +141,16 @@ describe("the Agents page", () => {
     // builder has no Session and holds nothing; the lapser's last Claim lapsed.
     expect(body.map((r) => within(r).getAllByRole("link")[0].textContent)).toEqual(["planner", "builder", "lapser"]);
     expect(within(body[0]).getByText("Break down: Search")).toBeInTheDocument();
-    expect(within(body[0]).getByText("sess-m-planner")).toBeInTheDocument();
+    // A Session id by its last 8 characters, the whole id on hover.
+    expect(within(body[0]).getByText("…-planner")).toHaveAttribute("title", "sess-m-planner");
     expect(within(body[0]).getByRole("meter")).toBeInTheDocument();
     expect(await within(body[2]).findByText("Lapsed")).toBeInTheDocument();
-    const lapses = within(body[2]).getAllByRole("cell")[5];
+    const lapses = within(body[2]).getAllByRole("cell")[6];
     expect(lapses).toHaveTextContent("1WEB-5");
     expect(await within(body[1]).findByText("No Session")).toBeInTheDocument();
     // Each dimmed row says why it is idle, once, under "Nothing held": no Session, or the lapse and when.
-    const holds = (row: HTMLElement) => within(row).getAllByRole("cell")[1];
-    const session = (row: HTMLElement) => within(row).getAllByRole("cell")[3];
+    const holds = (row: HTMLElement) => within(row).getAllByRole("cell")[2];
+    const session = (row: HTMLElement) => within(row).getAllByRole("cell")[4];
     expect(holds(body[1])).toHaveTextContent(/^Nothing heldNo Session$/);
     expect(session(body[1])).toHaveTextContent(/^$/);
     expect(holds(body[2])).toHaveTextContent(/^Nothing heldWEB-5Lapsed \d\d:\d\d$/);
@@ -150,8 +162,11 @@ describe("the Agents page", () => {
     agentsApi();
     renderApp("/agents?agent=planner");
     const peek = await screen.findByRole("dialog", { name: "Agent planner" });
-    expect(await within(peek).findByText("sess-planner-1")).toBeInTheDocument();
+    expect(await within(peek).findByText("…lanner-1")).toHaveAttribute("title", "sess-planner-1");
     expect(within(peek).getByText("claude-opus-5-5")).toBeInTheDocument();
+    // Who it reports to is said here, not on every row.
+    expect(within(peek).getByText("Reports to")).toBeInTheDocument();
+    expect(screen.queryByText(/reports to/)).not.toBeInTheDocument();
     const claims = within(peek).getByRole("region", { name: "Claims today" });
     expect(within(claims).getByText("Claims today · 1")).toBeInTheDocument();
     expect(within(claims).getByRole("link", { name: "WEB-10" })).toHaveAttribute("href", "/agents?task=WEB-10");
@@ -171,7 +186,7 @@ describe("the Agents page", () => {
     expect(within(peek).queryByRole("region", { name: "Tokens" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "New agent" })).not.toBeInTheDocument();
     // The Session comes from the live Claim, not from the admin-only list.
-    expect(within(peek).getByText("sess-m-planner")).toBeInTheDocument();
+    expect(within(peek).getByText("…-planner")).toBeInTheDocument();
     expect(api.calls.some((c) => c.path.startsWith("/v1/members/") && (c.path.endsWith("/sessions") || c.path.endsWith("/tokens")))).toBe(false);
     expect(within(peek).queryByRole("button", { name: "More" })).not.toBeInTheDocument();
   });
@@ -244,8 +259,11 @@ describe("the Agents page with the Runner", () => {
     renderApp("/agents");
     const rows = await screen.findAllByRole("row");
     const [planner, reviewer] = rows.slice(1);
-    const session = (row: HTMLElement) => within(row).getAllByRole("cell")[3];
-    await waitFor(() => expect(session(planner)).toHaveTextContent(/^Runningstarted 04:25 · mac-miniViewclaude-opus-5-5$/));
+    const state = (row: HTMLElement) => within(row).getAllByRole("cell")[1];
+    const session = (row: HTMLElement) => within(row).getAllByRole("cell")[4];
+    await waitFor(() => expect(state(planner)).toHaveTextContent(/^Running$/));
+    expect(session(planner)).toHaveTextContent(/^started 04:25 · mac-miniViewclaude-opus-5-5$/);
+    expect(state(reviewer)).toHaveTextContent(/^$/);
     expect(within(planner).getByRole("link", { name: "View" })).toHaveAttribute("href", "/agents?task=WEB-10#session");
     // Idle, the model is the agent settings'.
     expect(session(reviewer)).toHaveTextContent("claude-opus-5-5");
@@ -256,7 +274,8 @@ describe("the Agents page with the Runner", () => {
     runnerAgentsApi(ada, { state: "stalled", expiresIn: 3 });
     const { unmount } = renderApp("/agents");
     let planner = (await screen.findAllByRole("row"))[1];
-    await waitFor(() => expect(within(planner).getAllByRole("cell")[3]).toHaveTextContent(/^Stalledstarted 04:25 · mac-mini/));
+    await waitFor(() => expect(within(planner).getAllByRole("cell")[1]).toHaveTextContent(/^Stalled$/));
+    expect(within(planner).getByText("Stalled").closest("[data-tone]")).toHaveAttribute("data-tone", "blocked");
     // No more Heartbeats: three minutes of the fifteen are left.
     expect(within(planner).getByRole("meter", { name: "Time left before the Claim lapses" })).toHaveAttribute("aria-valuenow", "20");
     unmount();
@@ -264,7 +283,8 @@ describe("the Agents page with the Runner", () => {
     runnerAgentsApi(ada, { state: "waiting" });
     renderApp("/agents");
     planner = (await screen.findAllByRole("row"))[1];
-    await waitFor(() => expect(within(planner).getAllByRole("cell")[3]).toHaveTextContent(/^Waitingstarted 04:25 · mac-mini/));
+    await waitFor(() => expect(within(planner).getAllByRole("cell")[1]).toHaveTextContent(/^Waiting$/));
+    expect(within(planner).getByText("Waiting").closest("[data-tone]")).toHaveAttribute("data-tone", "claimed");
   });
 
   it("pauses and resumes an agent for an admin, and the row says Paused", async () => {
@@ -300,7 +320,10 @@ describe("the Agents page with the Runner", () => {
     const peek = await screen.findByRole("dialog", { name: "Agent planner" });
     const now = await within(peek).findByRole("region", { name: "Runner session" });
     expect(now).toHaveTextContent(/planner·started 04:25·Running·mac-mini·tmux dk-WEB-10/);
-    expect(within(peek).getByText("claude-sonnet-5-5")).toBeInTheDocument();
+    // One Model: the live Claim's, then the agent settings' when they name another.
+    expect(within(peek).getByText("claude-opus-5-5")).toBeInTheDocument();
+    expect(within(peek).getByText("· set to claude-sonnet-5-5")).toBeInTheDocument();
+    expect(within(peek).queryByText("Model label")).not.toBeInTheDocument();
     expect(within(now).getByRole("link", { name: "View" })).toHaveAttribute("href", "/agents?task=WEB-10#session");
 
     await userEvent.click(within(now).getByRole("button", { name: "Join" }));

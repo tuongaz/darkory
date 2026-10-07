@@ -5,13 +5,15 @@ import type { Activity, Feature, Member, MemberDetail, RunnerSession } from "@/a
 import { useDirectory, useOpenTasks, useRunnerSessions } from "@/api/queries";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
+import { SessionId } from "@/components/CopyValue";
 import { EmptyState } from "@/components/EmptyState";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
-import { RunnerSessionBadge } from "@/components/RunnerSessionBadge";
+import { PillsFit } from "@/components/PillsFit";
+import { RunnerSessionBadge, SessionStatePill } from "@/components/RunnerSessionBadge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,7 +22,7 @@ import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
 import { AgentMenuItems, AgentPeek, EndPill } from "./AgentPeek";
 import { agentActions, agentParam, sessionOverAgents, taskOverAgents } from "./agentActions";
-import { agentRows, claimKinds, lapsesIn24h, lastClaimEntry, type AgentRow } from "./derive";
+import { agentRows, claimKinds, count, lapsesIn24h, lastClaimEntry, type AgentRow } from "./derive";
 import { useFeatureMap, useMemberDetails, useRecentActivity, useSessions, useTaskMap, type Session } from "./queries";
 
 const claimKindSet = new Set<string>(claimKinds);
@@ -39,11 +41,11 @@ export function AgentsPage() {
   const [params, setParams] = useSearchParams();
   const selected = params.get(agentParam);
 
-  const rows = agentRows(memberList, open.data ?? [], now);
+  const runner = useRunnerSessions().data?.items ?? [];
+  const rows = agentRows(memberList, open.data ?? [], now, (id) => runner.find((s) => s.member_id === id)?.state);
   const ids = rows.map((r) => r.agent.id);
   const details = useMemberDetails(ids);
   const sessions = useSessions(ids, admin);
-  const runner = useRunnerSessions().data?.items ?? [];
   const lapses = useRecentActivity({ kind: ["task.lapsed"] }, (e) => e.kind === "task.lapsed");
   const history = useRecentActivity({ kind: [...claimKinds] }, (e) => claimKindSet.has(e.kind));
 
@@ -106,16 +108,17 @@ export function AgentsPage() {
           </EmptyState>
         ) : (
           // On a phone the table keeps Agent, Holds and Heartbeat, and fits the screen; the rest is in
-          // the agent's peek.
-          <table className="w-full table-fixed border-collapse md:min-w-[1020px]">
+          // the agent's peek, Reports to among it.
+          <table className="w-full table-fixed border-collapse md:min-w-[1100px]">
             <thead>
               <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 md:[&>th:first-child]:pl-6">
-                <th className="w-[132px] md:w-[220px]">Agent</th>
+                <th className="w-[132px] md:w-[184px]">Agent</th>
+                <th className={cn(wide, "w-[96px]")}>State</th>
                 <th>Holds</th>
-                <th className="w-[92px] md:w-[136px]">Heartbeat</th>
-                <th className={cn(wide, "w-[196px]")}>Session · model</th>
+                <th className="w-[92px] md:w-[152px]">Heartbeat</th>
+                <th className={cn(wide, "w-[184px]")}>Session · Model</th>
                 <th className={cn(wide, "w-[200px]")}>Skills · Teams</th>
-                <th className={cn(wide, "w-[104px] text-right")}>Lapses, 24 h</th>
+                <th className={cn(wide, "w-[96px] text-right")}>Lapses, 24 h</th>
                 <th className={cn(wide, "w-12")}>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -186,7 +189,6 @@ function AgentTableRow({
   const task = held[0];
   const claim = task && liveClaim(task, now);
   const idle = !claim;
-  const manager = agent.manager_id ? members.get(agent.manager_id) : undefined;
   const actions = agentActions({ agent, held, me, members, features, sessions });
   // Why an idle agent holds nothing, said once: deactivated, how its last Claim ended, or no Session open.
   const ended = idle && last && last.kind !== "task.claimed" ? last : undefined;
@@ -227,25 +229,26 @@ function AgentTableRow({
       <td>
         <span className="flex min-w-0 items-center gap-2">
           <MemberAvatar member={agent} size="md" className={cn(idle && "opacity-60")} />
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <Link
-              to={{ search: `?${agentParam}=${encodeURIComponent(agent.name)}` }}
-              onClick={(e) => {
-                e.preventDefault();
-                onOpen(agent.name);
-              }}
-              className={cn("truncate font-medium hover:underline", !idle && "text-foreground")}
-            >
-              {agent.name}
-            </Link>
-            {(manager || agent.agent?.paused) && (
-              <small className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                {agent.agent?.paused && <Pill tone="secondary">Paused</Pill>}
-                {manager && <span className="truncate">reports to {manager.name}</span>}
-              </small>
-            )}
-          </span>
+          <Link
+            to={{ search: `?${agentParam}=${encodeURIComponent(agent.name)}` }}
+            onClick={(e) => {
+              e.preventDefault();
+              onOpen(agent.name);
+            }}
+            className={cn("truncate font-medium hover:underline", !idle && "text-foreground")}
+          >
+            {agent.name}
+          </Link>
         </span>
+      </td>
+      <td className={wide}>
+        {/* What the runner session is doing, and whether the agent may start another. */}
+        {(runnerSession || agent.agent?.paused) && (
+          <span className="flex flex-wrap items-center gap-1">
+            {runnerSession && <SessionStatePill state={runnerSession.state} />}
+            {agent.agent?.paused && <Pill tone="secondary">Paused</Pill>}
+          </span>
+        )}
       </td>
       <td>
         {claim ? (
@@ -276,14 +279,15 @@ function AgentTableRow({
         {agent.deactivated_at ? null : (
           <span className="flex min-w-0 flex-col items-start gap-0.5">
             {runnerSession && runnerKey ? (
-              // The Runner runs it: since when and where, and View opens the Task at its terminal.
-              <RunnerSessionBadge session={runnerSession} bare className="max-w-full text-foreground" />
+              // The Runner runs it: since when and where (its state has a column), and View opens
+              // the Task at its terminal.
+              <RunnerSessionBadge session={runnerSession} bare state={false} className="max-w-full text-foreground" />
             ) : claim ? (
-              <span className="max-w-full truncate font-mono text-xs text-foreground">{claim.session_id}</span>
+              <SessionId id={claim.session_id} className="text-foreground" />
             ) : admin && sessions && sessions.length > 0 ? (
               <span className="flex max-w-full min-w-0 items-baseline gap-1.5">
-                <span className="truncate font-mono text-xs">{sessions[0].id}</span>
-                {sessions.length > 1 && <small className="text-xs whitespace-nowrap">+{sessions.length - 1} Sessions</small>}
+                <SessionId id={sessions[0].id} />
+                {sessions.length > 1 && <small className="text-xs whitespace-nowrap">+{count(sessions.length - 1, "Session")}</small>}
               </span>
             ) : (
               noSession && !saidNoSession && <Pill tone="dropped">No Session</Pill>
@@ -303,13 +307,7 @@ function AgentTableRow({
       </td>
       <td className={wide}>
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex min-w-0 gap-1 overflow-hidden">
-            {detail?.skills.map((s) => (
-              <Pill key={s.id} tone="outline">
-                {s.name}
-              </Pill>
-            ))}
-          </span>
+          <PillsFit names={detail?.skills.map((s) => s.name) ?? []} />
           <small className="truncate text-xs text-muted-foreground">{detail?.teams.map((t) => t.name).join(" · ")}</small>
         </span>
       </td>

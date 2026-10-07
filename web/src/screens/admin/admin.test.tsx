@@ -107,7 +107,7 @@ describe("a Member's page", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Deactivate" }));
     const confirm = await screen.findByRole("dialog", { name: "Deactivate builder?" });
     expect(confirm).toHaveTextContent("Revokes1 tokenseed");
-    expect(confirm).toHaveTextContent("Closes1 Sessionsess-builder-1");
+    expect(confirm).toHaveTextContent("Closes1 Session…uilder-1");
     expect(confirm).toHaveTextContent("Ends1 ClaimWEB-3");
     expect(api.calls.some((c) => c.path.endsWith("/deactivate"))).toBe(false);
 
@@ -148,10 +148,13 @@ describe("Account", () => {
 
     const token = await screen.findByRole("listitem", { name: "Token init" });
     expect(within(token).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["More for token init"]);
+    // Besides its id, which copies itself, a Session has one action.
+    const actions = (row: HTMLElement) => within(row).getAllByRole("button").filter((b) => !b.getAttribute("aria-label")?.startsWith("Copy the Session id"));
     const here = await screen.findByRole("listitem", { name: "This browser" });
-    expect(within(here).getAllByRole("button").map((b) => b.textContent)).toEqual(["Sign out"]);
+    expect(actions(here).map((b) => b.textContent)).toEqual(["Sign out"]);
     const other = screen.getByRole("listitem", { name: "Session browser-2" });
-    expect(within(other).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["More for Session browser-2"]);
+    expect(within(other).getByRole("button", { name: "Copy the Session id browser-2" })).toHaveAttribute("title", "browser-2");
+    expect(actions(other).map((b) => b.getAttribute("aria-label"))).toEqual(["More for Session browser-2"]);
     expect(screen.getAllByRole("button", { name: /Sign out/ })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /^(Revoke|Close)$/ })).not.toBeInTheDocument();
 

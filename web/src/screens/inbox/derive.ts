@@ -1,4 +1,4 @@
-import type { Activity, Feature, Member, Task, TaskDetail } from "@/api/client";
+import type { Activity, Feature, Member, RunnerSessionState, Task, TaskDetail } from "@/api/client";
 import { liveClaim } from "@/work";
 
 // The rules the four screens read, apart from rendering, so the tests can hold them to the mock.
@@ -132,12 +132,21 @@ export type AgentRow = {
   deadline?: number;
 };
 
+// Where a runner session's state puts its agent: a Stalled one first, then a Waiting one.
+const stateBands: Partial<Record<RunnerSessionState, number>> = { stalled: -2, waiting: -1 };
+
 /**
- * The agent Members for the Agents table: those holding a live Claim first, the one whose
- * Heartbeat is due first at the top and Member-bound Claims after the timed ones; then the idle
- * ones; deactivated agents last. Names break ties.
+ * The agent Members for the Agents table: those whose runner session is Stalled, then Waiting
+ * (`stateOf` says, by Member id); then those holding a live Claim, the one whose Heartbeat is due
+ * first at the top and Member-bound Claims after the timed ones; then the idle ones; deactivated
+ * agents last. Names break ties.
  */
-export function agentRows(members: Member[], openTasks: Task[], now: number): AgentRow[] {
+export function agentRows(
+  members: Member[],
+  openTasks: Task[],
+  now: number,
+  stateOf: (memberId: string) => RunnerSessionState | undefined = () => undefined,
+): AgentRow[] {
   const held = new Map<string, Task[]>();
   for (const t of openTasks) {
     const c = liveClaim(t, now);
@@ -151,7 +160,12 @@ export function agentRows(members: Member[], openTasks: Task[], now: number): Ag
       const first = tasks[0] ? expiry(tasks[0]) : Infinity;
       return { agent, held: tasks, deadline: Number.isFinite(first) ? first : undefined };
     });
-  const band = (r: AgentRow) => (r.agent.deactivated_at ? 3 : r.held.length === 0 ? 2 : r.deadline === undefined ? 1 : 0);
+  const band = (r: AgentRow) => {
+    if (r.agent.deactivated_at) return 3;
+    const state = stateOf(r.agent.id);
+    if (state && stateBands[state] !== undefined) return stateBands[state];
+    return r.held.length === 0 ? 2 : r.deadline === undefined ? 1 : 0;
+  };
   return rows.sort(
     (a, b) => band(a) - band(b) || (a.deadline ?? 0) - (b.deadline ?? 0) || a.agent.name.localeCompare(b.agent.name),
   );

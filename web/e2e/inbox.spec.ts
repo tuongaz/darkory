@@ -95,14 +95,13 @@ test("a 2 s Claim lapses: Agents shows Lapsed, the Task returns to Todo, Darkory
   await page.goto(`${base()}/agents`);
   const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
   await expect(row).toContainText("Nothing held");
-  await expect(row).toContainText("reports to ada");
   await markLoaded(page);
 
   await v1(agent, "POST", `/v1/tasks/${discount}/claim`, { heartbeat_timeout_seconds: 2, model_label: "claude-opus-5-5" });
   // No Heartbeat comes; the server records the lapse within a second of the expiry.
   await expect(row.getByText("Lapsed")).toBeVisible({ timeout: 15_000 });
   await expect(row).toContainText("Nothing held");
-  await expect(row.getByRole("cell").nth(5)).toContainText(`1${discount}`);
+  await expect(row.getByRole("cell").nth(6)).toContainText(`1${discount}`);
   await notReloaded(page);
   await shot(page, "agents-lapsed");
 
