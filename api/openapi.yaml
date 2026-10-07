@@ -995,13 +995,16 @@ paths:
         question or Escalation; `project` may be given with the other two, and must then be theirs.
 
         A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
-        the caller, who must be a Member of the Project. It waits at `step`, or else at the
-        Workflow's first Step that carries a Skill, or at its first Step when none does; at a hold
-        no one is offered it until someone moves it on (`moveTask`). Aimed at a Member by name
-        (`aim`), it waits with that Member at no Step instead. With `breakdown` it is a Parent from
-        its first moment, at no Step: its Breakdown Subtask ("Break down: <title>", kind
-        `breakdown`, filed by nobody) is filed with it at the Workflow's Step carrying
-        `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+        the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+        at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+        files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+        Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+        that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+        default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+        Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+        is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+        <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+        carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
         `acceptance` default to the Project's. It names `workspaces`, or else the Project's
         default Workspace, or none when the Project has no default.
 
@@ -3209,8 +3212,10 @@ components:
         step:
           type: string
           description: |
-            Step id or name in the Project's Workflow to start at. Defaults to the first Step that
-            carries a Skill, or the first Step when none does.
+            Step id or name in the Project's Workflow to start at. Defaults to the first Step
+            carrying a Skill other than `breakdown`, `acceptance`, `retro` and `skill-review`
+            (Build in the default Workflow); failing that, the first Step carrying any Skill;
+            failing that, the first Step.
         breakdown:
           type: boolean
           description: File the Task with its Breakdown Subtask, making it a Parent from its first moment.
