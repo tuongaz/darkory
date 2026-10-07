@@ -315,7 +315,7 @@ func (a *agent) read() error {
 	for _, m := range checkout.FindAllStringSubmatch(a.prompt, -1) {
 		a.dirs = append(a.dirs, strings.TrimSuffix(m[1], ","))
 	}
-	for _, want := range []string{"## Working rules", "## How this session ends", "darkory complete " + a.key} {
+	for _, want := range []string{"## Working rules", "## How this session ends", "darkory handover " + a.key} {
 		if !strings.Contains(a.prompt, want) {
 			return fmt.Errorf("the prompt does not say %q", want)
 		}

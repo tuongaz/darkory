@@ -50,6 +50,16 @@ func TestBuildPrompt(t *testing.T) {
 	if strings.Contains(got, "\x1b") {
 		t.Error("the prompt carries a raw escape")
 	}
+	// A build Task is handed over, never completed by its builder; its review completes it.
+	if !strings.Contains(got, "Never `darkory complete` this Task") || strings.Contains(got, "darkory complete WEB-12") {
+		t.Error("the build Task's prompt lets its builder complete it")
+	}
+	review := p
+	review.Task.Skill, review.Task.Review = "review", true
+	if got := BuildPrompt(review); !strings.Contains(got, "`darkory complete WEB-12 --note <what you checked>` when the work passes your review") ||
+		strings.Contains(got, "Never `darkory complete`") {
+		t.Error("the review Task's prompt does not say to complete it")
+	}
 
 	// A quick Feature's Task with no Workspace and nothing on its record yet.
 	p = Prompt{Agent: "builder", Manager: "ada", Dir: "/d/workspaces/WEB-30", Rules: remote.Rules,

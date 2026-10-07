@@ -329,7 +329,7 @@ func (s *session) prompt(ctx context.Context, f *FeatureInfo, checkouts []Checko
 		if err != nil {
 			return Prompt{}, err
 		}
-		p.Task.Skill = sk.Skill.Name
+		p.Task.Skill, p.Task.Review = sk.Skill.Name, s.r.isReview(ctx, s.rec, sk.Skill)
 		texts := []*client.SkillDetail{sk}
 		if sk.Skill.Kind == client.Company && sk.Skill.BaseSkillID != nil {
 			if base, err := s.rec.Skill(ctx, *sk.Skill.BaseSkillID); err == nil {
