@@ -28,7 +28,7 @@ type Spec struct {
 	Argv []string
 	// Dir is the working directory, the first checkout.
 	Dir string
-	// Env is added to the runner's environment, as KEY=VALUE.
+	// Env is the command's whole environment, as KEY=VALUE; in tmux, TERM is the pane's.
 	Env []string
 	// SessionDir is <data>/sessions/<TASK-KEY>, where the log and the host's files go.
 	SessionDir string
@@ -87,7 +87,7 @@ func (childHost) Start(_ context.Context, s Spec) (Proc, error) {
 	}
 	cmd := exec.Command(s.Argv[0], s.Argv[1:]...)
 	cmd.Dir = s.Dir
-	cmd.Env = append(os.Environ(), s.Env...)
+	cmd.Env = s.Env
 	cmd.Stdout, cmd.Stderr = log, log
 	newGroup(cmd)
 	stdin, err := cmd.StdinPipe()
@@ -159,6 +159,7 @@ func (h *tmuxHost) Tmux() bool { return true }
 
 func (h *tmuxHost) tmux(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "tmux", append([]string{"-L", h.socket}, args...)...)
+	cmd.Env = tmuxEnv()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("tmux %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -168,11 +169,13 @@ func (h *tmuxHost) tmux(ctx context.Context, args ...string) (string, error) {
 
 func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 	// The environment carries the token, so it goes in a file only this user reads rather than on
-	// tmux's command line, which every process can see.
+	// tmux's command line, which every process can see. The pane's own TERM stays.
 	var env strings.Builder
 	for _, kv := range s.Env {
 		k, v, _ := strings.Cut(kv, "=")
-		fmt.Fprintf(&env, "export %s=%s\n", k, ShellQuote(v))
+		if k != "TERM" {
+			fmt.Fprintf(&env, "export %s=%s\n", k, ShellQuote(v))
+		}
 	}
 	envFile := filepath.Join(s.SessionDir, "env.sh")
 	if err := os.WriteFile(envFile, []byte(env.String()), 0o600); err != nil {
@@ -185,7 +188,8 @@ func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 		return nil, err
 	}
 	// The script waits for the pane's output to reach the log before it starts the command, and
-	// leaves the command's exit status behind.
+	// leaves the command's exit status behind. It starts with an empty environment but the pane's
+	// TERM, whatever the tmux server's own is, and takes the session's from env.sh.
 	script := fmt.Sprintf("#!/bin/sh\nn=0\nwhile [ ! -e %[1]s ] && [ $n -lt 100 ]; do sleep 0.05; n=$((n+1)); done\n. %[2]s\n%[3]s\necho $? > %[4]s\n",
 		ShellQuote(goFile), ShellQuote(envFile), ShellJoin(s.Argv), ShellQuote(exitFile))
 	run := filepath.Join(s.SessionDir, "run.sh")
@@ -193,7 +197,8 @@ func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 		return nil, err
 	}
 	h.tmux(ctx, "kill-session", "-t", "="+s.Name)
-	if _, err := h.tmux(ctx, "new-session", "-d", "-s", s.Name, "-x", "200", "-y", "50", "-c", s.Dir, "/bin/sh "+ShellQuote(run)); err != nil {
+	if _, err := h.tmux(ctx, "new-session", "-d", "-s", s.Name, "-x", "200", "-y", "50", "-c", s.Dir,
+		`exec /usr/bin/env -i TERM="$TERM" /bin/sh `+ShellQuote(run)); err != nil {
 		return nil, err
 	}
 	if _, err := h.tmux(ctx, "pipe-pane", "-o", "-t", pane(s.Name), "cat >> "+ShellQuote(s.Log)); err != nil {

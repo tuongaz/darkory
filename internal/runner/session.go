@@ -215,9 +215,13 @@ func (s *session) start(ctx context.Context) error {
 	if err := os.WriteFile(promptFile, []byte(BuildPrompt(p)), 0o600); err != nil {
 		return err
 	}
+	// The session's environment is the runner's own few variables, not the server's (baseEnv).
 	// The darkory the runner is goes first on the PATH, so the session's CLI is the same release.
-	env := []string{remote.EnvURL + "=" + r.cfg.URL, remote.EnvToken + "=" + s.a.token, remote.EnvSession + "=" + s.rec.Session(),
-		"PATH=" + filepath.Dir(r.bin) + string(os.PathListSeparator) + os.Getenv("PATH")}
+	env := baseEnv(os.Environ())
+	env = setEnv(env, "PATH", filepath.Dir(r.bin)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	env = setEnv(env, remote.EnvURL, r.cfg.URL)
+	env = setEnv(env, remote.EnvToken, s.a.token)
+	env = setEnv(env, remote.EnvSession, s.rec.Session())
 	mcpFile := filepath.Join(s.dir, "mcp.json")
 	if err := s.writeMCPConfig(mcpFile, TaskDir(r.cfg.Data, s.key)); err != nil {
 		return err
@@ -228,6 +232,14 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	keys := make([]string, 0, len(s.set.Env))
+	for k := range s.set.Env {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		env = setEnv(env, k, s.set.Env[k])
+	}
 	switch {
 	case s.set.ProgressFile != "":
 		if s.progress, err = Expand(s.set.ProgressFile, v); err != nil {
@@ -237,16 +249,8 @@ func (s *session) start(ctx context.Context) error {
 			s.progress = filepath.Join(cwd, s.progress)
 		}
 	case IsClaude(s.set.Command):
-		s.claudeDir = ClaudeDir(s.set.Env)
+		s.claudeDir = ClaudeDir(env)
 		s.progress, s.transcript = TranscriptPath(s.claudeDir, cwd, s.rec.Session()), true
-	}
-	keys := make([]string, 0, len(s.set.Env))
-	for k := range s.set.Env {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	for _, k := range keys {
-		env = append(env, k+"="+s.set.Env[k])
 	}
 	proc, err := r.host.Start(ctx, Spec{Name: TmuxName(s.key), Argv: argv, Dir: cwd, Env: env, SessionDir: s.dir, Log: s.logPath})
 	if err != nil {

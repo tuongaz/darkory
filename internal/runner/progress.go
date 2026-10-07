@@ -32,16 +32,13 @@ func ProjectSlug(cwd string) string {
 	return string(b)
 }
 
-// ClaudeDir is where Claude Code keeps its state for an agent whose environment is env:
+// ClaudeDir is where Claude Code keeps its state in a session whose environment is env:
 // CLAUDE_CONFIG_DIR when set, else ~/.claude.
-func ClaudeDir(env map[string]string) string {
-	if d := env["CLAUDE_CONFIG_DIR"]; d != "" {
+func ClaudeDir(env []string) string {
+	if d, _ := lookupEnv(env, "CLAUDE_CONFIG_DIR"); d != "" {
 		return d
 	}
-	if d := os.Getenv("CLAUDE_CONFIG_DIR"); d != "" {
-		return d
-	}
-	home := env["HOME"]
+	home, _ := lookupEnv(env, "HOME")
 	if home == "" {
 		home, _ = os.UserHomeDir()
 	}

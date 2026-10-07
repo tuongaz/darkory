@@ -667,8 +667,10 @@ type AddNoteBody struct {
 // directory) and `{task}` (the Task's display key). The defaults start Claude Code:
 // `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
 // --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
-// read these settings, `env` included: keep secrets in the server's own environment, which
-// sessions inherit.
+// read these settings, `env` included: keep secrets in the server's own environment and
+// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
+// and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
+// `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
 type AgentSettings struct {
 	// Args Its arguments, each a template.
 	Args []string `json:"args"`
@@ -1034,8 +1036,10 @@ type Member struct {
 	// directory) and `{task}` (the Task's display key). The defaults start Claude Code:
 	// `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
 	// --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
-	// read these settings, `env` included: keep secrets in the server's own environment, which
-	// sessions inherit.
+	// read these settings, `env` included: keep secrets in the server's own environment and
+	// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
+	// and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
+	// `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
 	Agent     *AgentSettings `json:"agent,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
 
