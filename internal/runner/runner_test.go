@@ -456,6 +456,10 @@ func TestRunnerInTmux(t *testing.T) {
 	if !strings.Contains(out.String(), "fakeagent: working WEB-3") || !strings.Contains(out.String(), "/exit") {
 		t.Fatalf("the pane's log:\n%s", out.String())
 	}
+	// The Evidence is the pane as the agent's terminal had it, nothing added or taken out.
+	if b, err := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-3", "pane.log")); err != nil || out.String() != string(b) {
+		t.Fatalf("the Evidence differs from pane.log (%v):\n%q\n%q", err, out.String(), b)
+	}
 }
 
 // The terminal: an admin joining through /v1/runner/sessions/{task}/terminal sees the session's
