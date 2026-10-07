@@ -1,39 +1,37 @@
 // /teams/:team/features (F-B3): a Team's Features in Rank order with their owner and Task bar.
-// Dragging the grip re-ranks; the Display shows ended Features, dimmed, in their places.
+// Dragging the grip re-ranks; the Display shows ended Features, dimmed, in their places; the Filter
+// keeps its pills in ?filter.features=.
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { EllipsisIcon, FilterIcon, GripVerticalIcon, LayersIcon, PlusIcon, SearchXIcon, SlidersHorizontalIcon } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { EllipsisIcon, GripVerticalIcon, LayersIcon, PlusIcon, SearchXIcon, SlidersHorizontalIcon } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import type { Feature } from "@/api/client";
 import { useDirectory, useTeams } from "@/api/queries";
-import { sendIntent } from "@/app/intents";
+import { sendIntent, useIntent } from "@/app/intents";
 import { Content, TopBar } from "@/app/TopBar";
+import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
+import { FilterChipRow, FilterMenuButton, type FilterBarProps } from "@/components/filters/FilterBar";
+import { useFilterState } from "@/components/filters/filterState";
+import { usablePills } from "@/components/filters/operators";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { TeamMark } from "@/components/TeamMark";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { countsText, moveFeature, rankPosition, taskBar } from "./derive";
+import { countsText, moveFeature, rankPosition, taskBar, visibleFeatures } from "./derive";
+import { featureFields, featureFilterOptions } from "./filters";
 import { useRankFeature, useTeamFeatures } from "./queries";
-import { FilterChips } from "./ViewMenus";
+import { useLegacyFeatureFilters } from "./state";
 
 // grip · # · key · title · owner · Task bar · counts · ⋯; on a phone the owner, bar and counts go.
 const rowGrid =
@@ -44,11 +42,11 @@ export function TeamFeaturesPage() {
   const teams = useTeams();
   const team = teams.data?.find((t) => t.key === teamRef || t.id === teamRef);
   const features = useTeamFeatures(team?.key);
-  const { members, memberList } = useDirectory();
+  const { members, skills } = useDirectory();
   const me = useCurrentMe();
+  const now = useNow();
   const [params, setParams] = useSearchParams();
   const showEnded = params.get("ended") === "1";
-  const ownerName = params.get("owner") ?? undefined;
   const setParam = (k: string, v: string | undefined) =>
     setParams(
       (p) => {
@@ -60,13 +58,23 @@ export function TeamFeaturesPage() {
       { replace: true },
     );
 
+  const filter = useFilterState("features");
+  useLegacyFeatureFilters({ skills, members });
+  const pills = useMemo(() => usablePills(filter.pills, featureFields), [filter.pills]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  useIntent("filter", () => setFilterOpen(true));
+  const options = useMemo(() => featureFilterOptions({ members, me: me.member.id }), [members, me.member.id]);
+  const bar: FilterBarProps = {
+    fields: featureFields,
+    pills,
+    optionsFor: (field) => options.get(field),
+    onSetFilter: filter.setFilter,
+    onRemoveFilter: filter.removeFilter,
+    onClearAll: filter.clearAll,
+  };
+
   const ranked = useMemo(() => features.data ?? [], [features.data]);
-  const ownerId = ownerName ? (memberList.find((m) => m.name === ownerName)?.id ?? "?") : undefined;
-  const shown = ranked.filter((f) => (showEnded || f.state === "open") && (!ownerId || f.owner_id === ownerId));
-  const owners = [...new Set(ranked.map((f) => f.owner_id))].flatMap((id) => {
-    const m = members.get(id);
-    return m ? [m] : [];
-  });
+  const shown = visibleFeatures(ranked, { pills, showEnded, now });
   const inTeam = !!team && me.teams.some((t) => t.id === team.id);
 
   const top = (
@@ -77,31 +85,7 @@ export function TeamFeaturesPage() {
         actions={
           team && (
             <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" aria-label="Filter" className={cn(ownerName && "bg-accent")}>
-                    <FilterIcon />
-                    <span className="hidden sm:inline">Filter</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-2 pt-1.5 pb-1 text-2xs font-medium text-muted-foreground">Owner</div>
-                  <DropdownMenuRadioGroup value={ownerName ?? ""} onValueChange={(v) => setParam("owner", v || undefined)}>
-                    {owners.map((m) => (
-                      <DropdownMenuRadioItem key={m.id} value={m.name}>
-                        <MemberAvatar member={m} />
-                        {m.name}
-                      </DropdownMenuRadioItem>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                  {ownerName && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={() => setParam("owner", undefined)}>Clear</DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <FilterMenuButton {...bar} open={filterOpen} onOpenChange={setFilterOpen} />
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" aria-label="Display" className="data-[state=open]:bg-accent">
@@ -132,12 +116,7 @@ export function TeamFeaturesPage() {
           </Button>
         }
       />
-      <FilterChips
-        chips={[
-          ...(showEnded ? [{ label: "Shipped and dropped: shown", clear: () => setParam("ended", undefined) }] : []),
-          ...(ownerName ? [{ label: `Owner: ${ownerName}`, clear: () => setParam("owner", undefined) }] : []),
-        ]}
-      />
+      {team && <FilterChipRow {...bar} />}
     </>
   );
 

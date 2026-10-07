@@ -414,7 +414,25 @@ describe("Team › Features", () => {
     await userEvent.click(await screen.findByRole("switch", { name: "Shipped and dropped" }));
     await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(3));
     expect(within(list).getByText("Shipped")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear Shipped and dropped: shown" })).toBeInTheDocument();
+    // A Display choice, not a filter: no chip says it.
+    expect(screen.queryByRole("toolbar", { name: "Filters" })).not.toBeInTheDocument();
+  });
+
+  it("filters by the Filter's pills: State Shipped shows an ended Feature the Display hides; an old ?owner= link reads by id", async () => {
+    mockApi(routes());
+    const first = renderApp("/teams/WEB/features?filter.features=state%3Ais%3Ashipped");
+    const list = await screen.findByRole("list", { name: "Features in Rank order" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem").map((li) => li.getAttribute("data-feature"))).toEqual(["WEB-18"]));
+    expect(screen.getByRole("button", { name: "State: Shipped" })).toBeInTheDocument();
+    first.unmount();
+
+    renderApp("/teams/WEB/features?owner=bob");
+    expect(await screen.findByRole("button", { name: "Owner: bob" })).toBeInTheDocument();
+    // Nobody owns a Feature but ada.
+    await waitFor(() => expect(screen.getByRole("list", { name: "Features in Rank order" })).toBeEmptyDOMElement());
+    await userEvent.click(screen.getByRole("button", { name: "Owner — is" }));
+    await userEvent.click(await screen.findByRole("option", { name: "is not" }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: "Features in Rank order" })).getAllByRole("listitem")).toHaveLength(2));
   });
 
   it("offers the grip to a Member of the Team only", async () => {

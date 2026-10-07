@@ -13,7 +13,7 @@ import { DayTime } from "@/components/Time";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import { BlocksPill, FeatureRef, MarkPill, SkillPill } from "./bits";
-import { marksOf, type Group } from "./derive";
+import { marksOf, updatedAt, type Group } from "./derive";
 import { aimedAt, featureOf, holderOf, type BoardModel } from "./model";
 
 // glyph · key · title · marks · Feature · Skill · holder · updated (waiting since, or ended); on a
@@ -107,7 +107,7 @@ function TaskRow({ task, model }: { task: Task; model: BoardModel }) {
   const claim = liveClaim(task, model.now);
   const marks = marksOf(task, model.trails.get(task.id), model.now);
   const blocks = model.blocks.get(task.id) ?? [];
-  const when = ended ? (task.ended_at ?? task.waiting_since) : task.waiting_since;
+  const when = updatedAt(task);
   return (
     <Link
       to={peek(task.key)}

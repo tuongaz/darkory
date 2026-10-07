@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Task } from "@/api/client";
+import { endOf, startOf } from "@/components/filters/dates";
 import { ada, builder, feature, task } from "@/test/fixtures";
 import {
   blocking,
@@ -17,7 +18,9 @@ import {
   taskBar,
   mayMove,
   matches,
+  matchesFeature,
   nobody,
+  visibleFeatures,
   visibleTasks,
 } from "./derive";
 import { statuses } from "./testData";
@@ -183,6 +186,71 @@ describe("the Filter's pills", () => {
     const ended = task(7, "f-1", { state: "done", blocked: true });
     expect(matches(ended, [{ field: "blocked", op: "is", values: ["true"] }], ctx)).toBe(false);
     expect(matches({ ...ended, state: "open" }, [{ field: "blocked", op: "is", values: ["true"] }], ctx)).toBe(true);
+  });
+});
+
+describe("the Filter's dates, Claim and Workspace", () => {
+  const local = (h: number) => new Date(new Date(now).getFullYear(), new Date(now).getMonth(), new Date(now).getDate(), h);
+  const today = local(0);
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const ctx = {
+    now,
+    features: new Map([["f-1", { owner_id: ada.id }]]),
+    trails: new Map([
+      ["k-2", { lapsedAt: at(30) }],
+      ["k-4", { lapsedAt: at(60 * 30) }],
+    ]),
+    sessions: new Set(["k-1"]),
+  };
+  const held = task(1, "f-1", { created_at: yesterday.toISOString(), claim: { id: "c-1", task_id: "k-1", holder_id: builder.id, session_id: "s", started_at: at(5) } });
+  const lapsed = task(2, "f-1", { created_at: today.toISOString(), workspace_ids: ["w-shop"] });
+  const done = task(3, "f-1", { state: "done", status_id: "st-done", created_at: yesterday.toISOString(), ended_at: today.toISOString() });
+  const old = task(4, "f-1", { created_at: at(60 * 24 * 40), waiting_since: at(60 * 24 * 40), workspace_ids: ["w-shop", "w-docs"] });
+  const all = [held, lapsed, done, old];
+  const where = (pill: { field: string; op: string; values: string[] }) => all.filter((t) => matches(t, [pill], ctx)).map((t) => t.key);
+
+  it("reads Filed, Completed and Updated as the list shows them", () => {
+    expect(where({ field: "filed_at", op: "btw", values: [startOf(today), endOf(today)] })).toEqual(["WEB-2"]);
+    expect(where({ field: "filed_at", op: "before", values: [startOf(today)] })).toEqual(["WEB-1", "WEB-3", "WEB-4"]);
+    // Only a done Task has been completed.
+    expect(where({ field: "completed_at", op: "last", values: ["7d"] })).toEqual(["WEB-3"]);
+    // Updated is the ended time of an ended Task, else when it began waiting.
+    expect(where({ field: "updated_at", op: "last", values: ["30d"] })).toEqual(["WEB-1", "WEB-2", "WEB-3"]);
+  });
+
+  it("holds every Claim value that is true of a Task", () => {
+    expect(where({ field: "claim", op: "is", values: ["held"] })).toEqual(["WEB-1"]);
+    expect(where({ field: "claim", op: "is", values: ["unheld"] })).toEqual(["WEB-2", "WEB-4"]);
+    // A lapse counts for a day; WEB-4's was 30 hours ago.
+    expect(where({ field: "claim", op: "is", values: ["lapsed"] })).toEqual(["WEB-2"]);
+    expect(where({ field: "claim", op: "in", values: ["session", "lapsed"] })).toEqual(["WEB-1", "WEB-2"]);
+  });
+
+  it("reads a Task's Workspaces as several values", () => {
+    expect(where({ field: "workspace", op: "is", values: ["w-docs"] })).toEqual(["WEB-4"]);
+    expect(where({ field: "workspace", op: "in", values: ["w-shop"] })).toEqual(["WEB-2", "WEB-4"]);
+  });
+});
+
+describe("the Features' Filter", () => {
+  const quick = feature(2, 1, { quick: true, ship_when_done: true, owner_id: builder.id });
+  const plain = feature(5, 2);
+  const shipped = feature(7, 3, { state: "shipped", ended_at: at(60) });
+  const ranked = [quick, plain, shipped];
+  const keys = (fs: { key: string }[]) => fs.map((f) => f.key);
+
+  it("reads the owner, the state, Quick, Ships when done, the dates and Search", () => {
+    const where = (pill: { field: string; op: string; values: string[] }) => keys(ranked.filter((f) => matchesFeature(f, [pill], now)));
+    expect(where({ field: "owner", op: "not", values: [builder.id] })).toEqual(["WEB-5", "WEB-7"]);
+    expect(where({ field: "quick", op: "is", values: ["true"] })).toEqual(["WEB-2"]);
+    expect(where({ field: "ship_when_done", op: "is", values: ["false"] })).toEqual(["WEB-5", "WEB-7"]);
+    expect(where({ field: "ended_at", op: "last", values: ["7d"] })).toEqual(["WEB-7"]);
+    expect(where({ field: "q", op: "contains", values: ["web-5"] })).toEqual(["WEB-5"]);
+  });
+
+  it("hides ended Features as the Display says, unless the Filter asks for their state", () => {
+    expect(keys(visibleFeatures(ranked, { pills: [], showEnded: false, now }))).toEqual(["WEB-2", "WEB-5"]);
+    expect(keys(visibleFeatures(ranked, { pills: [{ field: "state", op: "is", values: ["shipped"] }], showEnded: false, now }))).toEqual(["WEB-7"]);
   });
 });
 

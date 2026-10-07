@@ -1,6 +1,6 @@
-// The top bar's controls on the Board screens: the List | Board switch and Display, and the chips
-// Team › Features shows for its owner. Filter is components/filters.
-import { CheckIcon, KanbanIcon, LayersIcon, ListIcon, SlidersHorizontalIcon, UserIcon, XIcon } from "lucide-react";
+// The top bar's controls on the Board screens: the List | Board switch and Display. The Filter is
+// components/filters.
+import { CheckIcon, KanbanIcon, LayersIcon, ListIcon, SlidersHorizontalIcon, UserIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { StatusGlyph } from "@/components/StatusGlyph";
@@ -48,23 +48,6 @@ function BarButton({ icon, label, ...props }: { icon: ReactNode; label: string }
       {icon}
       <span className="hidden sm:inline">{label}</span>
     </Button>
-  );
-}
-
-/** The toolbar under the top bar while anything is filtered: one chip per choice, × clears it. */
-export function FilterChips({ chips }: { chips: { label: string; clear: () => void }[] }) {
-  if (chips.length === 0) return null;
-  return (
-    <div className="flex h-10 flex-none items-center gap-1.5 overflow-x-auto border-b px-4">
-      {chips.map((c) => (
-        <span key={c.label} className="inline-flex h-6 flex-none items-center gap-1 rounded-md border bg-accent pr-0.5 pl-2 text-xs whitespace-nowrap">
-          {c.label}
-          <button type="button" aria-label={`Clear ${c.label}`} onClick={c.clear} className="grid size-5 place-items-center rounded-sm text-muted-foreground hover:bg-background">
-            <XIcon className="size-3" />
-          </button>
-        </span>
-      ))}
-    </div>
   );
 }
 

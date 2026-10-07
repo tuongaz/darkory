@@ -3,6 +3,7 @@
 // Vitest checks them without rendering.
 import type { Activity, Feature, Task, TaskBrief, TaskCounts } from "@/api/client";
 import type { components } from "@/api/schema.gen";
+import { passesDate } from "@/components/filters/dates";
 import type { FilterPill } from "@/components/filters/filterState";
 import { glyphFor, type Glyph } from "@/lib/status";
 import { kindLabel, liveClaim } from "@/work";
@@ -129,8 +130,47 @@ export function kindValue(task: Pick<Task, "kind" | "aimed_at_id">): KindValue {
   return task.kind === "work" && task.aimed_at_id ? "question" : task.kind;
 }
 
-/** What `matches` reads beyond the Task: the clock and the Team's Features. */
-export type FilterContext = { now: number; features: Map<string, Pick<Feature, "owner_id">> };
+/**
+ * What `matches` reads beyond the Task: the clock, the Team's Features, and for the Claim axis
+ * the Claim trails (lapses) and the Tasks a Runner session works now.
+ */
+export type FilterContext = {
+  now: number;
+  features: Map<string, Pick<Feature, "owner_id">>;
+  trails?: Map<string, ClaimTrail>;
+  sessions?: ReadonlySet<string>;
+};
+
+/** The time the list's Updated column shows: when the Task ended, else when it began waiting. */
+export function updatedAt(task: Pick<Task, "state" | "ended_at" | "waiting_since">): string {
+  return task.state !== "open" ? (task.ended_at ?? task.waiting_since) : task.waiting_since;
+}
+
+/** A Task's time on each date axis; a Task not completed has no Completed time. */
+const taskTimes: Record<string, (t: Task) => string | undefined> = {
+  filed_at: (t) => t.created_at,
+  updated_at: updatedAt,
+  completed_at: (t) => (t.state === "done" ? t.ended_at : undefined),
+};
+
+/** How long a lapse counts as recent on the Claim axis. */
+const lapseWindowMs = 24 * 60 * 60 * 1000;
+
+/**
+ * The Claim axis' values of a Task, as many as hold: held (a live Claim), unheld (open, nobody
+ * holding it), lapsed (its last Claim lapsed in the past 24 hours), session (a Runner session
+ * works it now).
+ */
+export function claimValues(task: Task, ctx: FilterContext): string[] {
+  const out: string[] = [];
+  const held = !!liveClaim(task, ctx.now);
+  if (held) out.push("held");
+  else if (task.state === "open") out.push("unheld");
+  const lapsed = lapsedAt(task, ctx.trails?.get(task.id), ctx.now);
+  if (lapsed && ctx.now - Date.parse(lapsed) <= lapseWindowMs) out.push("lapsed");
+  if (ctx.sessions?.has(task.id)) out.push("session");
+  return out;
+}
 
 /**
  * A Task's values on an axis of the Filter: one for most, as many as it names for its Workspaces,
@@ -160,6 +200,8 @@ export function taskValues(task: Task, field: string, ctx: FilterContext): strin
       return [kindValue(task)];
     case "workspace":
       return task.workspace_ids ?? [];
+    case "claim":
+      return claimValues(task, ctx);
     default:
       return undefined;
   }
@@ -184,6 +226,12 @@ export function passes(values: string[], pill: FilterPill): boolean {
   }
 }
 
+/** Whether a key or a title holds a Search pill's words, ignoring case. */
+function searchMatches(record: { key: string; title: string }, pill: FilterPill): boolean {
+  const words = (pill.values[0] ?? "").trim().toLowerCase();
+  return !words || record.key.toLowerCase().includes(words) || record.title.toLowerCase().includes(words);
+}
+
 /**
  * Whether a Task passes every pill of the Filter: the axes are ANDed, the values of one axis ORed.
  * Search (`q`) matches the key or the title, ignoring case. A pill for an axis the Tasks do not
@@ -191,10 +239,9 @@ export function passes(values: string[], pill: FilterPill): boolean {
  */
 export function matches(task: Task, pills: readonly FilterPill[], ctx: FilterContext): boolean {
   return pills.every((pill) => {
-    if (pill.field === "q") {
-      const words = (pill.values[0] ?? "").trim().toLowerCase();
-      return !words || task.key.toLowerCase().includes(words) || task.title.toLowerCase().includes(words);
-    }
+    if (pill.field === "q") return searchMatches(task, pill);
+    const time = taskTimes[pill.field];
+    if (time) return passesDate(time(task), pill, ctx.now);
     const values = taskValues(task, pill.field, ctx);
     return values === undefined || passes(values, pill);
   });
@@ -207,7 +254,13 @@ export function matches(task: Task, pills: readonly FilterPill[], ctx: FilterCon
  */
 export function visibleTasks(
   tasks: Task[],
-  ctx: { display: Display; pills: readonly FilterPill[]; features: Map<string, Feature>; statuses: Map<string, Status>; now: number; byKind: boolean },
+  ctx: Omit<FilterContext, "features"> & {
+    display: Display;
+    pills: readonly FilterPill[];
+    features: Map<string, Feature>;
+    statuses: Map<string, Status>;
+    byKind: boolean;
+  },
 ): Task[] {
   const { display } = ctx;
   const status = ctx.pills.find((p) => p.field === "status" && (p.op === "is" || p.op === "in"));
@@ -223,6 +276,49 @@ export function visibleTasks(
     }
     return true;
   });
+}
+
+/** A Feature's values on an axis of Team › Features' Filter; undefined for an axis it lacks. */
+export function featureValues(feature: Feature, field: string): string[] | undefined {
+  switch (field) {
+    case "owner":
+      return [feature.owner_id];
+    case "state":
+      return [feature.state];
+    case "quick":
+      return [String(feature.quick)];
+    case "ship_when_done":
+      return [String(feature.ship_when_done)];
+    default:
+      return undefined;
+  }
+}
+
+/** A Feature's time on each date axis; an open Feature has no Ended time. */
+const featureTimes: Record<string, (f: Feature) => string | undefined> = {
+  filed_at: (f) => f.created_at,
+  ended_at: (f) => f.ended_at,
+};
+
+/** Whether a Feature passes every pill, as `matches` reads them for a Task. */
+export function matchesFeature(feature: Feature, pills: readonly FilterPill[], now: number): boolean {
+  return pills.every((pill) => {
+    if (pill.field === "q") return searchMatches(feature, pill);
+    const time = featureTimes[pill.field];
+    if (time) return passesDate(time(feature), pill, now);
+    const values = featureValues(feature, pill.field);
+    return values === undefined || passes(values, pill);
+  });
+}
+
+/**
+ * The Features a list shows, in Rank order: the Filter's pills, then the Display's "Shipped and
+ * dropped", unless the Filter asks for the ended state by name.
+ */
+export function visibleFeatures(ranked: Feature[], ctx: { pills: readonly FilterPill[]; showEnded: boolean; now: number }): Feature[] {
+  const state = ctx.pills.find((p) => p.field === "state" && (p.op === "is" || p.op === "in"));
+  const asked = new Set(state?.values ?? []);
+  return ranked.filter((f) => matchesFeature(f, ctx.pills, ctx.now) && (ctx.showEnded || f.state === "open" || asked.has(f.state)));
 }
 
 /** What the Activity says about a Task's Claims that a Task in a list does not carry. */

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { ApiError, type Task } from "@/api/client";
+import { useRunnerSessions, useWorkspaces } from "@/api/queries";
 import { sendIntent, useIntent } from "@/app/intents";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
@@ -41,6 +42,10 @@ export function TeamTasksPage() {
   const pills = useMemo(() => usablePills(filter.pills, taskFields), [filter.pills]);
   const [filterOpen, setFilterOpen] = useState(false);
   useIntent("filter", () => setFilterOpen(true));
+  const workspaces = useWorkspaces().data;
+  const runner = useRunnerSessions().data?.items;
+  // The Tasks a Runner session works now, for the Claim axis' Live session.
+  const sessions = useMemo(() => new Set((runner ?? []).filter((r) => r.state !== "ending").map((r) => r.task_id)), [runner]);
   const all = model.tasks.data;
   const options = useMemo(
     () =>
@@ -51,9 +56,10 @@ export function TeamTasksPage() {
         features: model.featureList,
         members: model.members,
         skills: model.skills,
+        workspaces: workspaces ?? [],
         me: model.me.member.id,
       }),
-    [all, model.statusList, model.glyphs, model.featureList, model.members, model.skills, model.me.member.id],
+    [all, model.statusList, model.glyphs, model.featureList, model.members, model.skills, workspaces, model.me.member.id],
   );
   const bar: FilterBarProps = {
     fields: taskFields,
@@ -73,9 +79,11 @@ export function TeamTasksPage() {
         features: model.featureById,
         statuses: model.statusById,
         now: model.now,
+        trails: model.trails,
+        sessions,
         byKind: view === "list",
       }),
-    [sorted, display, pills, model.featureById, model.statusById, model.now, view],
+    [sorted, display, pills, model.featureById, model.statusById, model.now, model.trails, sessions, view],
   );
 
   // On a phone the bar shows the Team alone, beside the view switch and the actions.
