@@ -162,7 +162,7 @@ func (p *Preset) plan(f client.Feature, ask string) []Step {
 }
 
 // Presets are the presets tools/bots runs, by name.
-var Presets = map[string]*Preset{"software": &Software}
+var Presets = map[string]*Preset{"software": &Software, "accounting": &Accounting}
 
 // Software is the software team: Teams WEB and OPS; a planner, two builders, a reviewer, a retro,
 // a lapser, a stuck agent and a backlog prober; kai, who owns the work and directs the agents,
