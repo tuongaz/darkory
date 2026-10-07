@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/tuongaz/darkory/client"
@@ -15,11 +16,13 @@ import (
 // Person is a human persona at work, acting through a token of their own as a person in the web
 // app would. One who answers looks at their takeable list every Pace.Poll and, Pace.Answer after
 // first seeing a question aimed at them or a Task needing a Skill they work, claims it, writes a
-// Note (the answer, or what they did, with the workpaper attached) and completes it. One who owns
-// looks over the Features they own every Pace.Round: they ship each whose Tasks have all ended
-// (one that ships when done has shipped itself), and move one unblocked Task waiting in a
-// backlog Status, of a Feature whose Break down has ended, to the first todo Status. A human
-// reports no model label.
+// Note (the answer, or what they did, with the workpaper attached) and completes it. One who
+// answers into an Awaiting Status moves the Tasks a question blocks there on first seeing it, and
+// back to the first todo Status after writing the answer, before completing the question. One who
+// owns looks over the Features they own every Pace.Round: they ship each whose Tasks have all
+// ended (one that ships when done has shipped itself), and move one unblocked Task waiting in the
+// first backlog Status, of a Feature whose Break down has ended, to the first todo Status; a Task
+// in another backlog Status waits for whoever put it there. A human reports no model label.
 type Person struct {
 	agent
 	p Persona
@@ -81,6 +84,11 @@ func (h *Person) answer(ctx context.Context) error {
 		}
 		seen[t.ID] = true
 		if _, ok := h.due[t.ID]; !ok {
+			if aimed && h.p.Answers && h.p.Awaiting != "" {
+				if err := h.park(ctx, t); err != nil {
+					return on(t.Key, err)
+				}
+			}
 			h.due[t.ID] = now.Add(h.between(h.cfg.Pace.Answer))
 		}
 		if next == nil && !now.Before(h.due[t.ID]) {
@@ -144,6 +152,12 @@ func (h *Person) do(ctx context.Context, key string) error {
 	if err := h.note(wctx, key, note); err != nil {
 		return gone(wctx, err)
 	}
+	// Moved back while the question still blocks them, so nothing can take them in between.
+	if d.Task.AimedAtID != nil && h.p.Awaiting != "" {
+		if err := h.unpark(wctx, d); err != nil {
+			return gone(wctx, err)
+		}
+	}
 	stop()
 	if ctx.Err() != nil {
 		return nil
@@ -156,8 +170,8 @@ func (h *Person) do(ctx context.Context, key string) error {
 	return nil
 }
 
-// look ships the persona's Features whose Tasks have all ended, then moves one Task waiting in a
-// backlog Status to the first todo Status.
+// look ships the persona's Features whose Tasks have all ended, then moves one Task waiting in the
+// first backlog Status to the first todo Status.
 func (h *Person) look(ctx context.Context) error {
 	open := client.FeatureStateOpen
 	res, err := h.c.ListFeaturesWithResponse(ctx, &client.ListFeaturesParams{Owner: &h.m.ID, State: &open, Limit: ptr(500)})
@@ -188,13 +202,8 @@ func (h *Person) look(ctx context.Context) error {
 		return err
 	}
 	todo, todoName := firstOfKind(list, client.StatusKindTodo)
-	backlog := map[string]string{}
-	for _, s := range list {
-		if s.Kind == client.StatusKindBacklog {
-			backlog[s.ID] = s.Name
-		}
-	}
-	if len(backlog) == 0 || todo == "" {
+	backlog, _ := firstOfKind(list, client.StatusKindBacklog)
+	if backlog == "" || todo == "" {
 		return nil
 	}
 	for _, f := range features {
@@ -212,17 +221,86 @@ func (h *Person) look(ctx context.Context) error {
 			continue
 		}
 		for _, t := range tasks {
-			from, waiting := backlog[t.StatusID]
-			if t.State != client.TaskStateOpen || !waiting || t.Blocked {
+			if t.State != client.TaskStateOpen || t.StatusID != backlog || t.Blocked {
 				continue
 			}
-			sres, err := h.c.SetTaskStatusWithResponse(ctx, t.Key, &client.SetTaskStatusParams{}, client.SetTaskStatusBody{Status: todo})
-			if err := check(sres, err, http.StatusOK); err != nil {
-				return on(t.Key, fmt.Errorf("moving it to %s: %w", todoName, err))
-			}
-			h.say("moved", t.Key, "%q from %s to %s", t.Title, from, todoName)
-			return nil
+			return h.move(ctx, t, todo, todoName, "")
 		}
 	}
 	return nil
+}
+
+// park moves the open Tasks the question q blocks to the persona's Awaiting Status, where next
+// does not offer them, while the persona gets the answer.
+func (h *Person) park(ctx context.Context, q client.Task) error {
+	list, err := h.listStatuses(ctx)
+	if err != nil {
+		return err
+	}
+	awaiting, name := statusNamed(list, h.p.Awaiting)
+	if awaiting == "" {
+		return nil
+	}
+	res, err := h.c.GetTaskWithResponse(ctx, q.Key)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	for _, t := range res.JSON200.Blocking {
+		if t.State != client.TaskStateOpen || t.StatusID == awaiting {
+			continue
+		}
+		if err := h.move(ctx, t, awaiting, name, fmt.Sprintf(" until %s %q is answered", q.Key, q.Title)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// unpark moves the open Tasks the question q blocks out of the persona's Awaiting Status to the
+// first todo Status, now that the persona has the answer.
+func (h *Person) unpark(ctx context.Context, q *client.TaskDetail) error {
+	list, err := h.listStatuses(ctx)
+	if err != nil {
+		return err
+	}
+	awaiting, _ := statusNamed(list, h.p.Awaiting)
+	todo, todoName := firstOfKind(list, client.StatusKindTodo)
+	if awaiting == "" || todo == "" {
+		return nil
+	}
+	for _, t := range q.Blocking {
+		if t.State != client.TaskStateOpen || t.StatusID != awaiting {
+			continue
+		}
+		if err := h.move(ctx, t, todo, todoName, fmt.Sprintf(", now that %s has its answer", q.Task.Key)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// move moves the Task t to the Status id, named name, and reports it with why after; a Task that
+// ended since it was read stays where it is.
+func (h *Person) move(ctx context.Context, t client.Task, id, name, why string) error {
+	from := h.statusName(ctx, t.StatusID)
+	res, err := h.c.SetTaskStatusWithResponse(ctx, t.Key, &client.SetTaskStatusParams{}, client.SetTaskStatusBody{Status: id})
+	if err := check(res, err, http.StatusOK); err != nil {
+		if Code(err) == client.ErrorCodeEnded {
+			return nil
+		}
+		return on(t.Key, fmt.Errorf("moving it to %s: %w", name, err))
+	}
+	h.say("moved", t.Key, "%q from %s to %s%s", t.Title, from, name, why)
+	return nil
+}
+
+// statusNamed returns the id and name of the Status named name, ignoring case, as Darkory matches
+// names, or empty strings when the Organisation has none.
+func statusNamed(list []client.Status, name string) (string, string) {
+	for _, s := range list {
+		if strings.EqualFold(s.Name, name) {
+			return s.ID, s.Name
+		}
+	}
+	return "", ""
 }

@@ -21,13 +21,16 @@ import (
 // token of their own. As they work, the test checks that:
 //
 //   - Setup is idempotent: run again, it changes nothing but the tokens. The Statuses are the
-//     accounting list, and the clients Workspace is a git repository, BOOK's and TAX's default.
-//   - A Task in Awaiting client is never offered by next: while Kai is away, Reconcile bank feed,
-//     its blocker ended, and the fixed asset register wait there untaken and are not takeable;
-//     once Kai is back he moves them to Todo and the drafter takes each after its move.
+//     accounting list, two of the backlog kind, and the clients Workspace is a git repository,
+//     BOOK's and TAX's default.
+//   - A Task in Backlog, the intake, is never offered by next: while Kai is away, Reconcile bank
+//     feed, its blocker ended, and the fixed asset register wait there untaken and are not
+//     takeable; once Kai is back he moves them to Todo and the drafter takes each after its move.
 //   - The drafter's question about March's statements is aimed at Mai, blocks Collect bank
-//     statements, and only Mai takes it; once she completes it, Collect completes, which unblocks
-//     Reconcile.
+//     statements, and only Mai takes it. She moves Collect, which the drafter holds, to Awaiting
+//     client on seeing the question and back to Todo once she has the answer, before completing
+//     the question; then Collect completes, which unblocks Reconcile. Kai never moves a Task out
+//     of Awaiting client, and no Claim begins on a Task there.
 //   - Draft the BAS is handed over to tax-review, landing In review, and reviewer-tax completes it.
 //   - The quick Feature ships in the write that completes its one Task's review.
 //   - Q1 BAS ships itself (ship when done) in the write in which Mai completes Lodge the BAS.
@@ -75,7 +78,8 @@ func TestBotsAccounting(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("the Statuses are %v, want %v", got, want)
 	}
-	awaiting, todo, inReview := status[bot.StatusAwaitingClient], status["Todo"], status["In review"]
+	backlog, awaiting, todo, inReview := status[bot.StatusBacklog], status[bot.StatusAwaitingClient], status["Todo"], status["In review"]
+	inProgress := status["In progress"]
 	ws := crew.Workspaces[bot.WorkspaceClients]
 	repo := filepath.Join(root, bot.WorkspaceClients)
 	if ws.Path != repo || ws.Kind != client.WorkspaceKindGit {
@@ -113,8 +117,9 @@ func TestBotsAccounting(t *testing.T) {
 		}
 	}
 
-	// The bots start, Kai held back so what waits in Awaiting client stays there for a while; a
-	// watcher looks for a Task held while in Awaiting client, which must never be.
+	// The bots start, Kai held back so what waits in Backlog stays there for a while. A watcher
+	// looks for Tasks held while in a backlog Status: never in Backlog, and in Awaiting client only
+	// under a Claim that began before the Task was moved there (checked against the trail below).
 	rec := &botLog{t: t}
 	cfg := bot.Config{URL: url, Pace: bot.Fast, Report: rec.add}
 	runCtx, stopRunning := context.WithCancel(context.Background())
@@ -137,23 +142,29 @@ func TestBotsAccounting(t *testing.T) {
 		}
 		start(b)
 	}
-	var heldAwaiting []string
+	var heldBacklog []string
+	heldAwaiting := map[string]client.Task{} // by Claim id
 	polls := 0
 	wg.Go(func() {
-		name := awaiting.Name
 		for sleepCtx(runCtx, 100*time.Millisecond) {
-			res, err := admin.c.ListTasksWithResponse(runCtx, &client.ListTasksParams{Status: &name, Limit: ptr(500)})
-			if err != nil || res.JSON200 == nil {
-				continue
-			}
-			mu.Lock()
-			polls++
-			for _, tk := range res.JSON200.Items {
-				if tk.Claim != nil {
-					heldAwaiting = append(heldAwaiting, tk.Key+" held by "+tk.Claim.HolderID)
+			for _, s := range []client.Status{backlog, awaiting} {
+				res, err := admin.c.ListTasksWithResponse(runCtx, &client.ListTasksParams{Status: &s.Name, Limit: ptr(500)})
+				if err != nil || res.JSON200 == nil {
+					continue
 				}
+				mu.Lock()
+				polls++
+				for _, tk := range res.JSON200.Items {
+					switch {
+					case tk.Claim == nil:
+					case s.ID == backlog.ID:
+						heldBacklog = append(heldBacklog, tk.Key+" held by "+tk.Claim.HolderID)
+					default:
+						heldAwaiting[tk.Claim.ID] = tk
+					}
+				}
+				mu.Unlock()
 			}
-			mu.Unlock()
 		}
 	})
 	stopBots := sync.OnceFunc(func() {
@@ -214,18 +225,23 @@ func TestBotsAccounting(t *testing.T) {
 	if !strings.Contains(asked.Text, "aimed at "+bot.PersonaMai+": \"Statements for March are missing — ask Northwind?\"") {
 		t.Fatalf("the drafter asked %s", asked)
 	}
+	// Mai puts it to Northwind, Collect waiting in Awaiting client, and moves it back once answered.
+	if parked := rec.wait(15*time.Second, bot.PersonaMai, "moved", collect.Key); !strings.Contains(parked.Text,
+		"from "+inProgress.Name+" to "+awaiting.Name+" until "+question) {
+		t.Fatalf("Mai moved Collect: %s", parked)
+	}
 	rec.wait(15*time.Second, bot.PersonaMai, "completed", question)
 	rec.wait(15*time.Second, "drafter", "answered", collect.Key)
 	rec.wait(15*time.Second, "drafter", "completed", collect.Key)
 
-	// With Kai away, Reconcile (its blocker ended) and the asset register wait in Awaiting client:
-	// next offers neither to the drafter, who has the Skills both need, and neither is takeable.
+	// With Kai away, Reconcile (its blocker ended) and the asset register wait in Backlog: next
+	// offers neither to the drafter, who has the Skills both need, and neither is takeable.
 	time.Sleep(time.Duration(3*bot.Fast.Wait) * time.Second / 2)
 	drafter := dialAs(t, url, &member{name: "drafter", token: crew.Members["drafter"].Token, session: bot.NewSession()})
 	takeable := drafter.takeable()
 	for _, tk := range []client.Task{reconcile, assets} {
 		d := admin.task(tk.Key)
-		if d.Status.ID != awaiting.ID || d.Task.Blocked || slices.Contains(takeable, tk.Key) || len(d.Claims) != 0 {
+		if d.Status.ID != backlog.ID || d.Task.Blocked || slices.Contains(takeable, tk.Key) || len(d.Claims) != 0 {
 			t.Fatalf("with Kai away, %s is in %s, blocked %v, takeable by the drafter %v, with Claims %+v", tk.Key, d.Status.Name,
 				d.Task.Blocked, slices.Contains(takeable, tk.Key), d.Claims)
 		}
@@ -272,8 +288,8 @@ func TestBotsAccounting(t *testing.T) {
 			t.Errorf("%s ended with %v", name, err)
 		}
 	}
-	if polls < 10 || len(heldAwaiting) > 0 {
-		t.Errorf("the watcher polled Awaiting client %d times and saw holders: %v", polls, heldAwaiting)
+	if polls < 20 || len(heldBacklog) > 0 {
+		t.Errorf("the watcher polled the backlog Statuses %d times and saw holders in Backlog: %v", polls, heldBacklog)
 	}
 	mu.Unlock()
 
@@ -287,12 +303,25 @@ func TestBotsAccounting(t *testing.T) {
 	for _, s := range statuses {
 		kind[s.ID] = s.Kind
 	}
-	// A Handover naming a Status leaves the Task there, as a hand-back to Todo does.
-	handedTo := map[string]client.StatusKind{}
+	// A Status a Member names during a Claim, moving the Task (Mai's Awaiting client, and Todo once
+	// answered) or handing it over into it (a hand-back to Todo), is where the Task stays when the
+	// Claim ends, unless it is in progress and the Claim ends other than by that Handover.
+	type naming struct {
+		seq  int64
+		kind client.StatusKind
+	}
+	claimedAt, lastNamed := map[string]int64{}, map[string]naming{}
 	for _, en := range trail {
-		if en.Kind == client.ActivityKindTaskHandedOver {
-			s, _ := en.Payload["status_id"].(string)
-			handedTo[en.SubjectID] = kind[s]
+		switch en.Kind {
+		case client.ActivityKindTaskClaimed:
+			claimedAt[en.SubjectID] = en.Seq
+		case client.ActivityKindTaskStatusSet:
+			s, _ := en.Payload["to"].(string)
+			lastNamed[en.SubjectID] = naming{en.Seq, kind[s]}
+		case client.ActivityKindTaskHandedOver:
+			if s, _ := en.Payload["status_id"].(string); s != "" {
+				lastNamed[en.SubjectID] = naming{en.Seq, kind[s]}
+			}
 		}
 	}
 	for _, d := range tasks {
@@ -301,8 +330,11 @@ func TestBotsAccounting(t *testing.T) {
 			t.Errorf("%s is still held by %s after the tokens were revoked", d.Task.Key, d.Task.Claim.HolderID)
 		}
 		want := restingKind(d, cs, named[d.Task.ID])
-		if want == client.StatusKindInProgress && handedTo[d.Task.ID] != "" {
-			want = handedTo[d.Task.ID]
+		if n := lastNamed[d.Task.ID]; d.Task.State == client.TaskStateOpen && len(cs) > 0 && n.seq > claimedAt[d.Task.ID] {
+			want = n.kind
+			if last := cs[len(cs)-1].HowEnded; want == client.StatusKindInProgress && (last == nil || *last != client.ClaimEndHandedOver) {
+				want = client.StatusKindTodo
+			}
 		}
 		if d.Status.ID != d.Task.StatusID || d.Status.Kind != want {
 			t.Errorf("%s is %s, its last Claim ended %v, and it is in %s (%s); want a %s Status", d.Task.Key, d.Task.State, lastEnd(cs),
@@ -319,16 +351,50 @@ func TestBotsAccounting(t *testing.T) {
 	if sc := tr.of(client.ActivityKindStatusesChanged, ""); len(sc) != 1 || sc[0].Seq > tr.of(client.ActivityKindTaskFiled, "")[0].Seq {
 		t.Errorf("the Statuses changed %+v", sc)
 	}
-	// Reconcile and the asset register were filed into Awaiting client and moved out by Kai alone.
+	// Reconcile and the asset register were filed into Backlog and moved out by Kai alone.
 	for _, tk := range []client.Task{reconcile, assets} {
 		filed := tr.one(client.ActivityKindTaskFiled, tk.ID)
 		moves := tr.of(client.ActivityKindTaskStatusSet, tk.ID)
 		claims := tr.of(client.ActivityKindTaskClaimed, tk.ID)
-		if filed.Payload["status_id"] != awaiting.ID || len(moves) != 1 || *moves[0].ActorID != kai || moves[0].Payload["to"] != todo.ID ||
-			len(claims) == 0 || claims[0].Seq < moves[0].Seq {
+		if filed.Payload["status_id"] != backlog.ID || len(moves) != 1 || *moves[0].ActorID != kai || moves[0].Payload["from"] != backlog.ID ||
+			moves[0].Payload["to"] != todo.ID || len(claims) == 0 || claims[0].Seq < moves[0].Seq {
 			t.Errorf("%s: filed %+v, moved %+v, claimed %+v", tk.Key, filed, moves, claims)
 		}
 	}
+	// Only Mai moves a Task into Awaiting client, from In progress, and out of it, to Todo; nothing is
+	// filed there. Every Claim the watcher saw on a Task in Awaiting client began before the Task's
+	// move there.
+	parkedAt := map[string]int64{}
+	for _, en := range tr.of(client.ActivityKindTaskStatusSet, "") {
+		from, to := en.Payload["from"], en.Payload["to"]
+		if from != awaiting.ID && to != awaiting.ID {
+			continue
+		}
+		if *en.ActorID != mai || (to == awaiting.ID && from != inProgress.ID) || (from == awaiting.ID && to != todo.ID) {
+			t.Errorf("seq %d: %s moved from %v to %v by %s", en.Seq, en.SubjectID, from, to, *en.ActorID)
+		}
+		if _, ok := parkedAt[en.SubjectID]; !ok && to == awaiting.ID {
+			parkedAt[en.SubjectID] = en.Seq
+		}
+	}
+	for _, en := range tr.of(client.ActivityKindTaskFiled, "") {
+		if en.Payload["status_id"] == awaiting.ID {
+			t.Errorf("seq %d: %s filed into %s", en.Seq, en.SubjectID, awaiting.Name)
+		}
+	}
+	mu.Lock()
+	for claim, tk := range heldAwaiting {
+		var began int64
+		for _, en := range tr.of(client.ActivityKindTaskClaimed, tk.ID) {
+			if en.Payload["claim_id"] == claim {
+				began = en.Seq
+			}
+		}
+		if at, ok := parkedAt[tk.ID]; began == 0 || !ok || began > at {
+			t.Errorf("%s was held in %s under Claim %s, which did not begin before its move there", tk.Key, awaiting.Name, claim)
+		}
+	}
+	mu.Unlock()
 	// The question: filed aimed at Mai, blocking Collect in the same write, inside the drafter's one
 	// Claim on Collect; claimed by Mai alone; answered before Collect completed, which came before
 	// Reconcile's move.
@@ -350,12 +416,19 @@ func TestBotsAccounting(t *testing.T) {
 		t.Errorf("the question %s: Claims %+v, Notes %+v", q.Task.Key, q.Claims, q.Notes)
 	}
 	collectClaim, collectDone := tr.one(client.ActivityKindTaskClaimed, collect.ID), tr.one(client.ActivityKindTaskCompleted, collect.ID)
-	qDone := tr.one(client.ActivityKindTaskCompleted, q.Task.ID)
+	qClaim, qDone := tr.one(client.ActivityKindTaskClaimed, q.Task.ID), tr.one(client.ActivityKindTaskCompleted, q.Task.ID)
 	reconcileMoved := tr.one(client.ActivityKindTaskStatusSet, reconcile.ID)
 	if !(collectClaim.Seq < qFiled.Seq && qFiled.Seq < qDone.Seq && qDone.Seq < collectDone.Seq && collectDone.Seq < reconcileMoved.Seq) ||
 		collectDone.Payload["claim_id"] != collectClaim.Payload["claim_id"] {
 		t.Errorf("Collect claimed at %d, its question filed at %d and answered at %d, Collect completed at %d, Reconcile moved at %d",
 			collectClaim.Seq, qFiled.Seq, qDone.Seq, collectDone.Seq, reconcileMoved.Seq)
+	}
+	// Collect, held by the drafter all along, went to Awaiting client once Mai saw the question and
+	// back to Todo once she had the answer, both by her, before the question ended and unblocked it.
+	if moves := tr.of(client.ActivityKindTaskStatusSet, collect.ID); len(moves) != 2 ||
+		moves[0].Payload["to"] != awaiting.ID || moves[1].Payload["to"] != todo.ID ||
+		!(qFiled.Seq < moves[0].Seq && moves[0].Seq < qClaim.Seq && qClaim.Seq < moves[1].Seq && moves[1].Seq < qDone.Seq) {
+		t.Errorf("Collect moved %+v; its question filed at %d, claimed at %d and completed at %d", moves, qFiled.Seq, qClaim.Seq, qDone.Seq)
 	}
 	if cd := tasks[collect.ID]; len(cd.Observations) != 1 || cd.Observations[0].Outcome != client.DidntWork {
 		t.Errorf("Collect's Observations %+v", cd.Observations)
