@@ -68,6 +68,23 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 
 (Agents append here: anything the mock drew that `/v1` cannot give, and how it was resolved.)
 
+### Filters (2026-10-07)
+
+- **The bar is enably-v2's FilterBar, split in two** (`web/src/components/filters/`): the header's Filter button, beside Display, opens the Filters menu and shows a count while anything is set; `F` opens it too. The chips row renders under the header only while something is set, with Reset at its right. `filterState.ts` is enably's `use-filter-state` (the `field:op:v1,v2` wire format), `operators.ts` its operator rules, `FilterBar.tsx` the menu, the chips and the editors. `screens/board/filters.tsx` holds the Tasks' axes and the values each offers, read from the board's model; `derive.ts`'s `matches` says what a pill means for a Task, and the list and the board both filter through it in the browser.
+- **Left out of the port:** the hover flyout (its pointer-aim cone and grace timers were a third of enably's component), so the menu drills in by a click, or the arrows and Enter, as on touch. Also left out: day marks, money ranges, pinned and default-shown axes, page-supplied rows, custom editors, chips and summaries, saved views, permission gating, search-first value lists fetched from an endpoint, the text editor (Search is the only text axis), and the result count (the list's footer already says "3 Tasks · Filtered hidden (5)").
+- **Search is a pill**, `q:contains:<words>` in `?filter.tasks=`, not enably's own `?search=`, so the server's `filter` reads it with the rest. The Filters menu leads with its field, written as it is typed. enably also adds a field that narrows the axes past eight of them; it is left out where Search leads, since two fields in one menu read as one too many.
+- **One value reads "is" and several "is one of", in both directions.** Unticking down to one value goes back to `is`; enably kept `in` there. An axis without `nin` (Aimed at, Feature owner, Filed by, Kind) cannot say "is none of", so under "is not" a pick replaces the value instead of adding one.
+- **Statuses are grouped by kind with rules, not headings.** A heading over a lone Status of the same name ("Backlog" over Backlog) repeated it, and the glyph already says the kind. A group of values carries a heading only when it has a name of its own: Features are listed as the open ones by Rank, then "Shipped and dropped", since the board shows those Features' Tasks by default.
+- **A Status pill beats the Display.** "Status is Done" shows the Done Tasks even while Display hides Done. On the board, the Done and Dropped columns still collapse as the Display says.
+- **What each axis reads:**
+  - Held by reads the live Claim, so a done Task is held by Nobody even though its card shows who completed it.
+  - Aimed at reads `aimed_at_id` whether or not someone holds the Task.
+  - Kind's Question is a work Task aimed at a Member.
+  - Blocked counts only open Tasks, as the card's mark does.
+  - The Member values are the Organisation's active Members, the signed-in one first and marked Me, each named by id.
+- **Old links** of the form `?skill=<name>&holder=<name>&blocked=1` are rewritten into `filter.tasks` once the Skills and Members load, in one write that drops the old parameters. A name that matches nothing is dropped.
+- The address reads `filter.tasks=status%3Ain%3A…`: URLSearchParams percent-encodes the token's colons and commas, and each value is encoded once more inside the token. That is the wire format working as intended.
+
 ### W2 Board, W3 Task and Feature, W4 Inbox and Agents, W5 Admin (2026-10-07)
 
 - **Lapsed on a list row** has no field: `GET /v1/tasks` carries a Claim only while it is live and `how_ended` only in the Task detail. The Board derives the mark from one Activity read of the Team's latest 500 `task.claimed` / `task.lapsed` / `task.completed` entries joined with the stream; a lapse older than that window shows nothing. The Done card's avatar is the completer from the same read. A `last_claim_end` on the list record would replace it.
