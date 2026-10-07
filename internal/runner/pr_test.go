@@ -72,10 +72,12 @@ func TestRunnerPullRequestMode(t *testing.T) {
 	eventually(t, 20*time.Second, "WEB-3's review completed by its pull request", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
 	d := f.task("WEB-3")
 	last := d.Claims[len(d.Claims)-1]
-	if last.HolderID != f.ids["reviewer"] || !strings.Contains(notes(d), "Pull request #7 (https://github.com/acme/web/pull/7) was merged on GitHub") {
-		t.Fatalf("WEB-3's last Claim %+v, Notes:\n%s", last, notes(d))
+	if last.HolderID != f.ids["reviewer"] || !strings.Contains(notesOf(d), "Pull request #7 (https://github.com/acme/web/pull/7) was merged on GitHub") {
+		t.Fatalf("WEB-3's last Claim %+v, Notes:\n%s", last, notesOf(d))
 	}
-	eventually(t, 10*time.Second, "WEB-3's merge record", func() bool { return slices.Contains(evidenceNames(f.task("WEB-3").Evidence), "merge-WEB-3.txt") })
+	eventually(t, 10*time.Second, "WEB-3's merge Note", func() bool {
+		return strings.Contains(notesOf(f.task("WEB-3")), "web: WEB-3/cart-page lands through its pull request.")
+	})
 	if _, err := runGit(t.Context(), f.repo, "merge-base", "--is-ancestor", "WEB-3/cart-page", "feature/WEB-1"); err == nil {
 		t.Fatal("the runner merged a pull_request Workspace's branch itself")
 	}
@@ -85,12 +87,4 @@ func TestRunnerPullRequestMode(t *testing.T) {
 	if got := gh.opened()[0]; got != "main <- feature/WEB-1: WEB-1: Checkout" {
 		t.Fatalf("opened %q", got)
 	}
-}
-
-func notes(d client.TaskDetail) string {
-	var b strings.Builder
-	for _, n := range d.Notes {
-		b.WriteString(n.Body + "\n")
-	}
-	return b.String()
 }

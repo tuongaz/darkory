@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,24 +12,20 @@ import (
 	"github.com/tuongaz/darkory/internal/cli"
 )
 
-// darkory attach with one Task joins its session; with a file it attaches Evidence, as before.
-func TestAttachJoinsASessionOrAttachesEvidence(t *testing.T) {
-	for _, c := range []struct {
-		args []string
-		join bool
-	}{
-		{[]string{"WEB-12"}, true},
-		{[]string{"WEB-12", "--readonly"}, true},
-		{[]string{"--readonly", "WEB-12", "--data", "/srv/dk"}, true},
-		{[]string{"WEB-12", "report.txt"}, false},
-		{[]string{"WEB-12", "report.txt", "--name", "r.txt"}, false},
-		{[]string{"WEB-12", "--name", "r.txt", "report.txt"}, false},
-		{[]string{"WEB-1", "shot.png", "--feature"}, false},
-		{nil, false},
-	} {
-		if got := attachesSession(c.args); got != c.join {
-			t.Errorf("attachesSession(%q) = %v, want %v", c.args, got, c.join)
-		}
+// darkory join needs a Task, and says so when the Runner runs no session on it.
+func TestJoinNeedsASession(t *testing.T) {
+	var stderr bytes.Buffer
+	var ex *cli.ExitError
+	if err := run([]string{"join"}, &bytes.Buffer{}, &stderr); !errors.As(err, &ex) || ex.Code != cli.ExitUsage {
+		t.Fatalf("no Task: %v", err)
+	}
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	stderr.Reset()
+	if err := run([]string{"join", "WEB-12", "--data", t.TempDir()}, &bytes.Buffer{}, &stderr); !errors.As(err, &ex) || ex.Code != cli.ExitFailed ||
+		!strings.Contains(stderr.String(), "no session dk-WEB-12") {
+		t.Fatalf("no session: %v, %s", err, stderr.String())
 	}
 }
 

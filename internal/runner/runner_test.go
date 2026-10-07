@@ -235,6 +235,14 @@ func (f *fixture) feature(key string) client.FeatureDetail {
 	return d
 }
 
+func notesOf(d client.TaskDetail) string {
+	var b strings.Builder
+	for _, n := range d.Notes {
+		b.WriteString(n.Body + "\n")
+	}
+	return b.String()
+}
+
 func evidenceNames(list []client.Evidence) []string {
 	var names []string
 	for _, e := range list {
@@ -289,7 +297,7 @@ func TestRunnerWorksAFeature(t *testing.T) {
 			return slices.ContainsFunc(list.Items, func(x client.Task) bool { return x.Key == "WEB-3" && x.State == client.TaskStateDone })
 		})
 		eventually(t, 10*time.Second, "the merge of WEB-3", func() bool {
-			return slices.Contains(evidenceNames(f.task("WEB-3").Evidence), "merge-WEB-3.txt")
+			return strings.Contains(notesOf(f.task("WEB-3")), "Merged WEB-3/cart-page into feature/WEB-1 at ")
 		})
 		eventually(t, 10*time.Second, "the sessions to end", func() bool { return len(r.Running()) == 0 })
 		ctx := t.Context()
@@ -308,7 +316,7 @@ func TestRunnerWorksAFeature(t *testing.T) {
 		names := evidenceNames(web3.Evidence)
 		feature := f.feature("WEB-1")
 		fnames := evidenceNames(feature.Evidence)
-		for _, want := range []string{"test-WEB-3.log", "merge-WEB-3.txt"} {
+		for _, want := range []string{"test-WEB-3.log"} {
 			if !slices.Contains(names, want) {
 				t.Errorf("WEB-3's Evidence %v lacks %s", names, want)
 			}

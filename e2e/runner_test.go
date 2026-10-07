@@ -288,13 +288,13 @@ func TestRunnerWorksAFeature(t *testing.T) {
 	}
 	ri.wait(60*time.Second, "MAIN-3 and MAIN-4 done", func() bool { return done(ri.task("MAIN-3")) && done(ri.task("MAIN-4")) })
 	for _, key := range []string{"MAIN-3", "MAIN-4"} {
-		ri.wait(15*time.Second, key+"'s merge recorded", func() bool { return ri.evidence(key, "merge-"+key+".txt") != "" })
+		ri.wait(15*time.Second, key+"'s merge noted", func() bool { return strings.Contains(notes(ri.task(key)), "Merged "+key+"/") })
 		d := ri.task(key)
 		if got := repoGit(t, ri.repo, "show", "feature/MAIN-1:fakeagent-"+key+".txt"); !strings.Contains(got, key+" worked by fakeagent") {
 			t.Fatalf("feature/MAIN-1 holds %q for %s", got, key)
 		}
-		if merged := ri.evidence(key, "merge-"+key+".txt"); !strings.Contains(merged, "Merged "+key+"/") || !strings.Contains(merged, "into feature/MAIN-1 at") {
-			t.Errorf("%s's merge record: %q", key, merged)
+		if merged := notes(d); !strings.Contains(merged, "into feature/MAIN-1 at") {
+			t.Errorf("%s's merge Note:\n%s", key, merged)
 		}
 		if !strings.Contains(notes(d), "fakeagent: built; please review") || !strings.Contains(notes(d), "fakeagent: done") || !slices.Contains(names(d.Evidence), "test-"+key+".log") {
 			t.Errorf("%s: Notes\n%sEvidence %v", key, notes(d), names(d.Evidence))
@@ -424,9 +424,9 @@ func TestRunnerQuickAndShipWhenDone(t *testing.T) {
 	ada := ri.ada
 	ada.ok("feature", "create", "--team", "MAIN", "--title", "Fix the typo", "--quick", "--skill", "engineer")
 	ri.wait(30*time.Second, "the quick Feature shipped", func() bool { return ri.feature("MAIN-1").Feature.State == client.FeatureStateShipped })
-	ri.wait(15*time.Second, "MAIN-2's merge recorded", func() bool { return ri.evidence("MAIN-2", "merge-MAIN-2.txt") != "" })
-	if got := ri.evidence("MAIN-2", "merge-MAIN-2.txt"); !strings.Contains(got, "into main at") {
-		t.Fatalf("the quick merge: %q", got)
+	ri.wait(15*time.Second, "MAIN-2's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-2")), "Merged MAIN-2/") })
+	if got := notes(ri.task("MAIN-2")); !strings.Contains(got, "into main at") {
+		t.Fatalf("the quick merge's Note:\n%s", got)
 	}
 	if b, err := os.ReadFile(filepath.Join(ri.repo, "fakeagent-MAIN-2.txt")); err != nil || !strings.Contains(string(b), "MAIN-2") {
 		t.Fatalf("main's checkout after the quick Feature: %q, %v", b, err)
@@ -478,10 +478,9 @@ func TestRunnerMergeConflict(t *testing.T) {
 	if skill.Skill.Name != "engineer" {
 		t.Fatalf("the resolving Task needs %s", skill.Skill.Name)
 	}
-	ri.wait(15*time.Second, key+"'s merge record", func() bool { return ri.evidence(key, "merge-"+key+".txt") != "" })
-	if got := ri.evidence(key, "merge-"+key+".txt"); !strings.Contains(got, "conflicted, so nothing was merged") {
-		t.Fatalf("%s's merge record: %q", key, got)
-	}
+	ri.wait(15*time.Second, key+"'s conflict noted", func() bool {
+		return strings.Contains(notes(ri.task(key)), "into feature/MAIN-1 conflicted, so nothing was merged")
+	})
 	if gitOK(ri.repo, "merge-base", "--is-ancestor", conflicted, "feature/MAIN-1") {
 		t.Fatalf("%s went into feature/MAIN-1 despite the conflict", conflicted)
 	}
@@ -492,8 +491,8 @@ func TestRunnerMergeConflict(t *testing.T) {
 func TestRunnerAlone(t *testing.T) {
 	ri := newRunnerInstall(t, nil, "--agents=off")
 	ada := ri.ada
-	if res := ada.run("sessions"); res.code == 0 || !strings.Contains(res.stderr, "no_runner") {
-		t.Fatalf("sessions on a server with no Runner: exit %d\n%s", res.code, res.stderr)
+	if out := ada.ok("sessions"); !strings.Contains(out, "No Runner is attached to this server") {
+		t.Fatalf("sessions on a server with no Runner:\n%s", out)
 	}
 	log := &logBuffer{}
 	cmd := exec.Command(bin, "agents", "--data", ri.dir)
@@ -516,7 +515,7 @@ func TestRunnerAlone(t *testing.T) {
 	})
 	ada.ok("feature", "create", "--team", "MAIN", "--title", "Fix the typo", "--quick", "--skill", "engineer")
 	ri.wait(30*time.Second, "the quick Feature shipped and merged", func() bool {
-		return ri.feature("MAIN-1").Feature.State == client.FeatureStateShipped && ri.evidence("MAIN-2", "merge-MAIN-2.txt") != ""
+		return ri.feature("MAIN-1").Feature.State == client.FeatureStateShipped && strings.Contains(notes(ri.task("MAIN-2")), "Merged MAIN-2/")
 	})
 	if _, err := os.Stat(filepath.Join(ri.repo, "fakeagent-MAIN-2.txt")); err != nil {
 		t.Fatalf("main lacks MAIN-2's work: %v", err)

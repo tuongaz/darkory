@@ -50,7 +50,7 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 
 ## Web
 
-- **Session panel** on the Task peek and page when a runner session exists: host, started, state, `darkory attach WEB-12`, and the **terminal** (xterm.js over the WebSocket; read-only unless admin). A Note "tuongaz joined the session" when a client attaches.
+- **Session panel** on the Task peek and page when a runner session exists: host, started, state, `darkory join WEB-12`, and the **terminal** (xterm.js over the WebSocket; read-only unless admin). A Note "tuongaz joined the session" when a client attaches.
 - **Agents page:** session column (running since, View), Pause/Resume per agent (admins), New agent → the Member dialog gains the agent settings.
 - **Admin → Workspaces** (list, add with path and mode, Team defaults) and the agent settings on the Member page (command, model, paused, unattended).
 - **File Feature:** Quick and Ship-when-done switches; **File Task:** Workspaces (multi-select, default the Team's). The Feature page shows the feature branch and the merge Activity; a Task shows its branch and merge state.
@@ -100,9 +100,9 @@ Allowlist permissions (B/C), workers on other machines (the terminal relay and t
 
 ### R1
 
-- **A Note needs the Claim**, so the runner cannot write "Merged WEB-12/cart-page into feature/WEB-1 at …" on a Task whose review has just completed it, nor on a shipped Feature. Merges are recorded as Evidence (`merge-<KEY>.txt`) until the record lets a Member of the Feature's Team write a Note on a Task nobody holds; the plan's `task.merged`, `task.merge_conflict`, `feature.branch_created` and `feature.merged` Activity kinds were not built, as the lead asked.
+- **A Note needed the Claim**, so the runner could not note "Merged WEB-12/cart-page into feature/WEB-1 at …" on a Task whose review had just completed it; R0 opened Notes on a Task nobody holds to its Feature's Team and owner, and the runner notes merges and conflicts there. A Ship's merge goes on the Feature as Evidence (`merge-<KEY>.txt`). The plan's `task.merged`, `task.merge_conflict`, `feature.branch_created` and `feature.merged` Activity kinds were not built, as the lead asked.
 - **`darkory mcp` heartbeats its own Session's Claims.** In the session's MCP configuration it would keep a hung session's Claim alive for as long as the process lives, and D8's gate would gate nothing; the runner's configuration runs `darkory mcp --no-heartbeat`.
-- **`darkory attach <task> <file>` already attached Evidence.** The session's attach is the same command with one argument.
+- **`darkory attach <task> <file>` already attached Evidence**, so joining a session is `darkory join <task>` (the lead's call).
 - **Evidence after a Handover races the next holder.** The reviewer's runner claims within a second of the builder's Handover, and Evidence on a held Task is the holder's alone; the builder's session log then goes on the Feature, named for the Task.
 - **Interactive Claude Code waits for a first message**, and the default arguments R0 stores carry none: the runner appends "Work on Task WEB-12: …" when no argument names `{task}`.
 - **Claude Code 2.1 appends bookkeeping after its last message** (`ai-title`, `cost-state`, `last-prompt`, attachments), so "the transcript's last record" is the last user or assistant message of the main conversation. Its project directory is the working directory's real path with every character but letters and digits made `-` (checked against this machine's `~/.claude/projects`).

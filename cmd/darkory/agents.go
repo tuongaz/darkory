@@ -100,37 +100,20 @@ func or(v, def string) string {
 	return def
 }
 
-const attachUsage = `Usage: darkory attach <task> [--readonly] [--data dir]
+const joinUsage = `Usage: darkory join <task> [--readonly] [--data dir]
 
 Joins the tmux session the Runner runs for a Task (dk-<TASK>), on the Runner's own tmux server
 for the Install in the data directory. --readonly watches without typing. Detach with the tmux
-prefix and d. (darkory attach <task> <file> attaches Evidence instead.)
+prefix and d.
 
 `
 
-// attachesSession says whether `darkory attach` args join a session — one Task and no file —
-// rather than attach Evidence.
-func attachesSession(args []string) bool {
-	n := 0
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case a == "--name" || a == "--type" || a == "--data" || a == "-name" || a == "-type" || a == "-data":
-			i++ // the flag's value
-		case strings.HasPrefix(a, "-"):
-		default:
-			n++
-		}
-	}
-	return n == 1
-}
-
-// attachSession is `darkory attach <task>`: tmux attach to the Task's session.
-func attachSession(args []string, stderr io.Writer) error {
-	fs := flag.NewFlagSet("attach", flag.ContinueOnError)
+// joinSession is `darkory join <task>`: tmux attach to the Task's session.
+func joinSession(args []string, stderr io.Writer) error {
+	fs := flag.NewFlagSet("join", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		fmt.Fprint(stderr, attachUsage)
+		fmt.Fprint(stderr, joinUsage)
 		fs.PrintDefaults()
 	}
 	readonly := fs.Bool("readonly", false, "watch without typing")
@@ -154,12 +137,12 @@ func attachSession(args []string, stderr io.Writer) error {
 	}
 	tmux, err := exec.LookPath("tmux")
 	if err != nil {
-		return errors.New("darkory attach needs tmux, and it is not on the PATH; the session's log is in <data>/sessions/<task>/pane.log")
+		return errors.New("darkory join needs tmux, and it is not on the PATH; the session's log is in <data>/sessions/<task>/pane.log")
 	}
 	socket := runner.TmuxSocket(*data)
 	name := runner.TmuxName(strings.ToUpper(task))
 	if out, err := exec.Command(tmux, "-L", socket, "has-session", "-t", "="+name).CombinedOutput(); err != nil {
-		fmt.Fprintf(stderr, "darkory attach: no session %s on the Runner's tmux server for %s (%s)\n", name, *data, strings.TrimSpace(string(out)))
+		fmt.Fprintf(stderr, "darkory join: no session %s on the Runner's tmux server for %s (%s)\n", name, *data, strings.TrimSpace(string(out)))
 		return &cli.ExitError{Code: cli.ExitFailed}
 	}
 	argv := []string{"-L", socket, "attach-session", "-t", "=" + name}

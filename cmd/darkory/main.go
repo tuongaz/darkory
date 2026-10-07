@@ -46,7 +46,7 @@ Usage:
   darkory mcp                                                          serve the agent operations to an MCP client over stdio
   darkory agents [--data dir] [--url url] [--token-dir dir] [--member name]…
                                                                        run the Runner alone: agent sessions for the agents' tokens
-  darkory attach <task> [--readonly] [--data dir]                      join the tmux session the Runner runs for a Task
+  darkory join <task> [--readonly] [--data dir]                        join the tmux session the Runner runs for a Task
   darkory update [--check] [--version v]                               replace this binary with a newer release
   darkory version                                                      print the version
 ` + cli.Usage()
@@ -85,11 +85,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runMCP(args[1:], stderr)
 	case "agents":
 		return runAgents(args[1:], stderr)
-	case "attach":
-		// One Task and no file joins its session; with a file it is the Evidence command.
-		if attachesSession(args[1:]) {
-			return attachSession(args[1:], stderr)
-		}
+	case "join":
+		return joinSession(args[1:], stderr)
 	}
 	if cli.Handles(args) {
 		return runCLI(args, stdout, stderr)
