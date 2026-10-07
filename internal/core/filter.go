@@ -79,8 +79,6 @@ type sqlQuery struct {
 	args  []any
 	now   time.Time
 	nowAt string
-	// sessions are the ids of the Tasks a Runner beside the server runs a session for now.
-	sessions []string
 }
 
 // arg binds v and returns its placeholder.
@@ -166,23 +164,17 @@ func liveClaim(q *sqlQuery) string {
 	return "(t.claim_holder_id IS NOT NULL AND (t.claim_expires_at IS NULL OR t.claim_expires_at > " + q.nowArg() + "))"
 }
 
-// lapsedSince holds when a Claim of the Task t lapsed at or after cut: the lapse recorded (the
-// Claim ended lapsed, at its expiry) or not yet (the Task's Claim still current, its expiry
-// passed).
+// lapsedSince holds when the open Task t has no live Claim and its latest Claim lapsed after
+// cut: the lapse recorded (the Claim ended lapsed, the Task freed) or not yet (the Task's Claim
+// still current, its expiry passed).
 func lapsedSince(q *sqlQuery, cut time.Time) string {
 	c := q.arg(ms(cut))
-	return `((t.claim_holder_id IS NOT NULL AND t.claim_expires_at IS NOT NULL
-	AND t.claim_expires_at <= ` + q.nowArg() + ` AND t.claim_expires_at >= ` + c + `)
-OR EXISTS (SELECT 1 FROM claims xl WHERE xl.org_id = t.org_id AND xl.task_id = t.id
-	AND xl.how_ended = 'lapsed' AND xl.ended_at >= ` + c + `))`
-}
-
-// inSession holds when a Runner beside the server runs a session for the Task t now.
-func inSession(q *sqlQuery) string {
-	if len(q.sessions) == 0 {
-		return "1 = 0"
-	}
-	return "t.id IN (" + q.list(q.sessions) + ")"
+	return `(t.state = 'open' AND ((t.claim_holder_id IS NOT NULL AND t.claim_expires_at IS NOT NULL
+	AND t.claim_expires_at <= ` + q.nowArg() + ` AND t.claim_expires_at > ` + c + `)
+OR (t.claim_holder_id IS NULL AND EXISTS (SELECT 1 FROM claims xl WHERE xl.org_id = t.org_id AND xl.task_id = t.id
+	AND xl.how_ended = 'lapsed' AND xl.ended_at > ` + c + `
+	AND NOT EXISTS (SELECT 1 FROM claims xn WHERE xn.org_id = t.org_id AND xn.task_id = t.id
+		AND (xn.started_at > xl.started_at OR (xn.started_at = xl.started_at AND xn.id > xl.id)))))))`
 }
 
 // taskFields are the fields listTasks filters by, over a Task t and its Feature f.
@@ -217,12 +209,15 @@ var taskFields = fieldMap(
 		word{"work", fixed("(t.kind = 'work' AND t.aimed_at_id IS NULL)")},
 		word{"breakdown", fixed("t.kind = 'breakdown'")},
 		word{"retrospective", fixed("t.kind = 'retrospective'")},
-		word{"question", fixed("(t.kind = 'work' AND t.aimed_at_id IS NOT NULL)")}),
+		word{"question", fixed("t.aimed_at_id IS NOT NULL")}),
 	enum("claim",
 		word{"held", liveClaim},
 		word{"unheld", func(q *sqlQuery) string { return "NOT " + liveClaim(q) }},
 		word{"lapsed", func(q *sqlQuery) string { return lapsedSince(q, q.now.Add(-24*time.Hour)) }},
-		word{"session", inSession}),
+		word{"session", func(q *sqlQuery) string {
+			return "(" + liveClaim(q) + ` AND t.claim_expires_at IS NOT NULL
+	AND EXISTS (SELECT 1 FROM members xm WHERE xm.org_id = t.org_id AND xm.id = t.claim_holder_id AND xm.kind = 'agent'))`
+		}}),
 	filterField{name: "workspace", kind: idField, match: func(q *sqlQuery, vals []string) string {
 		return `EXISTS (SELECT 1 FROM task_workspaces xw WHERE xw.org_id = t.org_id AND xw.task_id = t.id
 	AND xw.workspace_id IN (` + q.list(vals) + "))"
@@ -232,8 +227,11 @@ var taskFields = fieldMap(
 	AND xc.model_label IN (` + q.list(vals) + ")))"
 	}},
 	filterField{name: "filed_at", kind: dateField, cols: []string{"t.created_at"}},
+	// The latest Activity about the Task: Heartbeats and Darkory's own Status moves write none.
+	filterField{name: "updated_at", kind: dateField, cols: []string{
+		"COALESCE((SELECT MAX(xa.at) FROM activity xa WHERE xa.org_id = t.org_id AND xa.subject_id = t.id), t.created_at)"}},
 	filterField{name: "completed_at", kind: dateField, cols: []string{"CASE WHEN t.state = 'done' THEN t.ended_at END"}},
-	filterField{name: "q", kind: textField, cols: []string{"t.display_key", "t.title"}},
+	filterField{name: "q", kind: textField, cols: []string{"t.display_key", "t.title", "t.description"}},
 )
 
 // kindWord matches the kind of the Task t's Status.
@@ -252,7 +250,7 @@ var featureFields = fieldMap(
 	boolean("ship_when_done", fixed("f.ship_when_done = TRUE")),
 	filterField{name: "filed_at", kind: dateField, cols: []string{"f.created_at"}},
 	filterField{name: "ended_at", kind: dateField, cols: []string{"f.ended_at"}},
-	filterField{name: "q", kind: textField, cols: []string{"f.display_key", "f.title"}},
+	filterField{name: "q", kind: textField, cols: []string{"f.display_key", "f.title", "f.description"}},
 )
 
 // fieldSet is a list's fields, by name, with their names in order for messages.
@@ -344,7 +342,7 @@ func checkValue(f filterField, op, v string) *Error {
 				return refuse(CodeInvalid, "last takes 7d, 30d or 90d, not %q", v)
 			}
 		} else if _, err := time.Parse(time.RFC3339, v); err != nil {
-			return refuse(CodeInvalid, "%q is not an RFC 3339 time with its offset, such as 2026-10-07T09:00:00.000+11:00", v)
+			return refuse(CodeInvalid, "%q is not an RFC 3339 time with its offset, such as 2026-10-07T09:00:00+11:00", v)
 		}
 	}
 	return nil

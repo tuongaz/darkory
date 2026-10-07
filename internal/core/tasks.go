@@ -160,13 +160,10 @@ func (s *Service) GetTask(ctx context.Context, c *auth.Caller, ref string) (Task
 	return getTaskDetail(ctx, s.store, c.OrgID, id, s.clock.Now())
 }
 
-// TaskFilter narrows ListTasks; nil fields do not. Filters are `filter` tokens (filter.go);
-// SessionTasks are the ids of the Tasks a Runner beside the server runs a session for now, which
-// `claim:is:session` matches.
+// TaskFilter narrows ListTasks; nil fields do not. Filters are `filter` tokens (filter.go).
 type TaskFilter struct {
 	Feature, Team, State, Skill, AimedAt, Holder, Status *string
 	Filters                                              []string
-	SessionTasks                                         []string
 	Limit                                                int
 	Cursor                                               string
 }
@@ -183,7 +180,7 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 	}
 	limit := limitOf(tf.Limit)
 	now := s.clock.Now()
-	q := &sqlQuery{now: now, sessions: tf.SessionTasks}
+	q := &sqlQuery{now: now}
 	q.and("t.org_id = " + q.arg(c.OrgID))
 	refs := []struct {
 		ref     *string

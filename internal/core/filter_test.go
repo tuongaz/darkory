@@ -37,9 +37,9 @@ func sortedKeys(ks ...string) []string {
 }
 
 // Every Task field of the filter grammar, with at least one operator each, on both engines:
-// refs by id, words, booleans, dates given with offsets and milliseconds and as `last`,
-// holder:is:none, q over key and title, and negations that keep the Tasks with no value for the
-// field. Several tokens AND, and they compose with ListTasks' other parameters.
+// refs by id, words, booleans, dates given with offsets and as `last`, holder:is:none, q, and
+// negations that keep the Tasks with no value for the field. Several tokens AND, and they compose
+// with ListTasks' other parameters.
 func TestTaskFilters(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -68,8 +68,8 @@ func TestTaskFilters(t *testing.T) {
 
 		// 09:00Z: Checkout (WEB-1, its Break down WEB-2) and the cart page, in a Workspace.
 		checkout := f.feature(lead, "WEB", "Checkout").Feature.ID
-		cart, err := f.svc.FileTask(ctx, lead, core.NewTask{Feature: &checkout, Title: "Cart page: totals, with 100% of the tax_rate",
-			Skill: ptrStr("build"), Description: "Uses Stripe", Workspaces: &[]string{ws.ID}}, core.Idem{})
+		cart, err := f.svc.FileTask(ctx, lead, core.NewTask{Feature: &checkout, Title: "Cart page", Skill: ptrStr("build"),
+			Description: "Totals, with 100% of the tax_rate", Workspaces: &[]string{ws.ID}}, core.Idem{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,9 +154,8 @@ func TestTaskFilters(t *testing.T) {
 			{[]string{"kind:nin:work,breakdown"}, sortedKeys("WEB-8")},
 			{[]string{"claim:is:held"}, sortedKeys("WEB-3", "WEB-4")},
 			{[]string{"claim:is:unheld"}, unheld},
-			// No Runner runs a session here (TaskFilter.SessionTasks is empty).
-			{[]string{"claim:is:session"}, sortedKeys()},
-			{[]string{"claim:not:session"}, all},
+			// The builder is an agent and claimed with a Heartbeat timeout; ada is human and did not.
+			{[]string{"claim:is:session"}, sortedKeys("WEB-3")},
 			{[]string{"claim:is:lapsed"}, sortedKeys("OPS-3")},
 			{[]string{"claim:in:held,lapsed"}, sortedKeys("WEB-3", "WEB-4", "OPS-3")},
 			{[]string{"workspace:is:" + ws.ID}, sortedKeys("WEB-3")},
@@ -173,20 +172,19 @@ func TestTaskFilters(t *testing.T) {
 			{[]string{"filed_at:gte:2026-10-06T10:00:00Z"}, except("WEB-2", "WEB-3")},
 			{[]string{"filed_at:lte:2026-10-06T10:00:00Z"}, sortedKeys("WEB-2", "WEB-3", "WEB-4", "WEB-5", "WEB-6", "WEB-7")},
 			{[]string{"filed_at:btw:2026-10-06T09:30:00Z,2026-10-06T10:00:00Z"}, sortedKeys("WEB-4", "WEB-5", "WEB-6", "WEB-7")},
+			{[]string{"filed_at:last:7d"}, all},
 			// Milliseconds, and a day picked in the browser at +11:00 sent as its local bounds.
 			{[]string{"filed_at:lte:2026-10-06T09:59:59.999Z"}, sortedKeys("WEB-2", "WEB-3")},
-			{[]string{"filed_at:btw:2026-10-06T20:00:00.000%2B11:00,2026-10-06T21:00:00.000%2B11:00"}, except("WEB-8", "OPS-2", "OPS-3")},
 			{[]string{"filed_at:btw:2026-10-06T00:00:00.000%2B11:00,2026-10-06T23:59:59.999%2B11:00"}, all},
 			{[]string{"filed_at:btw:2026-10-07T00:00:00.000%2B11:00,2026-10-07T23:59:59.999%2B11:00"}, sortedKeys()},
-			{[]string{"filed_at:last:7d"}, all},
+			{[]string{"updated_at:after:2026-10-06T11:01:00Z"}, sortedKeys("WEB-3")},
+			{[]string{"updated_at:before:2026-10-06T10:30:00Z"}, sortedKeys("WEB-2", "WEB-5")},
 			{[]string{"completed_at:gte:2026-10-06T00:00:00Z"}, sortedKeys("WEB-6")},
 			{[]string{"completed_at:last:7d"}, sortedKeys("WEB-6")},
 			{[]string{"q:contains:cart"}, sortedKeys("WEB-3")},
 			{[]string{"q:contains:CART%20PAGE"}, sortedKeys("WEB-3")},
 			{[]string{"q:contains:ops-3"}, sortedKeys("OPS-3")},
 			{[]string{"q:contains:totals%2C%20with"}, sortedKeys("WEB-3")},
-			// Not the description.
-			{[]string{"q:contains:stripe"}, sortedKeys()},
 			// LIKE's wildcards in a value match themselves.
 			{[]string{"q:contains:100%25"}, sortedKeys("WEB-3")},
 			{[]string{"q:contains:_"}, sortedKeys("WEB-3")},
@@ -207,20 +205,11 @@ func TestTaskFilters(t *testing.T) {
 		if got := f.filterKeys(core.TaskFilter{Team: ptrStr("WEB"), Filters: []string{"claim:is:lapsed"}}); len(got) != 0 {
 			t.Errorf("WEB and lapsed: %v", got)
 		}
-		// claim:is:session matches the Tasks the server's Runner says it runs a session for.
-		session := core.TaskFilter{Filters: []string{"claim:is:session"}, SessionTasks: []string{cart.Task.ID, invoice.ID}}
-		if got := f.filterKeys(session); !slices.Equal(got, sortedKeys("WEB-3", "OPS-3")) {
-			t.Errorf("in a session: %v", got)
-		}
-		session.Filters = []string{"claim:nin:session,held"}
-		if got := f.filterKeys(session); !slices.Equal(got, except("WEB-3", "WEB-4", "OPS-3")) {
-			t.Errorf("in no session and unheld: %v", got)
-		}
 		if got := f.filterKeys(core.TaskFilter{State: ptrStr("open"), Holder: ptrStr("builder"), Filters: []string{"blocked:is:false"}}); !slices.Equal(got, sortedKeys("WEB-3")) {
 			t.Errorf("held by the builder, open, not blocked: %v", got)
 		}
 
-		// A recorded lapse is a lapse too, and stays one for 24 hours whatever comes after.
+		// A recorded lapse is a lapse too; a later Claim, even one since released, is not.
 		if n, err := f.svc.Sweep(ctx); err != nil || n != 1 {
 			t.Fatalf("sweep: %d %v", n, err)
 		}
@@ -234,17 +223,18 @@ func TestTaskFilters(t *testing.T) {
 			t.Errorf("23 hours on: %v", got)
 		}
 		f.claim(opsy, invoice.Key, noTimeout)
-		if got := f.filterKeys(lapsed); !slices.Equal(got, sortedKeys("OPS-3", "WEB-3")) {
+		if got := f.filterKeys(lapsed); !slices.Equal(got, sortedKeys("WEB-3")) {
 			t.Errorf("claimed again: %v", got)
 		}
 		if _, err := f.svc.Release(ctx, opsy, invoice.Key, nil, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		if got := f.filterKeys(lapsed); !slices.Equal(got, sortedKeys("OPS-3", "WEB-3")) {
+		if got := f.filterKeys(lapsed); !slices.Equal(got, sortedKeys("WEB-3")) {
 			t.Errorf("claimed again and released: %v", got)
 		}
 
-		// A day later both lapses are more than 24 hours old: neither held nor lapsed.
+		// A day later the cart's lapse is more than 24 hours old: neither held nor lapsed within
+		// the day.
 		f.clock.Advance(26 * time.Hour)
 		if got := f.filterKeys(core.TaskFilter{Filters: []string{"claim:in:held,lapsed,session"}}); !slices.Equal(got, sortedKeys("WEB-4")) {
 			t.Errorf("a day on: %v", got)
@@ -256,6 +246,9 @@ func TestTaskFilters(t *testing.T) {
 		}
 		if got := f.filterKeys(core.TaskFilter{Filters: []string{"filed_at:last:30d"}}); !slices.Equal(got, all) {
 			t.Errorf("filed in the last 30 days: %v", got)
+		}
+		if got := f.filterKeys(core.TaskFilter{Filters: []string{"updated_at:last:7d"}}); len(got) != 0 {
+			t.Errorf("updated in the last 7 days, 8 days on: %v", got)
 		}
 	})
 }
@@ -362,7 +355,6 @@ func TestFiltersRefused(t *testing.T) {
 		"kind:is:retro",
 		"claim:is:lapsed_24h",
 		"claim:is:live_session",
-		"updated_at:last:7d",
 		"filed_at:before:2026-10-06",
 		"filed_at:before:2026-10-06T10:00:00",
 		"filed_at:before:yesterday",
