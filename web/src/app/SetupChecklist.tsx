@@ -1,25 +1,27 @@
 import { CheckIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { useMembers, useTeams } from "@/api/queries";
+import { useMembers, useProjects } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
+import { useCurrentProject } from "./currentProject";
 import { sendIntent } from "./intents";
 import { Content, TopBar } from "./TopBar";
 
 /**
- * The three steps that set up an Install (F-B5), shown in the Inbox until something is filed: with
- * no Feature in the Organisation there are no Tasks, so the Inbox would be empty.
+ * The three steps that set up an Install, shown in the Inbox until the Organisation has a Task:
+ * with none, the Inbox would be empty. A fresh `init` makes MAIN, so step 1 is usually done.
  */
 export function SetupChecklist() {
   const me = useCurrentMe();
-  const teams = useTeams();
+  const projects = useProjects();
   const members = useMembers();
-  const hasTeam = (teams.data?.length ?? 0) > 0;
+  const project = useCurrentProject();
+  const hasProject = (projects.data?.length ?? 0) > 0;
   const hasMembers = (members.data?.length ?? 0) > 1;
   const admin = me.member.admin;
-  const next = !hasTeam ? 1 : !hasMembers ? 2 : 3;
+  const next = !hasProject ? 1 : !hasMembers ? 2 : 3;
   return (
     <>
       <TopBar crumbs={[{ label: "Inbox" }]} />
@@ -35,31 +37,31 @@ export function SetupChecklist() {
             <p className="text-muted-foreground">Three steps, then agents can pull work.</p>
           </div>
           <ol className="flex flex-col">
-            <Step n={1} done={hasTeam} title="Create a Team" help="Its key prefixes every Feature and Task: WEB-1.">
+            <Step n={1} done={hasProject} title="Create a Project" help="Its key starts every Task key: MAIN-1. It comes with a Workflow.">
               {admin && (
-                <StepButton enabled primary={next === 1} to="/admin/teams?new=1">
-                  Create Team
-                </StepButton>
+                <Button variant={next === 1 ? "default" : "outline"} onClick={() => sendIntent({ kind: "new-project" })}>
+                  Create Project
+                </Button>
               )}
             </Step>
-            <Step n={2} done={hasMembers} title="Add Members" help="Humans sign in by link; agents get a token.">
+            <Step n={2} done={hasMembers} title="Add a Member" help="Humans sign in by link; agents get a token.">
               {admin && (
-                <StepButton enabled={hasTeam} primary={next === 2} to="/admin/members?new=1">
+                <StepButton enabled={hasProject} primary={next === 2} to="/settings/organisation/members?new=1">
                   Add Member
                 </StepButton>
               )}
             </Step>
-            <Step n={3} done={false} title="File a Feature" help="Also files its Break down Task.">
+            <Step n={3} done={false} title="File a Task" help="It waits at its Project's first work Step for a Member with that Skill.">
               <Button
                 variant={next === 3 ? "default" : "outline"}
                 disabled={next !== 3}
-                onClick={() => sendIntent({ kind: "file-feature", team: me.teams[0]?.key ?? teams.data?.[0]?.key })}
+                onClick={() => sendIntent({ kind: "file-task", project: project?.key })}
               >
-                File Feature
+                File Task
               </Button>
             </Step>
           </ol>
-          {!admin && next < 3 && <p className="text-xs text-muted-foreground">An admin creates Teams and Members.</p>}
+          {!admin && next < 3 && <p className="text-xs text-muted-foreground">An admin creates Projects and Members.</p>}
         </section>
       </Content>
     </>

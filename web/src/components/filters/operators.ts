@@ -26,9 +26,9 @@ export type FilterField = {
 export type FilterOption = {
   value: string;
   label: string;
-  /** A StatusGlyph or a MemberAvatar, drawn before the label in the checklist and on the chip. */
+  /** A WorkGlyph or a MemberAvatar, drawn before the label in the checklist and on the chip. */
   icon?: ReactNode;
-  /** A second identifier after the label, such as a Feature's key. */
+  /** A second identifier after the label, such as a Task's key. */
   sublabel?: string;
   /** Muted words at the end of the row, such as "Me". */
   hint?: string;

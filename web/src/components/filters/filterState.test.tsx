@@ -12,11 +12,11 @@ function Probe({ entity = "tasks" }: { entity?: string }) {
     <div>
       <output data-testid="search">{location.search}</output>
       <output data-testid="pills">{JSON.stringify(f.pills)}</output>
-      <button onClick={() => f.setFilter({ field: "status", op: "in", values: ["st-todo"] })}>set-status</button>
+      <button onClick={() => f.setFilter({ field: "step", op: "in", values: ["st-build"] })}>set-step</button>
       <button onClick={() => f.setFilter({ field: "q", op: "contains", values: ["Smith, J"] })}>set-comma</button>
-      <button onClick={() => f.removeFilter("status")}>remove-status</button>
+      <button onClick={() => f.removeFilter("step")}>remove-step</button>
       <button onClick={() => f.clearAll()}>clear-all</button>
-      <button onClick={() => f.replaceAll([{ field: "status", op: "is", values: ["st-done"] }])}>replace-all</button>
+      <button onClick={() => f.replaceAll([{ field: "step", op: "is", values: ["st-done"] }])}>replace-all</button>
     </div>
   );
 }
@@ -34,54 +34,54 @@ const pills = () => JSON.parse(screen.getByTestId("pills").textContent || "[]");
 
 describe("useFilterState", () => {
   it("keeps the other parameters when a filter changes", async () => {
-    renderAt("/teams/WEB/tasks?view=board&task=WEB-3");
-    await userEvent.click(screen.getByText("set-status"));
+    renderAt("/projects/WEB/tasks?view=board&task=WEB-3");
+    await userEvent.click(screen.getByText("set-step"));
     expect(search()).toContain("view=board");
     expect(search()).toContain("task=WEB-3");
-    expect(pills()).toEqual([{ field: "status", op: "in", values: ["st-todo"] }]);
+    expect(pills()).toEqual([{ field: "step", op: "in", values: ["st-build"] }]);
   });
 
   it("reads its pills from the address", () => {
-    renderAt("/x?filter.tasks=status%3Ain%3Ast-todo%2Cst-done");
-    expect(pills()).toEqual([{ field: "status", op: "in", values: ["st-todo", "st-done"] }]);
+    renderAt("/x?filter.tasks=step%3Ain%3Ast-build%2Cst-done");
+    expect(pills()).toEqual([{ field: "step", op: "in", values: ["st-build", "st-done"] }]);
   });
 
   it("keeps each list's pills under its own name", async () => {
-    renderAt("/x?filter.features=state%3Ais%3Aopen");
-    await userEvent.click(screen.getByText("set-status"));
+    renderAt("/x?filter.members=kind%3Ais%3Aagent");
+    await userEvent.click(screen.getByText("set-step"));
     expect(search()).toContain("filter.tasks=");
-    expect(search()).toContain("filter.features=");
-    expect(pills()).toEqual([{ field: "status", op: "in", values: ["st-todo"] }]);
+    expect(search()).toContain("filter.members=");
+    expect(pills()).toEqual([{ field: "step", op: "in", values: ["st-build"] }]);
   });
 
   it("replaces the pill on the same field rather than adding a second", async () => {
-    renderAt("/x?filter.tasks=status%3Ais%3Ast-done");
-    await userEvent.click(screen.getByText("set-status"));
-    expect(pills()).toEqual([{ field: "status", op: "in", values: ["st-todo"] }]);
+    renderAt("/x?filter.tasks=step%3Ais%3Ast-done");
+    await userEvent.click(screen.getByText("set-step"));
+    expect(pills()).toEqual([{ field: "step", op: "in", values: ["st-build"] }]);
   });
 
   it("removes one pill and leaves the others", async () => {
-    renderAt("/x?filter.tasks=status%3Ais%3Ast-done&filter.tasks=skill%3Ais%3As-build");
-    await userEvent.click(screen.getByText("remove-status"));
+    renderAt("/x?filter.tasks=step%3Ais%3Ast-done&filter.tasks=skill%3Ais%3As-build");
+    await userEvent.click(screen.getByText("remove-step"));
     expect(pills()).toEqual([{ field: "skill", op: "is", values: ["s-build"] }]);
   });
 
   it("clears every pill and leaves the rest of the address", async () => {
-    renderAt("/x?filter.tasks=status%3Ais%3Ast-done&view=list");
+    renderAt("/x?filter.tasks=step%3Ais%3Ast-done&view=list");
     await userEvent.click(screen.getByText("clear-all"));
     expect(pills()).toEqual([]);
     expect(search()).toBe("?view=list");
   });
 
   it("replaces every pill in one write", async () => {
-    renderAt("/x?filter.tasks=holder%3Ais%3Am-ada&filter.tasks=status%3Ain%3Ast-todo");
+    renderAt("/x?filter.tasks=holder%3Ais%3Am-ada&filter.tasks=step%3Ain%3Ast-build");
     await userEvent.click(screen.getByText("replace-all"));
-    expect(pills()).toEqual([{ field: "status", op: "is", values: ["st-done"] }]);
+    expect(pills()).toEqual([{ field: "step", op: "is", values: ["st-done"] }]);
   });
 
   it("sets two axes one after the other", async () => {
     renderAt("/x");
-    await act(async () => screen.getByText("set-status").click());
+    await act(async () => screen.getByText("set-step").click());
     await act(async () => screen.getByText("set-comma").click());
     expect(pills()).toHaveLength(2);
   });
@@ -95,7 +95,7 @@ describe("the wire format", () => {
   });
 
   it("joins several values with commas", () => {
-    expect(serializeFilter({ field: "status", op: "in", values: ["a", "b"] })).toBe("status:in:a,b");
+    expect(serializeFilter({ field: "step", op: "in", values: ["a", "b"] })).toBe("step:in:a,b");
   });
 
   it("carries a date's offset through", () => {
@@ -106,7 +106,7 @@ describe("the wire format", () => {
 
   it("round-trips", () => {
     for (const pill of [
-      { field: "status", op: "in", values: ["st-todo", "st-done"] },
+      { field: "step", op: "in", values: ["st-build", "st-done"] },
       { field: "q", op: "contains", values: ["a:b,c%d"] },
       { field: "filed_at", op: "last", values: ["7d"] },
     ]) {
@@ -117,12 +117,12 @@ describe("the wire format", () => {
   it("refuses a malformed token rather than throwing mid-render", () => {
     expect(parseFilter("justafield")).toBeNull();
     expect(parseFilter("")).toBeNull();
-    expect(parseFilter("status:is:")).toBeNull();
-    expect(() => parseFilter("status:is:%")).not.toThrow();
-    expect(parseFilter("status:is:%")).toBeNull();
-    expect(parseFilter("status:is:%zz")).toBeNull();
+    expect(parseFilter("step:is:")).toBeNull();
+    expect(() => parseFilter("step:is:%")).not.toThrow();
+    expect(parseFilter("step:is:%")).toBeNull();
+    expect(parseFilter("step:is:%zz")).toBeNull();
     // One bad value refuses the whole token, not just its own slot.
-    expect(parseFilter("status:is:ok,%")).toBeNull();
+    expect(parseFilter("step:is:ok,%")).toBeNull();
   });
 
   it("keeps an encoded colon in a value, and reads + as itself", () => {

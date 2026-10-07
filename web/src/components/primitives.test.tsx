@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +6,6 @@ import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { initials, shortSessionId, tintOf } from "@/lib/members";
-import { glyphFor } from "@/lib/status";
 import { untilText } from "@/lib/time";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
@@ -18,32 +17,11 @@ import { Peek } from "./Peek";
 import { Pill } from "./Pill";
 import { PropertiesRail, Property } from "./PropertiesRail";
 import { RunnerSessionBadge } from "./RunnerSessionBadge";
-import { StatusGlyph } from "./StatusGlyph";
-import { StatusSelect } from "./StatusSelect";
+import { ProjectMark } from "./ProjectMark";
 import { Timeline, TimelineDay, TimelineRow } from "./Timeline";
 import { WorkGlyph } from "./WorkGlyph";
 
 const inMinutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
-
-describe("StatusGlyph", () => {
-  it("names each of the six glyphs", () => {
-    render(
-      <>
-        {(["backlog", "todo", "inprogress", "inreview", "done", "dropped"] as const).map((g) => (
-          <StatusGlyph key={g} glyph={g} />
-        ))}
-      </>,
-    );
-    const names = screen.getAllByRole("img").map((el) => el.getAttribute("aria-label"));
-    expect(names).toEqual(["Backlog", "Todo", "In progress", "In review", "Done", "Dropped"]);
-  });
-
-  it("draws a later In-progress Status as In review", () => {
-    expect(glyphFor("in_progress")).toBe("inprogress");
-    expect(glyphFor("in_progress", 1)).toBe("inreview");
-    expect(glyphFor("backlog")).toBe("backlog");
-  });
-});
 
 describe("WorkGlyph", () => {
   it("names each glyph, and marks a working one by its holder's kind and session", () => {
@@ -259,38 +237,28 @@ describe("FormDialog", () => {
   });
 });
 
-describe("StatusSelect", () => {
-  const statuses = [
-    { id: "st-done", name: "Done", kind: "done" as const, position: 5 },
-    { id: "st-review", name: "In review", kind: "in_progress" as const, position: 4 },
-    { id: "st-backlog", name: "Backlog", kind: "backlog" as const, position: 1 },
-    { id: "st-progress", name: "In progress", kind: "in_progress" as const, position: 3 },
-    { id: "st-todo", name: "Todo", kind: "todo" as const, position: 2 },
-    { id: "st-dropped", name: "Dropped", kind: "dropped" as const, position: 6 },
-  ];
-
-  it("is one control for a form and for a Task's properties: the open-kind Statuses in board order, with their glyphs", async () => {
-    const lists: string[][] = [];
-    for (const variant of ["field", "property"] as const) {
-      const { unmount } = render(<StatusSelect variant={variant} id="s" statuses={statuses} value="st-todo" onValueChange={() => {}} />);
-      const trigger = screen.getByRole("combobox");
-      expect(trigger).toHaveTextContent("Todo");
-      if (variant === "property") expect(trigger).toHaveAccessibleName("Status: Todo");
-      await userEvent.click(trigger);
-      const list = await screen.findByRole("listbox");
-      lists.push(within(list).getAllByRole("option").map((o) => `${o.querySelector("[data-glyph]")?.getAttribute("data-glyph")} ${o.textContent}`));
-      unmount();
-    }
-    expect(lists[0]).toEqual(["backlog Backlog", "todo Todo", "inprogress In progress", "inreview In review"]);
-    expect(lists[1]).toEqual(lists[0]);
+describe("ProjectMark", () => {
+  it("letters a Project by its name, coloured by its key so it keeps its colour", () => {
+    render(
+      <>
+        <ProjectMark project={{ key: "WEB", name: "web app" }} />
+        <ProjectMark project={{ key: "WEB", name: "Storefront" }} size="lg" />
+      </>,
+    );
+    const [a, b] = document.querySelectorAll("[aria-hidden]");
+    expect(a).toHaveTextContent("W");
+    expect(b).toHaveTextContent("S");
+    const fill = (el: Element) => [...el.classList].find((c) => c.startsWith("bg-chart-"));
+    expect(fill(a)).toBeDefined();
+    expect(fill(a)).toBe(fill(b));
   });
 });
 
 describe("InfoPopover", () => {
   it("opens its explanation from the ⓘ", async () => {
-    render(<InfoPopover label="About Statuses">A Task in a Backlog Status is not takeable.</InfoPopover>);
+    render(<InfoPopover label="About holds">A Task at a hold is not takeable.</InfoPopover>);
     expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "About Statuses" }));
+    await userEvent.click(screen.getByRole("button", { name: "About holds" }));
     expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
   });
 });

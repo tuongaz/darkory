@@ -1,42 +1,57 @@
 import createClient, { type Middleware } from "openapi-fetch";
 import type { components, paths } from "./schema.gen";
 
-type Schemas = components["schemas"];
+/** Every schema of `/v1`, for the request bodies a write takes (`Schemas["FileTaskBody"]`). */
+export type Schemas = components["schemas"];
 export type Activity = Schemas["Activity"];
 export type ActivityKind = Schemas["ActivityKind"];
 export type ActivityPage = Schemas["ActivityPage"];
 export type AgentSettings = Schemas["AgentSettings"];
 export type Claim = Schemas["Claim"];
+export type ClaimEnd = Schemas["ClaimEnd"];
+export type Connector = Schemas["Connector"];
 export type ErrorBody = Schemas["Error"];
+export type ErrorCode = Schemas["ErrorCode"];
 export type Evidence = Schemas["Evidence"];
-export type Feature = Schemas["Feature"];
-export type FeatureDetail = Schemas["FeatureDetail"];
-export type FeatureState = Schemas["FeatureState"];
 export type Health = Schemas["Health"];
 export type IssuedToken = Schemas["IssuedToken"];
+export type Label = Schemas["Label"];
 export type LoginLink = Schemas["LoginLink"];
 export type Me = Schemas["Me"];
 export type Member = Schemas["Member"];
 export type MemberDetail = Schemas["MemberDetail"];
+export type MemberKind = Schemas["MemberKind"];
+export type NewWorkflow = Schemas["NewWorkflow"];
 export type Note = Schemas["Note"];
 export type Observation = Schemas["Observation"];
 export type ObservationOutcome = Schemas["ObservationOutcome"];
+export type Organisation = Schemas["Organisation"];
+export type OrganisationBrief = Schemas["OrganisationBrief"];
+export type Project = Schemas["Project"];
+export type ProjectDetail = Schemas["ProjectDetail"];
+export type ProposalState = Schemas["ProposalState"];
 export type RunnerSession = Schemas["RunnerSession"];
 export type RunnerSessionState = Schemas["RunnerSessionState"];
+export type Session = Schemas["Session"];
 export type Skill = Schemas["Skill"];
 export type SkillDetail = Schemas["SkillDetail"];
 export type SkillProposal = Schemas["SkillProposal"];
 export type SkillVersion = Schemas["SkillVersion"];
+export type Step = Schemas["Step"];
+export type StepFacts = Schemas["StepFacts"];
 export type SubjectType = Schemas["SubjectType"];
+export type SubtaskCounts = Schemas["SubtaskCounts"];
+export type Taker = Schemas["Taker"];
 export type Task = Schemas["Task"];
 export type TaskBrief = Schemas["TaskBrief"];
-export type TaskCounts = Schemas["TaskCounts"];
 export type TaskDetail = Schemas["TaskDetail"];
-export type Team = Schemas["Team"];
-export type TeamDetail = Schemas["TeamDetail"];
+export type TaskKind = Schemas["TaskKind"];
+export type TaskState = Schemas["TaskState"];
 export type Token = Schemas["Token"];
 export type View = Schemas["View"];
 export type ViewEntity = Schemas["ViewEntity"];
+export type Workflow = Schemas["Workflow"];
+export type WorkflowStep = Schemas["WorkflowStep"];
 export type Workspace = Schemas["Workspace"];
 export type WorkspaceMode = Schemas["WorkspaceMode"];
 
@@ -53,10 +68,25 @@ export class ApiError extends Error {
     this.code = code;
     this.details = details;
   }
+
+  /**
+   * The names `details` lists under `field`, as `/v1` gives them for programs to choose from:
+   * `outcomes` (the Connectors out of the Task's Step) on `no_connector` and `use_advance`,
+   * `proposals` (proposal ids) on `proposal_stale`. Empty when the refusal carries none.
+   */
+  detailList(field: "outcomes" | "proposals"): string[] {
+    const v = this.details?.[field];
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  }
 }
 
 export function isUnauthenticated(err: unknown): boolean {
   return err instanceof ApiError && err.status === 401;
+}
+
+/** Whether `err` is a refusal from /v1 with one of `codes`. */
+export function isRefusal(err: unknown, ...codes: ErrorCode[]): err is ApiError {
+  return err instanceof ApiError && (codes.length === 0 || (codes as string[]).includes(err.code));
 }
 
 /** A random UUID, also where crypto.randomUUID is missing (plain http off localhost). */

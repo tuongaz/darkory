@@ -1,22 +1,25 @@
-import { useCallback, useState, type ReactNode } from "react";
-import { Outlet } from "react-router";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Outlet, useLocation } from "react-router";
 import { useActivityStream } from "@/api/live";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "./AppSidebar";
 import { CommandMenu } from "./CommandMenu";
+import { useIntent } from "./intents";
+import { NewProjectDialog } from "./NewProjectDialog";
 import { usePeek } from "./peek";
+import { rememberAppLocation } from "./returnTo";
 import { SelectionContext, taskRow } from "./selection";
 import { useShortcuts } from "./shortcuts";
 import { ShortcutsSheet } from "./ShortcutsSheet";
 import { UpdateBanner } from "./UpdateBanner";
 
 /**
- * The frame of every signed-in screen: the sidebar, the update banner, then the page, which draws
- * its own TopBar. It holds the Activity stream open, answers the shortcuts, and mounts what opens
- * over any page: ⌘K, the shortcuts sheet, the screens' global dialogs (`dialogs`), and the Task
- * Peek for ?task=, which leaves the page under it working.
+ * What every signed-in screen runs inside, the app and Settings alike: the Activity stream, the
+ * shortcuts, and what opens over any page: ⌘K, the shortcuts sheet, the New Project dialog, the
+ * screens' global dialogs (`dialogs`), and the Task Peek for ?task=, which leaves the page under
+ * it working. The routes inside draw a `Frame`: the app's sidebar (`AppFrame`) or Settings' own.
  */
 export function Shell({ dialogs, peek }: { dialogs?: ReactNode; peek?: (taskKey: string, close: () => void) => ReactNode }) {
   useActivityStream();
@@ -24,6 +27,7 @@ export function Shell({ dialogs, peek }: { dialogs?: ReactNode; peek?: (taskKey:
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   useShortcuts({ setSearchOpen, setShortcutsOpen, selected, select: setSelected });
+  useIntent("search", () => setSearchOpen(true));
   const { taskKey, close } = usePeek();
   // Closing the peek (Esc, ×) leaves its Task selected, and its row takes the focus back: the
   // sheet's own focus handling has nothing to return to.
@@ -37,15 +41,10 @@ export function Shell({ dialogs, peek }: { dialogs?: ReactNode; peek?: (taskKey:
     <TooltipProvider delayDuration={300}>
       <SelectionContext value={{ selected, select: setSelected }}>
         <SidebarProvider className="h-svh overflow-hidden">
-          <AppSidebar onSearch={() => setSearchOpen(true)} />
-          <SidebarInset className="min-w-0 overflow-hidden">
-            <UpdateBanner />
-            <div id="main" className="flex min-h-0 flex-1 flex-col">
-              <Outlet />
-            </div>
-          </SidebarInset>
+          <Outlet />
           <CommandMenu open={searchOpen} onOpenChange={setSearchOpen} />
           <ShortcutsSheet open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <NewProjectDialog />
           {dialogs}
           {taskKey && peek?.(taskKey, closePeek)}
           <Toaster position="bottom-right" />
@@ -55,3 +54,31 @@ export function Shell({ dialogs, peek }: { dialogs?: ReactNode; peek?: (taskKey:
   );
 }
 
+/**
+ * A sidebar beside the page: the update banner, then the page, which draws its own TopBar. On a
+ * phone the sidebar is a sheet the TopBar's button opens.
+ */
+export function Frame({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+  return (
+    <>
+      {sidebar}
+      <SidebarInset className="min-w-0 overflow-hidden">
+        <UpdateBanner />
+        <div id="main" className="flex min-h-0 flex-1 flex-col">
+          {children}
+        </div>
+      </SidebarInset>
+    </>
+  );
+}
+
+/** The app's pages beside its sidebar. Remembers where it is, so Settings' Back returns here. */
+export function AppFrame() {
+  const { pathname, search } = useLocation();
+  useEffect(() => rememberAppLocation(pathname + search), [pathname, search]);
+  return (
+    <Frame sidebar={<AppSidebar />}>
+      <Outlet />
+    </Frame>
+  );
+}
