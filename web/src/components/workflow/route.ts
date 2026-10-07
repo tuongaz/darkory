@@ -207,14 +207,18 @@ export function routeConnectors(boxes: Map<string, Rect>, requests: RouteRequest
     });
   });
 
-  // Entering a side: the gutter, as leaving. From below or above: spread along by where they
+  // Entering a side: the gutter, as leaving; on a side that lines also leave by, the turn comes
+  // past their names, so no name sits on it. From below or above: spread along by where they
   // come from.
   group(plans, (p) => `${p.req.to}:${p.entry}`).forEach((list) => {
     const T = list[0].T;
-    if (list[0].entry === "left" || list[0].entry === "right") {
+    const side = list[0].entry;
+    if (side === "left" || side === "right") {
+      const leaving = plans.filter((q) => q.req.from === list[0].req.to && q.exit === side);
+      const clear = leaving.length > 0 ? Math.max(...leaving.map((q) => labelWidth(q.req.label))) + 16 + leaving.length * LANE : STUB;
       list.sort((p, q) => p.end - q.end);
       lanes(list, (p) => level(p) < p.end).forEach((lane, p) => {
-        p.x2 = p.entry === "left" ? Math.max(T.x - STUB - lane * LANE, p.x1) : right(T) + STUB + lane * LANE;
+        p.x2 = side === "left" ? Math.max(T.x - clear - lane * LANE, p.x1) : right(T) + clear + lane * LANE;
       });
     } else {
       list.sort((p, q) => p.x1 - q.x1);

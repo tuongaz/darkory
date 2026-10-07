@@ -35,7 +35,7 @@ export default function DesignLab() {
       <Section title="Workflow canvas · live" note="Project › Workflow: read-only, the counts and the takers' rings.">
         <WorkflowCanvas workflow={sampleWorkflow} mode="live" className="h-[520px] rounded-lg border" />
       </Section>
-      <Section title="Workflow canvas · a new Project" note="The default Workflow as darkory init lays it out: one row, 448px apart.">
+      <Section title="Workflow canvas · a new Project" note="The default Workflow at the places darkory init stores: the board's order, ranks 448px apart, rows 128px.">
         <WorkflowCanvas workflow={defaultWorkflow} mode="live" className="h-[420px] rounded-lg border" />
       </Section>
       <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a step, Tidy up.">

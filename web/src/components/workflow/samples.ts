@@ -1,5 +1,5 @@
 import { tidy } from "./layout";
-import type { Connector, Step, Workflow } from "./model";
+import type { Connector, Point, Step, Workflow } from "./model";
 import type { GraphStep, GraphSubtask } from "./graph";
 
 /**
@@ -66,17 +66,28 @@ function laidOut(w: { steps: Omit<Step, "x" | "y">[]; connectors: Connector[] })
 export const sampleWorkflow: Workflow = laidOut({ steps, connectors });
 
 /**
- * The default Workflow a new Project starts with, laid out as `darkory init` stores it: one row,
- * x = index × 448 (a step's 208 + 240 between), y = 0. No Tasks yet; the roster's agents take it.
+ * The default Workflow a new Project starts with, at the places `darkory init` stores (decided
+ * 2026-10-07): compact, in the board's order, one rank of 448 (a step's 208 + 240 between) and rows
+ * of 128. Backlog, Plan, Build and Retro down the first rank; Review beside Build, Skill review
+ * beside Retro; Done is drawn at x 896. No Tasks yet; the roster's agents take it.
  */
+export const defaultPlaces: Record<string, Point> = {
+  "s-backlog": { x: 0, y: 0 },
+  "s-plan": { x: 0, y: 128 },
+  "s-build": { x: 0, y: 256 },
+  "s-review": { x: 448, y: 256 },
+  "s-retro": { x: 0, y: 384 },
+  "s-skill-review": { x: 448, y: 384 },
+};
+
 export const defaultWorkflow: Workflow = (() => {
-  const row = ["s-backlog", "s-plan", "s-build", "s-review", "s-retro", "s-skill-review"];
+  const order = ["s-backlog", "s-plan", "s-build", "s-review", "s-retro", "s-skill-review"];
   const kept = new Set(["c-plan-done", "c-review-done", "c-review-build", "c-retro-done", "c-retro-skill-review", "c-skill-review-done", "c-skill-review-retro"]);
   return {
-    steps: row.map((id, i) => {
+    steps: order.map((id, i) => {
       const s = steps.find((x) => x.id === id)!;
       const takers = s.takers.filter((t) => t.kind === "agent").map(({ id, name, kind }) => ({ id, name, kind }));
-      return { ...s, position: i, x: i * 448, y: 0, takers, tasks: 0, working: 0, medianMs: undefined };
+      return { ...s, position: i, ...defaultPlaces[id], takers, tasks: 0, working: 0, medianMs: undefined };
     }),
     connectors: [...connectors.filter((c) => kept.has(c.id)), connector("c-build-review", "s-build", "s-review", "pass", 0)],
   };
