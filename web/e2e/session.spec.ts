@@ -1,12 +1,15 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import startServer from "./server";
+import startServer, { startRunnerInstall, type RunnerInstall } from "./server";
 
 // The Session panel and the Agents page's Runner state (docs/build/agents-plan.md, R2) against the
-// real binary. They run on an Install of their own, as admin.spec.ts does: the agent here has
-// agent settings, which a Runner attached to the shared Install would start sessions for. This
-// branch's server has no Runner, so the panel must be absent; the live terminal is played by
-// Playwright (page.route and page.routeWebSocket) until the Runner lands.
+// real binary. The first tests run on an Install of their own with no Runner (serve --runner=off),
+// as admin.spec.ts does: the panel must be absent, and the terminal is played by Playwright
+// (page.route and page.routeWebSocket) to check it under the Install's CSP. The last run on
+// Installs whose server runs the Runner, with the fake agent (tools/fakeagent) as builder's
+// command: once with sessions in tmux, when the machine has it, and once as child processes.
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/session/", import.meta.url));
@@ -233,3 +236,150 @@ test("the terminal under the Install's CSP, the Runner played by the test: watch
   expect(errors).toEqual([]);
   await ctx.close();
 });
+
+/** Calls /v1 on another Install with a token and the Session it names; a refusal throws. */
+function at(base: string, secret: string, session: string) {
+  return async <T = Record<string, unknown>>(method: string, path: string, body?: unknown): Promise<T> => {
+    const res = await fetch(`${base}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${secret}`, "Darkory-Session": session, "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`${method} ${path} answered ${res.status}: ${text}`);
+    return (text ? JSON.parse(text) : {}) as T;
+  };
+}
+
+function hasTmux(): boolean {
+  try {
+    execFileSync("sh", ["-c", "command -v tmux"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type LiveDetail = {
+  task: { claim?: unknown };
+  notes: { body: string }[];
+  evidence: { id: string; filename: string }[];
+};
+
+for (const tmux of ["on", "off"] as const) {
+  test.describe(`with a Runner, sessions ${tmux === "on" ? "in tmux" : "as child processes"}`, () => {
+    let live: RunnerInstall | undefined;
+
+    test.beforeAll(async () => {
+      test.skip(tmux === "on" && !hasTmux(), "no tmux on this machine");
+      test.setTimeout(240_000);
+      live = await startRunnerInstall(tmux, async ({ base, token, fakeagent, scratch }) => {
+        const ada = at(base, token, "e2e-live-ada");
+        // builder runs the fake agent, busy until /exit: it keeps writing progress, so the Runner
+        // keeps its Heartbeats and never nudges. The other agents of the roster are paused.
+        const progress = join(scratch, "{session_id}.jsonl");
+        await ada("PATCH", "/v1/members/builder/agent", {
+          command: fakeagent,
+          args: ["--prompt-file", "{prompt_file}", "--progress", progress, "--mcp-config", "{mcp_config}"],
+          model: "fake-1",
+          env: { FAKEAGENT_SCENARIO: "busy" },
+          unattended: true,
+          paused: false,
+          progress_file: progress,
+        });
+        for (const name of ["planner", "reviewer", "retro"]) await ada("PATCH", `/v1/members/${name}/agent`, { paused: true });
+      });
+    });
+
+    test.afterAll(async () => {
+      await live?.stop();
+    });
+
+    test(`the Runner's session live: watch, ${tmux === "on" ? "Join and type, " : ""}Pause, Stop`, async ({ browser }) => {
+      test.setTimeout(120_000);
+      const { base, token } = live!;
+      const ada = at(base, token, "e2e-live-ada");
+      const filed = await ada<{ tasks: { key: string }[] }>("POST", "/v1/features", { team: "MAIN", title: "Fix the typo", quick: true, skill: "engineer" });
+      const key = filed.tasks[0].key;
+      const sessions = () => ada<{ items: { task_id: string; tmux?: string }[]; runner: boolean }>("GET", "/v1/runner/sessions");
+      // The Runner claims it as builder and starts the fake agent.
+      await expect.poll(async () => (await sessions()).items.length, { timeout: 30_000 }).toBe(1);
+      expect((await sessions()).items[0].tmux).toBe(tmux === "on" ? `dk-${key}` : undefined);
+
+      const { url } = await ada<{ url: string }>("POST", "/v1/members/ada/login-links");
+      const ctx = await browser.newContext();
+      const page = await ctx.newPage();
+      const errors: string[] = [];
+      page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+      page.on("pageerror", (e) => errors.push(e.message));
+      const sockets: string[] = [];
+      page.on("websocket", (ws) => sockets.push(ws.url()));
+      await page.goto(url);
+      await page.getByRole("button", { name: /^Sign in as / }).click();
+      await expect(page).toHaveURL(`${base}/inbox`);
+
+      // Agents: builder's session and model. Pause it first, or the Task Stop releases goes
+      // straight back to builder.
+      await page.goto(`${base}/agents`);
+      const row = page.getByRole("row").filter({ hasText: "builder" });
+      await expect(row).toContainText("running since");
+      await expect(row).toContainText("fake-1");
+      await row.hover();
+      await row.getByRole("button", { name: "More for builder" }).click();
+      await page.getByRole("menuitem", { name: "Pause" }).click();
+      await expect(row.getByText("Paused")).toBeVisible();
+
+      await row.getByRole("link", { name: "View" }).click();
+      const peek = page.getByRole("dialog", { name: `Task ${key}` });
+      const panel = peek.getByRole("region", { name: "Session" });
+      await expect(panel).toContainText(tmux === "on" ? `tmux dk-${key}` : "no tmux");
+      if (tmux === "on") {
+        // Watching, read-only: tmux draws what the fake agent printed.
+        const screen = panel.locator(".xterm-rows");
+        await expect(screen).toContainText("fakeagent: busy until /exit", { timeout: 15_000 });
+        await expect(panel.getByRole("status")).toHaveText("Read-only · Join to type");
+        expect(sockets[0]).toMatch(new RegExp(`/v1/runner/sessions/${key}/terminal\\?readonly=1$`));
+        await shot(page, "8-live-watching");
+
+        // Joined, a line typed in the browser reaches the fake agent, which says it read it.
+        await panel.getByRole("button", { name: "Join", exact: true }).click();
+        await expect(panel.getByRole("status")).toHaveText("Joined · your keys go to the session");
+        // The joined socket starts from a cleared screen; type once tmux has attached and drawn it,
+        // as a person would (keys sent before tmux takes the terminal are lost).
+        await expect(screen).toContainText("fakeagent: busy until /exit");
+        await page.keyboard.type("hello from the web");
+        await page.keyboard.press("Enter");
+        await expect(screen).toContainText('fakeagent: read "hello from the web"');
+        await expect.poll(async () => (await ada<LiveDetail>("GET", `/v1/tasks/${key}`)).notes.map((n) => n.body)).toContain("ada joined the session.");
+        await shot(page, "9-live-joined");
+      } else {
+        // Without tmux the session cannot be joined: no terminal, no WebSocket.
+        await expect(panel).toContainText("This session runs without tmux and cannot be joined");
+        await expect(panel.locator(".xterm")).toHaveCount(0);
+        expect(sockets).toEqual([]);
+        await shot(page, "8-live-child");
+      }
+
+      // Stop from the peek's ⋯ menu: the session ends, its Claim is released with a Note, and its
+      // log is Evidence.
+      await peek.getByRole("button", { name: "More", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Stop session" }).click();
+      const confirm = page.getByRole("dialog", { name: `Stop the session on ${key}?` });
+      await expect(confirm).toContainText("Its Claim is released, with a Note saying so");
+      await confirm.getByRole("button", { name: "Stop session" }).click();
+      await expect(panel).toHaveCount(0, { timeout: 30_000 });
+      await expect.poll(async () => (await sessions()).items.length).toBe(0);
+      const detail = await ada<LiveDetail>("GET", `/v1/tasks/${key}`);
+      expect(detail.task.claim).toBeUndefined();
+      expect(detail.notes.map((n) => n.body).join("\n")).toContain("An admin stopped the session");
+      const log = detail.evidence.find((e) => e.filename === `session-${key}.log`);
+      expect(log, "the session's log is Evidence").toBeDefined();
+      const text = await (await fetch(`${base}/v1/evidence/${log!.id}/content`, { headers: { Authorization: `Bearer ${token}`, "Darkory-Session": "e2e-live-ada" } })).text();
+      expect(text).toContain("fakeagent: busy until /exit");
+      if (tmux === "on") expect(text).toContain('fakeagent: read "hello from the web"');
+
+      expect(errors).toEqual([]);
+      await ctx.close();
+    });
+  });
+}

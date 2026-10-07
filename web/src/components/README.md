@@ -162,7 +162,10 @@ elements and a truecolor cell's colour into a `style` attribute, both of which `
 refuses. `noInjectedStyles` in `vite.config.ts` turns its `<style>` elements into a constructed
 stylesheet the document adopts and its style attribute into a CSSOM write, which the policy
 allows; xterm's own CSS is in `globals.css`. `csp.test.tsx` fails if the terminal adds either, and
-`e2e/session.spec.ts` draws truecolor output under the real policy with no console error.
+`e2e/session.spec.ts` draws truecolor output under the real policy with no console error. The same
+spec runs a real session (`startRunnerInstall` in `e2e/server.ts`: `serve --runner=on` with
+`tools/fakeagent` as builder's command): in tmux it watches, joins, types a line the agent reads
+and stops it; as a child process it shows the session cannot be joined and stops it.
 
 ## Tokens
 
