@@ -275,10 +275,7 @@ func (r *Runner) prepareOne(ctx context.Context, task, feature string, c *Checko
 			return fmt.Errorf("the branch %s in %s was not made by the runner; it will not work on it", existing[0], repo)
 		}
 		c.Branch = existing[0]
-		if _, err := runGit(ctx, repo, "worktree", "add", c.Dir, c.Branch); err != nil {
-			return err
-		}
-		return nil
+		return addWorktree(ctx, repo, c.Dir, nil, c.Branch)
 	}
 	if !branchExists(ctx, repo, c.Base) {
 		if c.Base != FeatureBranch(feature) {
@@ -288,7 +285,7 @@ func (r *Runner) prepareOne(ctx context.Context, task, feature string, c *Checko
 			return err
 		}
 	}
-	if _, err := runGit(ctx, repo, "worktree", "add", "-b", c.Branch, c.Dir, c.Base); err != nil {
+	if err := addWorktree(ctx, repo, c.Dir, []string{"-b", c.Branch}, c.Base); err != nil {
 		return err
 	}
 	if err := r.ledger.add(Made{Repo: repo, Branch: c.Branch, Base: c.Base, Task: task, At: time.Now().UTC()}); err != nil {

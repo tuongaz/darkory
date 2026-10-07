@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -54,6 +55,50 @@ func identity(ctx context.Context, repo string) []string {
 	}
 	return []string{"GIT_AUTHOR_NAME=Darkory runner", "GIT_AUTHOR_EMAIL=runner@darkory.invalid",
 		"GIT_COMMITTER_NAME=Darkory runner", "GIT_COMMITTER_EMAIL=runner@darkory.invalid"}
+}
+
+// addWorktree adds a worktree of repo at dir, args being what follows the path in `git worktree
+// add` (a branch, or `-b branch base` is given before it through before). The worktree is made
+// without a checkout, given the repository's filter keys, and populated then: git-crypt keeps its
+// key in GIT_DIR/git-crypt, and a linked worktree's GIT_DIR starts empty, so a checkout through
+// its smudge filter fails before any session could start (enably-v2's own
+// scripts/worktree_bootstrap.sh repairs a person's worktree the same way, after the fact).
+func addWorktree(ctx context.Context, repo, dir string, before []string, args ...string) error {
+	add := append([]string{"worktree", "add", "--no-checkout"}, before...)
+	add = append(append(add, dir), args...)
+	if _, err := runGit(ctx, repo, add...); err != nil {
+		return err
+	}
+	if err := linkFilterKeys(ctx, dir); err != nil {
+		return err
+	}
+	_, err := runGit(ctx, dir, "reset", "--hard", "--quiet", "HEAD")
+	return err
+}
+
+// linkFilterKeys links the repository's git-crypt directory into the worktree at dir's own git
+// directory, when the repository has one and the worktree does not yet: a link rather than a copy,
+// so a rotated key reaches every worktree.
+func linkFilterKeys(ctx context.Context, dir string) error {
+	gitDir, err := runGit(ctx, dir, "rev-parse", "--path-format=absolute", "--git-dir")
+	if err != nil {
+		return err
+	}
+	common, err := runGit(ctx, dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil {
+		return err
+	}
+	if gitDir == common {
+		return nil
+	}
+	src, dst := filepath.Join(common, "git-crypt"), filepath.Join(gitDir, "git-crypt")
+	if st, err := os.Stat(src); err != nil || !st.IsDir() {
+		return nil
+	}
+	if _, err := os.Lstat(dst); err == nil {
+		return nil
+	}
+	return os.Symlink(src, dst)
 }
 
 // branchExists says whether repo has the local branch name.

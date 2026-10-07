@@ -180,6 +180,56 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	}
 }
 
+// A repository whose smudge filter needs a key in its git directory, as git-crypt does: a plain
+// `git worktree add` fails at the checkout, since a linked worktree's git directory starts empty.
+func TestPrepareGivesAWorktreeTheRepositorysFilterKeys(t *testing.T) {
+	repo := gitRepo(t)
+	ctx := t.Context()
+	if err := os.MkdirAll(filepath.Join(repo, ".git", "git-crypt", "keys"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".git", "git-crypt", "keys", "default"), []byte("k"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, repo, "config", "filter.needkey.smudge", `sh -c 'test -f "$(git rev-parse --git-dir)/git-crypt/keys/default" && cat'`)
+	mustGit(t, repo, "config", "filter.needkey.clean", "cat")
+	mustGit(t, repo, "config", "filter.needkey.required", "true")
+	commitFile(t, repo, ".gitattributes", "secret.txt filter=needkey\n", "attributes")
+	commitFile(t, repo, "secret.txt", "hush\n", "secret")
+	if _, err := runGit(ctx, repo, "worktree", "add", "-b", "plain", filepath.Join(t.TempDir(), "plain"), "main"); err == nil {
+		t.Fatal("a plain worktree add did not fail at the smudge filter; the test no longer shows the bug")
+	}
+
+	r := newTestRunner(t)
+	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
+	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", false, []Workspace{ws}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(got[0].Dir, "secret.txt")); err != nil || string(b) != "hush\n" {
+		t.Fatalf("the worktree holds %q, %v", b, err)
+	}
+	if out := mustGit(t, got[0].Dir, "status", "--porcelain"); out != "" {
+		t.Fatalf("the new worktree is dirty:\n%s", out)
+	}
+	gitDir := mustGit(t, got[0].Dir, "rev-parse", "--path-format=absolute", "--git-dir")
+	target, err := filepath.EvalSymlinks(filepath.Join(gitDir, "git-crypt"))
+	want, _ := filepath.EvalSymlinks(filepath.Join(repo, ".git", "git-crypt"))
+	if err != nil || target != want {
+		t.Fatalf("git-crypt in the worktree's git directory resolves to %q, want %q, %v", target, want, err)
+	}
+
+	// The worktree of an existing branch of the Task takes the same path.
+	r.RemoveCheckouts(ctx, "WEB-2")
+	again, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", false, []Workspace{ws}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(again[0].Dir, "secret.txt")); err != nil || string(b) != "hush\n" {
+		t.Fatalf("the second worktree holds %q, %v", b, err)
+	}
+}
+
 func TestMergeBranch(t *testing.T) {
 	repo := gitRepo(t)
 	ctx := t.Context()

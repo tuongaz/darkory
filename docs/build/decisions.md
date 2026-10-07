@@ -375,3 +375,7 @@ The first real Claude Code session under the Runner (agents-plan.md, "Smoke run"
   - Search: the key or the title only.
 
   Why: Views are checked by the server's grammar, a paged list will pass the same pills to `filter`, and the lead's rule is that the web and the server never read a token two ways.
+
+### The Runner at Sacca (2026-10-07)
+
+- **The Runner adds a Task's worktree without a checkout, links the repository's `git-crypt` directory into the worktree's own git directory when the repository has one, and populates the worktree then (`git reset --hard HEAD`).** Why: git-crypt reads its key from `GIT_DIR/git-crypt`, and `git worktree add` gives a linked worktree an empty git directory, so the first real Task at Sacca (enably-v2, whose `secrets/` is git-crypt) failed at the smudge filter before any session could start; the repository's own `scripts/worktree_bootstrap.sh` makes the same link for a person's worktree, through a Claude Code hook that runs too late for the Runner. A link, not a copy, so a rotated key reaches every worktree.
