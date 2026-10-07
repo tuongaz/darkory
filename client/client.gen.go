@@ -1805,7 +1805,7 @@ type ListFeaturesParams struct {
 	// Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
 	// · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
 	// `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
-	// ignoring case, over the key, title and description).
+	// ignoring case, over the key and the title).
 	//
 	// Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
 	// naming the token, as on `listTasks`.
@@ -2068,24 +2068,27 @@ type ListTasksParams struct {
 	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
 	// boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
 	// `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
-	// the earlier first) and `last` (`7d`, `30d` or `90d` before the server's now). A date is
-	// RFC 3339 with its offset, such as `2026-10-07T09:00:00+11:00`. `not` and `nin` also
+	// the earlier first) and `last` (`7d`, `30d` or `90d`: at or after the server's now less
+	// that many days). A date is RFC 3339 with its offset, to the millisecond, such as
+	// `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
+	// `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
 	// match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
-	// Member, which need no Skill).
+	// Member, which need no Skill), and on a field with several values (`workspace`) match a
+	// Task none of whose values is one given.
 	//
 	// Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
 	// `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
 	// for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
 	// id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
 	// (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
-	// and blocks an open Task) · `kind` (`work`, `breakdown`, `retro`, or `question`: a Task
-	// aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a live
-	// Claim; `unheld`: none, as `holder:is:none`; `lapsed_24h`: open, unheld, and its latest
-	// Claim lapsed within the last 24 hours; `live_session`: a live Claim with a Heartbeat
-	// timeout held by an agent) · `workspace` (Workspace id the Task names) · `model` (the
-	// live Claim's model label) · `filed_at` · `updated_at` (the latest Activity about the
-	// Task, or when it was filed) · `completed_at` (when it ended done; a dropped Task has
-	// none) · `q` (`contains`, ignoring case, over the key, title and description).
+	// and blocks an open Task) · `kind` (`work`, `breakdown`, `retrospective`, or `question`: a
+	// work Task aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a
+	// live Claim; `unheld`: none, as `holder:is:none`; `lapsed`: a Claim of the Task lapsed
+	// within the last 24 hours; `session`: the Runner beside this server runs a session for
+	// it now, as `listRunnerSessions` lists) · `workspace` (Workspace id the Task names) ·
+	// `model` (the live Claim's model label) · `filed_at` (when it was filed) ·
+	// `completed_at` (when it ended done; a dropped Task has none) · `q` (`contains`,
+	// ignoring case, over the key and the title).
 	//
 	// Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
 	// An unknown field, an operator the field does not take, the wrong number of values or a
