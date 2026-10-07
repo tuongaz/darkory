@@ -3,9 +3,10 @@ import { fileURLToPath } from "node:url";
 import type { FeatureDetail, IssuedToken, LoginLink, TaskDetail } from "../src/api/client";
 import startServer from "./server";
 
-// The Filter on Team › Tasks against the real binary: F opens the Filters menu, a Status and a
-// holder become chips, the person flips an operator, a reload keeps it all (the address holds the
-// pills, by id), and Reset clears it. On an Install of its own, as board.spec.ts runs.
+// The Filter against the real binary: F opens the Filters menu, a Status and a holder become
+// chips, the person flips an operator, a reload keeps it all (the address holds the pills, by id),
+// and Reset clears it; then the date axes, Claim, Team › Features and a phone. On an Install of
+// its own, as board.spec.ts runs.
 test.describe.configure({ mode: "serial" });
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -182,6 +183,92 @@ test("the Filter: F, a Status and a holder, an operator flipped, a reload, Reset
     await expect(row(page, cart)).toBeVisible();
     await expect(row(page, discount)).toBeVisible();
     await expect(page.getByRole("button", { name: "Filter" })).toBeVisible();
+  });
+
+  expect(errors).toEqual([]);
+});
+
+test("the Filter's dates and Claim, Team › Features, and a phone", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const ada = agent(adminToken, "ada-e2e-filters-2");
+  const link = await ada<LoginLink>("POST", "/v1/members/ada/login-links");
+  await page.goto(link.body!.url);
+  await page.getByRole("button", { name: /^Sign in as / }).click();
+  await expect(page).toHaveURL(`${base}/inbox`);
+  // The first test filed these, and builder-1 still holds the cart Task.
+  const tasks = (await v1<{ items: { key: string; title: string }[] }>(page, "GET", "/v1/tasks?team=WEB")).items;
+  const key = (title: string) => tasks.find((t) => t.title === title)!.key;
+  const [cart, payment] = [key("Build the cart page"), key("Payment form validation")];
+  const today = await page.evaluate(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+
+  await page.goto(`${base}/teams/WEB/tasks?view=list`);
+  await expect(row(page, cart)).toBeVisible();
+
+  await test.step("Filed is before today leaves nothing; flipped to is between, today's Tasks are back", async () => {
+    await page.keyboard.press("f");
+    const menu = page.getByRole("dialog", { name: "Filters" });
+    await menu.getByRole("option", { name: "Filed", exact: true }).click();
+    await menu.getByRole("button", { name: "Filed — is between" }).click();
+    await page.getByRole("option", { name: "is before" }).click();
+    await shot(page, "5-date-axis");
+    await menu.locator(`[data-day="${today}"] button`).click();
+    await expect(menu).toHaveCount(0);
+    await expect(chips(page).getByRole("button", { name: /^Filed: before / })).toBeVisible();
+    await expect(row(page, cart)).toHaveCount(0);
+    // The day's start, with the browser's offset, on the wire.
+    expect(new URL(page.url()).searchParams.get("filter.tasks")).toMatch(new RegExp(`^filed_at:before:${today}T00%3A00%3A00\\.000%2B|^filed_at:before:${today}T00%3A00%3A00\\.000-`));
+
+    await chips(page).getByRole("button", { name: "Filed — is before" }).click();
+    await page.getByRole("option", { name: "is between" }).click();
+    await expect(row(page, cart)).toBeVisible();
+    await expect(row(page, payment)).toBeVisible();
+    await chips(page).getByRole("button", { name: "Clear Filed" }).click();
+  });
+
+  await test.step("a window from the presets, and Claim is Held", async () => {
+    await page.getByRole("button", { name: "Filter" }).click();
+    await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "Updated", exact: true }).click();
+    await page.getByRole("button", { name: "Last 7 days" }).click();
+    await expect(chips(page).getByRole("button", { name: "Updated: Last 7 days" })).toBeVisible();
+    await page.getByRole("button", { name: "Filter, 1 set" }).click();
+    await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "Claim", exact: true }).click();
+    await page.getByRole("option", { name: "Held", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(chips(page).getByRole("button", { name: "Claim: Held" })).toBeVisible();
+    await expect(row(page, cart)).toBeVisible();
+    await expect(row(page, payment)).toHaveCount(0);
+    await shot(page, "6-window-and-claim");
+  });
+
+  await test.step("at 390px each chip takes a line, and nothing scrolls sideways", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const lines = chips(page).locator(":scope > div");
+    await expect(lines).toHaveCount(2);
+    const widths = await lines.evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
+    expect(new Set(widths).size).toBe(1);
+    const [scroll, client] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    expect(scroll).toBe(client);
+    await shot(page, "7-phone");
+    await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
+  await test.step("Team › Features: State is Shipped leaves nothing, is not Shipped the open Feature", async () => {
+    await page.goto(`${base}/teams/WEB/features`);
+    const list = page.getByRole("list", { name: "Features in Rank order" });
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await page.keyboard.press("f");
+    await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "State", exact: true }).click();
+    await page.getByRole("option", { name: "Shipped", exact: true }).click();
+    await expect(chips(page).getByRole("button", { name: "State: Shipped" })).toBeVisible();
+    await expect(list.getByRole("listitem")).toHaveCount(0);
+    await chips(page).getByRole("button", { name: "State — is" }).click();
+    await page.getByRole("option", { name: "is not" }).click();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    expect(new URL(page.url()).searchParams.getAll("filter.features")).toEqual(["state:not:shipped"]);
+    await shot(page, "8-features");
   });
 
   expect(errors).toEqual([]);

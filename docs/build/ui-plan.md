@@ -84,6 +84,29 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
   - The Member values are the Organisation's active Members, the signed-in one first and marked Me, each named by id.
 - **Old links** of the form `?skill=<name>&holder=<name>&blocked=1` are rewritten into `filter.tasks` once the Skills and Members load, in one write that drops the old parameters. A name that matches nothing is dropped.
 - The address reads `filter.tasks=status%3Ain%3A…`: URLSearchParams percent-encodes the token's colons and commas, and each value is encoded once more inside the token. That is the wire format working as intended.
+- **Dates on the wire** are RFC 3339 instants with the browser's offset, at millisecond precision (the record keeps Unix ms). A picked local day becomes its bounds, 00:00:00.000 and 23:59:59.999:
+  - after:end(D)
+  - before:start(D)
+  - gte:start(D)
+  - lte:end(D)
+  - btw:start(A),end(B), inclusive at both ends. One day is btw of that day, since dates have no `is`.
+  - last:7d|30d|90d
+
+  Each bound carries its own offset. On 4 Oct 2026, the day Melbourne's daylight saving starts, the day runs from +10:00 to +11:00. Flipping the operator keeps the days and bounds them again. The chip reads each instant's day in the viewer's time zone: "after 4 Oct", "4 Oct – 6 Oct", "Last 7 days". The lead passed these tokens on to the `api-filters` branch.
+- **Updated has no field.** The Task record carries no `updated_at`, and the tasks table has none. The filter reads the time the list's Updated column shows, which is `ended_at` for an ended Task and `waiting_since` otherwise, now shared as `updatedAt` in `derive.ts`. Completed is the `ended_at` of a done Task.
+- **Claim takes several values at once:**
+  - Held: a live Claim.
+  - Unheld: the Task is open and nobody holds it.
+  - Lapsed in 24 h: read from the Claim trail the board already reads, so a lapse older than its 500 entries counts as none.
+  - Live session: a Runner session works the Task, in any state but ending.
+  Live session comes from `useRunnerSessions`, the Agents page's query, which polls every 5 s while a Runner is attached. Team › Tasks now polls too.
+- **The date editor draws one month**, with All and the windows beside it. enably's two-month calendar and its phone takeover sheet are left out: one month fits both a phone and the desktop popover.
+- **The phone layout is CSS.** Under 640px each chip takes a line of its own with its value taking the slack, and the row's Reset goes, since the Filters menu keeps its own, as enably's stacked rail does. `stacked` forces the layout at any width.
+- **Team › Features:**
+  - The owner dropdown and its chip are gone, and Display's "Shipped and dropped" no longer shows as a chip.
+  - State (Open, Shipped, Dropped) asked for by name beats the Display, as Status does on Tasks.
+  - Old `?owner=<name>` links are rewritten.
+  - "State" is the API's word for a Feature's open, shipped or dropped. CONTEXT.md's "avoid: State" is about a Task's Status.
 
 ### W2 Board, W3 Task and Feature, W4 Inbox and Agents, W5 Admin (2026-10-07)
 
