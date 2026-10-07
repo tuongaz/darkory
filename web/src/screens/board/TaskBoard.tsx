@@ -242,18 +242,19 @@ function CardBody({ task, model, lifted }: { task: Task; model: BoardModel; lift
         lifted ? "rotate-[1.5deg] shadow-pop" : "shadow-soft",
       )}
     >
-      <div className="flex min-w-0 items-center gap-1.5">
+      {/* The pills row: the key, then the mark, what an open Task needs (a question: what it holds
+          up) and who holds it, wrapping to the right under the mark when a card is too narrow. */}
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-1.5 gap-y-1">
         <Key className="mr-auto">{task.key}</Key>
         {mark && <MarkPill mark={mark} now={model.now} />}
+        {needs}
         {holder ? <MemberAvatar member={holder} /> : aimed && <AimedAt member={aimed} />}
       </div>
       <div className="leading-[1.35] font-medium">{task.title}</div>
       {/* The Feature on a line of its own, so two clients' Features read apart at five columns. */}
       <FeatureRef feature={featureOf(model, task)} />
-      {/* The pills: what an open Task needs (a question: what it holds up), then the Heartbeat. */}
-      {(needs || held) && (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-          {needs}
+      {held && (
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           <HeartbeatLine task={task} now={model.now} />
         </div>
       )}

@@ -55,17 +55,18 @@ export function SkillPill({ task, model }: { task: Task; model: Pick<BoardModel,
   return <Pill tone="outline">{skill.name}</Pill>;
 }
 
-/**
- * "lapses in 15 min  claude-opus-5-5": a held card's countdown to the lapse and, in mono, the model
- * the holder named. In a row too narrow for both the model wraps to a line of its own.
- */
+/** "lapses in 15 min · claude-opus-5-5": a held card's countdown to the lapse and the model the holder named, cut short to fit. */
 export function HeartbeatLine({ task, now }: { task: Task; now: number }) {
   const claim = liveClaim(task, now);
   if (!claim?.expires_at) return null;
   return (
     <>
       <HeartbeatMeter claim={claim} variant="compact" />
-      {claim.model_label && <span className="max-w-full min-w-0 truncate font-mono text-[11px]">{claim.model_label}</span>}
+      {claim.model_label && (
+        <span className="min-w-0 truncate" title={claim.model_label}>
+          · {claim.model_label}
+        </span>
+      )}
     </>
   );
 }
