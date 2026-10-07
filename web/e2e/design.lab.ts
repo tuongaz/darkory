@@ -40,6 +40,9 @@ for (const scheme of ["light", "dark"] as const) {
 
       const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
       expect(widths.scroll).toBe(widths.client);
+      // The graph scrolls sideways in its box under a finger too.
+      const graphPane = page.getByRole("region", { name: "Subtasks, graph" }).locator(".react-flow__pane");
+      expect(await graphPane.evaluate((el) => getComputedStyle(el).touchAction)).toBe("pan-x pan-y");
 
       await page.screenshot({ path: `e2e/screenshots/lab-${size.name}-${scheme}.png`, fullPage: true });
       if (size.name === "desktop") {

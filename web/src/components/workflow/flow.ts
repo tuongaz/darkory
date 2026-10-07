@@ -1,6 +1,6 @@
 import { Position, type Edge, type Node, type NodeHandle } from "@xyflow/react";
 import { STEP_H, STEP_W, TERMINAL_H, TERMINAL_W, terminals } from "./layout";
-import { isHold, stepsInOrder, targetName, unstaffed, waitingAt, type Connector, type Ends, type Step, type Workflow } from "./model";
+import { stepsInOrder, targetName, unstaffed, waitingAt, type Connector, type Ends, type Step, type Workflow } from "./model";
 import { routeConnectors, type Rect, type Route } from "./route";
 
 /** The terminal nodes' ids; a step's id is a UUID, so these never meet one. */
@@ -73,7 +73,6 @@ export function toNodes(workflow: Workflow, mode: Mode): CanvasNode[] {
     selectable: edit,
     deletable: false,
     ariaLabel: stepLabel(step),
-    className: isHold(step) ? "is-hold" : undefined,
   }));
   const terminal = (id: string, kind: "done" | "dropped", at: { x: number; y: number }, ariaLabel: string): TerminalFlowNode => ({
     id,

@@ -152,7 +152,7 @@ export function SubtaskGraph({
 
   if (subtasks.length === 0) return null;
   return (
-    <div role="region" aria-label="Subtasks, graph" className={cn("overflow-x-auto overscroll-x-contain", className)}>
+    <div role="region" aria-label="Subtasks, graph" className={cn("subtask-graph overflow-x-auto overscroll-x-contain", className)}>
       <div className="relative" style={{ width: layout.width, height: layout.height }}>
         {layout.columns.map((c) => (
           <div

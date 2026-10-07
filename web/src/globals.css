@@ -84,6 +84,11 @@
   opacity: 0;
   pointer-events: none;
 }
+/* The Subtask graph does not pan or zoom: it scrolls in its box, which a finger on it must be let
+   do (base.css stops touch panning on the pane, for the canvas's own). */
+.subtask-graph .react-flow__pane {
+  touch-action: pan-x pan-y;
+}
 /* React Flow's credit, kept as its makers ask of anyone not subscribed to React Flow Pro. */
 .react-flow__attribution {
   --xy-attribution-background-color: transparent;
