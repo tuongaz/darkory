@@ -21,3 +21,20 @@ export function initials(member: Pick<Member, "name" | "kind">): string {
     .join("")
     .toUpperCase();
 }
+
+const tints = 8;
+
+/** Which of the eight avatar tints (globals.css) a name gets: the same every time, spread by a string hash. */
+export function tintOf(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return Math.abs(h) % tints;
+}
+
+/**
+ * A Session id as rows show it: its last 8 characters after "…". Ids are UUIDv7, so Sessions
+ * started the same day share their first characters and differ at the end.
+ */
+export function shortSessionId(id: string): string {
+  return id.length <= 9 ? id : `…${id.slice(-8)}`;
+}

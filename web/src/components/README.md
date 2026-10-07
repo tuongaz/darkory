@@ -18,7 +18,7 @@ What the agents plan's phase R3 (`docs/build/agents-plan.md`) added to these scr
 
 | Screen | Holds |
 |---|---|
-| Admin › Workspaces (`WorkspacesPage`) | Each Workspace: name, kind, path, mode (Plain or Pull request), default branch, the Teams it is the default of, the open Tasks naming it. New Workspace; path, mode and default branch edited in place; Remove behind ⋯, refused in words while any Task names it. |
+| Admin › Workspaces (`WorkspacesPage`) | Each Workspace: name, kind, path, mode (Local or Pull request), the path cut in the middle so its folder shows, default branch, the Teams it is the default of, the open Tasks naming it. New Workspace; path, mode and default branch edited in place; Remove behind ⋯, refused in words while any Task names it. |
 | Admin › a Team (`TeamPage`) | Above its Members: Default Workspace and Ship when done (`PATCH /v1/teams/{team}`). |
 | Admin › a Member (`MemberPage`), an agent | The Agent card: command (its placeholders under it), arguments, model, environment, progress file, Paused, Unattended; each saved alone (`PATCH /v1/members/{member}/agent`). An agent with no settings is handed to the Runner from it; Stop using the Runner, behind ⋯, clears them (`DELETE /v1/members/{member}/agent`). New Member asks an agent Run with the Runner (on) and, when on, its model; the Members table shows the model and a Paused pill. |
 | File a Feature (`BoardDialogs`) | Quick, which asks the Skill (needed) and Workspaces of its one Task and fixes Ship when done on; Ship when done, starting at the Team's. |
@@ -99,7 +99,7 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 |---|---|---|
 | `StatusGlyph glyph` | `.st` | `backlog · todo · inprogress · inreview · done · dropped`. `glyphFor(kind, nthOfKind)` in `@/lib/status` maps a Status kind to a glyph: the first In-progress Status draws half full, later ones (In review) three quarters. |
 | `StatusSelect statuses value onValueChange variant id` | `.select` | The one Status picker (File a Task, a Task's properties): the open-kind Statuses in board order with their glyphs. `field` for a form, `property` for a properties column. |
-| `MemberAvatar member size` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Round initials for a human, square violet for an agent; named for screen readers ("builder-1 (agent)"). |
+| `MemberAvatar member size` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Round initials for a human, square with the violet agent border for an agent, each on one of eight muted tints picked by its name (`tintOf` in `@/lib/members`, `.avatar-tint` in `globals.css`), so two "RT"s differ; named for screen readers ("builder-1 (agent)"). |
 | `Pill tone` | `.badge` | `waiting · claimed · blocked · done · dropped · agent` (ink on a tint), `outline` (a Skill name), `secondary` (a Task kind, a fact), `destructive`. At most two words; a dimmed row's pill says why. |
 | `Key to?` | `.key` | `WEB-3` in mono; a link with `to`. |
 | `TeamMark team size` | `.team-dot` | A Team's lettered square, coloured by its key. |
@@ -110,10 +110,12 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | `Timeline` + `TimelineDay` + `TimelineRow who when` + `SystemMark` | `.tl` | Activity and a Task's record. `SystemMark` stands for Darkory when no Member acted (a lapse). |
 | `EmptyState icon title action` | `.empty` | A heading of at most three words and the one next thing. |
 | `InfoPopover label anchor side align` | `.info` | ⓘ: where explanations go, so the screen stays label + number + pill. `anchor` (a ref), `side` and `align` open it beside what it explains rather than over it. |
-| `HeartbeatMeter claim variant` | `.hb` | `bar` (peek, Agents): "in 15 min" with the time left as a bar; `compact` (a card): pulse + "15 min". No expiry, Lapsed. |
+| `HeartbeatMeter claim variant` | `.hb` | `bar` (peek, Agents): "lapses in 15 min" with the time left as a bar; `compact` (a card, a row): pulse + "lapses in 15 min". The exact lapse time on hover. No expiry, Lapsed. |
 | `Refusal error`, `Loaded query` | | A refusal with its stable code; a query's data, skeleton or refusal. |
-| `Time`, `ClockTime`, `RelativeTime` | | "6 Oct 2026, 22:18"; "22:18"; "in 4 minutes". |
-| `RunnerSessionBadge session bare` | | The Runner's session on a Task as one line: "Session [Running] started 04:25 · mac-mini"; `bare` leaves out "Session" under a Session column. |
+| `Time`, `ClockTime`, `DayTime what`, `RelativeTime` | | "6 Oct 2026, 22:18"; "22:18"; a table's time column, "22:18" today and "6 Oct" before, its hover naming the field ("Waiting since …"); "in 4 minutes". |
+| `CopyValue value what`, `SessionId id` | | A value in mono that copies itself on click, whole on hover (a branch). `SessionId` shows a Session id as "…" and its last 8 characters, where UUIDv7 ids differ. |
+| `PillsFit names` | `.badge` | Skill pills on one line: as many whole ones as fit, then "+N" naming the rest on hover. |
+| `RunnerSessionBadge session bare state` | | The Runner's session on a Task as one line: "Session [Running] started 04:25 · mac-mini"; `bare` leaves out "Session" under a Session column, `state={false}` the pill beside a State column (Agents). |
 | `SessionFacts session agent` | | A runner session's facts in one line: the agent, started, its state, the host, `tmux dk-WEB-12` or "no tmux". |
 | `SessionStatePill state` | `.badge` | A runner session's state: Running (done tone: working, Heartbeats going), Waiting (claimed: its turn ended without a decision, nudged), Stalled (blocked: no progress, no more Heartbeats, the Claim lapsing; the Heartbeat meter empties), Ending (dropped). Its title says which. |
 

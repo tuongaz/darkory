@@ -1,5 +1,5 @@
 import type { Member } from "@/api/client";
-import { initials } from "@/lib/members";
+import { initials, tintOf } from "@/lib/members";
 import { cn } from "@/lib/utils";
 
 export type AvatarSize = "sm" | "md" | "lg";
@@ -10,7 +10,11 @@ const sizes: Record<AvatarSize, { box: string; agent: string }> = {
   lg: { box: "size-10 text-sm", agent: "rounded-[10px]" },
 };
 
-/** A Member's mark: round initials for a human, square violet initials for an agent. */
+/**
+ * A Member's mark: round initials for a human, square initials with the violet agent border for
+ * an agent, each on a muted tint of its own (by name), so "RT" for retro and "RT" for reviewer-tax
+ * differ.
+ */
 export function MemberAvatar({
   member,
   size = "sm",
@@ -21,18 +25,19 @@ export function MemberAvatar({
   className?: string;
 }) {
   const s = sizes[size];
+  const tint = tintOf(member.name);
   return (
     <span
       role="img"
       aria-label={member.kind === "agent" ? `${member.name} (agent)` : member.name}
       title={member.name}
       data-kind={member.kind}
+      data-tint={tint}
       className={cn(
-        "inline-grid flex-none place-items-center border font-semibold leading-none select-none",
+        "avatar-tint inline-grid flex-none place-items-center border font-semibold leading-none select-none",
+        `tint-${tint}`,
         s.box,
-        member.kind === "agent"
-          ? cn("border-agent-border bg-agent-bg text-agent", s.agent)
-          : "rounded-full border-border bg-secondary text-secondary-foreground",
+        member.kind === "agent" ? cn("border-agent-border", s.agent) : "rounded-full",
         className,
       )}
     >

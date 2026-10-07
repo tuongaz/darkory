@@ -189,6 +189,36 @@
   --danger-border: oklch(0.45 0.08 25);
 }
 
+/* An avatar's tint (MemberAvatar): one of eight muted hues, chosen by a hash of the Member's name,
+   so two Members with the same initials look apart. The theme sets the tone, the tint-N class the
+   hue. */
+:root {
+  --tint-bg: 0.95 0.035;
+  --tint-fg: 0.47 0.11;
+  --tint-border: 0.87 0.05;
+}
+.dark {
+  --tint-bg: 0.31 0.05;
+  --tint-fg: 0.83 0.09;
+  --tint-border: 0.42 0.07;
+}
+@layer components {
+  .avatar-tint {
+    background-color: oklch(var(--tint-bg) var(--tint-h));
+    color: oklch(var(--tint-fg) var(--tint-h));
+    border-color: oklch(var(--tint-border) var(--tint-h));
+  }
+  /* Neighbouring numbers far apart on the wheel. */
+  .tint-0 { --tint-h: 250; }
+  .tint-1 { --tint-h: 25; }
+  .tint-2 { --tint-h: 155; }
+  .tint-3 { --tint-h: 300; }
+  .tint-4 { --tint-h: 65; }
+  .tint-5 { --tint-h: 200; }
+  .tint-6 { --tint-h: 340; }
+  .tint-7 { --tint-h: 115; }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

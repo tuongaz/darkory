@@ -26,13 +26,24 @@ export function SessionStatePill({ state }: { state: RunnerSessionState }) {
 
 /**
  * The session the Runner runs for a Task, in one line: "Session [Running] started 04:25 ·
- * mac-mini". A fact, not a button. `bare` leaves out "Session" where a column already says it.
+ * mac-mini". A fact, not a button. `bare` leaves out "Session" where a column already says it,
+ * and `state={false}` the pill where a column of its own shows it.
  */
-export function RunnerSessionBadge({ session, bare, className }: { session: RunnerSession; bare?: boolean; className?: string }) {
+export function RunnerSessionBadge({
+  session,
+  bare,
+  state = true,
+  className,
+}: {
+  session: RunnerSession;
+  bare?: boolean;
+  state?: boolean;
+  className?: string;
+}) {
   return (
     <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
       {!bare && <span>Session</span>}
-      <SessionStatePill state={session.state} />
+      {state && <SessionStatePill state={session.state} />}
       <span className="truncate">
         started <ClockTime at={session.started_at} /> · {session.host}
       </span>

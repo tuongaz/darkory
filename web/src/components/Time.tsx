@@ -1,4 +1,6 @@
 import { useNow } from "@/clock";
+import { shortWhen } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -16,6 +18,21 @@ export function ClockTime({ at }: { at: string }) {
   return (
     <time dateTime={at} title={dateTime.format(d)} className="tabular-nums">
       {clock.format(d)}
+    </time>
+  );
+}
+
+/**
+ * A time in a table's column: "22:18" today, "6 Oct" another day, so a bare clock never stands
+ * for another day. The hover names the field and gives the whole time: "Waiting since 6 Oct
+ * 2026, 22:18".
+ */
+export function DayTime({ at, what, className }: { at: string; what?: string; className?: string }) {
+  const now = useNow();
+  const full = dateTime.format(new Date(at));
+  return (
+    <time dateTime={at} title={what ? `${what} ${full}` : full} className={cn("tabular-nums", className)}>
+      {shortWhen(at, now)}
     </time>
   );
 }
