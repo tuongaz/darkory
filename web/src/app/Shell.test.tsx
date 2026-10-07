@@ -269,6 +269,28 @@ describe("keys", () => {
     await waitFor(() => expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent(/Admin.*Members.*bob/));
   });
 
+  it("⌘K offers to file words that match nothing, as a Task's title or a Feature's", async () => {
+    mockApi(records());
+    renderApp("/my-work");
+    await screen.findByRole("heading", { name: "My work" });
+
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    let search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "gift wrapping");
+    expect(await within(search).findByRole("option", { name: "File a Feature “gift wrapping”" })).toBeInTheDocument();
+    await userEvent.click(within(search).getByRole("option", { name: "File a Task “gift wrapping”" }));
+    const dialog = await screen.findByRole("dialog", { name: "File a Task" });
+    expect(within(dialog).getByLabelText("Title")).toHaveValue("gift wrapping");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "gift wrapping");
+    await userEvent.click(await within(search).findByRole("option", { name: "File a Feature “gift wrapping”" }));
+    expect(within(await screen.findByRole("dialog", { name: "File a Feature" })).getByLabelText("Title")).toHaveValue("gift wrapping");
+  });
+
   it("⌘K offers no Admin pages and no human Members to a Member who is not an admin", async () => {
     mockApi({ ...records(), "GET /v1/me": me(bob) });
     renderApp("/inbox");
