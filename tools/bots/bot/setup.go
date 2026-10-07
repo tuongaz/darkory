@@ -487,7 +487,8 @@ type planned interface {
 
 func (a *agent) plans(p *Preset, ask string) { a.preset, a.ask = p, ask }
 
-// Bots makes the bot for every Spec of the preset's Agents.
+// Bots makes the bot for every Spec of the preset's Agents, and for every persona Setup issued a
+// token to.
 func (crew *Crew) Bots(cfg Config) []Bot {
 	var bots []Bot
 	for _, s := range crew.Preset.Agents {
@@ -513,6 +514,11 @@ func (crew *Crew) Bots(cfg Config) []Bot {
 		}
 		b.plans(crew.Preset, crew.Ask)
 		bots = append(bots, b)
+	}
+	for _, p := range crew.Personas {
+		h := NewPerson(cfg, crew.Members[p.Name], p)
+		h.plans(crew.Preset, crew.Ask)
+		bots = append(bots, h)
 	}
 	return bots
 }

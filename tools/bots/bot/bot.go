@@ -76,25 +76,31 @@ type Pace struct {
 	Patience time.Duration
 	// Rest is how long Stuck rests after a take-back before taking work again, or 0 to stop.
 	Rest time.Duration
+	// Answer is how long a human persona leaves a Task they could take before taking it, at
+	// random between the two; Round how often a persona who owns Features looks them over.
+	Answer [2]time.Duration
+	Round  time.Duration
 }
 
 // Fast is the pace of the scenario tests: every bot finishes a Task within a second.
 var Fast = Pace{Name: "fast", Work: [2]time.Duration{200 * time.Millisecond, 600 * time.Millisecond}, Step: 20 * time.Millisecond,
-	Wait: 1, Poll: 100 * time.Millisecond, Timeout: 3, Heartbeat: 500 * time.Millisecond, LapseTimeout: 2, Patience: 2 * time.Minute}
+	Wait: 1, Poll: 100 * time.Millisecond, Timeout: 3, Heartbeat: 500 * time.Millisecond, LapseTimeout: 2, Patience: 2 * time.Minute,
+	Answer: [2]time.Duration{200 * time.Millisecond, 600 * time.Millisecond}, Round: 500 * time.Millisecond}
 
 // Human is the pace of a live load: a builder takes 30–90 s per Task and heartbeats every 15 s,
-// the lapser lapses once a minute, and Stuck holds its Task until someone takes it back.
+// the lapser lapses once a minute, Stuck holds its Task until someone takes it back, a person
+// answers a question 20–60 s after it is asked, and an owner looks their Features over every 30 s.
 var Human = Pace{Name: "human", Work: [2]time.Duration{30 * time.Second, 90 * time.Second}, Step: 3 * time.Second,
 	Wait: 30, Poll: 5 * time.Second, Timeout: 45, Heartbeat: 15 * time.Second, LapseTimeout: 20, LapseEvery: time.Minute,
-	Patience: 3 * time.Minute, Rest: 2 * time.Minute}
+	Patience: 3 * time.Minute, Rest: 2 * time.Minute, Answer: [2]time.Duration{20 * time.Second, 60 * time.Second}, Round: 30 * time.Second}
 
 // Event is one thing a bot did or met.
 type Event struct {
 	At  time.Time
 	Bot string
 	// What is a short verb phrase: took, nothing, noted, attached, asked, answered, observed,
-	// wrote, handed over, handed back, completed, released, filed, blocked, moved, proposed,
-	// published, went silent, lapsed, taken back, lost, refused, failed.
+	// wrote, handed over, handed back, completed, released, filed, blocked, moved, shipped,
+	// proposed, published, went silent, lapsed, taken back, lost, refused, failed.
 	What string
 	// Task is the display key of the Task it is about, if any.
 	Task string

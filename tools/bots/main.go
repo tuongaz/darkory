@@ -48,6 +48,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	url := fs.String("url", or(os.Getenv("DARKORY_URL"), "http://127.0.0.1:7357"), "the Install (DARKORY_URL)")
 	token := fs.String("token", "", "an admin's token (DARKORY_TOKEN, which other processes cannot read as they can arguments)")
 	presetName := fs.String("preset", "software", "the Organisation the bots make and work: software or accounting")
+	humans := fs.Bool("humans", true, "run the preset's human personas too, each with a token of their own: they answer the questions, own the Features and ship them")
 	workspaceRoot := fs.String("workspace-root", filepath.Join(or(os.Getenv("DARKORY_DATA"), ".dev"), "bots"),
 		"where a preset's Workspaces get their throwaway git repositories, one directory each (default: bots in DARKORY_DATA, else in .dev)")
 	paceName := fs.String("pace", "human", "human: a builder takes 30–90 s a Task; fast: under a second")
@@ -106,7 +107,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		return err
 	}
 	crew, err := bot.Setup(ctx, admin, bot.Options{Preset: preset, Team: *team, TeamName: *teamName, Ops: *ops, OpsName: *opsName, Ask: *ask,
-		WorkspaceRoot: *workspaceRoot, Timeout: pace.Timeout, TokenName: "tools/bots " + time.Now().Format("2006-01-02 15:04")})
+		Personas: *humans, WorkspaceRoot: *workspaceRoot, Timeout: pace.Timeout, TokenName: "tools/bots " + time.Now().Format("2006-01-02 15:04")})
 	if err != nil {
 		return err
 	}
