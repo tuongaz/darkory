@@ -122,13 +122,20 @@
 
 /* Values the kit (kit.css) writes inline, named here so components use tokens only. */
 :root {
-  --agent-border: oklch(0.86 0.06 300);
   --on-solid: oklch(0.985 0 0); /* text on a solid state fill: a Done glyph, the New tag */
   --shadow-soft-color: oklch(0 0 0 / 0.04);
   --shadow-pop-color: oklch(0 0 0 / 0.12);
   --scrim: oklch(0 0 0 / 0.3);
   --warn-border: oklch(0.85 0.08 75);
   --danger-border: oklch(0.85 0.08 25);
+
+  /* The AI gradient: an agent's border and the ring that turns while an agent works. A
+     violet-led blend, violet → blue → teal → pink. A ring that turns composes
+     `conic-gradient(from var(--spin), var(--agent-stops))` where it is drawn: a gradient held in
+     a variable is resolved where the variable is defined, with its angle fixed there. */
+  --agent-stops: oklch(0.55 0.23 293) 0% 12%, oklch(0.6 0.19 258) 32%, oklch(0.7 0.13 190) 50%,
+    oklch(0.67 0.21 350) 70%, oklch(0.55 0.23 293) 88% 100%;
+  --agent-gradient: conic-gradient(var(--agent-stops));
 }
 
 /* shadcn's neutral dark theme, with the Darkory additions lifted for a dark ground. The app sets
@@ -180,13 +187,29 @@
   --agent-bg: oklch(0.3 0.07 300);
   --human: oklch(0.985 0 0);
 
-  --agent-border: oklch(0.42 0.1 300);
   --on-solid: oklch(0.145 0 0);
   --shadow-soft-color: oklch(0 0 0 / 0.3);
   --shadow-pop-color: oklch(0 0 0 / 0.5);
   --scrim: oklch(0 0 0 / 0.6);
   --warn-border: oklch(0.45 0.08 75);
   --danger-border: oklch(0.45 0.08 25);
+
+  --agent-stops: oklch(0.7 0.19 293) 0% 12%, oklch(0.72 0.15 258) 32%, oklch(0.8 0.12 190) 50%,
+    oklch(0.76 0.17 350) 70%, oklch(0.7 0.19 293) 88% 100%;
+  --agent-gradient: conic-gradient(var(--agent-stops));
+}
+
+/* The angle a working ring has turned to: registered so it animates, and not inherited, so a mark
+   inside a turning one keeps its own. */
+@property --spin {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes mark-spin {
+  to {
+    --spin: 360deg;
+  }
 }
 
 /* An avatar's tint (MemberAvatar): one of eight muted hues, chosen by a hash of the Member's name,
@@ -203,11 +226,87 @@
   --tint-border: 0.42 0.07;
 }
 @layer components {
+  /* A Member's mark: a tinted disc in a round ring. The ring is the border box painted under the
+     disc, so it can be a gradient: a human's is a plain line in its tint, an agent's the AI
+     gradient. A standalone mark whose Member works (data-working) rings thicker: an agent's turns
+     while its session runs and stops amber (waiting), red (stalled) or grey (ending); a human's
+     live Claim is a still ring in the human ink. */
   .avatar-tint {
-    background-color: oklch(var(--tint-bg) var(--tint-h));
+    --mark-disc: oklch(var(--tint-bg) var(--tint-h));
+    --mark-line: oklch(var(--tint-border) var(--tint-h));
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    background:
+      linear-gradient(var(--mark-disc) 0 0) padding-box,
+      linear-gradient(var(--mark-line) 0 0) border-box;
     color: oklch(var(--tint-fg) var(--tint-h));
-    border-color: oklch(var(--tint-border) var(--tint-h));
   }
+  .avatar-tint[data-kind="agent"],
+  .avatar-tint[data-working="running"] {
+    border-width: 1.5px;
+    background:
+      linear-gradient(var(--mark-disc) 0 0) padding-box,
+      conic-gradient(from var(--spin), var(--agent-stops)) border-box;
+  }
+  .avatar-tint[data-working] {
+    border-width: 2px;
+  }
+  .avatar-tint[data-working="running"] {
+    animation: mark-spin 1.6s linear infinite;
+  }
+  .avatar-tint[data-working="waiting"] {
+    --mark-line: var(--state-claimed);
+  }
+  .avatar-tint[data-working="stalled"] {
+    --mark-line: var(--state-blocked);
+  }
+  .avatar-tint[data-working="ending"] {
+    --mark-line: var(--state-dropped);
+  }
+  .avatar-tint[data-working="held"] {
+    --mark-line: var(--human);
+  }
+  .avatar-tint[data-working="waiting"],
+  .avatar-tint[data-working="stalled"],
+  .avatar-tint[data-working="ending"],
+  .avatar-tint[data-working="held"] {
+    background:
+      linear-gradient(var(--mark-disc) 0 0) padding-box,
+      linear-gradient(var(--mark-line) 0 0) border-box;
+  }
+
+  /* The working glyph (WorkGlyph): a 2px ring with a clear middle, so it sits on any row. An
+     agent's is the AI gradient, turning while its session runs; it stops in the session's colour
+     as the mark does. A human's is still, in the human ink, with a dot in the middle. */
+  .work-ring {
+    border-radius: 9999px;
+    background: conic-gradient(from var(--spin), var(--agent-stops));
+    mask: radial-gradient(closest-side, transparent calc(100% - 2px), black calc(100% - 1.5px));
+  }
+  .work-ring[data-session="running"] {
+    animation: mark-spin 1.6s linear infinite;
+  }
+  .work-ring[data-session="waiting"] {
+    background: var(--state-claimed);
+  }
+  .work-ring[data-session="stalled"] {
+    background: var(--state-blocked);
+  }
+  .work-ring[data-session="ending"] {
+    background: var(--state-dropped);
+  }
+  .work-ring[data-holder="human"] {
+    background: var(--human);
+    mask: radial-gradient(closest-side, black 2px, transparent 2.5px calc(100% - 2px), black calc(100% - 1.5px));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .avatar-tint[data-working="running"],
+    .work-ring {
+      animation: none;
+    }
+  }
+
   /* Neighbouring numbers far apart on the wheel. */
   .tint-0 { --tint-h: 250; }
   .tint-1 { --tint-h: 25; }
@@ -264,7 +363,6 @@
   --color-state-dropped-bg: var(--state-dropped-bg);
   --color-agent: var(--agent);
   --color-agent-bg: var(--agent-bg);
-  --color-agent-border: var(--agent-border);
   --color-human: var(--human);
   --color-on-solid: var(--on-solid);
   --color-scrim: var(--scrim);
