@@ -115,6 +115,58 @@ func TestTmuxHost(t *testing.T) {
 	}
 }
 
+// The runner's tmux server reads no configuration of the person's, and sets only its own few
+// options.
+func TestTmuxHostReadsNoConfiguration(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	home := t.TempDir()
+	conf := "set -g @marker mine\nset -g status on\nset -g history-limit 50\n"
+	writeTestFile(t, filepath.Join(home, ".tmux.conf"), conf)
+	writeTestFile(t, filepath.Join(home, ".config", "tmux", "tmux.conf"), conf)
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	h := &tmuxHost{socket: TmuxSocket(t.TempDir()), every: 50 * time.Millisecond}
+	t.Cleanup(func() { killTmux(h.socket) })
+	s := hostSpec(t, "dk-WEB-1")
+	s.Argv = []string{"/bin/sh", "-c", `echo "term $TERM"; sleep 60`}
+	p, err := h.Start(t.Context(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Kill()
+	show := func(args ...string) string {
+		out, _ := exec.Command("tmux", append([]string{"-L", h.socket}, args...)...).CombinedOutput()
+		return strings.TrimSpace(string(out))
+	}
+	for opt, want := range map[string]string{"@marker": "", "status": "off", "default-terminal": "screen-256color", "history-limit": "10000"} {
+		if got := show("show-options", "-gqv", opt); got != want {
+			t.Errorf("the runner's tmux server has %s %q, want %q", opt, got, want)
+		}
+	}
+	if got := show("display-message", "-p", "-t", "=dk-WEB-1:", "#{history_limit}"); got != "10000" {
+		t.Errorf("the first window's history limit is %q", got)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(p.Screen(5), "term screen-256color") {
+		if time.Now().After(deadline) {
+			t.Fatalf("the session shows %q", p.Screen(5))
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // killTmux stops a tmux server and removes its socket, which tmux leaves behind.
 func killTmux(socket string) {
 	exec.Command("tmux", "-L", socket, "kill-server").Run()

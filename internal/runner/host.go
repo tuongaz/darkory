@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,7 +149,9 @@ func (p *child) Tmux() bool { return false }
 
 func (p *child) Screen(lines int) string { return lastLines(p.log, lines) }
 
-// tmuxHost runs sessions in tmux, on the runner's own tmux server.
+// tmuxHost runs sessions in tmux, on the runner's own tmux server. The server reads no tmux
+// configuration (a person's status bar, key tables and plugins are theirs, not the agents'): it
+// sets only tmuxOptions as the first session starts it.
 type tmuxHost struct {
 	socket string
 	// every is how often a session is looked for, to tell it has ended.
@@ -158,7 +161,7 @@ type tmuxHost struct {
 func (h *tmuxHost) Tmux() bool { return true }
 
 func (h *tmuxHost) tmux(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "tmux", append([]string{"-L", h.socket}, args...)...)
+	cmd := exec.CommandContext(ctx, "tmux", append([]string{"-L", h.socket, "-f", os.DevNull}, args...)...)
 	cmd.Env = tmuxEnv()
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -197,8 +200,10 @@ func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 		return nil, err
 	}
 	h.tmux(ctx, "kill-session", "-t", "="+s.Name)
-	if _, err := h.tmux(ctx, "new-session", "-d", "-s", s.Name, "-x", "200", "-y", "50", "-c", s.Dir,
-		`exec /usr/bin/env -i TERM="$TERM" /bin/sh `+ShellQuote(run)); err != nil {
+	// The options come first, so the first window has them too.
+	newSession := append(slices.Clone(tmuxOptions), "new-session", "-d", "-s", s.Name, "-x", "200", "-y", "50", "-c", s.Dir,
+		`exec /usr/bin/env -i TERM="$TERM" /bin/sh `+ShellQuote(run))
+	if _, err := h.tmux(ctx, newSession...); err != nil {
 		return nil, err
 	}
 	if _, err := h.tmux(ctx, "pipe-pane", "-o", "-t", pane(s.Name), "cat >> "+ShellQuote(s.Log)); err != nil {
@@ -211,6 +216,15 @@ func (h *tmuxHost) Start(ctx context.Context, s Spec) (Proc, error) {
 	p := &tmuxProc{h: h, name: s.Name, exitFile: exitFile, log: s.Log, done: make(chan struct{})}
 	go p.watch()
 	return p, nil
+}
+
+// tmuxOptions are all the runner's tmux server is configured with: no status bar (a joiner sees
+// the agent's screen alone), a scrollback for the screen the runner reads, and a terminal type
+// every system's terminfo knows.
+var tmuxOptions = []string{
+	"set-option", "-g", "status", "off", ";",
+	"set-option", "-g", "history-limit", "10000", ";",
+	"set-option", "-g", "default-terminal", "screen-256color", ";",
 }
 
 // pane is the target of a session's one pane, the session matched by its exact name.
