@@ -39,6 +39,8 @@ type Values struct {
 	MCPConfig string
 	// Task is the Task's display key, {task}.
 	Task string
+	// Title is the Task's title, for Claude Code's first message; it is no placeholder.
+	Title string
 }
 
 func (v Values) lookup(name string) (string, bool) {
@@ -81,7 +83,13 @@ func Expand(s string, v Values) (string, error) {
 }
 
 // firstMessage is the session's first message to Claude Code, which otherwise waits at its prompt.
-const firstMessage = "Work on Task {task}: the system prompt holds the Task, its record and the rules for ending it."
+func firstMessage(v Values) string {
+	title := strings.TrimRight(strings.Join(strings.Fields(v.Title), " "), ".")
+	if title == "" {
+		return fmt.Sprintf("Work on Task %s. Your instructions are in the system prompt.", v.Task)
+	}
+	return fmt.Sprintf("Work on Task %s: %s. Your instructions are in the system prompt.", v.Task, title)
+}
 
 // Render turns an agent's command and arguments into the argv the runner starts. An empty command
 // is DefaultCommand, and empty arguments for it are DefaultArgs. Claude Code gets the session's
@@ -93,13 +101,12 @@ func Render(command string, args []string, unattended bool, v Values) ([]string,
 	if command == "" {
 		command = DefaultCommand
 	}
+	first := false
 	if IsClaude(command) {
 		if len(args) == 0 {
 			args = DefaultArgs
 		}
-		if !slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, "{task}") }) {
-			args = append(slices.Clone(args), firstMessage)
-		}
+		first = !slices.ContainsFunc(args, func(a string) bool { return strings.Contains(a, "{task}") })
 	}
 	if !unattended {
 		args = slices.DeleteFunc(slices.Clone(args), func(a string) bool { return a == skipPermissions })
@@ -121,6 +128,10 @@ func Render(command string, args []string, unattended bool, v Values) ([]string,
 			continue
 		}
 		argv = append(argv, out)
+	}
+	if first {
+		// After the placeholders are filled, so a title is never read as one.
+		argv = append(argv, firstMessage(v))
 	}
 	return argv, nil
 }

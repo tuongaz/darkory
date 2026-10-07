@@ -88,7 +88,7 @@ type Options struct {
 	// Member may have open on this process at once. Defaults to DefaultMaxWaiting.
 	MaxWaiting int
 	// Runner is the Runner beside this server, which /v1/runner serves; nil for none, as with
-	// serve --agents=off. AttachRunner sets one later.
+	// serve --runner=off. AttachRunner sets one later.
 	Runner runnerapi.Runner
 }
 

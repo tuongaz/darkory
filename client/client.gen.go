@@ -2678,7 +2678,7 @@ type ClientInterface interface {
 	//
 	// A read model of the Runner beside this server, not part of the record: what it runs now,
 	// one session per Task it holds a Claim on for an agent. With no Runner attached to this
-	// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+	// server (as with `serve --runner=off`) it answers `runner: false` and no sessions, not an
 	// error, so a page can poll it.
 	//
 	// Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
@@ -4144,7 +4144,7 @@ func (c *Client) IssueToken(ctx context.Context, member MemberRef, params *Issue
 //
 // A read model of the Runner beside this server, not part of the record: what it runs now,
 // one session per Task it holds a Claim on for an agent. With no Runner attached to this
-// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+// server (as with `serve --runner=off`) it answers `runner: false` and no sessions, not an
 // error, so a page can poll it.
 //
 // Corresponds with GET /v1/runner/sessions (the `ListRunnerSessions` operationId).
@@ -10093,7 +10093,7 @@ type ClientWithResponsesInterface interface {
 	//
 	// A read model of the Runner beside this server, not part of the record: what it runs now,
 	// one session per Task it holds a Claim on for an agent. With no Runner attached to this
-	// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+	// server (as with `serve --runner=off`) it answers `runner: false` and no sessions, not an
 	// error, so a page can poll it.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -15080,7 +15080,7 @@ func (c *ClientWithResponses) IssueTokenWithResponse(ctx context.Context, member
 //
 // A read model of the Runner beside this server, not part of the record: what it runs now,
 // one session per Task it holds a Claim on for an agent. With no Runner attached to this
-// server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+// server (as with `serve --runner=off`) it answers `runner: false` and no sessions, not an
 // error, so a page can poll it.
 //
 // Returns a wrapper object for the known response body format(s).

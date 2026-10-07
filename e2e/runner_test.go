@@ -23,7 +23,7 @@ import (
 // runs the Runner beside the server, its clocks shortened, sessions as child processes. The
 // scenarios: a Feature from Break down to Ship across two Workspaces with two builders (2, 3, 4,
 // 11), sessions that end without a decision, go stale or are taken back (5, 6, 7), a quick Feature
-// and a ship-when-done one (4), a merge conflict (9), darkory agents beside serve --agents=off
+// and a ship-when-done one (4), a merge conflict (9), darkory runner beside serve --runner=off
 // (12), and a session in tmux stopped by an admin, when tmux is installed.
 
 // runnerTimings make a session take a second or two.
@@ -98,7 +98,7 @@ type runnerInstall struct {
 }
 
 // newRunnerInstall makes a runnerInstall, lets setup add to it while no Runner runs, then starts
-// the server with serveArgs (--agents=on unless they say).
+// the server with serveArgs (--runner=on unless they say).
 func newRunnerInstall(t *testing.T, setup func(ri *runnerInstall), serveArgs ...string) *runnerInstall {
 	t.Helper()
 	needE2E(t)
@@ -120,7 +120,7 @@ func newRunnerInstall(t *testing.T, setup func(ri *runnerInstall), serveArgs ...
 	}
 	in.serveEnv = []string{"DARKORY_RUNNER_TIMINGS=" + runnerTimings, "DARKORY_RUNNER_TMUX=off"}
 	// Set the agents up with no Runner running, so none starts the roster's Claude Code.
-	first := in.serve("--agents=off")
+	first := in.serve("--runner=off")
 	in.ada = &member{in: in, name: "ada", token: token[1], url: first.url}
 	in.ada.session = in.ada.prime()
 	var me client.Me
@@ -141,7 +141,7 @@ func newRunnerInstall(t *testing.T, setup func(ri *runnerInstall), serveArgs ...
 	first.stop()
 	in.servers = nil
 	if len(serveArgs) == 0 {
-		serveArgs = []string{"--agents=on"}
+		serveArgs = []string{"--runner=on"}
 	}
 	ri.srv = in.serve(serveArgs...)
 	in.ada.url = ri.srv.url
@@ -486,16 +486,16 @@ func TestRunnerMergeConflict(t *testing.T) {
 	}
 }
 
-// Scenario 12: darkory agents on the same machine as a server started with --agents=off works the
+// Scenario 12: darkory runner on the same machine as a server started with --agents=off works the
 // same: a quick Feature lands on main.
 func TestRunnerAlone(t *testing.T) {
-	ri := newRunnerInstall(t, nil, "--agents=off")
+	ri := newRunnerInstall(t, nil, "--runner=off")
 	ada := ri.ada
 	if out := ada.ok("sessions"); !strings.Contains(out, "No Runner is attached to this server") {
 		t.Fatalf("sessions on a server with no Runner:\n%s", out)
 	}
 	log := &logBuffer{}
-	cmd := exec.Command(bin, "agents", "--data", ri.dir)
+	cmd := exec.Command(bin, "runner", "--data", ri.dir)
 	cmd.Env = ri.env(append(ri.serveEnv, "DARKORY_URL="+ri.srv.url)...)
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Start(); err != nil {
@@ -509,9 +509,9 @@ func TestRunnerAlone(t *testing.T) {
 		case <-exited:
 		case <-time.After(20 * time.Second):
 			cmd.Process.Kill()
-			t.Error("darkory agents did not stop")
+			t.Error("darkory runner did not stop")
 		}
-		checkLog(t, "darkory agents", log.String())
+		checkLog(t, "darkory runner", log.String())
 	})
 	ada.ok("feature", "create", "--team", "MAIN", "--title", "Fix the typo", "--quick", "--skill", "engineer")
 	ri.wait(30*time.Second, "the quick Feature shipped and merged", func() bool {
@@ -521,7 +521,7 @@ func TestRunnerAlone(t *testing.T) {
 		t.Fatalf("main lacks MAIN-2's work: %v", err)
 	}
 	if !strings.Contains(log.String(), "the runner is running agents") {
-		t.Fatalf("darkory agents said:\n%s", log)
+		t.Fatalf("darkory runner said:\n%s", log)
 	}
 }
 

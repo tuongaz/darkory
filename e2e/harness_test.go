@@ -234,8 +234,8 @@ func (in *install) serve(args ...string) *serveProc {
 	p := &serveProc{log: &logBuffer{}, exited: make(chan struct{})}
 	// No Runner unless a test asks for one: an Install init seeded runs its agents' sessions, and
 	// the roster's default command is Claude Code.
-	if !slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--agents") }) {
-		args = append(args, "--agents=off")
+	if !slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--runner") }) {
+		args = append(args, "--runner=off")
 	}
 	p.cmd = exec.Command(bin, append([]string{"serve", "--listen", "127.0.0.1:0", "--data", in.dir, "--db", in.db,
 		"--no-browser", "--no-update-check"}, args...)...)

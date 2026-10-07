@@ -94,13 +94,25 @@ func (r *Runner) reviewed(ctx context.Context, a client.Activity) {
 	if sk, ok := r.skill(ctx, rec, *claim.SkillID); !ok || !r.isReview(ctx, rec, sk) {
 		return
 	}
-	r.mergeTask(ctx, d, "")
+	r.mergeTask(ctx, r.actingAs(claim.HolderID), d, "")
 }
 
-// mergeTask merges a reviewed Task's branch in each of its Workspaces and records how it went.
-// via says what completed the review, when it was not a reviewer's Complete.
-func (r *Runner) mergeTask(ctx context.Context, d *client.TaskDetail, via string) {
-	rec, key := r.reader, d.Task.Key
+// actingAs is the Record of the runner's agent member, the reviewer whose Complete merged, so the
+// merge's Notes and Tasks are that agent's; the runner's reader when the reviewer is not one of
+// its agents.
+func (r *Runner) actingAs(member string) Record {
+	for _, a := range r.agents {
+		if a.me.Member.ID == member {
+			return a.rec
+		}
+	}
+	return r.reader
+}
+
+// mergeTask merges a reviewed Task's branch in each of its Workspaces and records how it went, as
+// rec. via says what completed the review, when it was not a reviewer's Complete.
+func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail, via string) {
+	key := d.Task.Key
 	f, err := rec.Feature(ctx, d.Feature.Key)
 	if err != nil {
 		r.logError(ctx, "reading a reviewed Task's Feature", "task", key, "err", err)
@@ -140,13 +152,13 @@ func (r *Runner) mergeTask(ctx context.Context, d *client.TaskDetail, via string
 		switch {
 		case errors.As(err, &dirty):
 			lines = append(lines, fmt.Sprintf("%s: did not merge %s into %s: %v.", ws.Name, branch, target, err))
-			r.resolve(ctx, d, f, ws, branch, target, err.Error()+"; commit or stash them, then merge "+branch+" by hand or here.")
+			r.resolve(ctx, rec, d, f, ws, branch, target, err.Error()+"; commit or stash them, then merge "+branch+" by hand or here.")
 		case err != nil:
 			lines = append(lines, fmt.Sprintf("%s: could not merge %s into %s: %v", ws.Name, branch, target, err))
 			r.logError(ctx, "merging a reviewed Task's branch", "task", key, "workspace", ws.Name, "err", err)
 		case res.Conflict != "":
 			lines = append(lines, fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged.\n%s", ws.Name, branch, target, res.Conflict))
-			r.resolve(ctx, d, f, ws, branch, target, res.Conflict)
+			r.resolve(ctx, rec, d, f, ws, branch, target, res.Conflict)
 		case res.Already:
 			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).", ws.Name, branch, target, short(res.Commit)))
 		default:
@@ -157,7 +169,7 @@ func (r *Runner) mergeTask(ctx context.Context, d *client.TaskDetail, via string
 	if len(lines) == 0 {
 		return
 	}
-	r.recordMerge(ctx, key, d.Feature.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, key, d.Feature.Key, strings.Join(lines, "\n"))
 }
 
 // short is a commit's short name.
@@ -166,12 +178,12 @@ func short(sha string) string { return sha[:min(len(sha), 12)] }
 // recordMerge records what a merge did: a Note on the reviewed Task key, which a Member of its
 // Feature's Team may write though nobody holds it; or, for a Ship (key the Feature's), Evidence on
 // the Feature.
-func (r *Runner) recordMerge(ctx context.Context, key, feature, text string) {
+func (r *Runner) recordMerge(ctx context.Context, rec Record, key, feature, text string) {
 	var err error
 	if key == feature {
-		err = r.reader.AttachFeature(ctx, feature, shipRecord(feature), []byte(text+"\n"))
+		err = rec.AttachFeature(ctx, feature, shipRecord(feature), []byte(text+"\n"))
 	} else {
-		err = r.reader.Note(ctx, key, text)
+		err = rec.Note(ctx, key, text)
 	}
 	if err != nil {
 		r.logError(ctx, "could not record a merge", "on", key, "err", err)
@@ -180,8 +192,7 @@ func (r *Runner) recordMerge(ctx context.Context, key, feature, text string) {
 
 // resolve files the work Task that resolves a merge the runner could not make: on the Feature
 // while it is open, needing the Skill that built the reviewed Task.
-func (r *Runner) resolve(ctx context.Context, d *client.TaskDetail, f *FeatureInfo, ws Workspace, branch, target, conflict string) {
-	rec := r.reader
+func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, f *FeatureInfo, ws Workspace, branch, target, conflict string) {
 	title := fmt.Sprintf("Resolve the merge of %s into %s", branch, target)
 	body := fmt.Sprintf("The review of %s completed, but merging its branch %s into %s in the Workspace %s did not go in, so the runner "+
 		"left both branches as they were.\n\n%s\n\nMerge %s into this Task's branch, resolve what conflicts, run the tests, commit, and hand "+
@@ -268,7 +279,7 @@ func (r *Runner) shipped(ctx context.Context, featureID string) {
 			r.log.Info("shipped a Feature's branch", "feature", f.Key, "workspace", ws.Name, "into", def, "commit", short(res.Commit))
 		}
 	}
-	r.recordMerge(ctx, f.Key, f.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, f.Key, f.Key, strings.Join(lines, "\n"))
 }
 
 // pollPullRequests completes the review of a Task whose pull request was merged on GitHub, in

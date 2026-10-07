@@ -313,6 +313,12 @@ func TestRunnerWorksAFeature(t *testing.T) {
 		}
 
 		web3 := f.task("WEB-3")
+		// The reviewer, whose Complete merged it, notes the merge.
+		if !slices.ContainsFunc(web3.Notes, func(n client.Note) bool {
+			return strings.HasPrefix(n.Body, "Merged WEB-3/cart-page into feature/WEB-1 at ") && n.AuthorID == f.ids["reviewer"]
+		}) {
+			t.Errorf("no merge Note by the reviewer:\n%s", notesOf(web3))
+		}
 		names := evidenceNames(web3.Evidence)
 		feature := f.feature("WEB-1")
 		fnames := evidenceNames(feature.Evidence)
@@ -524,22 +530,51 @@ func TestRunnerTerminal(t *testing.T) {
 		return slices.ContainsFunc(f.task("WEB-3").Notes, func(n client.Note) bool { return n.Body == "ada joined the session." })
 	})
 
-	// mai, no admin, watches: what she types never reaches the session, and no Note says she came.
-	watcher := dial("mai", "")
-	defer watcher.CloseNow()
-	if err := watcher.Write(t.Context(), websocket.MessageBinary, []byte("typed by mai\r")); err != nil {
-		t.Fatal(err)
+	// mai is no admin: she only watches, even when she asks to type (the server decides), so her
+	// keys never reach the session; ada asking to watch types nothing either. Watching is noted for
+	// no one, and a watcher's size changes nothing.
+	var watchers []*websocket.Conn
+	for _, w := range []struct{ member, query, keys string }{
+		{"mai", "", "typed by mai"}, {"mai", "?readonly=0", "mai asking to type"}, {"mai", "?readonly=false", "mai asking again"},
+		{"ada", "?readonly=1", "ada only watching"},
+	} {
+		c := dial(w.member, w.query)
+		defer c.CloseNow()
+		watchers = append(watchers, c)
+		if err := c.Write(t.Context(), websocket.MessageText, []byte(`{"cols":40,"rows":10}`)); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.Write(t.Context(), websocket.MessageBinary, []byte(w.keys+"\r")); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := admin.Write(t.Context(), websocket.MessageBinary, []byte("typed by ada again\r")); err != nil {
 		t.Fatal(err)
 	}
-	out := screen(watcher, `fakeagent: read "typed by ada again"`)
-	if strings.Contains(out, "typed by mai") {
-		t.Fatalf("a watcher's keys reached the session:\n%s", out)
+	for _, c := range watchers {
+		out := screen(c, `fakeagent: read "typed by ada again"`)
+		for _, keys := range []string{"typed by mai", "mai asking to type", "mai asking again", "ada only watching"} {
+			if strings.Contains(out, `fakeagent: read "`+keys) {
+				t.Fatalf("a watcher's keys reached the session (%q):\n%s", keys, out)
+			}
+		}
 	}
-	if slices.ContainsFunc(f.task("WEB-3").Notes, func(n client.Note) bool { return strings.HasPrefix(n.Body, "mai") }) {
-		t.Fatal("a watcher was noted as joining")
+	joined := 0
+	for _, n := range f.task("WEB-3").Notes {
+		if strings.HasPrefix(n.Body, "mai") || n.Body == "ada joined the session." {
+			joined++
+		}
+	}
+	if joined != 1 {
+		t.Fatalf("%d Notes of joining; only ada's read-write join is one", joined)
+	}
+	// The window is as wide as ada's 100 columns, whatever the watchers' 40.
+	if width, err := exec.Command("tmux", "-L", r.Socket(), "display-message", "-p", "-t", "=dk-WEB-3:", "#{window_width}").Output(); err != nil ||
+		strings.TrimSpace(string(width)) != "100" {
+		t.Fatalf("the agent's window is %q columns wide (%v); a watcher's 40 must not shrink it", width, err)
 	}
 	admin.Close(websocket.StatusNormalClosure, "")
-	watcher.Close(websocket.StatusNormalClosure, "")
+	for _, c := range watchers {
+		c.Close(websocket.StatusNormalClosure, "")
+	}
 }

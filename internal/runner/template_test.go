@@ -8,7 +8,8 @@ import (
 )
 
 var values = Values{PromptFile: "/d/sessions/WEB-12/prompt.md", Workspace: "/d/workspaces/WEB-12/web",
-	SessionID: "0199e1a2-0000-7000-8000-000000000001", Model: "claude-sonnet-5-5", MCPConfig: "/d/sessions/WEB-12/mcp.json", Task: "WEB-12"}
+	SessionID: "0199e1a2-0000-7000-8000-000000000001", Model: "claude-sonnet-5-5", MCPConfig: "/d/sessions/WEB-12/mcp.json", Task: "WEB-12",
+	Title: "Cart page {prompt_file}."}
 
 func TestRenderTheDefaultCommand(t *testing.T) {
 	got, err := Render("", nil, true, values)
@@ -17,7 +18,7 @@ func TestRenderTheDefaultCommand(t *testing.T) {
 	}
 	want := []string{"claude", "--session-id", values.SessionID, "--model", "claude-sonnet-5-5", "--dangerously-skip-permissions",
 		"--mcp-config", "/d/sessions/WEB-12/mcp.json", "--append-system-prompt-file", "/d/sessions/WEB-12/prompt.md",
-		"Work on Task WEB-12: the system prompt holds the Task, its record and the rules for ending it."}
+		"Work on Task WEB-12: Cart page {prompt_file}. Your instructions are in the system prompt."}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got  %q\nwant %q", got, want)
 	}

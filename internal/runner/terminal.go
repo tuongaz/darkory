@@ -18,8 +18,11 @@ import (
 
 // Attach bridges conn to the Task's tmux session (D6): `tmux attach` runs on a pseudo-terminal
 // whose output goes to the client as binary messages, and the client's binary messages are typed
-// into it unless readonly; a text message {"cols": n, "rows": n} resizes it. Someone joining to
-// type is recorded in a Note on the Task. It returns when either side ends, and closes conn.
+// into it unless readonly; a text message {"cols": n, "rows": n} resizes it. The server decides
+// readonly from the caller (only an admin who did not ask to watch may type); a watcher attaches
+// read-only with ignore-size, so its panel never resizes the agent's window, and what it sends is
+// dropped. Only someone joining to type is recorded, in a Note on the Task, since every look at a
+// Task's page watches. It returns when either side ends, and closes conn.
 func (r *Runner) Attach(ctx context.Context, taskID string, readonly bool, conn *websocket.Conn) error {
 	s := r.session(taskID)
 	if s == nil {
@@ -41,7 +44,7 @@ func (r *Runner) Attach(ctx context.Context, taskID string, readonly bool, conn 
 	}
 	args := []string{"-L", r.Socket(), "attach-session", "-t", "=" + TmuxName(s.key)}
 	if readonly {
-		args = append(args, "-r")
+		args = append(args, "-r", "-f", "ignore-size")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

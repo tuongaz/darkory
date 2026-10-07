@@ -20,22 +20,22 @@ import (
 	"github.com/tuongaz/darkory/internal/runner"
 )
 
-const agentsUsage = `Usage: darkory agents [--data dir] [--url url] [--token-dir dir] [--member name]… [--tmux auto|on|off]
+const runnerUsage = `Usage: darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]… [--tmux auto|on|off]
 
 Runs the Runner on its own (ADR 0013): for every agent Member whose token is in the token
 directory (<data>/agents unless set), it pulls Tasks through next and works each in a session,
-as darkory serve does in-process unless --agents=off. Sessions run in tmux when the machine has it.
+as darkory serve does in-process unless --runner=off. Sessions run in tmux when the machine has it.
 --member limits it to the agents named. DARKORY_URL names the Install (http://127.0.0.1:7357
 unless set). DARKORY_RUNNER_TIMINGS (such as wait=5s,timeout=1m) changes its clocks, for tests.
 
 `
 
-// runAgents is `darkory agents`.
-func runAgents(args []string, stderr io.Writer) error {
-	fs := flag.NewFlagSet("agents", flag.ContinueOnError)
+// runRunner is `darkory runner`.
+func runRunner(args []string, stderr io.Writer) error {
+	fs := flag.NewFlagSet("runner", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		fmt.Fprint(stderr, agentsUsage)
+		fmt.Fprint(stderr, runnerUsage)
 		fs.PrintDefaults()
 	}
 	data := fs.String("data", or(os.Getenv("DARKORY_DATA"), config.DefaultData), "the Install's data directory, where sessions and worktrees go (DARKORY_DATA)")
@@ -51,7 +51,7 @@ func runAgents(args []string, stderr io.Writer) error {
 		return &cli.ExitError{Code: cli.ExitUsage}
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "darkory agents takes no arguments, got %q\n", fs.Args())
+		fmt.Fprintf(stderr, "darkory runner takes no arguments, got %q\n", fs.Args())
 		return &cli.ExitError{Code: cli.ExitUsage}
 	}
 	dir := *tokenDir
@@ -147,7 +147,7 @@ func joinSession(args []string, stderr io.Writer) error {
 	}
 	argv := []string{"-L", socket, "attach-session", "-t", "=" + name}
 	if *readonly {
-		argv = append(argv, "-r")
+		argv = append(argv, "-r", "-f", "ignore-size")
 	}
 	cmd := exec.Command(tmux, argv...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr

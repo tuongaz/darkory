@@ -40,11 +40,11 @@ Usage:
                                                                        create the Organisation, its first Member and its agents
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                 [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
-                [--no-update-check] [--agents auto|on|off]
+                [--no-update-check] [--runner auto|on|off]
                                                                        run the server, and the Runner beside it
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
   darkory mcp                                                          serve the agent operations to an MCP client over stdio
-  darkory agents [--data dir] [--url url] [--token-dir dir] [--member name]…
+  darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]…
                                                                        run the Runner alone: agent sessions for the agents' tokens
   darkory join <task> [--readonly] [--data dir]                        join the tmux session the Runner runs for a Task
   darkory update [--check] [--version v]                               replace this binary with a newer release
@@ -83,8 +83,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	case "mcp":
 		return runMCP(args[1:], stderr)
-	case "agents":
-		return runAgents(args[1:], stderr)
+	case "runner":
+		return runRunner(args[1:], stderr)
 	case "join":
 		return joinSession(args[1:], stderr)
 	}
@@ -346,10 +346,10 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-// serveRunner is the Runner serve runs beside the server, or nil: with --agents=auto, only when
+// serveRunner is the Runner serve runs beside the server, or nil: with --runner=auto, only when
 // <data>/agents holds agent tokens.
 func serveRunner(cfg config.Serve, listen string, log *slog.Logger) (*runner.Runner, error) {
-	if cfg.Agents == "off" {
+	if cfg.Runner == "off" {
 		return nil, nil
 	}
 	dir := runner.TokenDir(cfg.DataDir)
@@ -358,8 +358,8 @@ func serveRunner(cfg config.Serve, listen string, log *slog.Logger) (*runner.Run
 		return nil, err
 	}
 	if len(tokens) == 0 {
-		if cfg.Agents == "on" {
-			return nil, fmt.Errorf("--agents=on, but %s holds no agent tokens", dir)
+		if cfg.Runner == "on" {
+			return nil, fmt.Errorf("--runner=on, but %s holds no agent tokens", dir)
 		}
 		return nil, nil
 	}

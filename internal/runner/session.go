@@ -222,7 +222,8 @@ func (s *session) start(ctx context.Context) error {
 	if err := s.writeMCPConfig(mcpFile, TaskDir(r.cfg.Data, s.key)); err != nil {
 		return err
 	}
-	v := Values{PromptFile: promptFile, Workspace: cwd, SessionID: s.rec.Session(), Model: s.set.Model, MCPConfig: mcpFile, Task: s.key}
+	v := Values{PromptFile: promptFile, Workspace: cwd, SessionID: s.rec.Session(), Model: s.set.Model, MCPConfig: mcpFile, Task: s.key,
+		Title: s.d.Task.Title}
 	argv, err := Render(s.set.Command, s.set.Args, s.set.Unattended, v)
 	if err != nil {
 		return err

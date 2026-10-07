@@ -11,7 +11,7 @@ import (
 )
 
 // TokenDir is where `darkory init` keeps the agents' tokens, one <member>.token file each, for the
-// runner that `darkory serve` and `darkory agents` start.
+// runner that `darkory serve` and `darkory runner` start.
 func TokenDir(data string) string { return filepath.Join(data, "agents") }
 
 // ReadTokens reads every <name>.token in dir; none is no error. A file that is not a token is.

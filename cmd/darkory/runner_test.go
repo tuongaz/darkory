@@ -29,11 +29,11 @@ func TestJoinNeedsASession(t *testing.T) {
 	}
 }
 
-// darkory agents refuses to start with no tokens, and says where it looked.
-func TestAgentsNeedsTokens(t *testing.T) {
+// darkory runner refuses to start with no tokens, and says where it looked.
+func TestRunnerNeedsTokens(t *testing.T) {
 	data := t.TempDir()
 	var stderr bytes.Buffer
-	err := run([]string{"agents", "--data", data}, &bytes.Buffer{}, &stderr)
+	err := run([]string{"runner", "--data", data}, &bytes.Buffer{}, &stderr)
 	if err == nil || !strings.Contains(err.Error(), filepath.Join(data, "agents")) {
 		t.Fatalf("got %v", err)
 	}
@@ -41,11 +41,11 @@ func TestAgentsNeedsTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(data, "agents", "builder.token"), []byte("not a token\n"), 0o600)
-	if err := run([]string{"agents", "--data", data}, &bytes.Buffer{}, &stderr); err == nil || !strings.Contains(err.Error(), "does not hold a Darkory token") {
+	if err := run([]string{"runner", "--data", data}, &bytes.Buffer{}, &stderr); err == nil || !strings.Contains(err.Error(), "does not hold a Darkory token") {
 		t.Fatalf("a file that is not a token: %v", err)
 	}
 	var ex *cli.ExitError
-	if err := run([]string{"agents", "extra"}, &bytes.Buffer{}, &stderr); !errors.As(err, &ex) || ex.Code != cli.ExitUsage {
+	if err := run([]string{"runner", "extra"}, &bytes.Buffer{}, &stderr); !errors.As(err, &ex) || ex.Code != cli.ExitUsage {
 		t.Fatalf("a stray argument: %v", err)
 	}
 }
