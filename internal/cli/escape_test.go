@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -34,10 +35,9 @@ func TestOutputEscapesTerminalControls(t *testing.T) {
 	in := newInstall(t, storetest.Open(t, store.SQLite))
 	in.setup()
 	ada, bob := in.as("ada", "ada-1"), in.as("bob", "bob-1")
-	bob.ok("feature", "create", "--team", "WEB", "--title", "Search\u202eevil\u2066")
-	var filed client.TaskDetail
-	bob.json(&filed, "file", "--feature", "WEB-1", "--skill", "build", "--title", hostileTitle,
-		"--body", "line one\n\x1b[31mred\u009b2J\x7f")
+	in.seed("bob", core.NewTask{Project: ptr("WEB"), Title: "Search\u202eevil\u2066", Breakdown: true})
+	filed := in.seed("bob", core.NewTask{Parent: ptr("WEB-1"), Step: ptr("Build"), Title: hostileTitle,
+		Description: "line one\n\x1b[31mred\u009b2J\x7f"})
 	key := filed.Task.Key
 	if filed.Task.Title != hostileTitle {
 		t.Fatalf("--json carried the title as %q", filed.Task.Title)
@@ -56,8 +56,7 @@ func TestOutputEscapesTerminalControls(t *testing.T) {
 	for name, out := range map[string]string{
 		"show":              bob.ok("show", key),
 		"tasks":             bob.ok("tasks"),
-		"feature show":      bob.ok("feature", "show", "WEB-1"),
-		"feature list":      bob.ok("feature", "list"),
+		"parent show":       bob.ok("show", "WEB-1"),
 		"activity":          bob.ok("activity"),
 		"activity --follow": followed.String(),
 		"heartbeat":         bob.ok("heartbeat", key),

@@ -183,6 +183,12 @@ func (s *Server) Handler() http.Handler {
 	return s.guard(mux)
 }
 
+// replaced answers an operation of the API model v2 has no meaning for, until /v1 is rebuilt on
+// it. model v2: replaced by what by names (M1b).
+func replaced(w http.ResponseWriter, by string) {
+	writeError(w, http.StatusNotImplemented, gen.ErrorCodeNotImplemented, "model v2: "+by)
+}
+
 func (s *Server) notImplemented(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusNotImplemented, gen.ErrorCodeNotImplemented, r.Method+" "+r.URL.Path+" is not built yet")
 }

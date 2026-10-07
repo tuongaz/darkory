@@ -43,21 +43,30 @@ type AgentSettings struct {
 }
 
 type MemberDetail struct {
-	Member  Member
-	Teams   []Team
-	Skills  []Skill
-	Reports []Member
+	Member   Member
+	Projects []Project
+	Skills   []Skill
+	Reports  []Member
 }
 
-type Team struct {
+// Project is a body of work with the Members who do it (ADR 0015): its own key, Workflow,
+// Labels, Rank and default Workspace.
+type Project struct {
 	ID   string
 	Key  string
 	Name string
-	// DefaultWorkspaceID is the Workspace a Task filed in the Team names when it names none.
+	// DefaultWorkspaceID is the Workspace a Task filed in the Project names when it names none.
 	DefaultWorkspaceID *string
-	// ShipWhenDone is what a Feature filed in the Team takes when its filer does not say.
-	ShipWhenDone bool
+	// AutoComplete and Acceptance are what a Task filed in the Project takes when its filer does
+	// not say.
+	AutoComplete bool
+	Acceptance   bool
 	CreatedAt    time.Time
+}
+
+type ProjectDetail struct {
+	Project Project
+	Members []Member
 }
 
 // Workspace is a place a session works in, named on the Install (ADR 0013). A git Workspace is
@@ -72,11 +81,6 @@ type Workspace struct {
 	Mode          string
 	DefaultBranch string
 	CreatedAt     time.Time
-}
-
-type TeamDetail struct {
-	Team    Team
-	Members []Member
 }
 
 type Skill struct {
@@ -103,76 +107,131 @@ type SkillDetail struct {
 	Current SkillVersion
 }
 
-type Feature struct {
-	ID                      string
-	Key                     string
-	TeamID                  string
-	Title                   string
-	Description             string
-	OwnerID                 string
-	State                   string
-	Rank                    int64
-	FromRetrospectiveTaskID *string
-	// Quick: filed with its one Task and no Break down; it has no Retrospective (ADR 0014).
-	Quick bool
-	// ShipWhenDone: it ships itself when its last open Task is completed.
-	ShipWhenDone bool
-	FiledBy      string
-	CreatedAt    time.Time
-	EndedAt      *time.Time
-	TaskCounts   TaskCounts
+// Step is a place in a Project's Workflow (ADR 0016), carrying at most one Skill: a Task at it is
+// taken by a Member with that Skill. A Step without one is a hold.
+type Step struct {
+	ID      string
+	Name    string
+	SkillID *string
+	// Position is its place in the Workflow, 1 first.
+	Position int64
+	// X and Y are where the canvas draws it, in pixels.
+	X, Y int64
 }
 
-// TaskCounts counts a Feature's Tasks by state; Claimed counts the open ones with a live Claim.
-type TaskCounts struct {
-	Open, Claimed, Done, Dropped int
+// Connector is a named way out of a Step: into another Step, or into Done when ToStepID is nil.
+type Connector struct {
+	ID         string
+	FromStepID string
+	ToStepID   *string
+	Name       string
+	// Position is its place among the Connectors out of its Step, 1 first.
+	Position int64
 }
 
-type FeatureDetail struct {
-	Feature  Feature
-	Tasks    []Task
-	Evidence []Evidence
+// Workflow is a Project's Steps, in order, and the Connectors between them.
+type Workflow struct {
+	ProjectID  string
+	Steps      []Step
+	Connectors []Connector
+}
+
+// WorkflowDetail is a Workflow with what is happening at each of its Steps now.
+type WorkflowDetail struct {
+	Workflow
+	// Facts are each Step's, in the order of Steps.
+	Facts []StepFacts
+}
+
+// StepFacts are the live facts of one Step.
+type StepFacts struct {
+	StepID string
+	// Tasks counts the open Tasks at the Step; Working those of them with a live Claim.
+	Tasks, Working int
+	// Takers are the active Members who could take a Task at the Step by its Skill: the
+	// Project's Members holding it, or for skill-review the Organisation's.
+	Takers []Taker
+	// MedianMS is the median time Tasks spent at the Step before leaving it over the last 30
+	// days; nil when none left it.
+	MedianMS *int64
+}
+
+// Taker is a Member who holds a Step's Skill.
+type Taker struct {
+	MemberID string
+	Name     string
+	// Kind is human or agent.
+	Kind string
+}
+
+// Label is a named, coloured mark carried by Tasks: a Project's own, or the Organisation's for
+// every Project (ProjectID nil).
+type Label struct {
+	ID        string
+	ProjectID *string
+	Name      string
+	// Color is #rrggbb.
+	Color     string
+	CreatedAt time.Time
 }
 
 type Task struct {
-	ID          string
-	Key         string
-	FeatureID   string
+	ID        string
+	Key       string
+	ProjectID string
+	// ParentID is the Parent of a Subtask; nil for a Task with no Parent.
+	ParentID    *string
 	Kind        string
 	Title       string
 	Description string
 	State       string
-	// StatusID is the Task's Status, one of its Organisation's (ADR 0012).
-	StatusID  string
+	// StepID is the Step the Task is at; nil on a Parent, a Task aimed at a Member, and an ended
+	// Task. StepSince is when it reached it.
+	StepID    *string
+	StepSince *time.Time
+	// SkillID is the Skill of its Step, read with it: the Skill that takes it. Nil at a hold and
+	// wherever StepID is nil.
 	SkillID   *string
 	AimedAtID *string
-	Claim     *Claim
-	Blocked   bool
+	OwnerID   string
+	// Rank is the Task's place in its Project's Rank, 1 first; nil on a Subtask, which sorts by
+	// its Parent's.
+	Rank *int64
+	// Labels are the ids of the Labels it carries, by name.
+	Labels []string
+	// Breakdown: filed with Break down on. AutoComplete and Acceptance are a Parent's.
+	Breakdown               bool
+	AutoComplete            bool
+	Acceptance              bool
+	FromRetrospectiveTaskID *string
+	Claim                   *Claim
+	Blocked                 bool
 	// OpenBlockers are the open Tasks blocking this one.
 	OpenBlockers []TaskBrief
 	// WorkspaceIDs are the Workspaces the Task names, in the order named.
 	WorkspaceIDs []string
-	FiledBy      string
+	// SubtaskCounts counts a Parent's Subtasks; nil on a Task with none.
+	SubtaskCounts *SubtaskCounts
+	// FiledBy is nil for the Subtasks Darkory files itself: Breakdown, Acceptance, Retrospective.
+	FiledBy *string
+	// WaitingSince is when it was filed or last reached a Step: `next` gives a tie to the Task
+	// that has waited longest.
 	WaitingSince time.Time
 	CreatedAt    time.Time
 	EndedAt      *time.Time
 }
 
-// Status is where a Task is in its workflow, from the list its Organisation defines and orders.
-// Darkory's rules read Kind, never Name.
-type Status struct {
-	ID   string
-	Name string
-	// Kind is backlog, todo, in_progress, done or dropped.
-	Kind string
-	// Position is its place in the list, 1 first.
-	Position int64
+// SubtaskCounts counts a Parent's Subtasks by state; Working counts the open ones with a live
+// Claim.
+type SubtaskCounts struct {
+	Open, Working, Done, Dropped int
 }
 
-// TaskBrief names a Task by its id and display key.
+// TaskBrief names a Task by its id, display key and title.
 type TaskBrief struct {
-	ID  string
-	Key string
+	ID    string
+	Key   string
+	Title string
 }
 
 type Claim struct {
@@ -180,7 +239,8 @@ type Claim struct {
 	TaskID   string
 	HolderID string
 	// SessionID is the id the Session making the Claim chose.
-	SessionID    string
+	SessionID string
+	// SkillID is the Skill of the Step the Task was taken at; nil for a Task aimed at a Member.
 	SkillID      *string
 	SkillVersion *int64
 	ModelLabel   *string
@@ -194,9 +254,15 @@ type Claim struct {
 
 type TaskDetail struct {
 	Task Task
-	// Status is the Task's Status.
-	Status  Status
-	Feature Feature
+	// Parent is a Subtask's Parent; nil for a Task with no Parent.
+	Parent *TaskBrief
+	// Subtasks are a Parent's, in the order they were filed.
+	Subtasks []Task
+	// Step is the Step the Task is at, and Connectors the ways out of it, in order.
+	Step       *Step
+	Connectors []Connector
+	// Labels are the Labels it carries, by name.
+	Labels []Label
 	// Workspaces are the Workspaces the Task names, in the order of Task.WorkspaceIDs.
 	Workspaces   []Workspace
 	Claims       []Claim
@@ -234,7 +300,6 @@ type Note struct {
 type Observation struct {
 	ID               string
 	TaskID           string
-	FeatureID        string
 	AuthorID         string
 	SkillID          *string
 	Outcome          string
@@ -246,8 +311,7 @@ type Observation struct {
 
 type Evidence struct {
 	ID          string
-	FeatureID   string
-	TaskID      *string
+	TaskID      string
 	Filename    string
 	ContentType string
 	Size        int64
@@ -319,9 +383,12 @@ type LoginLink struct {
 type Me struct {
 	Organisation Organisation
 	Member       Member
-	Teams        []Team
+	Projects     []Project
 	Skills       []Skill
 	Session      Session
+	// Organisations are the Organisations the sign-in identity reaches, for a switcher; nil on
+	// Local, which holds exactly one.
+	Organisations []Organisation
 }
 
 // Page is a list with an opaque cursor to the next page; NextCursor is empty on the last page.
@@ -340,12 +407,12 @@ type HeartbeatReply struct {
 // View is a saved set of filters, sort and display for a list, kept by one Member for themselves.
 type View struct {
 	ID string
-	// Entity is the list it is of, EntityTasks or EntityFeatures.
+	// Entity is the list it is of: EntityTasks.
 	Entity string
-	// TeamID is the Team whose list it is; nil for a list across Teams.
-	TeamID  *string
-	Name    string
-	Filters []string
+	// ProjectID is the Project whose list it is; nil for a list across Projects.
+	ProjectID *string
+	Name      string
+	Filters   []string
 	// Sort and Display are as the client wrote them; nil when it wrote none.
 	Sort      *string
 	Display   map[string]any

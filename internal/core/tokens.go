@@ -154,8 +154,8 @@ func closeSession(t *tx, sessionID, how string, by *string) (int, error) {
 }
 
 // endClaims ends the live Claims picked by where (over the Task t and its Claim c, binding $2 to
-// arg) as how, by by, clearing each Task's Claim — a Task in an in_progress Status returns to the
-// first todo one — and recording task.claim_ended. A Claim whose
+// arg) as how, by by, clearing each Task's Claim — the Task stays at its Step — and recording
+// task.claim_ended. A Claim whose
 // expiry had already passed ended at its expiry: it is recorded as lapsed, with no actor. It
 // returns how many Claims it ended that had not lapsed.
 func endClaims(t *tx, where string, arg any, how string, by *string) (int, error) {
@@ -182,7 +182,7 @@ ORDER BY t.id`, t.caller.OrgID, arg)
 			endedAt, endedHow, actor, t.caller.OrgID, b.claim); err != nil {
 			return 0, err
 		}
-		if _, err := t.Exec(t.ctx, clearClaimSQL+releaseStatusSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, t.caller.OrgID, b.task, b.claim); err != nil {
+		if _, err := t.Exec(t.ctx, clearClaimSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, t.caller.OrgID, b.task, b.claim); err != nil {
 			return 0, err
 		}
 		kind := "task.claim_ended"
@@ -224,8 +224,8 @@ func (s *Service) mustBeValid(ctx context.Context, c *auth.Caller) error {
 	return nil
 }
 
-// clearClaimSQL leaves a Task with no current Claim. It leaves the Status alone: a write that ends
-// a Claim adds the Status that ending moves the Task to, such as releaseStatusSQL.
+// clearClaimSQL leaves a Task with no current Claim. It leaves the Task at its Step: only advancing
+// and completing move a Task on as its Claim ends (ADR 0016).
 const clearClaimSQL = `UPDATE tasks SET claim_id = NULL, claim_holder_id = NULL, claim_session_id = NULL,
 claim_skill_id = NULL, claim_timeout_ms = NULL, claim_expires_at = NULL`
 

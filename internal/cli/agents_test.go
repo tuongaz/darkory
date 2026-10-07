@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -93,27 +94,20 @@ func TestAgentCommands(t *testing.T) {
 		}
 		ada.fails(ExitUsage, "team", "set", "WEB")
 
-		ada.fails(ExitUsage, "feature", "create", "--team", "WEB", "--title", "Fix", "--quick")
-		out = ada.ok("feature", "create", "--team", "WEB", "--title", "Fix the footer", "--quick", "--skill", "build")
-		if !strings.Contains(out, "  State      open quick\n") || !strings.Contains(out, "WEB-2     open          Todo         build          Fix the footer") {
-			t.Fatalf("feature create --quick:\n%s", out)
-		}
-		out = ada.ok("feature", "create", "--team", "WEB", "--title", "Search", "--ship-when-done=false")
-		if strings.Contains(out, "ships when done") {
-			t.Fatalf("--ship-when-done=false:\n%s", out)
-		}
-
-		ada.ok("file", "--feature", "WEB-3", "--skill", "build", "--title", "Two places", "--workspace", "api", "--workspace", "shop")
-		out = bob.ok("show", "WEB-5")
+		// model v2: quick Features and ship-when-done went with `feature create` (M2 rebuilds
+		// `file` with --parent and --breakdown).
+		in.seed("ada", core.NewTask{Project: ptr("WEB"), Title: "Search", Breakdown: true})
+		ada.ok("file", "--feature", "WEB-1", "--aim", "ada", "--title", "Two places", "--workspace", "api", "--workspace", "shop")
+		out = bob.ok("show", "WEB-3")
 		if !strings.Contains(out, "\n  Workspace  api (git, main) /src/api\n             shop (git, trunk) ") {
 			t.Fatalf("show with two Workspaces:\n%s", out)
 		}
 		var none client.TaskDetail
-		ada.json(&none, "file", "--feature", "WEB-3", "--aim", "ada", "--title", "A question", "--no-workspace")
+		ada.json(&none, "file", "--feature", "WEB-1", "--aim", "ada", "--title", "A question", "--no-workspace")
 		if none.Task.WorkspaceIds != nil || len(none.Workspaces) != 0 {
 			t.Fatalf("--no-workspace named %v", none.Task.WorkspaceIds)
 		}
-		ada.fails(ExitUsage, "file", "--feature", "WEB-3", "--aim", "ada", "--title", "Q", "--no-workspace", "--workspace", "api")
+		ada.fails(ExitUsage, "file", "--feature", "WEB-1", "--aim", "ada", "--title", "Q", "--no-workspace", "--workspace", "api")
 		if res := ada.fails(ExitRefused, "workspace", "remove", "api"); !strings.Contains(res.stderr, "conflict") {
 			t.Fatalf("removing a named Workspace: %s", res.stderr)
 		}
@@ -140,24 +134,24 @@ func TestAgentCommands(t *testing.T) {
 		if out := bob.ok("sessions"); out != "No Runner is attached to this server; it runs no agent sessions.\n" {
 			t.Fatalf("sessions without a Runner: %q", out)
 		}
-		if res := ada.fails(ExitFailed, "sessions", "nudge", "WEB-2"); !strings.Contains(res.stderr, "no_runner") {
+		if res := ada.fails(ExitFailed, "sessions", "nudge", "WEB-3"); !strings.Contains(res.stderr, "no_runner") {
 			t.Fatalf("nudge without a Runner: %s", res.stderr)
 		}
 		var task client.TaskDetail
-		bob.json(&task, "show", "WEB-2")
+		bob.json(&task, "show", "WEB-3")
 		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: task.Task.FiledBy, SessionID: "run-1", Host: "box",
-			Tmux: "dk-WEB-2", StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning, LogPath: "/data/pane.log"}}
+			Tmux: "dk-WEB-3", StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning, LogPath: "/data/pane.log"}}
 		in.srv.AttachRunner(fake)
 		out = bob.ok("sessions")
-		if out != "WEB-2     ada            running  since 2026-10-07T09:00:00Z on box, tmux dk-WEB-2, log /data/pane.log\n" {
+		if out != "WEB-3     ada            running  since 2026-10-07T09:00:00Z on box, tmux dk-WEB-3, log /data/pane.log\n" {
 			t.Fatalf("sessions:\n%q", out)
 		}
-		bob.fails(ExitRefused, "sessions", "nudge", "WEB-2")
-		ada.ok("sessions", "nudge", "WEB-2")
-		ada.ok("sessions", "stop", "WEB-2")
+		bob.fails(ExitRefused, "sessions", "nudge", "WEB-3")
+		ada.ok("sessions", "nudge", "WEB-3")
+		ada.ok("sessions", "stop", "WEB-3")
 		if len(fake.nudged) != 1 || fake.nudged[0] != task.Task.ID {
 			t.Fatalf("nudged %v", fake.nudged)
 		}
-		ada.fails(ExitFailed, "sessions", "nudge", "WEB-3")
+		ada.fails(ExitFailed, "sessions", "nudge", "WEB-4")
 	})
 }

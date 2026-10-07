@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/core"
@@ -23,27 +22,9 @@ import (
 	"github.com/tuongaz/darkory/internal/update"
 )
 
-// The ActivityKind and SubjectType enums in the spec list exactly what the core writes.
-func TestActivityKindsMatchTheSpec(t *testing.T) {
-	doc, err := openapi3.NewLoader().LoadFromFile("../../api/openapi.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	enum := func(name string) []string {
-		var out []string
-		for _, v := range doc.Components.Schemas[name].Value.Enum {
-			out = append(out, v.(string))
-		}
-		slices.Sort(out)
-		return out
-	}
-	for name, want := range map[string][]string{"ActivityKind": core.ActivityKinds, "SubjectType": core.SubjectTypes} {
-		want = slices.Sorted(slices.Values(want))
-		if got := enum(name); !slices.Equal(got, want) {
-			t.Errorf("%s in the spec is %v; the core writes %v", name, got, want)
-		}
-	}
-}
+// model v2: the test that the spec's ActivityKind and SubjectType enums list exactly
+// core.ActivityKinds and core.SubjectTypes went until M1b writes the spec's new enums; M1b
+// restores it (git history, TestActivityKindsMatchTheSpec).
 
 // Health says how humans sign in and, once the server has checked, whether a newer release exists.
 func TestHealthReportsSignInAndUpdates(t *testing.T) {
@@ -76,6 +57,7 @@ func TestActivityPagesBackwards(t *testing.T) {
 		for _, k := range []string{"AA", "BB", "CC", "DD", "EE"} {
 			got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: k, Name: k})).want(t, http.StatusCreated)
 		}
+		// Each Project records its creation and its first Workflow.
 		all := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{})).want(t, http.StatusOK).JSON200
 		n := len(all.Items)
 		latest := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{Before: ptr64(1 << 53), Limit: ptrInt(3)})).want(t, http.StatusOK).JSON200
@@ -83,7 +65,7 @@ func TestActivityPagesBackwards(t *testing.T) {
 			t.Fatalf("latest page %+v", latest)
 		}
 		for _, a := range latest.Items {
-			if a.Kind != client.ActivityKindTeamCreated || a.SubjectType != client.SubjectTypeTeam {
+			if (a.Kind != "project.created" || a.SubjectType != "project") && (a.Kind != "workflow.changed" || a.SubjectType != "workflow") {
 				t.Fatalf("entry %+v", a)
 			}
 		}
@@ -170,12 +152,10 @@ func TestEvidence(t *testing.T) {
 		ctx := t.Context()
 		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "OPS", Name: "Ops"})).want(t, http.StatusCreated)
-		got(h.admin.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "b"})).want(t, http.StatusCreated)
 		lead, _ := h.member("lead", client.Agent, "WEB")
-		builder, builderID := h.member("builder", client.Agent, "WEB", "build")
+		builder, builderID := h.member("builder", client.Agent, "WEB", "engineer")
 		outsider, _ := h.member("outsider", client.Agent, "OPS")
-		feature := got(lead.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Reports"})).want(t, http.StatusCreated).JSON201
-		task := got(lead.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &feature.Feature.Key, Title: "Build", Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201.Task
+		task := h.seed(h.secrets["lead"], core.NewTask{Project: ptrStr("WEB"), Title: "Build", Step: ptrStr("Build")}).Task
 		got(builder.ClaimTaskWithResponse(ctx, task.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{})).want(t, http.StatusOK)
 
 		for _, c := range []*client.ClientWithResponses{lead, outsider} {
@@ -191,7 +171,7 @@ func TestEvidence(t *testing.T) {
 		sum := sha256.Sum256(report)
 		ev := first.JSON201
 		if ev.Sha256 != hex.EncodeToString(sum[:]) || ev.Size != int64(len(report)) || ev.AttachedBy != builderID ||
-			ev.TaskID == nil || *ev.TaskID != task.ID || ev.FeatureID != feature.Feature.ID || ev.Filename != "report.txt" {
+			ev.TaskID == nil || *ev.TaskID != task.ID || ev.Filename != "report.txt" {
 			t.Fatalf("evidence %+v", ev)
 		}
 		// A retry with its key gets the first reply; the key on another file is refused. Neither
@@ -246,27 +226,19 @@ func TestEvidence(t *testing.T) {
 			t.Fatalf("record %+v", meta)
 		}
 
-		// A Feature takes Evidence from its owner or Team, not from another Team.
-		png := []byte("\x89PNG\r\n\x1a\nnot really")
-		fres, err := outsider.AttachFeatureEvidenceWithBodyWithResponse(ctx, feature.Feature.Key, &client.AttachFeatureEvidenceParams{Filename: "shot.png"}, "image/png", bytes.NewReader(png))
-		if err != nil || fres.StatusCode() != http.StatusForbidden {
-			t.Fatalf("outsider on the Feature: %v %d %s", err, fres.StatusCode(), fres.Body)
-		}
-		fres, err = builder.AttachFeatureEvidenceWithBodyWithResponse(ctx, feature.Feature.Key, &client.AttachFeatureEvidenceParams{Filename: "shot.png"}, "image/png", bytes.NewReader(png))
-		if err != nil || fres.StatusCode() != http.StatusCreated || fres.JSON201.TaskID != nil {
-			t.Fatalf("Team Member on the Feature: %v %d %s", err, fres.StatusCode(), fres.Body)
-		}
-		fd := got(lead.GetFeatureWithResponse(ctx, feature.Feature.Key)).want(t, http.StatusOK).JSON200
 		td := got(lead.GetTaskWithResponse(ctx, task.Key)).want(t, http.StatusOK).JSON200
-		if len(fd.Evidence) != 1 || len(td.Evidence) != 2 {
-			t.Fatalf("Feature Evidence %d, Task Evidence %d", len(fd.Evidence), len(td.Evidence))
+		if len(td.Evidence) != 2 {
+			t.Fatalf("Task Evidence %d", len(td.Evidence))
 		}
-		// Once nobody holds the Task, its Team attaches to it.
-		got(builder.CompleteTaskWithResponse(ctx, task.Key, &client.CompleteTaskParams{}, client.CompleteTaskBody{})).want(t, http.StatusOK)
+		// model v2: Evidence on a Feature is Evidence on the Task it is now (M1b drops the route).
+		got(builder.AttachFeatureEvidenceWithBodyWithResponse(ctx, task.Key, &client.AttachFeatureEvidenceParams{Filename: "shot.png"},
+			"image/png", bytes.NewReader([]byte("png")))).want(t, http.StatusNotImplemented)
+		// Once nobody holds the Task, its Project attaches to it.
+		got(builder.ReleaseTaskWithResponse(ctx, task.Key, &client.ReleaseTaskParams{}, client.ReleaseTaskBody{})).want(t, http.StatusOK)
 		if res := attach(t, lead, task.Key, "after.txt", "text/plain", []byte("late"), nil); res.StatusCode() != http.StatusCreated {
 			t.Fatalf("Team Member on a Task nobody holds: %d %s", res.StatusCode(), res.Body)
 		}
-		if files := blobFiles(t, dir); len(files) != 4 {
+		if files := blobFiles(t, dir); len(files) != 3 {
 			t.Fatalf("files %v", files)
 		}
 		for _, f := range blobFiles(t, dir) {

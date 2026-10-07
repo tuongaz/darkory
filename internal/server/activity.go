@@ -35,7 +35,8 @@ func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request, params gen
 		q.Member = *params.Member
 	}
 	if params.Team != nil {
-		q.Team = *params.Team
+		// model v2: the API's team is the Project (renamed in M1b).
+		q.Project = *params.Team
 	}
 	if params.Kind != nil {
 		for _, k := range *params.Kind {

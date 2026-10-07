@@ -15,6 +15,7 @@ import (
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/clock"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -76,7 +77,7 @@ func TestSlowBodiesAreCutOff(t *testing.T) {
 		{"email sign-in, no credential", http.MethodPost, "/v1/sign-in/email", nil, "400"},
 		{"a JSON write", http.MethodPost, "/v1/teams", bearer, "400"},
 		{"refused for want of a credential", http.MethodPost, "/v1/teams", nil, "401"},
-		{"Evidence", http.MethodPost, "/v1/features/NOPE-1/evidence?filename=a.txt", bearer, "404"},
+		{"Evidence", http.MethodPost, "/v1/tasks/NOPE-1/evidence?filename=a.txt", bearer, "404"},
 	} {
 		status, took := slowBody(t, h, c.method, c.path, c.headers)
 		if took > 3*time.Second || !strings.Contains(status, c.status) {
@@ -186,8 +187,7 @@ func TestEvidenceFilenamesShowAsTheyAre(t *testing.T) {
 	ctx := t.Context()
 	h.webAndBuild()
 	builder, _ := h.agent("builder", nil, "build")
-	f := got(builder.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Docs"})).want(t, http.StatusCreated).JSON201
-	task := got(builder.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key, Title: "Write", Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201.Task
+	task := h.seed(h.secrets["builder"], core.NewTask{Project: ptrStr("WEB"), Title: "Write", Step: ptrStr("Build")}).Task
 	for _, bad := range []string{"report‮fdp.exe", "a⁦b.txt", "zero​width.txt", "line sep.txt"} {
 		if res := attach(t, builder, task.Key, bad, "text/plain", []byte("x"), nil); res.StatusCode() != http.StatusBadRequest {
 			t.Errorf("filename %q: %d", bad, res.StatusCode())

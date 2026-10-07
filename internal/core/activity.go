@@ -10,29 +10,33 @@ import (
 
 // ActivityKinds lists every kind of Activity entry Darkory writes; the API's ActivityKind enum
 // lists the same. The part before the dot names the subject's type (SubjectTypes).
+// Entries written before model v2 keep the kinds they were written with (feature.*, team.*,
+// task.handed_over, task.status_set, statuses.changed): Activity is the trail of what happened.
 var ActivityKinds = []string{
-	"feature.filed", "feature.ranked", "feature.shipped", "feature.dropped", "feature.owner_passed", "feature.evidence_attached",
-	"task.filed", "task.claimed", "task.lapsed", "task.released", "task.handed_over", "task.completed", "task.dropped",
-	"task.taken_back", "task.claim_ended", "task.note_added", "task.observed", "task.blocker_added", "task.blocker_removed",
-	"task.evidence_attached", "task.skill_proposed", "task.status_set",
-	"statuses.changed",
+	"task.filed", "task.claimed", "task.lapsed", "task.released", "task.advanced", "task.moved", "task.completed", "task.dropped",
+	"task.taken_back", "task.claim_ended", "task.split", "task.became_parent", "task.note_added", "task.observed",
+	"task.blocker_added", "task.blocker_removed", "task.evidence_attached", "task.skill_proposed", "task.ranked",
+	"task.owner_passed", "task.labels_set",
+	"workflow.changed",
+	"label.created", "label.changed", "label.deleted",
 	"skill.created", "skill.version_published",
 	"member.created", "member.updated", "member.manager_set", "member.manager_cleared", "member.skill_granted", "member.skill_revoked",
 	"member.deactivated", "member.reactivated", "member.agent_changed",
-	"team.created", "team.changed", "team.member_added", "team.member_removed",
+	"project.created", "project.changed", "project.member_added", "project.member_removed",
 	"workspace.added", "workspace.changed", "workspace.removed",
 	"token.issued", "token.revoked",
 	"session.closed",
 	"login_link.issued", "login_link.redeemed",
 }
 
-// SubjectTypes lists the kinds of record an Activity entry can be about.
-var SubjectTypes = []string{"feature", "task", "skill", "member", "team", "token", "session", "login_link", "statuses", "workspace"}
+// SubjectTypes lists the kinds of record an Activity entry can be about. A workflow.changed entry
+// is about a Project's Workflow, and names the Project.
+var SubjectTypes = []string{"task", "workflow", "label", "skill", "member", "project", "token", "session", "login_link", "workspace"}
 
 // ActivityQuery picks a page of Activity: the entries numbered above After and below Before
 // (zero for no bound), at most Limit of them. With Before the page is the entries closest below
-// it, still in sequence order. Member, Kinds and Team, when set, keep only the entries that match
-// them all, and the page is then that many matching entries.
+// it, still in sequence order. Member, Kinds and Project, when set, keep only the entries that
+// match them all, and the page is then that many matching entries.
 type ActivityQuery struct {
 	After, Before int64
 	Limit         int
@@ -40,8 +44,8 @@ type ActivityQuery struct {
 	Member string
 	// Kinds keeps the entries of these kinds.
 	Kinds []string
-	// Team keeps the entries about a Feature of a Team (id or key), or about a Task of one.
-	Team string
+	// Project keeps the entries about a Project (id or key), its Workflow, or a Task of it.
+	Project string
 }
 
 // ListActivity returns a page of Activity entries in sequence order. Numbers are allocated in
@@ -76,14 +80,12 @@ func (s *Service) ListActivity(ctx context.Context, c *auth.Caller, q ActivityQu
 		}
 		where = append(where, "a.kind IN ("+strings.Join(marks, ", ")+")")
 	}
-	if q.Team != "" {
-		id, err := resolveTeam(ctx, s.store, c.OrgID, q.Team)
+	if q.Project != "" {
+		id, err := resolveProject(ctx, s.store, c.OrgID, q.Project)
 		if err != nil {
 			return ActivityPage{}, err
 		}
-		add(`(EXISTS (SELECT 1 FROM tasks ft JOIN features ff ON ff.id = ft.feature_id
-	WHERE ft.org_id = a.org_id AND ft.id = a.subject_id AND ff.team_id = ?)
-OR EXISTS (SELECT 1 FROM features ff WHERE ff.org_id = a.org_id AND ff.id = a.subject_id AND ff.team_id = ?))`, id)
+		add(`(a.subject_id = ? OR EXISTS (SELECT 1 FROM tasks ft WHERE ft.org_id = a.org_id AND ft.id = a.subject_id AND ft.project_id = ?))`, id)
 	}
 	query := `SELECT a.seq, a.at, a.actor_id, a.kind, a.subject_id, a.payload FROM activity a WHERE ` + strings.Join(where, " AND ")
 	var items []Activity

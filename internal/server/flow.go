@@ -7,18 +7,11 @@ import (
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
-// Flow and learning: Handover, Notes, Observations, Blocking, take-back and drop on Tasks; Rank,
-// ship, drop and ownership on Features; Skill proposals.
+// Flow and learning: Notes, Observations, Blocking, take-back and drop on Tasks; Skill proposals.
 
+// HandoverTask: model v2: replaced by /v1/tasks/{task}/advance along a Connector (M1b).
 func (s *Server) HandoverTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.HandoverTaskParams) {
-	var body gen.HandoverTaskBody
-	out := as(http.StatusOK, func(t core.Task) any { return taskOut(t) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	t, err := s.core.Handover(r.Context(), c, task, body.Skill, body.Status, body.Note, idem)
-	s.respond(w, r, out, t, err)
+	replaced(w, "a Task is advanced along a Connector out of its Step")
 }
 
 func (s *Server) AddNote(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AddNoteParams) {
@@ -97,52 +90,25 @@ func (s *Server) GetSkillProposal(w http.ResponseWriter, r *http.Request, propos
 	s.respond(w, r, as(http.StatusOK, func(p core.SkillProposal) any { return proposalOut(p) }), p, err)
 }
 
+// Features are Tasks now (ADR 0015). model v2: replaced by /v1/tasks/{task}/rank, /complete,
+// /drop, /owner and the Parent's Observations (M1b).
+
 func (s *Server) RankFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.RankFeatureParams) {
-	var body gen.RankFeatureBody
-	out := as(http.StatusOK, func(f core.Feature) any { return featureOut(f) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	f, err := s.core.RankFeature(r.Context(), c, feature, body.Position, idem)
-	s.respond(w, r, out, f, err)
+	replaced(w, "a Feature is a Task with Subtasks; rank the Task")
 }
 
 func (s *Server) ShipFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.ShipFeatureParams) {
-	out := as(http.StatusOK, func(d core.FeatureDetail) any { return featureDetailOut(d) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, out)
-	if !ok {
-		return
-	}
-	d, err := s.core.ShipFeature(r.Context(), c, feature, idem)
-	s.respond(w, r, out, d, err)
+	replaced(w, "a Feature is a Task with Subtasks; its Owner completes it")
 }
 
 func (s *Server) DropFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.DropFeatureParams) {
-	out := as(http.StatusOK, func(d core.FeatureDetail) any { return featureDetailOut(d) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, out)
-	if !ok {
-		return
-	}
-	d, err := s.core.DropFeature(r.Context(), c, feature, idem)
-	s.respond(w, r, out, d, err)
+	replaced(w, "a Feature is a Task with Subtasks; its Owner drops it")
 }
 
 func (s *Server) PassFeatureOwnership(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.PassFeatureOwnershipParams) {
-	var body gen.PassFeatureOwnershipBody
-	out := as(http.StatusOK, func(f core.Feature) any { return featureOut(f) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	f, err := s.core.PassFeatureOwnership(r.Context(), c, feature, body.Owner, idem)
-	s.respond(w, r, out, f, err)
+	replaced(w, "a Feature is a Task with Subtasks; pass the Task's ownership")
 }
 
 func (s *Server) ListFeatureObservations(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.ListFeatureObservationsParams) {
-	all := params.Reviewed != nil && *params.Reviewed
-	obs, err := s.core.ListFeatureObservations(r.Context(), caller(r), feature, all)
-	s.respond(w, r, as(http.StatusOK, func(obs []core.Observation) any {
-		return gen.ObservationList{Items: each(obs, observationOut)}
-	}), obs, err)
+	replaced(w, "a Feature is a Task with Subtasks; read the Parent's Observations")
 }

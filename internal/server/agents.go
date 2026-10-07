@@ -64,16 +64,18 @@ func (s *Server) RemoveWorkspace(w http.ResponseWriter, r *http.Request, workspa
 	s.respond(w, r, noContent, nil, s.core.RemoveWorkspace(r.Context(), c, workspace, idem))
 }
 
+// UpdateTeam changes a Project, its ship_when_done being the Project's auto_complete. model v2:
+// replaced by PATCH /v1/projects/{project} (M1b).
 func (s *Server) UpdateTeam(w http.ResponseWriter, r *http.Request, team gen.TeamRef, params gen.UpdateTeamParams) {
 	var body gen.UpdateTeamBody
-	out := as(http.StatusOK, func(t core.Team) any { return teamOut(t) })
+	out := as(http.StatusOK, func(p core.Project) any { return teamOut(p) })
 	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
 	if !ok {
 		return
 	}
-	t, err := s.core.UpdateTeam(r.Context(), c, team, core.TeamChange{Name: body.Name, DefaultWorkspace: body.DefaultWorkspace,
-		ShipWhenDone: body.ShipWhenDone}, idem)
-	s.respond(w, r, out, t, err)
+	p, err := s.core.UpdateProject(r.Context(), c, team, core.ProjectChange{Name: body.Name, DefaultWorkspace: body.DefaultWorkspace,
+		AutoComplete: body.ShipWhenDone}, idem)
+	s.respond(w, r, out, p, err)
 }
 
 func (s *Server) SetAgentSettings(w http.ResponseWriter, r *http.Request, member gen.MemberRef, params gen.SetAgentSettingsParams) {

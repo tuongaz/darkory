@@ -19,18 +19,24 @@ import (
 
 // The race suite (ADR 0004): every test runs on SQLite and on Postgres.
 
-// builders makes n Members in WEB with the build Skill, and a Feature owned by a lead who is not
-// one of them.
+// builders makes Project WEB, whose Build Step (build) leads into Done ("pass") and to Parked, a
+// hold ("park"), and n Members in it with the build Skill. Tasks are filed at Build in the
+// Project it returns.
 func builders(t *testing.T, st *store.Store, n int) (*fixture, []*auth.Caller, string) {
 	f := newFixture(t, st)
-	f.team("WEB")
+	f.project("WEB")
 	f.skill("build")
-	lead := f.member("lead", []string{"WEB"}, nil)
+	if _, err := f.svc.SetWorkflow(t.Context(), f.admin, "WEB", core.WorkflowInput{
+		Steps:      []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "Parked", X: 240}},
+		Connectors: []core.ConnectorInput{{From: "Build", Name: "pass"}, {From: "Build", To: ptrStr("Parked"), Name: "park"}},
+	}, core.Idem{}); err != nil {
+		t.Fatal(err)
+	}
 	var out []*auth.Caller
 	for i := range n {
 		out = append(out, f.member(name("builder", i), []string{"WEB"}, []string{"build"}))
 	}
-	return f, out, f.feature(lead, "WEB", "Race").Feature.ID
+	return f, out, "WEB"
 }
 
 // unexpected fails on any error that is not a refusal the domain names: no "database is locked",
@@ -49,8 +55,8 @@ func unexpected(t *testing.T, err error) {
 
 func TestRaceFiftyClaimOneTask(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 50)
-		task := f.task(callers[0], feature, "Contended", "build")
+		f, callers, project := builders(t, st, 50)
+		task := f.task(callers[0], project, "Contended", "Build")
 		var won, lost atomic.Int64
 		var wg sync.WaitGroup
 		start := make(chan struct{})
@@ -84,9 +90,9 @@ func TestRaceFiftyClaimOneTask(t *testing.T) {
 // and no caller comes back empty while a Task it could take remained.
 func TestRaceNextHandsEachTaskOnce(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 20)
+		f, callers, project := builders(t, st, 20)
 		for i := range 10 {
-			f.task(callers[0], feature, name("task", i), "build")
+			f.task(callers[0], project, name("task", i), "Build")
 		}
 		var mu sync.Mutex
 		claimed := map[string]string{}
@@ -130,7 +136,7 @@ func TestRaceNextHandsEachTaskOnce(t *testing.T) {
 // A waiting `next` claims a Task filed while it waits, woken by the write.
 func TestNextWakesWhenATaskIsFiled(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 1)
+		f, callers, project := builders(t, st, 1)
 		got := make(chan core.TaskDetail, 1)
 		go func() {
 			d, ok, err := f.svc.Next(t.Context(), callers[0], 20*time.Second, noTimeout, core.Idem{})
@@ -140,7 +146,7 @@ func TestNextWakesWhenATaskIsFiled(t *testing.T) {
 			got <- d
 		}()
 		time.Sleep(100 * time.Millisecond)
-		filed := f.task(callers[0], feature, "Arrives", "build")
+		filed := f.task(callers[0], project, "Arrives", "Build")
 		select {
 		case d := <-got:
 			if d.Task.ID != filed.ID {
@@ -156,11 +162,11 @@ func TestNextWakesWhenATaskIsFiled(t *testing.T) {
 // Claim: the claimer wins, the Heartbeat is refused, and the lapse is recorded exactly once.
 func TestRaceClaimAgainstLateHeartbeat(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 2)
+		f, callers, project := builders(t, st, 2)
 		holder, claimer := callers[0], callers[1]
 		var tasks []core.Task
 		for i := range 10 {
-			task := f.task(holder, feature, name("task", i), "build")
+			task := f.task(holder, project, name("task", i), "Build")
 			if _, err := f.svc.Claim(t.Context(), holder, task.ID, timeout(10*time.Second), core.Idem{}); err != nil {
 				t.Fatal(err)
 			}
@@ -207,11 +213,11 @@ func TestRaceClaimAgainstLateHeartbeat(t *testing.T) {
 // reader that always asks for what follows the last number it saw misses nothing.
 func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 8)
+		f, callers, project := builders(t, st, 8)
 		ctx := t.Context()
 		var tasks []core.Task
 		for i := range 8 {
-			tasks = append(tasks, f.task(callers[0], feature, name("task", i), "build"))
+			tasks = append(tasks, f.task(callers[0], project, name("task", i), "Build"))
 		}
 		stop := make(chan struct{})
 		var seen []int64
@@ -255,7 +261,7 @@ func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
 					} else {
 						unexpected(t, err)
 					}
-					_, err := f.svc.FileTask(ctx, c, core.NewTask{Feature: &feature, Title: "more", Skill: ptrStr("build")}, core.Idem{})
+					_, err := f.svc.FileTask(ctx, c, core.NewTask{Project: &project, Title: "more", Step: ptrStr("Build")}, core.Idem{})
 					unexpected(t, err)
 				}
 			})
@@ -278,11 +284,11 @@ func TestRaceActivityIsGaplessInCommitOrder(t *testing.T) {
 // Concurrent retries under one Idempotency-Key make one write and all get its response.
 func TestRaceIdempotentRetries(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 1)
+		f, callers, project := builders(t, st, 1)
 		c := callers[0]
-		task := f.task(c, feature, "Once", "build")
+		task := f.task(c, project, "Once", "Build")
 		for i := range 3 {
-			f.task(c, feature, name("spare", i), "build")
+			f.task(c, project, name("spare", i), "Build")
 		}
 		for _, op := range []struct {
 			name string
@@ -343,8 +349,7 @@ func TestRaceIdempotentRetries(t *testing.T) {
 // soak found the late retry refused not_holder instead.
 func TestRaceIdempotentRetriesOfHeldWrites(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 1)
-		f.skill("review")
+		f, callers, project := builders(t, st, 1)
 		c := callers[0]
 		ctx := t.Context()
 		for _, op := range []struct {
@@ -352,12 +357,12 @@ func TestRaceIdempotentRetriesOfHeldWrites(t *testing.T) {
 			run  func(task string, idem core.Idem) (any, error)
 		}{
 			{"release", func(task string, idem core.Idem) (any, error) { return f.svc.Release(ctx, c, task, nil, idem) }},
-			{"handover", func(task string, idem core.Idem) (any, error) {
-				return f.svc.Handover(ctx, c, task, "review", nil, nil, idem)
+			{"advance", func(task string, idem core.Idem) (any, error) {
+				return f.svc.Advance(ctx, c, task, "park", nil, idem)
 			}},
 			{"complete", func(task string, idem core.Idem) (any, error) { return f.svc.Complete(ctx, c, task, nil, idem) }},
 		} {
-			task := f.task(c, feature, op.name, "build")
+			task := f.task(c, project, op.name, "Build")
 			f.claim(c, task.Key, noTimeout)
 			idem := jsonIdem("retry-"+op.name, op.name)
 			var mu sync.Mutex
@@ -405,11 +410,11 @@ func TestRaceIdempotentRetriesOfHeldWrites(t *testing.T) {
 // one refused and the other succeeding, with the released Claim shown lapsed.
 func TestRaceIdempotentClaimsAgainstARelease(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f, callers, feature := builders(t, st, 2)
+		f, callers, project := builders(t, st, 2)
 		holder, claimer := callers[0], callers[1]
 		ctx := t.Context()
 
-		task := f.task(holder, feature, "One after the other", "build")
+		task := f.task(holder, project, "One after the other", "Build")
 		f.claim(holder, task.ID, noTimeout)
 		idem := jsonIdem("after-release", "claim "+task.ID)
 		_, err := f.svc.Claim(ctx, claimer, task.ID, noTimeout, idem)
@@ -427,7 +432,7 @@ func TestRaceIdempotentClaimsAgainstARelease(t *testing.T) {
 		const n = 30
 		var tasks []core.Task
 		for i := range n {
-			task := f.task(holder, feature, name("task", i), "build")
+			task := f.task(holder, project, name("task", i), "Build")
 			f.claim(holder, task.ID, noTimeout)
 			tasks = append(tasks, task)
 		}
@@ -499,5 +504,3 @@ func claimEnds(cs []core.Claim) string {
 	}
 	return b.String()
 }
-
-func ptrStr(s string) *string { return &s }

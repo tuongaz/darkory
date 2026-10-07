@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/blob"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -76,6 +78,23 @@ func (h *harness) client(secret, session string) *client.ClientWithResponses {
 		h.t.Fatal(err)
 	}
 	return c
+}
+
+// seed files nt through the core as the Member whose token is secret, where /v1 has no route for
+// it until it is rebuilt on model v2: a Task in a Project, at a Step, or filed with Break down.
+// model v2: the tests of Features, Statuses and the MVP flow through them went with those routes;
+// M1b rebuilds them on /v1's new ones, and these tests then file through the client again.
+func (h *harness) seed(secret string, nt core.NewTask) core.TaskDetail {
+	h.t.Helper()
+	c, err := h.srv.auth.Authenticate(h.t.Context(), auth.Credentials{Bearer: secret, Session: "seed"})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	d, err := h.srv.Core().FileTask(h.t.Context(), c, nt, core.Idem{})
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	return d
 }
 
 func newTestServer(t *testing.T) (*httptest.Server, *client.ClientWithResponses) {
@@ -203,3 +222,5 @@ func assertError(t *testing.T, res *http.Response, status int, code gen.ErrorCod
 		t.Fatalf("body %+v, want code %s and a message", body, code)
 	}
 }
+
+func ptrBool(b bool) *bool { return &b }

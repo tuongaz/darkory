@@ -7,10 +7,10 @@ import (
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
-// A Member's own Views of the task and feature lists.
+// A Member's own Views of the Tasks list; the API's team is the Project (model v2: renamed in M1b).
 
 func viewOut(v core.View) gen.View {
-	out := gen.View{ID: v.ID, Entity: gen.ViewEntity(v.Entity), TeamID: v.TeamID, Name: v.Name, Filters: v.Filters, Sort: v.Sort,
+	out := gen.View{ID: v.ID, Entity: gen.ViewEntity(v.Entity), TeamID: v.ProjectID, Name: v.Name, Filters: v.Filters, Sort: v.Sort,
 		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 	if v.Display != nil {
 		out.Display = &v.Display
@@ -30,7 +30,7 @@ func (s *Server) CreateView(w http.ResponseWriter, r *http.Request, params gen.C
 	if !ok {
 		return
 	}
-	nv := core.NewView{Entity: string(body.Entity), Team: body.Team, Name: body.Name, Sort: body.Sort}
+	nv := core.NewView{Entity: string(body.Entity), Project: body.Team, Name: body.Name, Sort: body.Sort}
 	if body.Filters != nil {
 		nv.Filters = *body.Filters
 	}

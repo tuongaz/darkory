@@ -60,7 +60,7 @@ func ptr[T any](v T) *T { return &v }
 
 var firstToken = regexp.MustCompile(`(?m)^\s+(dk_\S+)$`)
 
-// Inside a git repository, init seeds Team MAIN, the repository as its default Workspace and the
+// Inside a git repository, init seeds Project MAIN, the repository as its default Workspace and the
 // four agents, writes each agent's token to <data>/agents/<name>.token readable by its user
 // alone, and lists them; the first token it prints is still the first Member's.
 func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
@@ -82,8 +82,8 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 	root, _ := filepath.EvalSymlinks(repo)
 	for _, want := range []string{
 		"First Member: ada (human, admin)",
-		"\nTeam MAIN (Main) holds ada and the agents below.\n",
-		"Workspace shop: " + root + " (git, default branch trunk), Team MAIN's default.\n",
+		"\nProject MAIN (Main), on the default Workflow, holds ada and the agents below.\n",
+		"Workspace shop: " + root + " (git, default branch trunk), Project MAIN's default.\n",
 		"Agents, reporting to ada, each with a token in " + filepath.Join(data, "agents", "<name>.token") + ":\n",
 		"  planner   breakdown              claude-opus-5-5\n",
 		"  builder   engineer               claude-sonnet-5-5\n",
@@ -142,7 +142,7 @@ func TestInitOutsideAGitRepository(t *testing.T) {
 	data := t.TempDir()
 	out := initIn(t, t.TempDir(), data)
 	if !strings.Contains(out, "No Workspace: init ran outside a git repository. Add one with darkory workspace add --path <repository>,\n"+
-		"then make it the Team's default with darkory team set MAIN --default-workspace <name>.\n") || !strings.Contains(out, "  planner ") {
+		"then make it the Project's default with darkory team set MAIN --default-workspace <name>.\n") || !strings.Contains(out, "  planner ") {
 		t.Fatalf("init outside a repository printed:\n%s", out)
 	}
 	agents, ws := agentsOf(t, data, firstToken.FindStringSubmatch(out)[1])
@@ -152,7 +152,7 @@ func TestInitOutsideAGitRepository(t *testing.T) {
 
 	data = t.TempDir()
 	out = initIn(t, t.TempDir(), data, "--no-agents")
-	if strings.Contains(out, "Team MAIN") || strings.Contains(out, "Workspace") {
+	if strings.Contains(out, "Project MAIN") || strings.Contains(out, "Workspace") {
 		t.Fatalf("init --no-agents printed:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(data, "agents")); !os.IsNotExist(err) {

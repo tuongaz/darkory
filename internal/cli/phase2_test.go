@@ -12,10 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/store"
-	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
 // recorder is a fake Install that records every request and answers from a route table.
@@ -78,6 +74,9 @@ const (
 
 // The commands for operations Phase 2 builds form their requests as the contract says: method,
 // path, query and JSON body, with the token, the Session and a fresh Idempotency-Key on writes.
+// model v2: TestPhase2Flow, the Phase 2 commands end to end through Features, Handover and Ship,
+// went with them; M2 rebuilds it on file --parent, advance, move and complete.
+
 func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 	dir := t.TempDir()
 	png := filepath.Join(dir, "shot.png")
@@ -248,162 +247,4 @@ func TestPhase2CommandsFormTheirRequests(t *testing.T) {
 	if got, err := os.ReadFile(filepath.Join(dir, "out.png")); err != nil || string(got) != "\x89PNG" {
 		t.Fatalf("evidence get -o saved %q, %v", got, err)
 	}
-}
-
-// The Phase 2 flow against the real server on both engines: Notes, Observations and Evidence; a
-// question that blocks; block and unblock; Handover and no self-review; take-back; rank and
-// ownership; shipping, which files the Retrospective; a proposed Skill version read with
-// proposal show, reviewed by another Member and published; and dropping a Feature.
-func TestPhase2Flow(t *testing.T) {
-	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		in := newInstall(t, st)
-		in.setup()
-		ada := in.as("ada", "ada-1")
-		ada.ok("skill", "create", "review", "--kind", "generic", "--body", "Review it.")
-		ada.ok("skill", "create", "build-acme", "--kind", "company", "--base", "build", "--body", "Build it the Acme way.")
-		ada.ok("team", "add", "WEB", "ada")
-		in.agent("rita", "WEB", "review", "skill-review")
-		ada.ok("report-to", "bob", "ada")
-		bob, rita := in.as("bob", "bob-1"), in.as("rita", "rita-1")
-		bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
-		bob.ok("feature", "create", "--team", "WEB", "--title", "Later")
-		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "Build search")
-		task := "WEB-5"
-		bob.ok("claim", task, "--timeout", "60")
-
-		bob.ok("note", task, "indexing", "done")
-		bob.ok("observe", task, "--worked", "small commits")
-		report := filepath.Join(t.TempDir(), "report.txt")
-		os.WriteFile(report, []byte("all green\n"), 0o600)
-		var ev client.Evidence
-		bob.json(&ev, "attach", task, report)
-		if ev.Filename != "report.txt" || ev.Size != 10 || deref(ev.TaskID) == "" {
-			t.Fatalf("attach: %+v", ev)
-		}
-		out := filepath.Join(t.TempDir(), "back.txt")
-		bob.ok("evidence", "get", ev.ID, "-o", out)
-		if b, _ := os.ReadFile(out); string(b) != "all green\n" {
-			t.Fatalf("downloaded %q", b)
-		}
-		var onFeature client.Evidence
-		bob.json(&onFeature, "attach", "WEB-1", report, "--name", "plan.txt")
-		if onFeature.TaskID != nil || onFeature.Filename != "plan.txt" {
-			t.Fatalf("attach to the Feature: %+v", onFeature)
-		}
-
-		// A question aimed at ada blocks the Task until it ends.
-		var q client.TaskDetail
-		bob.json(&q, "file", "--blocks", task, "--aim", "ada", "--title", "Which index?")
-		var blocked client.TaskDetail
-		bob.json(&blocked, "show", task)
-		if !blocked.Task.Blocked || len(blocked.Blockers) != 1 || len(deref(blocked.Task.OpenBlockers)) != 1 {
-			t.Fatalf("after the question: %+v", blocked.Task)
-		}
-		if out := bob.ok("tasks", "--feature", "WEB-1"); !strings.Contains(out, "[blocked by "+q.Task.Key+"]") {
-			t.Fatalf("tasks does not say what blocks %s:\n%s", task, out)
-		}
-		bob.ok("unblock", task, "--by", q.Task.Key)
-		bob.ok("block", task, "--by", q.Task.Key)
-		if res := bob.fails(ExitRefused, "block", q.Task.Key, "--by", task); !strings.Contains(res.stderr, "cycle") {
-			t.Fatalf("a blocking loop: %q", res.stderr)
-		}
-		ada.ok("claim", q.Task.Key, "--timeout", "0")
-		ada.ok("complete", q.Task.Key, "--note", "Use the trigram index.")
-
-		var handed client.Task
-		bob.json(&handed, "handover", task, "--skill", "review", "--note", "ready for review")
-		if handed.Claim != nil {
-			t.Fatalf("handover left a Claim: %+v", handed.Claim)
-		}
-		// No self-review: bob held it under build, so the review is rita's.
-		bob.fails(ExitRefused, "claim", task, "--timeout", "60")
-		rita.ok("claim", task, "--timeout", "60")
-		var taken client.Task
-		bob.json(&taken, "take-back", task, "--reason", "reassigning")
-		rita.fails(ExitRefused, "heartbeat", task)
-		rita.ok("claim", task, "--timeout", "60")
-		rita.ok("complete", task)
-
-		var ranked client.Feature
-		bob.json(&ranked, "feature", "rank", "WEB-3", "1")
-		if ranked.Rank != 1 {
-			t.Fatalf("rank: %+v", ranked)
-		}
-		var passed client.Feature
-		bob.json(&passed, "feature", "owner", "WEB-1", "ada")
-		if out := ada.ok("feature", "list"); !strings.Contains(out, "Search  [1 open (0 claimed), 2 done]") {
-			t.Fatalf("feature list:\n%s", out)
-		}
-		ada.ok("claim", "WEB-2", "--timeout", "0")
-		ada.ok("complete", "WEB-2")
-		var shipped client.FeatureDetail
-		ada.json(&shipped, "feature", "ship", "WEB-1")
-		if shipped.Feature.State != client.FeatureStateShipped {
-			t.Fatalf("ship: %+v", shipped.Feature)
-		}
-		retro := ""
-		for _, tk := range shipped.Tasks {
-			if tk.Kind == client.Retrospective {
-				retro = tk.Key
-			}
-		}
-		if retro == "" {
-			t.Fatalf("shipping filed no Retrospective: %+v", shipped.Tasks)
-		}
-
-		// The Retrospective: the owner takes it, as no one in WEB has retro, reads the
-		// Observations, and proposes a new version of the company Skill for review.
-		ada.ok("claim", retro, "--timeout", "0")
-		var obs client.ObservationList
-		ada.json(&obs, "feature", "observations", "WEB-1")
-		if len(obs.Items) != 1 || obs.Items[0].Body != "small commits" {
-			t.Fatalf("observations: %+v", obs)
-		}
-		ada.stdin = "Build it the Acme way, in small commits.\n"
-		var proposed client.SkillProposal
-		ada.json(&proposed, "propose", retro, "--skill", "build-acme", "--base", "1", "--file", "-")
-		ada.stdin = ""
-		if proposed.State != client.Pending || proposed.BasedOnVersion != 1 {
-			t.Fatalf("propose: %+v", proposed)
-		}
-		if res := ada.fails(ExitRefused, "propose", retro, "--skill", "build-acme", "--base", "9", "--file", report); !strings.Contains(res.stderr, "proposal_stale") {
-			t.Fatalf("a proposal against a version that is not current: %q", res.stderr)
-		}
-		ada.ok("handover", retro, "--skill", "skill-review")
-		rita.ok("claim", retro, "--timeout", "60")
-		var shown client.SkillProposal
-		rita.json(&shown, "proposal", "show", retro)
-		if shown.ID != proposed.ID || shown.Body != "Build it the Acme way, in small commits.\n" {
-			t.Fatalf("proposal show %s: %+v", retro, shown)
-		}
-		if out := rita.ok("proposal", "show", retro); !strings.Contains(out, "build-acme, written against v1") || !strings.Contains(out, "in small commits") {
-			t.Fatalf("proposal show printed:\n%s", out)
-		}
-		rita.ok("complete", retro)
-		var published client.SkillProposal
-		rita.json(&published, "proposal", "show", proposed.ID)
-		if published.State != client.Published || deref(published.PublishedVersion) != 2 {
-			t.Fatalf("after the review: %+v", published)
-		}
-		var skill client.SkillDetail
-		rita.json(&skill, "skill", "show", "build-acme")
-		if skill.Current.Version != 2 || skill.Current.Body != "Build it the Acme way, in small commits.\n" {
-			t.Fatalf("the published version: %+v", skill.Current)
-		}
-		ada.json(&obs, "feature", "observations", "WEB-1")
-		var everything client.ObservationList
-		ada.json(&everything, "feature", "observations", "WEB-1", "--all")
-		if len(obs.Items) != 0 || len(everything.Items) != 1 || everything.Items[0].ReviewedAt == nil {
-			t.Fatalf("after the Retrospective: unreviewed %+v, all %+v", obs.Items, everything.Items)
-		}
-		if res := rita.fails(ExitFailed, "proposal", "show", "WEB-3"); !strings.Contains(res.stderr, "no Skill proposal") {
-			t.Fatalf("proposal show of a Feature: %q", res.stderr)
-		}
-
-		var dropped client.FeatureDetail
-		bob.json(&dropped, "feature", "drop", "WEB-3")
-		if dropped.Feature.State != client.FeatureStateDropped {
-			t.Fatalf("drop: %+v", dropped.Feature)
-		}
-	})
 }

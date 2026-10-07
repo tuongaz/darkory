@@ -26,11 +26,13 @@ import (
 // Organisation's counter (ADR 0011); a record that fails deletes the file.
 
 func (s *Server) AttachTaskEvidence(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AttachTaskEvidenceParams) {
-	s.attachEvidence(w, r, core.EvidenceTarget{Task: &task}, params.Filename, params.IdempotencyKey)
+	s.attachEvidence(w, r, core.EvidenceTarget{Task: task}, params.Filename, params.IdempotencyKey)
 }
 
+// AttachFeatureEvidence: Evidence on a Parent is Evidence on the Task it is. model v2: replaced by
+// /v1/tasks/{task}/evidence (M1b).
 func (s *Server) AttachFeatureEvidence(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.AttachFeatureEvidenceParams) {
-	s.attachEvidence(w, r, core.EvidenceTarget{Feature: &feature}, params.Filename, params.IdempotencyKey)
+	replaced(w, "a Feature is a Task with Subtasks; attach Evidence to the Task")
 }
 
 func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target core.EvidenceTarget, filename string, key *string) {

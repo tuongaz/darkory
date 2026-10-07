@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -19,15 +20,21 @@ func TestInitCreatesTheInstallOnce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The four builtin Skills, and engineer and review, which the default Workflow's Build and
+		// Review Steps carry, whether or not the roster is seeded.
 		var names []string
 		for _, s := range skills {
-			if !s.Builtin || s.CurrentVersion != 1 {
-				t.Errorf("built-in Skill %+v", s)
+			builtin := s.Name != core.SkillEngineer && s.Name != core.SkillReview
+			if s.Builtin != builtin || s.Kind != "generic" || s.CurrentVersion != 1 {
+				t.Errorf("seeded Skill %+v", s)
 			}
 			names = append(names, s.Name)
 		}
-		if len(names) != 3 || names[0] != "breakdown" || names[1] != "retro" || names[2] != "skill-review" {
-			t.Fatalf("built-in Skills %v", names)
+		if !slices.Equal(names, []string{"acceptance", "breakdown", "engineer", "retro", "review", "skill-review"}) {
+			t.Fatalf("seeded Skills %v", names)
+		}
+		if me, err := f.svc.GetMe(ctx, f.admin); err != nil || len(me.Projects) != 0 || me.Organisations != nil {
+			t.Fatalf("me without the roster: %+v, %v", me, err)
 		}
 		if _, err := f.svc.Init(ctx, "Again", "bob"); !errors.Is(err, core.ErrInitialised) {
 			t.Fatalf("second init: %v", err)
@@ -49,15 +56,17 @@ func TestAdminOperationsNeedTheAdminMark(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
+		f.project("WEB")
 		f.skill("qa")
 		bob := f.member("bob", []string{"WEB"}, nil)
 		forbidden := map[string]error{}
 		_, forbidden["createMember"] = f.svc.CreateMember(ctx, bob, core.NewMember{Name: "eve", Kind: "agent"}, core.Idem{})
-		_, forbidden["createTeam"] = f.svc.CreateTeam(ctx, bob, "API", "API", core.Idem{})
+		_, forbidden["createProject"] = f.svc.CreateProject(ctx, bob, core.NewProject{Key: "API", Name: "API"}, core.Idem{})
+		_, forbidden["updateProject"] = f.svc.UpdateProject(ctx, bob, "WEB", core.ProjectChange{AutoComplete: ptrBool(true)}, core.Idem{})
+		_, forbidden["setWorkflow"] = f.svc.SetWorkflow(ctx, bob, "WEB", core.WorkflowInput{}, core.Idem{})
 		_, forbidden["createSkill"] = f.svc.CreateSkill(ctx, bob, core.NewSkill{Name: "x", Kind: "generic"}, core.Idem{})
 		forbidden["grantSkill"] = f.svc.GrantSkill(ctx, bob, "bob", "qa", core.Idem{})
-		forbidden["addTeamMember"] = f.svc.AddTeamMember(ctx, bob, "WEB", "ada", core.Idem{})
+		forbidden["addProjectMember"] = f.svc.AddProjectMember(ctx, bob, "WEB", "ada", core.Idem{})
 		forbidden["setManager"] = f.svc.SetManager(ctx, bob, "bob", "ada", core.Idem{})
 		_, forbidden["issueToken"] = f.svc.IssueToken(ctx, bob, "bob", "more", 0, core.Idem{})
 		_, forbidden["issueLoginLink"] = f.svc.IssueLoginLink(ctx, bob, "bob", core.Idem{})
@@ -71,8 +80,11 @@ func TestAdminOperationsNeedTheAdminMark(t *testing.T) {
 		if _, err := f.svc.ListMembers(ctx, bob, nil, nil); err != nil {
 			t.Fatal(err)
 		}
-		if d, err := f.svc.GetTeam(ctx, bob, "WEB"); err != nil || len(d.Members) != 1 {
-			t.Fatalf("team %+v, %v", d, err)
+		if d, err := f.svc.GetProject(ctx, bob, "WEB"); err != nil || len(d.Members) != 1 {
+			t.Fatalf("project %+v, %v", d, err)
+		}
+		if w, err := f.svc.GetWorkflow(ctx, bob, "WEB"); err != nil || len(w.Steps) != 6 {
+			t.Fatalf("workflow %+v, %v", w, err)
 		}
 		if ts, err := f.svc.ListTokens(ctx, bob, "bob"); err != nil || len(ts) != 1 {
 			t.Fatalf("own tokens %v, %v", ts, err)
@@ -81,14 +93,14 @@ func TestAdminOperationsNeedTheAdminMark(t *testing.T) {
 	})
 }
 
-func TestMembersTeamsAndSkills(t *testing.T) {
+func TestMembersProjectsAndSkills(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		_, err := f.svc.CreateTeam(ctx, f.admin, "WEB", "Other", core.Idem{})
+		f.project("WEB")
+		_, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "WEB", Name: "Other"}, core.Idem{})
 		wantCode(t, err, core.CodeConflict)
-		_, err = f.svc.CreateTeam(ctx, f.admin, "web", "Lower", core.Idem{})
+		_, err = f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "web", Name: "Lower"}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
 
 		email := "bob@example.com"
@@ -118,10 +130,10 @@ func TestMembersTeamsAndSkills(t *testing.T) {
 		if _, err := f.svc.UpdateMember(ctx, f.admin, "robert", core.MemberChange{Name: ptrStr("robert")}, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.svc.AddTeamMember(ctx, f.admin, "WEB", "robert", core.Idem{}); err != nil {
+		if err := f.svc.AddProjectMember(ctx, f.admin, "WEB", "robert", core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.svc.AddTeamMember(ctx, f.admin, "WEB", "robert", core.Idem{}); err != nil {
+		if err := f.svc.AddProjectMember(ctx, f.admin, "WEB", "robert", core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		if n := f.checkActivity(); n != before+1 {
@@ -141,24 +153,24 @@ func TestMembersTeamsAndSkills(t *testing.T) {
 			t.Fatal(err)
 		}
 		d, err := f.svc.GetMember(ctx, f.admin, "robert")
-		if err != nil || len(d.Teams) != 1 || len(d.Skills) != 1 || d.Skills[0].Name != "qa-acme" {
+		if err != nil || len(d.Projects) != 1 || len(d.Skills) != 1 || d.Skills[0].Name != "qa-acme" {
 			t.Fatalf("member detail %+v, %v", d, err)
 		}
 		if err := f.svc.RevokeSkill(ctx, f.admin, "robert", "qa-acme", core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		if err := f.svc.RemoveTeamMember(ctx, f.admin, "WEB", "robert", core.Idem{}); err != nil {
+		if err := f.svc.RemoveProjectMember(ctx, f.admin, "WEB", "robert", core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		d, _ = f.svc.GetMember(ctx, f.admin, bob.ID)
-		if len(d.Teams) != 0 || len(d.Skills) != 0 {
+		if len(d.Projects) != 0 || len(d.Skills) != 0 {
 			t.Fatalf("after removal %+v", d)
 		}
 		f.checkActivity()
 	})
 }
 
-// Reporting lines may cross Teams but never loop.
+// Reporting lines may cross Projects but never loop.
 func TestReportingLinesRefuseCycles(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -185,63 +197,6 @@ func TestReportingLinesRefuseCycles(t *testing.T) {
 		}
 		if err := f.svc.SetManager(ctx, f.admin, "bea", "dan", core.Idem{}); err != nil {
 			t.Fatalf("no loop once cal reports to no one: %v", err)
-		}
-		f.checkActivity()
-	})
-}
-
-func TestFilingFeaturesAndTasks(t *testing.T) {
-	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f := newFixture(t, st)
-		ctx := t.Context()
-		f.team("WEB")
-		f.team("API")
-		f.skill("build")
-		web := f.member("web-dev", []string{"WEB"}, nil)
-		api := f.member("api-dev", []string{"API"}, nil)
-
-		_, err := f.svc.FileFeature(ctx, api, core.NewFeature{Team: "WEB", Title: "Not mine"}, core.Idem{})
-		wantCode(t, err, core.CodeForbidden)
-		first := f.feature(web, "WEB", "First")
-		second, err := f.svc.FileFeature(ctx, web, core.NewFeature{Team: "WEB", Title: "Second", Owner: ptrStr("api-dev")}, core.Idem{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if first.Feature.Rank != 1 || second.Feature.Rank != 2 || second.Feature.Key != "WEB-3" || second.Feature.OwnerID != api.MemberID {
-			t.Fatalf("features %+v %+v", first.Feature, second.Feature)
-		}
-		// Any Member may file a Task in another Team's Feature; it takes that Team's next key.
-		task, err := f.svc.FileTask(ctx, api, core.NewTask{Feature: ptrStr("WEB-1"), Title: "From API", Skill: ptrStr("build")}, core.Idem{})
-		if err != nil || task.Task.Key != "WEB-5" || task.Task.Kind != "work" || task.Feature.ID != first.Feature.ID {
-			t.Fatalf("task %+v, %v", task.Task, err)
-		}
-		for _, bad := range []core.NewTask{
-			{Feature: ptrStr("WEB-1"), Title: "Both", Skill: ptrStr("build"), AimedAt: ptrStr("ada")},
-			{Feature: ptrStr("WEB-1"), Title: "Neither"},
-			{Feature: ptrStr("WEB-1"), Title: ""},
-		} {
-			_, err := f.svc.FileTask(ctx, web, bad, core.Idem{})
-			wantCode(t, err, core.CodeInvalid)
-		}
-		// A question joins the Feature of the Task it blocks; naming another Feature is refused.
-		_, err = f.svc.FileTask(ctx, web, core.NewTask{Feature: ptrStr("WEB-3"), Title: "Q", AimedAt: ptrStr("ada"), Blocks: ptrStr("WEB-2")}, core.Idem{})
-		wantCode(t, err, core.CodeInvalid)
-
-		page, err := f.svc.ListFeatures(ctx, web, core.FeatureFilter{Team: ptrStr("WEB"), Limit: 1})
-		if err != nil || len(page.Items) != 1 || page.Items[0].Key != "WEB-1" || page.NextCursor == "" {
-			t.Fatalf("first page %+v, %v", page, err)
-		}
-		page, err = f.svc.ListFeatures(ctx, web, core.FeatureFilter{Team: ptrStr("WEB"), Limit: 1, Cursor: page.NextCursor})
-		if err != nil || len(page.Items) != 1 || page.Items[0].Key != "WEB-3" || page.NextCursor != "" {
-			t.Fatalf("second page %+v, %v", page, err)
-		}
-		tasks, err := f.svc.ListTasks(ctx, web, core.TaskFilter{Feature: ptrStr("WEB-1")})
-		if err != nil || len(tasks.Items) != 2 {
-			t.Fatalf("tasks %+v, %v", tasks, err)
-		}
-		tasks, err = f.svc.ListTasks(ctx, web, core.TaskFilter{Skill: ptrStr("breakdown")})
-		if err != nil || len(tasks.Items) != 2 || tasks.Items[0].Key != "WEB-2" || tasks.Items[1].Key != "WEB-4" {
-			t.Fatalf("Break downs in Rank order: %v, %v", keys(tasks.Items), err)
 		}
 		f.checkActivity()
 	})
@@ -286,5 +241,3 @@ func TestSessionsAreStartedOnFirstSight(t *testing.T) {
 		}
 	})
 }
-
-func ptrBool(b bool) *bool { return &b }

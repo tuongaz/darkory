@@ -44,11 +44,13 @@ func optional(s string) *string {
 }
 
 func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
-	return gen.MemberDetail{Member: memberOut(d.Member), Teams: each(d.Teams, teamOut), Skills: each(d.Skills, skillOut), Reports: each(d.Reports, memberOut)}
+	return gen.MemberDetail{Member: memberOut(d.Member), Teams: each(d.Projects, teamOut), Skills: each(d.Skills, skillOut), Reports: each(d.Reports, memberOut)}
 }
 
-func teamOut(t core.Team) gen.Team {
-	return gen.Team{ID: t.ID, Key: t.Key, Name: t.Name, DefaultWorkspaceID: t.DefaultWorkspaceID, ShipWhenDone: t.ShipWhenDone, CreatedAt: t.CreatedAt}
+// teamOut renders a Project in the shape the API still names a Team, its auto_complete as
+// ship_when_done. model v2: replaced by the Project schema (M1b).
+func teamOut(p core.Project) gen.Team {
+	return gen.Team{ID: p.ID, Key: p.Key, Name: p.Name, DefaultWorkspaceID: p.DefaultWorkspaceID, ShipWhenDone: p.AutoComplete, CreatedAt: p.CreatedAt}
 }
 
 func workspaceOut(w core.Workspace) gen.Workspace {
@@ -56,8 +58,8 @@ func workspaceOut(w core.Workspace) gen.Workspace {
 		DefaultBranch: w.DefaultBranch, CreatedAt: w.CreatedAt}
 }
 
-func teamDetailOut(d core.TeamDetail) gen.TeamDetail {
-	return gen.TeamDetail{Team: teamOut(d.Team), Members: each(d.Members, memberOut)}
+func teamDetailOut(d core.ProjectDetail) gen.TeamDetail {
+	return gen.TeamDetail{Team: teamOut(d.Project), Members: each(d.Members, memberOut)}
 }
 
 func skillOut(s core.Skill) gen.Skill {
@@ -74,18 +76,6 @@ func skillDetailOut(d core.SkillDetail) gen.SkillDetail {
 	return gen.SkillDetail{Skill: skillOut(d.Skill), Current: skillVersionOut(d.Current)}
 }
 
-func featureOut(f core.Feature) gen.Feature {
-	return gen.Feature{ID: f.ID, Key: f.Key, TeamID: f.TeamID, Title: f.Title, Description: f.Description, OwnerID: f.OwnerID,
-		State: gen.FeatureState(f.State), Rank: f.Rank, FromRetrospectiveTaskID: f.FromRetrospectiveTaskID, Quick: f.Quick,
-		ShipWhenDone: f.ShipWhenDone, FiledBy: f.FiledBy,
-		CreatedAt: f.CreatedAt, EndedAt: f.EndedAt,
-		TaskCounts: gen.TaskCounts{Open: f.TaskCounts.Open, Claimed: f.TaskCounts.Claimed, Done: f.TaskCounts.Done, Dropped: f.TaskCounts.Dropped}}
-}
-
-func featureDetailOut(d core.FeatureDetail) gen.FeatureDetail {
-	return gen.FeatureDetail{Feature: featureOut(d.Feature), Tasks: each(d.Tasks, taskOut), Evidence: each(d.Evidence, evidenceOut)}
-}
-
 func claimOut(c core.Claim) gen.Claim {
 	out := gen.Claim{ID: c.ID, TaskID: c.TaskID, HolderID: c.HolderID, SessionID: c.SessionID, SkillID: c.SkillID,
 		SkillVersion: c.SkillVersion, ModelLabel: c.ModelLabel, HeartbeatTimeoutSeconds: seconds(c.Timeout),
@@ -97,10 +87,17 @@ func claimOut(c core.Claim) gen.Claim {
 	return out
 }
 
+// taskOut renders a Task in the shape the API still has: its Parent as its Feature (its own id
+// when it has none, as a Feature became a Task with the same id), its Step as its Status. model
+// v2: replaced by the Task schema with project, parent, step and labels (M1b).
 func taskOut(t core.Task) gen.Task {
-	out := gen.Task{ID: t.ID, Key: t.Key, FeatureID: t.FeatureID, Kind: gen.TaskKind(t.Kind), Title: t.Title,
-		Description: t.Description, State: gen.TaskState(t.State), StatusID: t.StatusID, SkillID: t.SkillID, AimedAtID: t.AimedAtID,
-		Blocked: t.Blocked, FiledBy: t.FiledBy, WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
+	feature := t.ID
+	if t.ParentID != nil {
+		feature = *t.ParentID
+	}
+	out := gen.Task{ID: t.ID, Key: t.Key, FeatureID: feature, Kind: gen.TaskKind(t.Kind), Title: t.Title,
+		Description: t.Description, State: gen.TaskState(t.State), StatusID: deref(t.StepID), SkillID: t.SkillID, AimedAtID: t.AimedAtID,
+		Blocked: t.Blocked, FiledBy: deref(t.FiledBy), WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
 	if t.Claim != nil {
 		c := claimOut(*t.Claim)
 		out.Claim = &c
@@ -118,7 +115,7 @@ func taskOut(t core.Task) gen.Task {
 
 func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 	out := gen.TaskDetail{
-		Task: taskOut(d.Task), Status: statusOut(d.Status), Feature: featureOut(d.Feature), Workspaces: each(d.Workspaces, workspaceOut),
+		Task: taskOut(d.Task), Status: stepStatusOut(d), Feature: parentFeatureOut(d), Workspaces: each(d.Workspaces, workspaceOut),
 		Claims: each(d.Claims, claimOut), Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut),
 		Blockers: each(d.Blockers, taskOut), Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
 	}
@@ -129,8 +126,42 @@ func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 	return out
 }
 
-func statusOut(s core.Status) gen.Status {
-	return gen.Status{ID: s.ID, Name: s.Name, Kind: gen.StatusKind(s.Kind), Position: s.Position}
+// stepStatusOut renders a Task's Step as the Status the API still has: a hold as backlog, a Step
+// with a live Claim as in progress, any other as todo; an ended Task's as done or dropped. model
+// v2: replaced by the Step and its Connectors in TaskDetail (M1b).
+func stepStatusOut(d core.TaskDetail) gen.Status {
+	switch {
+	case d.Task.State != "open":
+		return gen.Status{Name: d.Task.State, Kind: gen.StatusKind(d.Task.State)}
+	case d.Step == nil:
+		return gen.Status{Kind: gen.StatusKind("todo")}
+	}
+	kind := "todo"
+	switch {
+	case d.Step.SkillID == nil:
+		kind = "backlog"
+	case d.Task.Claim != nil:
+		kind = "in_progress"
+	}
+	return gen.Status{ID: d.Step.ID, Name: d.Step.Name, Kind: gen.StatusKind(kind), Position: d.Step.Position}
+}
+
+// parentFeatureOut renders a Task's Parent, or the Task itself when it has none, as the Feature
+// the API still has. model v2: replaced by the parent brief and subtasks in TaskDetail (M1b).
+func parentFeatureOut(d core.TaskDetail) gen.Feature {
+	t := d.Task
+	f := gen.Feature{ID: t.ID, Key: t.Key, TeamID: t.ProjectID, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID,
+		State: gen.FeatureState(t.State), FiledBy: deref(t.FiledBy), CreatedAt: t.CreatedAt, EndedAt: t.EndedAt, ShipWhenDone: t.AutoComplete}
+	if t.State == "done" {
+		f.State = gen.FeatureState("shipped")
+	}
+	if t.Rank != nil {
+		f.Rank = *t.Rank
+	}
+	if d.Parent != nil {
+		f.ID, f.Key, f.Title, f.Description, f.ShipWhenDone = d.Parent.ID, d.Parent.Key, d.Parent.Title, "", false
+	}
+	return f
 }
 
 func proposalOut(p core.SkillProposal) gen.SkillProposal {
@@ -144,13 +175,13 @@ func noteOut(n core.Note) gen.Note {
 }
 
 func observationOut(o core.Observation) gen.Observation {
-	return gen.Observation{ID: o.ID, TaskID: o.TaskID, FeatureID: o.FeatureID, AuthorID: o.AuthorID, SkillID: o.SkillID,
+	return gen.Observation{ID: o.ID, TaskID: o.TaskID, AuthorID: o.AuthorID, SkillID: o.SkillID,
 		Outcome: gen.ObservationOutcome(o.Outcome), Body: o.Body, CreatedAt: o.CreatedAt, ReviewedByTaskID: o.ReviewedByTaskID,
 		ReviewedAt: o.ReviewedAt}
 }
 
 func evidenceOut(e core.Evidence) gen.Evidence {
-	return gen.Evidence{ID: e.ID, FeatureID: e.FeatureID, TaskID: e.TaskID, Filename: e.Filename, ContentType: e.ContentType,
+	return gen.Evidence{ID: e.ID, TaskID: &e.TaskID, Filename: e.Filename, ContentType: e.ContentType,
 		Size: e.Size, Sha256: e.SHA256, AttachedBy: e.AttachedBy, CreatedAt: e.CreatedAt}
 }
 

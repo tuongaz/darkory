@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -114,6 +116,16 @@ func TestWritesOnOneProcessWakeWaitersOnAnother(t *testing.T) {
 	got(adminB.GrantSkillWithResponse(ctx, "bot", "breakdown", &client.GrantSkillParams{})).ok(t)
 	tok := got(adminB.IssueTokenWithResponse(ctx, "bot", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "main"})).ok(t)
 	botA := a.client(t, tok.JSON201.Secret, "bot-a")
+	// The Task each round files bot's question under, at the Backlog hold, where nobody takes it.
+	// model v2: filed through the core until M1b rebuilds filing on /v1 (a Feature was filed here).
+	ada, err := auth.New(b.st, b.srv.Core().Clock()).Authenticate(ctx, auth.Credentials{Bearer: secret, Session: "ada-seed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchor, err := b.srv.Core().FileTask(ctx, ada, core.NewTask{Project: ptr("WEB"), Title: "Anchor", Step: ptr("Backlog")}, core.Idem{})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	page := got(a.client(t, secret, "ada-a").ListActivityWithResponse(ctx, &client.ListActivityParams{})).ok(t)
 	events := a.stream(t, secret, "ada-stream", page.JSON200.LastSeq)
@@ -149,7 +161,8 @@ func TestWritesOnOneProcessWakeWaitersOnAnother(t *testing.T) {
 		}()
 		time.Sleep(300 * time.Millisecond)
 		start = time.Now()
-		got(adminB.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Feature " + round})).ok(t)
+		got(adminB.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &anchor.Task.Key, Title: "Question " + round,
+			AimedAt: ptr("bot")})).ok(t)
 		select {
 		case r := <-done:
 			if r.err != nil || r.res.StatusCode() != http.StatusOK {

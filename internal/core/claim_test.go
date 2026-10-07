@@ -13,7 +13,8 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// claimFixture is one Team, one Skill, two builders and a Task needing the Skill.
+// claimFixture is one Project whose Workflow is one Step, Build, carrying the build Skill and
+// leading into Done; two builders; and a Task at Build.
 type claimFixture struct {
 	*fixture
 	a, b *auth.Caller
@@ -22,12 +23,12 @@ type claimFixture struct {
 
 func newClaimFixture(t *testing.T, st *store.Store) claimFixture {
 	f := newFixture(t, st)
-	f.team("WEB")
+	f.project("WEB")
 	f.skill("build")
+	f.chain("WEB", [2]string{"Build", "build"})
 	a := f.member("alice", []string{"WEB"}, []string{"build"})
 	b := f.member("bob", []string{"WEB"}, []string{"build"})
-	feat := f.feature(a, "WEB", "Login")
-	return claimFixture{fixture: f, a: a, b: b, task: f.task(a, feat.Feature.ID, "Build it", "build")}
+	return claimFixture{fixture: f, a: a, b: b, task: f.task(a, "WEB", "Build it", "Build")}
 }
 
 func (f claimFixture) activityKinds(subject string) []string {
@@ -163,7 +164,7 @@ func TestLapseIsRecordedByTheNextClaimerOrTheSweeper(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newClaimFixture(t, st)
 		ctx := t.Context()
-		other := f.fixture.task(f.a, f.task.FeatureID, "Style it", "build")
+		other := f.fixture.task(f.a, "WEB", "Style it", "Build")
 		for _, id := range []string{f.task.ID, other.ID} {
 			if _, err := f.svc.Claim(ctx, f.a, id, timeout(10*time.Second), core.Idem{}); err != nil {
 				t.Fatal(err)
@@ -261,8 +262,8 @@ func TestRevokingATokenOrClosingASessionEndsItsClaims(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newClaimFixture(t, st)
 		ctx := t.Context()
-		memberBound := f.fixture.task(f.a, f.task.FeatureID, "Member-bound", "build")
-		other := f.fixture.task(f.a, f.task.FeatureID, "Other Session", "build")
+		memberBound := f.fixture.task(f.a, "WEB", "Member-bound", "Build")
+		other := f.fixture.task(f.a, "WEB", "Other Session", "Build")
 		if _, err := f.svc.Claim(ctx, f.a, f.task.Key, timeout(time.Minute), core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
@@ -343,8 +344,6 @@ func TestIdempotentClaim(t *testing.T) {
 	})
 }
 
-func ptrDur(d time.Duration) *time.Duration { return &d }
-
 func mustJSON(t *testing.T, v any) []byte {
 	t.Helper()
 	b, err := json.Marshal(v)
@@ -379,7 +378,7 @@ func TestRevocationStopsLongRequestsAndClaims(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("next kept waiting after its Session was closed")
 		}
-		task := f.fixture.task(f.a, f.task.FeatureID, "Arrives later", "build")
+		task := f.fixture.task(f.a, "WEB", "Arrives later", "Build")
 		_, err := f.svc.Claim(ctx, f.b, task.Key, noTimeout, core.Idem{})
 		wantCode(t, err, core.CodeUnauthenticated)
 		_, _, err = f.svc.Next(ctx, f.b, 0, noTimeout, core.Idem{})
@@ -403,4 +402,78 @@ func TestRevocationStopsLongRequestsAndClaims(t *testing.T) {
 		}
 		f.checkActivity()
 	})
+}
+
+// A Claim records the Skill of the Task's Step and its version, and moves nothing: the Task stays
+// at its Step while held, released, lapsed or taken back, and only advancing moves it on.
+func TestClaimRecordsTheStepsSkillAndMovesNothing(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newClaimFixture(t, st)
+		ctx := t.Context()
+		build := f.step("WEB", "Build")
+		d := f.claim(f.a, f.task.Key, timeout(time.Minute))
+		if d.Task.Claim.SkillID == nil || *d.Task.Claim.SkillID != f.skillID("build") || d.Task.StepID == nil || *d.Task.StepID != build ||
+			d.Step == nil || d.Step.ID != build || len(d.Connectors) != 1 || d.Connectors[0].Name != "pass" {
+			t.Fatalf("claimed: %+v at %+v, ways out %+v", d.Task.Claim, d.Step, d.Connectors)
+		}
+		if n := f.count(`SELECT COUNT(*) FROM claims WHERE task_id = $1 AND skill_id = $2 AND skill_version = 1`, f.task.ID, f.skillID("build")); n != 1 {
+			t.Fatal("the Claim's row does not record the Step's Skill")
+		}
+		since := *d.Task.StepSince
+		if _, err := f.svc.Release(ctx, f.a, f.task.Key, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		f.claim(f.b, f.task.Key, timeout(time.Minute))
+		f.clock.Advance(2 * time.Minute)
+		if _, err := f.svc.Sweep(ctx); err != nil {
+			t.Fatal(err)
+		}
+		got := f.get(f.task.Key)
+		if got.Task.StepID == nil || *got.Task.StepID != build || !got.Task.StepSince.Equal(since) || got.Task.Claim != nil {
+			t.Fatalf("after release and lapse the Task is at %v since %v, held by %+v", got.Task.StepID, got.Task.StepSince, got.Task.Claim)
+		}
+	})
+}
+
+// A lapsed Claim's Task is takeable at once, before anyone records the lapse; in either order —
+// the sweeper first, then the claim, or the claim first, which records it, then the sweeper,
+// which finds nothing — the lapse is recorded once and the Task stays at its Step.
+func TestALapsedTaskInEitherOrder(t *testing.T) {
+	for _, order := range []string{"lapse, sweep, claim", "lapse, claim, sweep"} {
+		t.Run(order, func(t *testing.T) {
+			storetest.Each(t, func(t *testing.T, st *store.Store) {
+				f := newClaimFixture(t, st)
+				ctx := t.Context()
+				f.claim(f.a, f.task.Key, timeout(10*time.Second))
+				f.clock.Advance(time.Minute)
+				if !f.takeable(f.b)[f.task.ID] {
+					t.Fatal("a Task whose Claim lapsed is not takeable before the lapse is recorded")
+				}
+				if order == "lapse, sweep, claim" {
+					if n, err := f.svc.Sweep(ctx); err != nil || n != 1 {
+						t.Fatalf("sweep recorded %d, %v", n, err)
+					}
+					if f.at(f.task.Key) != "Build" {
+						t.Fatalf("after the sweep the Task is at %s", f.at(f.task.Key))
+					}
+					f.claim(f.b, f.task.Key, noTimeout)
+				} else {
+					d := f.claim(f.b, f.task.Key, noTimeout)
+					if len(d.Claims) != 2 || *d.Claims[0].HowEnded != "lapsed" {
+						t.Fatalf("the claim of the lapsed Task shows %+v", d.Claims)
+					}
+					if n, err := f.svc.Sweep(ctx); err != nil || n != 0 {
+						t.Fatalf("sweep after the claim recorded %d, %v", n, err)
+					}
+				}
+				if f.at(f.task.Key) != "Build" {
+					t.Fatalf("the Task is at %s", f.at(f.task.Key))
+				}
+				if n := f.count(`SELECT COUNT(*) FROM activity WHERE kind = 'task.lapsed' AND subject_id = $1`, f.task.ID); n != 1 {
+					t.Fatalf("%d lapse records", n)
+				}
+				f.checkActivity()
+			})
+		})
+	}
 }

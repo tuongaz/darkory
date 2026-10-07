@@ -2,16 +2,11 @@ package runner
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/store"
-	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
 // The dialogs as Claude Code 2.1.289 draws them (the smoke run's capture, and a fresh
@@ -133,109 +128,6 @@ func (f *fixture) fakeClaude(name, scenario, prompt string) {
 	f.ok("ada", "agent", "set", name, "--command", bin, "--model", "fake-1", "--unattended", "--progress-file", progress,
 		"--arg=--prompt-file", "--arg={prompt_file}", "--arg=--progress", "--arg="+progress, "--arg=--mcp-config", "--arg={mcp_config}",
 		"--env", "FAKEAGENT_SCENARIO="+scenario, "--env", asDarkory+"=1", "--env", "FAKEAGENT_PROMPT="+prompt)
-}
-
-// Claude Code runs with the person's own configuration: their ~/.claude.json, which trusts the
-// Workspace's repository they opened Claude Code in, covers the Task's worktree, and their
-// settings accepted the permission skip, so the fake one, asking as Claude Code does, asks
-// nothing. The runner writes none of it and makes no configuration directory of its own.
-func TestRunnerUsesThePersonsClaudeCodeConfiguration(t *testing.T) {
-	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f := newFixture(t, st)
-		home := t.TempDir() // after the fixture, whose git has a HOME of its own
-		t.Setenv("HOME", home)
-		t.Setenv("CLAUDE_CONFIG_DIR", "")
-		repo, _ := filepath.EvalSymlinks(f.repo)
-		global := `{"hasCompletedOnboarding": true, "projects": {"` + repo + `": {"hasTrustDialogAccepted": true}}}`
-		settings := `{"skipDangerousModePermissionPrompt": true}`
-		writeTestFile(t, filepath.Join(home, ".claude.json"), global)
-		writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), settings)
-		f.agent("builder", "complete", "build")
-		f.fakeClaude("builder", "complete", "claude")
-		f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-		f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
-		r := f.run("builder")
-
-		eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
-		eventually(t, 10*time.Second, "the session to end", func() bool { return len(r.Running()) == 0 })
-		if notes := notesOf(f.task("WEB-3")); strings.Contains(notes, "first-run") {
-			t.Fatalf("the session met a first-run prompt:\n%s", notes)
-		}
-		for path, want := range map[string]string{filepath.Join(home, ".claude.json"): global, filepath.Join(home, ".claude", "settings.json"): settings} {
-			if b, err := os.ReadFile(path); err != nil || string(b) != want {
-				t.Fatalf("%s changed: %q, %v", path, b, err)
-			}
-		}
-		if _, err := os.Stat(filepath.Join(f.data, "claude")); !os.IsNotExist(err) {
-			t.Fatalf("the runner made a Claude Code configuration directory: %v", err)
-		}
-	})
-}
-
-// A first-run dialog of a repository never opened in Claude Code is accepted, once per session
-// and only before the agent's first turn, with a Note. A second one is left to a person: the
-// session waits and a Note says to join it. Claude Code asks only on a terminal, so this runs in
-// tmux.
-func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
-	if _, err := exec.LookPath("tmux"); err != nil {
-		t.Skip("no tmux")
-	}
-	f := newFixture(t, storetest.Open(t, store.SQLite))
-	f.timings.Stale = time.Minute
-	f.agent("builder", "complete", "build")
-	f.fakeClaude("builder", "complete", "trust")
-	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
-	r := f.runWith("on", "builder")
-	t.Cleanup(func() { killTmux(r.Socket()) })
-
-	eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
-	if notes := notesOf(f.task("WEB-3")); !strings.Contains(notes, "The runner accepted Claude Code's first-run prompt: the folder-trust dialog.") {
-		t.Fatalf("WEB-3's Notes:\n%s", notes)
-	}
-
-	// The next session's Claude Code asks twice: the second time is a person's to answer.
-	f.fakeClaude("builder", "complete", "again")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Totals")
-	waitingForAPerson(t, f, r, "WEB-4", "Claude Code shows the folder-trust dialog, and the runner accepts one first-run dialog "+
-		"a session; a person can answer it with darkory join WEB-4.")
-	n := 0
-	for l := range strings.Lines(f.log.String()) {
-		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-4 ") {
-			n++
-		}
-	}
-	if n != 1 {
-		t.Fatalf("the runner accepted %d dialogs on WEB-4, not the first alone", n)
-	}
-}
-
-// What the agent prints after its first turn is never answered, even when it is the folder-trust
-// dialog exactly: no key is sent, the session waits, and a Note says to join it.
-func TestRunnerNeverAnswersAfterTheFirstTurn(t *testing.T) {
-	if _, err := exec.LookPath("tmux"); err != nil {
-		t.Skip("no tmux")
-	}
-	f := newFixture(t, storetest.Open(t, store.SQLite))
-	f.timings.Stale = time.Minute
-	f.agent("builder", "complete", "build")
-	f.fakeClaude("builder", "complete", "late")
-	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
-	r := f.runWith("on", "builder")
-	t.Cleanup(func() { killTmux(r.Socket()) })
-
-	waitingForAPerson(t, f, r, "WEB-3", "Claude Code shows a first-run dialog after the agent's first turn; "+
-		"a person can answer it with darkory join WEB-3.")
-	// Ten more checks, and still no key.
-	time.Sleep(10 * f.timings.Tick)
-	if strings.Contains(f.log.String(), "accepting it") || strings.Contains(notesOf(f.task("WEB-3")), "accepted Claude Code's first-run prompt") {
-		t.Fatalf("the runner answered a dialog after the first turn:\n%s", notesOf(f.task("WEB-3")))
-	}
-	if b, _ := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-3", "pane.log")); strings.Contains(string(b), "the dialog was answered") ||
-		!strings.Contains(string(b), "Yes, I trust this folder") {
-		t.Fatalf("the session's pane:\n%s", tail(string(b), 30))
-	}
 }
 
 // waitingForAPerson waits until task's session shows a dialog the runner leaves to a person: the

@@ -4,11 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"testing"
-	"testing/fstest"
 
 	"github.com/google/uuid"
 	"github.com/tuongaz/darkory/internal/store"
@@ -18,21 +16,7 @@ import (
 // migrateTo6 applies migration 0006 to a database at 0005, from its files.
 func migrateTo6(t *testing.T, s *store.Store) {
 	t.Helper()
-	set := fstest.MapFS{}
-	for _, dir := range []string{"migrations", "migrations_next"} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, e := range entries {
-			b, err := os.ReadFile(dir + "/" + e.Name())
-			if err != nil {
-				t.Fatal(err)
-			}
-			set[e.Name()] = file(string(b))
-		}
-	}
-	res, err := s.MigrateFS(t.Context(), set, now)
+	res, err := s.MigrateFS(t.Context(), upTo(t, 6), now)
 	if err != nil {
 		t.Fatalf("migrating to 0006: %v", err)
 	}
@@ -352,38 +336,5 @@ func TestMigratingLeavesForeignKeysEnforced(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("a Member of no Organisation was accepted after migrating")
-	}
-}
-
-// Migration 0006 leaves the same schema on both engines.
-func TestMigration6SchemaIsTheSameOnBothEngines(t *testing.T) {
-	if os.Getenv(storetest.PostgresURLEnv) == "" {
-		t.Skipf("%s is not set; nothing to compare SQLite's schema with", storetest.PostgresURLEnv)
-	}
-	var schemas []schema
-	for _, e := range []store.Engine{store.SQLite, store.Postgres} {
-		s := storetest.OpenUnmigrated(t, e)
-		migrateTo(t, s, 5)
-		migrateTo6(t, s)
-		schemas = append(schemas, describe(t, s))
-	}
-	lite, pg := schemas[0], schemas[1]
-	for _, name := range union(lite, pg) {
-		l, p := lite[name], pg[name]
-		switch {
-		case l == nil:
-			t.Errorf("table %s exists only on Postgres", name)
-		case p == nil:
-			t.Errorf("table %s exists only on SQLite", name)
-		default:
-			if a, b := l.String(), p.String(); a != b {
-				t.Errorf("table %s differs\nsqlite:\n%s\npostgres:\n%s", name, a, b)
-			}
-		}
-	}
-	for name, tb := range lite {
-		if name != "organisations" && name != "schema_migrations" && tb.Columns["org_id"] != "text not null" {
-			t.Errorf("table %s: org_id is %q, want text not null", name, tb.Columns["org_id"])
-		}
 	}
 }

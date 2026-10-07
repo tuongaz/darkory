@@ -8,45 +8,19 @@ import (
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
+// Features are Tasks now (ADR 0015). model v2: replaced by /v1/tasks with parent and breakdown
+// (M1b).
+
 func (s *Server) FileFeature(w http.ResponseWriter, r *http.Request, params gen.FileFeatureParams) {
-	var body gen.FileFeatureBody
-	out := as(http.StatusCreated, func(d core.FeatureDetail) any { return featureDetailOut(d) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	nf := core.NewFeature{Team: body.Team, Title: body.Title, Owner: body.Owner, FromRetrospective: body.FromRetrospective,
-		Skill: body.Skill, Workspaces: body.Workspaces, ShipWhenDone: body.ShipWhenDone}
-	if body.Description != nil {
-		nf.Description = *body.Description
-	}
-	if body.Quick != nil {
-		nf.Quick = *body.Quick
-	}
-	d, err := s.core.FileFeature(r.Context(), c, nf, idem)
-	s.respond(w, r, out, d, err)
+	replaced(w, "a Feature is a Task filed with Break down, its Tasks its Subtasks")
 }
 
 func (s *Server) ListFeatures(w http.ResponseWriter, r *http.Request, params gen.ListFeaturesParams) {
-	ff := core.FeatureFilter{Team: params.Team, State: (*string)(params.State), Owner: params.Owner}
-	if params.Filter != nil {
-		ff.Filters = *params.Filter
-	}
-	if params.Limit != nil {
-		ff.Limit = *params.Limit
-	}
-	if params.Cursor != nil {
-		ff.Cursor = *params.Cursor
-	}
-	p, err := s.core.ListFeatures(r.Context(), caller(r), ff)
-	s.respond(w, r, as(http.StatusOK, func(p core.Page[core.Feature]) any {
-		return gen.FeatureList{Items: each(p.Items, featureOut), NextCursor: pageCursor(p.NextCursor)}
-	}), p, err)
+	replaced(w, "a Feature is a Task with Subtasks; list Tasks with top:is:true")
 }
 
 func (s *Server) GetFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef) {
-	d, err := s.core.GetFeature(r.Context(), caller(r), feature)
-	s.respond(w, r, as(http.StatusOK, func(d core.FeatureDetail) any { return featureDetailOut(d) }), d, err)
+	replaced(w, "a Feature is a Task with Subtasks; read the Task")
 }
 
 func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.FileTaskParams) {
@@ -56,8 +30,13 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 	if !ok {
 		return
 	}
-	nt := core.NewTask{Feature: body.Feature, Title: body.Title, Skill: body.Skill, AimedAt: body.AimedAt, Blocks: body.Blocks,
-		Status: body.Status, Workspaces: body.Workspaces}
+	// model v2: a Task is filed at a Step, not needing a Skill or in a Status; its Feature is its
+	// Parent (M1b rebuilds this body).
+	if body.Skill != nil || body.Status != nil {
+		replaced(w, "a Task is filed at a Step of its Project's Workflow, which carries the Skill")
+		return
+	}
+	nt := core.NewTask{Parent: body.Feature, Title: body.Title, AimedAt: body.AimedAt, Blocks: body.Blocks, Workspaces: body.Workspaces}
 	if body.Description != nil {
 		nt.Description = *body.Description
 	}
@@ -66,8 +45,13 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 }
 
 func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.ListTasksParams) {
-	tf := core.TaskFilter{Feature: params.Feature, Team: params.Team, State: (*string)(params.State), Skill: params.Skill,
-		AimedAt: params.AimedAt, Holder: params.Holder, Status: params.Status}
+	// model v2: a Feature is a Parent, a Team a Project; a Status is a Step (M1b).
+	if params.Status != nil {
+		replaced(w, "a Task's Status is its Step; filter by step")
+		return
+	}
+	tf := core.TaskFilter{Parent: params.Feature, Project: params.Team, State: (*string)(params.State), Skill: params.Skill,
+		AimedAt: params.AimedAt, Holder: params.Holder}
 	if params.Filter != nil {
 		tf.Filters = *params.Filter
 		if run := s.theRunner(); run != nil {

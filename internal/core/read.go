@@ -39,15 +39,15 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	return m, nil
 }
 
-const teamCols = `tm.id, tm.key_prefix, tm.name, tm.default_workspace_id, tm.ship_when_done, tm.created_at`
+const projectCols = `pr.id, pr.key_prefix, pr.name, pr.default_workspace_id, pr.auto_complete, pr.acceptance, pr.created_at`
 
-func scanTeam(row interface{ Scan(...any) error }) (Team, error) {
-	var t Team
+func scanProject(row interface{ Scan(...any) error }) (Project, error) {
+	var p Project
 	var workspace sql.NullString
 	var created int64
-	err := row.Scan(&t.ID, &t.Key, &t.Name, &workspace, &t.ShipWhenDone, &created)
-	t.DefaultWorkspaceID, t.CreatedAt = nullString(workspace), fromMS(created)
-	return t, err
+	err := row.Scan(&p.ID, &p.Key, &p.Name, &workspace, &p.AutoComplete, &p.Acceptance, &created)
+	p.DefaultWorkspaceID, p.CreatedAt = nullString(workspace), fromMS(created)
+	return p, err
 }
 
 const workspaceCols = `w.id, w.name, w.kind, w.path, w.mode, w.default_branch, w.created_at`
@@ -71,44 +71,39 @@ func scanSkill(row interface{ Scan(...any) error }) (Skill, error) {
 	return s, err
 }
 
-const featureCols = `f.id, f.display_key, f.team_id, f.title, f.description, f.owner_id, f.state, f.rank,
-f.from_retrospective_task_id, f.quick, f.ship_when_done, f.filed_by, f.created_at, f.ended_at`
-
-func scanFeature(row interface{ Scan(...any) error }) (Feature, error) {
-	var f Feature
-	var fromRetro sql.NullString
-	var created int64
-	var ended sql.NullInt64
-	err := row.Scan(&f.ID, &f.Key, &f.TeamID, &f.Title, &f.Description, &f.OwnerID, &f.State, &f.Rank,
-		&fromRetro, &f.Quick, &f.ShipWhenDone, &f.FiledBy, &created, &ended)
-	f.FromRetrospectiveTaskID, f.CreatedAt, f.EndedAt = nullString(fromRetro), fromMS(created), nullTime(ended)
-	return f, err
-}
-
-// taskCols reads a Task with its current Claim; scanTask shows the Claim only while it is live.
-const taskCols = `t.id, t.display_key, t.feature_id, t.kind, t.title, t.description, t.state, t.status_id, t.skill_id,
-t.aimed_at_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
+// taskCols reads a Task with its Step's Skill and its current Claim; scanTask shows the Claim
+// only while it is live.
+const taskCols = `t.id, t.display_key, t.project_id, t.parent_id, t.kind, t.title, t.description, t.state,
+t.step_id, t.step_since, ts.skill_id, t.aimed_at_id, t.owner_id, t.rank, t.breakdown, t.auto_complete, t.acceptance,
+t.from_retrospective_task_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
 t.claim_id, t.claim_holder_id, cs.chosen_id, t.claim_skill_id, cc.skill_version, cc.model_label,
 t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
 EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
 	WHERE b.org_id = t.org_id AND b.task_id = t.id AND bt.state = 'open')`
 
-const taskFrom = `tasks t LEFT JOIN claims cc ON cc.id = t.claim_id LEFT JOIN sessions cs ON cs.id = t.claim_session_id`
+const taskFrom = `tasks t LEFT JOIN steps ts ON ts.id = t.step_id LEFT JOIN claims cc ON cc.id = t.claim_id
+LEFT JOIN sessions cs ON cs.id = t.claim_session_id`
 
 func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) {
 	var t Task
-	var status, skill, aimed, claimID, holder, session, claimSkill, label sql.NullString
+	var parent, step, skill, aimed, fromRetro, filedBy, claimID, holder, session, claimSkill, label sql.NullString
 	var waiting, created int64
-	var ended, version, timeout, started, expires sql.NullInt64
-	err := row.Scan(&t.ID, &t.Key, &t.FeatureID, &t.Kind, &t.Title, &t.Description, &t.State, &status, &skill,
-		&aimed, &t.FiledBy, &waiting, &created, &ended,
+	var stepSince, rank, ended, version, timeout, started, expires sql.NullInt64
+	err := row.Scan(&t.ID, &t.Key, &t.ProjectID, &parent, &t.Kind, &t.Title, &t.Description, &t.State,
+		&step, &stepSince, &skill, &aimed, &t.OwnerID, &rank, &t.Breakdown, &t.AutoComplete, &t.Acceptance,
+		&fromRetro, &filedBy, &waiting, &created, &ended,
 		&claimID, &holder, &session, &claimSkill, &version, &label,
 		&timeout, &started, &expires, &t.Blocked)
 	if err != nil {
 		return t, err
 	}
-	t.StatusID, t.SkillID, t.AimedAtID = status.String, nullString(skill), nullString(aimed)
+	t.ParentID, t.StepID, t.StepSince, t.SkillID = nullString(parent), nullString(step), nullTime(stepSince), nullString(skill)
+	t.AimedAtID, t.FromRetrospectiveTaskID, t.FiledBy = nullString(aimed), nullString(fromRetro), nullString(filedBy)
+	if rank.Valid {
+		t.Rank = &rank.Int64
+	}
 	t.WaitingSince, t.CreatedAt, t.EndedAt = fromMS(waiting), fromMS(created), nullTime(ended)
+	t.Labels = []string{}
 	if holder.Valid && (!expires.Valid || expires.Int64 > ms(now)) {
 		c := &Claim{
 			ID: claimID.String, TaskID: t.ID, HolderID: holder.String, SessionID: session.String,
@@ -134,12 +129,12 @@ func getMember(ctx context.Context, r store.Reader, orgID, id string) (Member, e
 	return m, err
 }
 
-func getTeam(ctx context.Context, r store.Reader, orgID, id string) (Team, error) {
-	t, err := scanTeam(r.QueryRow(ctx, `SELECT `+teamCols+` FROM teams tm WHERE tm.org_id = $1 AND tm.id = $2`, orgID, id))
+func getProject(ctx context.Context, r store.Reader, orgID, id string) (Project, error) {
+	p, err := scanProject(r.QueryRow(ctx, `SELECT `+projectCols+` FROM projects pr WHERE pr.org_id = $1 AND pr.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return t, refuse(CodeNotFound, "no Team %s", id)
+		return p, refuse(CodeNotFound, "no Project %s", id)
 	}
-	return t, err
+	return p, err
 }
 
 func getSkill(ctx context.Context, r store.Reader, orgID, id string) (Skill, error) {
@@ -148,53 +143,6 @@ func getSkill(ctx context.Context, r store.Reader, orgID, id string) (Skill, err
 		return s, refuse(CodeNotFound, "no Skill %s", id)
 	}
 	return s, err
-}
-
-func getFeature(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (Feature, error) {
-	f, err := scanFeature(r.QueryRow(ctx, `SELECT `+featureCols+` FROM features f WHERE f.org_id = $1 AND f.id = $2`, orgID, id))
-	if errors.Is(err, sql.ErrNoRows) {
-		return f, refuse(CodeNotFound, "no Feature %s", id)
-	}
-	if err != nil {
-		return f, err
-	}
-	fs := []Feature{f}
-	err = fillTaskCounts(ctx, r, orgID, now, fs)
-	return fs[0], err
-}
-
-// fillTaskCounts counts each Feature's Tasks by state, in one query.
-func fillTaskCounts(ctx context.Context, r store.Reader, orgID string, now time.Time, fs []Feature) error {
-	if len(fs) == 0 {
-		return nil
-	}
-	args := []any{orgID, ms(now)}
-	at := map[string]int{}
-	marks := make([]string, len(fs))
-	for i, f := range fs {
-		args = append(args, f.ID)
-		marks[i] = "$" + itoa(len(args))
-		at[f.ID] = i
-	}
-	rows, err := r.Query(ctx, `SELECT feature_id,
-SUM(CASE WHEN state = 'open' THEN 1 ELSE 0 END),
-SUM(CASE WHEN state = 'open' AND claim_holder_id IS NOT NULL AND (claim_expires_at IS NULL OR claim_expires_at > $2) THEN 1 ELSE 0 END),
-SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END),
-SUM(CASE WHEN state = 'dropped' THEN 1 ELSE 0 END)
-FROM tasks WHERE org_id = $1 AND feature_id IN (`+strings.Join(marks, ", ")+`) GROUP BY feature_id`, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id string
-		var c TaskCounts
-		if err := rows.Scan(&id, &c.Open, &c.Claimed, &c.Done, &c.Dropped); err != nil {
-			return err
-		}
-		fs[at[id]].TaskCounts = c
-	}
-	return rows.Err()
 }
 
 func getTask(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (Task, error) {
@@ -206,28 +154,47 @@ func getTask(ctx context.Context, r store.Reader, orgID, id string, now time.Tim
 		return t, err
 	}
 	ts := []Task{t}
-	if err := fillOpenBlockers(ctx, r, orgID, ts); err != nil {
-		return t, err
-	}
-	err = fillWorkspaceIDs(ctx, r, orgID, ts)
+	err = fillTasks(ctx, r, orgID, now, ts)
 	return ts[0], err
 }
 
-// fillWorkspaceIDs names the Workspaces each Task names, in the order named, in one query.
-func fillWorkspaceIDs(ctx context.Context, r store.Reader, orgID string, ts []Task) error {
+// fillTasks reads what each Task carries beside its row: its open blockers, Workspaces, Labels
+// and Subtask counts, a query each.
+func fillTasks(ctx context.Context, r store.Reader, orgID string, now time.Time, ts []Task) error {
 	if len(ts) == 0 {
 		return nil
 	}
-	args := []any{orgID}
-	at := map[string]int{}
-	marks := make([]string, len(ts))
+	if err := fillOpenBlockers(ctx, r, orgID, ts); err != nil {
+		return err
+	}
+	if err := fillWorkspaceIDs(ctx, r, orgID, ts); err != nil {
+		return err
+	}
+	if err := fillLabelIDs(ctx, r, orgID, ts); err != nil {
+		return err
+	}
+	return fillSubtaskCounts(ctx, r, orgID, now, ts)
+}
+
+// taskMarks binds orgID and the ids of ts as $1, $2…, returning the placeholders of the ids and
+// each id's place in ts.
+func taskMarks(orgID string, ts []Task, extra ...any) (args []any, marks string, at map[string]int) {
+	args = append([]any{orgID}, extra...)
+	at = map[string]int{}
+	ph := make([]string, len(ts))
 	for i, t := range ts {
 		args = append(args, t.ID)
-		marks[i] = "$" + itoa(len(args))
+		ph[i] = "$" + itoa(len(args))
 		at[t.ID] = i
 	}
+	return args, strings.Join(ph, ", "), at
+}
+
+// fillWorkspaceIDs names the Workspaces each Task names, in the order named.
+func fillWorkspaceIDs(ctx context.Context, r store.Reader, orgID string, ts []Task) error {
+	args, marks, at := taskMarks(orgID, ts)
 	rows, err := r.Query(ctx, `SELECT task_id, workspace_id FROM task_workspaces
-WHERE org_id = $1 AND task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY task_id, position`, args...)
+WHERE org_id = $1 AND task_id IN (`+marks+`) ORDER BY task_id, position`, args...)
 	if err != nil {
 		return err
 	}
@@ -243,23 +210,68 @@ WHERE org_id = $1 AND task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY task_i
 	return rows.Err()
 }
 
-// fillOpenBlockers names the open blockers of each blocked Task, in one query.
+// fillLabelIDs names the Labels each Task carries, by name.
+func fillLabelIDs(ctx context.Context, r store.Reader, orgID string, ts []Task) error {
+	args, marks, at := taskMarks(orgID, ts)
+	rows, err := r.Query(ctx, `SELECT tl.task_id, l.id FROM task_labels tl JOIN labels l ON l.id = tl.label_id
+WHERE tl.org_id = $1 AND tl.task_id IN (`+marks+`) ORDER BY tl.task_id, l.name, l.id`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var task, label string
+		if err := rows.Scan(&task, &label); err != nil {
+			return err
+		}
+		i := at[task]
+		ts[i].Labels = append(ts[i].Labels, label)
+	}
+	return rows.Err()
+}
+
+// fillSubtaskCounts counts the Subtasks of each Task that has any.
+func fillSubtaskCounts(ctx context.Context, r store.Reader, orgID string, now time.Time, ts []Task) error {
+	args, marks, at := taskMarks(orgID, ts, ms(now))
+	rows, err := r.Query(ctx, `SELECT parent_id,
+SUM(CASE WHEN state = 'open' THEN 1 ELSE 0 END),
+SUM(CASE WHEN state = 'open' AND claim_holder_id IS NOT NULL AND (claim_expires_at IS NULL OR claim_expires_at > $2) THEN 1 ELSE 0 END),
+SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END),
+SUM(CASE WHEN state = 'dropped' THEN 1 ELSE 0 END)
+FROM tasks WHERE org_id = $1 AND parent_id IN (`+marks+`) GROUP BY parent_id`, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var c SubtaskCounts
+		if err := rows.Scan(&id, &c.Open, &c.Working, &c.Done, &c.Dropped); err != nil {
+			return err
+		}
+		ts[at[id]].SubtaskCounts = &c
+	}
+	return rows.Err()
+}
+
+// fillOpenBlockers names the open blockers of each blocked Task.
 func fillOpenBlockers(ctx context.Context, r store.Reader, orgID string, ts []Task) error {
-	args := []any{orgID}
-	at := map[string]int{}
-	var marks []string
-	for i, t := range ts {
+	var blocked []Task
+	for _, t := range ts {
 		if t.Blocked {
-			args = append(args, t.ID)
-			marks = append(marks, "$"+itoa(len(args)))
-			at[t.ID] = i
+			blocked = append(blocked, t)
 		}
 	}
-	if len(marks) == 0 {
+	if len(blocked) == 0 {
 		return nil
 	}
-	rows, err := r.Query(ctx, `SELECT b.task_id, bt.id, bt.display_key FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
-WHERE b.org_id = $1 AND bt.org_id = $1 AND bt.state = 'open' AND b.task_id IN (`+strings.Join(marks, ", ")+`) ORDER BY bt.created_at, bt.id`, args...)
+	args, marks, _ := taskMarks(orgID, blocked)
+	at := map[string]int{}
+	for i, t := range ts {
+		at[t.ID] = i
+	}
+	rows, err := r.Query(ctx, `SELECT b.task_id, bt.id, bt.display_key, bt.title FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
+WHERE b.org_id = $1 AND bt.org_id = $1 AND bt.state = 'open' AND b.task_id IN (`+marks+`) ORDER BY bt.created_at, bt.id`, args...)
 	if err != nil {
 		return err
 	}
@@ -267,7 +279,7 @@ WHERE b.org_id = $1 AND bt.org_id = $1 AND bt.state = 'open' AND b.task_id IN (`
 	for rows.Next() {
 		var task string
 		var b TaskBrief
-		if err := rows.Scan(&task, &b.ID, &b.Key); err != nil {
+		if err := rows.Scan(&task, &b.ID, &b.Key, &b.Title); err != nil {
 			return err
 		}
 		i := at[task]
@@ -294,22 +306,25 @@ func collect[T any](ctx context.Context, r store.Reader, scan func(interface{ Sc
 	return out, rows.Err()
 }
 
-// tasksWhere reads the Tasks of orgID matching where, which binds args.
+// tasksWhere reads the Tasks of orgID matching where, which binds args; where may name the
+// Task's Parent as pt, as the Rank order does.
 func tasksWhere(ctx context.Context, r store.Reader, orgID string, now time.Time, where string, args ...any) ([]Task, error) {
 	ts, err := collect(ctx, r, func(row interface{ Scan(...any) error }) (Task, error) { return scanTask(row, now) },
-		`SELECT `+taskCols+` FROM `+taskFrom+` JOIN features f ON f.id = t.feature_id WHERE `+where, args...)
+		`SELECT `+taskCols+` FROM `+taskFrom+` LEFT JOIN tasks pt ON pt.org_id = t.org_id AND pt.id = t.parent_id WHERE `+where, args...)
 	if err != nil {
 		return nil, err
 	}
-	if err := fillOpenBlockers(ctx, r, orgID, ts); err != nil {
-		return nil, err
-	}
-	return ts, fillWorkspaceIDs(ctx, r, orgID, ts)
+	return ts, fillTasks(ctx, r, orgID, now, ts)
 }
 
-func memberTeams(ctx context.Context, r store.Reader, orgID, memberID string) ([]Team, error) {
-	return collect(ctx, r, scanTeam, `SELECT `+teamCols+` FROM teams tm JOIN team_members x ON x.team_id = tm.id
-WHERE tm.org_id = $1 AND x.member_id = $2 ORDER BY tm.name`, orgID, memberID)
+// rankOrder sorts Tasks t, with their Parents pt, by Rank: a Subtask by its Parent's, after its
+// Parent, the Subtasks of one Parent by how long each has waited.
+const rankOrder = ` ORDER BY COALESCE(pt.rank, t.rank), t.project_id, COALESCE(t.parent_id, t.id),
+CASE WHEN t.parent_id IS NULL THEN 0 ELSE 1 END, t.waiting_since, t.id`
+
+func memberProjects(ctx context.Context, r store.Reader, orgID, memberID string) ([]Project, error) {
+	return collect(ctx, r, scanProject, `SELECT `+projectCols+` FROM projects pr JOIN project_members x ON x.project_id = pr.id
+WHERE pr.org_id = $1 AND x.member_id = $2 ORDER BY pr.name`, orgID, memberID)
 }
 
 func memberSkills(ctx context.Context, r store.Reader, orgID, memberID string) ([]Skill, error) {
@@ -323,7 +338,7 @@ func getMemberDetail(ctx context.Context, r store.Reader, orgID, id string) (Mem
 	if d.Member, err = getMember(ctx, r, orgID, id); err != nil {
 		return d, err
 	}
-	if d.Teams, err = memberTeams(ctx, r, orgID, id); err != nil {
+	if d.Projects, err = memberProjects(ctx, r, orgID, id); err != nil {
 		return d, err
 	}
 	if d.Skills, err = memberSkills(ctx, r, orgID, id); err != nil {
@@ -334,14 +349,14 @@ WHERE m.org_id = $1 AND r.manager_id = $2 ORDER BY m.name`, orgID, id)
 	return d, err
 }
 
-func getTeamDetail(ctx context.Context, r store.Reader, orgID, id string) (TeamDetail, error) {
-	var d TeamDetail
+func getProjectDetail(ctx context.Context, r store.Reader, orgID, id string) (ProjectDetail, error) {
+	var d ProjectDetail
 	var err error
-	if d.Team, err = getTeam(ctx, r, orgID, id); err != nil {
+	if d.Project, err = getProject(ctx, r, orgID, id); err != nil {
 		return d, err
 	}
 	d.Members, err = collect(ctx, r, scanMember, `SELECT `+memberCols+` FROM `+memberFrom+`
-JOIN team_members x ON x.member_id = m.id WHERE m.org_id = $1 AND x.team_id = $2 ORDER BY m.name`, orgID, id)
+JOIN project_members x ON x.member_id = m.id WHERE m.org_id = $1 AND x.project_id = $2 ORDER BY m.name`, orgID, id)
 	return d, err
 }
 
@@ -375,29 +390,14 @@ func getSkillDetail(ctx context.Context, r store.Reader, orgID, id string) (Skil
 	return d, err
 }
 
-const evidenceCols = `e.id, e.feature_id, e.task_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
+const evidenceCols = `e.id, e.task_id, e.filename, e.content_type, e.size, e.sha256, e.attached_by, e.created_at, e.blob_key`
 
 func scanEvidence(row interface{ Scan(...any) error }) (Evidence, error) {
 	var e Evidence
-	var task sql.NullString
 	var at int64
-	err := row.Scan(&e.ID, &e.FeatureID, &task, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
-	e.TaskID, e.CreatedAt = nullString(task), fromMS(at)
+	err := row.Scan(&e.ID, &e.TaskID, &e.Filename, &e.ContentType, &e.Size, &e.SHA256, &e.AttachedBy, &at, &e.BlobKey)
+	e.CreatedAt = fromMS(at)
 	return e, err
-}
-
-func getFeatureDetail(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (FeatureDetail, error) {
-	var d FeatureDetail
-	var err error
-	if d.Feature, err = getFeature(ctx, r, orgID, id, now); err != nil {
-		return d, err
-	}
-	if d.Tasks, err = tasksWhere(ctx, r, orgID, now, `t.org_id = $1 AND t.feature_id = $2 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
-		return d, err
-	}
-	d.Evidence, err = collect(ctx, r, scanEvidence, `SELECT `+evidenceCols+` FROM evidence e
-WHERE e.org_id = $1 AND e.feature_id = $2 AND e.task_id IS NULL ORDER BY e.created_at, e.id`, orgID, id)
-	return d, err
 }
 
 // claimsOf lists every Claim on a Task, oldest first. A current Claim whose expiry has passed is
@@ -439,10 +439,30 @@ func getTaskDetail(ctx context.Context, r store.Reader, orgID, id string, now ti
 	if d.Task, err = getTask(ctx, r, orgID, id, now); err != nil {
 		return d, err
 	}
-	if d.Status, err = getStatus(ctx, r, orgID, d.Task.StatusID); err != nil {
-		return d, fmt.Errorf("core: the Status of Task %s: %w", d.Task.Key, err)
+	if d.Task.ParentID != nil {
+		var b TaskBrief
+		if err := r.QueryRow(ctx, `SELECT id, display_key, title FROM tasks WHERE org_id = $1 AND id = $2`, orgID, *d.Task.ParentID).
+			Scan(&b.ID, &b.Key, &b.Title); err != nil {
+			return d, fmt.Errorf("core: the Parent of Task %s: %w", d.Task.Key, err)
+		}
+		d.Parent = &b
 	}
-	if d.Feature, err = getFeature(ctx, r, orgID, d.Task.FeatureID, now); err != nil {
+	if d.Subtasks, err = tasksWhere(ctx, r, orgID, now, `t.org_id = $1 AND t.parent_id = $2 ORDER BY t.created_at, t.id`, orgID, id); err != nil {
+		return d, err
+	}
+	d.Connectors = []Connector{}
+	if d.Task.StepID != nil {
+		st, err := getStep(ctx, r, orgID, *d.Task.StepID)
+		if err != nil {
+			return d, fmt.Errorf("core: the Step of Task %s: %w", d.Task.Key, err)
+		}
+		d.Step = &st
+		if d.Connectors, err = connectorsFrom(ctx, r, orgID, st.ID); err != nil {
+			return d, err
+		}
+	}
+	if d.Labels, err = collect(ctx, r, scanLabel, `SELECT `+labelCols+` FROM labels l JOIN task_labels tl ON tl.label_id = l.id
+WHERE tl.org_id = $1 AND tl.task_id = $2 ORDER BY l.name, l.id`, orgID, id); err != nil {
 		return d, err
 	}
 	if d.Workspaces, err = collect(ctx, r, scanWorkspace, `SELECT `+workspaceCols+` FROM workspaces w
@@ -489,7 +509,7 @@ WHERE p.org_id = $1 AND p.task_id = $2 ORDER BY p.created_at DESC, p.id DESC LIM
 	return d, nil
 }
 
-const observationCols = `o.id, o.task_id, o.feature_id, o.author_id, o.skill_id, o.outcome, o.body, o.created_at,
+const observationCols = `o.id, o.task_id, o.author_id, o.skill_id, o.outcome, o.body, o.created_at,
 o.reviewed_by_task_id, o.reviewed_at`
 
 func scanObservation(row interface{ Scan(...any) error }) (Observation, error) {
@@ -497,7 +517,7 @@ func scanObservation(row interface{ Scan(...any) error }) (Observation, error) {
 	var skill, reviewedBy sql.NullString
 	var at int64
 	var reviewedAt sql.NullInt64
-	err := row.Scan(&o.ID, &o.TaskID, &o.FeatureID, &o.AuthorID, &skill, &o.Outcome, &o.Body, &at, &reviewedBy, &reviewedAt)
+	err := row.Scan(&o.ID, &o.TaskID, &o.AuthorID, &skill, &o.Outcome, &o.Body, &at, &reviewedBy, &reviewedAt)
 	o.SkillID, o.CreatedAt, o.ReviewedByTaskID, o.ReviewedAt = nullString(skill), fromMS(at), nullString(reviewedBy), nullTime(reviewedAt)
 	return o, err
 }

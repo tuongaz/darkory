@@ -109,7 +109,7 @@ func TestListSessions(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
+		f.project("WEB")
 		bob := f.member("bob", []string{"WEB"}, nil)
 		eve := f.member("eve", []string{"WEB"}, nil)
 		for _, id := range []string{"bob-2", "bob-3"} {
@@ -136,7 +136,7 @@ func TestDeactivatingAMemberStopsEverythingTheyHold(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newClaimFixture(t, st)
 		ctx := t.Context()
-		bound := f.fixture.task(f.a, f.task.FeatureID, "Member-bound", "build")
+		bound := f.fixture.task(f.a, "WEB", "Member-bound", "Build")
 		f.claim(f.a, f.task.Key, timeout(time.Minute))
 		f.claim(f.a, bound.Key, noTimeout)
 		cookie := f.signIn(f.a.MemberID, "")
@@ -270,21 +270,22 @@ func TestTheLastActiveAdminStays(t *testing.T) {
 	})
 }
 
-// A Task whose only Team Member with its Skill was deactivated falls back to the Feature owner,
-// and a skill-review Task to the owner once the Organisation's only reviewer is deactivated.
+// A Task whose only Project Member with its Step's Skill was deactivated falls back to its Owner,
+// and a Task at the skill-review Step to its Owner once the Organisation's only reviewer is
+// deactivated.
 func TestDeactivatedMembersLeaveTheSkillPools(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		f.team("OPS")
+		f.project("WEB")
+		f.project("OPS")
 		f.skill("qa")
+		f.chain("WEB", [2]string{"QA", "qa"}, [2]string{"Skill review", core.SkillSkillReview})
 		owner := f.member("owner", []string{"WEB"}, nil)
 		f.member("tester", []string{"WEB"}, []string{"qa"})
 		f.member("reviewer", []string{"OPS"}, []string{core.SkillSkillReview})
-		feat := f.feature(owner, "WEB", "Search")
-		qa := f.task(owner, feat.Feature.ID, "Test search", "qa")
-		review := f.task(owner, feat.Feature.ID, "Review", core.SkillSkillReview)
+		qa := f.task(owner, "WEB", "Test search", "QA")
+		review := f.task(owner, "WEB", "Review", "Skill review")
 		if f.takeable(owner)[qa.ID] || f.takeable(owner)[review.ID] {
 			t.Fatal("the owner takes Tasks others can take")
 		}

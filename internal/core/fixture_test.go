@@ -51,13 +51,65 @@ func (f *fixture) session(memberID, chosen string) *auth.Caller {
 	return c
 }
 
-func (f *fixture) team(key string) string {
+// skillID is the id of the Skill named name.
+func (f *fixture) skillID(name string) string {
 	f.t.Helper()
-	tm, err := f.svc.CreateTeam(f.t.Context(), f.admin, key, "Team "+key, core.Idem{})
+	d, err := f.svc.GetSkill(f.t.Context(), f.admin, name)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return tm.ID
+	return d.Skill.ID
+}
+
+// project creates a Project on the default Workflow — Backlog (hold), Plan (breakdown), Build
+// (engineer), Review (review), Retro (retro), Skill review (skill-review) — and returns its id.
+func (f *fixture) project(key string) string {
+	f.t.Helper()
+	p, err := f.svc.CreateProject(f.t.Context(), f.admin, core.NewProject{Key: key, Name: "Project " + key}, core.Idem{})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return p.ID
+}
+
+// chain replaces the Project's Workflow with steps, each a name and a Skill ("" for a hold), in
+// order, each leading to the next ("pass") and the last into Done ("pass").
+func (f *fixture) chain(project string, steps ...[2]string) core.Workflow {
+	f.t.Helper()
+	var in core.WorkflowInput
+	for i, st := range steps {
+		si := core.StepInput{Name: st[0], X: int64(i * 240)}
+		if st[1] != "" {
+			si.Skill = ptrStr(st[1])
+		}
+		in.Steps = append(in.Steps, si)
+		ci := core.ConnectorInput{From: st[0], Name: "pass"}
+		if i+1 < len(steps) {
+			ci.To = ptrStr(steps[i+1][0])
+		}
+		in.Connectors = append(in.Connectors, ci)
+	}
+	w, err := f.svc.SetWorkflow(f.t.Context(), f.admin, project, in, core.Idem{})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return w
+}
+
+// step is the id of the Project's Step named name.
+func (f *fixture) step(project, name string) string {
+	f.t.Helper()
+	d, err := f.svc.GetWorkflow(f.t.Context(), f.admin, project)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	for _, st := range d.Steps {
+		if st.Name == name {
+			return st.ID
+		}
+	}
+	f.t.Fatalf("Project %s has no Step %s", project, name)
+	return ""
 }
 
 func (f *fixture) skill(name string) string {
@@ -69,17 +121,17 @@ func (f *fixture) skill(name string) string {
 	return d.Skill.ID
 }
 
-// member creates an agent Member in teams with skills, a token, and returns a Caller through a
-// Session named after it.
-func (f *fixture) member(name string, teams, skills []string) *auth.Caller {
+// member creates an agent Member in projects with skills, a token, and returns a Caller through
+// a Session named after it.
+func (f *fixture) member(name string, projects, skills []string) *auth.Caller {
 	f.t.Helper()
 	ctx := f.t.Context()
 	m, err := f.svc.CreateMember(ctx, f.admin, core.NewMember{Name: name, Kind: "agent"}, core.Idem{})
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	for _, tm := range teams {
-		if err := f.svc.AddTeamMember(ctx, f.admin, tm, m.ID, core.Idem{}); err != nil {
+	for _, p := range projects {
+		if err := f.svc.AddProjectMember(ctx, f.admin, p, m.ID, core.Idem{}); err != nil {
 			f.t.Fatal(err)
 		}
 	}
@@ -96,33 +148,78 @@ func (f *fixture) member(name string, teams, skills []string) *auth.Caller {
 	return f.session(m.ID, name+"-1")
 }
 
-// feature files a Feature in team as c, and returns it with its Break down.
-func (f *fixture) feature(c *auth.Caller, team, title string) core.FeatureDetail {
+// fileTask files nt as c and returns the Task's detail.
+func (f *fixture) fileTask(c *auth.Caller, nt core.NewTask) core.TaskDetail {
 	f.t.Helper()
-	d, err := f.svc.FileFeature(f.t.Context(), c, core.NewFeature{Team: team, Title: title}, core.Idem{})
+	d, err := f.svc.FileTask(f.t.Context(), c, nt, core.Idem{})
 	if err != nil {
 		f.t.Fatal(err)
 	}
 	return d
 }
 
-// task files a work Task needing skill on feature.
-func (f *fixture) task(c *auth.Caller, feature, title, skill string) core.Task {
+// task files a Task in project as c at step.
+func (f *fixture) task(c *auth.Caller, project, title, step string) core.Task {
 	f.t.Helper()
-	d, err := f.svc.FileTask(f.t.Context(), c, core.NewTask{Feature: &feature, Title: title, Skill: &skill}, core.Idem{})
-	if err != nil {
-		f.t.Fatal(err)
-	}
-	return d.Task
+	return f.fileTask(c, core.NewTask{Project: &project, Title: title, Step: &step}).Task
 }
 
-func (f *fixture) aimed(c *auth.Caller, feature, title, member string) core.Task {
+// subtask files a Subtask under parent as c at step.
+func (f *fixture) subtask(c *auth.Caller, parent, title, step string) core.Task {
 	f.t.Helper()
-	d, err := f.svc.FileTask(f.t.Context(), c, core.NewTask{Feature: &feature, Title: title, AimedAt: &member}, core.Idem{})
+	return f.fileTask(c, core.NewTask{Parent: &parent, Title: title, Step: &step}).Task
+}
+
+// parent files a Task in project as c with Break down on: a Parent with its Breakdown Subtask.
+func (f *fixture) parent(c *auth.Caller, project, title string) core.TaskDetail {
+	f.t.Helper()
+	return f.fileTask(c, core.NewTask{Project: &project, Title: title, Breakdown: true})
+}
+
+// aimed files a Task in project as c aimed at member.
+func (f *fixture) aimed(c *auth.Caller, project, title, member string) core.Task {
+	f.t.Helper()
+	return f.fileTask(c, core.NewTask{Project: &project, Title: title, AimedAt: &member}).Task
+}
+
+// claim claims the Task as c, failing the test when it cannot.
+func (f *fixture) claim(c *auth.Caller, task string, o core.ClaimOptions) core.TaskDetail {
+	f.t.Helper()
+	d, err := f.svc.Claim(f.t.Context(), c, task, o, core.Idem{})
+	if err != nil {
+		f.t.Fatalf("claim %s: %v", task, err)
+	}
+	return d
+}
+
+// advance advances the Task c holds along outcome.
+func (f *fixture) advance(c *auth.Caller, task, outcome string) core.Task {
+	f.t.Helper()
+	t, err := f.svc.Advance(f.t.Context(), c, task, outcome, nil, core.Idem{})
+	if err != nil {
+		f.t.Fatalf("advance %s %q: %v", task, outcome, err)
+	}
+	return t
+}
+
+// get reads the Task.
+func (f *fixture) get(task string) core.TaskDetail {
+	f.t.Helper()
+	d, err := f.svc.GetTask(f.t.Context(), f.admin, task)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return d.Task
+	return d
+}
+
+// at names the Step the Task is at, "-" for none.
+func (f *fixture) at(task string) string {
+	f.t.Helper()
+	d := f.get(task)
+	if d.Step == nil {
+		return "-"
+	}
+	return d.Step.Name
 }
 
 func (f *fixture) exec(query string, args ...any) {
@@ -243,3 +340,9 @@ func (f *fixture) checkActivity() int {
 }
 
 func name(prefix string, i int) string { return fmt.Sprintf("%s%02d", prefix, i) }
+
+func ptrStr(s string) *string { return &s }
+
+func ptrBool(b bool) *bool { return &b }
+
+func ptrDur(d time.Duration) *time.Duration { return &d }

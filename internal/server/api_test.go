@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -75,9 +76,9 @@ func (h *harness) secretOf(t *testing.T, name string) string {
 	return secret
 }
 
-// The claim path end to end through the generated client: the admin sets up a Team and an agent,
-// the agent files a Feature, `next` hands it the Break down filed with it, and it heartbeats and
-// completes it.
+// The claim path end to end through the generated client: the admin sets up a Project and an
+// agent, the agent files a Task with Break down, `next` hands it the Breakdown filed with it, and
+// it heartbeats and completes it.
 func TestClaimPathThroughTheClient(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
@@ -92,10 +93,9 @@ func TestClaimPathThroughTheClient(t *testing.T) {
 			t.Fatalf("next answered after %s, want about a second", waited)
 		}
 
-		filed := got(bot.FileFeatureWithResponse(ctx, &client.FileFeatureParams{IdempotencyKey: key("file-1")},
-			client.FileFeatureBody{Team: "WEB", Title: "Sign-up"})).want(t, http.StatusCreated).JSON201
-		if filed.Feature.Key != "WEB-1" || filed.Feature.OwnerID != botID || len(filed.Tasks) != 1 ||
-			filed.Tasks[0].Kind != client.Breakdown || filed.Tasks[0].Key != "WEB-2" {
+		filed := h.seed(h.secretOf(t, "bot"), core.NewTask{Project: ptrStr("WEB"), Title: "Sign-up", Breakdown: true})
+		if filed.Task.Key != "WEB-1" || filed.Task.OwnerID != botID || len(filed.Subtasks) != 1 ||
+			filed.Subtasks[0].Kind != "breakdown" || filed.Subtasks[0].Key != "WEB-2" {
 			t.Fatalf("filed %+v", filed)
 		}
 		takeable := got(bot.ListTakeableTasksWithResponse(ctx, &client.ListTakeableTasksParams{})).want(t, http.StatusOK).JSON200

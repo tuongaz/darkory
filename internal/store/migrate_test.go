@@ -347,7 +347,7 @@ claim_holder_id, claim_expires_at) VALUES ($1, 'o1', 'o1-f', $1, 'work', 'T', $2
 			task("lapsed", "open", &ada, &past)
 			task("waiting", "open", nil, nil)
 
-			res, err := s.Migrate(ctx)
+			res, err := s.MigrateFS(ctx, upTo(t, 3), now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -399,8 +399,8 @@ claim_holder_id, claim_expires_at) VALUES ($1, 'o1', 'o1-f', $1, 'work', 'T', $2
 	}
 }
 
-// migrateTo applies the migrations in migrations/ numbered up to last, from their files.
-func migrateTo(t *testing.T, s *store.Store, last int) {
+// upTo is the migration set in migrations/ numbered up to last, from their files.
+func upTo(t *testing.T, last int) fstest.MapFS {
 	t.Helper()
 	set := fstest.MapFS{}
 	entries, err := os.ReadDir("migrations")
@@ -418,7 +418,13 @@ func migrateTo(t *testing.T, s *store.Store, last int) {
 		}
 		set[e.Name()] = file(string(b))
 	}
-	if res, err := s.MigrateFS(t.Context(), set, now); err != nil || len(res.Applied) != last {
+	return set
+}
+
+// migrateTo applies the migrations in migrations/ numbered up to last to a new database.
+func migrateTo(t *testing.T, s *store.Store, last int) {
+	t.Helper()
+	if res, err := s.MigrateFS(t.Context(), upTo(t, last), now); err != nil || len(res.Applied) != last {
 		t.Fatalf("migrating to %04d: %+v %v", last, res, err)
 	}
 }
@@ -453,7 +459,7 @@ func TestMigration4AddsWorkspacesAndAgents(t *testing.T) {
 			must(`INSERT INTO tasks (id, org_id, feature_id, display_key, kind, title, state, filed_by, waiting_since, created_at, status_id)
 VALUES ('t', 'o', 'f', 'WEB-2', 'work', 'T', 'open', 'm', 0, 0, 'st')`)
 
-			res, err := s.Migrate(ctx)
+			res, err := s.MigrateFS(ctx, upTo(t, 4), now)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -518,7 +524,7 @@ func TestMigration5AddsViews(t *testing.T) {
 			must(`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`)
 			must(`INSERT INTO teams (id, org_id, key_prefix, name, created_at) VALUES ('tm', 'o', 'WEB', 'Web', 0)`)
 
-			res, err := s.Migrate(ctx)
+			res, err := s.MigrateFS(ctx, upTo(t, 5), now)
 			if err != nil {
 				t.Fatal(err)
 			}

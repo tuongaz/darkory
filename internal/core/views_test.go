@@ -12,7 +12,7 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// Views on both engines: saved, listed by list and Team, changed field by field, deleted; their
+// Views on both engines: saved, listed by list and Project, changed field by field, deleted; their
 // filters checked by the list's grammar; names unique per list ignoring case; another Member's
 // Views neither listed nor changed nor deleted, an admin's request included; and none of it
 // written to Activity or numbered.
@@ -20,77 +20,81 @@ func TestViews(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		web := f.team("WEB")
-		f.team("OPS")
+		web := f.project("WEB")
+		ops := f.project("OPS")
 		bob := f.member("bob", []string{"WEB"}, nil)
 		ada := f.admin
 		before := f.checkActivity()
 
-		mine, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityTasks, Team: ptrStr("WEB"), Name: "Unheld this week",
+		mine, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityTasks, Project: ptrStr("WEB"), Name: "Unheld this week",
 			Filters: []string{"holder:is:none", "filed_at:last:7d"}, Sort: ptrStr("updated_at:desc"),
 			Display: map[string]any{"layout": "board", "show_done": false}}, core.Idem{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if mine.Entity != "tasks" || mine.TeamID == nil || *mine.TeamID != web || mine.Name != "Unheld this week" ||
+		if mine.Entity != "tasks" || mine.ProjectID == nil || *mine.ProjectID != web || mine.Name != "Unheld this week" ||
 			!slices.Equal(mine.Filters, []string{"holder:is:none", "filed_at:last:7d"}) || mine.Sort == nil || *mine.Sort != "updated_at:desc" ||
 			mine.Display["layout"] != "board" || mine.Display["show_done"] != false || !mine.CreatedAt.Equal(epoch) || !mine.UpdatedAt.Equal(epoch) {
 			t.Fatalf("saved %+v", mine)
 		}
 		across, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityTasks, Name: "unheld THIS week"}, core.Idem{})
 		if err != nil {
-			t.Fatalf("the same name on the list across Teams: %v", err)
+			t.Fatalf("the same name on the list across Projects: %v", err)
 		}
-		if across.TeamID != nil || across.Filters == nil || len(across.Filters) != 0 || across.Sort != nil || across.Display != nil {
+		if across.ProjectID != nil || across.Filters == nil || len(across.Filters) != 0 || across.Sort != nil || across.Display != nil {
 			t.Fatalf("a View with nothing but a name: %+v", across)
 		}
 		f.clock.Advance(time.Minute)
-		features, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityFeatures, Team: ptrStr(web), Name: "Unheld this week",
-			Filters: []string{"quick:is:true"}}, core.Idem{})
+		opsView, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityTasks, Project: ptrStr(ops), Name: "Unheld this week",
+			Filters: []string{"top:is:true"}}, core.Idem{})
 		if err != nil {
-			t.Fatalf("the same name on another list: %v", err)
+			t.Fatalf("the same name on another Project's list: %v", err)
 		}
-		if _, err := f.svc.CreateView(ctx, ada, core.NewView{Entity: core.EntityTasks, Team: ptrStr("WEB"), Name: "Unheld this week"}, core.Idem{}); err != nil {
+		if _, err := f.svc.CreateView(ctx, ada, core.NewView{Entity: core.EntityTasks, Project: ptrStr("WEB"), Name: "Unheld this week"}, core.Idem{}); err != nil {
 			t.Fatalf("another Member's name: %v", err)
 		}
 
-		names := func(entity, team *string) []string {
+		keyOf := map[string]string{web: "WEB", ops: "OPS"}
+		names := func(entity, project *string) []string {
 			t.Helper()
-			vs, err := f.svc.ListViews(ctx, bob, entity, team)
+			vs, err := f.svc.ListViews(ctx, bob, entity, project)
 			if err != nil {
 				t.Fatal(err)
 			}
 			var out []string
 			for _, v := range vs {
-				out = append(out, v.Entity+"/"+v.Name)
+				where := "-"
+				if v.ProjectID != nil {
+					where = keyOf[*v.ProjectID]
+				}
+				out = append(out, v.Name+"@"+where)
 			}
 			return out
 		}
-		if got := names(nil, nil); !slices.Equal(got, []string{"tasks/Unheld this week", "tasks/unheld THIS week", "features/Unheld this week"}) {
+		if got := names(nil, nil); !slices.Equal(got, []string{"Unheld this week@WEB", "unheld THIS week@-", "Unheld this week@OPS"}) {
 			t.Errorf("bob's Views: %q", got)
 		}
-		if got := names(ptrStr("features"), nil); !slices.Equal(got, []string{"features/Unheld this week"}) {
-			t.Errorf("bob's feature Views: %q", got)
-		}
-		if got := names(ptrStr("tasks"), ptrStr("WEB")); !slices.Equal(got, []string{"tasks/Unheld this week"}) {
+		if got := names(ptrStr("tasks"), ptrStr("WEB")); !slices.Equal(got, []string{"Unheld this week@WEB"}) {
 			t.Errorf("bob's task Views of WEB: %q", got)
 		}
-		if got := names(nil, ptrStr("OPS")); len(got) != 0 {
+		if got := names(nil, ptrStr("OPS")); !slices.Equal(got, []string{"Unheld this week@OPS"}) {
 			t.Errorf("bob's Views of OPS: %q", got)
 		}
+		_, err = f.svc.ListViews(ctx, bob, ptrStr("features"), nil)
+		wantCode(t, err, core.CodeInvalid)
 		_, err = f.svc.ListViews(ctx, bob, ptrStr("members"), nil)
 		wantCode(t, err, core.CodeInvalid)
 		_, err = f.svc.ListViews(ctx, bob, nil, ptrStr("NOPE"))
 		wantCode(t, err, core.CodeNotFound)
 
 		// Refused: a name taken on the same list, ignoring case; filters the list does not take;
-		// a bad entity, name, sort or display; an unknown Team.
+		// a bad entity, name, sort or display; an unknown Project; the Features list, which is gone.
 		for _, c := range []struct {
 			nv   core.NewView
 			code core.Code
 		}{
-			{core.NewView{Entity: "tasks", Team: ptrStr("WEB"), Name: "UNHELD this WEEK"}, core.CodeConflict},
-			{core.NewView{Entity: "features", Team: ptrStr("WEB"), Name: "x", Filters: []string{"holder:is:none"}}, core.CodeInvalid},
+			{core.NewView{Entity: "tasks", Project: ptrStr("WEB"), Name: "UNHELD this WEEK"}, core.CodeConflict},
+			{core.NewView{Entity: "features", Project: ptrStr("WEB"), Name: "x", Filters: []string{"holder:is:none"}}, core.CodeInvalid},
 			{core.NewView{Entity: "tasks", Name: "x", Filters: []string{"status:is:Todo"}}, core.CodeInvalid},
 			{core.NewView{Entity: "members", Name: "x"}, core.CodeInvalid},
 			{core.NewView{Entity: "tasks", Name: "  "}, core.CodeInvalid},
@@ -98,7 +102,7 @@ func TestViews(t *testing.T) {
 			{core.NewView{Entity: "tasks", Name: "two\nlines"}, core.CodeInvalid},
 			{core.NewView{Entity: "tasks", Name: "x", Sort: ptrStr(strings.Repeat("s", 201))}, core.CodeInvalid},
 			{core.NewView{Entity: "tasks", Name: "x", Display: map[string]any{"big": strings.Repeat("d", 16<<10)}}, core.CodeInvalid},
-			{core.NewView{Entity: "tasks", Team: ptrStr("NOPE"), Name: "x"}, core.CodeNotFound},
+			{core.NewView{Entity: "tasks", Project: ptrStr("NOPE"), Name: "x"}, core.CodeNotFound},
 		} {
 			_, err := f.svc.CreateView(ctx, bob, c.nv, core.Idem{})
 			if codeOf(err) != c.code {
@@ -128,7 +132,7 @@ func TestViews(t *testing.T) {
 		if _, err := f.svc.UpdateView(ctx, bob, mine.ID, core.ViewChange{Name: ptrStr("UNHELD")}, core.Idem{}); err != nil {
 			t.Errorf("renamed in another case: %v", err)
 		}
-		other, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityTasks, Team: ptrStr("WEB"), Name: "Other"}, core.Idem{})
+		other, err := f.svc.CreateView(ctx, bob, core.NewView{Entity: core.EntityTasks, Project: ptrStr("WEB"), Name: "Other"}, core.Idem{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +141,7 @@ func TestViews(t *testing.T) {
 		if _, err := f.svc.UpdateView(ctx, bob, across.ID, core.ViewChange{Name: ptrStr("unheld")}, core.Idem{}); err != nil {
 			t.Errorf("a name taken on another list: %v", err)
 		}
-		_, err = f.svc.UpdateView(ctx, bob, features.ID, core.ViewChange{Filters: &[]string{"claim:is:unheld"}}, core.Idem{})
+		_, err = f.svc.UpdateView(ctx, bob, opsView.ID, core.ViewChange{Filters: &[]string{"status:is:" + ops}}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
 		_, err = f.svc.UpdateView(ctx, bob, mine.ID, core.ViewChange{Name: ptrStr("")}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
@@ -159,7 +163,7 @@ func TestViews(t *testing.T) {
 			t.Fatal(err)
 		}
 		wantCode(t, f.svc.DeleteView(ctx, bob, mine.ID, core.Idem{}), core.CodeNotFound)
-		if got := names(nil, nil); !slices.Equal(got, []string{"tasks/unheld", "features/Unheld this week", "tasks/Other"}) {
+		if got := names(nil, nil); !slices.Equal(got, []string{"unheld@-", "Unheld this week@OPS", "Other@WEB"}) {
 			t.Errorf("bob's Views after the delete: %q", got)
 		}
 		if after := f.checkActivity(); after != before {

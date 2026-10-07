@@ -7,27 +7,17 @@ import (
 	"github.com/tuongaz/darkory/internal/store"
 )
 
-// Blocking: one Task blocks another until it ends, across Features if need be (CONTEXT.md). The
-// edges live in the blocks table and the Takeable rule reads them; nothing stores "blocked".
+// Blocking: one worked Task blocks another until it ends, across Parents if need be (CONTEXT.md);
+// a Parent neither blocks nor is blocked. The edges live in the blocks table and the Takeable
+// rule reads them; nothing stores "blocked".
 
-// mayBlock refuses a caller who may not change what blocks the Task t of Feature f: while t is
-// held only its holder may (plan invariant 6); otherwise its Feature's owner or a Member of the
-// Feature's Team (decisions.md).
-func mayBlock(ctx context.Context, r store.Reader, c *auth.Caller, t Task, f Feature) error {
+// mayBlock refuses a caller who may not change what blocks the Task t: while t is held only its
+// holder may (plan invariant 6); otherwise its Owner or a Member of its Project (decisions.md).
+func mayBlock(ctx context.Context, r store.Reader, c *auth.Caller, t Task) error {
 	if t.Claim != nil {
 		return holds(c, t)
 	}
-	if f.OwnerID == c.MemberID {
-		return nil
-	}
-	in, err := inTeam(ctx, r, c.OrgID, f.TeamID, c.MemberID)
-	if err != nil {
-		return err
-	}
-	if !in {
-		return refuse(CodeForbidden, "while nobody holds Task %s, only its Feature's owner or a Member of its Team may change what blocks it", t.Key)
-	}
-	return nil
+	return inProjectOrOwner(ctx, r, c, t, "change, while nobody holds it, what blocks")
 }
 
 // blocksTransitively reports whether task already blocks other, directly or through other Tasks:
@@ -47,7 +37,7 @@ func blocksTransitively(t *tx, task, other string) (bool, error) {
 // An edge that would close a loop is refused with cycle.
 func (s *Service) AddBlocker(ctx context.Context, c *auth.Caller, taskRef, blockerRef string, idem Idem) error {
 	_, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		task, blocker, f, err := blockEdge(t, taskRef, blockerRef)
+		task, blocker, err := blockEdge(t, taskRef, blockerRef)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +47,12 @@ func (s *Service) AddBlocker(ctx context.Context, c *auth.Caller, taskRef, block
 		if task.State != "open" {
 			return nil, refuse(CodeEnded, "Task %s is %s", task.Key, task.State)
 		}
-		if err := mayBlock(ctx, t, c, task, f); err != nil {
+		for _, p := range []Task{task, blocker} {
+			if p.SubtaskCounts != nil {
+				return nil, refuse(CodeConflict, "%s is a Parent, and a Parent neither blocks nor is blocked: block one of its Subtasks", p.Key)
+			}
+		}
+		if err := mayBlock(ctx, t, c, task); err != nil {
 			return nil, err
 		}
 		var n int
@@ -85,16 +80,16 @@ func (s *Service) AddBlocker(ctx context.Context, c *auth.Caller, taskRef, block
 }
 
 // RemoveBlocker stops blockerRef blocking taskRef. It needs the same authority as adding it. An
-// open question on an ended Feature may not be left blocking no open Task, since an ended Feature
-// holds no open Task but its Retrospective and the questions blocking its Tasks (ADR 0010): the
-// question is completed or dropped instead.
+// open question under an ended Parent may not be left blocking no open Task, since an ended
+// Parent holds no open Subtask but its Retrospective and the questions blocking its Subtasks
+// (ADR 0010): the question is completed or dropped instead.
 func (s *Service) RemoveBlocker(ctx context.Context, c *auth.Caller, taskRef, blockerRef string, idem Idem) error {
 	_, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		task, blocker, f, err := blockEdge(t, taskRef, blockerRef)
+		task, blocker, err := blockEdge(t, taskRef, blockerRef)
 		if err != nil {
 			return nil, err
 		}
-		if err := mayBlock(ctx, t, c, task, f); err != nil {
+		if err := mayBlock(ctx, t, c, task); err != nil {
 			return nil, err
 		}
 		res, err := t.Exec(ctx, `DELETE FROM blocks WHERE org_id = $1 AND task_id = $2 AND blocker_task_id = $3`, c.OrgID, task.ID, blocker.ID)
@@ -104,7 +99,7 @@ func (s *Service) RemoveBlocker(ctx context.Context, c *auth.Caller, taskRef, bl
 		if n, _ := res.RowsAffected(); n == 0 {
 			return nil, nil
 		}
-		if err := questionStillBlocks(t, blocker, f); err != nil {
+		if err := questionStillBlocks(t, blocker); err != nil {
 			return nil, err
 		}
 		return nil, t.recordByCaller("task.blocker_removed", task.ID, map[string]any{"blocker_id": blocker.ID, "blocker_key": blocker.Key})
@@ -112,20 +107,17 @@ func (s *Service) RemoveBlocker(ctx context.Context, c *auth.Caller, taskRef, bl
 	return err
 }
 
-// questionStillBlocks refuses, once an edge from blocker is gone, to leave blocker open on an ended
-// Feature blocking no open Task. f is the Feature of the Task the edge blocked, which a question
-// joined when it was filed; the refusal rolls the removal back.
-func questionStillBlocks(t *tx, blocker Task, f Feature) error {
-	if blocker.State != "open" || blocker.Kind == "retrospective" {
+// questionStillBlocks refuses, once an edge from blocker is gone, to leave blocker open under an
+// ended Parent blocking no open Task; the refusal rolls the removal back.
+func questionStillBlocks(t *tx, blocker Task) error {
+	if blocker.State != "open" || blocker.Kind == "retrospective" || blocker.ParentID == nil {
 		return nil
 	}
-	if blocker.FeatureID != f.ID {
-		var err error
-		if f, err = getFeature(t.ctx, t, t.caller.OrgID, blocker.FeatureID, t.now); err != nil {
-			return err
-		}
+	p, err := getTask(t.ctx, t, t.caller.OrgID, *blocker.ParentID, t.now)
+	if err != nil {
+		return err
 	}
-	if f.State == "open" {
+	if p.State == "open" {
 		return nil
 	}
 	var n int
@@ -136,27 +128,15 @@ WHERE b.org_id = $1 AND b.blocker_task_id = $2 AND bt.state = 'open'`, t.caller.
 	if n > 0 {
 		return nil
 	}
-	return refuse(CodeEnded, "Feature %s has %s, and %s may stay open on it only while it blocks an open Task: complete or drop %s instead",
-		f.Key, f.State, blocker.Key, blocker.Key)
+	return refuse(CodeEnded, "%s is %s, and %s may stay open under it only while it blocks an open Task: complete or drop %s instead",
+		p.Key, p.State, blocker.Key, blocker.Key)
 }
 
-// blockEdge reads the two Tasks of an edge and the blocked Task's Feature.
-func blockEdge(t *tx, taskRef, blockerRef string) (task, blocker Task, f Feature, err error) {
-	org := t.caller.OrgID
-	taskID, err := resolveTask(t.ctx, t, org, taskRef)
-	if err != nil {
+// blockEdge reads the two Tasks of an edge.
+func blockEdge(t *tx, taskRef, blockerRef string) (task, blocker Task, err error) {
+	if task, err = taskOf(t, taskRef); err != nil {
 		return
 	}
-	blockerID, err := resolveTask(t.ctx, t, org, blockerRef)
-	if err != nil {
-		return
-	}
-	if task, err = getTask(t.ctx, t, org, taskID, t.now); err != nil {
-		return
-	}
-	if blocker, err = getTask(t.ctx, t, org, blockerID, t.now); err != nil {
-		return
-	}
-	f, err = getFeature(t.ctx, t, org, task.FeatureID, t.now)
+	blocker, err = taskOf(t, blockerRef)
 	return
 }

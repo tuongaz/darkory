@@ -33,17 +33,20 @@ func TestViewsThroughTheClient(t *testing.T) {
 			*v.Sort != "rank" || (*v.Display)["layout"] != "board" {
 			t.Fatalf("saved %s", first.Body)
 		}
-		got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityFeatures, Name: "Quick",
-			Filters: &[]string{"quick:is:true"}})).want(t, http.StatusCreated)
+		got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Name: "Quick",
+			Filters: &[]string{"top:is:true"}})).want(t, http.StatusCreated)
+		// model v2: Views are of the Tasks list only (M1b drops features from the enum).
+		got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityFeatures, Name: "Gone"})).
+			want(t, http.StatusBadRequest)
 
 		list := got(bob.ListViewsWithResponse(ctx, &client.ListViewsParams{})).want(t, http.StatusOK).JSON200.Items
 		if len(list) != 2 || list[0].ID != v.ID || list[1].Name != "Quick" || list[1].TeamID != nil || list[1].Sort != nil || list[1].Display != nil {
 			t.Fatalf("bob's Views: %+v", list)
 		}
-		entity := client.ViewEntityFeatures
+		entity := client.ViewEntityTasks
 		list = got(bob.ListViewsWithResponse(ctx, &client.ListViewsParams{Entity: &entity})).want(t, http.StatusOK).JSON200.Items
-		if len(list) != 1 || list[0].Name != "Quick" {
-			t.Fatalf("bob's feature Views: %+v", list)
+		if len(list) != 2 {
+			t.Fatalf("bob's task Views: %+v", list)
 		}
 		list = got(bob.ListViewsWithResponse(ctx, &client.ListViewsParams{Team: ptrStr("WEB")})).want(t, http.StatusOK).JSON200.Items
 		if len(list) != 1 || list[0].ID != v.ID {

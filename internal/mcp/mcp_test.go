@@ -13,21 +13,43 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 	"github.com/tuongaz/darkory/internal/clock"
+	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// fixture is an Install with the Team WEB, the Skill build, and the agent bob in WEB with build,
-// who has filed the Feature WEB-1 (and its Break down WEB-2) and the Task WEB-3 needing build.
+// fixture is an Install with the Team WEB, whose Workflow is Plan (breakdown) and Build (build)
+// into Done, and Retro (retro) into Done or on to Skill review (skill-review); the Skill build;
+// and the agent bob in WEB with build, who has filed Search WEB-1 with Break down (its Breakdown
+// WEB-2) and the Subtask WEB-3 at Build.
 type fixture struct {
 	t   *testing.T
+	srv *server.Server
 	url string
 	ada string // ada's token
 	bob string // bob's token
+}
+
+// seed files nt through the core as the Member whose token is secret, where /v1 has no route for
+// it until it is rebuilt on model v2. model v2: the MCP tests of Features and Statuses went with
+// those tools; M2 rebuilds them on the new ones, and these tests then file through MCP again.
+func (f *fixture) seed(secret string, nt core.NewTask) core.TaskDetail {
+	f.t.Helper()
+	svc := f.srv.Core()
+	c, err := auth.New(svc.Store(), svc.Clock()).Authenticate(f.t.Context(), auth.Credentials{Bearer: secret, Session: "seed"})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	d, err := svc.FileTask(f.t.Context(), c, nt, core.Idem{})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return d
 }
 
 func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
@@ -55,10 +77,22 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	must(t)(ada.GrantSkillWithResponse(ctx, "bob", "build", &client.GrantSkillParams{}))
 	tok, err := ada.IssueTokenWithResponse(ctx, "bob", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "bob"})
 	must(t)(tok, err)
-	bob := dial(t, ts.URL, tok.JSON201.Secret, "bob-setup")
-	must(t)(bob.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Search"}))
-	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: ptr("WEB-1"), Skill: ptr("build"), Title: "Build search"}))
-	return &fixture{t: t, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
+	f := &fixture{t: t, srv: srv, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
+	admin, err := auth.New(st, srv.Core().Clock()).Authenticate(ctx, auth.Credentials{Bearer: init.Token.Secret, Session: "seed"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := srv.Core().SetWorkflow(ctx, admin, "WEB", core.WorkflowInput{
+		Steps: []core.StepInput{{Name: "Plan", Skill: ptr(core.SkillBreakdown)}, {Name: "Build", Skill: ptr("build")},
+			{Name: "Retro", Skill: ptr(core.SkillRetro)}, {Name: "Skill review", Skill: ptr(core.SkillSkillReview)}},
+		Connectors: []core.ConnectorInput{{From: "Plan", Name: "done"}, {From: "Build", Name: "pass"},
+			{From: "Retro", Name: "done"}, {From: "Retro", To: ptr("Skill review"), Name: "propose"}, {From: "Skill review", Name: "publish"}},
+	}, core.Idem{}); err != nil {
+		t.Fatal(err)
+	}
+	f.seed(f.bob, core.NewTask{Project: ptr("WEB"), Title: "Search", Breakdown: true})
+	f.seed(f.bob, core.NewTask{Parent: ptr("WEB-1"), Step: ptr("Build"), Title: "Build search"})
+	return f
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -256,11 +290,8 @@ func TestNextClaimComplete(t *testing.T) {
 		if me.Member.Name != "bob" || me.Session.ID != "bob-mcp" {
 			t.Fatalf("me: %+v", me)
 		}
-		var list client.TaskList
-		ok(t, cs, &list, "list_tasks", map[string]any{"mine": true})
-		if len(list.Items) != 1 || list.Items[0].Key != "WEB-2" {
-			t.Fatalf("list_tasks mine: %+v", list)
-		}
+		// model v2: list_tasks read the Organisation's Statuses, which are gone; M2 rebuilds it on
+		// Steps.
 		var page client.ActivityPage
 		ok(t, cs, &page, "activity", map[string]any{"after": 0})
 		if page.LastSeq == 0 || len(page.Items) == 0 {
@@ -352,8 +383,7 @@ func TestALapsedClaimIsReported(t *testing.T) {
 func TestToolTextEscapesTerminalControls(t *testing.T) {
 	const hostile = "ok\x1b]52;c;ZXZpbA==\x07\x1b[2J\u009b\u202e"
 	f := newFixture(t, storetest.Open(t, store.SQLite), server.Options{})
-	bob := dial(t, f.url, f.bob, "bob-setup")
-	must(t)(bob.FileTaskWithResponse(t.Context(), &client.FileTaskParams{}, client.FileTaskBody{Feature: ptr("WEB-1"), Skill: ptr("build"), Title: hostile}))
+	f.seed(f.bob, core.NewTask{Parent: ptr("WEB-1"), Step: ptr("Build"), Title: hostile})
 	_, cs := f.connect("bob-mcp", Options{})
 	actable := func(s string) bool {
 		return strings.ContainsFunc(s, func(r rune) bool {
@@ -375,8 +405,7 @@ func TestToolTextEscapesTerminalControls(t *testing.T) {
 	}
 }
 
-// A Retrospective through MCP: Observations, a proposed Skill version, and show_proposal by Task
-// and by id.
+// A Retrospective through MCP: a proposed Skill version, and show_proposal by Task and by id.
 func TestRetrospectiveTools(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st, server.Options{})
@@ -392,21 +421,10 @@ func TestRetrospectiveTools(t *testing.T) {
 		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-3"})
 		ok(t, cs, &d, "claim", map[string]any{"task": "WEB-2", "heartbeat_timeout_seconds": 0})
 		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-2"})
-		bob := dial(t, f.url, f.bob, "bob-setup")
-		ship, err := bob.ShipFeatureWithResponse(ctx, "WEB-1", &client.ShipFeatureParams{})
-		must(t)(ship, err)
-		retro := ""
-		for _, tk := range ship.JSON200.Tasks {
-			if tk.Kind == client.Retrospective {
-				retro = tk.Key
-			}
-		}
-
-		var obs client.ObservationList
-		ok(t, cs, &obs, "observations", map[string]any{"feature": "WEB-1"})
-		if len(obs.Items) != 1 || obs.Items[0].Body != "flaky fixture" {
-			t.Fatalf("observations: %+v", obs)
-		}
+		// bob owns the Parent, which completing files its Retrospective, WEB-4. model v2: the
+		// observations tool, which read a Feature's, goes with Features (M2).
+		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-1"})
+		retro := "WEB-4"
 		res := call(t, cs, "show_proposal", map[string]any{"task": retro})
 		if !res.IsError || !strings.Contains(text(res), "no Skill proposal") {
 			t.Fatalf("show_proposal before any: %q", text(res))

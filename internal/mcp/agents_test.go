@@ -23,8 +23,9 @@ func TestWorkspaceTools(t *testing.T) {
 		_, cs := f.connect("bob-mcp", Options{})
 
 		var byDefault, named client.TaskDetail
-		ok(t, cs, &byDefault, "file_task", map[string]any{"feature": "WEB-1", "skill": "build", "title": "Default"})
-		ok(t, cs, &named, "file_task", map[string]any{"feature": "WEB-1", "skill": "build", "title": "Named", "workspaces": []string{"api", "web"}})
+		// model v2: a Task needing a Skill is filed at a Step (M2); an aimed one still files.
+		ok(t, cs, &byDefault, "file_task", map[string]any{"feature": "WEB-1", "aimed_at": "bob", "title": "Default"})
+		ok(t, cs, &named, "file_task", map[string]any{"feature": "WEB-1", "aimed_at": "bob", "title": "Named", "workspaces": []string{"api", "web"}})
 		if len(byDefault.Workspaces) != 1 || byDefault.Workspaces[0].Name != "web" {
 			t.Fatalf("by default: %+v", byDefault.Workspaces)
 		}

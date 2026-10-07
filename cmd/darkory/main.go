@@ -180,7 +180,7 @@ Sign in with a browser within %d minutes, once darkory serve is running:
   %s
 `, out.Organisation.Name, cfg.Database, out.Member.Name, out.Member.Name, out.Token.Secret,
 		int(core.LoginLinkTTL.Minutes()), link)
-	if out.Team != nil {
+	if out.Project != nil {
 		printRoster(stdout, out, tokens)
 	}
 	fmt.Fprint(stdout, "\ndarkory serve prints a fresh login link every time it starts.\n")
@@ -189,12 +189,13 @@ Sign in with a browser within %d minutes, once darkory serve is running:
 
 // printRoster says what init seeded besides the first Member.
 func printRoster(w io.Writer, out core.Initialised, tokens string) {
-	fmt.Fprintf(w, "\nTeam %s (%s) holds %s and the agents below.\n", out.Team.Key, out.Team.Name, out.Member.Name)
+	fmt.Fprintf(w, "\nProject %s (%s), on the default Workflow, holds %s and the agents below.\n", out.Project.Key, out.Project.Name, out.Member.Name)
 	if ws := out.Workspace; ws != nil {
-		fmt.Fprintf(w, "Workspace %s: %s (git, default branch %s), Team %s's default.\n", ws.Name, ws.Path, ws.DefaultBranch, out.Team.Key)
+		fmt.Fprintf(w, "Workspace %s: %s (git, default branch %s), Project %s's default.\n", ws.Name, ws.Path, ws.DefaultBranch, out.Project.Key)
 	} else {
+		// model v2: the command becomes darkory project set in M2.
 		fmt.Fprintf(w, "No Workspace: init ran outside a git repository. Add one with darkory workspace add --path <repository>,\n"+
-			"then make it the Team's default with darkory team set %s --default-workspace <name>.\n", out.Team.Key)
+			"then make it the Project's default with darkory team set %s --default-workspace <name>.\n", out.Project.Key)
 	}
 	fmt.Fprintf(w, "Agents, reporting to %s, each with a token in %s:\n", out.Member.Name, filepath.Join(tokens, "<name>.token"))
 	for _, a := range out.Agents {
