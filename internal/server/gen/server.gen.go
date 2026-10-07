@@ -588,6 +588,24 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for ViewEntity.
+const (
+	ViewEntityFeatures ViewEntity = "features"
+	ViewEntityTasks    ViewEntity = "tasks"
+)
+
+// Valid indicates whether the value is a known member of the ViewEntity enum.
+func (e ViewEntity) Valid() bool {
+	switch e {
+	case ViewEntityFeatures:
+		return true
+	case ViewEntityTasks:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkspaceKind.
 const (
 	WorkspaceKindGit WorkspaceKind = "git"
@@ -773,6 +791,23 @@ type CreateSkillBody struct {
 type CreateTeamBody struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
+}
+
+// CreateViewBody defines model for CreateViewBody.
+type CreateViewBody struct {
+	// Display At most 16 KiB as JSON.
+	Display *map[string]interface{} `json:"display,omitempty"`
+
+	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	Entity ViewEntity `json:"entity"`
+
+	// Filters The list's `filter` tokens; none when omitted.
+	Filters *[]string `json:"filters,omitempty"`
+	Name    string    `json:"name"`
+	Sort    *string   `json:"sort,omitempty"`
+
+	// Team The Team whose list it is, by id or key; omitted for a list across Teams.
+	Team *string `json:"team,omitempty"`
 }
 
 // CreateWorkspaceBody defines model for CreateWorkspaceBody.
@@ -1578,6 +1613,17 @@ type UpdateTeamBody struct {
 	ShipWhenDone     *bool   `json:"ship_when_done,omitempty"`
 }
 
+// UpdateViewBody defines model for UpdateViewBody.
+type UpdateViewBody struct {
+	// Display At most 16 KiB as JSON; replaces the whole object.
+	Display *map[string]interface{} `json:"display,omitempty"`
+	Filters *[]string               `json:"filters,omitempty"`
+	Name    *string                 `json:"name,omitempty"`
+
+	// Sort `""` clears it.
+	Sort *string `json:"sort,omitempty"`
+}
+
 // UpdateWorkspaceBody defines model for UpdateWorkspaceBody.
 type UpdateWorkspaceBody struct {
 	DefaultBranch *string `json:"default_branch,omitempty"`
@@ -1587,6 +1633,37 @@ type UpdateWorkspaceBody struct {
 	Mode *WorkspaceMode `json:"mode,omitempty"`
 	Name *string        `json:"name,omitempty"`
 	Path *string        `json:"path,omitempty"`
+}
+
+// View A saved set of filters, sort and display for a list, kept by one Member for themselves.
+type View struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// Display How the list is shown, as the client wrote it; the server does not read it.
+	Display *map[string]interface{} `json:"display,omitempty"`
+
+	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	Entity ViewEntity `json:"entity"`
+
+	// Filters The list's `filter` tokens, in the order saved.
+	Filters []string `json:"filters"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+
+	// Sort How the list is sorted, as the client wrote it; the server does not read it.
+	Sort *string `json:"sort,omitempty"`
+
+	// TeamID The Team whose list it is; absent for a list across Teams.
+	TeamID    *string   `json:"team_id,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ViewEntity The list a View is of; its filters are that list's `filter` tokens.
+type ViewEntity string
+
+// ViewList defines model for ViewList.
+type ViewList struct {
+	Items []View `json:"items"`
 }
 
 // Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
@@ -1676,6 +1753,9 @@ type TeamRef = string
 
 // TokenID defines model for TokenID.
 type TokenID = string
+
+// ViewID defines model for ViewID.
+type ViewID = string
 
 // WorkspaceRef defines model for WorkspaceRef.
 type WorkspaceRef = string
@@ -2173,6 +2253,36 @@ type RevokeTokenParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListViewsParams defines parameters for ListViews.
+type ListViewsParams struct {
+	// Entity Only Views of this list.
+	Entity *ViewEntity `form:"entity,omitempty" json:"entity,omitempty"`
+
+	// Team Only Views of this Team's list, by id or key.
+	Team *string `form:"team,omitempty" json:"team,omitempty"`
+}
+
+// CreateViewParams defines parameters for CreateView.
+type CreateViewParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteViewParams defines parameters for DeleteView.
+type DeleteViewParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateViewParams defines parameters for UpdateView.
+type UpdateViewParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateWorkspaceParams defines parameters for CreateWorkspace.
 type CreateWorkspaceParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2268,6 +2378,12 @@ type CreateTeamJSONRequestBody = CreateTeamBody
 
 // UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
 type UpdateTeamJSONRequestBody = UpdateTeamBody
+
+// CreateViewJSONRequestBody defines body for CreateView for application/json ContentType.
+type CreateViewJSONRequestBody = CreateViewBody
+
+// UpdateViewJSONRequestBody defines body for UpdateView for application/json ContentType.
+type UpdateViewJSONRequestBody = UpdateViewBody
 
 // CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
 type CreateWorkspaceJSONRequestBody = CreateWorkspaceBody
@@ -2496,6 +2612,18 @@ type ServerInterface interface {
 	// RevokeToken Revoke a token
 	// (POST /v1/tokens/{token}/revoke)
 	RevokeToken(w http.ResponseWriter, r *http.Request, token TokenID, params RevokeTokenParams)
+	// ListViews List the caller's Views
+	// (GET /v1/views)
+	ListViews(w http.ResponseWriter, r *http.Request, params ListViewsParams)
+	// CreateView Save a View
+	// (POST /v1/views)
+	CreateView(w http.ResponseWriter, r *http.Request, params CreateViewParams)
+	// DeleteView Delete one of the caller's Views
+	// (DELETE /v1/views/{view})
+	DeleteView(w http.ResponseWriter, r *http.Request, view ViewID, params DeleteViewParams)
+	// UpdateView Change one of the caller's Views
+	// (PATCH /v1/views/{view})
+	UpdateView(w http.ResponseWriter, r *http.Request, view ViewID, params UpdateViewParams)
 	// ListWorkspaces List the Install's Workspaces
 	// (GET /v1/workspaces)
 	ListWorkspaces(w http.ResponseWriter, r *http.Request)
@@ -5888,6 +6016,193 @@ func (siw *ServerInterfaceWrapper) RevokeToken(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ListViews operation middleware
+func (siw *ServerInterfaceWrapper) ListViews(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListViewsParams
+
+	// ------------- Optional query parameter "entity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "entity", r.URL.Query(), &params.Entity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "entity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "entity", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "team" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListViews(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateView operation middleware
+func (siw *ServerInterfaceWrapper) CreateView(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateViewParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateView(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteView operation middleware
+func (siw *ServerInterfaceWrapper) DeleteView(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "view" -------------
+	var view ViewID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "view", r.PathValue("view"), &view, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteViewParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteView(w, r, view, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateView operation middleware
+func (siw *ServerInterfaceWrapper) UpdateView(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "view" -------------
+	var view ViewID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "view", r.PathValue("view"), &view, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateViewParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateView(w, r, view, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkspaces operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 
@@ -6240,6 +6555,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/runner/sessions/{task}/nudge", wrapper.NudgeRunnerSession)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/runner/sessions/{task}/stop", wrapper.StopRunnerSession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/runner/sessions/{task}/terminal", wrapper.RunnerTerminal)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/views", wrapper.ListViews)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/views", wrapper.CreateView)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/views/{view}", wrapper.DeleteView)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/views/{view}", wrapper.UpdateView)
 
 	return m
 }

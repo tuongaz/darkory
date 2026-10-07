@@ -336,3 +336,19 @@ type HeartbeatReply struct {
 	Status    string
 	ExpiresAt *time.Time
 }
+
+// View is a saved set of filters, sort and display for a list, kept by one Member for themselves.
+type View struct {
+	ID string
+	// Entity is the list it is of, EntityTasks or EntityFeatures.
+	Entity string
+	// TeamID is the Team whose list it is; nil for a list across Teams.
+	TeamID  *string
+	Name    string
+	Filters []string
+	// Sort and Display are as the client wrote them; nil when it wrote none.
+	Sort      *string
+	Display   map[string]any
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
