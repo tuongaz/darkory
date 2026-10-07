@@ -2,9 +2,9 @@ package core_test
 
 import (
 	"encoding/json"
-	"strings"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 

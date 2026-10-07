@@ -31,7 +31,8 @@ export default async function startServer(): Promise<() => Promise<void>> {
   process.env.DARKORY_E2E_ADMIN_TOKEN = /dk_\S+/.exec(init.toString())?.[0] ?? "";
 
   // Port 0: the kernel picks a free port, and serve prints its link with the port it got.
-  const server = spawn(exe, ["serve", "--no-browser", "--listen", "127.0.0.1:0", "--data", data], {
+  // --runner=off: no agent the specs create ever gets a session started for it.
+  const server = spawn(exe, ["serve", "--no-browser", "--runner=off", "--listen", "127.0.0.1:0", "--data", data], {
     env,
     stdio: ["ignore", "pipe", "pipe"],
   });
