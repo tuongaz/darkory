@@ -3,6 +3,9 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -X github.com/tuongaz/darkory/internal/version.Version=$(VERSION)
 # The Postgres that test-pg runs against; its role must be able to create databases.
 TEST_POSTGRES_URL ?= postgres://dk@localhost:54329/postgres?sslmode=disable
+# How long the Go tests may run: under -race on a loaded machine the core package takes more than
+# go test's default 10 minutes on both engines.
+TEST_TIMEOUT ?= 30m
 GENERATED := client/client.gen.go internal/server/gen/server.gen.go
 
 # Local settings for dev and serve, such as PUBLIC_URL; local.mk is not committed.
@@ -49,11 +52,11 @@ vet:
 
 ## test: run every test on SQLite
 test:
-	$(GO) test -race ./...
+	$(GO) test -race -timeout $(TEST_TIMEOUT) ./...
 
 ## test-pg: run every test on SQLite and Postgres
 test-pg:
-	DARKORY_TEST_POSTGRES_URL='$(TEST_POSTGRES_URL)' $(GO) test -race ./...
+	DARKORY_TEST_POSTGRES_URL='$(TEST_POSTGRES_URL)' $(GO) test -race -timeout $(TEST_TIMEOUT) ./...
 
 ## check: what every phase ends green on
 check: gen-check vet test test-pg
