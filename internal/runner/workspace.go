@@ -275,7 +275,7 @@ func (r *Runner) prepareOne(ctx context.Context, task, feature string, c *Checko
 			return fmt.Errorf("the branch %s in %s was not made by the runner; it will not work on it", existing[0], repo)
 		}
 		c.Branch = existing[0]
-		return addWorktree(ctx, repo, c.Dir, nil, c.Branch)
+		return addWorktree(ctx, repo, c.Dir, c.Branch)
 	}
 	if !branchExists(ctx, repo, c.Base) {
 		if c.Base != FeatureBranch(feature) {
@@ -285,13 +285,15 @@ func (r *Runner) prepareOne(ctx context.Context, task, feature string, c *Checko
 			return err
 		}
 	}
-	if err := addWorktree(ctx, repo, c.Dir, []string{"-b", c.Branch}, c.Base); err != nil {
+	// The branch goes in the ledger before the worktree is made: a worktree that fails to populate
+	// would otherwise leave a branch the runner made but will not work on.
+	if _, err := runGit(ctx, repo, "branch", c.Branch, c.Base); err != nil {
 		return err
 	}
 	if err := r.ledger.add(Made{Repo: repo, Branch: c.Branch, Base: c.Base, Task: task, At: time.Now().UTC()}); err != nil {
 		return err
 	}
-	return nil
+	return addWorktree(ctx, repo, c.Dir, c.Branch)
 }
 
 // makeFeatureBranch makes feature/<KEY> from the Workspace's default branch, and pushes it when

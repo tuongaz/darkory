@@ -57,16 +57,13 @@ func identity(ctx context.Context, repo string) []string {
 		"GIT_COMMITTER_NAME=Darkory runner", "GIT_COMMITTER_EMAIL=runner@darkory.invalid"}
 }
 
-// addWorktree adds a worktree of repo at dir, args being what follows the path in `git worktree
-// add` (a branch, or `-b branch base` is given before it through before). The worktree is made
+// addWorktree adds a worktree of repo at dir on the existing branch. The worktree is made
 // without a checkout, given the repository's filter keys, and populated then: git-crypt keeps its
 // key in GIT_DIR/git-crypt, and a linked worktree's GIT_DIR starts empty, so a checkout through
 // its smudge filter fails before any session could start (enably-v2's own
 // scripts/worktree_bootstrap.sh repairs a person's worktree the same way, after the fact).
-func addWorktree(ctx context.Context, repo, dir string, before []string, args ...string) error {
-	add := append([]string{"worktree", "add", "--no-checkout"}, before...)
-	add = append(append(add, dir), args...)
-	if _, err := runGit(ctx, repo, add...); err != nil {
+func addWorktree(ctx context.Context, repo, dir, branch string) error {
+	if _, err := runGit(ctx, repo, "worktree", "add", "--no-checkout", dir, branch); err != nil {
 		return err
 	}
 	if err := linkFilterKeys(ctx, dir); err != nil {
