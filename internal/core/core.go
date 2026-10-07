@@ -107,6 +107,8 @@ type Idem struct {
 	// Render turns the write's result into the response stored under the key, in the same
 	// transaction as the write.
 	Render func(result any) (status int, body []byte, err error)
+	// RenderRefusal turns a refusal kept under the key into its response.
+	RenderRefusal func(refusal *Error) (status int, body []byte, err error)
 }
 
 // IdempotencyTTL is how long a response is kept under its key.

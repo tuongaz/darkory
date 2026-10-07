@@ -2,7 +2,9 @@ package core_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -394,6 +396,108 @@ func TestRaceIdempotentRetriesOfHeldWrites(t *testing.T) {
 		}
 		f.checkActivity()
 	})
+}
+
+// One Idempotency-Key gives one answer, a rule's refusal included. A claim refused
+// already_claimed, sent again under its key after the holder let go, gets the refusal back, not
+// the Task. Two claims sent at once under one key while the holder releases get the same answer
+// between them, and the one that wins lists the Claims as its write left them: the e2e soak found
+// one refused and the other succeeding, with the released Claim shown lapsed.
+func TestRaceIdempotentClaimsAgainstARelease(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f, callers, feature := builders(t, st, 2)
+		holder, claimer := callers[0], callers[1]
+		ctx := t.Context()
+
+		task := f.task(holder, feature, "One after the other", "build")
+		f.claim(holder, task.ID, noTimeout)
+		idem := jsonIdem("after-release", "claim "+task.ID)
+		_, err := f.svc.Claim(ctx, claimer, task.ID, noTimeout, idem)
+		wantCode(t, err, core.CodeAlreadyClaimed)
+		refused := answerOf(t, idem, nil, err)
+		if _, err := f.svc.Release(ctx, holder, task.ID, nil, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		d, err := f.svc.Claim(ctx, claimer, task.ID, noTimeout, idem)
+		if again := answerOf(t, idem, d, err); again.status != refused.status || !bytes.Equal(again.body, refused.body) {
+			t.Errorf("a claim refused, sent again under its key once the Task was free, answered\n%d %s\nnot\n%d %s",
+				again.status, again.body, refused.status, refused.body)
+		}
+
+		const n = 30
+		var tasks []core.Task
+		for i := range n {
+			task := f.task(holder, feature, name("task", i), "build")
+			f.claim(holder, task.ID, noTimeout)
+			tasks = append(tasks, task)
+		}
+		answers := make([][2]answer, n)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i, task := range tasks {
+			idem := jsonIdem(name("twins", i), "claim "+task.ID)
+			for j := range answers[i] {
+				wg.Go(func() {
+					<-start
+					d, err := f.svc.Claim(ctx, claimer, task.ID, noTimeout, idem)
+					answers[i][j] = answerOf(t, idem, d, err)
+				})
+			}
+			wg.Go(func() {
+				<-start
+				if _, err := f.svc.Release(ctx, holder, task.ID, nil, core.Idem{}); err != nil {
+					t.Errorf("release %s: %v", task.Key, err)
+				}
+			})
+		}
+		close(start)
+		wg.Wait()
+		won := 0
+		for i, task := range tasks {
+			a, b := answers[i][0], answers[i][1]
+			if a.status != b.status || !bytes.Equal(a.body, b.body) {
+				t.Errorf("%s: two claims under one key answered differently:\n%d %s\n%d %s", task.Key, a.status, a.body, b.status, b.body)
+				continue
+			}
+			held := f.count(`SELECT COUNT(*) FROM claims WHERE task_id = $1 AND holder_id = $2`, task.ID, claimer.MemberID)
+			if a.status != 200 {
+				if held != 0 {
+					t.Errorf("%s: both claims were refused, and the claimer has %d Claims on it", task.Key, held)
+				}
+				continue
+			}
+			won++
+			if held != 1 {
+				t.Errorf("%s: the claimer has %d Claims on it", task.Key, held)
+			}
+			var claimed core.TaskDetail
+			if err := json.Unmarshal(a.body, &claimed); err != nil {
+				t.Fatal(err)
+			}
+			record, err := f.svc.GetTask(ctx, claimer, task.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := claimEnds(claimed.Claims), claimEnds(record.Claims); got != want {
+				t.Errorf("%s: the claim answered with the Claims\n%s\nbut its write left\n%s", task.Key, got, want)
+			}
+		}
+		t.Logf("%d of %d Tasks claimed under their key, the rest refused under it", won, n)
+		f.checkActivity()
+	})
+}
+
+// claimEnds lists each Claim and how it ended.
+func claimEnds(cs []core.Claim) string {
+	var b strings.Builder
+	for _, c := range cs {
+		how := "open"
+		if c.HowEnded != nil {
+			how = *c.HowEnded
+		}
+		fmt.Fprintf(&b, "%s %s; ", c.ID, how)
+	}
+	return b.String()
 }
 
 func ptrStr(s string) *string { return &s }
