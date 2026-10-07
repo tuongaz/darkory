@@ -63,7 +63,7 @@ function layout(stacked: boolean) {
 type Layout = ReturnType<typeof layout>;
 
 /** What both halves of the bar read from the props: the axes by key, which are set, which fold. */
-function useBar(props: FilterBarProps) {
+function barOf(props: FilterBarProps) {
   const { fields, pills } = props;
   const pillFor = (key: string) => pills.find((p) => p.field === key);
   // The free-text axis (`q`): the menu's Search field and the Search chip, never a checklist.
@@ -101,7 +101,7 @@ export function FilterMenuButton({
   onOpenChange,
   ...props
 }: FilterBarProps & { open?: boolean; onOpenChange?: (open: boolean) => void }) {
-  const bar = useBar(props);
+  const bar = barOf(props);
   const { labels } = bar;
   const [openState, setOpenState] = useState(false);
   const open = openProp ?? openState;
@@ -279,7 +279,7 @@ function SearchField({ labels, value, onChange }: { labels: FilterLabels; value:
  * takes a line of its own instead of wrapping.
  */
 export function FilterChipRow({ stacked = false, ...props }: FilterBarProps & { stacked?: boolean }) {
-  const bar = useBar(props);
+  const bar = barOf(props);
   const { labels } = bar;
   const lay = layout(stacked);
   if (bar.activeCount === 0) return null;
