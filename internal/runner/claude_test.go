@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,120 +13,6 @@ import (
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
-
-// An agent's configuration directory keeps what Claude Code wrote there, gains the session's
-// folders as trusted and onboarding as done, forgets the folders of Tasks gone, and has settings
-// of the runner's alone.
-func TestPrepareClaude(t *testing.T) {
-	data := t.TempDir()
-	dir := ClaudeConfigDir(data, "builder")
-	workspaces := filepath.Join(data, "workspaces")
-	kept, gone := filepath.Join(workspaces, "WEB-2", "web"), filepath.Join(workspaces, "WEB-1", "web")
-	if err := os.MkdirAll(kept, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	// A folder reached through a link is trusted by its real path too, as Claude Code looks it up.
-	real := t.TempDir()
-	link := filepath.Join(t.TempDir(), "link")
-	if err := os.Symlink(real, link); err != nil {
-		t.Fatal(err)
-	}
-	real, _ = filepath.EvalSymlinks(real)
-	writeTestFile(t, filepath.Join(dir, ".claude.json"), `{"oauthAccount": {"emailAddress": "a@example.com"}, "numStartups": 4,
-		"projects": {"/elsewhere": {"allowedTools": ["Bash"]}, "`+kept+`": {"lastCost": 0.1, "hasTrustDialogAccepted": true},
-		"`+gone+`": {"hasTrustDialogAccepted": true}}}`)
-	writeTestFile(t, filepath.Join(dir, "settings.json"), `{"hooks": {"Stop": []}, "statusLine": {"type": "command"}}`)
-
-	if err := prepareClaude(dir, []string{"/repo/web", link}, true, workspaces); err != nil {
-		t.Fatal(err)
-	}
-	var doc struct {
-		OAuthAccount map[string]any            `json:"oauthAccount"`
-		Startups     int                       `json:"numStartups"`
-		Onboarded    bool                      `json:"hasCompletedOnboarding"`
-		Projects     map[string]map[string]any `json:"projects"`
-	}
-	readTestJSON(t, filepath.Join(dir, ".claude.json"), &doc)
-	if doc.OAuthAccount["emailAddress"] != "a@example.com" || doc.Startups != 4 || !doc.Onboarded {
-		t.Fatalf("Claude Code's own fields: %+v", doc)
-	}
-	var trusted []string
-	for p, e := range doc.Projects {
-		if e["hasTrustDialogAccepted"] == true {
-			trusted = append(trusted, p)
-		}
-	}
-	slices.Sort(trusted)
-	want := []string{"/repo/web", kept, link, real}
-	slices.Sort(want)
-	if !slices.Equal(trusted, want) {
-		t.Fatalf("trusted %q, want %q", trusted, want)
-	}
-	if doc.Projects["/elsewhere"]["allowedTools"] == nil || doc.Projects[kept]["lastCost"] != 0.1 {
-		t.Fatalf("the projects' own fields: %+v", doc.Projects)
-	}
-	if _, ok := doc.Projects[gone]; ok {
-		t.Fatalf("a gone Task's folder is still there: %+v", doc.Projects)
-	}
-	b, _ := os.ReadFile(filepath.Join(dir, "settings.json"))
-	if got := strings.Join(strings.Fields(string(b)), ""); got != `{"skipDangerousModePermissionPrompt":true}` {
-		t.Fatalf("settings.json: %s", b)
-	}
-	for _, f := range []string{".claude.json", "settings.json"} {
-		if st, err := os.Stat(filepath.Join(dir, f)); err != nil || st.Mode().Perm() != 0o600 {
-			t.Fatalf("%s: %v, %v", f, st, err)
-		}
-	}
-	if st, err := os.Stat(dir); err != nil || st.Mode().Perm() != 0o700 {
-		t.Fatalf("the directory: %v, %v", st, err)
-	}
-
-	// An agent that is not unattended accepts nothing; a file Claude Code left unreadable starts
-	// again.
-	writeTestFile(t, filepath.Join(dir, ".claude.json"), `{"projects": `)
-	if err := prepareClaude(dir, []string{"/repo/web"}, false, workspaces); err != nil {
-		t.Fatal(err)
-	}
-	b, _ = os.ReadFile(filepath.Join(dir, "settings.json"))
-	if got := strings.Join(strings.Fields(string(b)), ""); got != `{}` {
-		t.Fatalf("settings.json: %s", b)
-	}
-	readTestJSON(t, filepath.Join(dir, ".claude.json"), &doc)
-	if !doc.Onboarded || doc.Projects["/repo/web"]["hasTrustDialogAccepted"] != true {
-		t.Fatalf("after an unreadable file: %+v", doc)
-	}
-}
-
-func readTestJSON(t *testing.T, path string, v any) {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(b, v); err != nil {
-		t.Fatalf("%s: %v\n%s", path, err, b)
-	}
-}
-
-// The session keeps the person's sign-in: where their Claude Code keeps it, by the variables of
-// the runner's environment.
-func TestClaudeEnv(t *testing.T) {
-	for _, c := range []struct {
-		environ []string
-		secure  string
-	}{
-		{nil, ""},
-		{[]string{"CLAUDE_CONFIG_DIR=/home/a/.claude-work"}, "/home/a/.claude-work"},
-		{[]string{"CLAUDE_CONFIG_DIR=/home/a/.claude-work", "CLAUDE_SECURESTORAGE_CONFIG_DIR=/home/a/.keys"}, "/home/a/.keys"},
-		{[]string{"CLAUDE_CONFIG_DIR=/home/a/.claude-work", "CLAUDE_SECURESTORAGE_CONFIG_DIR="}, ""},
-	} {
-		got := claudeEnv("/data/claude/builder", c.environ)
-		want := []string{"CLAUDE_CONFIG_DIR=/data/claude/builder", "CLAUDE_SECURESTORAGE_CONFIG_DIR=" + c.secure}
-		if !slices.Equal(got, want) {
-			t.Errorf("claudeEnv with %q: %q, want %q", c.environ, got, want)
-		}
-	}
-}
 
 // The dialogs as Claude Code 2.1.289 draws them (the smoke run's capture, and a fresh
 // configuration directory's) are found; anything that is not exactly one is not: another folder,
@@ -250,12 +135,21 @@ func (f *fixture) fakeClaude(name, scenario, prompt string) {
 		"--env", "FAKEAGENT_SCENARIO="+scenario, "--env", asDarkory+"=1", "--env", "FAKEAGENT_PROMPT="+prompt)
 }
 
-// Claude Code runs in a configuration directory of the agent's own under the Install's data,
-// which trusts the session's folders and accepts the permission skip before it starts, so it
-// asks nothing: the fake one asks as Claude Code does unless that directory says otherwise.
-func TestRunnerGivesClaudeCodeItsOwnConfiguration(t *testing.T) {
+// Claude Code runs with the person's own configuration: their ~/.claude.json, which trusts the
+// Workspace's repository they opened Claude Code in, covers the Task's worktree, and their
+// settings accepted the permission skip, so the fake one, asking as Claude Code does, asks
+// nothing. The runner writes none of it and makes no configuration directory of its own.
+func TestRunnerUsesThePersonsClaudeCodeConfiguration(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
+		home := t.TempDir() // after the fixture, whose git has a HOME of its own
+		t.Setenv("HOME", home)
+		t.Setenv("CLAUDE_CONFIG_DIR", "")
+		repo, _ := filepath.EvalSymlinks(f.repo)
+		global := `{"hasCompletedOnboarding": true, "projects": {"` + repo + `": {"hasTrustDialogAccepted": true}}}`
+		settings := `{"skipDangerousModePermissionPrompt": true}`
+		writeTestFile(t, filepath.Join(home, ".claude.json"), global)
+		writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), settings)
 		f.agent("builder", "complete", "build")
 		f.fakeClaude("builder", "complete", "claude")
 		f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
@@ -264,25 +158,49 @@ func TestRunnerGivesClaudeCodeItsOwnConfiguration(t *testing.T) {
 
 		eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
 		eventually(t, 10*time.Second, "the session to end", func() bool { return len(r.Running()) == 0 })
-		if notes := notesOf(f.task("WEB-3")); strings.Contains(notes, "first-run prompt") {
-			t.Fatalf("the runner had to answer a first-run prompt:\n%s", notes)
+		if notes := notesOf(f.task("WEB-3")); strings.Contains(notes, "first-run") {
+			t.Fatalf("the session met a first-run prompt:\n%s", notes)
 		}
-		dir := ClaudeConfigDir(f.data, "builder")
-		var doc struct {
-			Projects map[string]map[string]any `json:"projects"`
+		for path, want := range map[string]string{filepath.Join(home, ".claude.json"): global, filepath.Join(home, ".claude", "settings.json"): settings} {
+			if b, err := os.ReadFile(path); err != nil || string(b) != want {
+				t.Fatalf("%s changed: %q, %v", path, b, err)
+			}
 		}
-		readTestJSON(t, filepath.Join(dir, ".claude.json"), &doc)
-		repo, _ := filepath.EvalSymlinks(f.repo)
-		if doc.Projects[filepath.Join(TaskDir(f.data, "WEB-3"), "web")] == nil || doc.Projects[repo]["hasTrustDialogAccepted"] != true {
-			t.Fatalf("the trusted folders: %v", doc.Projects)
+		if _, err := os.Stat(filepath.Join(f.data, "claude")); !os.IsNotExist(err) {
+			t.Fatalf("the runner made a Claude Code configuration directory: %v", err)
 		}
 	})
 }
 
-// A first-run dialog the configuration did not prevent is accepted, once per session and only
-// before the agent's first turn, with a Note. A second one is left to a person: the session waits
-// and a Note says to join it. Claude Code asks only on a terminal, so this runs in tmux.
-func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
+// A repository never opened in Claude Code meets both first-run dialogs: each is accepted once,
+// before the agent's first turn, with a Note, and the Task is done. Claude Code asks only on a
+// terminal, so this runs in tmux.
+func TestRunnerAcceptsEachFirstRunPromptOnce(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Stale = time.Minute
+	f.agent("builder", "complete", "build")
+	f.fakeClaude("builder", "complete", "always")
+	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	r := f.runWith("on", "builder")
+	t.Cleanup(func() { killTmux(r.Socket()) })
+
+	eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
+	notes := notesOf(f.task("WEB-3"))
+	for _, want := range []string{"The runner accepted Claude Code's first-run prompt: the folder-trust dialog.",
+		"The runner accepted Claude Code's first-run prompt: the Bypass Permissions mode warning."} {
+		if strings.Count(notes, want) != 1 {
+			t.Fatalf("WEB-3's Notes, wanting %q once:\n%s", want, notes)
+		}
+	}
+}
+
+// The same first-run dialog shown again after the runner accepted it is left to a person: the
+// session waits and a Note says to join it.
+func TestRunnerAcceptsTheSamePromptOnlyOnce(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux")
 	}
@@ -303,7 +221,8 @@ func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
 	// The next session's Claude Code asks twice: the second time is a person's to answer.
 	f.fakeClaude("builder", "complete", "again")
 	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Totals")
-	waitingForAPerson(t, f, r, "WEB-4")
+	waitingForAPerson(t, f, r, "WEB-4", "Claude Code shows the folder-trust dialog again after the runner accepted it; "+
+		"a person can answer it with darkory join WEB-4.")
 	n := 0
 	for l := range strings.Lines(f.log.String()) {
 		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-4 ") {
@@ -330,7 +249,8 @@ func TestRunnerNeverAnswersAfterTheFirstTurn(t *testing.T) {
 	r := f.runWith("on", "builder")
 	t.Cleanup(func() { killTmux(r.Socket()) })
 
-	waitingForAPerson(t, f, r, "WEB-3")
+	waitingForAPerson(t, f, r, "WEB-3", "Claude Code shows a first-run dialog after the agent's first turn; "+
+		"a person can answer it with darkory join WEB-3.")
 	// Ten more checks, and still no key.
 	time.Sleep(10 * f.timings.Tick)
 	if strings.Contains(f.log.String(), "accepting it") || strings.Contains(notesOf(f.task("WEB-3")), "accepted Claude Code's first-run prompt") {
@@ -343,14 +263,11 @@ func TestRunnerNeverAnswersAfterTheFirstTurn(t *testing.T) {
 }
 
 // waitingForAPerson waits until task's session shows a dialog the runner leaves to a person: the
-// session waiting, and a Note saying to join it.
-func waitingForAPerson(t *testing.T, f *fixture, r *Runner, task string) {
+// session waiting, and the Note saying so.
+func waitingForAPerson(t *testing.T, f *fixture, r *Runner, task, note string) {
 	t.Helper()
 	eventually(t, 30*time.Second, task+"'s session waiting for a person", func() bool {
 		return slices.ContainsFunc(r.Running(), func(s RunnerSession) bool { return s.Task == task && s.State == StateWaiting }) &&
-			strings.Contains(notesOf(f.task(task)), "Claude Code shows the folder-trust dialog, which the runner does not answer")
+			strings.Contains(notesOf(f.task(task)), note)
 	})
-	if notes := notesOf(f.task(task)); !strings.Contains(notes, "darkory join "+task) {
-		t.Fatalf("%s's Notes:\n%s", task, notes)
-	}
 }

@@ -46,15 +46,16 @@ type session struct {
 	// progress is the file the agent writes as it works; empty when there is none to read.
 	progress, claudeDir string
 	transcript          bool
-	// claude says the command is Claude Code, started in folder (its paths); answered says the
-	// runner has accepted its one first-run dialog of the session (firstRun), and turned that the
+	// claude says the command is Claude Code, started in folder (its paths); answered are the
+	// first-run dialogs the runner has accepted in the session (firstRun), and turned says the
 	// agent's model has answered; dialog names a dialog on screen left to a person, and toldJoin
 	// that a Note says so.
-	claude           bool
-	folder           []string
-	answered, turned bool
-	dialog           string
-	toldJoin         bool
+	claude   bool
+	folder   []string
+	answered map[string]bool
+	turned   bool
+	dialog   string
+	toldJoin bool
 
 	ended chan string
 	cmds  chan sessionCmd
@@ -253,25 +254,12 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Claude Code runs in a configuration directory of the agent's own, unless its settings name
-	// one, that trusts the session's folders (claude.go).
+	// Claude Code runs with the person's own configuration (claude.go); the folder is what its
+	// first-run dialog would name.
+	s.claude = IsClaude(s.set.Command)
 	s.folder = []string{cwd}
 	if real, err := filepath.EvalSymlinks(cwd); err == nil && real != cwd {
 		s.folder = append(s.folder, real)
-	}
-	if s.claude = IsClaude(s.set.Command); s.claude && s.set.Env[envConfigDir] == "" {
-		dir := ClaudeConfigDir(r.cfg.Data, s.a.name())
-		trusted := []string{cwd, TaskDir(r.cfg.Data, s.key)}
-		for _, c := range checkouts {
-			trusted = append(trusted, c.Dir, c.Workspace.Path)
-		}
-		if err := prepareClaude(dir, trusted, s.set.Unattended, filepath.Join(r.cfg.Data, "workspaces")); err != nil {
-			return fmt.Errorf("preparing Claude Code's configuration directory: %w", err)
-		}
-		for _, kv := range claudeEnv(dir, os.Environ()) {
-			k, v, _ := strings.Cut(kv, "=")
-			env = setEnv(env, k, v)
-		}
 	}
 	keys := make([]string, 0, len(s.set.Env))
 	for k := range s.set.Env {
@@ -485,11 +473,11 @@ func (s *session) check(ctx context.Context) bool {
 }
 
 // firstRun looks at the screen of a Claude Code session in tmux (Claude Code asks only on a
-// terminal) for one of its first-run dialogs, which the session's configuration directory should
-// have answered already. The runner accepts one such dialog per session, and only while the
-// agent's model has not answered yet, so nothing the agent prints can make it press a key, and
-// notes it. A dialog it may not answer is left to a person: the session waits, with a Note
-// saying to join it.
+// terminal) for one of its first-run dialogs, which a repository never opened in Claude Code
+// meets. The runner accepts each such dialog once in a session, and only while the agent's model
+// has not answered yet: Claude Code asks before any model turn, so after one nothing the agent
+// prints can make the runner press a key. It notes each answer. A dialog it may not answer is
+// left to a person: the session waits, with a Note saying to join it.
 func (s *session) firstRun(ctx context.Context) {
 	a, ok := s.proc.(Answerer)
 	if !s.claude || !ok {
@@ -500,8 +488,12 @@ func (s *session) firstRun(ctx context.Context) {
 	if !found {
 		return
 	}
-	if !s.answered && !s.agentTurned() {
-		s.answered = true
+	turned := s.agentTurned()
+	if !turned && !s.answered[p.Name] {
+		if s.answered == nil {
+			s.answered = map[string]bool{}
+		}
+		s.answered[p.Name] = true
 		s.log.Info("Claude Code asks its first-run question; accepting it", "prompt", p.Name)
 		if err := a.AcceptFirstRunPrompt(); err != nil {
 			s.log.Warn("answering Claude Code's first-run question", "err", err)
@@ -517,9 +509,11 @@ func (s *session) firstRun(ctx context.Context) {
 		return
 	}
 	s.toldJoin = true
-	s.log.Warn("the session shows a Claude Code dialog the runner does not answer; it waits for a person", "prompt", p.Name)
-	note := fmt.Sprintf("Claude Code shows %s, which the runner does not answer (it accepts one first-run prompt, before the agent's "+
-		"first turn): a person can answer it by joining the session (darkory join %s).", p.Name, s.key)
+	s.log.Warn("the session shows a Claude Code dialog the runner does not answer; it waits for a person", "prompt", p.Name, "after_first_turn", turned)
+	note := fmt.Sprintf("Claude Code shows a first-run dialog after the agent's first turn; a person can answer it with darkory join %s.", s.key)
+	if !turned {
+		note = fmt.Sprintf("Claude Code shows %s again after the runner accepted it; a person can answer it with darkory join %s.", p.Name, s.key)
+	}
 	if err := s.rec.Note(ctx, s.key, note); err != nil && ctx.Err() == nil {
 		s.log.Warn("noting the dialog left to a person", "err", err)
 	}

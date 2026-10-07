@@ -178,9 +178,11 @@ var stdin = bufio.NewScanner(os.Stdin)
 
 // firstRun asks Claude Code's first-run questions, as its dialogs show them, as mode says:
 //
-//	claude  as Claude Code 2.1 does: the folder-trust dialog unless $CLAUDE_CONFIG_DIR/.claude.json
-//	        trusts the working directory, then the Bypass Permissions mode warning unless its
-//	        settings.json has accepted it
+//	claude  as Claude Code 2.1 does: the folder-trust dialog unless the person's .claude.json
+//	        (~/.claude.json, or in $CLAUDE_CONFIG_DIR) trusts the working directory or the
+//	        repository whose worktree it is, then the Bypass Permissions mode warning unless their
+//	        settings.json (~/.claude/settings.json, or in $CLAUDE_CONFIG_DIR) has accepted it
+//	always  both, whatever the configuration says
 //	trust   the folder-trust dialog, whatever the configuration says
 //	again   the folder-trust dialog, and once it is accepted the same again
 //	late    nothing now; the agent prints the folder-trust dialog after its first turn (lateDialog)
@@ -192,7 +194,11 @@ func firstRun(mode string) error {
 		return nil
 	}
 	wd := workDir()
-	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	home, _ := os.UserHomeDir()
+	global, settingsFile := filepath.Join(home, ".claude.json"), filepath.Join(home, ".claude", "settings.json")
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		global, settingsFile = filepath.Join(dir, ".claude.json"), filepath.Join(dir, "settings.json")
+	}
 	var config struct {
 		Projects map[string]struct {
 			Trusted bool `json:"hasTrustDialogAccepted"`
@@ -201,12 +207,18 @@ func firstRun(mode string) error {
 	var settings struct {
 		Accepted bool `json:"skipDangerousModePermissionPrompt"`
 	}
-	if dir != "" {
-		if b, err := os.ReadFile(filepath.Join(dir, ".claude.json")); err == nil {
-			json.Unmarshal(b, &config)
-		}
-		if b, err := os.ReadFile(filepath.Join(dir, "settings.json")); err == nil {
-			json.Unmarshal(b, &settings)
+	if b, err := os.ReadFile(global); err == nil {
+		json.Unmarshal(b, &config)
+	}
+	if b, err := os.ReadFile(settingsFile); err == nil {
+		json.Unmarshal(b, &settings)
+	}
+	// A worktree is trusted when its repository is.
+	repo := wd
+	if out, err := exec.Command("git", "-C", wd, "rev-parse", "--path-format=absolute", "--git-common-dir").Output(); err == nil {
+		repo = filepath.Dir(strings.TrimSpace(string(out)))
+		if real, err := filepath.EvalSymlinks(repo); err == nil {
+			repo = real
 		}
 	}
 	trust := trustDialog(wd)
@@ -215,12 +227,14 @@ func firstRun(mode string) error {
 	var ask []string
 	switch mode {
 	case "claude":
-		if !config.Projects[wd].Trusted {
+		if !config.Projects[wd].Trusted && !config.Projects[repo].Trusted {
 			ask = append(ask, trust)
 		}
 		if !settings.Accepted {
 			ask = append(ask, bypass)
 		}
+	case "always":
+		ask = []string{trust, bypass}
 	case "trust":
 		ask = []string{trust}
 	case "again":

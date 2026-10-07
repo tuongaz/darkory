@@ -184,7 +184,7 @@ func TestBaseEnv(t *testing.T) {
 		"CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=x", "CLAUDE_CODE_ENTRYPOINT=cli", "CLAUDE_CONFIG_DIR=/home/a/.c", "TMUX=/tmp/tmux-1/default,1,0",
 		"TMUX_PANE=%1", "DARKORY_TOKEN=dk_admin", "DARKORY_NO_UPDATE_CHECK=1", "SECRET=s", "weird"})
 	want := []string{"PATH=/bin", "HOME=/home/a", "LC_ALL=en_AU.UTF-8", "ANTHROPIC_API_KEY=k", "TMPDIR=/tmp/a", "SSH_AUTH_SOCK=/s",
-		"DARKORY_NO_UPDATE_CHECK=1"}
+		"CLAUDE_CONFIG_DIR=/home/a/.c", "DARKORY_NO_UPDATE_CHECK=1"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("baseEnv kept %q, want %q", got, want)
 	}

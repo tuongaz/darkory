@@ -20,6 +20,11 @@ var passedVars = []string{"PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "T
 // own sign-in and endpoint for a person who uses an API key rather than signing in.
 var passedPrefixes = []string{"LC_", "ANTHROPIC_"}
 
+// claudeVars are where the person's own Claude Code keeps its configuration and sign-in, when
+// they moved it from ~/.claude: a session's Claude Code is theirs, so it looks in the same place.
+// HOME and USER, which find the default place and the Keychain item, pass anyway.
+var claudeVars = []string{"CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"}
+
 // EnvPassed names, comma-separated, further variables a session takes from the runner's
 // environment: where a person keeps the secrets their agents need, since agent settings are every
 // Member's to read.
@@ -27,7 +32,7 @@ const EnvPassed = "DARKORY_RUNNER_ENV"
 
 // baseEnv is the part of environ a session keeps.
 func baseEnv(environ []string) []string {
-	names := slices.Clone(passedVars)
+	names := slices.Concat(passedVars, claudeVars)
 	if v, ok := lookupEnv(environ, EnvPassed); ok {
 		for n := range strings.SplitSeq(v, ",") {
 			names = append(names, strings.TrimSpace(n))
