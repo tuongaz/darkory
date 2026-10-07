@@ -230,9 +230,9 @@ test("the Filter's dates and Claim, Team › Features, and a phone", async ({ pa
 
   await test.step("a window from the presets, and Claim is Held", async () => {
     await page.getByRole("button", { name: "Filter" }).click();
-    await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "Updated", exact: true }).click();
+    await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "Filed", exact: true }).click();
     await page.getByRole("button", { name: "Last 7 days" }).click();
-    await expect(chips(page).getByRole("button", { name: "Updated: Last 7 days" })).toBeVisible();
+    await expect(chips(page).getByRole("button", { name: "Filed: Last 7 days" })).toBeVisible();
     await page.getByRole("button", { name: "Filter, 1 set" }).click();
     await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "Claim", exact: true }).click();
     await page.getByRole("option", { name: "Held", exact: true }).click();

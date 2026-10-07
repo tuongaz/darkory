@@ -79,8 +79,9 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 - **What each axis reads:**
   - Held by reads the live Claim, so a done Task is held by Nobody even though its card shows who completed it.
   - Aimed at reads `aimed_at_id` whether or not someone holds the Task.
-  - Kind's Question is a work Task aimed at a Member.
-  - Blocked counts only open Tasks, as the card's mark does.
+  - Kind's Question is a Task aimed at a Member, and Work a work Task aimed at nobody.
+  - Blocked reads the record's flag, whatever the Task's own state.
+  - Search matches the key, the title or the description.
   - The Member values are the Organisation's active Members, the signed-in one first and marked Me, each named by id.
 - **Old links** of the form `?skill=<name>&holder=<name>&blocked=1` are rewritten into `filter.tasks` once the Skills and Members load, in one write that drops the old parameters. A name that matches nothing is dropped.
 - The address reads `filter.tasks=status%3Ain%3A…`: URLSearchParams percent-encodes the token's colons and commas, and each value is encoded once more inside the token. That is the wire format working as intended.
@@ -93,13 +94,17 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
   - last:7d|30d|90d
 
   Each bound carries its own offset. On 4 Oct 2026, the day Melbourne's daylight saving starts, the day runs from +10:00 to +11:00. Flipping the operator keeps the days and bounds them again. The chip reads each instant's day in the viewer's time zone: "after 4 Oct", "4 Oct – 6 Oct", "Last 7 days". The lead passed these tokens on to the `api-filters` branch.
-- **Updated has no field.** The Task record carries no `updated_at`, and the tasks table has none. The filter reads the time the list's Updated column shows, which is `ended_at` for an ended Task and `waiting_since` otherwise, now shared as `updatedAt` in `derive.ts`. Completed is the `ended_at` of a done Task.
-- **Claim takes several values at once:**
-  - Held: a live Claim.
-  - Unheld: the Task is open and nobody holds it.
-  - Lapsed in 24 h: read from the Claim trail the board already reads, so a lapse older than its 500 entries counts as none.
-  - Live session: a Runner session works the Task, in any state but ending.
-  Live session comes from `useRunnerSessions`, the Agents page's query, which polls every 5 s while a Runner is attached. Team › Tasks now polls too.
+- **Updated is not a filter axis.** The Task record carries no `updated_at`. The server derives one from the latest Activity, which the list cannot see, so the web never offers Updated and the two never disagree on a token. The list's Updated column keeps its own time (`updatedAt` in `derive.ts`). The Tasks' date axes are Filed (`created_at`) and Completed (the `ended_at` of a Task that ended done).
+- **The tokens are the server's.** Since `api-filters` merged (42277cc), the web's client-side `matches` reads every token as `GET /v1/tasks?filter=` and `GET /v1/features?filter=` do, and `POST /v1/views` checks a View's filters by that grammar. Each axis below is several values at once where more than one holds:
+  - Claim `held`: a live Claim.
+  - Claim `unheld`: no live Claim, in any state, the same as Held by Nobody.
+  - Claim `lapsed_24h`: open and unheld, with its latest Claim lapsed within 24 h. A Claim past its expiry that the sweep has not yet ended counts. The lapse comes from the Claim trail the board already reads, so one older than its 500 entries counts as none.
+  - Claim `live_session`: a live Claim with a Heartbeat timeout, held by an agent. The server cannot see the Runner's sessions, so neither does the filter.
+  - Kind `retro`: the retrospective kind.
+  - Kind `question`: aimed at a Member, whatever the Task's kind.
+
+  The server also has `status_kind`, `team`, `blocks` and `model`, which the bar does not offer yet.
+- **The Team pages still filter in the browser.** They hold every Task and Feature of the Team already. The pills are the server's tokens unchanged, so a paged or cross-Team list (My work, Inbox) can pass `?filter.<entity>=` straight through as `filter=` later.
 - **The date editor draws one month**, with All and the windows beside it. enably's two-month calendar and its phone takeover sheet are left out: one month fits both a phone and the desktop popover.
 - **The phone layout is CSS.** Under 640px each chip takes a line of its own with its value taking the slack, and the row's Reset goes, since the Filters menu keeps its own, as enably's stacked rail does. `stacked` forces the layout at any width.
 - **Team › Features:**

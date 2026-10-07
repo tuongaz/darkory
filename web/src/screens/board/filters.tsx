@@ -4,7 +4,6 @@ import {
   AtSignIcon,
   BanIcon,
   CalendarCheckIcon,
-  CalendarClockIcon,
   CalendarPlusIcon,
   CircleDashedIcon,
   FolderGit2Icon,
@@ -44,7 +43,6 @@ export const taskFields: FilterField[] = [
   { key: "kind", type: "enum", ops: ["is", "not", "in"], label: "Kind", icon: <ShapesIcon /> },
   { key: "workspace", type: "ref", ops: ["is", "in"], label: "Workspace", icon: <FolderGit2Icon /> },
   { key: "filed_at", type: "date", ops: dateOps, label: "Filed", icon: <CalendarPlusIcon /> },
-  { key: "updated_at", type: "date", ops: dateOps, label: "Updated", icon: <CalendarClockIcon /> },
   { key: "completed_at", type: "date", ops: dateOps, label: "Completed", icon: <CalendarCheckIcon /> },
   { key: "q", type: "text", ops: ["contains"], label: "Search" },
 ];
@@ -112,14 +110,14 @@ export function memberOptions(members: Iterable<Member>, me: string): FilterOpti
 const claimOptions: FilterOption[] = [
   { value: "held", label: "Held" },
   { value: "unheld", label: "Unheld" },
-  { value: "lapsed", label: "Lapsed in 24 h" },
-  { value: "session", label: "Live session" },
+  { value: "lapsed_24h", label: "Lapsed in 24 h" },
+  { value: "live_session", label: "Live session" },
 ];
 
 const kindOptions: { value: KindValue; label: string }[] = [
   { value: "work", label: "Work" },
   { value: "breakdown", label: "Break down" },
-  { value: "retrospective", label: "Retrospective" },
+  { value: "retro", label: "Retrospective" },
   { value: "question", label: "Question" },
 ];
 

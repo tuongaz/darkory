@@ -1,7 +1,7 @@
 // What the Board screens compute from /v1 records: Status glyphs, the order and grouping of Tasks,
 // the marks a row or card carries, what a refused drag says, and the Features' Task bars. Pure, so
 // Vitest checks them without rendering.
-import type { Activity, Feature, Task, TaskBrief, TaskCounts } from "@/api/client";
+import type { Activity, Feature, Member, Task, TaskBrief, TaskCounts } from "@/api/client";
 import type { components } from "@/api/schema.gen";
 import { passesDate } from "@/components/filters/dates";
 import type { FilterPill } from "@/components/filters/filterState";
@@ -123,22 +123,32 @@ export const defaultDisplay: Display = { group: "status", order: "rank", showDon
 /** The Held by value of a Task nobody holds. */
 export const nobody = "none";
 
-/** The Kind axis' values: a Task's kind, with a work Task aimed at a Member by name as a question. */
-export type KindValue = Task["kind"] | "question";
+/** The Kind axis' words, as the server's `filter` takes them: `retro` is the retrospective kind. */
+export type KindValue = "work" | "breakdown" | "retro" | "question";
 
-export function kindValue(task: Pick<Task, "kind" | "aimed_at_id">): KindValue {
-  return task.kind === "work" && task.aimed_at_id ? "question" : task.kind;
+/**
+ * A Task's Kind values: `question` when it is aimed at a Member, `work` for a work Task aimed at
+ * nobody, and its own kind for a Break down or a Retrospective, as `GET /v1/tasks?filter=` reads it.
+ */
+export function kindValues(task: Pick<Task, "kind" | "aimed_at_id">): KindValue[] {
+  const aimed = !!task.aimed_at_id;
+  const out: KindValue[] = [];
+  if (task.kind === "breakdown") out.push("breakdown");
+  else if (task.kind === "retrospective") out.push("retro");
+  else if (!aimed) out.push("work");
+  if (aimed) out.push("question");
+  return out;
 }
 
 /**
- * What `matches` reads beyond the Task: the clock, the Team's Features, and for the Claim axis
- * the Claim trails (lapses) and the Tasks a Runner session works now.
+ * What `matches` reads beyond the Task: the clock, the Team's Features, and for the Claim axis the
+ * Claim trails (recorded lapses) and the Members (whether a holder is an agent).
  */
 export type FilterContext = {
   now: number;
   features: Map<string, Pick<Feature, "owner_id">>;
   trails?: Map<string, ClaimTrail>;
-  sessions?: ReadonlySet<string>;
+  members?: Map<string, Pick<Member, "kind">>;
 };
 
 /** The time the list's Updated column shows: when the Task ended, else when it began waiting. */
@@ -146,10 +156,12 @@ export function updatedAt(task: Pick<Task, "state" | "ended_at" | "waiting_since
   return task.state !== "open" ? (task.ended_at ?? task.waiting_since) : task.waiting_since;
 }
 
-/** A Task's time on each date axis; a Task not completed has no Completed time. */
+/**
+ * A Task's time on each date axis: Filed, and Completed for a Task that ended done. Updated is the
+ * list's column only, not an axis: the record has no updated time the server and the list share.
+ */
 const taskTimes: Record<string, (t: Task) => string | undefined> = {
   filed_at: (t) => t.created_at,
-  updated_at: updatedAt,
   completed_at: (t) => (t.state === "done" ? t.ended_at : undefined),
 };
 
@@ -157,18 +169,21 @@ const taskTimes: Record<string, (t: Task) => string | undefined> = {
 const lapseWindowMs = 24 * 60 * 60 * 1000;
 
 /**
- * The Claim axis' values of a Task, as many as hold: held (a live Claim), unheld (open, nobody
- * holding it), lapsed (its last Claim lapsed in the past 24 hours), session (a Runner session
- * works it now).
+ * The Claim axis' values of a Task, as many as hold, as the server's `filter` reads them: `held`, a
+ * live Claim; `unheld`, none, in any state; `lapsed_24h`, open and unheld with its latest Claim
+ * lapsed within 24 hours, recorded or only expired; `live_session`, a live Claim with a Heartbeat
+ * timeout held by an agent.
  */
 export function claimValues(task: Task, ctx: FilterContext): string[] {
-  const out: string[] = [];
-  const held = !!liveClaim(task, ctx.now);
-  if (held) out.push("held");
-  else if (task.state === "open") out.push("unheld");
-  const lapsed = lapsedAt(task, ctx.trails?.get(task.id), ctx.now);
-  if (lapsed && ctx.now - Date.parse(lapsed) <= lapseWindowMs) out.push("lapsed");
-  if (ctx.sessions?.has(task.id)) out.push("session");
+  const claim = liveClaim(task, ctx.now);
+  const out = [claim ? "held" : "unheld"];
+  if (!claim && task.state === "open") {
+    // An expired Claim the sweep has not ended yet lapsed at its expiry; else the recorded lapse.
+    const expired = task.claim && !task.claim.ended_at ? task.claim.expires_at : undefined;
+    const lapsed = expired ?? ctx.trails?.get(task.id)?.lapsedAt;
+    if (lapsed && ctx.now - Date.parse(lapsed) <= lapseWindowMs) out.push("lapsed_24h");
+  }
+  if (claim?.heartbeat_timeout_seconds && ctx.members?.get(claim.holder_id)?.kind === "agent") out.push("live_session");
   return out;
 }
 
@@ -195,9 +210,9 @@ export function taskValues(task: Task, field: string, ctx: FilterContext): strin
     case "filed_by":
       return [task.filed_by];
     case "blocked":
-      return [String(task.state === "open" && task.blocked)];
+      return [String(task.blocked)];
     case "kind":
-      return [kindValue(task)];
+      return kindValues(task);
     case "workspace":
       return task.workspace_ids ?? [];
     case "claim":
@@ -226,16 +241,16 @@ export function passes(values: string[], pill: FilterPill): boolean {
   }
 }
 
-/** Whether a key or a title holds a Search pill's words, ignoring case. */
-function searchMatches(record: { key: string; title: string }, pill: FilterPill): boolean {
-  const words = (pill.values[0] ?? "").trim().toLowerCase();
-  return !words || record.key.toLowerCase().includes(words) || record.title.toLowerCase().includes(words);
+/** Whether a key, a title or a description holds a Search pill's words, ignoring case. */
+function searchMatches(record: { key: string; title: string; description: string }, pill: FilterPill): boolean {
+  const words = (pill.values[0] ?? "").toLowerCase();
+  return [record.key, record.title, record.description].some((text) => text.toLowerCase().includes(words));
 }
 
 /**
- * Whether a Task passes every pill of the Filter: the axes are ANDed, the values of one axis ORed.
- * Search (`q`) matches the key or the title, ignoring case. A pill for an axis the Tasks do not
- * have narrows nothing.
+ * Whether a Task passes every pill of the Filter, as `GET /v1/tasks?filter=` would answer: the
+ * axes are ANDed, the values of one axis ORed. Search (`q`) matches the key, the title or the
+ * description, ignoring case. A pill for an axis the Tasks do not have narrows nothing.
  */
 export function matches(task: Task, pills: readonly FilterPill[], ctx: FilterContext): boolean {
   return pills.every((pill) => {
