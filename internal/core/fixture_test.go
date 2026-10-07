@@ -173,12 +173,47 @@ func wantCode(t *testing.T, err error, code core.Code) {
 	}
 }
 
-// jsonIdem keeps results as their JSON, as the server does.
+// jsonIdem keeps results and refusals as their JSON, as the server does.
 func jsonIdem(key, hash string) core.Idem {
 	return core.Idem{Key: key, Hash: hash, Render: func(v any) (int, []byte, error) {
 		b, err := json.Marshal(v)
 		return 200, b, err
+	}, RenderRefusal: func(e *core.Error) (int, []byte, error) {
+		b, err := json.Marshal(map[string]string{"code": string(e.Code), "message": e.Message})
+		return 409, b, err
 	}}
+}
+
+// answer is what the server sends for a write's outcome.
+type answer struct {
+	status int
+	body   []byte
+}
+
+// answerOf is the answer to a write under idem: its result, the response kept under the key, or
+// its refusal. It may run on any goroutine.
+func answerOf(t *testing.T, idem core.Idem, result any, err error) answer {
+	t.Helper()
+	var replay *core.Replay
+	var refusal *core.Error
+	switch {
+	case err == nil:
+		b, err := json.Marshal(result)
+		if err != nil {
+			t.Error(err)
+		}
+		return answer{200, b}
+	case errors.As(err, &replay):
+		return answer{replay.Status, replay.Body}
+	case errors.As(err, &refusal):
+		status, b, err := idem.RenderRefusal(refusal)
+		if err != nil {
+			t.Error(err)
+		}
+		return answer{status, b}
+	}
+	t.Errorf("unexpected error: %v", err)
+	return answer{}
 }
 
 // checkActivity checks that the Organisation's Activity is numbered 1…n without gaps and that the

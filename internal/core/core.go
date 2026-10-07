@@ -90,6 +90,19 @@ func refuse(code Code, format string, args ...any) *Error {
 	return &Error{Code: code, Message: fmt.Sprintf(format, args...)}
 }
 
+// kept reports whether a refusal with the code is kept under the request's Idempotency-Key, as a
+// response is: the rules' answers about the record as the write found it (409), which the same
+// request sent again could otherwise contradict once the record moved on. A request refused for
+// itself or its caller (invalid, not_found, forbidden, …) keeps nothing (decisions.md).
+func (c Code) kept() bool {
+	switch c {
+	case CodeConflict, CodeAlreadyClaimed, CodeNotTakeable, CodeNotHolder, CodeEnded, CodeCycle, CodeTasksOpen,
+		CodeProposalStale, CodeStatusInUse, CodeUseComplete, CodeUseDrop:
+		return true
+	}
+	return false
+}
+
 // Replay is returned instead of performing a write whose Idempotency-Key was already used for
 // the same request: it carries the first response.
 type Replay struct {
@@ -108,6 +121,8 @@ type Idem struct {
 	// Render turns the write's result into the response stored under the key, in the same
 	// transaction as the write.
 	Render func(result any) (status int, body []byte, err error)
+	// RenderRefusal turns a refusal kept under the key, one of the rules' (409), into its response.
+	RenderRefusal func(refusal *Error) (status int, body []byte, err error)
 }
 
 // IdempotencyTTL is how long a response is kept under its key.
@@ -178,6 +193,11 @@ func idemStmts(c *auth.Caller, idem Idem, result any, now time.Time) ([]store.St
 	if err != nil {
 		return nil, err
 	}
+	return keyStmts(c, idem, status, body, now), nil
+}
+
+// keyStmts keeps a response under idem's key, removing an expired one first.
+func keyStmts(c *auth.Caller, idem Idem, status int, body []byte, now time.Time) []store.Stmt {
 	args := map[string]any{
 		"org": c.OrgID, "member": c.MemberID, "key": idem.Key, "hash": idem.Hash,
 		"status": int64(status), "body": string(body), "now": now.UnixMilli(),
@@ -187,7 +207,7 @@ func idemStmts(c *auth.Caller, idem Idem, result any, now time.Time) ([]store.St
 		store.S(`DELETE FROM idempotency_keys WHERE org_id = @org AND member_id = @member AND idempotency_key = @key AND created_at <= @cutoff`, args),
 		store.S(`INSERT INTO idempotency_keys (org_id, member_id, idempotency_key, request_hash, status, response, created_at)
 VALUES (@org, @member, @key, @hash, @status, @body, @now)`, args),
-	}, nil
+	}
 }
 
 // afterRefusal works out what a refused batch write should answer: the stored response when the
@@ -198,6 +218,33 @@ func (s *Service) afterRefusal(ctx context.Context, c *auth.Caller, idem Idem, e
 	}
 	if lerr := s.Lookup(ctx, c, idem); lerr != nil {
 		return lerr
+	}
+	return err
+}
+
+// keepRefusal keeps err under idem's key when it is a refusal Code.kept names, so the key gives
+// one answer: a request sent again under it, at once or later, gets this refusal back rather than
+// meeting the record in another state. The write has already rolled back, so the refusal is kept
+// by a write of its own, which takes no sequence number since it changes nothing in the record;
+// the key serialises it with a concurrent request under the same key, whose write keeps its
+// response there too. Whichever keeps its answer first is the answer: when the other request did,
+// its response is returned as a *Replay.
+func (s *Service) keepRefusal(ctx context.Context, c *auth.Caller, idem Idem, err error) error {
+	var refusal *Error
+	if idem.Key == "" || !errors.As(err, &refusal) || !refusal.Code.kept() {
+		return err
+	}
+	status, body, rerr := idem.RenderRefusal(refusal)
+	if rerr != nil {
+		return rerr
+	}
+	kerr := s.store.WriteBatchNoSeq(ctx, keyStmts(c, idem, status, body, s.clock.Now())...)
+	if store.IsUniqueViolation(kerr) {
+		// When the other answer has been purged since, nothing is left to repeat.
+		return s.afterRefusal(ctx, c, idem, err)
+	}
+	if kerr != nil {
+		return fmt.Errorf("core: keep a refusal under its idempotency key: %w", kerr)
 	}
 	return err
 }
@@ -244,9 +291,15 @@ func (t *tx) recordByCaller(kind, subject string, payload map[string]any) error 
 }
 
 // write runs fn as one write on the caller's Organisation (store.Write), keeping fn's result
-// under idem in the same transaction and waking waiters after the commit. A write that records
-// no Activity changed nothing and is rolled back, so Activity numbers stay gapless.
+// under idem in the same transaction and waking waiters after the commit; a refusal of a rule's
+// is kept under idem after the rollback. A write that records no Activity changed nothing and is
+// rolled back, so Activity numbers stay gapless.
 func (s *Service) write(ctx context.Context, c *auth.Caller, idem Idem, fn func(t *tx) (any, error)) (any, error) {
+	res, err := s.runWrite(ctx, c, idem, fn)
+	return res, s.keepRefusal(ctx, c, idem, err)
+}
+
+func (s *Service) runWrite(ctx context.Context, c *auth.Caller, idem Idem, fn func(t *tx) (any, error)) (any, error) {
 	var result any
 	unchanged := false
 	err := s.store.Write(ctx, c.OrgID, func(stx store.Tx, seq int64) error {
