@@ -11,8 +11,19 @@ pieces rather than drawing your own, and the words of `CONTEXT.md` only.
 | `src/screens/board/` | W2 Board | `TeamTasksPage` (`/teams/:team/tasks?view=list\|board`), `TeamFeaturesPage` (`/teams/:team/features`), `BoardDialogs` (File Task, File Feature; mounted once by the shell) |
 | `src/screens/task/` | W3 Task and Feature | `TaskPage` (`/tasks/:task`), `FeaturePage` (`/features/:feature`), `TaskPeek` (`?task=<key>` over any page) |
 | `src/screens/inbox/` | W4 Inbox | `InboxPage` (`/inbox`), `MyWorkPage`, `AgentsPage`, `ActivityPage` |
-| `src/screens/admin/` | W5 Admin | `AdminLayout` (`/admin/*`, admins only), `MembersPage`, `MemberPage`, `TeamsPage`, `TeamPage`, `SkillsPage`, `SkillPage`, `WorkflowPage`, `AccountPage` (`/account`) |
+| `src/screens/admin/` | W5 Admin | `AdminLayout` (`/admin/*`, admins only), `MembersPage`, `MemberPage`, `TeamsPage`, `TeamPage`, `SkillsPage`, `SkillPage`, `WorkflowPage`, `WorkspacesPage` (`/admin/workspaces`), `AccountPage` (`/account`) |
 | `src/app/`, `src/components/`, `src/lib/`, `e2e/` | W1 | the shell, the route table, the primitives, the smoke suite |
+
+What the agents plan's phase R3 (`docs/build/agents-plan.md`) added to these screens:
+
+| Screen | Holds |
+|---|---|
+| Admin › Workspaces (`WorkspacesPage`) | Each Workspace: name, kind, path, mode (Plain or Pull request), default branch, the Teams it is the default of, the open Tasks naming it. New Workspace; path, mode and default branch edited in place; Remove behind ⋯, refused in words while any Task names it. |
+| Admin › a Team (`TeamPage`) | Above its Members: Default Workspace and Ship when done (`PATCH /v1/teams/{team}`). |
+| Admin › a Member (`MemberPage`), an agent | The Agent card: command (its placeholders under it), arguments, model, environment, progress file, Paused, Unattended; each saved alone (`PATCH /v1/members/{member}/agent`). An agent with no settings is handed to the Runner from it; Stop using the Runner, behind ⋯, clears them (`DELETE /v1/members/{member}/agent`). New Member asks an agent Run with the Runner (on) and, when on, its model; the Members table shows the model and a Paused pill. |
+| File a Feature (`BoardDialogs`) | Quick, which asks the Skill (needed) and Workspaces of its one Task and fixes Ship when done on; Ship when done, starting at the Team's. |
+| File a Task (`BoardDialogs`) | Workspaces (`MultiCombobox`, chips), starting at the Team's default; not shown while the Install has none. |
+| A Task's properties, a Feature's header (`task/`) | The Task's Workspaces and branch, `<KEY>/<slug>`; the Feature's Quick and Ships when done pills and, when not quick and its Tasks name a Workspace, `feature/<KEY>`. The names come from `@/lib/branch`, which follows the Runner's. |
 
 `src/app/routes.tsx` is the only file that imports the screens. Keep each export's name; put
 anything else a screen needs (sub-components, hooks, its own queries, its tests) inside its folder.
@@ -77,9 +88,10 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   with another `queryFn`.
 - **Shared reads** in `@/api/queries`: `useMe`, `useMembers`, `useTeams`, `useSkills`,
   `useDirectory` (by id), `useOpenTasks` (every open Task: the sidebar's live count),
-  `useAllTasks`, `useAllFeatures` (⌘K), `useRunnerSessions` (`["runner", "sessions"]`: what the
-  Runner runs now, `{ runner, items }`) and `useRunnerSession(taskId)`. `@/work`: `liveClaim`,
-  `boundTo`, `liveAgents`, `taskGlyph` (by state, until Statuses reach `/v1`).
+  `useAllTasks`, `useAllFeatures` (⌘K), `useWorkspaces` (root `workspaces`, kept live by
+  `workspace.*`), `useRunnerSessions` (`["runner", "sessions"]`: what the Runner runs now,
+  `{ runner, items }`) and `useRunnerSession(taskId)`. `@/work`: `liveClaim`, `boundTo`,
+  `liveAgents`, `taskGlyph` (by state, until Statuses reach `/v1`).
 
 ## Primitives (`src/components/`)
 

@@ -266,3 +266,89 @@ test("the Board: live Claims, drags that set a Status or are refused, File Task,
 
   expect(errors).toEqual([]);
 });
+
+test("agents plan R3: a quick Feature with its one Task, and a Task naming its Workspaces", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const ada = agent(adminToken, "ada-e2e-board-r3");
+  const adaLink = await ada<LoginLink>("POST", "/v1/members/ada/login-links");
+  expect(adaLink.status).toBe(201);
+  await signIn(page, adaLink.body!.url);
+
+  // Two Workspaces on the Install, shop Web's default. The first test made Web, its Skills and Checkout flow.
+  type Workspace = { id: string; name: string };
+  const shop = await v1<Workspace>(page, "POST", "/v1/workspaces", { name: "shop", path: "/srv/src/shop" });
+  const docs = await v1<Workspace>(page, "POST", "/v1/workspaces", { name: "docs", path: "/srv/src/docs", mode: "pull_request" });
+  await v1(page, "PATCH", "/v1/teams/WEB", { default_workspace: "shop" });
+
+  let quickKey = "";
+  await test.step("File Feature with Quick: its Skill is asked for, it always ships when done, and it is filed with one Task", async () => {
+    await page.goto(`${base}/teams/WEB/features`);
+    await page.getByRole("button", { name: "File Feature" }).click();
+    const dialog = page.getByRole("dialog", { name: "File a Feature" });
+    await dialog.getByLabel("Title").fill("Fix the cart total");
+    await dialog.getByRole("switch", { name: "Quick" }).click();
+    await expect(dialog.getByRole("switch", { name: "Ship when done" })).toBeChecked();
+    await expect(dialog.getByRole("switch", { name: "Ship when done" })).toBeDisabled();
+    await expect(dialog.getByText("One Task, no Break down; ships on review")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Take out shop" })).toBeVisible();
+    // The Skill is needed: nothing is filed without it.
+    await dialog.getByRole("button", { name: "File Feature" }).click();
+    await expect(dialog.getByText("Choose a Skill.")).toBeVisible();
+    await dialog.getByRole("combobox", { name: "Skill" }).click();
+    await page.getByRole("option", { name: "build" }).click();
+    await shot(page, "r3-file-quick-feature");
+    await dialog.getByRole("button", { name: "File Feature" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page).toHaveURL(/\/features\/WEB-\d+$/);
+    quickKey = decodeURIComponent(new URL(page.url()).pathname.split("/").pop()!);
+
+    // The Feature's own header, under the top bar: its title, then its facts.
+    const header = page.locator("#main header").filter({ has: page.getByRole("heading", { level: 1, name: "Fix the cart total" }) });
+    await expect(header).toContainText("Quick");
+    await expect(header).toContainText("Ships when done");
+    await expect(header).not.toContainText(`feature/${quickKey}`);
+
+    const filed = await v1<FeatureDetail>(page, "GET", `/v1/features/${quickKey}`);
+    expect(filed.feature.quick).toBe(true);
+    expect(filed.feature.ship_when_done).toBe(true);
+    expect(filed.tasks).toHaveLength(1);
+    expect(filed.tasks[0]).toMatchObject({ kind: "work", title: "Fix the cart total", workspace_ids: [shop.id] });
+    await shot(page, "r3-quick-feature");
+  });
+
+  await test.step("File Task names Web's default Workspace and the one added; the Task shows them and its branch", async () => {
+    await page.goto(`${base}/teams/WEB/tasks?view=board`);
+    await expect(page.getByRole("heading", { name: "Tasks, board" })).toBeAttached();
+    await page.keyboard.press("c");
+    const dialog = page.getByRole("dialog", { name: "File a Task" });
+    await dialog.getByRole("combobox", { name: "Feature" }).click();
+    await page.getByRole("option", { name: /Checkout flow/ }).click();
+    await dialog.getByLabel("Title").fill("Gift wrap at checkout");
+    await dialog.getByRole("combobox", { name: "Who can take it" }).click();
+    await page.getByRole("option", { name: "build" }).click();
+    await expect(dialog.getByRole("button", { name: "Take out shop" })).toBeVisible();
+    await dialog.getByRole("combobox", { name: "Workspaces" }).click();
+    await page.getByRole("option", { name: /docs/ }).click();
+    await page.keyboard.press("Escape");
+    await expect(dialog.getByRole("button", { name: "Take out docs" })).toBeVisible();
+    await shot(page, "r3-file-task-workspaces");
+    await dialog.getByRole("button", { name: "File Task" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const card = page.locator("#main").getByRole("link", { name: /Gift wrap at checkout/ });
+    await expect(card).toBeVisible();
+    const key = (await card.getAttribute("data-task"))!;
+    const detail = await v1<TaskDetail>(page, "GET", `/v1/tasks/${key}`);
+    expect(detail.workspaces.map((w) => w.name)).toEqual(["shop", "docs"]);
+    expect(detail.task.workspace_ids).toEqual([shop.id, docs.id]);
+
+    await page.goto(`${base}/tasks/${key}`);
+    const rail = page.getByRole("complementary", { name: "Properties" });
+    await expect(rail).toContainText("shop");
+    await expect(rail).toContainText("docs");
+    await expect(rail).toContainText(`${key}/gift-wrap-at-checkout`);
+    await shot(page, "r3-task-branch");
+  });
+
+  expect(errors).toEqual([]);
+});

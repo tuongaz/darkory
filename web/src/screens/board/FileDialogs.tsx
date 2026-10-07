@@ -1,12 +1,12 @@
 // F-T7 File a Task and F-F3 File a Feature. BoardDialogs (index.tsx) mounts them once for the
 // whole app: C, ⌘K, a column's +, the Install checklist and the Features page open them.
 import { useMutation } from "@tanstack/react-query";
-import { ChevronRightIcon, LayersIcon, LinkIcon, SearchIcon } from "lucide-react";
+import { ChevronRightIcon, FolderGit2Icon, LayersIcon, LinkIcon, SearchIcon, ZapIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { api, ApiError, call, type Team } from "@/api/client";
-import { useDirectory, useTeams } from "@/api/queries";
+import { api, ApiError, call, type Team, type Workspace } from "@/api/client";
+import { useDirectory, useTeams, useWorkspaces } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { FormDialog } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { Combobox } from "./Combobox";
 import { defaultFileStatus } from "./derive";
+import { MultiCombobox } from "./MultiCombobox";
 import { useStatuses, useTeamFeatures, useTeamTasks } from "./queries";
 
 /** One field of the dialogs' 12-column form (kit `.field`): its label over its control, and what is wrong with it. */
@@ -48,9 +49,56 @@ function inWords(err: unknown, words: (code: string) => string | undefined): unk
   return said ? new ApiError(err.status, err.code, said, err.details) : err;
 }
 
+/** The Workspaces a Task filed in a Team names unless the filer says otherwise: the Team's default, if it still exists. */
+function teamDefault(team: Team | undefined, workspaces: Workspace[]): string[] {
+  const id = team?.default_workspace_id;
+  return id && workspaces.some((w) => w.id === id) ? [id] : [];
+}
+
+/** Workspaces, several in order: shown only when the Install has any. */
+function WorkspacesField({
+  id,
+  workspaces,
+  values,
+  onChange,
+  error,
+  className,
+}: {
+  id: string;
+  workspaces: Workspace[];
+  values: string[];
+  onChange: (values: string[]) => void;
+  error?: string;
+  className?: string;
+}) {
+  return (
+    <Field label="Workspaces" htmlFor={id} error={error} className={className}>
+      <MultiCombobox
+        id={id}
+        values={values}
+        onChange={onChange}
+        options={workspaces.map((w) => ({
+          value: w.id,
+          label: w.name,
+          icon: <FolderGit2Icon />,
+          detail: <span className="font-mono text-xs text-muted-foreground">{w.path}</span>,
+        }))}
+        placeholder="None"
+        searchPlaceholder="Search Workspaces"
+        empty="No Workspace"
+        icon={<FolderGit2Icon />}
+        invalid={!!error}
+      />
+    </Field>
+  );
+}
+
 type Who = "skill" | "member";
 
-/** F-T7: Feature, Title, Description, who can take it, Status, Blocks, and Create more. */
+/**
+ * F-T7: Feature, Title, Description, who can take it, Status, the Workspaces it names (the Team's
+ * default to start with; not shown while the Install has none), Blocks, and Create more.
+ */
 export function FileTaskDialog({
   team,
   status: presetStatus,
@@ -66,6 +114,7 @@ export function FileTaskDialog({
   const tasks = useTeamTasks(team?.key);
   const statuses = useStatuses();
   const { skillList, memberList } = useDirectory();
+  const workspaces = useWorkspaces().data ?? [];
   const navigate = useNavigate();
   const peek = usePeekLink();
   const titleRef = useRef<HTMLInputElement>(null);
@@ -81,6 +130,9 @@ export function FileTaskDialog({
   const [memberId, setMemberId] = useState<string>();
   const [statusId, setStatusId] = useState<string | undefined>(presetStatus);
   const [blocksKey, setBlocksKey] = useState<string>();
+  // Untouched, the Workspaces are the Team's default; once changed, the filer's, even none.
+  const [chosenWorkspaces, setWorkspaces] = useState<string[]>();
+  const workspaceIds = chosenWorkspaces ?? teamDefault(team, workspaces);
   const [more, setMore] = useState(false);
   const [errors, setErrors] = useState<{ feature?: string; title?: string; who?: string }>({});
 
@@ -100,6 +152,8 @@ export function FileTaskDialog({
             aimed_at: who === "member" ? memberId : undefined,
             status: chosenStatus,
             blocks: blocksKey,
+            // Named whenever the field is shown, so taking the default out files the Task in none.
+            workspaces: workspaces.length ? workspaceIds : undefined,
           },
         }),
       ),
@@ -244,6 +298,9 @@ export function FileTaskDialog({
         <Field label="Status" htmlFor="file-task-status" className="sm:col-span-4">
           <StatusSelect id="file-task-status" statuses={statuses.data ?? []} value={chosenStatus} onValueChange={setStatusId} />
         </Field>
+        {workspaces.length > 0 && (
+          <WorkspacesField id="file-task-workspaces" workspaces={workspaces} values={workspaceIds} onChange={setWorkspaces} className="sm:col-span-12" />
+        )}
         <Field
           label={
             <>
@@ -275,24 +332,41 @@ export function FileTaskDialog({
   );
 }
 
-/** F-F3: Team, Owner, Title, Description; the same write files its Break down Task. */
+/**
+ * F-F3: Team, Owner, Title, Description, Quick and Ship when done; the same write files its Break
+ * down Task, or, for a quick Feature, its one Task, needing the Skill and in the Workspaces chosen.
+ */
 export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string; onClose: () => void }) {
   const me = useCurrentMe();
   const teams = useTeams().data ?? [];
-  const { memberList } = useDirectory();
+  const { memberList, skillList } = useDirectory();
+  const workspaces = useWorkspaces().data ?? [];
   const navigate = useNavigate();
   const [teamKey, setTeamKey] = useState<string | undefined>(presetTeam ?? me.teams[0]?.key);
   const [ownerId, setOwnerId] = useState<string | undefined>(me.member.id);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [errors, setErrors] = useState<{ team?: string; title?: string }>({});
+  const [quick, setQuick] = useState(false);
+  const [skillId, setSkillId] = useState<string>();
+  const [chosenShip, setShip] = useState<boolean>();
+  const [chosenWorkspaces, setWorkspaces] = useState<string[]>();
+  const [errors, setErrors] = useState<{ team?: string; title?: string; skill?: string; workspaces?: string }>({});
   const chosenTeam = teams.find((t) => t.key === teamKey) ?? (presetTeam ? undefined : teams[0]);
+  // Untouched, Ship when done is the Team's; a quick Feature always ships when done.
+  const ship = quick || (chosenShip ?? chosenTeam?.ship_when_done ?? false);
+  const workspaceIds = chosenWorkspaces ?? teamDefault(chosenTeam, workspaces);
 
   const file = useMutation({
     mutationFn: () =>
       call(
         api.POST("/v1/features", {
-          body: { team: chosenTeam!.key, title: title.trim(), description: description.trim() || undefined, owner: ownerId },
+          body: {
+            team: chosenTeam!.key,
+            title: title.trim(),
+            description: description.trim() || undefined,
+            owner: ownerId,
+            ...(quick ? { quick: true, skill: skillId, workspaces: workspaceIds } : { ship_when_done: ship }),
+          },
         }),
       ),
     onSuccess: (filed) => {
@@ -302,9 +376,19 @@ export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string
   });
 
   const submit = () => {
-    const next = { team: chosenTeam ? undefined : "Choose a Team.", title: title.trim() ? undefined : "Name the Feature." };
+    const next = {
+      team: chosenTeam ? undefined : "Choose a Team.",
+      title: title.trim() ? undefined : "Name the Feature.",
+      skill: quick && !skillId ? "Choose a Skill." : undefined,
+      workspaces:
+        quick && workspaceIds.length === 0
+          ? workspaces.length
+            ? "Choose a Workspace."
+            : "Its Task works in a Workspace; an admin adds one in Admin › Workspaces."
+          : undefined,
+    };
     setErrors(next);
-    if (next.team || next.title) return;
+    if (next.team || next.title || next.skill || next.workspaces) return;
     file.mutate();
   };
 
@@ -325,7 +409,7 @@ export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string
       hint={
         <span className="flex items-center gap-2">
           <LayersIcon className="size-3.5" aria-hidden />
-          Also files its Break down Task
+          {quick ? "Also files its one Task" : "Also files its Break down Task"}
         </span>
       }
     >
@@ -378,6 +462,66 @@ export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string
         <Field label="Description" htmlFor="file-feature-description" className="sm:col-span-12">
           <Textarea id="file-feature-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Add a description" className="min-h-24" />
         </Field>
+        <div className="flex flex-col gap-1.5 sm:col-span-12">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span className="flex items-center gap-2">
+              <Switch id="file-feature-quick" checked={quick} onCheckedChange={setQuick} aria-describedby="file-feature-quick-means" />
+              <Label htmlFor="file-feature-quick" className="text-[12.5px] font-medium">
+                <ZapIcon className="size-3.5 text-muted-foreground" aria-hidden />
+                Quick
+              </Label>
+            </span>
+            <span className="flex items-center gap-2" title={quick ? "A quick Feature always ships when done" : undefined}>
+              <Switch id="file-feature-ship" checked={ship} disabled={quick} onCheckedChange={setShip} />
+              <Label htmlFor="file-feature-ship" className="text-[12.5px] font-medium">
+                Ship when done
+              </Label>
+            </span>
+          </div>
+          <p id="file-feature-quick-means" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ZapIcon className="size-3" aria-hidden />
+            One Task, no Break down; ships on review
+          </p>
+        </div>
+        {quick && (
+          <>
+            <Field label="Skill" htmlFor="file-feature-skill" error={errors.skill} className="sm:col-span-6">
+              <Combobox
+                id="file-feature-skill"
+                value={skillId}
+                onChange={(v) => {
+                  setSkillId(v);
+                  setErrors((e) => ({ ...e, skill: undefined }));
+                }}
+                options={skillList.map((s) => ({ value: s.id, label: s.name }))}
+                placeholder="Choose a Skill"
+                searchPlaceholder="Search Skills"
+                empty="No Skill"
+                icon={<SearchIcon />}
+                invalid={!!errors.skill}
+              />
+            </Field>
+            {workspaces.length > 0 ? (
+              <WorkspacesField
+                id="file-feature-workspaces"
+                workspaces={workspaces}
+                values={workspaceIds}
+                onChange={(v) => {
+                  setWorkspaces(v);
+                  setErrors((e) => ({ ...e, workspaces: undefined }));
+                }}
+                error={errors.workspaces}
+                className="sm:col-span-6"
+              />
+            ) : (
+              errors.workspaces && (
+                <p role="alert" className="text-xs text-state-blocked sm:col-span-6 sm:self-end">
+                  {errors.workspaces}
+                </p>
+              )
+            )}
+          </>
+        )}
       </div>
     </FormDialog>
   );

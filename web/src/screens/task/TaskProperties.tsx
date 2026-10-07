@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { FolderGit2Icon, GitBranchIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
@@ -9,6 +10,7 @@ import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { StatusSelect } from "@/components/StatusSelect";
+import { taskBranch } from "@/lib/branch";
 import { ClockTime } from "@/components/Time";
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
@@ -48,6 +50,11 @@ export function TaskProperties({ detail, actions, grouped }: { detail: TaskDetai
     },
     { label: "Needs", value: <Needs task={task} /> },
   ];
+  // Where a session works it: the Workspaces it names, and the branch the Runner makes in each.
+  if (detail.workspaces.length > 0) {
+    work.push({ label: "Workspaces", value: <Workspaces detail={detail} /> });
+    work.push({ label: "Branch", value: <Branch name={taskBranch(task.key, task.title)} /> });
+  }
 
   const hold: Row[] = [];
   if (claim) {
@@ -152,6 +159,29 @@ function StatusMenu({ detail }: { detail: TaskDetail }) {
       value={status.id}
       onValueChange={(to) => to !== status.id && move.mutate(to)}
     />
+  );
+}
+
+function Workspaces({ detail }: { detail: TaskDetail }) {
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+      {detail.workspaces.map((w) => (
+        <span key={w.id} className="inline-flex min-w-0 items-center gap-1.5" title={w.path}>
+          <FolderGit2Icon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
+          <span className="truncate">{w.name}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** A branch name in mono, whole: it wraps in the rail rather than losing its end, so it can be copied. */
+export function Branch({ name }: { name: string }) {
+  return (
+    <span className="inline-flex min-w-0 items-start gap-1.5">
+      <GitBranchIcon className="mt-px size-3.5 flex-none text-muted-foreground" aria-hidden />
+      <code className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{name}</code>
+    </span>
   );
 }
 

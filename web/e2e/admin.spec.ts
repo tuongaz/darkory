@@ -324,3 +324,137 @@ test("scenario 9: deactivating an agent ends its live Claim and its token stops 
   expect(errors).toEqual([]);
   await ctx.close();
 });
+
+test("agents plan R3: a Workspace, a Team's default, an agent's model and Paused", async ({ browser }) => {
+  const { ctx, page, errors } = await open(browser);
+  type Workspace = { id: string; name: string; path: string; mode: string; default_branch: string };
+
+  await test.step("New Workspace adds a git Workspace in pull-request mode; its default branch is edited in place", async () => {
+    await page.goto(`${base}/admin/workspaces`);
+    await expect(page.getByRole("heading", { name: "No Workspaces yet" })).toBeVisible();
+    await page.getByRole("button", { name: "New Workspace" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "New Workspace" });
+    await dialog.getByLabel("Name").fill("shop");
+    await dialog.getByLabel("Path").fill("/srv/src/shop");
+    await dialog.getByRole("radio", { name: "Pull request" }).click();
+    await expect(dialog.getByLabel("Default branch")).toHaveValue("main");
+    await shot(page, "r3-new-workspace");
+    await dialog.getByRole("button", { name: "Create Workspace" }).click();
+    await expect(dialog).toHaveCount(0);
+
+    const row = page.getByRole("table", { name: "Workspaces" }).getByRole("row", { name: "shop" });
+    await expect(row.getByRole("combobox", { name: "Mode of shop" })).toHaveText(/Pull request/);
+    await row.getByRole("button", { name: "Change default branch of shop" }).click();
+    await row.getByRole("textbox", { name: "Default branch of shop" }).fill("trunk");
+    await page.keyboard.press("Enter");
+    await expect(row.getByRole("button", { name: "Change default branch of shop" })).toHaveText("trunk");
+    await expect
+      .poll(async () => (await v1<{ items: Workspace[] }>(page, "GET", "/v1/workspaces")).items.map((w) => `${w.name} ${w.path} ${w.mode} ${w.default_branch}`))
+      .toEqual(["shop /srv/src/shop pull_request trunk"]);
+  });
+
+  await test.step("a Team's page sets its default Workspace and Ship when done; the Workspaces table counts it", async () => {
+    await v1(page, "POST", "/v1/teams", { key: "PLAT", name: "Platform" });
+    await page.goto(`${base}/admin/teams/PLAT`);
+    const defaults = page.getByRole("group", { name: "Defaults of Platform" });
+    await defaults.getByRole("combobox", { name: "Default Workspace" }).click();
+    await page.getByRole("option", { name: /shop/ }).click();
+    await expect(defaults.getByRole("combobox", { name: "Default Workspace" })).toHaveText(/shop/);
+    await defaults.getByRole("switch", { name: "Ship when done" }).click();
+    await expect(defaults.getByRole("switch", { name: "Ship when done" })).toBeChecked();
+    await shot(page, "r3-team-defaults");
+    const shop = (await v1<{ items: Workspace[] }>(page, "GET", "/v1/workspaces")).items[0];
+    await expect
+      .poll(async () => {
+        const t = (await v1<{ team: { default_workspace_id?: string; ship_when_done: boolean } }>(page, "GET", "/v1/teams/PLAT")).team;
+        return [t.default_workspace_id, t.ship_when_done];
+      })
+      .toEqual([shop.id, true]);
+
+    await page.goto(`${base}/admin/workspaces`);
+    await expect(page.getByRole("row", { name: "shop" })).toContainText("Platform");
+    await shot(page, "r3-workspaces");
+  });
+
+  await test.step("New Member as an Agent asks its model; its page edits the model and pauses it", async () => {
+    await page.goto(`${base}/admin/members?new=1&kind=agent`);
+    const dialog = page.getByRole("dialog", { name: "New Member" });
+    await dialog.getByLabel("Name").fill("planner-1");
+    await expect(dialog.getByLabel("Model")).toHaveValue("claude-sonnet-5-5");
+    await dialog.getByLabel("Model").fill("claude-opus-5-5");
+    await dialog.getByRole("button", { name: "Create Member" }).click();
+    const once = page.getByRole("dialog", { name: "Token for planner-1" });
+    await expect(once.getByRole("textbox", { name: "Secret of default" })).toHaveValue(/^dk_/);
+    await once.getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("heading", { name: "planner-1" })).toBeVisible();
+
+    type Agent = { member: { agent?: { command: string; model: string; paused: boolean } } };
+    const card = page.getByRole("group", { name: "Agent settings of planner-1" });
+    await expect(card.getByLabel("Model")).toHaveValue("claude-opus-5-5");
+    await expect(card.getByLabel("Command")).toHaveValue("claude");
+    expect((await v1<Agent>(page, "GET", "/v1/members/planner-1")).member.agent).toMatchObject({ command: "claude", model: "claude-opus-5-5", paused: false });
+
+    await card.getByLabel("Model").fill("claude-haiku-4-5-20251001");
+    await page.keyboard.press("Enter");
+    await card.getByRole("switch", { name: "Paused" }).click();
+    await expect(card.getByRole("switch", { name: "Paused" })).toBeChecked();
+    await expect
+      .poll(async () => (await v1<Agent>(page, "GET", "/v1/members/planner-1")).member.agent)
+      .toMatchObject({ model: "claude-haiku-4-5-20251001", paused: true });
+    await shot(page, "r3-agent");
+
+    await page.goto(`${base}/admin/members`);
+    const row = page.getByRole("row", { name: "planner-1" });
+    await expect(row).toContainText("Paused");
+    await expect(row).toContainText("claude-haiku-4-5-20251001");
+    await shot(page, "r3-members");
+  });
+
+  await test.step("Stop using the Runner, behind the Agent card's ⋯, says what it clears and clears it", async () => {
+    await page.goto(`${base}/admin/members/planner-1`);
+    await page.getByRole("button", { name: "More for the Agent settings of planner-1" }).click();
+    await page.getByRole("menuitem", { name: "Stop using the Runner" }).click();
+    const confirm = page.getByRole("dialog", { name: "Stop using the Runner for planner-1?" });
+    await expect(confirm).toContainText("claude-haiku-4-5-20251001");
+    await expect(confirm).toContainText("9 arguments");
+    await shot(page, "r3-stop-runner");
+    await confirm.getByRole("button", { name: "Stop using the Runner" }).click();
+    await expect(confirm).toHaveCount(0);
+    const card = page.getByRole("group", { name: "Agent settings of planner-1" });
+    await expect(card).toContainText("the Runner does not start it");
+    await expect(card.getByRole("button", { name: "Use the Runner" })).toBeVisible();
+    expect((await v1<{ member: { agent?: unknown } }>(page, "GET", "/v1/members/planner-1")).member.agent).toBeUndefined();
+  });
+
+  await test.step("New Member as an Agent with Run with the Runner off has no agent settings", async () => {
+    await page.goto(`${base}/admin/members?new=1&kind=agent`);
+    const dialog = page.getByRole("dialog", { name: "New Member" });
+    await dialog.getByLabel("Name").fill("bot-1");
+    await dialog.getByRole("switch", { name: "Run with the Runner" }).click();
+    await expect(dialog.getByLabel("Model")).toHaveCount(0);
+    await shot(page, "r3-new-agent-own-session");
+    await dialog.getByRole("button", { name: "Create Member" }).click();
+    await page.getByRole("dialog", { name: "Token for bot-1" }).getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("group", { name: "Agent settings of bot-1" })).toContainText("the Runner does not start it");
+    expect((await v1<{ member: { agent?: unknown } }>(page, "GET", "/v1/members/bot-1")).member.agent).toBeUndefined();
+  });
+
+  await test.step("at 390px none of them scrolls sideways", async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const screens: [string, () => ReturnType<Page["getByRole"]>][] = [
+      ["/admin/workspaces", () => page.getByRole("row", { name: "shop" })],
+      ["/admin/teams/PLAT", () => page.getByRole("group", { name: "Defaults of Platform" })],
+      ["/admin/members/planner-1", () => page.getByRole("group", { name: "Agent settings of planner-1" })],
+    ];
+    for (const [path, shown] of screens) {
+      await page.goto(`${base}${path}`);
+      await expect(shown()).toBeVisible();
+      const [scroll, client] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+      expect(scroll, path).toBe(client);
+    }
+    await shot(page, "r3-agent-phone");
+  });
+
+  expect(errors).toEqual([]);
+  await ctx.close();
+});

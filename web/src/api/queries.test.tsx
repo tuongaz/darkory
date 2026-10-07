@@ -17,6 +17,9 @@ describe("live invalidation", () => {
     expect(affectedBy("login_link.redeemed")).toEqual([]);
     expect(affectedBy("task.handed_over")).toContain("runner");
     expect(affectedBy("member.agent_changed")).toContain("runner");
+    // A Workspace added, changed or removed refetches the list, the Teams that name it and the Tasks.
+    expect(affectedBy("workspace.added")).toEqual(expect.arrayContaining(["workspaces", "teams", "task"]));
+    expect(affectedBy("team.changed")).not.toContain("workspaces");
     expect(affectedBy("something.new")).toBe("all");
   });
 

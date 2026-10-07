@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BanIcon, ChevronDownIcon, EllipsisIcon, LinkIcon, PaperclipIcon, PlusIcon, SearchXIcon, UserRoundIcon } from "lucide-react";
+import { BanIcon, ChevronDownIcon, EllipsisIcon, LinkIcon, PaperclipIcon, PlusIcon, SearchXIcon, UserRoundIcon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams, type To } from "react-router";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { featureBranch } from "@/lib/branch";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
@@ -31,6 +32,7 @@ import { orderTasks, sizeText, statusGlyph, useMemberName, type StatusLike } fro
 import { Avatar, MemberName, Needs, TaskLink } from "./parts";
 import { useFeature, useFeatureObservations, useStatuses, useTasks } from "./queries";
 import { lapsedClaim } from "./record";
+import { Branch } from "./TaskProperties";
 import { OutcomePill } from "./TaskRecord";
 
 const kinds = { work: undefined, breakdown: "Break down", retrospective: "Retrospective" } as const;
@@ -91,6 +93,8 @@ function FeatureBody({ detail }: { detail: FeatureDetail }) {
   const state = featureStates[feature.state];
   const tasks = orderTasks(detail.tasks, statuses);
   const counts = feature.task_counts;
+  // Break down makes feature/<KEY> in each Workspace the Feature's Tasks name; a quick Feature has none.
+  const branched = !feature.quick && detail.tasks.some((t) => t.workspace_ids?.length);
   return (
     <div className="flex max-w-[1100px] flex-col gap-8">
       <header className="flex flex-col gap-1.5">
@@ -98,6 +102,13 @@ function FeatureBody({ detail }: { detail: FeatureDetail }) {
         <h1 className="text-xl leading-tight font-semibold tracking-[-0.01em] [overflow-wrap:anywhere]">{feature.title}</h1>
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-muted-foreground">
           <Pill tone={state.tone}>{state.label}</Pill>
+          {feature.quick && (
+            <Pill tone="secondary">
+              <ZapIcon aria-hidden />
+              Quick
+            </Pill>
+          )}
+          {feature.ship_when_done && <Pill tone="secondary">Ships when done</Pill>}
           <span aria-hidden className="h-3.5 w-px bg-border" />
           <span>
             Rank <b className="font-medium text-foreground">#{feature.rank}</b>
@@ -106,6 +117,14 @@ function FeatureBody({ detail }: { detail: FeatureDetail }) {
           <span className="inline-flex items-center gap-1.5">
             Owner <MemberName id={feature.owner_id} className="text-foreground" />
           </span>
+          {branched && (
+            <>
+              <span aria-hidden className="h-3.5 w-px bg-border" />
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-foreground">
+                <Branch name={featureBranch(feature.key)} />
+              </span>
+            </>
+          )}
         </div>
         {feature.description && <p className="mt-1.5 whitespace-pre-wrap">{feature.description}</p>}
       </header>
@@ -473,12 +492,15 @@ function DropFeatureDialog({ detail, onOpenChange }: { detail: FeatureDetail; on
           </ul>
         </div>
       )}
-      <p className="flex flex-wrap items-center gap-2">
-        <PlusIcon className="size-3.5 text-muted-foreground" aria-hidden />
-        Files Retrospective: {feature.title}
-        <span className="text-muted-foreground">needs</span>
-        <Pill tone="outline">retro</Pill>
-      </p>
+      {/* A quick Feature has no Retrospective. */}
+      {!feature.quick && (
+        <p className="flex flex-wrap items-center gap-2">
+          <PlusIcon className="size-3.5 text-muted-foreground" aria-hidden />
+          Files Retrospective: {feature.title}
+          <span className="text-muted-foreground">needs</span>
+          <Pill tone="outline">retro</Pill>
+        </p>
+      )}
     </FormDialog>
   );
 }

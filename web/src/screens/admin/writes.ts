@@ -34,7 +34,23 @@ export const removeTeamMember = (team: string, member: string) =>
 
 export const createTeam = (body: Schemas["CreateTeamBody"]) => call(api.POST("/v1/teams", { body }));
 
+export const updateTeam = (team: string, body: Schemas["UpdateTeamBody"]) =>
+  call(api.PATCH("/v1/teams/{team}", { params: { path: { team } }, body }));
+
 export const createSkill = (body: Schemas["CreateSkillBody"]) => call(api.POST("/v1/skills", { body }));
+
+export const setAgentSettings = (member: string, body: Schemas["SetAgentSettingsBody"]) =>
+  call(api.PATCH("/v1/members/{member}/agent", { params: { path: { member } }, body }));
+
+export const clearAgentSettings = (member: string) => call(api.DELETE("/v1/members/{member}/agent", { params: { path: { member } } }));
+
+// Workspaces are named by id, as Members are.
+export const createWorkspace = (body: Schemas["CreateWorkspaceBody"]) => call(api.POST("/v1/workspaces", { body }));
+
+export const updateWorkspace = (workspace: string, body: Schemas["UpdateWorkspaceBody"]) =>
+  call(api.PATCH("/v1/workspaces/{workspace}", { params: { path: { workspace } }, body }));
+
+export const removeWorkspace = (workspace: string) => call(api.DELETE("/v1/workspaces/{workspace}", { params: { path: { workspace } } }));
 
 export const issueToken = (member: string, name: string, timeout?: number) =>
   call(api.POST("/v1/members/{member}/tokens", { params: { path: { member } }, body: { name, default_heartbeat_timeout_seconds: timeout } }));

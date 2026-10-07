@@ -3,7 +3,7 @@ import { BotIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import type { Member, MemberDetail, Team } from "@/api/client";
-import { useAllFeatures, useDirectory, useTeams } from "@/api/queries";
+import { useAllFeatures, useDirectory, useTeams, useWorkspaces } from "@/api/queries";
 import { EmptyState } from "@/components/EmptyState";
 import { FormDialog, FormRow, FormRows } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
@@ -14,13 +14,15 @@ import { TeamMark } from "@/components/TeamMark";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { AdminFrame } from "./AdminLayout";
 import { count, groupByKind, humansFirst, suggestKey, teamKeyPattern } from "./model";
-import { Avatars, GroupRow, MemberName, MoreMenu, Picker } from "./parts";
+import { Avatars, GroupRow, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
 import { useMemberDetails, useTeamDetail, useTeamDetails } from "./queries";
-import { addTeamMember, createTeam, removeTeamMember } from "./writes";
+import { addTeamMember, createTeam, removeTeamMember, updateTeam } from "./writes";
 
 // Team · Key · Members · Features (F-D4a). A phone keeps Team and Members.
 const teamCols = "grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:grid-cols-[220px_80px_260px_minmax(0,1fr)]";
@@ -162,7 +164,10 @@ function NewTeamDialog({ onClose }: { onClose: () => void }) {
 // Member · Skills · Reports to · ⋯ (F-D4b). A phone keeps Member and ⋯.
 const memberCols = "grid-cols-[minmax(0,1fr)_26px] md:grid-cols-[220px_minmax(0,1fr)_180px_26px]";
 
-/** /admin/teams/:team (F-D4b): the Team's Members with their Skills and Reporting line. */
+/**
+ * /admin/teams/:team (F-D4b): the Team's defaults for what is filed in it, then its Members with
+ * their Skills and Reporting line.
+ */
 export function TeamPage() {
   const { team: ref = "" } = useParams();
   const team = useTeamDetail(ref);
@@ -234,6 +239,12 @@ function TeamMembers({ team, members }: { team: Team; members: Member[] }) {
         <h1 className="text-xl leading-tight font-semibold tracking-[-0.01em]">{team.name}</h1>
         <Key className="text-xs">{team.key}</Key>
       </div>
+      <div className="max-w-[820px] px-6 pb-6">
+        <SettingsForm label={`Defaults of ${team.name}`}>
+          <DefaultWorkspaceRow team={team} />
+          <ShipWhenDoneRow team={team} />
+        </SettingsForm>
+      </div>
       <Refusal error={add.error ?? remove.error} className="px-6 pb-3" />
       {members.length === 0 ? (
         <EmptyState title="No Members yet">Add Member puts someone in {team.name}.</EmptyState>
@@ -299,5 +310,62 @@ function TeamMemberRow({
         </MoreMenu>
       </span>
     </div>
+  );
+}
+
+const none = "none";
+
+/** Default Workspace: where a Task filed in the Team works when it names none. */
+function DefaultWorkspaceRow({ team }: { team: Team }) {
+  const workspaces = useWorkspaces();
+  const save = useMutation({ mutationFn: (ws: string) => updateTeam(team.key, { default_workspace: ws === none ? "" : ws }) });
+  const value = save.isPending ? save.variables : (team.default_workspace_id ?? none);
+  const list = workspaces.data ?? [];
+  return (
+    <SettingsRow label="Default Workspace" htmlFor="team-workspace">
+      {workspaces.data && list.length === 0 ? (
+        <span className="text-muted-foreground">
+          No Workspace yet;{" "}
+          <Link to="/admin/workspaces" className="text-foreground underline-offset-2 hover:underline">
+            add one in Workspaces
+          </Link>
+        </span>
+      ) : (
+        <Select value={value} onValueChange={(v) => v !== value && save.mutate(v)} disabled={save.isPending || !workspaces.data}>
+          <SelectTrigger id="team-workspace" size="sm" className={cn(w320, "h-8")} aria-label="Default Workspace">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper" align="start">
+            <SelectItem value={none}>
+              <span className="text-muted-foreground">None</span>
+            </SelectItem>
+            {list.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.name}
+                <span className="font-mono text-xs text-muted-foreground">{w.path}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Refusal error={save.error} />
+    </SettingsRow>
+  );
+}
+
+/** Ship when done: what a Feature filed in the Team takes when its filer does not say. */
+function ShipWhenDoneRow({ team }: { team: Team }) {
+  const save = useMutation({ mutationFn: (on: boolean) => updateTeam(team.key, { ship_when_done: on }) });
+  return (
+    <SettingsRow label="Ship when done" htmlFor="team-ship">
+      <Switch
+        id="team-ship"
+        checked={save.isPending ? save.variables : team.ship_when_done}
+        onCheckedChange={(on) => save.mutate(on)}
+        disabled={save.isPending}
+      />
+      <span className="text-muted-foreground">New Features ship when their last Task is Done</span>
+      <Refusal error={save.error} />
+    </SettingsRow>
   );
 }

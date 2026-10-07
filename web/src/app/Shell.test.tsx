@@ -86,7 +86,7 @@ describe("the sidebar on a record's page", () => {
     "GET /v1/tasks": { items: [sweep] },
     "GET /v1/tasks/takeable": { items: [] },
     "GET /v1/activity": { items: [], last_seq: 0 },
-    "GET /v1/tasks/:task": { task: sweep, status: statuses[0], feature: chores, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+    "GET /v1/tasks/:task": { task: sweep, status: statuses[0], feature: chores, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
     "GET /v1/features/:feature": { feature: chores, tasks: [sweep], evidence: [] },
     "GET /v1/teams/:team": { team: ops, members: [me().member] },
     "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
@@ -325,7 +325,7 @@ describe("walking the Tasks with the keys", () => {
     "GET /v1/activity": { items: [], last_seq: 0 },
     "GET /v1/tasks/:task": ({ params }: { params: Record<string, string> }) => {
       const t = tasks.find((x) => x.key === params.task)!;
-      return { task: t, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] };
+      return { task: t, status: statuses[0], feature: checkout, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] };
     },
     "GET /v1/teams/:team": { team: web, members: [me().member] },
     "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
@@ -456,7 +456,7 @@ describe("screens share one query cache", () => {
       "GET /v1/tasks": { items: [cart] },
       // The Inbox and the Task page both read what the caller can take.
       "GET /v1/tasks/takeable": { items: [cart] },
-      "GET /v1/tasks/:task": { task: cart, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+      "GET /v1/tasks/:task": { task: cart, status: statuses[0], feature: checkout, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
       "GET /v1/teams/:team": { team: web, members: [me().member] },
       "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
     });

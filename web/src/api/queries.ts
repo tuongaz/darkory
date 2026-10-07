@@ -26,6 +26,7 @@ export const keys = {
   takeable: ["takeable"] as const,
   runnerSessions: ["runner", "sessions"] as const,
   activity: ["activity"] as const,
+  workspaces: ["workspaces"] as const,
 };
 
 type Root =
@@ -47,6 +48,7 @@ type Root =
   | "takeable"
   | "statuses"
   | "runner"
+  | "workspaces"
   | "activity";
 
 const work: Root[] = ["features", "feature", "feature-observations", "tasks", "task", "takeable"];
@@ -67,7 +69,7 @@ const affected: Record<SubjectType, Root[]> = {
   session: [...organisation, ...work, "runner"],
   login_link: [],
   statuses: [...work, "statuses"],
-  workspace: [...organisation, ...work],
+  workspace: [...organisation, ...work, "workspaces"],
 };
 
 /** The query roots an Activity entry may have changed. */
@@ -138,6 +140,11 @@ export function useDirectory() {
     }),
     [members.data, teams.data, skills.data],
   );
+}
+
+/** The Install's Workspaces, by name: where a Task's session works. */
+export function useWorkspaces() {
+  return useQuery({ queryKey: keys.workspaces, queryFn: () => call(api.GET("/v1/workspaces")).then((r) => r.items) });
 }
 
 /** Every open Task in the Organisation, in `next` order: what the sidebar's live count reads. */

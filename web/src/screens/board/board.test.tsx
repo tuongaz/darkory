@@ -1,10 +1,10 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Activity, Member, Task } from "@/api/client";
+import type { Activity, Member, Task, Team, Workspace } from "@/api/client";
 import { mockApi, refuse, type Handler } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
-import { ada, bob, build, builder, feature, me, signedIn, task, web } from "@/test/fixtures";
+import { ada, bob, build, builder, feature, me, ops, review, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { statuses } from "./testData";
 
@@ -110,7 +110,7 @@ describe("Team › Tasks, board", () => {
   it("rings the card whose peek is open, and only that one", async () => {
     mockApi(
       routes({
-        "GET /v1/tasks/:task": { task: discount, status: statuses[0], feature: checkout, claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
+        "GET /v1/tasks/:task": { task: discount, status: statuses[0], feature: checkout, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] },
         "GET /v1/teams/:team": { team: web, members: [me().member] },
         "GET /v1/members/:member": { member: me().member, teams: [web], skills: [], reports: [] },
       }),
@@ -227,6 +227,126 @@ describe("File Feature", () => {
     await userEvent.type(within(dialog).getByLabelText("Title"), "Gift cards");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Feature" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Only Members of Web file its Features; an admin can add you to Web.");
+  });
+});
+
+const at = "2026-10-01T09:00:00Z";
+const shop: Workspace = { id: "w-shop", name: "shop", kind: "git", path: "/src/shop", mode: "plain", default_branch: "main", created_at: at };
+const docs: Workspace = { id: "w-docs", name: "docs", kind: "git", path: "/src/docs", mode: "pull_request", default_branch: "main", created_at: at };
+const webShop: Team = { ...web, default_workspace_id: shop.id };
+const withWorkspaces = { "GET /v1/teams": { items: [ops, webShop] }, "GET /v1/workspaces": { items: [docs, shop] } };
+
+describe("File Task and Workspaces", () => {
+  async function openFileTask() {
+    await userEvent.click(await screen.findByRole("button", { name: "File a Task in Todo" }));
+    const dialog = await screen.findByRole("dialog", { name: "File a Task" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Feature" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Checkout flow/ }));
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Gift cards");
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Who can take it" }));
+    await userEvent.click(await screen.findByRole("option", { name: "build" }));
+    return dialog;
+  }
+  const filed = (api: ReturnType<typeof mockApi>) => api.calls.find((c) => c.method === "POST" && c.path === "/v1/tasks")?.body;
+
+  it("names the Team's default Workspace to start with, and the Workspaces chosen after", async () => {
+    const api = mockApi(routes({ ...withWorkspaces, "POST /v1/tasks": { task: { ...discount, key: "WEB-30" } } }));
+    renderApp("/teams/WEB/tasks?view=board");
+    const dialog = await openFileTask();
+    expect(within(dialog).getByRole("button", { name: "Take out shop" })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Workspaces" }));
+    await userEvent.click(await screen.findByRole("option", { name: /docs/ }));
+    await userEvent.keyboard("{Escape}");
+    expect(within(dialog).getByRole("button", { name: "Take out docs" })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)).toEqual({ feature: "WEB-1", title: "Gift cards", skill: build.id, status: "st-todo", workspaces: [shop.id, docs.id] });
+  });
+
+  it("files the Task in no Workspace when the default is taken out", async () => {
+    const api = mockApi(routes({ ...withWorkspaces, "POST /v1/tasks": { task: { ...discount, key: "WEB-30" } } }));
+    renderApp("/teams/WEB/tasks?view=board");
+    const dialog = await openFileTask();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Take out shop" }));
+    expect(within(dialog).getByRole("combobox", { name: "Workspaces" })).toHaveTextContent("None");
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)).toMatchObject({ workspaces: [] });
+  });
+
+  it("asks nothing about Workspaces while the Install has none", async () => {
+    mockApi(routes());
+    renderApp("/teams/WEB/tasks?view=board");
+    const dialog = await openFileTask();
+    expect(within(dialog).queryByRole("combobox", { name: "Workspaces" })).not.toBeInTheDocument();
+  });
+});
+
+describe("File Feature, quick and Ship when done", () => {
+  async function openFileFeature() {
+    await userEvent.click(await screen.findByRole("button", { name: "File Feature" }));
+    const dialog = await screen.findByRole("dialog", { name: "File a Feature" });
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Fix the cart total");
+    return dialog;
+  }
+  const filed = (api: ReturnType<typeof mockApi>) => api.calls.find((c) => c.method === "POST" && c.path === "/v1/features")?.body;
+  const done = { feature: checkout, tasks: [], evidence: [] };
+
+  it("Quick asks for a Skill, which it needs, and the Workspaces, and always ships when done", async () => {
+    const api = mockApi(routes({ ...withWorkspaces, "POST /v1/features": done }));
+    renderApp("/teams/WEB/features");
+    const dialog = await openFileFeature();
+    expect(within(dialog).getByRole("switch", { name: "Quick" })).toHaveAccessibleDescription("One Task, no Break down; ships on review");
+    expect(within(dialog).queryByRole("combobox", { name: "Skill" })).not.toBeInTheDocument();
+    const ship = within(dialog).getByRole("switch", { name: "Ship when done" });
+    expect(ship).not.toBeChecked();
+
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Quick" }));
+    expect(ship).toBeChecked();
+    expect(ship).toBeDisabled();
+    expect(dialog).toHaveTextContent("Also files its one Task");
+    // Nothing else is hidden.
+    for (const field of ["Team", "Owner", "Title", "Description"]) expect(within(dialog).getByLabelText(field)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Take out shop" })).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Feature" }));
+    expect(within(dialog).getByText("Choose a Skill.")).toBeInTheDocument();
+    expect(filed(api)).toBeUndefined();
+
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Skill" }));
+    await userEvent.click(await screen.findByRole("option", { name: "review" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Feature" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)).toEqual({ team: "WEB", title: "Fix the cart total", owner: ada.id, quick: true, skill: review.id, workspaces: [shop.id] });
+  });
+
+  it("a Feature that is not quick takes the Team's Ship when done, and sends no Skill or Workspace", async () => {
+    const api = mockApi(routes({ ...withWorkspaces, "GET /v1/teams": { items: [ops, { ...webShop, ship_when_done: true }] }, "POST /v1/features": done }));
+    renderApp("/teams/WEB/features");
+    const dialog = await openFileFeature();
+    const ship = within(dialog).getByRole("switch", { name: "Ship when done" });
+    await waitFor(() => expect(ship).toBeChecked());
+    // Quick on and off again leaves the filer's choice alone.
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Quick" }));
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Quick" }));
+    await userEvent.click(ship);
+    expect(ship).not.toBeChecked();
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Feature" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)).toEqual({ team: "WEB", title: "Fix the cart total", owner: ada.id, ship_when_done: false });
+  });
+
+  it("says before sending that a quick Feature needs a Workspace when the Install has none", async () => {
+    const api = mockApi(routes({ "POST /v1/features": done }));
+    renderApp("/teams/WEB/features");
+    const dialog = await openFileFeature();
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Quick" }));
+    expect(within(dialog).queryByRole("combobox", { name: "Workspaces" })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Skill" }));
+    await userEvent.click(await screen.findByRole("option", { name: "build" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Feature" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Its Task works in a Workspace; an admin adds one in Admin › Workspaces.");
+    expect(filed(api)).toBeUndefined();
   });
 });
 

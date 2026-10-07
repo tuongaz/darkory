@@ -35,6 +35,9 @@ export type TaskDetail = Schemas["TaskDetail"];
 export type Team = Schemas["Team"];
 export type TeamDetail = Schemas["TeamDetail"];
 export type Token = Schemas["Token"];
+export type Workspace = Schemas["Workspace"];
+export type WorkspaceMode = Schemas["WorkspaceMode"];
+export type AgentSettings = Schemas["AgentSettings"];
 
 /** A refusal or failure from /v1, carrying the stable code programs branch on. */
 export class ApiError extends Error {

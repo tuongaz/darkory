@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { AdminFrame } from "./AdminLayout";
+import { AgentCard } from "./AgentSettings";
 import { SessionRows, TokenRows } from "./credentials";
 import { count, deactivateSummary, heldClaims, liveTokens } from "./model";
 import { Chip, ConfirmDialog, Fact, Facts, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
@@ -105,6 +106,7 @@ function MemberSettings({ detail }: { detail: MemberDetail }) {
             <>
               {m.kind === "agent" ? <Pill tone="agent">Agent</Pill> : <Pill>Human</Pill>}
               {!active && <Pill tone="dropped">Deactivated</Pill>}
+              {m.agent?.paused && <Pill tone="dropped">Paused</Pill>}
               <span>
                 created <Time at={m.created_at} />
               </span>
@@ -136,6 +138,7 @@ function MemberSettings({ detail }: { detail: MemberDetail }) {
             </SettingsRow>
           )}
         </SettingsForm>
+        {m.kind === "agent" && <AgentCard member={m} />}
       </div>
 
       {dialog === "token" && <IssueTokenDialog member={m} onClose={() => setDialog(null)} />}
