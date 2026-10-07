@@ -113,7 +113,7 @@ func (s *Store) migrate(ctx context.Context, fsys fs.FS, now time.Time) (Migrate
 	}
 
 	for _, m := range pending {
-		if err := applyMigration(ctx, conn, m, now); err != nil {
+		if err := applyMigration(ctx, conn, s.engine, m, now); err != nil {
 			return res, err
 		}
 		res.Applied = append(res.Applied, m.version)
@@ -121,7 +121,18 @@ func (s *Store) migrate(ctx context.Context, fsys fs.FS, now time.Time) (Migrate
 	return res, nil
 }
 
-func applyMigration(ctx context.Context, conn *sql.Conn, m migration, now time.Time) error {
+// applyMigration runs one migration in its own transaction. On SQLite, foreign keys are not
+// enforced while it runs and are checked as a whole before it commits: SQLite changes a table by
+// rebuilding it (new table, copy, drop, rename), and dropping a table other tables refer to fails
+// while they are enforced. The pragma has no effect inside a transaction, so it is set on the
+// connection around it (https://www.sqlite.org/lang_altertable.html#otheralter).
+func applyMigration(ctx context.Context, conn *sql.Conn, engine Engine, m migration, now time.Time) error {
+	if engine == SQLite {
+		if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+			return fmt.Errorf("store: migration %04d: %w", m.version, err)
+		}
+		defer conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys = ON`)
+	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("store: migration %04d: %w", m.version, err)
@@ -129,6 +140,11 @@ func applyMigration(ctx context.Context, conn *sql.Conn, m migration, now time.T
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, m.text); err != nil {
 		return fmt.Errorf("store: migration %04d_%s: %w", m.version, m.name, err)
+	}
+	if engine == SQLite {
+		if err := foreignKeysHold(ctx, tx); err != nil {
+			return fmt.Errorf("store: migration %04d_%s: %w", m.version, m.name, err)
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, $3)`,
 		m.version, m.name, now.UnixMilli()); err != nil {
@@ -138,6 +154,24 @@ func applyMigration(ctx context.Context, conn *sql.Conn, m migration, now time.T
 		return fmt.Errorf("store: migration %04d: commit: %w", m.version, err)
 	}
 	return nil
+}
+
+// foreignKeysHold refuses a SQLite schema in which a row names a row that does not exist.
+func foreignKeysHold(ctx context.Context, tx *sql.Tx) error {
+	rows, err := tx.QueryContext(ctx, `SELECT "table", rowid, parent FROM pragma_foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("foreign key check: %w", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var table, parent string
+		var rowid sql.NullInt64
+		if err := rows.Scan(&table, &rowid, &parent); err != nil {
+			return fmt.Errorf("foreign key check: %w", err)
+		}
+		return fmt.Errorf("a row of %s (rowid %d) names a row of %s that does not exist", table, rowid.Int64, parent)
+	}
+	return rows.Err()
 }
 
 func appliedVersions(ctx context.Context, conn *sql.Conn) ([]int, error) {
