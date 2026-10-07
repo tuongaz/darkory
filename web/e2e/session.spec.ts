@@ -372,7 +372,7 @@ for (const tmux of ["on", "off"] as const) {
       const detail = await ada<LiveDetail>("GET", `/v1/tasks/${key}`);
       expect(detail.task.claim).toBeUndefined();
       expect(detail.notes.map((n) => n.body).join("\n")).toContain("An admin stopped the session");
-      const log = detail.evidence.find((e) => e.filename === `session-${key}.log`);
+      const log = detail.evidence.find((e) => new RegExp(`^session-${key}-builder-\\d{6}\\.log$`).test(e.filename));
       expect(log, "the session's log is Evidence").toBeDefined();
       const text = await (await fetch(`${base}/v1/evidence/${log!.id}/content`, { headers: { Authorization: `Bearer ${token}`, "Darkory-Session": "e2e-live-ada" } })).text();
       expect(text).toContain("fakeagent: busy until /exit");

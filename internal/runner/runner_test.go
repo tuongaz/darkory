@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -251,6 +252,18 @@ func evidenceNames(list []client.Evidence) []string {
 	return names
 }
 
+// sessionLogs counts the names that are a session log of agent on task, session-<KEY>-<agent>-<HHMMSS>.log.
+func sessionLogs(names []string, task, agent string) int {
+	re := regexp.MustCompile(`^session-` + regexp.QuoteMeta(task) + `-` + regexp.QuoteMeta(agent) + `-[0-9]{6}\.log$`)
+	n := 0
+	for _, name := range names {
+		if re.MatchString(name) {
+			n++
+		}
+	}
+	return n
+}
+
 type lockedBuffer struct {
 	mu sync.Mutex
 	b  bytes.Buffer
@@ -328,9 +341,10 @@ func TestRunnerWorksAFeature(t *testing.T) {
 			}
 		}
 		// Two sessions worked WEB-3; each log is on the Task, or on the Feature when the reviewer
-		// held the Task by then.
-		if n := strings.Count(strings.Join(append(names, fnames...), " "), "session-WEB-3.log"); n != 2 {
-			t.Errorf("session-WEB-3.log is attached %d times (Task %v, Feature %v)", n, names, fnames)
+		// held the Task by then, named for its agent.
+		all := append(names, fnames...)
+		if sessionLogs(all, "WEB-3", "builder") != 1 || sessionLogs(all, "WEB-3", "reviewer") != 1 {
+			t.Errorf("WEB-3's session logs: Task %v, Feature %v", names, fnames)
 		}
 		notes := ""
 		for _, n := range web3.Notes {
@@ -400,7 +414,7 @@ func TestRunnerReleasesASilentSession(t *testing.T) {
 		}
 		// Each session's log went with its release.
 		eventually(t, 10*time.Second, "three session logs", func() bool {
-			return strings.Count(strings.Join(evidenceNames(f.task("WEB-3").Evidence), " "), "session-WEB-3.log") == 3
+			return sessionLogs(evidenceNames(f.task("WEB-3").Evidence), "WEB-3", "builder") == 3
 		})
 	})
 }
@@ -439,7 +453,7 @@ func TestRunnerInTmux(t *testing.T) {
 	}
 	var log *client.Evidence
 	for _, e := range f.task("WEB-3").Evidence {
-		if e.Filename == "session-WEB-3.log" {
+		if sessionLogs([]string{e.Filename}, "WEB-3", "builder") == 1 {
 			log = &e
 		}
 	}

@@ -235,6 +235,32 @@ func (ri *runnerInstall) evidence(key, filename string) string {
 	return ri.ada.ok("evidence", "get", id, "-o", "-")
 }
 
+// sessionLog downloads the logs of agent's sessions on Task key (any agent's when agent is
+// empty), session-<KEY>-<agent>-<HHMMSS>.log, from the Task and from its Feature, joined.
+func (ri *runnerInstall) sessionLog(key, agent string) string {
+	ri.t.Helper()
+	if agent == "" {
+		agent = "[a-z0-9-]+"
+	} else {
+		agent = regexp.QuoteMeta(agent)
+	}
+	re := regexp.MustCompile(`^session-` + regexp.QuoteMeta(key) + `-` + agent + `-[0-9]{6}\.log$`)
+	d := ri.task(key)
+	list := d.Evidence
+	for _, e := range ri.feature(d.Feature.Key).Evidence {
+		if e.TaskID == nil { // the Feature's list holds its Tasks' Evidence too
+			list = append(list, e)
+		}
+	}
+	var logs strings.Builder
+	for _, e := range list {
+		if re.MatchString(e.Filename) {
+			logs.WriteString(ri.ada.ok("evidence", "get", e.ID, "-o", "-"))
+		}
+	}
+	return logs.String()
+}
+
 // featureEvidence downloads the last Evidence named filename on Feature key itself.
 func (ri *runnerInstall) featureEvidence(key, filename string) string {
 	ri.t.Helper()
@@ -305,7 +331,7 @@ func TestRunnerWorksAFeature(t *testing.T) {
 				t.Errorf("no %s branch in %s", key, repo)
 			}
 		}
-		log := ri.evidence(key, "session-"+key+".log") + ri.featureEvidence("MAIN-1", "session-"+key+".log")
+		log := ri.sessionLog(key, "")
 		for _, dir := range []string{filepath.Join("workspaces", key, ri.ws), filepath.Join("workspaces", key, "web2")} {
 			if !strings.Contains(log, dir) {
 				t.Errorf("%s's session did not work in %s:\n%s", key, dir, log)
@@ -391,7 +417,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		return false
 	})
 	ri.wait(15*time.Second, "the hung session's log", func() bool {
-		return strings.Contains(ri.evidence("MAIN-4", "session-MAIN-4.log"), "fakeagent: hanging")
+		return strings.Contains(ri.sessionLog("MAIN-4", "stuck"), "fakeagent: hanging")
 	})
 	ada.ok("agent", "set", "stuck", "--paused")
 
@@ -409,7 +435,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		var list client.RunnerSessionList
 		ada.json(&list, "sessions")
 		return len(slices.DeleteFunc(list.Items, func(s client.RunnerSession) bool { return s.TaskID != ri.task("MAIN-5").Task.ID })) == 0 &&
-			strings.Contains(ri.evidence("MAIN-5", "session-MAIN-5.log"), `fakeagent: read "/exit"`)
+			strings.Contains(ri.sessionLog("MAIN-5", "busy"), `fakeagent: read "/exit"`)
 	})
 	if d := ri.task("MAIN-5"); d.Status.Name != "Todo" || d.Task.Claim != nil {
 		t.Errorf("MAIN-5 after the take-back: %s, %+v", d.Status.Name, d.Task.Claim)
@@ -567,7 +593,7 @@ func TestRunnerInTmux(t *testing.T) {
 	ada.ok("sessions", "stop", "MAIN-2")
 	ri.wait(20*time.Second, "the stopped session gone, its log attached", func() bool {
 		return exec.Command("tmux", "-L", socket, "has-session", "-t", "=dk-MAIN-2").Run() != nil &&
-			strings.Contains(ri.evidence("MAIN-2", "session-MAIN-2.log"), "fakeagent: busy until /exit")
+			strings.Contains(ri.sessionLog("MAIN-2", "builder"), "fakeagent: busy until /exit")
 	})
 	d := ri.task("MAIN-2")
 	if d.Task.Claim != nil || !strings.Contains(notes(d), "An admin stopped the session") {

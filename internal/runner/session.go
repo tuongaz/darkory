@@ -715,7 +715,8 @@ func (s *session) shutdown(ctx context.Context) {
 }
 
 // attachLog attaches the session's log as Evidence, on the Task, or on its Feature when someone
-// else holds the Task by now.
+// else holds the Task by now. It is named for the Task, the agent and the time the session began
+// (UTC), so the builder's and the reviewer's logs of one Task tell apart.
 func (s *session) attachLog(ctx context.Context) {
 	b, err := readTail(s.logPath, maxLog)
 	if err != nil || len(b) == 0 {
@@ -724,7 +725,7 @@ func (s *session) attachLog(ctx context.Context) {
 		}
 		return
 	}
-	name := "session-" + s.key + ".log"
+	name := SessionLogName(s.key, s.a.name(), s.started)
 	onFeature, err := s.rec.Attach(ctx, s.key, s.d.Feature.Key, name, b)
 	switch {
 	case err != nil:
@@ -734,6 +735,11 @@ func (s *session) attachLog(ctx context.Context) {
 	default:
 		s.log.Info("attached the session's log", "evidence", name, "bytes", len(b))
 	}
+}
+
+// SessionLogName is the Evidence name of a session's log: session-<KEY>-<agent>-<HHMMSS>.log.
+func SessionLogName(task, agent string, started time.Time) string {
+	return fmt.Sprintf("session-%s-%s-%s.log", task, agent, started.UTC().Format("150405"))
 }
 
 func readTail(path string, n int64) ([]byte, error) {
