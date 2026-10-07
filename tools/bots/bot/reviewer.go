@@ -3,6 +3,7 @@ package bot
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/tuongaz/darkory/client"
@@ -10,8 +11,9 @@ import (
 
 // Reviewer takes review and skill-review Tasks through next. A Retrospective handed over with a
 // pending Skill proposal it reviews and completes, which publishes the proposed version, or hands
-// back to retro when another version was published since the proposal was written; any other
-// review it reads and completes with a Note.
+// back to retro when another version was published since the proposal was written; a Task whose
+// Step carries a HandBack it hands back to the Step's Skill, in Todo, the first time it reviews
+// it; any other review it reads and completes with a Note.
 type Reviewer struct{ agent }
 
 // NewReviewer makes a reviewer.
@@ -38,10 +40,31 @@ func (r *Reviewer) review(ctx context.Context, d *client.TaskDetail) error {
 		return nil
 	}
 	p := d.Proposal
+	// A Step that says what review finds wrong is handed back to its worker the first time.
+	if step := r.step(d); step != nil && step.HandBack != "" && !slices.ContainsFunc(d.Claims, func(c client.Claim) bool {
+		return c.HolderID == r.m.ID && c.ID != d.Task.Claim.ID
+	}) {
+		list, err := r.listStatuses(wctx)
+		if err != nil {
+			return gone(wctx, err)
+		}
+		_, todo := firstOfKind(list, client.StatusKindTodo)
+		stop()
+		if ctx.Err() != nil {
+			return nil
+		}
+		if err := r.handover(ctx, key, step.Skill, todo, step.HandBack); err != nil {
+			return gone(ctx, err)
+		}
+		r.say("handed back", key, "to %s: %q", step.Skill, step.HandBack)
+		return nil
+	}
 	if d.Task.Kind != client.Retrospective || p == nil || p.State != client.Pending {
 		note := fmt.Sprintf("Read %q with its %s and %s; it does what it says.", d.Task.Title, count(len(d.Notes), "Note"),
 			count(len(d.Evidence), "Evidence file"))
-		if len(d.Blockers) > 0 {
+		// A review Task filed for others' work is blocked by that work; a Task handed over to
+		// review is the work.
+		if len(d.Blockers) > 0 && len(d.Claims) == 1 {
 			var keys []string
 			for _, bl := range d.Blockers {
 				keys = append(keys, bl.Key)
@@ -69,7 +92,7 @@ func (r *Reviewer) review(ctx context.Context, d *client.TaskDetail) error {
 	// A version published since the proposal was written makes it stale: it goes back to retro
 	// to be written again, as the refusal to complete would say.
 	if p.BasedOnVersion == s.Skill.CurrentVersion {
-		_, err = r.complete(ctx, key, fmt.Sprintf("Reviewed the proposal for %s v%d: it says what the builders missed. Publishing.",
+		_, err = r.complete(ctx, key, fmt.Sprintf("Reviewed the proposal for %s v%d, which says what the workers missed, and published it.",
 			s.Skill.Name, p.BasedOnVersion+1))
 		if err == nil {
 			r.say("published", key, "%s v%d", s.Skill.Name, p.BasedOnVersion+1)

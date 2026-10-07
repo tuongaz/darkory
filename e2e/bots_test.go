@@ -622,9 +622,9 @@ func (a api) activity() []client.Activity {
 	}
 }
 
-// orgShape lists the Organisation's Teams with their Members, its Members with their kind,
-// manager and Skills, and its Skills with their versions, sorted, to compare one Setup with the
-// next.
+// orgShape lists the Organisation's Teams with their defaults and Members, its Workspaces, its
+// Statuses in order, its Members with their kind, manager and Skills, and its Skills with their
+// versions, sorted, to compare one Setup with the next.
 func orgShape(a api) []string {
 	a.t.Helper()
 	ctx := context.Background()
@@ -643,7 +643,18 @@ func orgShape(a api) []string {
 			names = append(names, m.Name)
 		}
 		sort.Strings(names)
-		out = append(out, fmt.Sprintf("team %s %s: %s", tm.Key, tm.Name, strings.Join(names, " ")))
+		out = append(out, fmt.Sprintf("team %s %s default=%s ship_when_done=%v: %s", tm.Key, tm.Name, deref(tm.DefaultWorkspaceID), tm.ShipWhenDone,
+			strings.Join(names, " ")))
+	}
+	workspaces, err := a.c.ListWorkspacesWithResponse(ctx)
+	if err != nil || workspaces.JSON200 == nil {
+		a.t.Fatalf("listing Workspaces: %v %s", err, bodyOf(workspaces))
+	}
+	for _, w := range workspaces.JSON200.Items {
+		out = append(out, fmt.Sprintf("workspace %s %s %s %s %s", w.ID, w.Name, w.Kind, w.Path, w.DefaultBranch))
+	}
+	for _, s := range a.statuses() {
+		out = append(out, fmt.Sprintf("status %d %s %s %s", s.Position, s.ID, s.Name, s.Kind))
 	}
 	members, err := a.c.ListMembersWithResponse(ctx, &client.ListMembersParams{})
 	if err != nil || members.JSON200 == nil {
@@ -753,7 +764,10 @@ func replay(t *testing.T, trail []client.Activity, statuses []client.Status) (ma
 		case client.ActivityKindTaskDropped:
 			status[task] = first[client.StatusKindDropped]
 		case client.ActivityKindStatusesChanged:
-			t.Errorf("seq %d: the Statuses changed during the run, which replay does not follow", en.Seq)
+			// A preset's Setup may set the Statuses before anything is filed.
+			if len(status) > 0 {
+				t.Errorf("seq %d: the Statuses changed during the run, which replay does not follow", en.Seq)
+			}
 		}
 	}
 	return status, named
@@ -808,11 +822,11 @@ func (tr trail) one(kind client.ActivityKind, subject string) client.Activity {
 }
 
 // checkClaims checks that every claim is followed by exactly one end of that Claim before the
-// Task is claimed again, and that every bot's claims carry its model label.
+// Task is claimed again, and that every agent bot's claims carry its model label.
 func (tr trail) checkClaims(crew *bot.Crew) {
 	tr.t.Helper()
 	model := map[string]string{}
-	for _, s := range bot.Roster {
+	for _, s := range crew.Preset.Agents {
 		model[crew.Members[s.Name].ID] = s.Model
 	}
 	ends := []client.ActivityKind{client.ActivityKindTaskReleased, client.ActivityKindTaskHandedOver, client.ActivityKindTaskCompleted,

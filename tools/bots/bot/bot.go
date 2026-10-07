@@ -76,25 +76,31 @@ type Pace struct {
 	Patience time.Duration
 	// Rest is how long Stuck rests after a take-back before taking work again, or 0 to stop.
 	Rest time.Duration
+	// Answer is how long a human persona leaves a Task they could take before taking it, at
+	// random between the two; Round how often a persona who owns Features looks them over.
+	Answer [2]time.Duration
+	Round  time.Duration
 }
 
 // Fast is the pace of the scenario tests: every bot finishes a Task within a second.
 var Fast = Pace{Name: "fast", Work: [2]time.Duration{200 * time.Millisecond, 600 * time.Millisecond}, Step: 20 * time.Millisecond,
-	Wait: 1, Poll: 100 * time.Millisecond, Timeout: 3, Heartbeat: 500 * time.Millisecond, LapseTimeout: 2, Patience: 2 * time.Minute}
+	Wait: 1, Poll: 100 * time.Millisecond, Timeout: 3, Heartbeat: 500 * time.Millisecond, LapseTimeout: 2, Patience: 2 * time.Minute,
+	Answer: [2]time.Duration{200 * time.Millisecond, 600 * time.Millisecond}, Round: 500 * time.Millisecond}
 
 // Human is the pace of a live load: a builder takes 30–90 s per Task and heartbeats every 15 s,
-// the lapser lapses once a minute, and Stuck holds its Task until someone takes it back.
+// the lapser lapses once a minute, Stuck holds its Task until someone takes it back, a person
+// answers a question 20–60 s after it is asked, and an owner looks their Features over every 30 s.
 var Human = Pace{Name: "human", Work: [2]time.Duration{30 * time.Second, 90 * time.Second}, Step: 3 * time.Second,
 	Wait: 30, Poll: 5 * time.Second, Timeout: 45, Heartbeat: 15 * time.Second, LapseTimeout: 20, LapseEvery: time.Minute,
-	Patience: 3 * time.Minute, Rest: 2 * time.Minute}
+	Patience: 3 * time.Minute, Rest: 2 * time.Minute, Answer: [2]time.Duration{20 * time.Second, 60 * time.Second}, Round: 30 * time.Second}
 
 // Event is one thing a bot did or met.
 type Event struct {
 	At  time.Time
 	Bot string
 	// What is a short verb phrase: took, nothing, noted, attached, asked, answered, observed,
-	// handed over, completed, released, filed, blocked, moved, proposed, published, went silent,
-	// lapsed, taken back, lost, refused, failed.
+	// wrote, handed over, handed back, completed, released, filed, blocked, moved, shipped,
+	// proposed, published, went silent, lapsed, taken back, lost, refused, failed.
 	What string
 	// Task is the display key of the Task it is about, if any.
 	Task string
@@ -190,6 +196,10 @@ type agent struct {
 	model string
 	c     *client.ClientWithResponses
 	rng   *rand.Rand
+	// preset says what a Task's plan asks of whoever works it, with questions aimed at ask by
+	// default; Software unless Crew.Bots sets it.
+	preset *Preset
+	ask    string
 
 	mu    sync.Mutex
 	names map[string]string // Status names by id
@@ -200,7 +210,24 @@ func newAgent(cfg Config, m Member, model string) agent {
 	if err != nil {
 		panic(err) // only a malformed URL fails, which is the caller's bug
 	}
-	return agent{cfg: cfg, m: m, model: model, c: c, rng: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))}
+	return agent{cfg: cfg, m: m, model: model, c: c, rng: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())), preset: &Software}
+}
+
+// step is what d's plan asks of whoever works its Task, or nil when the plan does not have it.
+func (a *agent) step(d *client.TaskDetail) *Step {
+	if d.Task.Kind != client.Work {
+		return nil
+	}
+	return a.preset.step(d.Feature, d.Task.Title, a.ask)
+}
+
+// between is a random duration between the two, as Pace.Work gives them.
+func (a *agent) between(r [2]time.Duration) time.Duration {
+	lo, hi := r[0], r[1]
+	if hi <= lo {
+		return lo
+	}
+	return lo + time.Duration(a.rng.Int64N(int64(hi-lo)))
 }
 
 func (a *agent) Name() string { return a.m.Name }
@@ -242,13 +269,7 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 // work is how long the next Task takes, at random within the pace's range.
-func (a *agent) work() time.Duration {
-	lo, hi := a.cfg.Pace.Work[0], a.cfg.Pace.Work[1]
-	if hi <= lo {
-		return lo
-	}
-	return lo + time.Duration(a.rng.Int64N(int64(hi-lo)))
-}
+func (a *agent) work() time.Duration { return a.between(a.cfg.Pace.Work) }
 
 // next asks for a takeable Task, waiting up to wait seconds, and claims it with a heartbeat
 // timeout of timeout seconds and the bot's model label. It returns nil when nothing came.
@@ -274,7 +295,11 @@ func (a *agent) took(d *client.TaskDetail) {
 	if c != nil && c.HeartbeatTimeoutSeconds != nil {
 		hb = fmt.Sprintf("heartbeat timeout %ds", *c.HeartbeatTimeoutSeconds)
 	}
-	a.say("took", d.Task.Key, "%q (%s, now %s; %s, model %s)", d.Task.Title, d.Task.Kind, d.Status.Name, hb, or(a.model, "none"))
+	model := ""
+	if a.model != "" {
+		model = ", model " + a.model
+	}
+	a.say("took", d.Task.Key, "%q (%s, now %s; %s%s)", d.Task.Title, d.Task.Kind, d.Status.Name, hb, model)
 }
 
 // count says n things, as "1 Note" or "2 Notes".
