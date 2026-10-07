@@ -70,6 +70,11 @@ func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.Li
 		AimedAt: params.AimedAt, Holder: params.Holder, Status: params.Status}
 	if params.Filter != nil {
 		tf.Filters = *params.Filter
+		if run := s.theRunner(); run != nil {
+			for _, sess := range run.Sessions() {
+				tf.SessionTasks = append(tf.SessionTasks, sess.TaskID)
+			}
+		}
 	}
 	if params.Limit != nil {
 		tf.Limit = *params.Limit
