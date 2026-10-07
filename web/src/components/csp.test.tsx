@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toaster } from "@/components/ui/sonner";
+import { sampleSteps, sampleSubtasks, sampleWorkflow } from "@/components/workflow/samples";
+import { SubtaskGraph } from "@/components/workflow/SubtaskGraph";
+import { WorkflowCanvas } from "@/components/workflow/WorkflowCanvas";
 
 // The Install's Content-Security-Policy is style-src 'self': a <style> element added at run time
 // is refused and logged as an error. These parts of the kit would add one; vite.config.ts
@@ -67,6 +70,29 @@ describe("no <style> at run time", () => {
     const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
     render(<Calendar mode="range" defaultMonth={new Date(2026, 9, 1)} selected={{ from: new Date(2026, 9, 4), to: new Date(2026, 9, 6) }} />);
     expect(screen.getByRole("grid")).toBeInTheDocument();
+    expect(styles()).toEqual([]);
+    expect(setAttribute.mock.calls.filter(([name]) => name === "style")).toEqual([]);
+  });
+
+  // React Flow (@xyflow/react) places nodes, edges and labels with style props, which React
+  // writes through the CSSOM; its own CSS is base.css, bundled from globals.css.
+  it("from the Workflow canvas and the Subtask graph, nor a style attribute", async () => {
+    const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
+    render(
+      <>
+        <WorkflowCanvas workflow={sampleWorkflow} mode="live" />
+        <WorkflowCanvas workflow={sampleWorkflow} mode="edit" onDeleteStep={() => {}} />
+        <SubtaskGraph steps={sampleSteps} subtasks={sampleSubtasks} onOpen={() => {}} />
+      </>,
+    );
+    const build = screen.getAllByRole("group", { hidden: true }).filter((n) => n.getAttribute("aria-label")?.startsWith("Build:"))[1];
+    act(() => build.focus());
+    fireEvent.keyDown(build, { key: "Enter" });
+    // Its panel, with the Select that asks where Build's Tasks go.
+    expect(await screen.findByRole("button", { name: "Delete Build", hidden: true })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Step that receives the Tasks at Build", hidden: true })).toBeInTheDocument();
+    expect(document.querySelectorAll(".react-flow__edge").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /^MAIN-5 /, hidden: true })).toBeInTheDocument();
     expect(styles()).toEqual([]);
     expect(setAttribute.mock.calls.filter(([name]) => name === "style")).toEqual([]);
   });

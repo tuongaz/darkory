@@ -21,6 +21,7 @@ import { RunnerSessionBadge } from "./RunnerSessionBadge";
 import { StatusGlyph } from "./StatusGlyph";
 import { StatusSelect } from "./StatusSelect";
 import { Timeline, TimelineDay, TimelineRow } from "./Timeline";
+import { WorkGlyph } from "./WorkGlyph";
 
 const inMinutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
 
@@ -44,6 +45,41 @@ describe("StatusGlyph", () => {
   });
 });
 
+describe("WorkGlyph", () => {
+  it("names each glyph, and marks a working one by its holder's kind and session", () => {
+    render(
+      <>
+        <WorkGlyph glyph={{ glyph: "waiting" }} />
+        <WorkGlyph glyph={{ glyph: "working", holderKind: "agent" }} />
+        <WorkGlyph glyph={{ glyph: "working", holderKind: "agent", session: "waiting" }} />
+        <WorkGlyph glyph={{ glyph: "working", holderKind: "human" }} />
+        <WorkGlyph glyph={{ glyph: "blocked" }} />
+        <WorkGlyph glyph={{ glyph: "hold" }} />
+        <WorkGlyph glyph={{ glyph: "done" }} />
+        <WorkGlyph glyph={{ glyph: "dropped" }} />
+        <WorkGlyph glyph={{ glyph: "parent", done: 3, dropped: 1, total: 5 }} />
+      </>,
+    );
+    const glyphs = screen.getAllByRole("img");
+    expect(glyphs.map((el) => el.getAttribute("aria-label"))).toEqual([
+      "Waiting",
+      "Working",
+      "Working, its session waiting",
+      "Working",
+      "Blocked",
+      "At a hold",
+      "Done",
+      "Dropped",
+      "3 of 5 Subtasks done, 1 dropped",
+    ]);
+    // An agent with no session named turns, as running; a human's ring has no session.
+    expect(glyphs[1].dataset.session).toBe("running");
+    expect(glyphs[2].dataset.session).toBe("waiting");
+    expect(glyphs[3].dataset.holder).toBe("human");
+    expect(glyphs[3]).not.toHaveAttribute("data-session");
+  });
+});
+
 describe("MemberAvatar", () => {
   it("takes initials as the board draws them", () => {
     expect(initials({ name: "Mai Tran", kind: "human" })).toBe("MT");
@@ -54,7 +90,7 @@ describe("MemberAvatar", () => {
     expect(initials({ name: "reviewer", kind: "agent" })).toBe("RV");
   });
 
-  it("marks an agent apart from a human", () => {
+  it("draws every Member round, an agent apart by its kind (the gradient ring in globals.css)", () => {
     render(
       <>
         <MemberAvatar member={{ name: "Mai Tran", kind: "human" }} />
@@ -63,9 +99,24 @@ describe("MemberAvatar", () => {
     );
     const human = screen.getByRole("img", { name: "Mai Tran" });
     const agent = screen.getByRole("img", { name: "builder-1 (agent)" });
-    expect(human).toHaveClass("rounded-full");
-    expect(agent).not.toHaveClass("rounded-full");
-    expect(agent).toHaveClass("border-agent-border", "size-10");
+    expect(human).toHaveClass("avatar-tint", "rounded-full");
+    expect(agent).toHaveClass("avatar-tint", "rounded-full", "size-10");
+    expect(human.dataset.kind).toBe("human");
+    expect(agent.dataset.kind).toBe("agent");
+    expect(agent).not.toHaveAttribute("data-working");
+  });
+
+  it("says that a standalone mark's Member works, and how", () => {
+    render(
+      <>
+        <MemberAvatar member={{ name: "builder-1", kind: "agent" }} working="running" />
+        <MemberAvatar member={{ name: "qa-bot", kind: "agent" }} working="stalled" />
+        <MemberAvatar member={{ name: "Mai Tran", kind: "human" }} working="held" />
+      </>,
+    );
+    expect(screen.getByRole("img", { name: "builder-1 (agent), working" }).dataset.working).toBe("running");
+    expect(screen.getByRole("img", { name: "qa-bot (agent), working, its session stalled" }).dataset.working).toBe("stalled");
+    expect(screen.getByRole("img", { name: "Mai Tran, working" }).dataset.working).toBe("held");
   });
 
   it("tints each avatar by its Member's name, so the same initials still differ", () => {
