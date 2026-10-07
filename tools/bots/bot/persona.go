@@ -115,7 +115,8 @@ func (h *Person) do(ctx context.Context, key string) error {
 	// A Claim with a timeout ends when the token is revoked, so none is left held when the run stops.
 	wctx, stop := h.hold(ctx, d)
 	defer stop()
-	if !sleep(wctx, h.work()/2) {
+	// The time to answer was the wait before the Claim; writing it takes a moment.
+	if !sleep(wctx, h.cfg.Pace.Step) {
 		return nil
 	}
 	note := ""

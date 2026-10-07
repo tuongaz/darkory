@@ -110,8 +110,10 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 	note := ""
 	switch {
 	case step == nil || step.Workpaper == "":
-		first, _, _ := strings.Cut(d.Task.Description, "\n")
-		note = fmt.Sprintf("Starting on %q: %s", d.Task.Title, strings.TrimSuffix(first, ".")) + "."
+		note = fmt.Sprintf("Starting on %q.", d.Task.Title)
+		if first, _, _ := strings.Cut(d.Task.Description, "\n"); strings.TrimSpace(first) != "" {
+			note = fmt.Sprintf("Starting on %q: %s.", d.Task.Title, strings.TrimSuffix(strings.TrimSpace(first), "."))
+		}
 	case rework:
 		note = fmt.Sprintf("Back from review, fixing %s.", step.Workpaper)
 	default:

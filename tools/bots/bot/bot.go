@@ -295,7 +295,11 @@ func (a *agent) took(d *client.TaskDetail) {
 	if c != nil && c.HeartbeatTimeoutSeconds != nil {
 		hb = fmt.Sprintf("heartbeat timeout %ds", *c.HeartbeatTimeoutSeconds)
 	}
-	a.say("took", d.Task.Key, "%q (%s, now %s; %s, model %s)", d.Task.Title, d.Task.Kind, d.Status.Name, hb, or(a.model, "none"))
+	model := ""
+	if a.model != "" {
+		model = ", model " + a.model
+	}
+	a.say("took", d.Task.Key, "%q (%s, now %s; %s%s)", d.Task.Title, d.Task.Kind, d.Status.Name, hb, model)
 }
 
 // count says n things, as "1 Note" or "2 Notes".
