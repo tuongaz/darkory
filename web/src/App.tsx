@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { isUnauthenticated } from "@/api/client";
 import { LiveActivity, LiveActivityContext } from "@/api/live";
 import { useMe } from "@/api/queries";
-import { AppRoutes } from "@/app/routes";
+import { AppRoutes, DevScreens } from "@/app/routes";
 import { SignedOut } from "@/app/SignedOut";
 import { Refusal } from "@/components/Refusal";
 import { MeContext } from "@/me";
@@ -23,7 +23,11 @@ export function App({ router }: { router: (children: ReactNode) => ReactNode }) 
   const [live] = useState(() => new LiveActivity());
   return (
     <Providers client={client} live={live}>
-      {router(<Root />)}
+      {router(
+        <DevScreens>
+          <Root />
+        </DevScreens>,
+      )}
     </Providers>
   );
 }

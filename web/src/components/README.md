@@ -91,15 +91,17 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
   `useAllTasks`, `useAllFeatures` (⌘K), `useWorkspaces` (root `workspaces`, kept live by
   `workspace.*`), `useRunnerSessions` (`["runner", "sessions"]`: what the Runner runs now,
   `{ runner, items }`) and `useRunnerSession(taskId)`. `@/work`: `liveClaim`, `boundTo`,
-  `liveAgents`, `taskGlyph` (by state, until Statuses reach `/v1`).
+  `liveAgents`, `taskWorkGlyph` (a Task record's WorkGlyph from its state, live Claim and
+  blocked flag, until steps reach `/v1`).
 
 ## Primitives (`src/components/`)
 
 | Component | Kit | Use |
 |---|---|---|
-| `StatusGlyph glyph` | `.st` | `backlog · todo · inprogress · inreview · done · dropped`. `glyphFor(kind, nthOfKind)` in `@/lib/status` maps a Status kind to a glyph: the first In-progress Status draws half full, later ones (In review) three quarters. |
+| `StatusGlyph glyph` | `.st` | The Status model's glyph (ADR 0012), kept only while screens still draw the Statuses `/v1` serves; model v2 (ADR 0016) replaces it with WorkGlyph, and it goes when the last screen moves to steps. `glyphFor(kind, nthOfKind)` in `@/lib/status`. |
 | `StatusSelect statuses value onValueChange variant id` | `.select` | The one Status picker (File a Task, a Task's properties): the open-kind Statuses in board order with their glyphs. `field` for a form, `property` for a properties column. |
-| `MemberAvatar member size` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Round initials for a human, square with the violet agent border for an agent, each on one of eight muted tints picked by its name (`tintOf` in `@/lib/members`, `.avatar-tint` in `globals.css`), so two "RT"s differ; named for screen readers ("builder-1 (agent)"). |
+| `MemberAvatar member size working` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Every Member round, initials on one of eight muted tints picked by its name (`tintOf` in `@/lib/members`), so two "RT"s differ, in a ring: a plain line for a human, the AI gradient (`--agent-gradient`) for an agent (`.avatar-tint` in `globals.css`); named for screen readers ("builder-1 (agent)"), `data-kind` says which. `working` is for a standalone mark (Agents page, a canvas or graph node) whose Member works: `running` turns an agent's ring (1.6 s), `waiting` / `stalled` / `ending` stop it amber / red / grey, `held` (a human's live Claim) is a still ring in the human ink. Reduced motion stops the turning. A row or a card says the same with its WorkGlyph instead. |
+| `WorkGlyph glyph label` | `.st` | A Task's derived state at 14px: `waiting` ○, `working` (an agent's AI-gradient ring turning while its session runs, stopped in the session's colour otherwise; a human's still ring with a dot), `blocked` ⊘, `hold` (dashed), `done` ✓, `dropped` ✕, `parent` (a progress ring: done green and dropped grey, of all its Subtasks). `glyphFor({state, held, holderKind, session, blocked, atHold, counts})` in `@/lib/work` picks it: ended, then Parent, then held, then blocked, then hold, then waiting. Replaces StatusGlyph as the screens move to steps. |
 | `Pill tone` | `.badge` | `waiting · claimed · blocked · done · dropped · agent` (ink on a tint), `outline` (a Skill name), `secondary` (a Task kind, a fact), `destructive`. At most two words; a dimmed row's pill says why. |
 | `Key to?` | `.key` | `WEB-3` in mono; a link with `to`. |
 | `TeamMark team size` | `.team-dot` | A Team's lettered square, coloured by its key. |
@@ -118,6 +120,23 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | `RunnerSessionBadge session bare state` | | The Runner's session on a Task as one line: "Session [Running] started 04:25 · mac-mini"; `bare` leaves out "Session" under a Session column, `state={false}` the pill beside a State column (Agents). |
 | `SessionFacts session agent` | | A runner session's facts in one line: the agent, started, its state, the host, `tmux dk-WEB-12` or "no tmux". |
 | `SessionStatePill state` | `.badge` | A runner session's state: Running (done tone: working, Heartbeats going), Waiting (claimed: its turn ended without a decision and the Runner nudges it, or it shows a dialog a person answers by joining), Stalled (blocked: no progress, no more Heartbeats, the Claim lapsing; the Heartbeat meter empties), Ending (dropped). Its title says which. |
+
+## Canvases (`src/components/workflow/`)
+
+Model v2's Workflow drawn on React Flow (`@xyflow/react` 12, its `base.css` bundled from
+`globals.css`, its look from the tokens in `globals.css`). Presentational: the parent holds the
+record and sends every change; the canvases read only these shapes (`model.ts`, `graph.ts`), which
+M4 binds `/v1` to.
+
+| Component | Use |
+|---|---|
+| `WorkflowCanvas workflow mode` | `Workflow = {steps, connectors}`; `Step = {id, name, skill?: {id, name}, position, x, y, takers: {id, name, kind, working?}[], tasks, working, medianMs?}`; `Connector = {id, from, to: stepId or null (Done), name, position}`. A step node shows its name, Skill (or "Hold", drawn dashed), takers as stacked marks, "N waiting · M working", and "No Member has it" in amber when it carries a Skill nobody holds; Done and Dropped stand fixed right of the steps, Dropped with a dashed "from any step" arrow. Connectors are routed at right angles round the nodes (`route.ts`), the outcome named where the line leaves its step; a Connector back leaves by the left and enters from below or above. `live` (Project › Workflow): read-only, takers ringed by `working`. `edit` (Settings › Workflow): `onSelect(step or null)`, `onMove(step, x, y)` on a drop or an arrow key, `onAddStep(from, at?)` from "+" or a connection let go on the canvas, `onAddConnector({from, to})`, `onConnectorChange(connector, {from, to})` when an end is dragged, `onDeleteStep(step, moveTo?)`, `onDeleteConnector(connector)`, `onLayout(positions)` from Tidy up (`tidy` in `layout.ts`: dagre, left to right, 240px between ranks, a step node 208×88). What `/v1` would refuse (into Dropped, into its own step, deleting a step whose Tasks have nowhere to go) is said in words and not sent (`connectProblem`, `deleteProblem`). Its own minimal panel (name, Skill, Connectors out, Delete) stands in for M4's. |
+| `SubtaskGraph steps subtasks onOpen` | A Parent's Subtasks over its Project's steps: `GraphSubtask = {id, key, title, stepId or null, state, holder?, working?, aimedAt?, blockedBy (open blockers' ids), kind}`. A column per step holding an open Subtask, in the Workflow's order, then "With <member>" per Member one is aimed at, then Done · Dropped; inside a column, a Subtask one layer right of what blocks it there; one row grid, a Subtask on its blocker's row when free (`layoutSubtasks` in `graph.ts`). Blocking arrows at right angles through gutters and row gaps, never across a node. Takeable now (open, unheld, unblocked, at a step with a Skill or aimed at a Member) highlighted and marked Takeable; worked as is, its holder's mark ringed; the rest dimmed. Drawn full size, scrolling sideways in its box; a click is `onOpen(id)`. |
+
+`/dev/design` (served by `npm run dev` only, no sign-in) draws the marks, the WorkGlyph set, both
+canvas modes and a Subtask graph from `samples.ts`; the editing canvas lists the callbacks it
+receives. `npm run lab` (Playwright against `vite dev`) shoots it at 1440×900 and 390×844 in light
+and dark into `e2e/screenshots/`, and checks the drags, the turning ring and the phone width.
 
 shadcn/ui components are in `src/components/ui/` (sidebar, button, badge, avatar, sheet, dialog,
 dropdown-menu, popover, command, tabs, table, switch, select, input, textarea, tooltip, separator,
@@ -175,8 +194,11 @@ and stops it; as a child process it shows the session cannot be joined and stops
 `src/globals.css` holds the board's `tokens.css` verbatim, shadcn's `.dark` theme with the Darkory
 colours lifted for a dark ground (the app follows the system), and the type scale: `text-sm` is
 13px (body), `text-xs` 12px, `text-2xs` 11px. Colours are utilities on tokens only, never hex:
-`bg-state-blocked-bg text-state-blocked`, `bg-agent-bg text-agent`, `border-agent-border`,
+`bg-state-blocked-bg text-state-blocked`, `bg-agent-bg text-agent`,
 `text-on-solid` (on a solid state fill), `bg-chart-1…5`, `shadow-soft`, `shadow-pop`, `bg-scrim`.
+`--agent-gradient` is the AI gradient, a conic gradient of `--agent-stops`; a ring that turns
+composes `conic-gradient(from var(--spin), var(--agent-stops))` where it is drawn, with
+`animation: mark-spin` turning the registered `--spin`.
 Light is the design; check a new screen in dark too.
 
 ## Tests
