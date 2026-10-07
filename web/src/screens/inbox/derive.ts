@@ -238,9 +238,8 @@ export function matchesFilter(e: Activity, f: ActivityFilter, where: Placement):
   return true;
 }
 
-export type MinuteGroup = { key: string; label: string; entries: Activity[] };
+export type DayGroup = { key: string; label: string; entries: Activity[] };
 
-const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const shortDay = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" });
 
 /** "Today", "Yesterday", or the day as "Mon 6 Oct". */
@@ -252,19 +251,22 @@ export function dayLabel(at: Date, now: number): string {
   return shortDay.format(at).replace(",", "");
 }
 
-/** Entries, newest first, in runs of one minute each, labelled "Today, 22:18". */
-export function groupByMinute(entries: Activity[], now: number): MinuteGroup[] {
-  const groups: MinuteGroup[] = [];
+/** Entries, newest first, in runs of one day each, labelled "Today", "Yesterday", "Mon 6 Oct". */
+export function groupByDay(entries: Activity[], now: number): DayGroup[] {
+  const groups: DayGroup[] = [];
   for (const e of entries) {
     const at = new Date(e.at);
-    const minute = new Date(at);
-    minute.setSeconds(0, 0);
-    const key = String(minute.getTime());
+    const key = String(startOfDay(at.getTime()));
     const last = groups.at(-1);
     if (last?.key === key) last.entries.push(e);
-    else groups.push({ key, label: `${dayLabel(at, now)}, ${clock.format(at)}`, entries: [e] });
+    else groups.push({ key, label: dayLabel(at, now), entries: [e] });
   }
   return groups;
+}
+
+/** The kinds a sign-in leaves, kept out of the trail unless asked for: they are not work. */
+export function isSignIn(kind: string): boolean {
+  return kind.startsWith("login_link.");
 }
 
 /** How long something has waited: "< 1 min", "4 min", "3 h", "2 d". */

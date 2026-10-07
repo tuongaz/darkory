@@ -199,7 +199,7 @@ test("Activity narrows to a Member and to a Kind", async ({ page }) => {
   const rows = activityRows(page);
   await expect(rows.first()).toBeVisible();
   // Its own entries, and the lapse Darkory recorded on its Claim.
-  for (const text of await rows.allTextContents()) expect(text).toMatch(/^#\d+(IBinbox-builder|DDarkory Lapsed)/);
+  for (const text of await rows.allTextContents()) expect(text).toMatch(/^(IBinbox-builder|DDarkory Lapsed)/);
   // The Claim's own entry is on this page, so the lapse says how long it waited.
   await expect(rows.filter({ hasText: "Darkory Lapsed" })).toContainText("held by inbox-builder · no Heartbeat in 2 s");
   await expect(rows.filter({ hasText: "inbox-builder filed" })).toHaveCount(1);
