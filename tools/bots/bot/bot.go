@@ -93,8 +93,8 @@ type Event struct {
 	At  time.Time
 	Bot string
 	// What is a short verb phrase: took, nothing, noted, attached, asked, answered, observed,
-	// handed over, completed, released, filed, blocked, moved, proposed, published, went silent,
-	// lapsed, taken back, lost, refused, failed.
+	// wrote, handed over, handed back, completed, released, filed, blocked, moved, proposed,
+	// published, went silent, lapsed, taken back, lost, refused, failed.
 	What string
 	// Task is the display key of the Task it is about, if any.
 	Task string
@@ -190,6 +190,10 @@ type agent struct {
 	model string
 	c     *client.ClientWithResponses
 	rng   *rand.Rand
+	// preset says what a Task's plan asks of whoever works it, with questions aimed at ask by
+	// default; Software unless Crew.Bots sets it.
+	preset *Preset
+	ask    string
 
 	mu    sync.Mutex
 	names map[string]string // Status names by id
@@ -200,7 +204,24 @@ func newAgent(cfg Config, m Member, model string) agent {
 	if err != nil {
 		panic(err) // only a malformed URL fails, which is the caller's bug
 	}
-	return agent{cfg: cfg, m: m, model: model, c: c, rng: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))}
+	return agent{cfg: cfg, m: m, model: model, c: c, rng: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())), preset: &Software}
+}
+
+// step is what d's plan asks of whoever works its Task, or nil when the plan does not have it.
+func (a *agent) step(d *client.TaskDetail) *Step {
+	if d.Task.Kind != client.Work {
+		return nil
+	}
+	return a.preset.step(d.Feature, d.Task.Title, a.ask)
+}
+
+// between is a random duration between the two, as Pace.Work gives them.
+func (a *agent) between(r [2]time.Duration) time.Duration {
+	lo, hi := r[0], r[1]
+	if hi <= lo {
+		return lo
+	}
+	return lo + time.Duration(a.rng.Int64N(int64(hi-lo)))
 }
 
 func (a *agent) Name() string { return a.m.Name }
@@ -242,13 +263,7 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 // work is how long the next Task takes, at random within the pace's range.
-func (a *agent) work() time.Duration {
-	lo, hi := a.cfg.Pace.Work[0], a.cfg.Pace.Work[1]
-	if hi <= lo {
-		return lo
-	}
-	return lo + time.Duration(a.rng.Int64N(int64(hi-lo)))
-}
+func (a *agent) work() time.Duration { return a.between(a.cfg.Pace.Work) }
 
 // next asks for a takeable Task, waiting up to wait seconds, and claims it with a heartbeat
 // timeout of timeout seconds and the bot's model label. It returns nil when nothing came.

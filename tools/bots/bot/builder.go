@@ -2,8 +2,10 @@ package bot
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -80,30 +82,63 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 		}
 		skill = s.Skill.Name
 	}
+	// What the Task asks of its worker: its plan's Step says, or else lines of its description.
+	step := b.step(d)
+	var who, question, handover string
+	if m := questionRe.FindStringSubmatch(d.Task.Description); m != nil {
+		who, question = m[1], m[2]
+	}
+	if m := handoverRe.FindStringSubmatch(d.Task.Description); m != nil {
+		handover = m[1]
+	}
+	// A Task handed back after review is reworked: the fix is appended and it goes to review again.
+	rework := false
+	if step != nil {
+		if q := step.Question; q != nil {
+			who, question = or(q.AimedAt, b.ask), q.Title
+		}
+		handover = or(step.Handover, handover)
+		for _, c := range d.Claims {
+			rework = rework || (c.HolderID == b.m.ID && c.HowEnded != nil && *c.HowEnded == client.ClaimEndHandedOver)
+		}
+	}
+
 	total := b.work()
 	if !sleep(wctx, total/3) {
 		return nil
 	}
-	first, _, _ := strings.Cut(d.Task.Description, "\n")
-	if err := b.note(wctx, key, fmt.Sprintf("Starting on %q. %s", d.Task.Title, first)); err != nil {
+	note := ""
+	switch {
+	case step == nil || step.Workpaper == "":
+		first, _, _ := strings.Cut(d.Task.Description, "\n")
+		note = fmt.Sprintf("Starting on %q. %s", d.Task.Title, first)
+	case rework:
+		note = fmt.Sprintf("Back from review, fixing %s.", step.Workpaper)
+	default:
+		note = fmt.Sprintf("Starting on %s, in %s.", d.Task.Title, step.Workpaper)
+	}
+	if err := b.note(wctx, key, note); err != nil {
 		return gone(wctx, err)
 	}
 	if !sleep(wctx, total/3) {
 		return nil
 	}
-	name, content := evidence(d, skill)
+	name, content, err := b.evidence(wctx, d, step, skill, rework)
+	if err != nil {
+		return gone(wctx, err)
+	}
 	if err := b.attach(wctx, key, name, content); err != nil {
 		return gone(wctx, err)
 	}
 
 	// A question asked once, by whoever held the Task, is not asked again.
-	asked := false
+	asked := rework
 	for _, bl := range d.Blockers {
 		asked = asked || bl.AimedAtID != nil
 	}
-	if m := questionRe.FindStringSubmatch(d.Task.Description); m != nil && !asked {
+	if question != "" && !asked {
 		asked = true
-		answered, err := b.ask(wctx, d, m[1], m[2])
+		answered, err := b.askAndWait(wctx, d, who, question)
 		if err != nil || wctx.Err() != nil {
 			return gone(wctx, err) // the Claim was lost while waiting, or the bot is stopping
 		}
@@ -112,14 +147,14 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return gone(ctx, b.release(ctx, key, fmt.Sprintf("Waiting for %s to answer; whoever takes it next can carry on once they have.", m[1])))
+			return gone(ctx, b.release(ctx, key, fmt.Sprintf("Waiting for %s to answer; whoever takes it next can carry on once they have.", who)))
 		}
 	}
 	if !sleep(wctx, total/3) {
 		return nil
 	}
 
-	if m := handoverRe.FindStringSubmatch(d.Task.Description); m != nil && m[1] != skill {
+	if handover != "" && handover != skill {
 		status, err := b.reviewStatus(wctx)
 		if err != nil {
 			return gone(wctx, err)
@@ -128,12 +163,16 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 		if ctx.Err() != nil {
 			return nil
 		}
-		return gone(ctx, b.handover(ctx, key, m[1], status, fmt.Sprintf("Built; %s is attached. Ready for %s.", name, m[1])))
+		hnote := fmt.Sprintf("Built; %s is attached. Ready for %s.", name, handover)
+		if step != nil && step.Workpaper != "" {
+			hnote = fmt.Sprintf("The workpaper %s is attached and ready for %s.", name, handover)
+		}
+		return gone(ctx, b.handover(ctx, key, handover, status, hnote))
 	}
 
 	outcome, body := client.Worked, fmt.Sprintf("%s went as %s describes.", d.Task.Title, or(skill, "the Skill"))
-	if m := questionRe.FindStringSubmatch(d.Task.Description); m != nil && asked {
-		outcome, body = client.DidntWork, fmt.Sprintf("%s did not answer this, so %s had to: %s", or(skill, "The Skill"), m[1], m[2])
+	if question != "" && asked && !rework {
+		outcome, body = client.DidntWork, fmt.Sprintf("%s did not answer this, so %s had to: %s", or(skill, "The Skill"), who, question)
 	}
 	res, err := b.c.ObserveWithResponse(wctx, key, &client.ObserveParams{}, client.ObserveBody{Outcome: outcome, Body: body})
 	if err := check(res, err, http.StatusCreated); err != nil {
@@ -148,9 +187,9 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 	return gone(ctx, err)
 }
 
-// ask files a question aimed at who that blocks d's Task, then waits, holding the Claim, until the
-// Task is unblocked or Patience runs out. It says whether the question was answered.
-func (b *Builder) ask(wctx context.Context, d *client.TaskDetail, who, q string) (bool, error) {
+// askAndWait files a question aimed at who that blocks d's Task, then waits, holding the Claim,
+// until the Task is unblocked or Patience runs out. It says whether the question was answered.
+func (b *Builder) askAndWait(wctx context.Context, d *client.TaskDetail, who, q string) (bool, error) {
 	desc := fmt.Sprintf("%s asks while working %s %q.", b.m.Name, d.Task.Key, d.Task.Title)
 	res, err := b.c.FileTaskWithResponse(wctx, &client.FileTaskParams{}, client.FileTaskBody{
 		Title: q, AimedAt: &who, Blocks: &d.Task.Key, Description: &desc})
@@ -196,7 +235,37 @@ func (b *Builder) reviewStatus(ctx context.Context) (string, error) {
 	return "", nil
 }
 
-// evidence is the file a builder attaches to d's Task, which needs skill.
+// evidence is the file the builder attaches to d's Task: the workpaper its Step names, with the
+// Step's line (or, on rework, its fix) appended, from the Task's first Workspace on this machine;
+// the line alone when that Workspace is elsewhere; else the preset's file for the Skill.
+func (b *Builder) evidence(ctx context.Context, d *client.TaskDetail, step *Step, skill string, rework bool) (string, string, error) {
+	if step == nil || step.Workpaper == "" {
+		if b.preset.Evidence != nil {
+			name, content := b.preset.Evidence(d, skill)
+			return name, content, nil
+		}
+		name, content := evidence(d, skill)
+		return name, content, nil
+	}
+	entry := step.Entry
+	if rework {
+		entry = or(step.Fix, "Fixed what review asked for.")
+	}
+	name := path.Base(step.Workpaper)
+	if len(d.Workspaces) > 0 {
+		content, err := appendWorkpaper(ctx, d.Workspaces[0].Path, step.Workpaper, d.Task.Key, b.m.Name, entry)
+		if err == nil {
+			b.say("wrote", d.Task.Key, "%q to %s in %s", entry, step.Workpaper, d.Workspaces[0].Name)
+			return name, content, nil
+		}
+		if !errors.Is(err, errNoCheckout) {
+			return "", "", err
+		}
+	}
+	return name, fmt.Sprintf("%s\n\n%s\n", d.Task.Title, entry), nil
+}
+
+// evidence is the file a builder attaches to d's Task, which needs skill, in the software preset.
 func evidence(d *client.TaskDetail, skill string) (string, string) {
 	switch skill {
 	case SkillQA:

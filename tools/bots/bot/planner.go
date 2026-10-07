@@ -35,6 +35,20 @@ type Step struct {
 	Backlog bool
 	// BlockedBy are the Refs of the Steps that must end before this one is takeable.
 	BlockedBy []string
+	// Workspaces are the Workspaces the Task names; none names its Team's default.
+	Workspaces []string
+
+	// What a worker does with the Task, where its description does not say (Builder):
+	// Question is asked the first time it is worked; Handover is the Skill it is handed over to
+	// once done, in the review Status, rather than completed; Entry is the line appended to the
+	// Workpaper, a file in the Task's first Workspace, which is then attached as Evidence.
+	Question  *Question
+	Handover  string
+	Workpaper string
+	Entry     string
+	// HandBack is what a reviewer says, handing the Task back to Skill, the first time they
+	// review it; Fix is the line its worker then appends before handing it over again.
+	HandBack, Fix string
 }
 
 // DefaultPlan breaks a Feature into two builds under the company Skill, one handed over to review
@@ -97,8 +111,11 @@ func (p *Planner) breakDown(ctx context.Context, d *client.TaskDetail) error {
 		if (s.Backlog || len(s.BlockedBy) > 0) && backlog != "" {
 			status = backlog
 		}
-		res, err := p.c.FileTaskWithResponse(wctx, &client.FileTaskParams{}, client.FileTaskBody{
-			Feature: &d.Feature.Key, Title: s.Title, Skill: &s.Skill, Description: &s.Description, Status: &status})
+		body := client.FileTaskBody{Feature: &d.Feature.Key, Title: s.Title, Skill: &s.Skill, Description: &s.Description, Status: &status}
+		if len(s.Workspaces) > 0 {
+			body.Workspaces = &s.Workspaces
+		}
+		res, err := p.c.FileTaskWithResponse(wctx, &client.FileTaskParams{}, body)
 		if err := check(res, err, http.StatusCreated); err != nil {
 			return gone(wctx, fmt.Errorf("filing %q: %w", s.Title, err))
 		}
