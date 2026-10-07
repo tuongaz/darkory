@@ -2,6 +2,7 @@ import { BanIcon, ClockIcon, PaperclipIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
 import { evidenceURL, type Claim, type TaskDetail } from "@/api/client";
 import { useNow } from "@/clock";
+import { SessionId } from "@/components/CopyValue";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { ClockTime } from "@/components/Time";
@@ -79,7 +80,10 @@ function Entry({ entry, detail }: { entry: RecordEntry; detail: TaskDetail }) {
           <b>{name(c.holder_id)}</b> claimed{s && ` under ${s}`}
           {s && c.skill_version !== undefined && ` version ${c.skill_version}`}
         </>,
-        <span className="font-mono">{[c.session_id, c.model_label].filter(Boolean).join(" · ")}</span>,
+        <span className="inline-flex max-w-full min-w-0 items-center gap-1">
+          Session <SessionId id={c.session_id} />
+          {c.model_label && <span className="truncate font-mono">· {c.model_label}</span>}
+        </span>,
       );
     }
     case "claim-ended":
