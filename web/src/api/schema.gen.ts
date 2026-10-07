@@ -2179,10 +2179,12 @@ export interface components {
         };
         /**
          * @description `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
-         *     turn ended with the Task still held and no decision; the Runner nudges it to end the Task
-         *     (a nudge pending or sent), then releases it. `stalled`: its progress has not moved for
-         *     the Runner's stale window, so the Runner sends no more Heartbeats and the Claim lapses
-         *     unless it moves again. `ending`: the Claim has ended and the session is closing.
+         *     turn ended with the Task still held and no decision, and the Runner nudges it to end the
+         *     Task (a nudge pending or sent), then releases it; or the agent's screen shows a Claude Code
+         *     dialog the Runner leaves to a person, who answers it by joining the session. `stalled`:
+         *     its progress has not moved for the Runner's stale window, so the Runner sends no more
+         *     Heartbeats and the Claim lapses unless it moves again. `ending`: the Claim has ended and
+         *     the session is closing.
          * @enum {string}
          */
         RunnerSessionState: "running" | "waiting" | "stalled" | "ending";

@@ -115,7 +115,7 @@ that opens the sidebar. Nothing may make the page scroll sideways at 390px: let 
 | `Time`, `ClockTime`, `RelativeTime` | | "6 Oct 2026, 22:18"; "22:18"; "in 4 minutes". |
 | `RunnerSessionBadge session bare` | | The Runner's session on a Task as one line: "Session [Running] started 04:25 · mac-mini"; `bare` leaves out "Session" under a Session column. |
 | `SessionFacts session agent` | | A runner session's facts in one line: the agent, started, its state, the host, `tmux dk-WEB-12` or "no tmux". |
-| `SessionStatePill state` | `.badge` | A runner session's state: Running (done tone: working, Heartbeats going), Waiting (claimed: its turn ended without a decision, nudged), Stalled (blocked: no progress, no more Heartbeats, the Claim lapsing; the Heartbeat meter empties), Ending (dropped). Its title says which. |
+| `SessionStatePill state` | `.badge` | A runner session's state: Running (done tone: working, Heartbeats going), Waiting (claimed: its turn ended without a decision and the Runner nudges it, or it shows a dialog a person answers by joining), Stalled (blocked: no progress, no more Heartbeats, the Claim lapsing; the Heartbeat meter empties), Ending (dropped). Its title says which. |
 
 shadcn/ui components are in `src/components/ui/` (sidebar, button, badge, avatar, sheet, dialog,
 dropdown-menu, popover, command, tabs, table, switch, select, input, textarea, tooltip, separator,

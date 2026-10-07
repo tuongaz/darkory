@@ -103,6 +103,9 @@ func run() error {
 	if err := a.cli("attach", a.key, logFile, "--name", "test-"+a.key+".log"); err != nil {
 		return err
 	}
+	if os.Getenv("FAKEAGENT_PROMPT") == "late" {
+		return lateDialog()
+	}
 
 	switch scenario {
 	case "complete":
@@ -175,26 +178,27 @@ var stdin = bufio.NewScanner(os.Stdin)
 
 // firstRun asks Claude Code's first-run questions, as its dialogs show them, as mode says:
 //
-//	claude  as Claude Code 2.1 does: the folder-trust dialog unless $CLAUDE_CONFIG_DIR/.claude.json
-//	        trusts the working directory, then the Bypass Permissions mode warning unless its
-//	        settings.json has accepted it
+//	claude  as Claude Code 2.1 does: the folder-trust dialog unless the person's .claude.json
+//	        (~/.claude.json, or in $CLAUDE_CONFIG_DIR) trusts the working directory or the
+//	        repository whose worktree it is, then the Bypass Permissions mode warning unless their
+//	        settings.json (~/.claude/settings.json, or in $CLAUDE_CONFIG_DIR) has accepted it
 //	always  both, whatever the configuration says
+//	trust   the folder-trust dialog, whatever the configuration says
 //	again   the folder-trust dialog, and once it is accepted the same again
+//	late    nothing now; the agent prints the folder-trust dialog after its first turn (lateDialog)
 //
 // A dialog's highlighted choice is "No, exit": it is accepted by a Down before the Enter, and
 // declining it exits 1. An accepted dialog clears the screen, as Claude Code's does.
 func firstRun(mode string) error {
-	if mode == "" {
+	if mode == "" || mode == "late" {
 		return nil
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
+	wd := workDir()
+	home, _ := os.UserHomeDir()
+	global, settingsFile := filepath.Join(home, ".claude.json"), filepath.Join(home, ".claude", "settings.json")
+	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
+		global, settingsFile = filepath.Join(dir, ".claude.json"), filepath.Join(dir, "settings.json")
 	}
-	if real, err := filepath.EvalSymlinks(wd); err == nil {
-		wd = real
-	}
-	dir := os.Getenv("CLAUDE_CONFIG_DIR")
 	var config struct {
 		Projects map[string]struct {
 			Trusted bool `json:"hasTrustDialogAccepted"`
@@ -203,22 +207,27 @@ func firstRun(mode string) error {
 	var settings struct {
 		Accepted bool `json:"skipDangerousModePermissionPrompt"`
 	}
-	if dir != "" {
-		if b, err := os.ReadFile(filepath.Join(dir, ".claude.json")); err == nil {
-			json.Unmarshal(b, &config)
-		}
-		if b, err := os.ReadFile(filepath.Join(dir, "settings.json")); err == nil {
-			json.Unmarshal(b, &settings)
+	if b, err := os.ReadFile(global); err == nil {
+		json.Unmarshal(b, &config)
+	}
+	if b, err := os.ReadFile(settingsFile); err == nil {
+		json.Unmarshal(b, &settings)
+	}
+	// A worktree is trusted when its repository is.
+	repo := wd
+	if out, err := exec.Command("git", "-C", wd, "rev-parse", "--path-format=absolute", "--git-common-dir").Output(); err == nil {
+		repo = filepath.Dir(strings.TrimSpace(string(out)))
+		if real, err := filepath.EvalSymlinks(repo); err == nil {
+			repo = real
 		}
 	}
-	trust := " Accessing workspace:\n\n " + wd + "\n\n Quick safety check: Is this a project you created or one you trust?\n\n" +
-		" ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+	trust := trustDialog(wd)
 	bypass := "  WARNING: Claude Code running in Bypass Permissions mode\n\n  ❯ No, exit\n    Yes, I accept\n\n" +
 		"  Enter to confirm · Esc to cancel\n"
 	var ask []string
 	switch mode {
 	case "claude":
-		if !config.Projects[wd].Trusted {
+		if !config.Projects[wd].Trusted && !config.Projects[repo].Trusted {
 			ask = append(ask, trust)
 		}
 		if !settings.Accepted {
@@ -226,6 +235,8 @@ func firstRun(mode string) error {
 		}
 	case "always":
 		ask = []string{trust, bypass}
+	case "trust":
+		ask = []string{trust}
 	case "again":
 		ask = []string{trust, trust}
 	default:
@@ -238,6 +249,39 @@ func firstRun(mode string) error {
 			os.Exit(1)
 		}
 		fmt.Print("\x1b[2J\x1b[H")
+	}
+	return nil
+}
+
+// workDir is the working directory by its real path, as Claude Code names it.
+func workDir() string {
+	wd, _ := os.Getwd()
+	if real, err := filepath.EvalSymlinks(wd); err == nil {
+		wd = real
+	}
+	return wd
+}
+
+// trustDialog is Claude Code 2.1.289's folder-trust dialog for folder wd.
+func trustDialog(wd string) string {
+	return " Accessing workspace:\n\n " + wd + "\n\n Quick safety check: Is this a project you created or one you trust? " +
+		"(Like your own code, a well-known open source project, or work from your team).\n\n" +
+		" ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+}
+
+// lateDialog prints the folder-trust dialog after the agent's first turn, as an agent's own
+// output might, then waits: a Down typed into it says "the dialog was answered", /exit ends it.
+func lateDialog() error {
+	fmt.Print(trustDialog(workDir()))
+	for stdin.Scan() {
+		switch in := stdin.Text(); {
+		case strings.Contains(in, "\x1b[B") || strings.Contains(in, "\x1bOB"):
+			fmt.Println("fakeagent: the dialog was answered")
+		case strings.TrimSpace(in) == "/exit":
+			return nil
+		default:
+			fmt.Printf("fakeagent: read %q\n", strings.TrimSpace(in))
+		}
 	}
 	return nil
 }

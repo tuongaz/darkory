@@ -16,8 +16,8 @@ import (
 const (
 	// StateRunning: the agent is working, its progress moving.
 	StateRunning = "running"
-	// StateWaiting: its turn ended with the Task still held and no decision; the Runner nudges
-	// it, then releases the Task.
+	// StateWaiting: its turn ended with the Task still held and no decision, and the Runner
+	// nudges it, then releases the Task; or it shows a dialog the Runner leaves to a person.
 	StateWaiting = "waiting"
 	// StateStalled: its progress went stale, so the Runner sends no more Heartbeats and the
 	// Claim lapses unless it moves again.
