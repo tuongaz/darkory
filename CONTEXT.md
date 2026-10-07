@@ -120,6 +120,10 @@ _Avoid_: Engine, provider setting, model config
 The append-only trail of every change to the record: who did what and when. That includes claims, lapses, take-backs, Handovers, blocks, ships and drops. It is written with the change it describes, and is never the source of truth.
 _Avoid_: Audit log, event, history
 
+**View**:
+A saved set of filters, sort and display for a list, kept by one Member for themselves. Nobody else sees it, and it is not part of the record.
+_Avoid_: Saved filter, smart list
+
 ### Agents at work
 
 **Runner**:

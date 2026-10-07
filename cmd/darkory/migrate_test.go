@@ -25,7 +25,7 @@ func TestMigrate(t *testing.T) {
 				return out.String(), err
 			}
 			out, err := migrate("--dry-run")
-			if err != nil || !strings.Contains(out, "4 pending migration(s), not applied:\n  0001_init\n  0002_member_deactivation\n  0003_task_status\n  0004_workspaces_and_agents\n") {
+			if err != nil || !strings.Contains(out, "5 pending migration(s), not applied:\n  0001_init\n  0002_member_deactivation\n  0003_task_status\n  0004_workspaces_and_agents\n  0005_views\n") {
 				t.Fatalf("dry run: %v\n%s", err, out)
 			}
 			st, err := store.Open(t.Context(), dsn)
@@ -33,12 +33,12 @@ func TestMigrate(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer st.Close()
-			if pending, err := st.Pending(t.Context()); err != nil || len(pending) != 4 {
+			if pending, err := st.Pending(t.Context()); err != nil || len(pending) != 5 {
 				t.Fatalf("after a dry run, pending %v, %v", pending, err)
 			}
 
 			out, err = migrate()
-			if err != nil || !strings.Contains(out, "Applied 0001_init\nApplied 0002_member_deactivation\nApplied 0003_task_status\nApplied 0004_workspaces_and_agents\n") {
+			if err != nil || !strings.Contains(out, "Applied 0001_init\nApplied 0002_member_deactivation\nApplied 0003_task_status\nApplied 0004_workspaces_and_agents\nApplied 0005_views\n") {
 				t.Fatalf("migrate: %v\n%s", err, out)
 			}
 			out, err = migrate()

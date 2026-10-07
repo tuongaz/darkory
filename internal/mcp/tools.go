@@ -97,16 +97,17 @@ type done struct {
 }
 
 type listTasksIn struct {
-	Feature string `json:"feature,omitempty" jsonschema:"only this Feature's Tasks"`
-	Team    string `json:"team,omitempty" jsonschema:"only this Team's Tasks, by key such as WEB"`
-	State   string `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
-	Status  string `json:"status,omitempty" jsonschema:"only Tasks in this Status, by name or id"`
-	Skill   string `json:"skill,omitempty" jsonschema:"only Tasks that need this Skill now"`
-	AimedAt string `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
-	Holder  string `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
-	Mine    bool   `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
-	Limit   int    `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
-	Cursor  string `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
+	Feature string   `json:"feature,omitempty" jsonschema:"only this Feature's Tasks"`
+	Team    string   `json:"team,omitempty" jsonschema:"only this Team's Tasks, by key such as WEB"`
+	State   string   `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
+	Status  string   `json:"status,omitempty" jsonschema:"only Tasks in this Status, by name or id"`
+	Skill   string   `json:"skill,omitempty" jsonschema:"only Tasks that need this Skill now"`
+	AimedAt string   `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
+	Holder  string   `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
+	Mine    bool     `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
+	Filter  []string `json:"filter,omitempty" jsonschema:"only Tasks matching every one of these field:op:values tokens, such as holder:is:none, status_kind:in:todo,in_progress or filed_at:last:7d; references are ids, each value percent-encoded"`
+	Limit   int      `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
+	Cursor  string   `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
 }
 
 // taskListOut is a page of Tasks with the Statuses their status_id names, so the list reads
@@ -310,6 +311,9 @@ func (s *Server) addTools() {
 		func(ctx context.Context, in listTasksIn) (taskListOut, error) {
 			params := &client.ListTasksParams{Feature: opt(in.Feature), Team: opt(in.Team), Skill: opt(in.Skill),
 				AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Status: opt(in.Status), Cursor: opt(in.Cursor)}
+			if len(in.Filter) > 0 {
+				params.Filter = &in.Filter
+			}
 			if in.State != "" {
 				st := client.TaskState(in.State)
 				params.State = &st

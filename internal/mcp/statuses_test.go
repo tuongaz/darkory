@@ -62,6 +62,14 @@ func TestStatusTools(t *testing.T) {
 		if len(tasks.Items) != 2 || tasks.Items[0].StatusID != ids["In progress"] || len(tasks.Statuses) != 6 {
 			t.Fatalf("list_tasks in progress: %+v", tasks)
 		}
+		ok(t, cs, &tasks, "list_tasks", map[string]any{"filter": []string{"status_kind:is:in_progress", "kind:is:work"}})
+		if len(tasks.Items) != 1 || tasks.Items[0].Key != "WEB-3" {
+			t.Fatalf("list_tasks filtered to work in progress: %+v", tasks)
+		}
+		if res := call(t, cs, "list_tasks", map[string]any{"filter": []string{"status_kind:is:doing"}}); !res.IsError ||
+			!strings.HasPrefix(text(res), "invalid: ") {
+			t.Fatalf("list_tasks with a bad filter: %s", text(res))
+		}
 		var handed client.Task
 		ok(t, cs, &handed, "handover", map[string]any{"task": "WEB-3", "skill": "build", "status": "In review"})
 		if handed.StatusID != ids["In review"] {

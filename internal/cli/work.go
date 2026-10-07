@@ -36,7 +36,7 @@ var workCommands = []command{
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Claims, Notes, Evidence and Observations", run: cmdShow},
-	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--status s] [--skill s] [--aimed-at m] [--holder m | --mine]", short: "list Tasks", run: cmdTasks},
+	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--status s] [--skill s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
 	{path: "status", args: "<task> <status>", short: "move a Task to another Status (its Feature's Team or owner, or its holder)", run: cmdStatus},
 	{path: "workflow", short: "list the Organisation's Statuses, in order, with their kinds", run: cmdWorkflow},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
@@ -551,6 +551,8 @@ func cmdTasks(c *call) error {
 	aimed := c.fs.String("aimed-at", "", "only Tasks aimed at this Member")
 	holder := c.fs.String("holder", "", "only Tasks this Member holds")
 	mine := c.fs.Bool("mine", false, "only Tasks you hold")
+	var filters strs
+	c.fs.Var(&filters, "filter", "only Tasks matching field:op:values, such as holder:is:none or filed_at:last:7d (ids, not names); give it once per filter")
 	limit := c.fs.Int("limit", 0, "at most this many Tasks (default 100)")
 	cursor := c.fs.String("cursor", "", "the next page, from a previous list")
 	if _, err := c.args(0, 0); err != nil {
@@ -562,6 +564,9 @@ func cmdTasks(c *call) error {
 	}
 	params := &client.ListTasksParams{Feature: opt(*feature), Team: opt(*team), Skill: opt(*skill), AimedAt: opt(*aimed),
 		Holder: opt(*holder), Status: opt(*status), Cursor: opt(*cursor)}
+	if filters.set {
+		params.Filter = &filters.v
+	}
 	if *state != "" {
 		params.State = ptr(client.TaskState(*state))
 	}
