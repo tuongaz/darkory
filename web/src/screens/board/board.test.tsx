@@ -103,7 +103,7 @@ describe("Team › Tasks, board", () => {
     expect(await screen.findByRole("heading", { name: "Tasks, board" })).toBeInTheDocument();
     const progress = await screen.findByRole("region", { name: "In progress" });
     const card = await within(progress).findByRole("link", { name: /WEB-3/ });
-    expect(within(card).getByText("· claude-opus-5-5")).toBeInTheDocument();
+    expect(within(card).getByText("claude-opus-5-5")).toBeInTheDocument();
     expect(within(card).getByText(/lapses in 1[45] min/)).toBeInTheDocument();
     // The Feature has a line of its own, its whole name on hover.
     expect(within(card).getByTitle("WEB-1 Checkout flow")).toBeInTheDocument();

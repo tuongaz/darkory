@@ -156,7 +156,8 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   await expect(row).toContainText("Build the cart page");
   await expect(row.getByText(`Blocked by ${key}`)).toBeVisible();
   await expect(row.getByRole("meter")).toBeVisible();
-  await expect(row).toContainText("sess-inbox-builder");
+  // The Session id by its last 8 characters; the whole id is its hover and what a click copies.
+  await expect(row.getByRole("button", { name: "Copy the Session id sess-inbox-builder" })).toHaveText("…-builder");
   await expect(row).toContainText("claude-opus-5-5");
   await shot(page, "agents");
 

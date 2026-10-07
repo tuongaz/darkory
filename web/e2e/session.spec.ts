@@ -114,7 +114,7 @@ test("no Runner attached: the panel is absent, Nudge and Stop answer no_runner, 
   await page.goto(`${base}/tasks/${taskKey}`);
   await expect(page.getByRole("heading", { name: "Build the cart page", level: 1 })).toBeVisible();
   await expect.poll(() => asked).toEqual([200]);
-  await expect(page.getByRole("complementary", { name: "Properties" })).toContainText("sess-ses-builder");
+  await expect(page.getByRole("complementary", { name: "Properties" }).getByRole("button", { name: "Copy the Session id sess-ses-builder" })).toHaveText("…-builder");
   await expect(page.getByRole("region", { name: "Session" })).toHaveCount(0);
   await page.getByRole("button", { name: "More" }).click();
   await expect(page.getByRole("menuitem", { name: "Take back" })).toBeVisible();

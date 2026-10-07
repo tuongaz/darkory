@@ -109,15 +109,15 @@ export function AgentsPage() {
         ) : (
           // On a phone the table keeps Agent, Holds and Heartbeat, and fits the screen; the rest is in
           // the agent's peek, Reports to among it.
-          <table className="w-full table-fixed border-collapse md:min-w-[1100px]">
+          <table className="w-full table-fixed border-collapse md:min-w-[1020px]">
             <thead>
               <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 md:[&>th:first-child]:pl-6">
-                <th className="w-[132px] md:w-[184px]">Agent</th>
-                <th className={cn(wide, "w-[96px]")}>State</th>
+                <th className="w-[116px] md:w-[160px]">Agent</th>
+                <th className={cn(wide, "w-[88px]")}>State</th>
                 <th>Holds</th>
-                <th className="w-[92px] md:w-[152px]">Heartbeat</th>
-                <th className={cn(wide, "w-[184px]")}>Session · Model</th>
-                <th className={cn(wide, "w-[200px]")}>Skills · Teams</th>
+                <th className="w-[124px] md:w-[164px]">Heartbeat</th>
+                <th className={cn(wide, "w-[164px]")}>Session · Model</th>
+                <th className={cn(wide, "w-[160px]")}>Skills · Teams</th>
                 <th className={cn(wide, "w-[96px] text-right")}>Lapses, 24 h</th>
                 <th className={cn(wide, "w-12")}>
                   <span className="sr-only">Actions</span>
