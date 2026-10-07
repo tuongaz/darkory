@@ -249,13 +249,13 @@ func TestRunnerSessions(t *testing.T) {
 			{TaskID: held.ID, MemberID: bobID, SessionID: "run-1", Host: "box", Tmux: "dk-" + held.Key, StartedAt: time.UnixMilli(1000).UTC(),
 				State: runnerapi.StateRunning, LogPath: "/data/sessions/pane.log"},
 			{TaskID: other.ID, MemberID: bobID, SessionID: "run-2", Host: "box", StartedAt: time.UnixMilli(2000).UTC(),
-				State: runnerapi.StateNudged, LogPath: "/data/sessions/other.log"},
+				State: runnerapi.StateStalled, LogPath: "/data/sessions/other.log"},
 		}}
 		h.srv.AttachRunner(fake)
 		listed := got(bob.ListRunnerSessionsWithResponse(ctx)).want(t, http.StatusOK).JSON200
 		list := listed.Items
 		if !listed.Runner || len(list) != 2 || list[0].TaskID != held.ID || list[0].Tmux == nil || *list[0].Tmux != "dk-"+held.Key ||
-			list[0].State != client.RunnerSessionRunning || list[1].Tmux != nil || list[1].State != client.RunnerSessionNudged {
+			list[0].State != client.RunnerSessionRunning || list[1].Tmux != nil || list[1].State != client.RunnerSessionStalled {
 			t.Fatalf("sessions %+v", list)
 		}
 		got(bob.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusForbidden)

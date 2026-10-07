@@ -200,7 +200,9 @@ describe("the Agents page with the Runner", () => {
     log_path: "/data/sessions/WEB-10/pane.log",
   };
 
-  function runnerAgentsApi(caller: Member = ada) {
+  /** `live` changes the planner's session: its state, and when its Claim lapses without a Heartbeat. */
+  function runnerAgentsApi(caller: Member = ada, live: { state?: RunnerSession["state"]; expiresIn?: number } = {}) {
+    const now = live.expiresIn === undefined ? held : { ...held, claim: claim(10, "m-planner", live.expiresIn) };
     let planner = agent("planner", { agent: settings() });
     const reviewer = agent("reviewer", { agent: settings({ model: "claude-opus-5-5" }) });
     const api = mockApi({
@@ -209,14 +211,14 @@ describe("the Agents page with the Runner", () => {
       "GET /v1/members": () => ({ items: [ada, bob, planner, reviewer] }),
       "GET /v1/statuses": statuses,
       "GET /v1/features": { items: [checkout] },
-      "GET /v1/tasks": { items: [held] },
+      "GET /v1/tasks": { items: [now] },
       "GET /v1/tasks/takeable": { items: [] },
       "GET /v1/tasks/:task": {
-        task: held,
+        task: now,
         status: statuses.items[2],
         feature: checkout,
         workspaces: [],
-        claims: [held.claim],
+        claims: [now.claim],
         notes: [],
         evidence: [],
         blockers: [],
@@ -228,7 +230,7 @@ describe("the Agents page with the Runner", () => {
       "GET /v1/members/:member/sessions": { items: [] },
       "GET /v1/members/:member/tokens": { items: [] },
       "GET /v1/activity": { items: [], last_seq: 0 },
-      "GET /v1/runner/sessions": { items: [session], runner: true },
+      "GET /v1/runner/sessions": { items: [{ ...session, state: live.state ?? session.state }], runner: true },
       "PATCH /v1/members/:member/agent": ({ body }) => {
         planner = { ...planner, agent: settings(body as Partial<AgentSettings>) };
         return planner;
@@ -243,11 +245,26 @@ describe("the Agents page with the Runner", () => {
     const rows = await screen.findAllByRole("row");
     const [planner, reviewer] = rows.slice(1);
     const session = (row: HTMLElement) => within(row).getAllByRole("cell")[3];
-    await waitFor(() => expect(session(planner)).toHaveTextContent(/^running since 04:25 · mac-miniViewclaude-opus-5-5$/));
+    await waitFor(() => expect(session(planner)).toHaveTextContent(/^Runningstarted 04:25 · mac-miniViewclaude-opus-5-5$/));
     expect(within(planner).getByRole("link", { name: "View" })).toHaveAttribute("href", "/agents?task=WEB-10#session");
     // Idle, the model is the agent settings'.
     expect(session(reviewer)).toHaveTextContent("claude-opus-5-5");
     expect(within(reviewer).queryByRole("link", { name: "View" })).not.toBeInTheDocument();
+  });
+
+  it("says a session whose progress went stale is Stalled, its Heartbeat meter emptying, and one whose turn ended Waiting", async () => {
+    runnerAgentsApi(ada, { state: "stalled", expiresIn: 3 });
+    const { unmount } = renderApp("/agents");
+    let planner = (await screen.findAllByRole("row"))[1];
+    await waitFor(() => expect(within(planner).getAllByRole("cell")[3]).toHaveTextContent(/^Stalledstarted 04:25 · mac-mini/));
+    // No more Heartbeats: three minutes of the fifteen are left.
+    expect(within(planner).getByRole("meter", { name: "Time left before the Claim lapses" })).toHaveAttribute("aria-valuenow", "20");
+    unmount();
+
+    runnerAgentsApi(ada, { state: "waiting" });
+    renderApp("/agents");
+    planner = (await screen.findAllByRole("row"))[1];
+    await waitFor(() => expect(within(planner).getAllByRole("cell")[3]).toHaveTextContent(/^Waitingstarted 04:25 · mac-mini/));
   });
 
   it("pauses and resumes an agent for an admin, and the row says Paused", async () => {

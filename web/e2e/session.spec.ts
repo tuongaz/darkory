@@ -219,7 +219,7 @@ test("the terminal under the Install's CSP, the Runner played by the test: watch
   // The peek over the Agents page, which View opens at the panel.
   await page.goto(`${base}/agents`);
   const row = page.getByRole("row").filter({ hasText: "ses-builder" });
-  await expect(row).toContainText("running since");
+  await expect(row).toContainText(/Running\s*started/);
   await row.getByRole("link", { name: "View" }).click();
   const peek = page.getByRole("dialog", { name: `Task ${taskKey}` });
   await expect(peek.getByRole("region", { name: "Session" }).locator(".xterm-rows")).toContainText("builder is running the tests");
@@ -322,7 +322,7 @@ for (const tmux of ["on", "off"] as const) {
       // straight back to builder.
       await page.goto(`${base}/agents`);
       const row = page.getByRole("row").filter({ hasText: "builder" });
-      await expect(row).toContainText("running since");
+      await expect(row).toContainText(/Running\s*started/);
       await expect(row).toContainText("fake-1");
       await row.hover();
       await row.getByRole("button", { name: "More for builder" }).click();

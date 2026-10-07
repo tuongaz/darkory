@@ -122,7 +122,7 @@ type RunnerSession struct {
 	TmuxSession string
 	TmuxSocket  string
 	StartedAt   time.Time
-	// State is running, nudged or ending.
+	// State is running, waiting, stalled or ending.
 	State   string
 	LogPath string
 }
@@ -130,7 +130,8 @@ type RunnerSession struct {
 // Session states.
 const (
 	StateRunning = runnerapi.StateRunning
-	StateNudged  = runnerapi.StateNudged
+	StateWaiting = runnerapi.StateWaiting
+	StateStalled = runnerapi.StateStalled
 	StateEnding  = runnerapi.StateEnding
 )
 

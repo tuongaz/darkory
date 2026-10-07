@@ -14,10 +14,14 @@ import (
 
 // Session states, as RunnerSession.state in api/openapi.yaml.
 const (
-	// StateRunning: the agent is working.
+	// StateRunning: the agent is working, its progress moving.
 	StateRunning = "running"
-	// StateNudged: its turn ended with the Task still held, and the Runner asked it to end it.
-	StateNudged = "nudged"
+	// StateWaiting: its turn ended with the Task still held and no decision; the Runner nudges
+	// it, then releases the Task.
+	StateWaiting = "waiting"
+	// StateStalled: its progress went stale, so the Runner sends no more Heartbeats and the
+	// Claim lapses unless it moves again.
+	StateStalled = "stalled"
 	// StateEnding: the Claim has ended and the session is closing.
 	StateEnding = "ending"
 )
@@ -38,7 +42,7 @@ type Session struct {
 	// and cannot be joined.
 	Tmux      string
 	StartedAt time.Time
-	// State is StateRunning, StateNudged or StateEnding.
+	// State is StateRunning, StateWaiting, StateStalled or StateEnding.
 	State string
 	// LogPath is where the session's terminal is logged on Host.
 	LogPath string

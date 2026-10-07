@@ -405,7 +405,15 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		t.Errorf("MAIN-3 is %s", d.Status.Name)
 	}
 
-	// 6: the hung session's Claim lapses on Darkory's rule, with no Heartbeat refused.
+	// 6: the hung session says it is stalled, and its Claim lapses on Darkory's rule, with no
+	// Heartbeat refused.
+	ri.wait(30*time.Second, "MAIN-4's session stalled", func() bool {
+		var list client.RunnerSessionList
+		ada.json(&list, "sessions")
+		return slices.ContainsFunc(list.Items, func(s client.RunnerSession) bool {
+			return s.TaskID == ri.task("MAIN-4").Task.ID && s.State == client.RunnerSessionStalled
+		})
+	})
 	ri.wait(30*time.Second, "MAIN-4's Claim to lapse", func() bool {
 		var page client.ActivityPage
 		ada.json(&page, "activity", "--kind", "task.lapsed", "--limit", "100")

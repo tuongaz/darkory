@@ -405,8 +405,9 @@ func (e ProposalState) Valid() bool {
 // Defines values for RunnerSessionState.
 const (
 	RunnerSessionEnding  RunnerSessionState = "ending"
-	RunnerSessionNudged  RunnerSessionState = "nudged"
 	RunnerSessionRunning RunnerSessionState = "running"
+	RunnerSessionStalled RunnerSessionState = "stalled"
+	RunnerSessionWaiting RunnerSessionState = "waiting"
 )
 
 // Valid indicates whether the value is a known member of the RunnerSessionState enum.
@@ -414,9 +415,11 @@ func (e RunnerSessionState) Valid() bool {
 	switch e {
 	case RunnerSessionEnding:
 		return true
-	case RunnerSessionNudged:
-		return true
 	case RunnerSessionRunning:
+		return true
+	case RunnerSessionStalled:
+		return true
+	case RunnerSessionWaiting:
 		return true
 	default:
 		return false
@@ -1183,8 +1186,11 @@ type RunnerSession struct {
 	SessionID string    `json:"session_id"`
 	StartedAt time.Time `json:"started_at"`
 
-	// State `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
-	// has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+	// State `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
+	// turn ended with the Task still held and no decision; the Runner nudges it to end the Task
+	// (a nudge pending or sent), then releases it. `stalled`: its progress has not moved for
+	// the Runner's stale window, so the Runner sends no more Heartbeats and the Claim lapses
+	// unless it moves again. `ending`: the Claim has ended and the session is closing.
 	State  RunnerSessionState `json:"state"`
 	TaskID string             `json:"task_id"`
 
@@ -1200,8 +1206,11 @@ type RunnerSessionList struct {
 	Runner bool `json:"runner"`
 }
 
-// RunnerSessionState `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
-// has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+// RunnerSessionState `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
+// turn ended with the Task still held and no decision; the Runner nudges it to end the Task
+// (a nudge pending or sent), then releases it. `stalled`: its progress has not moved for
+// the Runner's stale window, so the Runner sends no more Heartbeats and the Claim lapses
+// unless it moves again. `ending`: the Claim has ended and the session is closing.
 type RunnerSessionState string
 
 // Session defines model for Session.

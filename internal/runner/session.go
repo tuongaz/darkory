@@ -96,9 +96,12 @@ func (s *session) snapshot() RunnerSession {
 	return rs
 }
 
+// setState says what the session is doing; an ending session stays ending.
 func (s *session) setState(st string) {
 	s.mu.Lock()
-	s.state = st
+	if s.state != StateEnding {
+		s.state = st
+	}
 	s.mu.Unlock()
 }
 
@@ -391,7 +394,6 @@ func (s *session) watch(ctx context.Context) {
 				return
 			}
 			s.log.Info("nudged by an admin")
-			s.setState(StateNudged)
 			c.done <- s.proc.Type(Nudge)
 		case <-t.C:
 			if s.check(ctx) {
@@ -402,7 +404,9 @@ func (s *session) watch(ctx context.Context) {
 }
 
 // check reads the session's progress: a Heartbeat while it is fresh, none once it is stale, and a
-// nudge when the agent's turn ended with the Claim still held. It says whether the session ended.
+// nudge when the agent's turn ended with the Claim still held. The session's state follows:
+// stalled while stale, waiting while its turn has ended, running otherwise. It says whether the
+// session ended.
 func (s *session) check(ctx context.Context) bool {
 	if s.firstRun(ctx) {
 		return true
@@ -455,6 +459,14 @@ func (s *session) check(ctx context.Context) bool {
 		if d, err := s.rec.Task(ctx, s.key); err == nil && !s.holds(d) {
 			return s.finish(ctx, "lapsed")
 		}
+	}
+	switch {
+	case s.stale:
+		s.setState(StateStalled)
+	case rd.Ended:
+		s.setState(StateWaiting)
+	default:
+		s.setState(StateRunning)
 	}
 	if !rd.Ended {
 		return false
@@ -526,7 +538,6 @@ func (s *session) turnEnded(ctx context.Context) bool {
 	case s.nudges < 2 && (s.lastNudge.IsZero() || since >= s.r.t.Nudge):
 		s.nudges++
 		s.lastNudge = time.Now()
-		s.setState(StateNudged)
 		s.log.Info("the agent stopped without ending the Task; nudged it", "nudge", s.nudges)
 		if err := s.proc.Type(Nudge); err != nil {
 			s.log.Warn("nudging", "err", err)

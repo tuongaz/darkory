@@ -104,6 +104,20 @@ describe("the Session panel", () => {
     expect(FakeWebSocket.instances).toEqual([]);
   });
 
+  it("says when the session stalled or waits on its agent", async () => {
+    runnerApi(bob, () => ({ items: [{ ...session, state: "stalled" }], runner: true }));
+    const { unmount } = renderApp("/tasks/WEB-3");
+    let panel = await screen.findByRole("region", { name: "Session" });
+    expect(panel).toHaveTextContent(/builder·started \d\d:\d\d·Stalled·mac-mini·tmux dk-WEB-3/);
+    expect(within(panel).getByText("Stalled")).toHaveAttribute("data-tone", "blocked");
+    unmount();
+
+    runnerApi(bob, () => ({ items: [{ ...session, state: "waiting" }], runner: true }));
+    renderApp("/tasks/WEB-3");
+    panel = await screen.findByRole("region", { name: "Session" });
+    expect(panel).toHaveTextContent(/builder·started \d\d:\d\d·Waiting·mac-mini·tmux dk-WEB-3/);
+  });
+
   it("lets a Member who is not an admin watch, read-only, with the facts and the shell line", async () => {
     runnerApi(bob);
     renderApp("/tasks/WEB-3");

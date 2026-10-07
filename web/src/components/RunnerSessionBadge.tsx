@@ -1,36 +1,44 @@
 import type { Member, RunnerSession, RunnerSessionState } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { MemberAvatar } from "./MemberAvatar";
+import { Pill, type PillTone } from "./Pill";
 import { ClockTime } from "./Time";
 
-const dots: Record<RunnerSessionState, string> = {
-  running: "bg-state-done",
-  nudged: "bg-state-claimed",
-  ending: "bg-state-dropped",
+const stateNames: Record<RunnerSessionState, string> = { running: "Running", waiting: "Waiting", stalled: "Stalled", ending: "Ending" };
+
+const stateTones: Record<RunnerSessionState, PillTone> = { running: "done", waiting: "claimed", stalled: "blocked", ending: "dropped" };
+
+const stateHints: Record<RunnerSessionState, string> = {
+  running: "The agent is working; the Runner sends its Heartbeats",
+  waiting: "The agent's turn ended without a decision; the Runner nudges it, then releases the Task",
+  stalled: "No progress for a while: the Runner sends no more Heartbeats, and the Claim lapses unless it moves",
+  ending: "The Claim has ended; the session is closing",
 };
 
-/** A runner session's state as its dot: green running, amber nudged, grey ending. */
-export function SessionStateDot({ state, className }: { state: RunnerSessionState; className?: string }) {
-  return <span aria-hidden className={cn("size-1.5 flex-none rounded-full", dots[state], className)} />;
-}
-
-/**
- * The session the Runner runs for a Task, in one line: "Session · running since 04:25 · mac-mini".
- * A fact, not a button. `bare` leaves out "Session ·" where a column already says it.
- */
-export function RunnerSessionBadge({ session, bare, className }: { session: RunnerSession; bare?: boolean; className?: string }) {
+/** A runner session's state as a pill: Running (green), Waiting (amber), Stalled (red), Ending (grey). */
+export function SessionStatePill({ state }: { state: RunnerSessionState }) {
   return (
-    <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
-      <SessionStateDot state={session.state} />
-      <span className="truncate">
-        {!bare && "Session · "}
-        {session.state === "running" ? "running since" : `${session.state} · started`} <ClockTime at={session.started_at} /> · {session.host}
-      </span>
+    <span title={stateHints[state]} className="inline-flex">
+      <Pill tone={stateTones[state]}>{stateNames[state]}</Pill>
     </span>
   );
 }
 
-const stateNames: Record<RunnerSessionState, string> = { running: "Running", nudged: "Nudged", ending: "Ending" };
+/**
+ * The session the Runner runs for a Task, in one line: "Session [Running] started 04:25 ·
+ * mac-mini". A fact, not a button. `bare` leaves out "Session" where a column already says it.
+ */
+export function RunnerSessionBadge({ session, bare, className }: { session: RunnerSession; bare?: boolean; className?: string }) {
+  return (
+    <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
+      {!bare && <span>Session</span>}
+      <SessionStatePill state={session.state} />
+      <span className="truncate">
+        started <ClockTime at={session.started_at} /> · {session.host}
+      </span>
+    </span>
+  );
+}
 
 function Sep() {
   return (
@@ -67,10 +75,7 @@ export function SessionFacts({
         started <ClockTime at={session.started_at} />
       </span>
       <Sep />
-      <span className="inline-flex items-center gap-1.5">
-        <SessionStateDot state={session.state} />
-        {stateNames[session.state]}
-      </span>
+      <SessionStatePill state={session.state} />
       <Sep />
       <span className="max-w-full truncate" title="Host">
         {session.host}

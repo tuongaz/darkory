@@ -129,9 +129,17 @@ describe("RunnerSessionBadge", () => {
     const started = new Date(2026, 9, 7, 4, 25).toISOString();
     const base = { task_id: "k-12", member_id: "m-builder", session_id: "s", host: "mac-mini", started_at: started, log_path: "/x" };
     const { rerender, container } = render(<RunnerSessionBadge session={{ ...base, state: "running" }} />);
-    expect(container).toHaveTextContent("Session · running since 04:25 · mac-mini");
-    rerender(<RunnerSessionBadge session={{ ...base, state: "nudged" }} />);
-    expect(container).toHaveTextContent("Session · nudged · started 04:25 · mac-mini");
+    expect(container).toHaveTextContent("SessionRunningstarted 04:25 · mac-mini");
+    expect(screen.getByText("Running")).toHaveAttribute("data-tone", "done");
+    for (const [state, name, tone] of [
+      ["waiting", "Waiting", "claimed"],
+      ["stalled", "Stalled", "blocked"],
+      ["ending", "Ending", "dropped"],
+    ] as const) {
+      rerender(<RunnerSessionBadge session={{ ...base, state }} bare />);
+      expect(container).toHaveTextContent(`${name}started 04:25 · mac-mini`);
+      expect(screen.getByText(name)).toHaveAttribute("data-tone", tone);
+    }
   });
 });
 

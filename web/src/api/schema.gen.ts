@@ -2178,11 +2178,14 @@ export interface components {
             log_path: string;
         };
         /**
-         * @description `running`: working. `nudged`: its turn ended with the Task still held, and the Runner
-         *     has asked it to end the Task. `ending`: the Claim has ended and the session is closing.
+         * @description `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
+         *     turn ended with the Task still held and no decision; the Runner nudges it to end the Task
+         *     (a nudge pending or sent), then releases it. `stalled`: its progress has not moved for
+         *     the Runner's stale window, so the Runner sends no more Heartbeats and the Claim lapses
+         *     unless it moves again. `ending`: the Claim has ended and the session is closing.
          * @enum {string}
          */
-        RunnerSessionState: "running" | "nudged" | "ending";
+        RunnerSessionState: "running" | "waiting" | "stalled" | "ending";
         RunnerSessionList: {
             items: components["schemas"]["RunnerSession"][];
             /** @description Whether a Runner is attached to this server; false with no sessions when none is. */

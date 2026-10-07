@@ -417,6 +417,31 @@ func logTime(t *testing.T, log, msg, agent string) time.Time {
 	return time.Time{}
 }
 
+// A session says what it is doing: running while its progress moves, waiting once its turn ended
+// without a decision, stalled once its progress went stale and Heartbeats stopped.
+func TestRunnerSessionStates(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.agent("stuck", "hang", "build")
+	f.agent("quiet", "silent", "build")
+	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+	f.ok("ada", "file", "--feature", "WEB-1", "--aim", "stuck", "--title", "Hang")
+	f.ok("ada", "file", "--feature", "WEB-1", "--aim", "quiet", "--title", "Say nothing")
+	r := f.run("stuck", "quiet")
+
+	seen := map[string][]string{}
+	eventually(t, 20*time.Second, "WEB-3 stalled and WEB-4 waiting", func() bool {
+		for _, s := range r.Running() {
+			if l := seen[s.Task]; len(l) == 0 || l[len(l)-1] != s.State {
+				seen[s.Task] = append(l, s.State)
+			}
+		}
+		return slices.Contains(seen["WEB-3"], StateStalled) && slices.Contains(seen["WEB-4"], StateWaiting)
+	})
+	if l := seen["WEB-3"]; l[0] != StateRunning || slices.Index(l, StateStalled) < slices.Index(l, StateRunning) {
+		t.Fatalf("WEB-3's states: %v", l)
+	}
+}
+
 // An agent that stops without a decision is nudged twice and released with a Note; the third
 // release files a question to the Feature owner that blocks the Task.
 func TestRunnerReleasesASilentSession(t *testing.T) {
@@ -535,7 +560,7 @@ func TestRunnerTerminal(t *testing.T) {
 	t.Cleanup(func() { killTmux(r.Socket()) })
 	eventually(t, 20*time.Second, "the session waiting at its prompt", func() bool {
 		for _, s := range r.Running() {
-			if s.Task == "WEB-3" && s.State == StateNudged {
+			if s.Task == "WEB-3" && s.State == StateWaiting {
 				return true
 			}
 		}
