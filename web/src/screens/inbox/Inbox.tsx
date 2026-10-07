@@ -71,7 +71,7 @@ export function InboxPage() {
           </div>
         ) : (
           <>
-            {aimedAtMe.length === 0 && heldByMe.length === 0 && <NoneLine icon={<InboxIcon />}>Nothing aimed at you · No Claims</NoneLine>}
+            {aimedAtMe.length === 0 && heldByMe.length === 0 && <NoneLine icon={<InboxIcon />}>No questions for you · You hold nothing</NoneLine>}
             {aimedAtMe.length > 0 && (
               <section aria-label="Aimed at me">
                 <GroupHeader title="Aimed at me" count={aimedAtMe.length} />
