@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { boxesOf, DONE_NODE, routesOf, toNodes } from "./flow";
 import type { Workflow } from "./model";
 import { crosses, labelWidth, routeConnectors, type Rect } from "./route";
-import { sampleWorkflow } from "./samples";
+import { defaultWorkflow, sampleWorkflow } from "./samples";
 
 const nodes = toNodes(sampleWorkflow, "live");
 const { boxes, extra } = boxesOf(nodes);
@@ -67,6 +67,20 @@ describe("routeConnectors", () => {
     const moved = toNodes({ ...sampleWorkflow, steps: sampleWorkflow.steps.map((s) => (s.id === "s-qa" ? { ...s, y: s.y + 300 } : s)) }, "live");
     const again = routesOf(sampleWorkflow, moved).get("c-build-qa")!;
     expect(again.points.at(-1)!.y).toBeGreaterThan(routes.get("c-build-qa")!.points.at(-1)!.y + 200);
+  });
+
+  it("routes the default Workflow as `init` lays it, in one row, round every step", () => {
+    const row = toNodes(defaultWorkflow, "live");
+    const placed = boxesOf(row);
+    const rowRoutes = routesOf(defaultWorkflow, row);
+    expect(rowRoutes.size).toBe(defaultWorkflow.connectors.length);
+    for (const c of defaultWorkflow.connectors) {
+      const to = c.to ?? DONE_NODE;
+      const obstacles = [...[...placed.boxes].filter(([id]) => id !== c.from && id !== to).map(([, r]) => r), ...placed.extra];
+      expect(crosses(rowRoutes.get(c.id)!.points, obstacles), c.id).toBe(false);
+    }
+    // Plan's "done" passes five steps on its way to Done: above or below them, not through.
+    expect(rowRoutes.get("c-plan-done")!.points.length).toBeGreaterThan(2);
   });
 
   it("goes round a node standing between two steps", () => {

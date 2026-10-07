@@ -46,7 +46,7 @@ for (const scheme of ["light", "dark"] as const) {
 
       await page.screenshot({ path: `e2e/screenshots/lab-${size.name}-${scheme}.png`, fullPage: true });
       if (size.name === "desktop") {
-        for (const name of ["Marks", "WorkGlyph", "Workflow canvas · live", "Workflow canvas · editing", "Subtask graph"]) {
+        for (const name of ["Marks", "WorkGlyph", "Workflow canvas · live", "Workflow canvas · a new Project", "Workflow canvas · editing", "Subtask graph"]) {
           const slug = name.toLowerCase().replace(/[^a-z]+/g, "-");
           await page.getByRole("region", { name }).screenshot({ path: `e2e/screenshots/lab-${slug}-${scheme}.png` });
         }
