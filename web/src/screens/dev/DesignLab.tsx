@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { STEP_W, RANK_GAP, tidy } from "@/components/workflow/layout";
 import type { Connector, Point, Step, Workflow } from "@/components/workflow/model";
-import { sampleSteps, sampleSubtasks, sampleWorkflow } from "@/components/workflow/samples";
+import { defaultWorkflow, sampleSteps, sampleSubtasks, sampleWorkflow } from "@/components/workflow/samples";
 import { SubtaskGraph } from "@/components/workflow/SubtaskGraph";
 import { WorkflowCanvas } from "@/components/workflow/WorkflowCanvas";
 import type { WorkGlyph as Glyph, Working } from "@/lib/work";
@@ -34,6 +34,9 @@ export default function DesignLab() {
       </Section>
       <Section title="Workflow canvas · live" note="Project › Workflow: read-only, the counts and the takers' rings.">
         <WorkflowCanvas workflow={sampleWorkflow} mode="live" className="h-[520px] rounded-lg border" />
+      </Section>
+      <Section title="Workflow canvas · a new Project" note="The default Workflow at the places darkory init stores: the board's order, ranks 448px apart, rows 128px.">
+        <WorkflowCanvas workflow={defaultWorkflow} mode="live" className="h-[420px] rounded-lg border" />
       </Section>
       <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a step, Tidy up.">
         <EditingCanvas />
