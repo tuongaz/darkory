@@ -4,6 +4,9 @@
 @import "sonner/dist/styles.css";
 /* xterm.js's own, for the Session panel's terminal: the app's CSP takes styles from its own CSS only. */
 @import "@xterm/xterm/css/xterm.css";
+/* React Flow's structural styles, for the Workflow canvas and the Subtask graph; its look is ours
+   (below, "Canvases"), so style.css is not taken. */
+@import "@xyflow/react/dist/base.css";
 
 /* A toast's action is the kit's outline button (`.btn.xs.outline`, F-B4), not sonner's solid one.
    Unlayered, to win over sonner's own rule. */
@@ -33,6 +36,60 @@
 [data-radix-select-viewport]::-webkit-scrollbar,
 [data-radix-scroll-area-viewport]::-webkit-scrollbar {
   display: none;
+}
+
+/* Canvases (the Workflow canvas, the Subtask graph): React Flow's look, from the tokens, so it
+   follows the theme. base.css keys its own dark look on .react-flow.dark, which we never set.
+   Unlayered, as base.css is, to win over its rules. */
+.react-flow {
+  --xy-edge-stroke: var(--muted-foreground);
+  --xy-edge-stroke-width: 1.25;
+  --xy-edge-stroke-selected: var(--foreground);
+  --xy-connectionline-stroke: var(--foreground);
+  --xy-connectionline-stroke-width: 1.25;
+  --xy-handle-background-color: var(--muted-foreground);
+  --xy-background-color: transparent;
+  --xy-background-pattern-dots-color: var(--border);
+  font-family: var(--font-sans);
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 2;
+}
+.react-flow__node:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+  border-radius: var(--radius-lg);
+}
+.react-flow__node-terminal:focus-visible {
+  border-radius: 9999px;
+}
+/* A step's in and out: shown while editing, on the hovered or selected step. */
+.canvas-handle {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--card);
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.workflow-canvas[data-mode="edit"] .react-flow__node:hover .canvas-handle,
+.workflow-canvas[data-mode="edit"] .react-flow__node.selected .canvas-handle,
+.workflow-canvas[data-mode="edit"] .canvas-handle.connectingto,
+.workflow-canvas[data-mode="edit"] .react-flow__node:focus-visible .canvas-handle {
+  opacity: 1;
+}
+.workflow-canvas[data-mode="edit"] .canvas-handle.connectingto.valid {
+  --xy-handle-background-color: var(--foreground);
+}
+.canvas-handle-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+/* React Flow's credit, kept as its makers ask of anyone not subscribed to React Flow Pro. */
+.react-flow__attribution {
+  --xy-attribution-background-color: transparent;
+}
+.react-flow__attribution a {
+  color: var(--muted-foreground);
 }
 
 @custom-variant dark (&:is(.dark *));
@@ -306,6 +363,7 @@
       animation: none;
     }
   }
+
 
   /* Neighbouring numbers far apart on the wheel. */
   .tint-0 { --tint-h: 250; }

@@ -79,7 +79,7 @@ function ProgressRing({
     );
   return (
     <svg {...aria} viewBox="0 0 14 14" fill="none" strokeWidth={2} className={className}>
-      <circle cx="7" cy="7" r={r} className="stroke-border" />
+      <circle cx="7" cy="7" r={r} className="stroke-muted-foreground/30" />
       {arc(0, done, "stroke-state-done")}
       {arc(done, dropped, "stroke-muted-foreground")}
     </svg>
