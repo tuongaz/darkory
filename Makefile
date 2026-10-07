@@ -80,11 +80,14 @@ dev: dev-init
 	$(MAKE) --no-print-directory dev-web & \
 	wait
 
-## dev-api: the server alone on 7358, rebuilt and restarted when Go code changes
+## dev-api: the server alone on 7358, rebuilt and restarted when Go code changes. Each start opens
+## the sign-in link in a browser; DEV_BROWSER=0 only prints it (handy while editing Go code, since
+## every rebuild is a start).
+DEV_BROWSER ?= 1
 dev-api: dev-init
 	DARKORY_PUBLIC_URL='$(PUBLIC_URL)' DARKORY_NO_UPDATE_CHECK=1 \
 		$(GO) run ./tools/devrun -o $(DEV_DATA)/bin/darkory -pkg ./cmd/darkory -- \
-		serve --data $(DEV_DATA) --listen 127.0.0.1:7358 --no-browser
+		serve --data $(DEV_DATA) --listen 127.0.0.1:7358 $(if $(filter 0,$(DEV_BROWSER)),--no-browser)
 
 ## dev-web: the web app alone on 7357, proxying /v1 to the server on 7358
 dev-web:
