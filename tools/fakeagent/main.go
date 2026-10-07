@@ -182,7 +182,6 @@ var stdin = bufio.NewScanner(os.Stdin)
 //	        (~/.claude.json, or in $CLAUDE_CONFIG_DIR) trusts the working directory or the
 //	        repository whose worktree it is, then the Bypass Permissions mode warning unless their
 //	        settings.json (~/.claude/settings.json, or in $CLAUDE_CONFIG_DIR) has accepted it
-//	always  both, whatever the configuration says
 //	trust   the folder-trust dialog, whatever the configuration says
 //	again   the folder-trust dialog, and once it is accepted the same again
 //	late    nothing now; the agent prints the folder-trust dialog after its first turn (lateDialog)
@@ -233,8 +232,6 @@ func firstRun(mode string) error {
 		if !settings.Accepted {
 			ask = append(ask, bypass)
 		}
-	case "always":
-		ask = []string{trust, bypass}
 	case "trust":
 		ask = []string{trust}
 	case "again":
