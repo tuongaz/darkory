@@ -53,13 +53,15 @@ type Proc interface {
 	Screen(lines int) string
 }
 
-// Keyed is a Proc whose screen can be read as it shows now and answered with keys, as a person
-// at its terminal would: a session in tmux.
-type Keyed interface {
+// Answerer is a Proc whose screen can be read as it shows now and whose Claude Code first-run
+// dialog can be accepted, as a person at its terminal would: a session in tmux. It presses no
+// other key, so nothing else on the screen is ever answered.
+type Answerer interface {
 	// Shown is the screen as it shows now, without the lines scrolled off it.
 	Shown() string
-	// Key presses one key, by tmux's name for it (Down, Enter).
-	Key(key string) error
+	// AcceptFirstRunPrompt presses Down and Enter: from the highlighted "No, exit" to the
+	// dialog's second choice, which accepts, and chooses it.
+	AcceptFirstRunPrompt() error
 }
 
 // Host starts sessions.
@@ -299,8 +301,12 @@ func (p *tmuxProc) Shown() string {
 	return out
 }
 
-func (p *tmuxProc) Key(key string) error {
-	_, err := p.h.tmux(context.Background(), "send-keys", "-t", pane(p.name), key)
+func (p *tmuxProc) AcceptFirstRunPrompt() error {
+	if _, err := p.h.tmux(context.Background(), "send-keys", "-t", pane(p.name), "Down"); err != nil {
+		return err
+	}
+	time.Sleep(200 * time.Millisecond)
+	_, err := p.h.tmux(context.Background(), "send-keys", "-t", pane(p.name), "Enter")
 	return err
 }
 

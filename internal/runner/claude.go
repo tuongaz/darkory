@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -132,77 +133,71 @@ func writeJSON(path string, v any) error {
 	return os.Rename(f.Name(), path)
 }
 
-// firstRunPrompt is one of the questions Claude Code asks on a terminal the first time, which
-// would stall an unattended session: the runner's configuration directory answers them before
-// the session starts, and the runner answers one it still sees, once.
+// firstRunPrompt is one of the two questions Claude Code 2.1 asks on a terminal the first time,
+// which would stall an unattended session. The runner's configuration directory answers both
+// before the session starts; the runner answers one it still sees on screen only as a fallback,
+// within the limits of session.firstRun, and only when the screen is exactly that dialog: what
+// the agent prints can look like anything, so nothing looser is ever answered.
 type firstRunPrompt struct {
 	// Name says which, in Notes.
 	Name string
-	// signs are what the question says, any one of them, in lower case.
-	signs []string
-	// accept is the choice that accepts, any one of them, in lower case.
-	accept []string
+	// before are lines the dialog shows above its choices, in order: whole lines, or the start of
+	// one for a line that ends in "…". workspaceLine stands for the session's folder.
+	before []string
+	// accept is the second choice, the one that accepts, under the highlighted "No, exit".
+	accept string
 }
+
+const workspaceLine = "\x00workspace"
 
 var firstRunPrompts = []firstRunPrompt{
-	{Name: "the folder-trust dialog", signs: []string{"is this a project you created or one you trust", "do you trust the files in this folder"},
-		accept: []string{"yes, i trust this folder", "yes, proceed"}},
-	{Name: "the Bypass Permissions mode warning", signs: []string{"running in bypass permissions mode"}, accept: []string{"yes, i accept"}},
+	{Name: "the folder-trust dialog", before: []string{"Accessing workspace:", workspaceLine,
+		"Quick safety check: Is this a project you created or one you trust?…"}, accept: "Yes, I trust this folder"},
+	{Name: "the Bypass Permissions mode warning", before: []string{"WARNING: Claude Code running in Bypass Permissions mode"},
+		accept: "Yes, I accept"},
 }
 
-// promptCursor marks the highlighted choice of Claude Code's dialogs.
-const promptCursor = "❯"
-
-// findFirstRunPrompt finds a first-run prompt on screen, the session's screen as shown, and the
-// keys that move to its accepting choice and choose it.
-func findFirstRunPrompt(screen string) (firstRunPrompt, []string, bool) {
-	low := strings.ToLower(screen)
-	if !strings.Contains(low, "enter to confirm") {
-		return firstRunPrompt{}, nil, false
+// findFirstRunPrompt says which first-run dialog screen, a session's screen as shown, is, if it
+// is exactly one: the dialog's lines in order, and as the screen's last lines, nothing under
+// them, "❯ No, exit" highlighted, the accepting choice, and "Enter to confirm · Esc to cancel".
+// The folder-trust dialog must name folder, the session's working directory, by any of its
+// paths. Its accepting choice is then one Down and Enter away.
+func findFirstRunPrompt(screen string, folder ...string) (firstRunPrompt, bool) {
+	var lines []string
+	for l := range strings.Lines(screen) {
+		if l = strings.TrimSpace(l); l != "" {
+			lines = append(lines, l)
+		}
+	}
+	n := len(lines)
+	if n < 4 || lines[n-3] != "❯ No, exit" || lines[n-1] != "Enter to confirm · Esc to cancel" {
+		return firstRunPrompt{}, false
 	}
 	for _, p := range firstRunPrompts {
-		if !containsAny(low, p.signs) {
+		if lines[n-2] != p.accept {
 			continue
 		}
-		var lines []string
-		for l := range strings.Lines(screen) {
-			if strings.TrimSpace(l) != "" {
-				lines = append(lines, strings.ToLower(l))
+		at := 0
+		for _, want := range p.before {
+			for at < n-3 && !lineIs(lines[at], want, folder) {
+				at++
 			}
-		}
-		cursor, accept := -1, -1
-		for i, l := range lines {
-			if strings.Contains(l, promptCursor) && cursor < 0 {
-				cursor = i
+			if at == n-3 {
+				return firstRunPrompt{}, false
 			}
-			if containsAny(l, p.accept) {
-				accept = i
-			}
+			at++
 		}
-		if accept < 0 {
-			continue
-		}
-		if cursor < 0 {
-			// No highlighted choice to count from: the first comes before the one that accepts.
-			cursor = accept - 1
-		}
-		var keys []string
-		for i := cursor; i < accept; i++ {
-			keys = append(keys, "Down")
-		}
-		for i := accept; i < cursor; i++ {
-			keys = append(keys, "Up")
-		}
-		return p, append(keys, "Enter"), true
+		return p, true
 	}
-	return firstRunPrompt{}, nil, false
+	return firstRunPrompt{}, false
 }
 
-func containsAny(s string, subs []string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
-			return true
-		}
+func lineIs(line, want string, folder []string) bool {
+	switch {
+	case want == workspaceLine:
+		return slices.Contains(folder, line)
+	case strings.HasSuffix(want, "…"):
+		return strings.HasPrefix(line, strings.TrimSuffix(want, "…"))
 	}
-	return false
+	return line == want
 }

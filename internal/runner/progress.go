@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -104,6 +105,42 @@ func ReadProgress(path string) (Reading, error) {
 		}
 	}
 	return Reading{Exists: true, Modified: st.ModTime(), Ended: TurnHasEnded(buf)}, nil
+}
+
+// headBytes is how much of the start of a transcript is read for an assistant message.
+const headBytes = 4 << 20
+
+// HasAssistantMessage says whether the transcript at path holds an assistant message of the main
+// conversation: whether the agent's model has answered at all. A file not there yet holds none;
+// one whose first headBytes hold none, but which goes on, counts as holding one.
+func HasAssistantMessage(path string) (bool, error) {
+	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(io.LimitReader(f, headBytes))
+	sc.Buffer(make([]byte, 64<<10), headBytes)
+	for sc.Scan() {
+		line := bytes.TrimSpace(sc.Bytes())
+		if len(line) == 0 || line[0] != '{' {
+			continue
+		}
+		var r transcriptRecord
+		if json.Unmarshal(line, &r) == nil && r.Type == "assistant" && !r.IsSidechain {
+			return true, nil
+		}
+	}
+	if sc.Err() != nil {
+		return true, nil
+	}
+	if st, err := f.Stat(); err == nil && st.Size() > headBytes {
+		return true, nil
+	}
+	return false, nil
 }
 
 // transcriptRecord is the part of a Claude Code transcript line the runner reads.
