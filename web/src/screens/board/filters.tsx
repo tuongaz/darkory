@@ -110,14 +110,14 @@ export function memberOptions(members: Iterable<Member>, me: string): FilterOpti
 const claimOptions: FilterOption[] = [
   { value: "held", label: "Held" },
   { value: "unheld", label: "Unheld" },
-  { value: "lapsed_24h", label: "Lapsed in 24 h" },
-  { value: "live_session", label: "Live session" },
+  { value: "lapsed", label: "Lapsed in 24 h" },
+  { value: "session", label: "Live session" },
 ];
 
 const kindOptions: { value: KindValue; label: string }[] = [
   { value: "work", label: "Work" },
   { value: "breakdown", label: "Break down" },
-  { value: "retro", label: "Retrospective" },
+  { value: "retrospective", label: "Retrospective" },
   { value: "question", label: "Question" },
 ];
 

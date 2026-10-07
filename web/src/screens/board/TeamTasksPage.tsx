@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { ApiError, type Task } from "@/api/client";
-import { useWorkspaces } from "@/api/queries";
+import { useRunnerSessions, useWorkspaces } from "@/api/queries";
 import { sendIntent, useIntent } from "@/app/intents";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
@@ -45,6 +45,9 @@ export function TeamTasksPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   useIntent("filter", () => setFilterOpen(true));
   const workspaces = useWorkspaces().data;
+  const runner = useRunnerSessions().data?.items;
+  // The Tasks the Runner runs a session for, the Claim axis' Live session, as the server reads it.
+  const sessions = useMemo(() => new Set((runner ?? []).map((r) => r.task_id)), [runner]);
   const all = model.tasks.data;
   const options = useMemo(
     () =>
@@ -91,10 +94,10 @@ export function TeamTasksPage() {
         statuses: model.statusById,
         now: model.now,
         trails: model.trails,
-        members: model.members,
+        sessions,
         byKind: view === "list",
       }),
-    [sorted, display, pills, model.featureById, model.statusById, model.now, model.trails, model.members, view],
+    [sorted, display, pills, model.featureById, model.statusById, model.now, model.trails, sessions, view],
   );
 
   // On a phone the bar shows the Team alone, beside the view switch and the actions.

@@ -1,7 +1,7 @@
 // What the Board screens compute from /v1 records: Status glyphs, the order and grouping of Tasks,
 // the marks a row or card carries, what a refused drag says, and the Features' Task bars. Pure, so
 // Vitest checks them without rendering.
-import type { Activity, Feature, Member, Task, TaskBrief, TaskCounts } from "@/api/client";
+import type { Activity, Feature, Task, TaskBrief, TaskCounts } from "@/api/client";
 import type { components } from "@/api/schema.gen";
 import { passesDate } from "@/components/filters/dates";
 import type { FilterPill } from "@/components/filters/filterState";
@@ -123,32 +123,23 @@ export const defaultDisplay: Display = { group: "status", order: "rank", showDon
 /** The Held by value of a Task nobody holds. */
 export const nobody = "none";
 
-/** The Kind axis' words, as the server's `filter` takes them: `retro` is the retrospective kind. */
-export type KindValue = "work" | "breakdown" | "retro" | "question";
+/** The Kind axis' values: a Task's kind, with a work Task aimed at a Member by name as a question. */
+export type KindValue = Task["kind"] | "question";
 
-/**
- * A Task's Kind values: `question` when it is aimed at a Member, `work` for a work Task aimed at
- * nobody, and its own kind for a Break down or a Retrospective, as `GET /v1/tasks?filter=` reads it.
- */
-export function kindValues(task: Pick<Task, "kind" | "aimed_at_id">): KindValue[] {
-  const aimed = !!task.aimed_at_id;
-  const out: KindValue[] = [];
-  if (task.kind === "breakdown") out.push("breakdown");
-  else if (task.kind === "retrospective") out.push("retro");
-  else if (!aimed) out.push("work");
-  if (aimed) out.push("question");
-  return out;
+/** A Task's Kind, as `GET /v1/tasks?filter=` reads it: a work Task aimed at a Member is a question. */
+export function kindValue(task: Pick<Task, "kind" | "aimed_at_id">): KindValue {
+  return task.kind === "work" && task.aimed_at_id ? "question" : task.kind;
 }
 
 /**
  * What `matches` reads beyond the Task: the clock, the Team's Features, and for the Claim axis the
- * Claim trails (recorded lapses) and the Members (whether a holder is an agent).
+ * Claim trails (recorded lapses) and the Tasks the Runner runs a session for now.
  */
 export type FilterContext = {
   now: number;
   features: Map<string, Pick<Feature, "owner_id">>;
   trails?: Map<string, ClaimTrail>;
-  members?: Map<string, Pick<Member, "kind">>;
+  sessions?: ReadonlySet<string>;
 };
 
 /** The time the list's Updated column shows: when the Task ended, else when it began waiting. */
@@ -170,20 +161,18 @@ const lapseWindowMs = 24 * 60 * 60 * 1000;
 
 /**
  * The Claim axis' values of a Task, as many as hold, as the server's `filter` reads them: `held`, a
- * live Claim; `unheld`, none, in any state; `lapsed_24h`, open and unheld with its latest Claim
- * lapsed within 24 hours, recorded or only expired; `live_session`, a live Claim with a Heartbeat
- * timeout held by an agent.
+ * live Claim; `unheld`, none, in any state; `lapsed`, a Claim of the Task lapsed within the last
+ * 24 hours, recorded or only past its expiry, whether or not it was claimed again since;
+ * `session`, the Runner beside the server runs a session for it now.
  */
 export function claimValues(task: Task, ctx: FilterContext): string[] {
-  const claim = liveClaim(task, ctx.now);
-  const out = [claim ? "held" : "unheld"];
-  if (!claim && task.state === "open") {
-    // An expired Claim the sweep has not ended yet lapsed at its expiry; else the recorded lapse.
-    const expired = task.claim && !task.claim.ended_at ? task.claim.expires_at : undefined;
-    const lapsed = expired ?? ctx.trails?.get(task.id)?.lapsedAt;
-    if (lapsed && ctx.now - Date.parse(lapsed) <= lapseWindowMs) out.push("lapsed_24h");
-  }
-  if (claim?.heartbeat_timeout_seconds && ctx.members?.get(claim.holder_id)?.kind === "agent") out.push("live_session");
+  const out = [liveClaim(task, ctx.now) ? "held" : "unheld"];
+  const claim = task.claim;
+  // A Claim past its expiry that the sweep has not ended yet lapsed at its expiry.
+  const expired = claim && !claim.ended_at && claim.expires_at && Date.parse(claim.expires_at) <= ctx.now ? claim.expires_at : undefined;
+  const lapses = [expired, ctx.trails?.get(task.id)?.lastLapseAt].filter((at): at is string => !!at);
+  if (lapses.some((at) => ctx.now - Date.parse(at) <= lapseWindowMs)) out.push("lapsed");
+  if (ctx.sessions?.has(task.id)) out.push("session");
   return out;
 }
 
@@ -212,7 +201,7 @@ export function taskValues(task: Task, field: string, ctx: FilterContext): strin
     case "blocked":
       return [String(task.blocked)];
     case "kind":
-      return kindValues(task);
+      return [kindValue(task)];
     case "workspace":
       return task.workspace_ids ?? [];
     case "claim":
@@ -241,16 +230,16 @@ export function passes(values: string[], pill: FilterPill): boolean {
   }
 }
 
-/** Whether a key, a title or a description holds a Search pill's words, ignoring case. */
-function searchMatches(record: { key: string; title: string; description: string }, pill: FilterPill): boolean {
+/** Whether a key or a title holds a Search pill's words, ignoring case. */
+function searchMatches(record: { key: string; title: string }, pill: FilterPill): boolean {
   const words = (pill.values[0] ?? "").toLowerCase();
-  return [record.key, record.title, record.description].some((text) => text.toLowerCase().includes(words));
+  return [record.key, record.title].some((text) => text.toLowerCase().includes(words));
 }
 
 /**
  * Whether a Task passes every pill of the Filter, as `GET /v1/tasks?filter=` would answer: the
- * axes are ANDed, the values of one axis ORed. Search (`q`) matches the key, the title or the
- * description, ignoring case. A pill for an axis the Tasks do not have narrows nothing.
+ * axes are ANDed, the values of one axis ORed. Search (`q`) matches the key or the title, ignoring
+ * case, as the server's does. A pill for an axis the Tasks do not have narrows nothing.
  */
 export function matches(task: Task, pills: readonly FilterPill[], ctx: FilterContext): boolean {
   return pills.every((pill) => {
@@ -340,6 +329,8 @@ export function visibleFeatures(ranked: Feature[], ctx: { pills: readonly Filter
 export type ClaimTrail = {
   /** When its last Claim lapsed, if the last Claim it had ended by a lapse. */
   lapsedAt?: string;
+  /** When a Claim of it last lapsed, though it was claimed again since. */
+  lastLapseAt?: string;
   /** Who completed it. */
   completedBy?: string;
 };
@@ -359,7 +350,7 @@ export function claimTrails(entries: Activity[]): Map<string, ClaimTrail> {
   for (const e of sorted) {
     const t = out.get(e.subject_id) ?? {};
     if (e.kind === "task.claimed") t.lapsedAt = undefined;
-    else if (e.kind === "task.lapsed") t.lapsedAt = e.at;
+    else if (e.kind === "task.lapsed") t.lapsedAt = t.lastLapseAt = e.at;
     else if (e.kind === "task.completed") t.completedBy = e.actor_id;
     else continue;
     out.set(e.subject_id, t);

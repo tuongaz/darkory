@@ -165,24 +165,20 @@ describe("the Filter's pills", () => {
     expect(matches(lapsing, [{ field: "holder", op: "is", values: [nobody] }], ctx)).toBe(true);
   });
 
-  it("reads the Feature's owner, the filer, and Kind in the server's words", () => {
+  it("reads the Feature's owner, the filer, and Kind as the server does", () => {
     expect(where({ field: "owner", op: "is", values: [builder.id] })).toEqual(["WEB-4"]);
     expect(where({ field: "filed_by", op: "is", values: [ada.id] })).toEqual(["WEB-3", "WEB-4", "WEB-5"]);
+    // A question is a work Task aimed at a Member; `work` a work Task aimed at nobody.
     expect(where({ field: "kind", op: "is", values: ["question"] })).toEqual(["WEB-4"]);
     expect(where({ field: "kind", op: "not", values: ["question"] })).toEqual(["WEB-3", "WEB-5"]);
-    // `work` is a work Task aimed at nobody; `retro` the retrospective kind; an aimed Task of
-    // another kind is that kind and a question.
     expect(where({ field: "kind", op: "is", values: ["work"] })).toEqual(["WEB-3", "WEB-5"]);
-    expect(matches(task(9, "f-1", { kind: "retrospective" }), [{ field: "kind", op: "is", values: ["retro"] }], ctx)).toBe(true);
-    const aimedBreakdown = task(9, "f-1", { kind: "breakdown", aimed_at_id: ada.id });
-    expect(matches(aimedBreakdown, [{ field: "kind", op: "in", values: ["breakdown"] }], ctx)).toBe(true);
-    expect(matches(aimedBreakdown, [{ field: "kind", op: "not", values: ["question"] }], ctx)).toBe(false);
+    expect(matches(task(9, "f-1", { kind: "retrospective" }), [{ field: "kind", op: "is", values: ["retrospective"] }], ctx)).toBe(true);
   });
 
-  it("searches keys, titles and descriptions, ignoring case", () => {
+  it("searches keys and titles, not descriptions, ignoring case", () => {
     expect(where({ field: "q", op: "contains", values: ["CART"] })).toEqual(["WEB-3"]);
     expect(where({ field: "q", op: "contains", values: ["web-5"] })).toEqual(["WEB-5"]);
-    expect(matches(task(9, "f-1", { description: "Stripe's TEST keys" }), [{ field: "q", op: "contains", values: ["test key"] }], ctx)).toBe(true);
+    expect(matches(task(9, "f-1", { description: "Stripe's test keys" }), [{ field: "q", op: "contains", values: ["test key"] }], ctx)).toBe(false);
   });
 
   it("ANDs the axes and leaves alone an axis the Tasks do not have", () => {
@@ -205,18 +201,12 @@ describe("the Filter's dates, Claim and Workspace", () => {
     now,
     features: new Map([["f-1", { owner_id: ada.id }]]),
     trails: new Map([
-      ["k-2", { lapsedAt: at(30) }],
-      ["k-4", { lapsedAt: at(60 * 30) }],
+      ["k-2", { lapsedAt: at(30), lastLapseAt: at(30) }],
+      ["k-4", { lapsedAt: at(60 * 30), lastLapseAt: at(60 * 30) }],
     ]),
-    members: new Map([
-      [ada.id, ada],
-      [builder.id, builder],
-    ]),
+    sessions: new Set(["k-1"]),
   };
-  const held = task(1, "f-1", {
-    created_at: yesterday.toISOString(),
-    claim: { id: "c-1", task_id: "k-1", holder_id: builder.id, session_id: "s", started_at: at(5), heartbeat_timeout_seconds: 900, expires_at: at(-10) },
-  });
+  const held = task(1, "f-1", { created_at: yesterday.toISOString(), claim: { id: "c-1", task_id: "k-1", holder_id: builder.id, session_id: "s", started_at: at(5) } });
   const lapsed = task(2, "f-1", { created_at: today.toISOString(), workspace_ids: ["w-shop"] });
   const done = task(3, "f-1", { state: "done", status_id: "st-done", created_at: yesterday.toISOString(), ended_at: today.toISOString() });
   const old = task(4, "f-1", { created_at: at(60 * 24 * 40), waiting_since: at(60 * 24 * 40), workspace_ids: ["w-shop", "w-docs"] });
@@ -231,22 +221,22 @@ describe("the Filter's dates, Claim and Workspace", () => {
     expect(matches(dropped, [{ field: "completed_at", op: "last", values: ["7d"] }], ctx)).toBe(false);
   });
 
-  it("holds every Claim value that is true of a Task, in the server's words", () => {
+  it("holds every Claim value that is true of a Task, as the server reads them", () => {
     expect(where({ field: "claim", op: "is", values: ["held"] })).toEqual(["WEB-1"]);
     // Unheld in any state, as Held by Nobody.
     expect(where({ field: "claim", op: "is", values: ["unheld"] })).toEqual(["WEB-2", "WEB-3", "WEB-4"]);
     // A lapse counts for a day; WEB-4's was 30 hours ago.
-    expect(where({ field: "claim", op: "is", values: ["lapsed_24h"] })).toEqual(["WEB-2"]);
-    // A live Claim with a Heartbeat timeout, held by an agent.
-    expect(where({ field: "claim", op: "in", values: ["live_session", "lapsed_24h"] })).toEqual(["WEB-1", "WEB-2"]);
+    expect(where({ field: "claim", op: "is", values: ["lapsed"] })).toEqual(["WEB-2"]);
+    // The Runner runs a session for WEB-1.
+    expect(where({ field: "claim", op: "in", values: ["session", "lapsed"] })).toEqual(["WEB-1", "WEB-2"]);
   });
 
-  it("counts a Claim past its expiry that the sweep has not ended as a lapse", () => {
+  it("counts a lapse though the Task was claimed again, and a Claim past its expiry not yet swept", () => {
+    const reclaimed = task(8, "f-1", { claim: { id: "c-8", task_id: "k-8", holder_id: builder.id, session_id: "s", started_at: at(1) } });
+    const trails = claimTrails([entry(1, "task.lapsed", "k-8"), entry(2, "task.claimed", "k-8")]);
+    expect(matches(reclaimed, [{ field: "claim", op: "is", values: ["lapsed"] }], { ...ctx, trails })).toBe(true);
     const expired = task(6, "f-1", { claim: { id: "c-6", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: at(20), expires_at: at(2) } });
-    expect(matches(expired, [{ field: "claim", op: "is", values: ["lapsed_24h"] }], ctx)).toBe(true);
-    // A human's Claim with a timeout is not a session.
-    const human = task(7, "f-1", { claim: { id: "c-7", task_id: "k-7", holder_id: ada.id, session_id: "s", started_at: at(2), heartbeat_timeout_seconds: 900, expires_at: at(-10) } });
-    expect(matches(human, [{ field: "claim", op: "is", values: ["live_session"] }], ctx)).toBe(false);
+    expect(matches(expired, [{ field: "claim", op: "is", values: ["lapsed"] }], ctx)).toBe(true);
   });
 
   it("reads a Task's Workspaces as several values", () => {
