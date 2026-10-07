@@ -17,7 +17,7 @@ import (
 // commits, each operation reads the Task first and sends, with the write, the response the write
 // will make true; a guard in the batch checks the write happened as read, so the response stored
 // under an Idempotency-Key is the one the caller gets. When a guard refuses, the reason is read
-// after the rollback.
+// after the rollback, and a refusal of a rule's is then kept under the key (keepRefusal).
 
 // ClaimOptions are what claim and next accept besides the Task.
 type ClaimOptions struct {
@@ -38,23 +38,33 @@ func (o ClaimOptions) timeout(c *auth.Caller) time.Duration {
 // whole Takeable rule (ADR 0004). The UPDATE copies the Claim it replaces into the outgoing
 // columns, so the lapse of an expired Claim nobody has recorded yet is recorded here, numbered
 // before the new Claim's own Activity; it also moves a todo Task to the first in_progress Status,
-// which the guard after it checks is status, the one the response names (ADR 0012).
-func claimStmts(c *auth.Caller, taskID, claimID string, pre Task, version *int64, status string, o ClaimOptions, now time.Time) []store.Stmt {
+// which the guard after it checks is status, the one the response names (ADR 0012). The guard
+// also checks the Task's Claims are those read, which the response lists.
+func claimStmts(c *auth.Caller, taskID, claimID string, pre TaskDetail, version *int64, status string, o ClaimOptions, now time.Time) []store.Stmt {
 	args := takeableArgs(c, now)
 	timeout := o.timeout(c)
 	var timeoutMS, expires *int64
 	if timeout > 0 {
 		timeoutMS, expires = ptr(timeout.Milliseconds()), ptr(ms(now.Add(timeout)))
 	}
+	// The Claims read that had not ended in the record: claimsOf gives the current one its expiry,
+	// and shows it lapsed at that expiry once passed, before the lapse is recorded.
+	var open int64
+	for _, old := range pre.Claims {
+		if old.EndedAt == nil || old.ExpiresAt != nil {
+			open++
+		}
+	}
 	for k, v := range map[string]any{
 		"task": taskID, "claim": claimID, "session": c.SessionID, "timeout": timeoutMS, "expires": expires,
-		"label": o.ModelLabel, "skill": pre.SkillID, "version": version, "status": status,
+		"label": o.ModelLabel, "skill": pre.Task.SkillID, "version": version, "status": status,
+		"claims": int64(len(pre.Claims)), "open": open,
 	} {
 		args[k] = v
 	}
 	payload := map[string]any{"claim_id": claimID, "session_id": c.ChosenID}
-	if pre.SkillID != nil {
-		payload["skill_id"] = *pre.SkillID
+	if pre.Task.SkillID != nil {
+		payload["skill_id"] = *pre.Task.SkillID
 	}
 	if timeoutMS != nil {
 		payload["heartbeat_timeout_seconds"] = int64(timeout / time.Second)
@@ -76,11 +86,15 @@ AND NOT EXISTS (SELECT 1 FROM claims pc WHERE pc.org_id = @org AND pc.task_id = 
 outgoing_expires_at = claim_expires_at, claim_id = @claim, claim_holder_id = @member, claim_session_id = @session,
 claim_skill_id = skill_id, claim_timeout_ms = @timeout, claim_expires_at = @expires, status_id = `+claimStatusSQL+`
 WHERE t.id = @task AND `+takeableSQL, args),
-		// The claim happened, on the Task as it was read: the same Skill, at the same version, and
-		// in the Status the response names.
+		// The claim happened, on the Task as it was read: the same Skill, at the same version, in
+		// the Status the response names, and with the Claims it lists — none made since the read,
+		// and none open then ended since (the response would show a Claim released meanwhile as
+		// lapsed). Claims are never removed, and this runs before the new Claim is added.
 		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim
 AND t.skill_id IS NOT DISTINCT FROM @skill AND t.status_id = @status
-AND (t.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.org_id = @org AND s.id = t.skill_id AND s.current_version = @version))`, args)),
+AND (t.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.org_id = @org AND s.id = t.skill_id AND s.current_version = @version))
+AND (SELECT COUNT(*) FROM claims c WHERE c.org_id = @org AND c.task_id = @task) = @claims
+AND (SELECT COUNT(*) FROM claims c WHERE c.org_id = @org AND c.task_id = @task AND c.ended_at IS NULL) = @open`, args)),
 		store.S(`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at)
 SELECT @org, o.seq, NULL, 'task.lapsed', ot.id, '{"claim_id":"' || oc.id || '","holder_id":"' || oc.holder_id || '","how_ended":"lapsed"}', CAST(@now AS BIGINT)
 FROM tasks ot JOIN claims oc ON oc.id = ot.outgoing_claim_id JOIN organisations o ON o.id = @org
@@ -134,14 +148,12 @@ func (s *Service) tryClaim(ctx context.Context, c *auth.Caller, taskID string, o
 	if timeout > 0 {
 		claim.ExpiresAt = ptr(now.Add(timeout))
 	}
-	// If the claim succeeds, every Claim before it has ended and none is current; one still open
-	// had lapsed at its expiry.
+	// If the claim succeeds, every Claim before it has ended and none is current. The guard holds
+	// the Claims to those read, so none live when read can have ended since: one that had expired
+	// is already shown lapsed at its expiry, which the claim records.
 	out := pre
 	out.Claims = make([]Claim, 0, len(pre.Claims)+1)
 	for _, old := range pre.Claims {
-		if old.EndedAt == nil {
-			old.EndedAt, old.HowEnded = old.ExpiresAt, ptr("lapsed")
-		}
 		old.ExpiresAt = nil
 		out.Claims = append(out.Claims, old)
 	}
@@ -157,7 +169,7 @@ func (s *Service) tryClaim(ctx context.Context, c *auth.Caller, taskID string, o
 	if err != nil {
 		return TaskDetail{}, err
 	}
-	stmts = append(stmts, claimStmts(c, taskID, claimID, pre.Task, version, out.Status.ID, o, now)...)
+	stmts = append(stmts, claimStmts(c, taskID, claimID, pre, version, out.Status.ID, o, now)...)
 	if err := s.writeBatch(ctx, c.OrgID, stmts); err != nil {
 		return TaskDetail{}, err
 	}
@@ -170,8 +182,13 @@ func refused(err error) bool {
 
 // Claim claims a Task for the caller when it is takeable. The loser of a race gets
 // already_claimed and should stop rather than retry; a Task the caller could never take gets
-// not_takeable.
+// not_takeable. Either refusal is kept under the Idempotency-Key.
 func (s *Service) Claim(ctx context.Context, c *auth.Caller, ref string, o ClaimOptions, idem Idem) (TaskDetail, error) {
+	out, err := s.runClaim(ctx, c, ref, o, idem)
+	return out, s.keepRefusal(ctx, c, idem, err)
+}
+
+func (s *Service) runClaim(ctx context.Context, c *auth.Caller, ref string, o ClaimOptions, idem Idem) (TaskDetail, error) {
 	taskID, err := resolveTask(ctx, s.store, c.OrgID, ref)
 	if err != nil {
 		return TaskDetail{}, err
@@ -441,8 +458,13 @@ type heldOp struct {
 // the Claim guard, then op's statements. A refused batch is explained after the rollback. One
 // refused while the caller still holds the same Claim met a Task that changed between the read
 // and the write, such as its Status moved by a Member of its Team; it is tried again, at most
-// three times in all, as a claim is.
+// three times in all, as a claim is. A refusal of a rule's is kept under the Idempotency-Key.
 func (s *Service) heldWrite(ctx context.Context, c *auth.Caller, ref string, idem Idem, op heldOp) (any, error) {
+	res, err := s.runHeldWrite(ctx, c, ref, idem, op)
+	return res, s.keepRefusal(ctx, c, idem, err)
+}
+
+func (s *Service) runHeldWrite(ctx context.Context, c *auth.Caller, ref string, idem Idem, op heldOp) (any, error) {
 	taskID, err := resolveTask(ctx, s.store, c.OrgID, ref)
 	if err != nil {
 		return nil, err

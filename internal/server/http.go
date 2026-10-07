@@ -163,7 +163,7 @@ func (s *Server) begin(w http.ResponseWriter, r *http.Request, key *string, body
 			return nil, core.Idem{}, false
 		}
 	}
-	idem := core.Idem{Render: out}
+	idem := core.Idem{Render: out, RenderRefusal: refusalOut}
 	if key != nil {
 		sum := sha256.Sum256([]byte(r.Method + " " + r.URL.RequestURI() + "\n" + string(raw)))
 		idem.Key, idem.Hash = *key, hex.EncodeToString(sum[:])
@@ -225,6 +225,17 @@ var statusOf = map[core.Code]int{
 	core.CodeNotImplemented:       http.StatusNotImplemented,
 }
 
+// refusalOut renders a refusal: the reply fail sends, and the response kept under the request's
+// Idempotency-Key when the refusal is kept, so a replay repeats it byte for byte.
+func refusalOut(refusal *core.Error) (int, []byte, error) {
+	status, ok := statusOf[refusal.Code]
+	if !ok {
+		status = http.StatusConflict
+	}
+	b, err := json.Marshal(gen.Error{Code: gen.ErrorCode(refusal.Code), Message: refusal.Message})
+	return status, b, err
+}
+
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	var replay *core.Replay
 	var refusal *core.Error
@@ -232,11 +243,13 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.As(err, &replay):
 		writeRaw(w, replay.Status, replay.Body)
 	case errors.As(err, &refusal):
-		status, ok := statusOf[refusal.Code]
-		if !ok {
-			status = http.StatusConflict
+		status, body, err := refusalOut(refusal)
+		if err != nil {
+			s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "err", err)
+			writeError(w, http.StatusInternalServerError, gen.ErrorCodeInternal, "the server could not complete the request")
+			return
 		}
-		writeError(w, status, gen.ErrorCode(refusal.Code), refusal.Message)
+		writeRaw(w, status, body)
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, err.Error())
 	case errors.Is(err, context.Canceled):

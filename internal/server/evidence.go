@@ -83,7 +83,7 @@ func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target c
 	}
 	sum := hex.EncodeToString(hash.Sum(nil))
 	out := as(http.StatusCreated, func(e core.Evidence) any { return evidenceOut(e) })
-	idem := core.Idem{Render: out}
+	idem := core.Idem{Render: out, RenderRefusal: refusalOut}
 	if key != nil {
 		// The file is identified by its hash, which is known only now.
 		req := sha256.Sum256([]byte(r.Method + " " + r.URL.RequestURI() + "\n" + contentType + "\n" + sum))
