@@ -134,7 +134,8 @@ export function suggestKey(name: string): string {
 /** A Workspace name as /v1 takes it. */
 export const workspaceNamePattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/;
 
-export const modeNames: Record<WorkspaceMode, string> = { plain: "Plain", pull_request: "Pull request" };
+/** How work lands in a Workspace, as the Mode select names it: merged on this machine, or through pull requests. */
+export const modeNames: Record<WorkspaceMode, string> = { plain: "Local", pull_request: "Pull request" };
 
 /** The Teams whose Tasks work in a Workspace when they name none. */
 export function defaultOf(w: Pick<Workspace, "id">, teams: Team[]): Team[] {
