@@ -86,13 +86,59 @@ describe("Team › Tasks, list", () => {
     expect(groupNames()[0]).toBe("WEB-9 Search");
   });
 
-  it("filters by Skill from the address, with a chip that clears it", async () => {
+  it("reads an old ?skill=&blocked=1 link into the Filter, with chips that clear it", async () => {
     mockApi(routes());
     renderApp("/teams/WEB/tasks?view=list&skill=build&blocked=1");
     await row(/WEB-3/);
+    expect(await screen.findByRole("button", { name: "Needs: build" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Blocked: Blocked" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /WEB-10/ })).not.toBeInTheDocument();
+    // The old parameters are gone and the pills carry ids (the view switch links the address as it is).
+    const search = new URLSearchParams(screen.getByRole("link", { name: "Board" }).getAttribute("href")!.split("?")[1]);
+    expect(search.getAll("filter.tasks")).toEqual(["skill:is:s-build", "blocked:is:true"]);
+    expect(search.has("skill")).toBe(false);
     await userEvent.click(screen.getByRole("button", { name: "Clear Blocked" }));
     expect(await row(/WEB-10/)).toBeInTheDocument();
+  });
+
+  it("filters from the Filters menu: F opens it, a Status and a holder set chips, Reset clears them", async () => {
+    mockApi(routes());
+    renderApp("/teams/WEB/tasks?view=list");
+    await row(/WEB-5/);
+    expect(screen.queryByRole("toolbar", { name: "Filters" })).not.toBeInTheDocument();
+
+    await userEvent.keyboard("f");
+    const menu = await screen.findByRole("dialog", { name: "Filters" });
+    await userEvent.click(within(menu).getByRole("option", { name: "Status" }));
+    await userEvent.click(await within(menu).findByRole("option", { name: "Backlog" }));
+    await userEvent.click(within(menu).getByRole("option", { name: "In progress" }));
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByRole("button", { name: "Status: Backlog +1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Status — is one of" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Filter, 1 set" })).toBeInTheDocument();
+    await waitFor(() => expect(groupNames()).toEqual(["Backlog", "In progress"]));
+
+    // Held by: Nobody leads, the signed-in Member is marked Me.
+    await userEvent.click(screen.getByRole("button", { name: "Filter, 1 set" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Held by" }));
+    const options = within(await screen.findByRole("dialog", { name: "Filters" })).getAllByRole("option");
+    expect(options[1]).toHaveAccessibleName("Nobody");
+    expect(options[2]).toHaveAccessibleName(/^ada\s*Me$/);
+    await userEvent.click(screen.getByRole("option", { name: "builder" }));
+    expect(await screen.findByRole("button", { name: "Held by: builder" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("link", { name: /WEB-5/ })).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: /WEB-3/ })).toBeInTheDocument();
+
+    // The person flips the sign; the values stay.
+    await userEvent.click(screen.getByRole("button", { name: "Held by — is" }));
+    await userEvent.click(await screen.findByRole("option", { name: "is not" }));
+    expect(await row(/WEB-5/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /WEB-3/ })).not.toBeInTheDocument();
+
+    await userEvent.click(within(screen.getByRole("toolbar", { name: "Filters" })).getByRole("button", { name: "Reset" }));
+    expect(screen.queryByRole("toolbar", { name: "Filters" })).not.toBeInTheDocument();
+    expect(await row(/WEB-3/)).toBeInTheDocument();
   });
 });
 

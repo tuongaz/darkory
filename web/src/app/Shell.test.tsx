@@ -433,6 +433,7 @@ describe("walking the Tasks with the keys", () => {
       "Previous Task",
       "Open the Task",
       "Close the Task",
+      "Filter",
     ]);
     // While it is open the keys are its own.
     await userEvent.keyboard("c");

@@ -3,6 +3,7 @@
 // Vitest checks them without rendering.
 import type { Activity, Feature, Task, TaskBrief, TaskCounts } from "@/api/client";
 import type { components } from "@/api/schema.gen";
+import type { FilterPill } from "@/components/filters/filterState";
 import { glyphFor, type Glyph } from "@/lib/status";
 import { kindLabel, liveClaim } from "@/work";
 
@@ -118,30 +119,104 @@ export type Display = {
 
 export const defaultDisplay: Display = { group: "status", order: "rank", showDone: true, showDropped: false, showEndedFeatures: true };
 
-export type Filters = { skill?: string; holder?: string; blocked?: boolean };
+/** The Held by value of a Task nobody holds. */
+export const nobody = "none";
 
-/** Whether a Task passes the Filter popover's choices: the Skill it needs, who holds it, blocked. */
-export function passesFilters(task: Task, filters: Filters, now: number): boolean {
-  if (filters.skill && task.skill_id !== filters.skill) return false;
-  if (filters.holder && liveClaim(task, now)?.holder_id !== filters.holder) return false;
-  if (filters.blocked && !task.blocked) return false;
-  return true;
+/** The Kind axis' values: a Task's kind, with a work Task aimed at a Member by name as a question. */
+export type KindValue = Task["kind"] | "question";
+
+export function kindValue(task: Pick<Task, "kind" | "aimed_at_id">): KindValue {
+  return task.kind === "work" && task.aimed_at_id ? "question" : task.kind;
+}
+
+/** What `matches` reads beyond the Task: the clock and the Team's Features. */
+export type FilterContext = { now: number; features: Map<string, Pick<Feature, "owner_id">> };
+
+/**
+ * A Task's values on an axis of the Filter: one for most, as many as it names for its Workspaces,
+ * none when it has none (a Task aimed at a Member needs no Skill). Undefined for an axis the
+ * Tasks do not have.
+ */
+export function taskValues(task: Task, field: string, ctx: FilterContext): string[] | undefined {
+  const one = (v: string | undefined) => (v ? [v] : []);
+  switch (field) {
+    case "status":
+      return [task.status_id];
+    case "skill":
+      return one(task.skill_id);
+    case "holder":
+      return [liveClaim(task, ctx.now)?.holder_id ?? nobody];
+    case "aimed_at":
+      return one(task.aimed_at_id);
+    case "feature":
+      return [task.feature_id];
+    case "owner":
+      return one(ctx.features.get(task.feature_id)?.owner_id);
+    case "filed_by":
+      return [task.filed_by];
+    case "blocked":
+      return [String(task.state === "open" && task.blocked)];
+    case "kind":
+      return [kindValue(task)];
+    case "workspace":
+      return task.workspace_ids ?? [];
+    default:
+      return undefined;
+  }
 }
 
 /**
- * The Tasks a view shows: the Filter's choices, then the Display's: the Tasks of ended Features,
- * and (when `kinds` is given, as the list does) those in a Done or Dropped Status.
+ * Whether values pass a pill: `is` and `in` when any value is one of the pill's, `not` and `nin`
+ * when none is. So on an axis with several values (Workspaces) "is not X" means none of them is X,
+ * and on an axis with none, every "not" passes and every "is" fails.
+ */
+export function passes(values: string[], pill: FilterPill): boolean {
+  const hit = values.some((v) => pill.values.includes(v));
+  switch (pill.op) {
+    case "is":
+    case "in":
+      return hit;
+    case "not":
+    case "nin":
+      return !hit;
+    default:
+      return true;
+  }
+}
+
+/**
+ * Whether a Task passes every pill of the Filter: the axes are ANDed, the values of one axis ORed.
+ * Search (`q`) matches the key or the title, ignoring case. A pill for an axis the Tasks do not
+ * have narrows nothing.
+ */
+export function matches(task: Task, pills: readonly FilterPill[], ctx: FilterContext): boolean {
+  return pills.every((pill) => {
+    if (pill.field === "q") {
+      const words = (pill.values[0] ?? "").trim().toLowerCase();
+      return !words || task.key.toLowerCase().includes(words) || task.title.toLowerCase().includes(words);
+    }
+    const values = taskValues(task, pill.field, ctx);
+    return values === undefined || passes(values, pill);
+  });
+}
+
+/**
+ * The Tasks a view shows: the Filter's pills, then the Display's: the Tasks of ended Features,
+ * and (when `byKind` is set, as the list does) those in a Done or Dropped Status. A Status the
+ * Filter asks for by name ("Status is Done") is shown whatever the Display says.
  */
 export function visibleTasks(
   tasks: Task[],
-  ctx: { display: Display; filters: Filters; features: Map<string, Feature>; statuses: Map<string, Status>; now: number; byKind: boolean },
+  ctx: { display: Display; pills: readonly FilterPill[]; features: Map<string, Feature>; statuses: Map<string, Status>; now: number; byKind: boolean },
 ): Task[] {
   const { display } = ctx;
+  const status = ctx.pills.find((p) => p.field === "status" && (p.op === "is" || p.op === "in"));
+  const asked = new Set(status?.values ?? []);
   return tasks.filter((t) => {
-    if (!passesFilters(t, ctx.filters, ctx.now)) return false;
+    if (!matches(t, ctx.pills, ctx)) return false;
     const f = ctx.features.get(t.feature_id);
     if (!display.showEndedFeatures && f && f.state !== "open") return false;
-    if (ctx.byKind) {
+    if (ctx.byKind && !asked.has(t.status_id)) {
       const kind = ctx.statuses.get(t.status_id)?.kind;
       if (kind === "done" && !display.showDone) return false;
       if (kind === "dropped" && !display.showDropped) return false;

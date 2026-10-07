@@ -1,28 +1,14 @@
-// The top bar's controls on the Board screens: the List | Board switch, Filter, Display, and the
-// chips that show (and clear) what is filtered.
-import { CheckIcon, FilterIcon, KanbanIcon, LayersIcon, ListIcon, SlidersHorizontalIcon, UserIcon, XIcon } from "lucide-react";
+// The top bar's controls on the Board screens: the List | Board switch and Display, and the chips
+// Team › Features shows for its owner. Filter is components/filters.
+import { CheckIcon, KanbanIcon, LayersIcon, ListIcon, SlidersHorizontalIcon, UserIcon, XIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { Display, GroupBy, Order } from "./derive";
-import type { FilterParams } from "./state";
 
 /** The segmented List | Board switch (kit `.seg`); the other search parameters stay. */
 export function ViewSwitch({ view }: { view: "list" | "board" }) {
@@ -56,71 +42,12 @@ export function ViewSwitch({ view }: { view: "list" | "board" }) {
 }
 
 /** An outline top-bar button whose label hides on a phone. */
-function BarButton({ icon, label, active, ...props }: { icon: ReactNode; label: string; active?: boolean } & React.ComponentProps<typeof Button>) {
+function BarButton({ icon, label, ...props }: { icon: ReactNode; label: string } & React.ComponentProps<typeof Button>) {
   return (
-    <Button variant="outline" aria-label={label} className={cn(active && "bg-accent")} {...props}>
+    <Button variant="outline" aria-label={label} {...props}>
       {icon}
       <span className="hidden sm:inline">{label}</span>
     </Button>
-  );
-}
-
-export type FilterChoice = { id: string; name: string };
-
-/** Filter (F-B2's toolbar): the Skill a Task needs, who holds it, blocked only. */
-export function FilterMenu({
-  filters,
-  change,
-  skills,
-  holders,
-}: {
-  filters: FilterParams;
-  change: (c: Partial<FilterParams>) => void;
-  skills: FilterChoice[];
-  holders: FilterChoice[];
-}) {
-  const any = !!(filters.skill || filters.holder || filters.blocked);
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <BarButton icon={<FilterIcon />} label="Filter" active={any} />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={skills.length === 0}>Skill</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuRadioGroup value={filters.skill ?? ""} onValueChange={(v) => change({ skill: v || undefined })}>
-              {skills.map((s) => (
-                <DropdownMenuRadioItem key={s.id} value={s.name}>
-                  {s.name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger disabled={holders.length === 0}>Held by</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <DropdownMenuRadioGroup value={filters.holder ?? ""} onValueChange={(v) => change({ holder: v || undefined })}>
-              {holders.map((m) => (
-                <DropdownMenuRadioItem key={m.id} value={m.name}>
-                  {m.name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuCheckboxItem checked={!!filters.blocked} onCheckedChange={(c) => change({ blocked: c === true })}>
-          Blocked
-        </DropdownMenuCheckboxItem>
-        {any && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => change({ skill: undefined, holder: undefined, blocked: false })}>Clear</DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

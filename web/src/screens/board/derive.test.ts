@@ -16,6 +16,8 @@ import {
   statusGlyphs,
   taskBar,
   mayMove,
+  matches,
+  nobody,
   visibleTasks,
 } from "./derive";
 import { statuses } from "./testData";
@@ -96,7 +98,7 @@ describe("what a view shows", () => {
     task(7, "f-1", { blocked: true, skill_id: "s-review" }),
   ];
   const keysOf = (ts: Task[]) => ts.map((t) => t.key);
-  const base = { display: defaultDisplay, filters: {}, features, statuses: byId, now, byKind: true };
+  const base = { display: defaultDisplay, pills: [], features, statuses: byId, now, byKind: true };
 
   it("hides Dropped by default and shows Done and ended Features' Tasks", () => {
     expect(keysOf(visibleTasks(tasks, base))).toEqual(["WEB-3", "WEB-4", "WEB-6", "WEB-7"]);
@@ -112,8 +114,75 @@ describe("what a view shows", () => {
   });
 
   it("filters by Skill and by blocked", () => {
-    expect(keysOf(visibleTasks(tasks, { ...base, filters: { skill: "s-review" } }))).toEqual(["WEB-7"]);
-    expect(keysOf(visibleTasks(tasks, { ...base, filters: { blocked: true } }))).toEqual(["WEB-7"]);
+    expect(keysOf(visibleTasks(tasks, { ...base, pills: [{ field: "skill", op: "is", values: ["s-review"] }] }))).toEqual(["WEB-7"]);
+    expect(keysOf(visibleTasks(tasks, { ...base, pills: [{ field: "blocked", op: "is", values: ["true"] }] }))).toEqual(["WEB-7"]);
+  });
+
+  it("shows a Status the Filter asks for by name, though the Display hides its kind", () => {
+    const pills = [{ field: "status", op: "is", values: ["st-dropped"] }];
+    expect(keysOf(visibleTasks(tasks, { ...base, pills }))).toEqual(["WEB-5"]);
+    // Asked away, the Display still decides.
+    const not = [{ field: "status", op: "not", values: ["st-todo"] }];
+    expect(keysOf(visibleTasks(tasks, { ...base, pills: not }))).toEqual(["WEB-4"]);
+  });
+});
+
+describe("the Filter's pills", () => {
+  const ctx = { now, features: new Map([["f-1", { owner_id: ada.id }], ["f-2", { owner_id: builder.id }]]) };
+  const held = task(3, "f-1", {
+    title: "Build the cart page",
+    workspace_ids: ["w-shop", "w-docs"],
+    claim: { id: "c-3", task_id: "k-3", holder_id: builder.id, session_id: "s", started_at: at(5) },
+  });
+  const question = task(4, "f-2", { skill_id: undefined, aimed_at_id: ada.id });
+  const idle = task(5, "f-1", { skill_id: "s-review" });
+  const all = [held, question, idle];
+  const where = (...pills: { field: string; op: string; values: string[] }[]) => all.filter((t) => matches(t, pills, ctx)).map((t) => t.key);
+
+  it("reads in as any of and nin as none of", () => {
+    expect(where({ field: "skill", op: "in", values: ["s-build", "s-review"] })).toEqual(["WEB-3", "WEB-5"]);
+    expect(where({ field: "skill", op: "nin", values: ["s-build", "s-review"] })).toEqual(["WEB-4"]);
+  });
+
+  it("passes a Task with no value on the axis for not, and fails it for is", () => {
+    expect(where({ field: "skill", op: "not", values: ["s-build"] })).toEqual(["WEB-4", "WEB-5"]);
+    expect(where({ field: "aimed_at", op: "is", values: [ada.id] })).toEqual(["WEB-4"]);
+  });
+
+  it("reads not on several values as none of them equal", () => {
+    expect(where({ field: "workspace", op: "is", values: ["w-docs"] })).toEqual(["WEB-3"]);
+    expect(where({ field: "workspace", op: "not", values: ["w-docs"] })).toEqual(["WEB-4", "WEB-5"]);
+    expect(where({ field: "workspace", op: "nin", values: ["w-shop", "w-x"] })).toEqual(["WEB-4", "WEB-5"]);
+  });
+
+  it("holds Nobody for a Task without a live Claim, and an expired Claim holds nothing", () => {
+    expect(where({ field: "holder", op: "is", values: [nobody] })).toEqual(["WEB-4", "WEB-5"]);
+    expect(where({ field: "holder", op: "in", values: [nobody, builder.id] })).toEqual(["WEB-3", "WEB-4", "WEB-5"]);
+    const lapsing = task(6, "f-1", { claim: { id: "c-6", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: at(20), expires_at: at(1) } });
+    expect(matches(lapsing, [{ field: "holder", op: "is", values: [nobody] }], ctx)).toBe(true);
+  });
+
+  it("reads the Feature's owner, the filer, and a question as a work Task aimed at a Member", () => {
+    expect(where({ field: "owner", op: "is", values: [builder.id] })).toEqual(["WEB-4"]);
+    expect(where({ field: "filed_by", op: "is", values: [ada.id] })).toEqual(["WEB-3", "WEB-4", "WEB-5"]);
+    expect(where({ field: "kind", op: "is", values: ["question"] })).toEqual(["WEB-4"]);
+    expect(where({ field: "kind", op: "not", values: ["question"] })).toEqual(["WEB-3", "WEB-5"]);
+  });
+
+  it("searches keys and titles, ignoring case", () => {
+    expect(where({ field: "q", op: "contains", values: ["CART"] })).toEqual(["WEB-3"]);
+    expect(where({ field: "q", op: "contains", values: ["web-5"] })).toEqual(["WEB-5"]);
+  });
+
+  it("ANDs the axes and leaves alone an axis the Tasks do not have", () => {
+    expect(where({ field: "feature", op: "is", values: ["f-1"] }, { field: "holder", op: "is", values: [nobody] })).toEqual(["WEB-5"]);
+    expect(where({ field: "colour", op: "is", values: ["red"] })).toEqual(["WEB-3", "WEB-4", "WEB-5"]);
+  });
+
+  it("counts a Task blocked only while it is open", () => {
+    const ended = task(7, "f-1", { state: "done", blocked: true });
+    expect(matches(ended, [{ field: "blocked", op: "is", values: ["true"] }], ctx)).toBe(false);
+    expect(matches({ ...ended, state: "open" }, [{ field: "blocked", op: "is", values: ["true"] }], ctx)).toBe(true);
   });
 });
 

@@ -6,11 +6,13 @@ import { useEffect, useRef } from "react";
  * checklist. `team` is the current Team's key when there is one. A `file-task` may also name the
  * Status (`status`, a Status id: a column's +) and the Feature (`feature`, a key or id) to start
  * in; either may carry a `title` to start with (⌘K's words when nothing matched them). The Board
- * screen's dialogs, mounted once by the shell (BoardDialogs), handle both.
+ * screen's dialogs, mounted once by the shell (BoardDialogs), handle both. `filter` (the F key)
+ * opens the Filters menu of a page that has one.
  */
 export type Intent =
   | { kind: "file-task"; team?: string; status?: string; feature?: string; title?: string }
-  | { kind: "file-feature"; team?: string; title?: string };
+  | { kind: "file-feature"; team?: string; title?: string }
+  | { kind: "filter" };
 
 export const intentEvent = "darkory:intent";
 

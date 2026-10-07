@@ -1,15 +1,18 @@
 // /teams/:team/tasks?view=list|board: a Team's Tasks as rows grouped by Status (F-B2) or as a
-// kanban (F-B1), with Filter, Display and File Task.
+// kanban (F-B1), with Filter (its pills in ?filter.tasks=), Display and File Task.
 import { useQueryClient } from "@tanstack/react-query";
 import { BanIcon, LayersIcon, ListTodoIcon, PlusIcon, SearchXIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { ApiError, type Task } from "@/api/client";
-import { sendIntent } from "@/app/intents";
+import { sendIntent, useIntent } from "@/app/intents";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
+import { FilterChipRow, FilterMenuButton, type FilterBarProps } from "@/components/filters/FilterBar";
+import { useFilterState } from "@/components/filters/filterState";
+import { usablePills } from "@/components/filters/operators";
 import { Refusal } from "@/components/Refusal";
 import { TeamMark } from "@/components/TeamMark";
 import { Button } from "@/components/ui/button";
@@ -17,12 +20,13 @@ import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
 import { compareTasks, groupTasks, refusalNote, visibleTasks, type Status } from "./derive";
+import { taskFields, taskFilterOptions } from "./filters";
 import { useBoardModel, type BoardModel } from "./model";
 import { fetchTakeable, useClaim, useSetStatus } from "./queries";
-import { openFileTask, useDisplay, useFilterParams } from "./state";
+import { openFileTask, useDisplay, useLegacyTaskFilters } from "./state";
 import { TaskBoard, type Column } from "./TaskBoard";
 import { TaskList } from "./TaskList";
-import { DisplayMenu, FilterChips, FilterMenu, ViewSwitch } from "./ViewMenus";
+import { DisplayMenu, ViewSwitch } from "./ViewMenus";
 
 export function TeamTasksPage() {
   const { team: teamRef = "" } = useParams();
@@ -30,32 +34,48 @@ export function TeamTasksPage() {
   const view = params.get("view") === "board" ? "board" : "list";
   const model = useBoardModel(teamRef);
   const [display, changeDisplay] = useDisplay();
-  const [filterParams, changeFilters] = useFilterParams();
   const { team } = model;
 
-  // The Filter names Skills and Members; the Tasks carry ids.
-  const filters = useMemo(
-    () => ({
-      skill: filterParams.skill ? ([...model.skills.values()].find((s) => s.name === filterParams.skill)?.id ?? "?") : undefined,
-      holder: filterParams.holder ? ([...model.members.values()].find((m) => m.name === filterParams.holder)?.id ?? "?") : undefined,
-      blocked: filterParams.blocked,
-    }),
-    [filterParams, model.skills, model.members],
-  );
-
+  const filter = useFilterState("tasks");
+  useLegacyTaskFilters(model);
+  const pills = useMemo(() => usablePills(filter.pills, taskFields), [filter.pills]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  useIntent("filter", () => setFilterOpen(true));
   const all = model.tasks.data;
+  const options = useMemo(
+    () =>
+      taskFilterOptions({
+        tasks: all ?? [],
+        statuses: model.statusList,
+        glyphs: model.glyphs,
+        features: model.featureList,
+        members: model.members,
+        skills: model.skills,
+        me: model.me.member.id,
+      }),
+    [all, model.statusList, model.glyphs, model.featureList, model.members, model.skills, model.me.member.id],
+  );
+  const bar: FilterBarProps = {
+    fields: taskFields,
+    pills,
+    optionsFor: (field) => options.get(field),
+    onSetFilter: filter.setFilter,
+    onRemoveFilter: filter.removeFilter,
+    onClearAll: filter.clearAll,
+  };
+
   const sorted = useMemo(() => [...(all ?? [])].sort(compareTasks(display.order, model.featureById)), [all, display.order, model.featureById]);
   const shown = useMemo(
     () =>
       visibleTasks(sorted, {
         display,
-        filters,
+        pills,
         features: model.featureById,
         statuses: model.statusById,
         now: model.now,
         byKind: view === "list",
       }),
-    [sorted, display, filters, model.featureById, model.statusById, model.now, view],
+    [sorted, display, pills, model.featureById, model.statusById, model.now, view],
   );
 
   // On a phone the bar shows the Team alone, beside the view switch and the actions.
@@ -69,7 +89,7 @@ export function TeamTasksPage() {
         actions={
           team && (
             <>
-              <FilterMenu filters={filterParams} change={changeFilters} skills={skillChoices(model)} holders={holderChoices(model)} />
+              <FilterMenuButton {...bar} open={filterOpen} onOpenChange={setFilterOpen} />
               <DisplayMenu display={display} change={changeDisplay} view={view} />
             </>
           )
@@ -82,13 +102,7 @@ export function TeamTasksPage() {
           </Button>
         }
       />
-      <FilterChips
-        chips={[
-          ...(filterParams.skill ? [{ label: `Skill: ${filterParams.skill}`, clear: () => changeFilters({ skill: undefined }) }] : []),
-          ...(filterParams.holder ? [{ label: `Held by: ${filterParams.holder}`, clear: () => changeFilters({ holder: undefined }) }] : []),
-          ...(filterParams.blocked ? [{ label: "Blocked", clear: () => changeFilters({ blocked: false }) }] : []),
-        ]}
-      />
+      {team && <FilterChipRow {...bar} />}
     </>
   );
 
@@ -179,25 +193,6 @@ function footerText(all: Task[], shown: Task[], model: BoardModel): string {
   }
   for (const [label, n] of hidden) parts.push(`${label} hidden (${n})`);
   return parts.join(" · ");
-}
-
-function skillChoices(model: BoardModel) {
-  const ids = new Set((model.tasks.data ?? []).flatMap((t) => (t.skill_id ? [t.skill_id] : [])));
-  return [...ids].flatMap((id) => {
-    const s = model.skills.get(id);
-    return s ? [{ id, name: s.name }] : [];
-  }).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function holderChoices(model: BoardModel) {
-  const ids = new Set((model.tasks.data ?? []).flatMap((t) => {
-    const c = liveClaim(t, model.now);
-    return c ? [c.holder_id] : [];
-  }));
-  return [...ids].flatMap((id) => {
-    const m = model.members.get(id);
-    return m ? [{ id, name: m.name }] : [];
-  }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** The kanban, with what a drag does: set the Status, or say why not and what would. */

@@ -35,6 +35,7 @@ export const shortcutList: { section: string; keys: { label: string; ways: strin
       { label: "Previous Task", ways: [["K"], ["↑"]] },
       { label: "Open the Task", ways: [["Enter"]] },
       { label: "Close the Task", ways: [["Esc"]] },
+      { label: "Filter", ways: [["F"]] },
     ],
   },
 ];
@@ -150,6 +151,11 @@ export function useShortcuts({
       if (key === "c") {
         e.preventDefault();
         sendIntent({ kind: "file-task", team: team?.key });
+        return;
+      }
+      if (key === "f" && !e.shiftKey) {
+        e.preventDefault();
+        sendIntent({ kind: "filter" });
         return;
       }
       const arrow = e.key === "ArrowDown" || e.key === "ArrowUp";
