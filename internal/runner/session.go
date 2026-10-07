@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -45,10 +46,15 @@ type session struct {
 	// progress is the file the agent writes as it works; empty when there is none to read.
 	progress, claudeDir string
 	transcript          bool
-	// claude says the command is Claude Code; answered are the first-run prompts of its the
-	// runner has answered.
-	claude   bool
-	answered map[string]bool
+	// claude says the command is Claude Code, started in folder (its paths); answered says the
+	// runner has accepted its one first-run dialog of the session (firstRun), and turned that the
+	// agent's model has answered; dialog names a dialog on screen left to a person, and toldJoin
+	// that a Note says so.
+	claude           bool
+	folder           []string
+	answered, turned bool
+	dialog           string
+	toldJoin         bool
 
 	ended chan string
 	cmds  chan sessionCmd
@@ -249,6 +255,10 @@ func (s *session) start(ctx context.Context) error {
 	}
 	// Claude Code runs in a configuration directory of the agent's own, unless its settings name
 	// one, that trusts the session's folders (claude.go).
+	s.folder = []string{cwd}
+	if real, err := filepath.EvalSymlinks(cwd); err == nil && real != cwd {
+		s.folder = append(s.folder, real)
+	}
 	if s.claude = IsClaude(s.set.Command); s.claude && s.set.Env[envConfigDir] == "" {
 		dir := ClaudeConfigDir(r.cfg.Data, s.a.name())
 		trusted := []string{cwd, TaskDir(r.cfg.Data, s.key)}
@@ -405,12 +415,10 @@ func (s *session) watch(ctx context.Context) {
 
 // check reads the session's progress: a Heartbeat while it is fresh, none once it is stale, and a
 // nudge when the agent's turn ended with the Claim still held. The session's state follows:
-// stalled while stale, waiting while its turn has ended, running otherwise. It says whether the
-// session ended.
+// waiting while it shows a dialog left to a person, else stalled while stale, waiting while its
+// turn has ended, running otherwise. It says whether the session ended.
 func (s *session) check(ctx context.Context) bool {
-	if s.firstRun(ctx) {
-		return true
-	}
+	s.firstRun(ctx)
 	var rd Reading
 	if s.progress == "" {
 		// Nothing to read: the session counts as working while its command runs.
@@ -461,6 +469,8 @@ func (s *session) check(ctx context.Context) bool {
 		}
 	}
 	switch {
+	case s.dialog != "":
+		s.setState(StateWaiting)
 	case s.stale:
 		s.setState(StateStalled)
 	case rd.Ended:
@@ -474,42 +484,63 @@ func (s *session) check(ctx context.Context) bool {
 	return s.turnEnded(ctx)
 }
 
-// firstRun answers a first-run prompt of Claude Code's that the session shows although its
-// configuration directory should have answered it: the accepting choice, once, with a Note. Seen
-// again after that, the prompt stops the session with a Note saying so. Claude Code asks them only
-// on a terminal, so only a session in tmux is looked at. It says whether the session ended.
-func (s *session) firstRun(ctx context.Context) bool {
-	k, ok := s.proc.(Keyed)
+// firstRun looks at the screen of a Claude Code session in tmux (Claude Code asks only on a
+// terminal) for one of its first-run dialogs, which the session's configuration directory should
+// have answered already. The runner accepts one such dialog per session, and only while the
+// agent's model has not answered yet, so nothing the agent prints can make it press a key, and
+// notes it. A dialog it may not answer is left to a person: the session waits, with a Note
+// saying to join it.
+func (s *session) firstRun(ctx context.Context) {
+	a, ok := s.proc.(Answerer)
 	if !s.claude || !ok {
-		return false
+		return
 	}
-	p, keys, ok := findFirstRunPrompt(k.Shown())
-	if !ok {
-		return false
+	p, found := findFirstRunPrompt(a.Shown(), s.folder...)
+	s.dialog = ""
+	if !found {
+		return
 	}
-	if s.answered[p.Name] {
-		s.log.Warn("Claude Code asks its first-run question again after the runner answered it; stopping the session", "prompt", p.Name)
-		return s.giveUp(ctx, fmt.Sprintf("Claude Code showed %s again after the runner accepted it, so it cannot run here unattended; "+
-			"a person can answer it in the next session (darkory join %s)", p.Name, s.key))
-	}
-	if s.answered == nil {
-		s.answered = map[string]bool{}
-	}
-	s.answered[p.Name] = true
-	s.log.Info("Claude Code asks its first-run question; accepting it", "prompt", p.Name, "keys", keys)
-	for i, key := range keys {
-		if i > 0 {
-			time.Sleep(200 * time.Millisecond)
-		}
-		if err := k.Key(key); err != nil {
+	if !s.answered && !s.agentTurned() {
+		s.answered = true
+		s.log.Info("Claude Code asks its first-run question; accepting it", "prompt", p.Name)
+		if err := a.AcceptFirstRunPrompt(); err != nil {
 			s.log.Warn("answering Claude Code's first-run question", "err", err)
-			return false
+			return
+		}
+		if err := s.rec.Note(ctx, s.key, fmt.Sprintf("The runner accepted Claude Code's first-run prompt: %s.", p.Name)); err != nil && ctx.Err() == nil {
+			s.log.Warn("noting the first-run prompt", "err", err)
+		}
+		return
+	}
+	s.dialog = p.Name
+	if s.toldJoin {
+		return
+	}
+	s.toldJoin = true
+	s.log.Warn("the session shows a Claude Code dialog the runner does not answer; it waits for a person", "prompt", p.Name)
+	note := fmt.Sprintf("Claude Code shows %s, which the runner does not answer (it accepts one first-run prompt, before the agent's "+
+		"first turn): a person can answer it by joining the session (darkory join %s).", p.Name, s.key)
+	if err := s.rec.Note(ctx, s.key, note); err != nil && ctx.Err() == nil {
+		s.log.Warn("noting the dialog left to a person", "err", err)
+	}
+}
+
+// agentTurned says whether the agent's model has answered in this session yet: its transcript
+// holds an assistant message. Once it has, it stays so; a transcript that cannot be read counts
+// as answered.
+func (s *session) agentTurned() bool {
+	if s.turned {
+		return true
+	}
+	path := s.progress
+	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) && s.transcript {
+		if found := findTranscript(s.claudeDir, s.rec.Session()); found != "" {
+			path = found
 		}
 	}
-	if err := s.rec.Note(ctx, s.key, fmt.Sprintf("The runner accepted Claude Code's first-run prompt: %s.", p.Name)); err != nil && ctx.Err() == nil {
-		s.log.Warn("noting the first-run prompt", "err", err)
-	}
-	return false
+	turned, err := HasAssistantMessage(path)
+	s.turned = turned || err != nil
+	return s.turned
 }
 
 // holds says whether the session still holds the Task's Claim.
@@ -614,17 +645,14 @@ func (s *session) giveUp(ctx context.Context, why string) bool {
 	bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.r.t.Exit+30*time.Second)
 	defer cancel()
 	note := silentPrefix
-	screen := ""
-	if s.proc != nil {
-		screen = s.proc.Screen(20)
-	}
-	s.stopCommand(bctx, s.r.t.Exit)
-	switch {
-	case why != "" && s.proc != nil:
-		note += "; " + why + "; last 20 lines:\n" + or(remote.Clean(screen), "(none)")
-	case why != "":
+	if why != "" {
 		note += "; " + why + "."
-	default:
+	} else {
+		screen := ""
+		if s.proc != nil {
+			screen = s.proc.Screen(20)
+		}
+		s.stopCommand(bctx, s.r.t.Exit)
 		code := s.proc.ExitCode()
 		if s.nudges > 0 {
 			note += fmt.Sprintf(" after %d nudges", s.nudges)

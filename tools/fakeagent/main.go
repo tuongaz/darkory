@@ -103,6 +103,9 @@ func run() error {
 	if err := a.cli("attach", a.key, logFile, "--name", "test-"+a.key+".log"); err != nil {
 		return err
 	}
+	if os.Getenv("FAKEAGENT_PROMPT") == "late" {
+		return lateDialog()
+	}
 
 	switch scenario {
 	case "complete":
@@ -178,22 +181,17 @@ var stdin = bufio.NewScanner(os.Stdin)
 //	claude  as Claude Code 2.1 does: the folder-trust dialog unless $CLAUDE_CONFIG_DIR/.claude.json
 //	        trusts the working directory, then the Bypass Permissions mode warning unless its
 //	        settings.json has accepted it
-//	always  both, whatever the configuration says
+//	trust   the folder-trust dialog, whatever the configuration says
 //	again   the folder-trust dialog, and once it is accepted the same again
+//	late    nothing now; the agent prints the folder-trust dialog after its first turn (lateDialog)
 //
 // A dialog's highlighted choice is "No, exit": it is accepted by a Down before the Enter, and
 // declining it exits 1. An accepted dialog clears the screen, as Claude Code's does.
 func firstRun(mode string) error {
-	if mode == "" {
+	if mode == "" || mode == "late" {
 		return nil
 	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	if real, err := filepath.EvalSymlinks(wd); err == nil {
-		wd = real
-	}
+	wd := workDir()
 	dir := os.Getenv("CLAUDE_CONFIG_DIR")
 	var config struct {
 		Projects map[string]struct {
@@ -211,8 +209,7 @@ func firstRun(mode string) error {
 			json.Unmarshal(b, &settings)
 		}
 	}
-	trust := " Accessing workspace:\n\n " + wd + "\n\n Quick safety check: Is this a project you created or one you trust?\n\n" +
-		" ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+	trust := trustDialog(wd)
 	bypass := "  WARNING: Claude Code running in Bypass Permissions mode\n\n  ❯ No, exit\n    Yes, I accept\n\n" +
 		"  Enter to confirm · Esc to cancel\n"
 	var ask []string
@@ -224,8 +221,8 @@ func firstRun(mode string) error {
 		if !settings.Accepted {
 			ask = append(ask, bypass)
 		}
-	case "always":
-		ask = []string{trust, bypass}
+	case "trust":
+		ask = []string{trust}
 	case "again":
 		ask = []string{trust, trust}
 	default:
@@ -238,6 +235,39 @@ func firstRun(mode string) error {
 			os.Exit(1)
 		}
 		fmt.Print("\x1b[2J\x1b[H")
+	}
+	return nil
+}
+
+// workDir is the working directory by its real path, as Claude Code names it.
+func workDir() string {
+	wd, _ := os.Getwd()
+	if real, err := filepath.EvalSymlinks(wd); err == nil {
+		wd = real
+	}
+	return wd
+}
+
+// trustDialog is Claude Code 2.1.289's folder-trust dialog for folder wd.
+func trustDialog(wd string) string {
+	return " Accessing workspace:\n\n " + wd + "\n\n Quick safety check: Is this a project you created or one you trust? " +
+		"(Like your own code, a well-known open source project, or work from your team).\n\n" +
+		" ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+}
+
+// lateDialog prints the folder-trust dialog after the agent's first turn, as an agent's own
+// output might, then waits: a Down typed into it says "the dialog was answered", /exit ends it.
+func lateDialog() error {
+	fmt.Print(trustDialog(workDir()))
+	for stdin.Scan() {
+		switch in := stdin.Text(); {
+		case strings.Contains(in, "\x1b[B") || strings.Contains(in, "\x1bOB"):
+			fmt.Println("fakeagent: the dialog was answered")
+		case strings.TrimSpace(in) == "/exit":
+			return nil
+		default:
+			fmt.Printf("fakeagent: read %q\n", strings.TrimSpace(in))
+		}
 	}
 	return nil
 }

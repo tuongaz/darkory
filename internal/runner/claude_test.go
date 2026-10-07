@@ -130,8 +130,11 @@ func TestClaudeEnv(t *testing.T) {
 }
 
 // The dialogs as Claude Code 2.1.289 draws them (the smoke run's capture, and a fresh
-// configuration directory's), the older trust dialog, and a session at work.
+// configuration directory's) are found; anything that is not exactly one is not: another folder,
+// the dialog's text with Claude Code's prompt under it (an agent printing it), the choice
+// already moved, the older wording, a session at work.
 func TestFindFirstRunPrompt(t *testing.T) {
+	folder := "/private/tmp/smoke/data/workspaces/MAIN-2/project"
 	trust := `
 ────────────────────────────────────────────────────────────────
  Accessing workspace:
@@ -149,6 +152,7 @@ func TestFindFirstRunPrompt(t *testing.T) {
    Yes, I trust this folder
 
  Enter to confirm · Esc to cancel
+
 `
 	bypass := `
 ────────────────────────────────────────────────────────────────
@@ -164,9 +168,16 @@ func TestFindFirstRunPrompt(t *testing.T) {
 
   Enter to confirm · Esc to cancel
 `
+	printed := trust + `
+⏺ Bash(cat notes.txt)
+────────────────────────────────
+❯
+────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents
+`
 	older := ` Do you trust the files in this folder?
 
- /work/repo
+ /private/tmp/smoke/data/workspaces/MAIN-2/project
 
  ❯ 1. Yes, proceed
    2. No, exit
@@ -182,17 +193,43 @@ func TestFindFirstRunPrompt(t *testing.T) {
 `
 	for _, c := range []struct {
 		name, screen, prompt string
-		keys                 []string
 	}{
-		{"trust", trust, "the folder-trust dialog", []string{"Down", "Enter"}},
-		{"bypass", bypass, "the Bypass Permissions mode warning", []string{"Down", "Enter"}},
-		{"older trust", older, "the folder-trust dialog", []string{"Enter"}},
-		{"working", working, "", nil},
-		{"text about the dialog", "the agent wrote: Is this a project you created or one you trust? Yes, I trust this folder", "", nil},
+		{"trust", trust, "the folder-trust dialog"},
+		{"bypass", bypass, "the Bypass Permissions mode warning"},
+		{"trust for another folder", strings.Replace(trust, "MAIN-2/project", "MAIN-9/project", 1), ""},
+		{"trust printed above Claude Code's prompt", printed, ""},
+		{"trust with Yes highlighted", strings.NewReplacer("❯ No, exit", "  No, exit", "  Yes, I trust", "❯ Yes, I trust").Replace(trust), ""},
+		{"trust with its question changed", strings.Replace(trust, "Quick safety check", "Quick check", 1), ""},
+		{"older trust", older, ""},
+		{"working", working, ""},
+		{"the dialog's words in a line", "Is this a project you created or one you trust? ❯ No, exit Yes, I trust this folder Enter to confirm · Esc to cancel", ""},
 	} {
-		p, keys, ok := findFirstRunPrompt(c.screen)
-		if ok != (c.prompt != "") || p.Name != c.prompt || !slices.Equal(keys, c.keys) {
-			t.Errorf("%s: %q %q %v, want %q %q", c.name, p.Name, keys, ok, c.prompt, c.keys)
+		p, ok := findFirstRunPrompt(c.screen, "/elsewhere", folder)
+		if ok != (c.prompt != "") || p.Name != c.prompt {
+			t.Errorf("%s: %q %v, want %q", c.name, p.Name, ok, c.prompt)
+		}
+	}
+}
+
+// A transcript holds an assistant message once the agent's model has answered.
+func TestHasAssistantMessage(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"absent", "", false},
+		{"the first message only", `{"type":"custom-title"}` + "\n" + `{"type":"user","message":{"role":"user","content":"Work on Task WEB-3"}}` + "\n", false},
+		{"a subagent's", `{"type":"assistant","isSidechain":true,"message":{"role":"assistant","content":[]}}` + "\n", false},
+		{"answered", `{"type":"user","message":{"role":"user","content":"Work"}}` + "\n" +
+			`{"type":"assistant","message":{"role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use"}]}}` + "\n", true},
+	} {
+		path := filepath.Join(dir, c.name+".jsonl")
+		if c.body != "" {
+			writeTestFile(t, path, c.body)
+		}
+		if got, err := HasAssistantMessage(path); got != c.want || err != nil {
+			t.Errorf("%s: %v, %v", c.name, got, err)
 		}
 	}
 }
@@ -242,39 +279,78 @@ func TestRunnerGivesClaudeCodeItsOwnConfiguration(t *testing.T) {
 	})
 }
 
-// A first-run question the configuration did not prevent is answered once, with a Note; asked
-// again after that, the session stops and the Task goes back with a Note saying why. Claude Code
-// asks only on a terminal, so this runs in tmux.
-func TestRunnerAnswersClaudeCodesFirstRunPrompts(t *testing.T) {
+// A first-run dialog the configuration did not prevent is accepted, once per session and only
+// before the agent's first turn, with a Note. A second one is left to a person: the session waits
+// and a Note says to join it. Claude Code asks only on a terminal, so this runs in tmux.
+func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux")
 	}
 	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Stale = time.Minute
 	f.agent("builder", "complete", "build")
-	f.fakeClaude("builder", "complete", "always")
+	f.fakeClaude("builder", "complete", "trust")
 	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
 	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
 	r := f.runWith("on", "builder")
 	t.Cleanup(func() { killTmux(r.Socket()) })
 
 	eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
-	notes := notesOf(f.task("WEB-3"))
-	for _, want := range []string{"The runner accepted Claude Code's first-run prompt: the folder-trust dialog.",
-		"The runner accepted Claude Code's first-run prompt: the Bypass Permissions mode warning."} {
-		if !strings.Contains(notes, want) {
-			t.Fatalf("WEB-3's Notes lack %q:\n%s", want, notes)
-		}
+	if notes := notesOf(f.task("WEB-3")); !strings.Contains(notes, "The runner accepted Claude Code's first-run prompt: the folder-trust dialog.") {
+		t.Fatalf("WEB-3's Notes:\n%s", notes)
 	}
 
-	// The next session's Claude Code asks the same twice.
+	// The next session's Claude Code asks twice: the second time is a person's to answer.
 	f.fakeClaude("builder", "complete", "again")
 	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Totals")
-	eventually(t, 30*time.Second, "WEB-4 released with a Note", func() bool {
-		return strings.Contains(notesOf(f.task("WEB-4")), silentPrefix+"; Claude Code showed the folder-trust dialog again after the runner accepted it")
+	waitingForAPerson(t, f, r, "WEB-4")
+	n := 0
+	for l := range strings.Lines(f.log.String()) {
+		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-4 ") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("the runner accepted %d dialogs on WEB-4, not the first alone", n)
+	}
+}
+
+// What the agent prints after its first turn is never answered, even when it is the folder-trust
+// dialog exactly: no key is sent, the session waits, and a Note says to join it.
+func TestRunnerNeverAnswersAfterTheFirstTurn(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("no tmux")
+	}
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Stale = time.Minute
+	f.agent("builder", "complete", "build")
+	f.fakeClaude("builder", "complete", "late")
+	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	r := f.runWith("on", "builder")
+	t.Cleanup(func() { killTmux(r.Socket()) })
+
+	waitingForAPerson(t, f, r, "WEB-3")
+	// Ten more checks, and still no key.
+	time.Sleep(10 * f.timings.Tick)
+	if strings.Contains(f.log.String(), "accepting it") || strings.Contains(notesOf(f.task("WEB-3")), "accepted Claude Code's first-run prompt") {
+		t.Fatalf("the runner answered a dialog after the first turn:\n%s", notesOf(f.task("WEB-3")))
+	}
+	if b, _ := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-3", "pane.log")); strings.Contains(string(b), "the dialog was answered") ||
+		!strings.Contains(string(b), "Yes, I trust this folder") {
+		t.Fatalf("the session's pane:\n%s", tail(string(b), 30))
+	}
+}
+
+// waitingForAPerson waits until task's session shows a dialog the runner leaves to a person: the
+// session waiting, and a Note saying to join it.
+func waitingForAPerson(t *testing.T, f *fixture, r *Runner, task string) {
+	t.Helper()
+	eventually(t, 30*time.Second, task+"'s session waiting for a person", func() bool {
+		return slices.ContainsFunc(r.Running(), func(s RunnerSession) bool { return s.Task == task && s.State == StateWaiting }) &&
+			strings.Contains(notesOf(f.task(task)), "Claude Code shows the folder-trust dialog, which the runner does not answer")
 	})
-	notes = notesOf(f.task("WEB-4"))
-	if !strings.Contains(notes, "The runner accepted Claude Code's first-run prompt: the folder-trust dialog.") ||
-		!strings.Contains(notes, "darkory join WEB-4") {
-		t.Fatalf("WEB-4's Notes:\n%s", notes)
+	if notes := notesOf(f.task(task)); !strings.Contains(notes, "darkory join "+task) {
+		t.Fatalf("%s's Notes:\n%s", task, notes)
 	}
 }

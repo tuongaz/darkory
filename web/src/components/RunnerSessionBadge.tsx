@@ -10,7 +10,7 @@ const stateTones: Record<RunnerSessionState, PillTone> = { running: "done", wait
 
 const stateHints: Record<RunnerSessionState, string> = {
   running: "The agent is working; the Runner sends its Heartbeats",
-  waiting: "The agent's turn ended without a decision; the Runner nudges it, then releases the Task",
+  waiting: "The agent's turn ended without a decision (the Runner nudges it, then releases the Task), or it asks something a person answers by joining",
   stalled: "No progress for a while: the Runner sends no more Heartbeats, and the Claim lapses unless it moves",
   ending: "The Claim has ended; the session is closing",
 };
