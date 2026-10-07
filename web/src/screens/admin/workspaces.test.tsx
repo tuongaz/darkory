@@ -38,7 +38,7 @@ describe("Admin › Workspaces", () => {
 
     const shopRow = within(table).getByRole("row", { name: "shop" });
     expect(within(shopRow).getByRole("button", { name: "Change path of shop" })).toHaveTextContent("/src/shop");
-    expect(within(shopRow).getByRole("combobox", { name: "Mode of shop" })).toHaveTextContent("Plain");
+    expect(within(shopRow).getByRole("combobox", { name: "Mode of shop" })).toHaveTextContent("Local");
     expect(within(shopRow).getByRole("button", { name: "Change default branch of shop" })).toHaveTextContent("main");
     expect(await within(shopRow).findByText("2 Teams")).toBeInTheDocument();
     expect(await within(shopRow).findByText("2 Tasks")).toBeInTheDocument();

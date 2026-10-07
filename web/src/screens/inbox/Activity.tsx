@@ -16,6 +16,7 @@ import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -26,16 +27,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { count, groupByMinute, matchesFilter, sizeText, type ActivityFilter } from "./derive";
+import { count, groupByDay, isSignIn, matchesFilter, sizeText, type ActivityFilter } from "./derive";
 import { newest, useFeatureMap, useStatuses, useTaskMap } from "./queries";
 import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Sentence } from "./wording";
 
 const pageSize = 100;
 
 /**
- * /activity: the trail, newest first, in runs of a minute under the day. ?member=, ?kind= and
- * ?team= (a name, a kind, a Team key) narrow it through /v1's filters; the stream's new entries
- * that pass the same filter arrive at the top.
+ * /activity: the trail, newest first, by day. ?member=, ?kind= and ?team= (a name, a kind, a Team
+ * key) narrow it through /v1's filters; the stream's new entries that pass the same filter arrive
+ * at the top. Sign-ins (login links issued and redeemed) are left out unless ?signins=1 or the
+ * Kind filter names one.
  */
 export function ActivityPage() {
   const [params, setParams] = useSearchParams();
@@ -53,6 +55,7 @@ export function ActivityPage() {
   const team = teamRef ? dir.teamList.find((t) => t.key === teamRef || t.id === teamRef) : undefined;
   const kind = kindRef && isKnown(kindRef) ? kindRef : undefined;
   const filtered = !!(memberRef || kindRef || teamRef);
+  const signIns = params.get("signins") === "1" || (!!kind && isSignIn(kind));
 
   const history = useInfiniteQuery({
     queryKey: ["activity", "page", { member: memberRef, kind: kindRef, team: teamRef }],
@@ -75,7 +78,9 @@ export function ActivityPage() {
   const bySeq = new Map<number, Activity>();
   for (const page of history.data?.pages ?? []) for (const e of page.items) bySeq.set(e.seq, e);
   if (resolved) for (const e of live) if (matchesFilter(e, want, where)) bySeq.set(e.seq, e);
-  const entries = [...bySeq.values()].filter((e) => isKnown(e.kind)).sort((a, b) => b.seq - a.seq);
+  const known = [...bySeq.values()].filter((e) => isKnown(e.kind)).sort((a, b) => b.seq - a.seq);
+  const entries = signIns ? known : known.filter((e) => !isSignIn(e.kind));
+  const hidden = known.length - entries.length;
 
   // Entries are numbered without gaps, so an unfiltered stream entry more than one past the newest
   // one read means some arrived between the read and the stream opening; the history is read again.
@@ -120,6 +125,10 @@ export function ActivityPage() {
           </DropdownMenuRadioGroup>
         </FilterChip>
         <FilterChip label="Kind" value={kindRef && kindName(kindRef)} onClear={() => set("kind", undefined)}>
+          <DropdownMenuCheckboxItem checked={signIns} disabled={!!kind && isSignIn(kind)} onCheckedChange={(on) => set("signins", on ? "1" : undefined)}>
+            Show sign-ins
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
           <DropdownMenuRadioGroup value={kind ?? ""} onValueChange={(v) => set("kind", v)}>
             {kindChoices.map((k, i) => (
               <KindItem key={k.kind} choice={k} first={i === 0 || kindChoices[i - 1].group !== k.group} />
@@ -151,16 +160,22 @@ export function ActivityPage() {
             icon={<HistoryIcon />}
             title={filtered ? "No entries" : "No Activity"}
             action={
-              filtered && (
+              filtered ? (
                 <Button variant="outline" onClick={() => setParams(new URLSearchParams())}>
                   Clear filters
                 </Button>
+              ) : (
+                hidden > 0 && (
+                  <Button variant="outline" onClick={() => set("signins", "1")}>
+                    Show {count(hidden, "sign-in")}
+                  </Button>
+                )
               )
             }
           />
         ) : (
           <ol aria-label="Activity" aria-live="polite" aria-relevant="additions">
-            {groupByMinute(entries, now).map((g) => (
+            {groupByDay(entries, now).map((g) => (
               <li key={g.key}>
                 <h2 className="flex h-[34px] items-center border-b bg-muted pr-4 pl-6 font-medium">{g.label}</h2>
                 <ol>
@@ -174,9 +189,18 @@ export function ActivityPage() {
         )}
       </Content>
       {history.isSuccess && entries.length > 0 && (
-        // The same words whether or not there is more: "100 entries loaded · Load older".
+        // The same words whether or not there is more: "100 entries loaded · 7 sign-ins hidden · Show · Load older".
         <footer className="flex h-10 flex-none items-center gap-1.5 border-t pr-4 pl-6 text-xs text-muted-foreground">
           <span>{count(entries.length, "entry", "entries")} loaded</span>
+          {hidden > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{count(hidden, "sign-in")} hidden</span>
+              <Button size="xs" variant="link" className="h-auto px-0 text-xs text-foreground" onClick={() => set("signins", "1")}>
+                Show
+              </Button>
+            </>
+          )}
           {history.hasNextPage && (
             <>
               <span aria-hidden>·</span>
@@ -280,18 +304,14 @@ export function DarkoryMark() {
 const seconds = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
 const full = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
 
-/** One entry: #seq, who, what in words, when. */
+/** One entry: who, what in words, when. */
 export function EntryRow({ entry, lookup }: { entry: Activity; lookup: Lookup }) {
   const s = describe(entry, lookup);
   if (!s) return null;
   const actor = s.actorId ? lookup.members.get(s.actorId) : undefined;
   const at = new Date(entry.at);
   return (
-    <li
-      className="grid h-[34px] grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent md:grid-cols-[40px_20px_minmax(0,1fr)_auto]"
-      data-seq={entry.seq}
-    >
-      <span className="hidden text-right font-mono text-[11px] text-muted-foreground tabular-nums md:block">#{entry.seq}</span>
+    <li className="grid h-[34px] grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent" data-seq={entry.seq}>
       {actor ? <MemberAvatar member={actor} /> : s.actorId ? <span /> : <DarkoryMark />}
       <Words s={s} />
       <time dateTime={entry.at} title={full.format(at)} className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">

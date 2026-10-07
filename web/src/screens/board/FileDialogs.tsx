@@ -103,11 +103,13 @@ export function FileTaskDialog({
   team,
   status: presetStatus,
   feature: presetFeature,
+  title: presetTitle,
   onClose,
 }: {
   team: Team | undefined;
   status?: string;
   feature?: string;
+  title?: string;
   onClose: () => void;
 }) {
   const features = useTeamFeatures(team?.key);
@@ -123,7 +125,7 @@ export function FileTaskDialog({
   const [chosenFeature, setFeatureKey] = useState<string | undefined>(presetFeature);
   // A Feature given from the page in view counts only when it is one of this Team's open Features.
   const featureKey = features.data && !openFeatures.some((f) => f.key === chosenFeature) ? undefined : chosenFeature;
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(presetTitle ?? "");
   const [description, setDescription] = useState("");
   const [who, setWho] = useState<Who>("skill");
   const [skillId, setSkillId] = useState<string>();
@@ -336,7 +338,7 @@ export function FileTaskDialog({
  * F-F3: Team, Owner, Title, Description, Quick and Ship when done; the same write files its Break
  * down Task, or, for a quick Feature, its one Task, needing the Skill and in the Workspaces chosen.
  */
-export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string; onClose: () => void }) {
+export function FileFeatureDialog({ team: presetTeam, title: presetTitle, onClose }: { team?: string; title?: string; onClose: () => void }) {
   const me = useCurrentMe();
   const teams = useTeams().data ?? [];
   const { memberList, skillList } = useDirectory();
@@ -344,7 +346,7 @@ export function FileFeatureDialog({ team: presetTeam, onClose }: { team?: string
   const navigate = useNavigate();
   const [teamKey, setTeamKey] = useState<string | undefined>(presetTeam ?? me.teams[0]?.key);
   const [ownerId, setOwnerId] = useState<string | undefined>(me.member.id);
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(presetTitle ?? "");
   const [description, setDescription] = useState("");
   const [quick, setQuick] = useState(false);
   const [skillId, setSkillId] = useState<string>();

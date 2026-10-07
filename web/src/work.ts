@@ -21,6 +21,18 @@ export function taskGlyph(task: Task, now: number): "todo" | "inprogress" | "don
   return liveClaim(task, now) ? "inprogress" : "todo";
 }
 
+const kindLabels = { breakdown: "Break down", retrospective: "Retrospective" } as const;
+
+/**
+ * The kind a pill names on a Break down or a Retrospective, or nothing when the title already
+ * says it: Darkory files them as "Break down: Checkout" and "Retrospective: Checkout".
+ */
+export function kindLabel(task: Pick<Task, "kind" | "title">): "Break down" | "Retrospective" | undefined {
+  if (task.kind === "work") return undefined;
+  const label = kindLabels[task.kind];
+  return task.title.toLowerCase().startsWith(`${label.toLowerCase()}:`) ? undefined : label;
+}
+
 /** The agent Members holding a live Claim at `now`: who the sidebar counts as live. */
 export function liveAgents(tasks: Task[], members: Map<string, Member>, now: number): Set<string> {
   const ids = new Set<string>();

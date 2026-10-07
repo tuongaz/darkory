@@ -2,12 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BanIcon, KeyRoundIcon, LogOutIcon, MonitorIcon, XIcon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import type { Member, Token } from "@/api/client";
+import { SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { shortSessionId } from "@/lib/members";
 import { boundToSession, count, madeThrough, revokeSummary, type Held, type Session } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, RecordRow } from "./parts";
 import { closeSession, logout, revokeToken } from "./writes";
@@ -84,7 +86,7 @@ export function TokenRows({ tokens, sessions, held }: { tokens: Token[]; session
               <Fact label="Closes">
                 {count(summary.sessions.length, "Session")}
                 {summary.sessions.map((s) => (
-                  <Key key={s.id}>{s.id}</Key>
+                  <Key key={s.id}>{shortSessionId(s.id)}</Key>
                 ))}
               </Fact>
             )}
@@ -145,7 +147,7 @@ export function SessionRows({ member, sessions, held, current }: { member: Membe
             }
           >
             {here && <b className="font-medium">This browser</b>}
-            <Key className="max-w-[220px] truncate text-foreground">{s.id}</Key>
+            <SessionId id={s.id} className="text-foreground" />
             <SessionWork session={s} held={held} />
           </RecordRow>
         );
@@ -167,7 +169,7 @@ export function SessionRows({ member, sessions, held, current }: { member: Membe
         >
           <Facts>
             <Fact label="Closes">
-              1 Session<Key>{closing.id}</Key>
+              1 Session<Key>{shortSessionId(closing.id)}</Key>
             </Fact>
             {ends.length > 0 && (
               <Fact label="Ends">

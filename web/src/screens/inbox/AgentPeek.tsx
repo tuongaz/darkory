@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, call, type Activity, type Member, type RunnerSession, type Task } from "@/api/client";
 import { useDirectory, useOpenTasks, useRunnerSessions } from "@/api/queries";
 import { useNow } from "@/clock";
+import { SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -129,6 +130,8 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
   const claims = withLive(claimsSince(history.entries, id, startOfDay(now)), held, now);
   const sessions = sessionsQ?.data;
   const live = held[0] && liveClaim(held[0], now);
+  const set = agent.agent?.model;
+  const model = live?.model_label ?? set;
   const manager = agent.manager_id ? members.get(agent.manager_id) : undefined;
   const actions = agentActions({ agent, held, me: me.member, members, features, sessions });
   const entries = history.complete ? count(history.entries.length, "entry", "entries") : `${activityLimit}+ entries`;
@@ -157,7 +160,7 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
             ) : (
               sessions.map((s) => (
                 <span key={s.id} className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate font-mono text-xs">{s.id}</span>
+                  <SessionId id={s.id} />
                   <span className="whitespace-nowrap text-muted-foreground">
                     · open since <ShortTime at={s.started_at} className="text-sm" />
                   </span>
@@ -165,19 +168,16 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
               ))
             )
           ) : live ? (
-            <span className="truncate font-mono text-xs">{live.session_id}</span>
+            <SessionId id={live.session_id} />
           ) : (
             <Pill tone="dropped">No Session</Pill>
           )}
         </Property>
-        {agent.agent && (
+        {model && (
+          // The model the live Claim names, else the agent settings'; settings that name another follow it.
           <Property label="Model">
-            <span className="truncate font-mono text-xs">{agent.agent.model}</span>
-          </Property>
-        )}
-        {live?.model_label && live.model_label !== agent.agent?.model && (
-          <Property label="Model label">
-            <span className="truncate font-mono text-xs">{live.model_label}</span>
+            <span className="truncate font-mono text-xs">{model}</span>
+            {set && set !== model && <span className="truncate text-xs text-muted-foreground">· set to {set}</span>}
           </Property>
         )}
         {manager && (

@@ -5,9 +5,10 @@ import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
+import { shortWhen } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
-import { shortWhen, type Mark } from "./derive";
+import type { Mark } from "./derive";
 import type { BoardModel } from "./model";
 
 export function MarkPill({ mark, now }: { mark: Mark; now: number }) {
@@ -36,11 +37,11 @@ export function BlocksPill({ blocks }: { blocks: TaskBrief[] }) {
   );
 }
 
-/** The Feature a Task belongs to: its key and title. */
+/** The Feature a Task belongs to: its key and title, on one line, the whole title on hover. */
 export function FeatureRef({ feature, className }: { feature: Feature | undefined; className?: string }) {
   if (!feature) return null;
   return (
-    <span className={cn("flex min-w-0 items-center gap-1 text-[11.5px] text-muted-foreground", className)}>
+    <span title={`${feature.key} ${feature.title}`} className={cn("flex min-w-0 items-center gap-1 text-[11.5px] text-muted-foreground", className)}>
       <Key className="text-[11px]">{feature.key}</Key>
       <span className="truncate">{feature.title}</span>
     </span>
@@ -54,20 +55,19 @@ export function SkillPill({ task, model }: { task: Task; model: Pick<BoardModel,
   return <Pill tone="outline">{skill.name}</Pill>;
 }
 
-/** "15 min · claude-opus-5-5": a held card's countdown to the lapse and the model the holder named. */
+/** "lapses in 15 min · claude-opus-5-5": a held card's countdown to the lapse and the model the holder named, cut short to fit. */
 export function HeartbeatLine({ task, now }: { task: Task; now: number }) {
   const claim = liveClaim(task, now);
   if (!claim?.expires_at) return null;
   return (
-    <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <>
       <HeartbeatMeter claim={claim} variant="compact" />
       {claim.model_label && (
-        <>
-          <span aria-hidden>·</span>
-          <span className="truncate">{claim.model_label}</span>
-        </>
+        <span className="min-w-0 truncate" title={claim.model_label}>
+          · {claim.model_label}
+        </span>
       )}
-    </div>
+    </>
   );
 }
 

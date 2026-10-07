@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { initials } from "@/lib/members";
+import { initials, shortSessionId, tintOf } from "@/lib/members";
 import { glyphFor } from "@/lib/status";
 import { untilText } from "@/lib/time";
 import { EmptyState } from "./EmptyState";
@@ -65,7 +65,31 @@ describe("MemberAvatar", () => {
     const agent = screen.getByRole("img", { name: "builder-1 (agent)" });
     expect(human).toHaveClass("rounded-full");
     expect(agent).not.toHaveClass("rounded-full");
-    expect(agent).toHaveClass("bg-agent-bg", "size-10");
+    expect(agent).toHaveClass("border-agent-border", "size-10");
+  });
+
+  it("tints each avatar by its Member's name, so the same initials still differ", () => {
+    render(
+      <>
+        <MemberAvatar member={{ name: "retro", kind: "agent" }} />
+        <MemberAvatar member={{ name: "reviewer-tax", kind: "agent" }} />
+        <MemberAvatar member={{ name: "retro", kind: "human" }} />
+      </>,
+    );
+    const [retro, reviewer, human] = screen.getAllByRole("img");
+    expect(retro).toHaveTextContent("RT");
+    expect(reviewer).toHaveTextContent("RT");
+    expect(retro.dataset.tint).not.toBe(reviewer.dataset.tint);
+    expect(retro).toHaveClass(`tint-${tintOf("retro")}`);
+    // The tint follows the name, whatever the kind.
+    expect(human.dataset.tint).toBe(retro.dataset.tint);
+  });
+});
+
+describe("SessionId", () => {
+  it("shows the last 8 characters, where UUIDv7 ids of one day differ, and keeps a short id whole", () => {
+    expect(shortSessionId("01a11403-53a4-7b2e-9c1d-3b4dcbb772f3")).toBe("…cbb772f3");
+    expect(shortSessionId("sess-1")).toBe("sess-1");
   });
 });
 
@@ -80,11 +104,11 @@ describe("HeartbeatMeter", () => {
         <HeartbeatMeter claim={{ expires_at: inMinutes(-1), heartbeat_timeout_seconds: 2 }} />
       </>,
     );
-    expect(screen.getByText("in 15 min")).toBeInTheDocument();
+    expect(screen.getByText("lapses in 15 min")).toBeInTheDocument();
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "100");
-    // A card's compact meter reads as the Agents table's does.
-    expect(screen.getByText("in 10 min")).toBeInTheDocument();
-    expect(screen.getByText("in 36 s")).toBeInTheDocument();
+    // A card's compact meter reads as the Agents table's does, and says when on hover.
+    expect(screen.getByText("lapses in 10 min")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
+    expect(screen.getByText("lapses in 36 s")).toBeInTheDocument();
     expect(screen.getByText("No expiry")).toBeInTheDocument();
     expect(screen.getByText("Lapsed")).toBeInTheDocument();
   });

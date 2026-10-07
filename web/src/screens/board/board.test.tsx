@@ -62,7 +62,11 @@ describe("Team › Tasks, list", () => {
     expect(within(held).getByText("Blocked by WEB-8")).toBeInTheDocument();
     expect(within(held).getByRole("img", { name: "builder (agent)" })).toBeInTheDocument();
     expect(within(await row(/WEB-8 Stripe keys/)).getByText("blocks WEB-3")).toBeInTheDocument();
-    expect(within(await row(/WEB-10 Break down/)).getByText("Break down")).toBeInTheDocument();
+    // "Break down: Search" says its kind; no pill repeats it.
+    expect(within(await row(/WEB-10 Break down/)).queryByText("Break down")).not.toBeInTheDocument();
+    // The time column has a header, and its hover names the field.
+    expect(screen.getByText("Updated")).toBeInTheDocument();
+    expect(held.querySelector("time")).toHaveAttribute("title", expect.stringMatching(/^Waiting since /));
     // A row opens the Task's peek over the list.
     expect(held).toHaveAttribute("href", "/teams/WEB/tasks?view=list&task=WEB-3");
     expect(screen.getByText("5 Tasks · Dropped hidden (1)")).toBeInTheDocument();
@@ -99,8 +103,10 @@ describe("Team › Tasks, board", () => {
     expect(await screen.findByRole("heading", { name: "Tasks, board" })).toBeInTheDocument();
     const progress = await screen.findByRole("region", { name: "In progress" });
     const card = await within(progress).findByRole("link", { name: /WEB-3/ });
-    expect(within(card).getByText("claude-opus-5-5")).toBeInTheDocument();
-    expect(within(card).getByText(/1[45] min/)).toBeInTheDocument();
+    expect(within(card).getByText("· claude-opus-5-5")).toBeInTheDocument();
+    expect(within(card).getByText(/lapses in 1[45] min/)).toBeInTheDocument();
+    // The Feature has a line of its own, its whole name on hover.
+    expect(within(card).getByTitle("WEB-1 Checkout flow")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /WEB-15/ })).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Show Dropped, 1" }));

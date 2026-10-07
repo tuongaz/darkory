@@ -95,14 +95,13 @@ test("a 2 s Claim lapses: Agents shows Lapsed, the Task returns to Todo, Darkory
   await page.goto(`${base()}/agents`);
   const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
   await expect(row).toContainText("Nothing held");
-  await expect(row).toContainText("reports to ada");
   await markLoaded(page);
 
   await v1(agent, "POST", `/v1/tasks/${discount}/claim`, { heartbeat_timeout_seconds: 2, model_label: "claude-opus-5-5" });
   // No Heartbeat comes; the server records the lapse within a second of the expiry.
   await expect(row.getByText("Lapsed")).toBeVisible({ timeout: 15_000 });
   await expect(row).toContainText("Nothing held");
-  await expect(row.getByRole("cell").nth(5)).toContainText(`1${discount}`);
+  await expect(row.getByRole("cell").nth(6)).toContainText(`1${discount}`);
   await notReloaded(page);
   await shot(page, "agents-lapsed");
 
@@ -157,7 +156,8 @@ test("a question the agent aims at the human lands in Aimed at me, live", async 
   await expect(row).toContainText("Build the cart page");
   await expect(row.getByText(`Blocked by ${key}`)).toBeVisible();
   await expect(row.getByRole("meter")).toBeVisible();
-  await expect(row).toContainText("sess-inbox-builder");
+  // The Session id by its last 8 characters; the whole id is its hover and what a click copies.
+  await expect(row.getByRole("button", { name: "Copy the Session id sess-inbox-builder" })).toHaveText("…-builder");
   await expect(row).toContainText("claude-opus-5-5");
   await shot(page, "agents");
 
@@ -200,7 +200,7 @@ test("Activity narrows to a Member and to a Kind", async ({ page }) => {
   const rows = activityRows(page);
   await expect(rows.first()).toBeVisible();
   // Its own entries, and the lapse Darkory recorded on its Claim.
-  for (const text of await rows.allTextContents()) expect(text).toMatch(/^#\d+(IBinbox-builder|DDarkory Lapsed)/);
+  for (const text of await rows.allTextContents()) expect(text).toMatch(/^(IBinbox-builder|DDarkory Lapsed)/);
   // The Claim's own entry is on this page, so the lapse says how long it waited.
   await expect(rows.filter({ hasText: "Darkory Lapsed" })).toContainText("held by inbox-builder · no Heartbeat in 2 s");
   await expect(rows.filter({ hasText: "inbox-builder filed" })).toHaveCount(1);

@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { shortSessionId } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { AdminFrame } from "./AdminLayout";
@@ -207,8 +208,8 @@ function DeactivateDialog({
             <Fact label="Closes">
               {count(sessions.length, "Session")}
               {sessions.map((s) => (
-                <code key={s.id} className="font-mono text-[11.5px] font-normal text-muted-foreground">
-                  {s.id}
+                <code key={s.id} title={s.id} className="font-mono text-[11.5px] font-normal text-muted-foreground">
+                  {shortSessionId(s.id)}
                 </code>
               ))}
             </Fact>

@@ -6,7 +6,7 @@ import { mockApi } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
 import { ada, build, builder, feature, ops, review, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { dayLabel, groupByMinute, matchesFilter } from "./derive";
+import { dayLabel, groupByDay, matchesFilter } from "./derive";
 import { statuses } from "./testing";
 import { describe as say, sentenceText, type Lookup } from "./wording";
 
@@ -72,19 +72,18 @@ describe("the Activity wording", () => {
     expect(say(entry(15, "task.renamed" as Activity["kind"]), lookup)).toBeNull();
   });
 
-  it("groups entries by minute under the day", () => {
+  it("groups entries by day", () => {
     const now = new Date(at(22, 19)).getTime();
     const entries = [
-      entry(133, "login_link.redeemed", {}, { at: at(22, 19, 2) }),
-      entry(132, "login_link.issued", {}, { at: at(22, 19, 2) }),
-      entry(131, "login_link.redeemed", {}, { at: at(22, 18, 29) }),
+      entry(133, "task.claimed", {}, { at: at(22, 19, 2) }),
+      entry(132, "task.filed", {}, { at: at(22, 19, 2) }),
+      entry(131, "task.completed", {}, { at: at(8, 18, 29) }),
       entry(30, "task.claimed", {}, { at: at(9, 5, 0, -1) }),
     ];
-    const groups = groupByMinute(entries, now);
+    const groups = groupByDay(entries, now);
     expect(groups.map((g) => [g.label, g.entries.map((e) => e.seq)])).toEqual([
-      ["Today, 22:19", [133, 132]],
-      ["Today, 22:18", [131]],
-      ["Yesterday, 09:05", [30]],
+      ["Today", [133, 132, 131]],
+      ["Yesterday", [30]],
     ]);
     expect(dayLabel(new Date(at(9, 0, 0, -3)), now)).not.toMatch(/Today|Yesterday/);
   });
@@ -178,6 +177,33 @@ describe("the Activity page", () => {
     const footer = await screen.findByText("100 entries loaded");
     expect(footer.parentElement).toHaveTextContent(/^100 entries loaded·Load older$/);
     expect(screen.getByRole("button", { name: "Load older" })).toBeInTheDocument();
+  });
+
+  it("leaves sign-ins out until the Kind menu or the footer shows them", async () => {
+    const signIns = [
+      entry(5, "login_link.redeemed", {}, { actor_id: ada.id, subject_type: "member", subject_id: ada.id, at: at(9, 4) }),
+      entry(4, "login_link.issued", { member_id: ada.id }, { actor_id: ada.id, subject_type: "member", subject_id: ada.id, at: at(9, 4) }),
+    ];
+    mockApi({
+      ...signedIn(),
+      "GET /v1/statuses": statuses,
+      "GET /v1/tasks": { items: [payment] },
+      "GET /v1/features": { items: [feature(1, 1)] },
+      "GET /v1/activity": { items: [...history, ...signIns], last_seq: 5, first_seq: 1 },
+    });
+    renderApp("/activity");
+    const list = await screen.findByRole("list", { name: "Activity" });
+    const seqs = () => within(list).getAllByRole("listitem").filter((li) => li.dataset.seq).map((r) => r.dataset.seq);
+    await waitFor(() => expect(seqs()).toEqual(["3", "2", "1"]));
+    // One group for the day, and no #ids.
+    expect(within(list).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toHaveLength(1);
+    expect(list).not.toHaveTextContent("#3");
+    expect(screen.getByText("2 sign-ins hidden")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Kind" }));
+    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Show sign-ins" }));
+    await waitFor(() => expect(seqs()).toEqual(["5", "4", "3", "2", "1"]));
+    expect(screen.queryByText(/sign-ins hidden/)).not.toBeInTheDocument();
   });
 
   it("filters by Kind from its menu", async () => {

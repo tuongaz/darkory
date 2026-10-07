@@ -92,8 +92,9 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
   ];
 
   const named = (n: Named): Entry => ({ id: n.id, content: <>{n.icon}{n.title}</>, keys: n.keys, run: n.run });
+  const words = query.trim();
   // With nothing typed, the actions and the places; else what matches, best group first.
-  const groups: Group[] = query.trim()
+  const found: Group[] = words
     ? orderGroups([
         group("Tasks", rankRecords(query, tasks.data ?? []), (t) => ({
           id: `task ${t.key}`,
@@ -133,6 +134,28 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
         { heading: "Actions", best: 0, entries: actions.map(named) },
         { heading: "Go to", best: 0, entries: places.map(named) },
       ];
+  // Words that match nothing can still be filed: as a Task's title, or a Feature's.
+  const groups: Group[] =
+    words && found.length === 0
+      ? [
+          {
+            heading: "No match",
+            best: 0,
+            entries: [
+              {
+                id: "file-task-titled",
+                content: <><PlusIcon />File a Task “{words}”</>,
+                run: () => sendIntent({ kind: "file-task", team: team?.key, title: words }),
+              },
+              {
+                id: "file-feature-titled",
+                content: <><LayersIcon />File a Feature “{words}”</>,
+                run: () => sendIntent({ kind: "file-feature", team: team?.key, title: words }),
+              },
+            ],
+          },
+        ]
+      : found;
 
   const close = (then: () => void) => {
     onOpenChange(false);

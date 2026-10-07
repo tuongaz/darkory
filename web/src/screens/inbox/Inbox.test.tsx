@@ -153,7 +153,7 @@ describe("the Inbox", () => {
     inboxApi({ tasks: takeable, features: [search], takeable });
     renderApp("/inbox");
 
-    expect(await screen.findByText("Nothing aimed at you · No Claims")).toBeInTheDocument();
+    expect(await screen.findByText("No questions for you · You hold nothing")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Aimed at me" })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "Held by me" })).not.toBeInTheDocument();
     const take = await section("Takeable now");
@@ -203,7 +203,7 @@ describe("the Inbox", () => {
   it("keeps the Inbox heading for a Member with nothing at all", async () => {
     mockApi({ ...signedIn(), "GET /v1/me": me(ada), "GET /v1/statuses": statuses, "GET /v1/tasks/takeable": { items: [] }, "GET /v1/features": ({ query }) => ({ items: query.get("owner") ? [] : [feature(1, 1, { owner_id: bob.id, team_id: web.id })] }) });
     renderApp("/inbox");
-    expect(await screen.findByText("Nothing aimed at you · No Claims")).toBeInTheDocument();
+    expect(await screen.findByText("No questions for you · You hold nothing")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
   });
 });
@@ -220,7 +220,7 @@ describe("My work", () => {
     renderApp("/my-work");
 
     const held = await section("Held by me");
-    expect(within(held).getByText("You hold no Claims.")).toBeInTheDocument();
+    expect(within(held).getByText("You hold nothing")).toBeInTheDocument();
     const table = await screen.findByRole("table", { name: "Takeable now" });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((r) => within(r).getAllByRole("cell")[2].textContent)).toEqual(["Magic link email", "Break down: Billing export"]);
@@ -230,5 +230,16 @@ describe("My work", () => {
     expect(within(rows[1]).getByText("< 1 min")).toBeInTheDocument();
     expect(await within(rows[0]).findByRole("img", { name: "In review" })).toBeInTheDocument();
     expect(within(rows[0]).getByRole("button", { name: "Claim WEB-13" })).toHaveAttribute("data-variant", "default");
+  });
+
+  it("says why nothing is takeable: no Skills, or nothing to take now", async () => {
+    inboxApi({ tasks: [], features: [] }).routes["GET /v1/me"] = { ...me(ada), skills: [] };
+    const { unmount } = renderApp("/my-work");
+    expect(within(await section("Takeable now")).getByText("You have no Skills yet — an Admin adds them under Admin › Members")).toBeInTheDocument();
+    unmount();
+
+    inboxApi({ tasks: [], features: [] });
+    renderApp("/my-work");
+    expect(within(await section("Takeable now")).getByText("Nothing you can take right now")).toBeInTheDocument();
   });
 });

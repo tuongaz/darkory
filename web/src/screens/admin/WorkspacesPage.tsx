@@ -142,7 +142,7 @@ function WorkspaceRow({
         {w.kind}
       </span>
       <span role="cell" className={cn(wide, "min-w-0")}>
-        <InlineText label={`path of ${w.name}`} value={w.path} onSave={(path) => onChange({ path })} disabled={busy} className="w-full" />
+        <InlineText label={`path of ${w.name}`} value={w.path} onSave={(path) => onChange({ path })} disabled={busy} path className="w-full" />
       </span>
       <span role="cell">
         <ModeSelect label={`Mode of ${w.name}`} value={w.mode} onChange={(mode) => onChange({ mode })} disabled={busy} />
@@ -188,18 +188,38 @@ function WorkspaceRow({
   );
 }
 
-/** A value shown as text that becomes a field when clicked; Enter or leaving the field saves it, Esc puts it back. */
+/**
+ * A path cut in the middle, so its last part, the folder's own name, stays in view:
+ * "/private/tmp/clau…/project".
+ */
+function MiddleTruncated({ path }: { path: string }) {
+  const cut = path.replace(/\/+$/, "").lastIndexOf("/");
+  if (cut <= 0) return <span className="truncate">{path}</span>;
+  return (
+    <>
+      <span className="truncate">{path.slice(0, cut)}</span>
+      <span className="flex-none whitespace-pre">{path.slice(cut)}</span>
+    </>
+  );
+}
+
+/**
+ * A value shown as text that becomes a field when clicked; Enter or leaving the field saves it, Esc
+ * puts it back. A `path` is cut in the middle rather than at its end.
+ */
 function InlineText({
   label,
   value,
   onSave,
   disabled,
+  path,
   className,
 }: {
   label: string;
   value: string;
   onSave: (value: string) => void;
   disabled?: boolean;
+  path?: boolean;
   className?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -238,9 +258,9 @@ function InlineText({
         setEditing(true);
       }}
       title={value}
-      className="max-w-full cursor-text truncate rounded-sm px-1 py-0.5 text-left font-mono text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-default"
+      className="flex max-w-full min-w-0 cursor-text rounded-sm px-1 py-0.5 text-left font-mono text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-default"
     >
-      {value}
+      {path ? <MiddleTruncated path={value} /> : <span className="truncate">{value}</span>}
     </button>
   );
 }

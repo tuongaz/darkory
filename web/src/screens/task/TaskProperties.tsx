@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { api, call, type TaskDetail } from "@/api/client";
 import { useNow } from "@/clock";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
+import { CopyValue, SessionId } from "@/components/CopyValue";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
@@ -48,8 +49,9 @@ export function TaskProperties({ detail, actions, grouped }: { detail: TaskDetai
         </span>
       ),
     },
-    { label: "Needs", value: <Needs task={task} /> },
   ];
+  // Once the Task is Done or Dropped it needs nothing more.
+  if (open) work.push({ label: "Needs", value: <Needs task={task} /> });
   // Where a session works it: the Workspaces it names, and the branch the Runner makes in each.
   if (detail.workspaces.length > 0) {
     work.push({ label: "Workspaces", value: <Workspaces detail={detail} /> });
@@ -60,7 +62,7 @@ export function TaskProperties({ detail, actions, grouped }: { detail: TaskDetai
   if (claim) {
     hold.push({ label: "Held by", value: <MemberName id={claim.holder_id} /> });
     hold.push({ label: "Heartbeat", value: <HeartbeatMeter claim={claim} /> });
-    hold.push({ label: "Session", value: <span className="truncate font-mono text-xs">{claim.session_id}</span> });
+    hold.push({ label: "Session", value: <SessionId id={claim.session_id} /> });
     if (claim.model_label) hold.push({ label: "Model", value: <span className="truncate font-mono text-xs">{claim.model_label}</span> });
   } else if (open) {
     hold.push({
@@ -175,12 +177,12 @@ function Workspaces({ detail }: { detail: TaskDetail }) {
   );
 }
 
-/** A branch name in mono, whole: it wraps in the rail rather than losing its end, so it can be copied. */
+/** A branch name in mono on one line, cut short in a narrow rail: the whole name on hover, copied on click. */
 export function Branch({ name }: { name: string }) {
   return (
-    <span className="inline-flex min-w-0 items-start gap-1.5">
-      <GitBranchIcon className="mt-px size-3.5 flex-none text-muted-foreground" aria-hidden />
-      <code className="min-w-0 font-mono text-xs [overflow-wrap:anywhere]">{name}</code>
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <GitBranchIcon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
+      <CopyValue value={name} what="branch" />
     </span>
   );
 }

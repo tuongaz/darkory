@@ -46,7 +46,7 @@ export function MyWorkPage() {
           <>
             <section aria-label="Held by me">
               <GroupHeader title="Held by me" count={holding.length} />
-              {holding.length === 0 && <NoneLine>You hold no Claims.</NoneLine>}
+              {holding.length === 0 && <NoneLine>You hold nothing</NoneLine>}
               {holding.map((t) => (
                 <HeldRow key={t.id} task={t} status={statuses.get(t.status_id)} feature={features.get(t.feature_id)} skill={skillOf(t, skills)} />
               ))}
@@ -54,7 +54,8 @@ export function MyWorkPage() {
             <section aria-label="Takeable now">
               <GroupHeader title="Takeable now" count={queue.length} />
               {queue.length === 0 ? (
-                <NoneLine>Nothing takeable.</NoneLine>
+                // Why nothing is offered: with no Skills, only Tasks aimed at me or my own Features' could be.
+                <NoneLine>{me.skills.length === 0 ? "You have no Skills yet — an Admin adds them under Admin › Members" : "Nothing you can take right now"}</NoneLine>
               ) : (
                 <div role="table" aria-label="Takeable now">
                   <div role="row" className={`${queueGrid} h-8 bg-muted text-xs font-medium text-muted-foreground`}>

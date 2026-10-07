@@ -63,7 +63,7 @@ export function useFilterParams(): [FilterParams, (change: Partial<FilterParams>
 }
 
 /** What File Task can be opened with beyond the shell's intent: a Status (a column's +) or a Feature. */
-export type FileTaskPreset = { team?: string; status?: string; feature?: string };
+export type FileTaskPreset = { team?: string; status?: string; feature?: string; title?: string };
 
 const fileTaskEvent = "darkory:board-file-task";
 

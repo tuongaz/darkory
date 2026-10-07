@@ -151,6 +151,14 @@ describe("marks", () => {
     ]);
   });
 
+  it("leaves the kind out when the title already says it", () => {
+    expect(marksOf(task(10, "f-9", { kind: "breakdown", title: "Break down: Checkout" }), undefined, now)).toEqual([]);
+    expect(marksOf(task(11, "f-9", { kind: "retrospective", title: "Retrospective: Checkout" }), undefined, now)).toEqual([]);
+    expect(marksOf(task(12, "f-9", { kind: "retrospective", title: "Look back on Checkout" }), undefined, now)).toEqual([
+      { kind: "task-kind", label: "Retrospective" },
+    ]);
+  });
+
   it("reads what a question blocks off the blocked Tasks' open blockers", () => {
     const cart = task(3, "f-1", { blocked: true, open_blockers: [{ id: "k-8", key: "WEB-8" }] });
     expect(blocking([cart, task(8, "f-1")]).get("k-8")).toEqual([{ id: "k-3", key: "WEB-3" }]);

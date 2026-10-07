@@ -114,7 +114,7 @@ test("no Runner attached: the panel is absent, Nudge and Stop answer no_runner, 
   await page.goto(`${base}/tasks/${taskKey}`);
   await expect(page.getByRole("heading", { name: "Build the cart page", level: 1 })).toBeVisible();
   await expect.poll(() => asked).toEqual([200]);
-  await expect(page.getByRole("complementary", { name: "Properties" })).toContainText("sess-ses-builder");
+  await expect(page.getByRole("complementary", { name: "Properties" }).getByRole("button", { name: "Copy the Session id sess-ses-builder" })).toHaveText("…-builder");
   await expect(page.getByRole("region", { name: "Session" })).toHaveCount(0);
   await page.getByRole("button", { name: "More" }).click();
   await expect(page.getByRole("menuitem", { name: "Take back" })).toBeVisible();
@@ -219,7 +219,9 @@ test("the terminal under the Install's CSP, the Runner played by the test: watch
   // The peek over the Agents page, which View opens at the panel.
   await page.goto(`${base}/agents`);
   const row = page.getByRole("row").filter({ hasText: "ses-builder" });
-  await expect(row).toContainText(/Running\s*started/);
+  // The session's state has a column of its own, beside what the agent holds.
+  await expect(row.getByRole("cell").nth(1)).toHaveText("Running");
+  await expect(row).toContainText(/started \d\d:\d\d/);
   await row.getByRole("link", { name: "View" }).click();
   const peek = page.getByRole("dialog", { name: `Task ${taskKey}` });
   await expect(peek.getByRole("region", { name: "Session" }).locator(".xterm-rows")).toContainText("builder is running the tests");
@@ -322,7 +324,8 @@ for (const tmux of ["on", "off"] as const) {
       // straight back to builder.
       await page.goto(`${base}/agents`);
       const row = page.getByRole("row").filter({ hasText: "builder" });
-      await expect(row).toContainText(/Running\s*started/);
+      await expect(row.getByRole("cell").nth(1)).toHaveText("Running");
+      await expect(row).toContainText(/started \d\d:\d\d/);
       await expect(row).toContainText("fake-1");
       await row.hover();
       await row.getByRole("button", { name: "More for builder" }).click();
