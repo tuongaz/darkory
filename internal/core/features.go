@@ -179,9 +179,10 @@ func (s *Service) GetFeature(ctx context.Context, c *auth.Caller, ref string) (F
 	return getFeatureDetail(ctx, s.store, c.OrgID, id, s.clock.Now())
 }
 
-// FeatureFilter narrows ListFeatures; nil fields do not.
+// FeatureFilter narrows ListFeatures; nil fields do not. Filters are `filter` tokens (filter.go).
 type FeatureFilter struct {
 	Team, State, Owner *string
+	Filters            []string
 	Limit              int
 	Cursor             string
 }
@@ -192,38 +193,39 @@ func (s *Service) ListFeatures(ctx context.Context, c *auth.Caller, ff FeatureFi
 	if err != nil {
 		return Page[Feature]{}, err
 	}
-	limit := limitOf(ff.Limit)
-	where := []string{"f.org_id = $1"}
-	args := []any{c.OrgID}
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where = append(where, strings.ReplaceAll(cond, "?", "$"+itoa(len(args))))
+	filters, err := parseFilters(EntityFeatures, ff.Filters)
+	if err != nil {
+		return Page[Feature]{}, err
 	}
+	limit := limitOf(ff.Limit)
+	now := s.clock.Now()
+	q := &sqlQuery{now: now}
+	q.and("f.org_id = " + q.arg(c.OrgID))
 	if ff.Team != nil {
 		id, err := resolveTeam(ctx, s.store, c.OrgID, *ff.Team)
 		if err != nil {
 			return Page[Feature]{}, err
 		}
-		add("f.team_id = ?", id)
+		q.and("f.team_id = " + q.arg(id))
 	}
 	if ff.State != nil {
-		add("f.state = ?", *ff.State)
+		q.and("f.state = " + q.arg(*ff.State))
 	}
 	if ff.Owner != nil {
 		id, err := resolveMember(ctx, s.store, c.OrgID, *ff.Owner)
 		if err != nil {
 			return Page[Feature]{}, err
 		}
-		add("f.owner_id = ?", id)
+		q.and("f.owner_id = " + q.arg(id))
 	}
-	args = append(args, limit+1, offset)
+	q.narrow(filters)
 	items, err := collect(ctx, s.store, scanFeature, `SELECT `+featureCols+` FROM features f JOIN teams tm ON tm.id = f.team_id
-WHERE `+strings.Join(where, " AND ")+` ORDER BY tm.name, f.rank, f.id LIMIT $`+itoa(len(args)-1)+` OFFSET $`+itoa(len(args)), args...)
+WHERE `+q.sql()+` ORDER BY tm.name, f.rank, f.id LIMIT `+q.arg(limit+1)+` OFFSET `+q.arg(offset), q.args...)
 	if err != nil {
 		return Page[Feature]{}, err
 	}
 	p := page(items, offset, limit)
-	return p, fillTaskCounts(ctx, s.store, c.OrgID, s.clock.Now(), p.Items)
+	return p, fillTaskCounts(ctx, s.store, c.OrgID, now, p.Items)
 }
 
 // RankFeature moves a Feature to position within its Team's Rank, 1 first; a position past the

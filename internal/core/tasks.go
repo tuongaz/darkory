@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"strings"
 
 	"github.com/tuongaz/darkory/internal/auth"
 )
@@ -161,9 +160,10 @@ func (s *Service) GetTask(ctx context.Context, c *auth.Caller, ref string) (Task
 	return getTaskDetail(ctx, s.store, c.OrgID, id, s.clock.Now())
 }
 
-// TaskFilter narrows ListTasks; nil fields do not.
+// TaskFilter narrows ListTasks; nil fields do not. Filters are `filter` tokens (filter.go).
 type TaskFilter struct {
 	Feature, Team, State, Skill, AimedAt, Holder, Status *string
+	Filters                                              []string
 	Limit                                                int
 	Cursor                                               string
 }
@@ -174,24 +174,24 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 	if err != nil {
 		return Page[Task]{}, err
 	}
+	filters, err := parseFilters(EntityTasks, tf.Filters)
+	if err != nil {
+		return Page[Task]{}, err
+	}
 	limit := limitOf(tf.Limit)
 	now := s.clock.Now()
-	where := []string{"t.org_id = $1"}
-	args := []any{c.OrgID}
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where = append(where, strings.ReplaceAll(cond, "?", "$"+itoa(len(args))))
-	}
+	q := &sqlQuery{now: now}
+	q.and("t.org_id = " + q.arg(c.OrgID))
 	refs := []struct {
 		ref     *string
 		resolve func(context.Context, storeReader, string, string) (string, error)
-		cond    string
+		col     string
 	}{
-		{tf.Feature, resolveFeature, "t.feature_id = ?"},
-		{tf.Team, resolveTeam, "f.team_id = ?"},
-		{tf.Skill, resolveSkill, "t.skill_id = ?"},
-		{tf.AimedAt, resolveMember, "t.aimed_at_id = ?"},
-		{tf.Holder, resolveMember, "t.claim_holder_id = ?"},
+		{tf.Feature, resolveFeature, "t.feature_id"},
+		{tf.Team, resolveTeam, "f.team_id"},
+		{tf.Skill, resolveSkill, "t.skill_id"},
+		{tf.AimedAt, resolveMember, "t.aimed_at_id"},
+		{tf.Holder, resolveMember, "t.claim_holder_id"},
 	}
 	for _, r := range refs {
 		if r.ref == nil {
@@ -201,10 +201,10 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 		if err != nil {
 			return Page[Task]{}, err
 		}
-		add(r.cond, id)
+		q.and(r.col + " = " + q.arg(id))
 	}
 	if tf.Holder != nil {
-		add("(t.claim_expires_at IS NULL OR t.claim_expires_at > ?)", ms(now))
+		q.and("(t.claim_expires_at IS NULL OR t.claim_expires_at > " + q.nowArg() + ")")
 	}
 	if tf.Status != nil {
 		list, err := listStatuses(ctx, s.store, c.OrgID)
@@ -215,14 +215,14 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 		if err != nil {
 			return Page[Task]{}, err
 		}
-		add("t.status_id = ?", st.ID)
+		q.and("t.status_id = " + q.arg(st.ID))
 	}
 	if tf.State != nil {
-		add("t.state = ?", *tf.State)
+		q.and("t.state = " + q.arg(*tf.State))
 	}
-	args = append(args, limit+1, offset)
-	items, err := tasksWhere(ctx, s.store, c.OrgID, now, strings.Join(where, " AND ")+
-		` ORDER BY f.rank, t.waiting_since, t.id LIMIT $`+itoa(len(args)-1)+` OFFSET $`+itoa(len(args)), args...)
+	q.narrow(filters)
+	items, err := tasksWhere(ctx, s.store, c.OrgID, now, q.sql()+
+		` ORDER BY f.rank, t.waiting_since, t.id LIMIT `+q.arg(limit+1)+` OFFSET `+q.arg(offset), q.args...)
 	if err != nil {
 		return Page[Task]{}, err
 	}

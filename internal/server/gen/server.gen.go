@@ -1638,6 +1638,9 @@ type EvidenceFilename = string
 // EvidenceID defines model for EvidenceID.
 type EvidenceID = string
 
+// FeatureFilter defines model for FeatureFilter.
+type FeatureFilter = []string
+
 // FeatureRef defines model for FeatureRef.
 type FeatureRef = string
 
@@ -1661,6 +1664,9 @@ type SessionID = string
 
 // SkillRef defines model for SkillRef.
 type SkillRef = string
+
+// TaskFilter defines model for TaskFilter.
+type TaskFilter = []string
 
 // TaskRef defines model for TaskRef.
 type TaskRef = string
@@ -1708,6 +1714,19 @@ type ListFeaturesParams struct {
 	Team  *string       `form:"team,omitempty" json:"team,omitempty"`
 	State *FeatureState `form:"state,omitempty" json:"state,omitempty"`
 	Owner *string       `form:"owner,omitempty" json:"owner,omitempty"`
+
+	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
+	// (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
+	// `nin` OR within one).
+	//
+	// Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
+	// · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
+	// `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
+	// ignoring case, over the key, title and description).
+	//
+	// Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
+	// naming the token, as on `listTasks`.
+	Filter *FeatureFilter `form:"filter,omitempty" json:"filter,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1955,6 +1974,41 @@ type ListTasksParams struct {
 
 	// Status Only Tasks in this Status, by id or name.
 	Status *string `form:"status,omitempty" json:"status,omitempty"`
+
+	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
+	// with the other parameters; `in` and `nin` match any of their values (OR). Each value is
+	// percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
+	// `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
+	// query-encoded as usual. References are ids, not names; an id that names nothing matches
+	// nothing.
+	//
+	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
+	// boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
+	// `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
+	// the earlier first) and `last` (`7d`, `30d` or `90d` before the server's now). A date is
+	// RFC 3339 with its offset, such as `2026-10-07T09:00:00+11:00`. `not` and `nin` also
+	// match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
+	// Member, which need no Skill).
+	//
+	// Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
+	// `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
+	// for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
+	// id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
+	// (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
+	// and blocks an open Task) · `kind` (`work`, `breakdown`, `retro`, or `question`: a Task
+	// aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a live
+	// Claim; `unheld`: none, as `holder:is:none`; `lapsed_24h`: open, unheld, and its latest
+	// Claim lapsed within the last 24 hours; `live_session`: a live Claim with a Heartbeat
+	// timeout held by an agent) · `workspace` (Workspace id the Task names) · `model` (the
+	// live Claim's model label) · `filed_at` · `updated_at` (the latest Activity about the
+	// Task, or when it was filed) · `completed_at` (when it ended done; a dropped Task has
+	// none) · `q` (`contains`, ignoring case, over the key, title and description).
+	//
+	// Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
+	// An unknown field, an operator the field does not take, the wrong number of values or a
+	// value the field cannot hold is refused with `invalid`, naming the token. At most 50
+	// `filter`s of at most 100 values each.
+	Filter *TaskFilter `form:"filter,omitempty" json:"filter,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2713,6 +2767,19 @@ func (siw *ServerInterfaceWrapper) ListFeatures(w http.ResponseWriter, r *http.R
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "owner"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "owner", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter", r.URL.Query(), &params.Filter, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
 		}
 		return
 	}
@@ -4596,6 +4663,19 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "filter" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter", r.URL.Query(), &params.Filter, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
 		}
 		return
 	}
