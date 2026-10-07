@@ -14,6 +14,7 @@ import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChipRow, FilterMenuButton, type FilterBarProps } from "@/components/filters/FilterBar";
+import { AppliedView, ViewsMenu } from "@/components/filters/ViewsMenu";
 import { useFilterState } from "@/components/filters/filterState";
 import { usablePills } from "@/components/filters/operators";
 import { Key } from "@/components/Key";
@@ -32,6 +33,7 @@ import { countsText, moveFeature, rankPosition, taskBar, visibleFeatures } from 
 import { featureFields, featureFilterOptions } from "./filters";
 import { useRankFeature, useTeamFeatures } from "./queries";
 import { useLegacyFeatureFilters } from "./state";
+import { featureViewRest, readFeatureView, useSavedViews } from "./views";
 
 // grip · # · key · title · owner · Task bar · counts · ⋯; on a phone the owner, bar and counts go.
 const rowGrid =
@@ -64,13 +66,25 @@ export function TeamFeaturesPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   useIntent("filter", () => setFilterOpen(true));
   const options = useMemo(() => featureFilterOptions({ members, me: me.member.id }), [members, me.member.id]);
+  const views = useSavedViews({
+    entity: "features",
+    team: team?.id,
+    fields: featureFields,
+    pills,
+    rest: featureViewRest(showEnded),
+    restParams: (v, next) => {
+      const { showEnded } = readFeatureView(v);
+      if (showEnded) next.set("ended", "1");
+      else if (showEnded === false) next.delete("ended");
+    },
+  });
   const bar: FilterBarProps = {
     fields: featureFields,
     pills,
     optionsFor: (field) => options.get(field),
     onSetFilter: filter.setFilter,
     onRemoveFilter: filter.removeFilter,
-    onClearAll: filter.clearAll,
+    onClearAll: views.clear,
   };
 
   const ranked = useMemo(() => features.data ?? [], [features.data]);
@@ -85,6 +99,7 @@ export function TeamFeaturesPage() {
         actions={
           team && (
             <>
+              <ViewsMenu {...views} />
               <FilterMenuButton {...bar} open={filterOpen} onOpenChange={setFilterOpen} />
               <Popover>
                 <PopoverTrigger asChild>
@@ -116,7 +131,7 @@ export function TeamFeaturesPage() {
           </Button>
         }
       />
-      {team && <FilterChipRow {...bar} />}
+      {team && <FilterChipRow {...bar} leading={views.applied && <AppliedView name={views.applied.name} edited={views.edited} />} />}
     </>
   );
 

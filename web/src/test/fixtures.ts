@@ -69,7 +69,7 @@ export function health(extra: Partial<Health> = {}): Health {
  * What every signed-in page reads: health, the caller, the Members, Teams and Skills for names, and
  * the shell's reads of every open Task (the live count), of Features (the Install checklist) and
  * of the Install's Workspaces: none by default. A Task's page and peek and the Agents page also
- * read the Runner's sessions: no Runner by default.
+ * read the Runner's sessions: no Runner by default. The Team pages read the Member's Views: none.
  */
 export function signedIn(member: Member = ada): Record<string, Handler> {
   return {
@@ -82,5 +82,6 @@ export function signedIn(member: Member = ada): Record<string, Handler> {
     "GET /v1/features": { items: [] },
     "GET /v1/runner/sessions": { items: [], runner: false },
     "GET /v1/workspaces": { items: [] },
+    "GET /v1/views": { items: [] },
   };
 }

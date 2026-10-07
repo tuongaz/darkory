@@ -35,6 +35,8 @@ export type TaskDetail = Schemas["TaskDetail"];
 export type Team = Schemas["Team"];
 export type TeamDetail = Schemas["TeamDetail"];
 export type Token = Schemas["Token"];
+export type View = Schemas["View"];
+export type ViewEntity = Schemas["ViewEntity"];
 export type Workspace = Schemas["Workspace"];
 export type WorkspaceMode = Schemas["WorkspaceMode"];
 

@@ -273,3 +273,72 @@ test("the Filter's dates and Claim, Team › Features, and a phone", async ({ pa
 
   expect(errors).toEqual([]);
 });
+
+test("a View: save the Filter, reload, apply it again, delete it", async ({ page }) => {
+  const errors = consoleErrors(page);
+  const ada = agent(adminToken, "ada-e2e-filters-3");
+  const link = await ada<LoginLink>("POST", "/v1/members/ada/login-links");
+  await page.goto(link.body!.url);
+  await page.getByRole("button", { name: /^Sign in as / }).click();
+  await expect(page).toHaveURL(`${base}/inbox`);
+  const tasks = (await v1<{ items: { key: string; title: string }[] }>(page, "GET", "/v1/tasks?team=WEB")).items;
+  const key = (title: string) => tasks.find((t) => t.title === title)!.key;
+  const [cart, payment] = [key("Build the cart page"), key("Payment form validation")];
+
+  await page.goto(`${base}/teams/WEB/tasks?view=list`);
+  await expect(row(page, payment)).toBeVisible();
+  await page.keyboard.press("f");
+  await page.getByRole("dialog", { name: "Filters" }).getByRole("option", { name: "Held by" }).click();
+  await page.getByRole("option", { name: "builder-1" }).click();
+  await page.keyboard.press("Escape");
+  await expect(row(page, payment)).toHaveCount(0);
+
+  await test.step("Save as view names the list's Filter and Display", async () => {
+    await page.getByRole("button", { name: "Views" }).click();
+    await expect(page.getByText("No Views yet.")).toBeVisible();
+    await page.getByRole("button", { name: "Save as view…" }).click();
+    await page.getByRole("textbox", { name: "View name" }).fill("The builder's");
+    await page.getByRole("button", { name: "Save View" }).click();
+    await expect(chips(page).getByLabel("View The builder's")).toBeVisible();
+    const views = (await v1<{ items: { name: string; filters: string[]; sort?: string; display?: Record<string, unknown> }[] }>(page, "GET", "/v1/views?entity=tasks&team=WEB")).items;
+    expect(views).toHaveLength(1);
+    expect(views[0].filters).toHaveLength(1);
+    expect(views[0].filters[0]).toMatch(/^holder:is:/);
+    expect(views[0]).toMatchObject({ name: "The builder's", sort: "rank", display: { layout: "list" } });
+    await shot(page, "9-view-saved");
+  });
+
+  await test.step("a reload keeps it applied", async () => {
+    await page.reload();
+    await expect(chips(page).getByLabel("View The builder's")).toBeVisible();
+    await expect(row(page, cart)).toBeVisible();
+  });
+
+  await test.step("Reset leaves it; applying it brings its Filter back", async () => {
+    await chips(page).getByRole("button", { name: "Reset" }).click();
+    await expect(chips(page)).toHaveCount(0);
+    await expect(row(page, payment)).toBeVisible();
+    await page.getByRole("button", { name: "Views" }).click();
+    await expect(page.getByRole("option", { name: /The builder's/ })).toBeVisible();
+    await shot(page, "10-views-menu");
+    await page.getByRole("option", { name: /The builder's/ }).click();
+    await expect(chips(page).getByLabel("View The builder's")).toBeVisible();
+    await expect(chips(page).getByRole("button", { name: "Held by: builder-1" })).toBeVisible();
+    await expect(row(page, payment)).toHaveCount(0);
+    await expect(row(page, cart)).toBeVisible();
+    await shot(page, "11-view-applied");
+  });
+
+  await test.step("deleting it leaves the Filter as it is", async () => {
+    await page.getByRole("button", { name: "Views" }).click();
+    await page.getByRole("option", { name: /The builder's/ }).hover();
+    await page.getByRole("button", { name: "Delete The builder's" }).click();
+    await expect(page.getByText("No Views yet.")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(chips(page).getByLabel(/^View /)).toHaveCount(0);
+    await expect(chips(page).getByRole("button", { name: "Held by: builder-1" })).toBeVisible();
+    expect((await v1<{ items: unknown[] }>(page, "GET", "/v1/views?entity=tasks&team=WEB")).items).toEqual([]);
+  });
+
+  expect(errors).toEqual([]);
+});

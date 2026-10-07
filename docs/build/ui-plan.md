@@ -105,6 +105,17 @@ W1 first, then W2–W5 in parallel in their own worktrees, touching only their o
 
   The server also has `status_kind`, `team`, `blocks` and `model`, which the bar does not offer yet.
 - **The Team pages still filter in the browser.** They hold every Task and Feature of the Team already. The pills are the server's tokens unchanged, so a paged or cross-Team list (My work, Inbox) can pass `?filter.<entity>=` straight through as `filter=` later.
+- **Views (phase 3)** port enably's SavedViewsControl and useSavedFilters onto `/v1/views`. The header's Views control beside Filter lists the Member's Views of this list and Team (`GET /v1/views?entity=&team=`):
+  - Choosing a row applies that View.
+  - "Save as view…" asks for a name.
+  - Each row has Overwrite and Delete; Delete asks nothing, and the PATCH's rename is not offered.
+  - With none, it says so in plain words.
+
+  What a View keeps:
+  - Tasks: the filter tokens, the Display's order as `sort`, and the layout, the grouping and the Show toggles as `display`.
+  - Features: the filter tokens, and "Shipped and dropped" as `display`.
+
+  Applying a View writes its pills and `?view.<entity>=<id>` in one address write, sets the layout, and sets this browser's Display, which is kept per browser. A token the page can no longer apply is dropped. The chips row leads with the applied View's name, adding "edited" once the pills differ from its filters in any order. Reset leaves the View in the same write as the pills. A taken name (409) reads "You already have a View named “X” for this list." beside the field, and the field keeps the name. Views write no Activity, so the list is refetched after this tab's own writes; another tab sees the change on its next refetch.
 - **The date editor draws one month**, with All and the windows beside it. enably's two-month calendar and its phone takeover sheet are left out: one month fits both a phone and the desktop popover.
 - **The phone layout is CSS.** Under 640px each chip takes a line of its own with its value taking the slack, and the row's Reset goes, since the Filters menu keeps its own, as enably's stacked rail does. `stacked` forces the layout at any width.
 - **Team › Features:**

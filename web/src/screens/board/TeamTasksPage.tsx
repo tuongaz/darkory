@@ -12,6 +12,7 @@ import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChipRow, FilterMenuButton, type FilterBarProps } from "@/components/filters/FilterBar";
+import { AppliedView, ViewsMenu } from "@/components/filters/ViewsMenu";
 import { useFilterState } from "@/components/filters/filterState";
 import { usablePills } from "@/components/filters/operators";
 import { Refusal } from "@/components/Refusal";
@@ -27,6 +28,7 @@ import { fetchTakeable, useClaim, useSetStatus } from "./queries";
 import { openFileTask, useDisplay, useLegacyTaskFilters } from "./state";
 import { TaskBoard, type Column } from "./TaskBoard";
 import { TaskList } from "./TaskList";
+import { readTaskView, taskViewRest, useSavedViews } from "./views";
 import { DisplayMenu, ViewSwitch } from "./ViewMenus";
 
 export function TeamTasksPage() {
@@ -58,13 +60,25 @@ export function TeamTasksPage() {
       }),
     [all, model.statusList, model.glyphs, model.featureList, model.members, model.skills, workspaces, model.me.member.id],
   );
+  const views = useSavedViews({
+    entity: "tasks",
+    team: team?.id,
+    fields: taskFields,
+    pills,
+    rest: taskViewRest(display, view),
+    restParams: (v, next) => {
+      const layout = readTaskView(v).layout;
+      if (layout) next.set("view", layout);
+    },
+    onApplied: (v) => changeDisplay(readTaskView(v).display),
+  });
   const bar: FilterBarProps = {
     fields: taskFields,
     pills,
     optionsFor: (field) => options.get(field),
     onSetFilter: filter.setFilter,
     onRemoveFilter: filter.removeFilter,
-    onClearAll: filter.clearAll,
+    onClearAll: views.clear,
   };
 
   const sorted = useMemo(() => [...(all ?? [])].sort(compareTasks(display.order, model.featureById)), [all, display.order, model.featureById]);
@@ -94,6 +108,7 @@ export function TeamTasksPage() {
         actions={
           team && (
             <>
+              <ViewsMenu {...views} />
               <FilterMenuButton {...bar} open={filterOpen} onOpenChange={setFilterOpen} />
               <DisplayMenu display={display} change={changeDisplay} view={view} />
             </>
@@ -107,7 +122,7 @@ export function TeamTasksPage() {
           </Button>
         }
       />
-      {team && <FilterChipRow {...bar} />}
+      {team && <FilterChipRow {...bar} leading={views.applied && <AppliedView name={views.applied.name} edited={views.edited} />} />}
     </>
   );
 

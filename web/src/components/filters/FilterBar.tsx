@@ -3,7 +3,7 @@
 // set axis as a segmented chip, axis · operator ▾ · value · ×, with Reset at its right. The pills
 // are the caller's (the address, through useFilterState); the bar only reads and writes them.
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon, XIcon } from "lucide-react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
@@ -275,16 +275,18 @@ function SearchField({ labels, value, onChange }: { labels: FilterLabels; value:
 
 /**
  * The row under the header while anything is set: a chip per set axis (and the Search chip), with
- * Reset at its right. Nothing renders while nothing is set. On a phone, or `stacked`, each chip
- * takes a line of its own instead of wrapping.
+ * Reset at its right; `leading` heads it (the applied View) and keeps it up with no pill set.
+ * Nothing renders while nothing is set. On a phone, or `stacked`, each chip takes a line of its
+ * own instead of wrapping.
  */
-export function FilterChipRow({ stacked = false, ...props }: FilterBarProps & { stacked?: boolean }) {
+export function FilterChipRow({ stacked = false, leading, ...props }: FilterBarProps & { stacked?: boolean; leading?: ReactNode }) {
   const bar = barOf(props);
   const { labels } = bar;
   const lay = layout(stacked);
-  if (bar.activeCount === 0) return null;
+  if (bar.activeCount === 0 && !leading) return null;
   return (
     <div role="toolbar" aria-label={labels.filters} data-testid="filter-chips" className={cn("flex flex-none border-b px-4 py-1.5", lay.row)}>
+      {leading}
       {bar.text && bar.textValue && <SearchChip labels={labels} value={bar.textValue} onChange={bar.setText} lay={lay} />}
       {bar.set.map((field) => (
         <FieldChip
