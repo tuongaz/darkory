@@ -16,7 +16,7 @@ import { useAllFeatures, useAllTasks, useDirectory } from "@/api/queries";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
-import { StatusGlyph } from "@/components/StatusGlyph";
+import { WorkGlyph } from "@/components/WorkGlyph";
 import {
   CommandDialog,
   CommandEmpty,
@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/command";
 import { Kbd } from "@/components/ui/kbd";
 import { useCurrentMe } from "@/me";
-import { taskGlyph } from "@/work";
+import { taskWorkGlyph } from "@/work";
 import { teamFeaturesPath, teamTasksPath, useCurrentTeam } from "./currentTeam";
 import { sendIntent } from "./intents";
 import { orderGroups, rankRecords, type Hit } from "./search";
@@ -52,7 +52,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
   const team = useCurrentTeam();
   const tasks = useAllTasks(open);
   const features = useAllFeatures(open);
-  const { teams, teamList, memberList } = useDirectory();
+  const { teams, teamList, memberList, members: byId } = useDirectory();
   const now = useNow();
   const admin = me.member.admin;
 
@@ -100,7 +100,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
           id: `task ${t.key}`,
           content: (
             <>
-              <StatusGlyph glyph={taskGlyph(t, now)} /> <Key>{t.key}</Key> <span className="truncate">{t.title}</span>{" "}
+              <WorkGlyph glyph={taskWorkGlyph(t, now, (id) => byId.get(id)?.kind)} /> <Key>{t.key}</Key> <span className="truncate">{t.title}</span>{" "}
               <span className="ml-auto truncate text-xs text-muted-foreground">{featureTitles.get(t.feature_id)}</span>
             </>
           ),

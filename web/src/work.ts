@@ -1,4 +1,5 @@
 import type { Claim, Member, Task } from "./api/client";
+import { glyphFor, type MemberKind, type WorkGlyph } from "./lib/work";
 
 /** The Task's Claim while it holds at `now` (Unix ms): not ended and not past its expiry. */
 export function liveClaim(task: Task, now: number): Claim | undefined {
@@ -13,12 +14,13 @@ export function boundTo(claim: Claim): string {
 }
 
 /**
- * The glyph for a Task from its state and Claim, until Statuses reach /v1: done and dropped as
- * themselves, held as In progress, any other open Task as Todo.
+ * A Task's WorkGlyph from its record: its state, its live Claim and whether it is blocked. Steps
+ * and Parents are not on /v1 yet, so it never draws a hold or a Parent's progress, and an agent's
+ * live Claim draws as running.
  */
-export function taskGlyph(task: Task, now: number): "todo" | "inprogress" | "done" | "dropped" {
-  if (task.state !== "open") return task.state;
-  return liveClaim(task, now) ? "inprogress" : "todo";
+export function taskWorkGlyph(task: Task, now: number, kindOf: (memberId: string) => MemberKind | undefined): WorkGlyph {
+  const claim = liveClaim(task, now);
+  return glyphFor({ state: task.state, held: !!claim, holderKind: claim && kindOf(claim.holder_id), blocked: task.blocked });
 }
 
 const kindLabels = { breakdown: "Break down", retrospective: "Retrospective" } as const;

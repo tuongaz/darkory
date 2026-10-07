@@ -1,5 +1,6 @@
 import { SearchXIcon } from "lucide-react";
-import { Link, Navigate, Route, Routes } from "react-router";
+import { lazy, Suspense, type ReactNode } from "react";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router";
 import { EmptyState } from "@/components/EmptyState";
 import { Loaded } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,26 @@ export function AppRoutes() {
       </Route>
     </Routes>
   );
+}
+
+// Only `npm run dev` has it: the build replaces import.meta.env.DEV with false and leaves the
+// page, and what only it imports, out of the bundle.
+const DesignLab = import.meta.env.DEV ? lazy(() => import("@/screens/dev/DesignLab")) : undefined;
+
+/**
+ * Pages for building the app, above the sign-in: /dev/design (the marks and the canvases on
+ * sample records) needs no server. Anywhere else, the app.
+ */
+export function DevScreens({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation();
+  if (DesignLab && pathname === "/dev/design") {
+    return (
+      <Suspense fallback={null}>
+        <DesignLab />
+      </Suspense>
+    );
+  }
+  return children;
 }
 
 /** /inbox: the Install checklist until anything is filed, then the Inbox. */

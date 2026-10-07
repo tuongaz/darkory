@@ -17,7 +17,7 @@ Decided with the owner on 2026-10-07 in a question-by-question session (nine dec
 
 ## The record
 
-Migration `0006_model_v2` (one file per engine, as 0002–0005). Ids, times and `org_id` as before (plan.md invariant 3).
+**No migration: every Install starts from a new database** (the owner, 2026-10-07: "no migration required, just start from scratch new DB"). The schema is rewritten as a single `0001_init.sql` for the v2 record, and 0002–0005 are deleted; `darkory init` seeds a fresh Install. Ids, times and `org_id` as before (plan.md invariant 3).
 
 ### Tables
 
@@ -30,16 +30,9 @@ Migration `0006_model_v2` (one file per engine, as 0002–0005). Ids, times and 
 - `views.team_id` → `project_id`; `entity` is `tasks` only — Views of the Features list are dropped by the migration.
 - `statuses` is dropped after the data moves.
 
-### Moving the data
+### A fresh schema
 
-Done in the migration itself (both engines), in this order, so an Install such as the owner's Sacca keeps every record:
-
-1. `projects` from `teams`; `auto_complete` from `ship_when_done`; `acceptance` false.
-2. Every non-quick Feature becomes a top-level Task: same id, key, title, description, owner, rank, filer, times; `state` shipped → done; `kind` work; `breakdown` true when it had a Break down Task; `auto_complete` from `ship_when_done`. Its Tasks get `parent_id` = its id. A **quick** Feature is dropped and its one Task becomes top-level, taking the Feature's `rank`, `owner_id` and `auto_complete`; the Feature's key is retired (keys are never reused: `last_number` stands).
-3. Each Project's Workflow is derived from the Skills its Tasks have needed (`tasks.skill_id` and `claims.skill_id`, with the generic Skill of a company one), so that every open Task has a step to stand at: one step per Skill, named after the Skill with the first letter capitalised, ordered breakdown first, then the others in the order of their first use, then `review`, then retro, then skill-review; a `Backlog` hold step first when any open Task sat in a backlog-kind Status. Connectors: each work step → the next ("pass"), the last work step → Done ("pass"), every work step after the first → the first ("needs changes"); breakdown → Done ("done"); retro → Done ("done") and → skill-review ("propose") when both exist; skill-review → Done ("publish") and → retro ("needs changes"). x/y from a left-to-right layout with 240 px between steps. The derivation only has to be right for the Tasks that exist (at Sacca it yields Backlog · Plan); the owner's script (M5) sets the Workflow wanted.
-4. Each open Task's `step_id`: the step of its `skill_id` (a Task aimed at a Member: NULL); an open Task in a backlog-kind Status: the Backlog step; `step_since` = `waiting_since`. Ended Tasks: NULL.
-5. Evidence and Observations whose `feature_id` is a quick Feature's and `task_id` is NULL move to its one Task; those on a non-quick Feature with `task_id` NULL take the Parent's id. Labels: none. Views: `project_id` from `team_id`; `status:` tokens are dropped (they carry Status ids, which no step has); Views with `entity = features` are deleted.
-6. `tasks.kind` and `claims.how_ended` are CHECK constraints, so adding `acceptance`, `advanced` and `split` rebuilds those tables on SQLite (new table, copy, drop, rename, indexes again); Postgres drops and re-adds the constraint. The migration author writes both and the upgrade test runs on both engines.
+`0001_init.sql` carries the whole v2 record, with what 0002–0005 added folded in (member deactivation, Workspaces and `task_workspaces`, agent settings, Views). No upgrade path, no data move, no upgrade test: a test that `init` on a fresh database of each engine yields the seeded Organisation, the builtin Skills, `engineer` and `review`, and MAIN with the default Workflow is the proof. The owner's Sacca Install is re-created from scratch (M5).
 
 ### The default Workflow
 
@@ -65,6 +58,7 @@ Where a rule is unchanged it is not repeated; `docs/build/plan.md`'s invariants 
 - **Complete** (`complete`): a worked Task — the holder, allowed only when exactly one connector leads to Done from its step (otherwise `use_advance`, naming the outcomes); a Parent — its Owner, refused `tasks_open` while a Subtask is open. A completed Task: `state` done, `ended_at`, `step_id` NULL. Then: a Parent with an open Acceptance rule (below) and Auto-complete follows its Subtasks.
 - **Acceptance**: when a Subtask ends Done while its Parent is still open and has `acceptance` on, every other Subtask has ended, and the Project's Workflow has a step carrying the `acceptance` Skill, Darkory files one Subtask of kind `acceptance` at that step ("Acceptance: <Parent title>", filed by nobody, Owner the Parent's) — unless the Subtask that just ended is itself an Acceptance that ended Done. An Acceptance that ends Dropped files nothing more. `acceptance` is a builtin generic Skill (with breakdown, retro, skill-review).
 - **Auto-complete**: when the last open Subtask of a Parent that is still open and has `auto_complete` ends Done, and no Acceptance is due, the Parent completes in the same write, as `ship_when_done` did. A Retrospective ending is a Subtask ending on an ended Parent: neither rule fires.
+- **Proposals**: a Retrospective may carry one pending proposal **per Skill** (MAIN-1's Retrospective on 2026-10-07 found two Skills to change and could file only one); `propose` on a Skill that already has a pending proposal on the Task supersedes it, as today. Advancing into Done from the skill-review step publishes every pending proposal on the Task that is still current, and is refused `stale` naming the ones that are not. A Retrospective files new work as top-level Tasks of the Project (an ended Parent takes no new Subtasks but questions), which is what "files new Features" meant.
 - **Skill review**: a Retrospective's `propose` is refused `no_step` unless a connector leads from its step to a step carrying `skill-review`; advancing along it is today's handover to skill-review, and advancing from that step into Done publishes the version (refused `stale` as today when the base is no longer current, the Task moved back along "needs changes" with the refusal as its Note). A step carrying skill-review is takeable from any Project by a Member who has the Skill.
 - **Breakdown**: `file` with `breakdown: true` files the Task and, in the same write, its Breakdown Subtask at the Project's breakdown step (refused `no_step` when the Workflow has none). The Task is a Parent from its first moment.
 - **Retrospective**: when a Parent ends, done or dropped, and the Workflow has a retro step, Darkory files the Retrospective Subtask there. A Task without Subtasks files none.
@@ -102,6 +96,7 @@ Spec first: `api/openapi.yaml`, then `make gen` and `cd web && npm run gen`, gen
 - On `advance` into Done, and on `complete`: merge the Task's branch into its base (plain mode) or read the merged pull request carrying the key (PR mode), as the review's Complete did; a Parent's Complete merges `<PARENT-KEY>` into the default branch or opens that pull request; conflicts reopen as before (a Note, the Task moved back to the first work step).
 - The prompt says "Its Parent" where it said "Its Feature", lists the connectors out of the Task's step as the ways to end (`darkory advance <outcome>`), and for an Acceptance session checks out the Parent's branch with everything merged. `Nudge` wording: "advance it, complete it, or file a question".
 - `ADR 0013`'s three-strikes question Task is filed as a Subtask of the Task's Parent (or standalone), aimed at the manager.
+- **Progress must survive a long tool call.** MAIN-1's Retrospective (2026-10-07) measured 14 lapsed builder Claims out of 16: each session sat in one silent foreground `make verify` (~10.5 min) while the Runner reads progress from the transcript's modified time (stale after 2 min, the Claim's timeout 5 min), so the Runner stopped Heartbeats and the Claim lapsed mid-call. The Skill text now tells the agent to run long calls in the background with a Monitor, but the Runner must not depend on that: M3 makes a running tool call count as progress — the transcript's last entry is a `tool_use` without its `tool_result`, so the call is in flight; treat it as progress until the Claim's own timeout would end it, and say in the session log when it does — and extends the stale window for a session whose child processes are alive. Test it with a fake agent that blocks 6 minutes in one call.
 
 ## Web
 
@@ -119,19 +114,18 @@ Shell and routes per the sidebar sketch agreed in the session:
 
 ## Sacca
 
-The owner's Install at `darkory/.dev` migrates in place when `make dev` restarts the server (`serve` backs the SQLite file up). In this order, so no agent runs against a half-set Workflow:
+The owner's Install at `darkory/.dev` is **re-created from scratch** (no migration; the old one is parked beside `.dev.bak-20261007` as `.dev.v1-<date>`, with its `agents/*.token` files no longer valid). When `model-v2` merges into main and the owner's `make dev` restarts:
 
-1. **Before M1 merges into main**: pause the five agents (`darkory agent set <name> --paused`), so the rebuilt Runner starts no session; the planner's MAIN-2 session ends with the restart.
-2. The migration derives MAIN's Workflow from the Tasks that exist — Backlog · Plan (breakdown) only, since MAIN-2 is the only Task that has needed a Skill.
-3. `scripts/sacca-v2.sh` (run once, committed for the record) sets the Workflow wanted: Backlog · Plan (breakdown) · Build (engineer) · QA (qa) · Review (review) · Acceptance (acceptance) · Retro (retro) · Skill review (skill-review); Build → QA "pass", QA → Review "pass", QA → Build "fail", Review → Done "pass", Review → Build "needs changes", Acceptance → Done "pass", Acceptance → Build "fail", plus the default's Plan, Retro and Skill review connectors; grants `acceptance` to the `qa` agent; sets `acceptance` on for the Project. It deletes `feature/MAIN-1` locally and on GitHub (no commits of its own) and removes its ledger entries, since the Runner's branch names change and it never touches a branch it did not record under the new name.
-4. Skill texts in `.dev/skills/*.md` rewritten for `advance` and published as new versions through proposals: engineer ends with `advance pass` and never completes; qa `advance pass` / `advance fail`; review `gh pr merge` then `advance pass`; breakdown files Subtasks with `--parent`; retro unchanged but for words.
-5. Unpause the agents; the planner retakes MAIN-2 under the new Runner.
+1. Stop the old server; park `.dev`; `darkory init --org Sacca --data .dev` from the enably-v2 directory (so it becomes the Workspace, as on 2026-10-07), Member `tuongaz` admin; `make dev` picks the new Install up.
+2. `scripts/sacca-v2.sh` (committed, idempotent) sets up what `init`'s default does not: the generic `qa` Skill and the `qa` agent (sonnet-5-5) with `qa` + `acceptance`; the company Skills `enably-engineer|qa|review|breakdown|retro` from `.dev/skills/*.md` (the v2 texts: engineer ends with `advance pass` and never completes; qa `advance pass` / `advance fail`, and the Retrospective's unfiled change — capture every screenshot through ui-review's helper, run `review.py` before `verify.down`; review `gh pr merge` then `advance pass`; breakdown files Subtasks with `--parent`; retro in v2 words, filing follow-ups as top-level Tasks and one proposal per Skill); Workspace enably-v2 in `pull_request` mode; Project MAIN's Workflow: Backlog · Plan (breakdown) · Build (engineer) · QA (qa) · Review (review) · Acceptance (acceptance) · Retro (retro) · Skill review (skill-review); Build → QA "pass", QA → Review "pass", QA → Build "fail", Review → Done "pass", Review → Build "needs changes", Acceptance → Done "pass", Acceptance → Build "fail", plus the default's Plan, Retro and Skill review connectors; `acceptance` and `auto_complete` on for the Project; `local.mk` unchanged (`DARKORY_RUNNER_ENV=OPENROUTER_API_KEY`).
+3. The old `feature/MAIN-1`, `MAIN-4/…`, `MAIN-5/…` branches and `.dev/workspaces/branches.json` are history: MAIN-1 shipped on the old model (pull request #1290 into main is the owner's to merge). The new ledger starts empty; the Runner's new branch names (`main-7-…`) cannot collide with them.
+4. The first v2 Task is filed by the owner; the proof (below) runs on a separate test Install, never on Sacca's.
 
 ## Phases
 
 Each phase in a worktree under `/Users/tuongaz/dev/darkory-wt/<name>`; main receives merges only; `make check`, `make web-check`, `make e2e`, `make e2e-pg` and `cd web && npm run e2e` green before a merge; decisions to `decisions.md`.
 
-- **M1 record and `/v1`** — migration 0006 on both engines with the data move; core rules and tests (every rule above, both orders of lapse/claim where a Claim is involved, the race suite, the upgrade test from a 0005 database); `openapi.yaml`, server, generated client; the Go e2e bots (`tools/bots`) and suites on steps and `advance`. Nothing else starts before M1's spec is merged.
+- **M1 record and `/v1`** — the fresh `0001_init.sql` on both engines; core rules and tests (every rule above, both orders of lapse/claim where a Claim is involved, the race suite, the fresh-`init` test); `openapi.yaml`, server, generated client; the Go e2e bots (`tools/bots`) and suites on steps and `advance`. Nothing else starts before M1's spec is merged.
 - **M2 CLI and MCP** — commands, `prime` rules, tests, `README`.
 - **M3 Runner** — branches, merges, prompt, Acceptance sessions, tests, `docs/build/settings.md`.
 - **M4 Web** — four worktrees once M1 is merged: shell + switcher + settings area; Tasks list/board + Task page/peek + Subtask graph; Workflow canvas (live + editing); Inbox/My work/Agents/Activity + Filters/Views + marks. Then one integration pass.
@@ -149,7 +143,7 @@ Each phase in a worktree under `/Users/tuongaz/dev/darkory-wt/<name>`; main rece
 8. The Subtask graph: columns, arrows, the highlighted next ones, a running ring on the working node.
 9. Marks: an agent's gradient border still and turning; a human's plain border; the session colours.
 10. Settings area from both doors; `/admin/members` redirects; a non-admin sees Account and their Projects only.
-11. The migration of a 0005 database with Features, a quick Feature, Statuses in every kind, Evidence on a Feature, Observations, and Views.
+11. A fresh `init` on each engine: the Organisation, the builtin Skills, `engineer` and `review`, the roster, MAIN with the default Workflow, the printed link; the Install checklist in the web app leads from there to the first Task.
 12. Organisation switching: `organisations` absent → no row; present with two → the row shows (a test fixture, since Local never has two).
 
 ## The nine decisions, as taken
