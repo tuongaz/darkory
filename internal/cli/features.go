@@ -11,7 +11,7 @@ import (
 
 var featureCommands = []command{
 	{path: "feature create", args: "--team t --title t [--body text|-] [--owner m] [--from-retro task] [--ship-when-done] [--quick --skill s [--workspace ws]…]", short: "file a Feature, with its Break down Task, or a quick one with its one Task", run: cmdFeatureCreate},
-	{path: "feature list", args: "[--team t] [--state s] [--owner m]", short: "list Features by Team and Rank", run: cmdFeatureList},
+	{path: "feature list", args: "[--team t] [--state s] [--owner m] [--filter field:op:values]...", short: "list Features by Team and Rank", run: cmdFeatureList},
 	{path: "feature show", args: "<feature>", short: "show a Feature with its Tasks and Evidence", run: cmdFeatureShow},
 	{path: "feature rank", args: "<feature> <position>", short: "move a Feature in its Team's Rank (1 is first)", run: cmdFeatureRank},
 	{path: "feature ship", args: "<feature>", short: "ship a Feature whose Tasks have all ended (owner)", run: cmdFeatureShip},
@@ -68,6 +68,8 @@ func cmdFeatureList(c *call) error {
 	team := c.fs.String("team", "", "only this Team's Features")
 	state := c.fs.String("state", "", "only Features in this state: open, shipped or dropped")
 	owner := c.fs.String("owner", "", "only Features this Member owns")
+	var filters strs
+	c.fs.Var(&filters, "filter", "only Features matching field:op:values, such as quick:is:true (ids, not names); give it once per filter")
 	limit := c.fs.Int("limit", 0, "at most this many Features (default 100)")
 	cursor := c.fs.String("cursor", "", "the next page, from a previous list")
 	if _, err := c.args(0, 0); err != nil {
@@ -78,6 +80,9 @@ func cmdFeatureList(c *call) error {
 		return err
 	}
 	params := &client.ListFeaturesParams{Team: opt(*team), Owner: opt(*owner), Cursor: opt(*cursor)}
+	if filters.set {
+		params.Filter = &filters.v
+	}
 	if *state != "" {
 		params.State = ptr(client.FeatureState(*state))
 	}

@@ -591,6 +591,24 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for ViewEntity.
+const (
+	ViewEntityFeatures ViewEntity = "features"
+	ViewEntityTasks    ViewEntity = "tasks"
+)
+
+// Valid indicates whether the value is a known member of the ViewEntity enum.
+func (e ViewEntity) Valid() bool {
+	switch e {
+	case ViewEntityFeatures:
+		return true
+	case ViewEntityTasks:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for WorkspaceKind.
 const (
 	WorkspaceKindGit WorkspaceKind = "git"
@@ -776,6 +794,23 @@ type CreateSkillBody struct {
 type CreateTeamBody struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
+}
+
+// CreateViewBody defines model for CreateViewBody.
+type CreateViewBody struct {
+	// Display At most 16 KiB as JSON.
+	Display *map[string]interface{} `json:"display,omitempty"`
+
+	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	Entity ViewEntity `json:"entity"`
+
+	// Filters The list's `filter` tokens; none when omitted.
+	Filters *[]string `json:"filters,omitempty"`
+	Name    string    `json:"name"`
+	Sort    *string   `json:"sort,omitempty"`
+
+	// Team The Team whose list it is, by id or key; omitted for a list across Teams.
+	Team *string `json:"team,omitempty"`
 }
 
 // CreateWorkspaceBody defines model for CreateWorkspaceBody.
@@ -1581,6 +1616,17 @@ type UpdateTeamBody struct {
 	ShipWhenDone     *bool   `json:"ship_when_done,omitempty"`
 }
 
+// UpdateViewBody defines model for UpdateViewBody.
+type UpdateViewBody struct {
+	// Display At most 16 KiB as JSON; replaces the whole object.
+	Display *map[string]interface{} `json:"display,omitempty"`
+	Filters *[]string               `json:"filters,omitempty"`
+	Name    *string                 `json:"name,omitempty"`
+
+	// Sort `""` clears it.
+	Sort *string `json:"sort,omitempty"`
+}
+
 // UpdateWorkspaceBody defines model for UpdateWorkspaceBody.
 type UpdateWorkspaceBody struct {
 	DefaultBranch *string `json:"default_branch,omitempty"`
@@ -1590,6 +1636,37 @@ type UpdateWorkspaceBody struct {
 	Mode *WorkspaceMode `json:"mode,omitempty"`
 	Name *string        `json:"name,omitempty"`
 	Path *string        `json:"path,omitempty"`
+}
+
+// View A saved set of filters, sort and display for a list, kept by one Member for themselves.
+type View struct {
+	CreatedAt time.Time `json:"created_at"`
+
+	// Display How the list is shown, as the client wrote it; the server does not read it.
+	Display *map[string]interface{} `json:"display,omitempty"`
+
+	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	Entity ViewEntity `json:"entity"`
+
+	// Filters The list's `filter` tokens, in the order saved.
+	Filters []string `json:"filters"`
+	ID      string   `json:"id"`
+	Name    string   `json:"name"`
+
+	// Sort How the list is sorted, as the client wrote it; the server does not read it.
+	Sort *string `json:"sort,omitempty"`
+
+	// TeamID The Team whose list it is; absent for a list across Teams.
+	TeamID    *string   `json:"team_id,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ViewEntity The list a View is of; its filters are that list's `filter` tokens.
+type ViewEntity string
+
+// ViewList defines model for ViewList.
+type ViewList struct {
+	Items []View `json:"items"`
 }
 
 // Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
@@ -1641,6 +1718,9 @@ type EvidenceFilename = string
 // EvidenceID defines model for EvidenceID.
 type EvidenceID = string
 
+// FeatureFilter defines model for FeatureFilter.
+type FeatureFilter = []string
+
 // FeatureRef defines model for FeatureRef.
 type FeatureRef = string
 
@@ -1665,6 +1745,9 @@ type SessionID = string
 // SkillRef defines model for SkillRef.
 type SkillRef = string
 
+// TaskFilter defines model for TaskFilter.
+type TaskFilter = []string
+
 // TaskRef defines model for TaskRef.
 type TaskRef = string
 
@@ -1673,6 +1756,9 @@ type TeamRef = string
 
 // TokenID defines model for TokenID.
 type TokenID = string
+
+// ViewID defines model for ViewID.
+type ViewID = string
 
 // WorkspaceRef defines model for WorkspaceRef.
 type WorkspaceRef = string
@@ -1711,6 +1797,19 @@ type ListFeaturesParams struct {
 	Team  *string       `form:"team,omitempty" json:"team,omitempty"`
 	State *FeatureState `form:"state,omitempty" json:"state,omitempty"`
 	Owner *string       `form:"owner,omitempty" json:"owner,omitempty"`
+
+	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
+	// (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
+	// `nin` OR within one).
+	//
+	// Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
+	// · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
+	// `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
+	// ignoring case, over the key, title and description).
+	//
+	// Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
+	// naming the token, as on `listTasks`.
+	Filter *FeatureFilter `form:"filter,omitempty" json:"filter,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1959,6 +2058,41 @@ type ListTasksParams struct {
 	// Status Only Tasks in this Status, by id or name.
 	Status *string `form:"status,omitempty" json:"status,omitempty"`
 
+	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
+	// with the other parameters; `in` and `nin` match any of their values (OR). Each value is
+	// percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
+	// `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
+	// query-encoded as usual. References are ids, not names; an id that names nothing matches
+	// nothing.
+	//
+	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
+	// boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
+	// `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
+	// the earlier first) and `last` (`7d`, `30d` or `90d` before the server's now). A date is
+	// RFC 3339 with its offset, such as `2026-10-07T09:00:00+11:00`. `not` and `nin` also
+	// match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
+	// Member, which need no Skill).
+	//
+	// Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
+	// `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
+	// for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
+	// id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
+	// (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
+	// and blocks an open Task) · `kind` (`work`, `breakdown`, `retro`, or `question`: a Task
+	// aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a live
+	// Claim; `unheld`: none, as `holder:is:none`; `lapsed_24h`: open, unheld, and its latest
+	// Claim lapsed within the last 24 hours; `live_session`: a live Claim with a Heartbeat
+	// timeout held by an agent) · `workspace` (Workspace id the Task names) · `model` (the
+	// live Claim's model label) · `filed_at` · `updated_at` (the latest Activity about the
+	// Task, or when it was filed) · `completed_at` (when it ended done; a dropped Task has
+	// none) · `q` (`contains`, ignoring case, over the key, title and description).
+	//
+	// Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
+	// An unknown field, an operator the field does not take, the wrong number of values or a
+	// value the field cannot hold is refused with `invalid`, naming the token. At most 50
+	// `filter`s of at most 100 values each.
+	Filter *TaskFilter `form:"filter,omitempty" json:"filter,omitempty"`
+
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
@@ -2122,6 +2256,36 @@ type RevokeTokenParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListViewsParams defines parameters for ListViews.
+type ListViewsParams struct {
+	// Entity Only Views of this list.
+	Entity *ViewEntity `form:"entity,omitempty" json:"entity,omitempty"`
+
+	// Team Only Views of this Team's list, by id or key.
+	Team *string `form:"team,omitempty" json:"team,omitempty"`
+}
+
+// CreateViewParams defines parameters for CreateView.
+type CreateViewParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteViewParams defines parameters for DeleteView.
+type DeleteViewParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateViewParams defines parameters for UpdateView.
+type UpdateViewParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateWorkspaceParams defines parameters for CreateWorkspace.
 type CreateWorkspaceParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2217,6 +2381,12 @@ type CreateTeamJSONRequestBody = CreateTeamBody
 
 // UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
 type UpdateTeamJSONRequestBody = UpdateTeamBody
+
+// CreateViewJSONRequestBody defines body for CreateView for application/json ContentType.
+type CreateViewJSONRequestBody = CreateViewBody
+
+// UpdateViewJSONRequestBody defines body for UpdateView for application/json ContentType.
+type UpdateViewJSONRequestBody = UpdateViewBody
 
 // CreateWorkspaceJSONRequestBody defines body for CreateWorkspace for application/json ContentType.
 type CreateWorkspaceJSONRequestBody = CreateWorkspaceBody
@@ -2339,7 +2509,8 @@ type ClientInterface interface {
 
 	// ListFeatures List Features
 	//
-	// Ordered by Team, then Rank.
+	// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
+	// with the others.
 	//
 	// Corresponds with GET /v1/features (the `ListFeatures` operationId).
 	ListFeatures(ctx context.Context, params *ListFeaturesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2844,7 +3015,8 @@ type ClientInterface interface {
 
 	// ListTasks List Tasks
 	//
-	// Ordered by Feature Rank, then by how long each Task has waited.
+	// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
+	// narrows the list, `filter` together with the others.
 	//
 	// Corresponds with GET /v1/tasks (the `ListTasks` operationId).
 	ListTasks(ctx context.Context, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3285,6 +3457,67 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tokens/{token}/revoke (the `RevokeToken` operationId).
 	RevokeToken(ctx context.Context, token TokenID, params *RevokeTokenParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListViews List the caller's Views
+	//
+	// A View is a saved set of filters, sort and display for a list, kept by one Member for
+	// themselves; nobody else, an admin included, sees or changes it. Oldest first.
+	//
+	// Corresponds with GET /v1/views (the `ListViews` operationId).
+	ListViews(ctx context.Context, params *ListViewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateViewWithBody Save a View
+	//
+	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+	// as the list checks them. A View is a Member's preference, not the record: saving,
+	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/views (the `CreateView` operationId).
+	CreateViewWithBody(ctx context.Context, params *CreateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateView Save a View
+	//
+	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+	// as the list checks them. A View is a Member's preference, not the record: saving,
+	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/views (the `CreateView` operationId).
+	CreateView(ctx context.Context, params *CreateViewParams, body CreateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteView Delete one of the caller's Views
+	//
+	// Errors: `not_found` (no View of the caller's with that id).
+	//
+	// Corresponds with DELETE /v1/views/{view} (the `DeleteView` operationId).
+	DeleteView(ctx context.Context, view ViewID, params *DeleteViewParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateViewWithBody Change one of the caller's Views
+	//
+	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// caller's with that id), `conflict` (name taken), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+	UpdateViewWithBody(ctx context.Context, view ViewID, params *UpdateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateView Change one of the caller's Views
+	//
+	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// caller's with that id), `conflict` (name taken), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+	UpdateView(ctx context.Context, view ViewID, params *UpdateViewParams, body UpdateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListWorkspaces List the Install's Workspaces
 	//
 	// Corresponds with GET /v1/workspaces (the `ListWorkspaces` operationId).
@@ -3425,7 +3658,8 @@ func (c *Client) DownloadEvidence(ctx context.Context, evidence EvidenceID, reqE
 
 // ListFeatures List Features
 //
-// Ordered by Team, then Rank.
+// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
+// with the others.
 //
 // Corresponds with GET /v1/features (the `ListFeatures` operationId).
 func (c *Client) ListFeatures(ctx context.Context, params *ListFeaturesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4470,7 +4704,8 @@ func (c *Client) SetStatuses(ctx context.Context, params *SetStatusesParams, bod
 
 // ListTasks List Tasks
 //
-// Ordered by Feature Rank, then by how long each Task has waited.
+// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
+// narrows the list, `filter` together with the others.
 //
 // Corresponds with GET /v1/tasks (the `ListTasks` operationId).
 func (c *Client) ListTasks(ctx context.Context, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5311,6 +5546,127 @@ func (c *Client) RevokeToken(ctx context.Context, token TokenID, params *RevokeT
 	return c.Client.Do(req)
 }
 
+// ListViews List the caller's Views
+//
+// A View is a saved set of filters, sort and display for a list, kept by one Member for
+// themselves; nobody else, an admin included, sees or changes it. Oldest first.
+//
+// Corresponds with GET /v1/views (the `ListViews` operationId).
+func (c *Client) ListViews(ctx context.Context, params *ListViewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListViewsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateViewWithBody Save a View
+//
+// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+// as the list checks them. A View is a Member's preference, not the record: saving,
+// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/views (the `CreateView` operationId).
+func (c *Client) CreateViewWithBody(ctx context.Context, params *CreateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateViewRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateView Save a View
+//
+// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+// as the list checks them. A View is a Member's preference, not the record: saving,
+// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/views (the `CreateView` operationId).
+func (c *Client) CreateView(ctx context.Context, params *CreateViewParams, body CreateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateViewRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteView Delete one of the caller's Views
+//
+// Errors: `not_found` (no View of the caller's with that id).
+//
+// Corresponds with DELETE /v1/views/{view} (the `DeleteView` operationId).
+func (c *Client) DeleteView(ctx context.Context, view ViewID, params *DeleteViewParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteViewRequest(c.Server, view, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateViewWithBody Change one of the caller's Views
+//
+// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// caller's with that id), `conflict` (name taken), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+func (c *Client) UpdateViewWithBody(ctx context.Context, view ViewID, params *UpdateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateViewRequestWithBody(c.Server, view, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateView Change one of the caller's Views
+//
+// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// caller's with that id), `conflict` (name taken), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+func (c *Client) UpdateView(ctx context.Context, view ViewID, params *UpdateViewParams, body UpdateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateViewRequest(c.Server, view, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListWorkspaces List the Install's Workspaces
 //
 // Corresponds with GET /v1/workspaces (the `ListWorkspaces` operationId).
@@ -5735,6 +6091,18 @@ func NewListFeaturesRequest(server string, params *ListFeaturesParams) (*http.Re
 		if params.Owner != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "owner", *params.Owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter", *params.Filter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7996,6 +8364,18 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 
 		}
 
+		if params.Filter != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter", *params.Filter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -9426,6 +9806,238 @@ func NewRevokeTokenRequest(server string, token TokenID, params *RevokeTokenPara
 	return req, nil
 }
 
+// NewListViewsRequest constructs an http.Request for the ListViews method
+func NewListViewsRequest(server string, params *ListViewsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/views")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Entity != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "entity", *params.Entity, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Team != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateViewRequest calls the generic CreateView builder with application/json body
+func NewCreateViewRequest(server string, params *CreateViewParams, body CreateViewJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateViewRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateViewRequestWithBody constructs an http.Request for the CreateView method, with any body, and a specified content type
+func NewCreateViewRequestWithBody(server string, params *CreateViewParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/views")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteViewRequest constructs an http.Request for the DeleteView method
+func NewDeleteViewRequest(server string, view ViewID, params *DeleteViewParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "view", view, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/views/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUpdateViewRequest calls the generic UpdateView builder with application/json body
+func NewUpdateViewRequest(server string, view ViewID, params *UpdateViewParams, body UpdateViewJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateViewRequestWithBody(server, view, params, "application/json", bodyReader)
+}
+
+// NewUpdateViewRequestWithBody constructs an http.Request for the UpdateView method, with any body, and a specified content type
+func NewUpdateViewRequestWithBody(server string, view ViewID, params *UpdateViewParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "view", view, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/views/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListWorkspacesRequest constructs an http.Request for the ListWorkspaces method
 func NewListWorkspacesRequest(server string) (*http.Request, error) {
 	var err error
@@ -9712,7 +10324,8 @@ type ClientWithResponsesInterface interface {
 
 	// ListFeaturesWithResponse List Features
 	//
-	// Ordered by Team, then Rank.
+	// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
+	// with the others.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10279,7 +10892,8 @@ type ClientWithResponsesInterface interface {
 
 	// ListTasksWithResponse List Tasks
 	//
-	// Ordered by Feature Rank, then by how long each Task has waited.
+	// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
+	// narrows the list, `filter` together with the others.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10741,6 +11355,71 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tokens/{token}/revoke (the `RevokeToken` operationId).
 	RevokeTokenWithResponse(ctx context.Context, token TokenID, params *RevokeTokenParams, reqEditors ...RequestEditorFn) (*RevokeTokenResponse, error)
+
+	// ListViewsWithResponse List the caller's Views
+	//
+	// A View is a saved set of filters, sort and display for a list, kept by one Member for
+	// themselves; nobody else, an admin included, sees or changes it. Oldest first.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/views (the `ListViews` operationId).
+	ListViewsWithResponse(ctx context.Context, params *ListViewsParams, reqEditors ...RequestEditorFn) (*ListViewsResponse, error)
+
+	// CreateViewWithBodyWithResponse Save a View
+	//
+	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+	// as the list checks them. A View is a Member's preference, not the record: saving,
+	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/views (the `CreateView` operationId).
+	CreateViewWithBodyWithResponse(ctx context.Context, params *CreateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateViewResponse, error)
+
+	// CreateViewWithResponse Save a View
+	//
+	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+	// as the list checks them. A View is a Member's preference, not the record: saving,
+	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/views (the `CreateView` operationId).
+	CreateViewWithResponse(ctx context.Context, params *CreateViewParams, body CreateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateViewResponse, error)
+
+	// DeleteViewWithResponse Delete one of the caller's Views
+	//
+	// Errors: `not_found` (no View of the caller's with that id).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/views/{view} (the `DeleteView` operationId).
+	DeleteViewWithResponse(ctx context.Context, view ViewID, params *DeleteViewParams, reqEditors ...RequestEditorFn) (*DeleteViewResponse, error)
+
+	// UpdateViewWithBodyWithResponse Change one of the caller's Views
+	//
+	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// caller's with that id), `conflict` (name taken), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+	UpdateViewWithBodyWithResponse(ctx context.Context, view ViewID, params *UpdateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateViewResponse, error)
+
+	// UpdateViewWithResponse Change one of the caller's Views
+	//
+	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// caller's with that id), `conflict` (name taken), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+	UpdateViewWithResponse(ctx context.Context, view ViewID, params *UpdateViewParams, body UpdateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateViewResponse, error)
 
 	// ListWorkspacesWithResponse List the Install's Workspaces
 	//
@@ -14213,6 +14892,191 @@ func (r RevokeTokenResponse) ContentType() string {
 	return ""
 }
 
+type ListViewsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ViewList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListViewsResponse) GetJSON200() *ViewList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListViewsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListViewsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListViewsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListViewsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListViewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateViewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *View
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateViewResponse) GetJSON201() *View {
+	return r.JSON201
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateViewResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateViewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateViewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateViewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateViewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteViewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteViewResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteViewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteViewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteViewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteViewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateViewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *View
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateViewResponse) GetJSON200() *View {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateViewResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateViewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateViewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateViewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateViewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListWorkspacesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14471,7 +15335,8 @@ func (c *ClientWithResponses) DownloadEvidenceWithResponse(ctx context.Context, 
 
 // ListFeaturesWithResponse List Features
 //
-// Ordered by Team, then Rank.
+// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
+// with the others.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15362,7 +16227,8 @@ func (c *ClientWithResponses) SetStatusesWithResponse(ctx context.Context, param
 
 // ListTasksWithResponse List Tasks
 //
-// Ordered by Feature Rank, then by how long each Task has waited.
+// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
+// narrows the list, `filter` together with the others.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16063,6 +16929,107 @@ func (c *ClientWithResponses) RevokeTokenWithResponse(ctx context.Context, token
 		return nil, err
 	}
 	return ParseRevokeTokenResponse(rsp)
+}
+
+// ListViewsWithResponse List the caller's Views
+//
+// A View is a saved set of filters, sort and display for a list, kept by one Member for
+// themselves; nobody else, an admin included, sees or changes it. Oldest first.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/views (the `ListViews` operationId).
+func (c *ClientWithResponses) ListViewsWithResponse(ctx context.Context, params *ListViewsParams, reqEditors ...RequestEditorFn) (*ListViewsResponse, error) {
+	rsp, err := c.ListViews(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListViewsResponse(rsp)
+}
+
+// CreateViewWithBodyWithResponse Save a View
+//
+// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+// as the list checks them. A View is a Member's preference, not the record: saving,
+// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/views (the `CreateView` operationId).
+func (c *ClientWithResponses) CreateViewWithBodyWithResponse(ctx context.Context, params *CreateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateViewResponse, error) {
+	rsp, err := c.CreateViewWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateViewResponse(rsp)
+}
+
+// CreateViewWithResponse Save a View
+//
+// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+// as the list checks them. A View is a Member's preference, not the record: saving,
+// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/views (the `CreateView` operationId).
+func (c *ClientWithResponses) CreateViewWithResponse(ctx context.Context, params *CreateViewParams, body CreateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateViewResponse, error) {
+	rsp, err := c.CreateView(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateViewResponse(rsp)
+}
+
+// DeleteViewWithResponse Delete one of the caller's Views
+//
+// Errors: `not_found` (no View of the caller's with that id).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/views/{view} (the `DeleteView` operationId).
+func (c *ClientWithResponses) DeleteViewWithResponse(ctx context.Context, view ViewID, params *DeleteViewParams, reqEditors ...RequestEditorFn) (*DeleteViewResponse, error) {
+	rsp, err := c.DeleteView(ctx, view, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteViewResponse(rsp)
+}
+
+// UpdateViewWithBodyWithResponse Change one of the caller's Views
+//
+// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// caller's with that id), `conflict` (name taken), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+func (c *ClientWithResponses) UpdateViewWithBodyWithResponse(ctx context.Context, view ViewID, params *UpdateViewParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateViewResponse, error) {
+	rsp, err := c.UpdateViewWithBody(ctx, view, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateViewResponse(rsp)
+}
+
+// UpdateViewWithResponse Change one of the caller's Views
+//
+// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// caller's with that id), `conflict` (name taken), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/views/{view} (the `UpdateView` operationId).
+func (c *ClientWithResponses) UpdateViewWithResponse(ctx context.Context, view ViewID, params *UpdateViewParams, body UpdateViewJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateViewResponse, error) {
+	rsp, err := c.UpdateView(ctx, view, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateViewResponse(rsp)
 }
 
 // ListWorkspacesWithResponse List the Install's Workspaces
@@ -18534,6 +19501,134 @@ func ParseRevokeTokenResponse(rsp *http.Response) (*RevokeTokenResponse, error) 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Token
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListViewsResponse parses an HTTP response from a ListViewsWithResponse call
+func ParseListViewsResponse(rsp *http.Response) (*ListViewsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListViewsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ViewList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateViewResponse parses an HTTP response from a CreateViewWithResponse call
+func ParseCreateViewResponse(rsp *http.Response) (*CreateViewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateViewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest View
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteViewResponse parses an HTTP response from a DeleteViewWithResponse call
+func ParseDeleteViewResponse(rsp *http.Response) (*DeleteViewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteViewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateViewResponse parses an HTTP response from a UpdateViewWithResponse call
+func ParseUpdateViewResponse(rsp *http.Response) (*UpdateViewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateViewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest View
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

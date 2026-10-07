@@ -29,6 +29,9 @@ func (s *Server) FileFeature(w http.ResponseWriter, r *http.Request, params gen.
 
 func (s *Server) ListFeatures(w http.ResponseWriter, r *http.Request, params gen.ListFeaturesParams) {
 	ff := core.FeatureFilter{Team: params.Team, State: (*string)(params.State), Owner: params.Owner}
+	if params.Filter != nil {
+		ff.Filters = *params.Filter
+	}
 	if params.Limit != nil {
 		ff.Limit = *params.Limit
 	}
@@ -65,6 +68,9 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.ListTasksParams) {
 	tf := core.TaskFilter{Feature: params.Feature, Team: params.Team, State: (*string)(params.State), Skill: params.Skill,
 		AimedAt: params.AimedAt, Holder: params.Holder, Status: params.Status}
+	if params.Filter != nil {
+		tf.Filters = *params.Filter
+	}
 	if params.Limit != nil {
 		tf.Limit = *params.Limit
 	}

@@ -616,7 +616,8 @@ export interface paths {
         };
         /**
          * List Features
-         * @description Ordered by Team, then Rank.
+         * @description Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
+         *     with the others.
          */
         get: operations["listFeatures"];
         put?: never;
@@ -795,7 +796,8 @@ export interface paths {
         };
         /**
          * List Tasks
-         * @description Ordered by Feature Rank, then by how long each Task has waited.
+         * @description Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
+         *     narrows the list, `filter` together with the others.
          */
         get: operations["listTasks"];
         put?: never;
@@ -1369,6 +1371,60 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the caller's Views
+         * @description A View is a saved set of filters, sort and display for a list, kept by one Member for
+         *     themselves; nobody else, an admin included, sees or changes it. Oldest first.
+         */
+        get: operations["listViews"];
+        put?: never;
+        /**
+         * Save a View
+         * @description `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
+         *     as the list checks them. A View is a Member's preference, not the record: saving,
+         *     changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
+         *     of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+         */
+        post: operations["createView"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/views/{view}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete one of the caller's Views
+         * @description Errors: `not_found` (no View of the caller's with that id).
+         */
+        delete: operations["deleteView"];
+        options?: never;
+        head?: never;
+        /**
+         * Change one of the caller's Views
+         * @description Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
+         *     View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+         *     caller's with that id), `conflict` (name taken), `invalid`.
+         */
+        patch: operations["updateView"];
         trace?: never;
     };
 }
@@ -2193,6 +2249,57 @@ export interface components {
             /** @description Whether a Runner is attached to this server; false with no sessions when none is. */
             runner: boolean;
         };
+        /**
+         * @description The list a View is of; its filters are that list's `filter` tokens.
+         * @enum {string}
+         */
+        ViewEntity: "tasks" | "features";
+        /** @description A saved set of filters, sort and display for a list, kept by one Member for themselves. */
+        View: {
+            id: string;
+            entity: components["schemas"]["ViewEntity"];
+            /** @description The Team whose list it is; absent for a list across Teams. */
+            team_id?: string;
+            name: string;
+            /** @description The list's `filter` tokens, in the order saved. */
+            filters: string[];
+            /** @description How the list is sorted, as the client wrote it; the server does not read it. */
+            sort?: string;
+            /** @description How the list is shown, as the client wrote it; the server does not read it. */
+            display?: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ViewList: {
+            items: components["schemas"]["View"][];
+        };
+        CreateViewBody: {
+            entity: components["schemas"]["ViewEntity"];
+            /** @description The Team whose list it is, by id or key; omitted for a list across Teams. */
+            team?: string;
+            name: string;
+            /** @description The list's `filter` tokens; none when omitted. */
+            filters?: string[];
+            sort?: string;
+            /** @description At most 16 KiB as JSON. */
+            display?: {
+                [key: string]: unknown;
+            };
+        };
+        UpdateViewBody: {
+            name?: string;
+            filters?: string[];
+            /** @description `""` clears it. */
+            sort?: string;
+            /** @description At most 16 KiB as JSON; replaces the whole object. */
+            display?: {
+                [key: string]: unknown;
+            };
+        };
     };
     responses: {
         /** @description The request failed. */
@@ -2237,6 +2344,57 @@ export interface components {
         Limit: number;
         /** @description The `next_cursor` of the previous page. */
         Cursor: string;
+        /**
+         * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
+         *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
+         *     percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
+         *     `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
+         *     query-encoded as usual. References are ids, not names; an id that names nothing matches
+         *     nothing.
+         *
+         *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
+         *     boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
+         *     `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
+         *     the earlier first) and `last` (`7d`, `30d` or `90d` before the server's now). A date is
+         *     RFC 3339 with its offset, such as `2026-10-07T09:00:00+11:00`. `not` and `nin` also
+         *     match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
+         *     Member, which need no Skill).
+         *
+         *     Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
+         *     `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
+         *     for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
+         *     id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
+         *     (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
+         *     and blocks an open Task) · `kind` (`work`, `breakdown`, `retro`, or `question`: a Task
+         *     aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a live
+         *     Claim; `unheld`: none, as `holder:is:none`; `lapsed_24h`: open, unheld, and its latest
+         *     Claim lapsed within the last 24 hours; `live_session`: a live Claim with a Heartbeat
+         *     timeout held by an agent) · `workspace` (Workspace id the Task names) · `model` (the
+         *     live Claim's model label) · `filed_at` · `updated_at` (the latest Activity about the
+         *     Task, or when it was filed) · `completed_at` (when it ended done; a dropped Task has
+         *     none) · `q` (`contains`, ignoring case, over the key, title and description).
+         *
+         *     Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
+         *     An unknown field, an operator the field does not take, the wrong number of values or a
+         *     value the field cannot hold is refused with `invalid`, naming the token. At most 50
+         *     `filter`s of at most 100 values each.
+         */
+        TaskFilter: string[];
+        /**
+         * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
+         *     (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
+         *     `nin` OR within one).
+         *
+         *     Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
+         *     · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
+         *     `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
+         *     ignoring case, over the key, title and description).
+         *
+         *     Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
+         *     naming the token, as on `listTasks`.
+         */
+        FeatureFilter: string[];
+        ViewID: string;
     };
     requestBodies: never;
     headers: never;
@@ -3407,6 +3565,20 @@ export interface operations {
                 team?: string;
                 state?: components["schemas"]["FeatureState"];
                 owner?: string;
+                /**
+                 * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
+                 *     (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
+                 *     `nin` OR within one).
+                 *
+                 *     Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
+                 *     · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
+                 *     `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
+                 *     ignoring case, over the key, title and description).
+                 *
+                 *     Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
+                 *     naming the token, as on `listTasks`.
+                 */
+                filter?: components["parameters"]["FeatureFilter"];
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
                 /** @description The `next_cursor` of the previous page. */
@@ -3694,6 +3866,42 @@ export interface operations {
                 holder?: string;
                 /** @description Only Tasks in this Status, by id or name. */
                 status?: string;
+                /**
+                 * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
+                 *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
+                 *     percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
+                 *     `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
+                 *     query-encoded as usual. References are ids, not names; an id that names nothing matches
+                 *     nothing.
+                 *
+                 *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
+                 *     boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
+                 *     `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
+                 *     the earlier first) and `last` (`7d`, `30d` or `90d` before the server's now). A date is
+                 *     RFC 3339 with its offset, such as `2026-10-07T09:00:00+11:00`. `not` and `nin` also
+                 *     match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
+                 *     Member, which need no Skill).
+                 *
+                 *     Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
+                 *     `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
+                 *     for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
+                 *     id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
+                 *     (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
+                 *     and blocks an open Task) · `kind` (`work`, `breakdown`, `retro`, or `question`: a Task
+                 *     aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a live
+                 *     Claim; `unheld`: none, as `holder:is:none`; `lapsed_24h`: open, unheld, and its latest
+                 *     Claim lapsed within the last 24 hours; `live_session`: a live Claim with a Heartbeat
+                 *     timeout held by an agent) · `workspace` (Workspace id the Task names) · `model` (the
+                 *     live Claim's model label) · `filed_at` · `updated_at` (the latest Activity about the
+                 *     Task, or when it was filed) · `completed_at` (when it ended done; a dropped Task has
+                 *     none) · `q` (`contains`, ignoring case, over the key, title and description).
+                 *
+                 *     Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
+                 *     An unknown field, an operator the field does not take, the wrong number of values or a
+                 *     value the field cannot hold is refused with `invalid`, naming the token. At most 50
+                 *     `filter`s of at most 100 values each.
+                 */
+                filter?: components["parameters"]["TaskFilter"];
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
                 /** @description The `next_cursor` of the previous page. */
@@ -4511,6 +4719,123 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listViews: {
+        parameters: {
+            query?: {
+                /** @description Only Views of this list. */
+                entity?: components["schemas"]["ViewEntity"];
+                /** @description Only Views of this Team's list, by id or key. */
+                team?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's Views. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ViewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createView: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateViewBody"];
+            };
+        };
+        responses: {
+            /** @description The new View. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteView: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                view: components["parameters"]["ViewID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The View is gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateView: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                view: components["parameters"]["ViewID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateViewBody"];
+            };
+        };
+        responses: {
+            /** @description The View. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["View"];
+                };
             };
             default: components["responses"]["Error"];
         };

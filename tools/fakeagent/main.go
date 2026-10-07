@@ -182,7 +182,6 @@ var stdin = bufio.NewScanner(os.Stdin)
 //	        (~/.claude.json, or in $CLAUDE_CONFIG_DIR) trusts the working directory or the
 //	        repository whose worktree it is, then the Bypass Permissions mode warning unless their
 //	        settings.json (~/.claude/settings.json, or in $CLAUDE_CONFIG_DIR) has accepted it
-//	always  both, whatever the configuration says
 //	trust   the folder-trust dialog, whatever the configuration says
 //	again   the folder-trust dialog, and once it is accepted the same again
 //	late    nothing now; the agent prints the folder-trust dialog after its first turn (lateDialog)
@@ -233,8 +232,6 @@ func firstRun(mode string) error {
 		if !settings.Accepted {
 			ask = append(ask, bypass)
 		}
-	case "always":
-		ask = []string{trust, bypass}
 	case "trust":
 		ask = []string{trust}
 	case "again":
@@ -318,7 +315,7 @@ func (a *agent) read() error {
 	for _, m := range checkout.FindAllStringSubmatch(a.prompt, -1) {
 		a.dirs = append(a.dirs, strings.TrimSuffix(m[1], ","))
 	}
-	for _, want := range []string{"## Working rules", "## How this session ends", "darkory complete " + a.key} {
+	for _, want := range []string{"## Working rules", "## How this session ends", "darkory handover " + a.key} {
 		if !strings.Contains(a.prompt, want) {
 			return fmt.Errorf("the prompt does not say %q", want)
 		}

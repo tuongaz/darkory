@@ -36,6 +36,17 @@ func TestStatusCommands(t *testing.T) {
 		if !strings.Contains(out, "WEB-3     open          Backlog      build          Later") || strings.Count(out, "\n") != 1 {
 			t.Fatalf("tasks in the Backlog:\n%s", out)
 		}
+		out = bob.ok("tasks", "--filter", "status_kind:is:backlog", "--filter", "kind:in:work,question")
+		if !strings.Contains(out, "WEB-3     open          Backlog      build          Later") || strings.Count(out, "\n") != 1 {
+			t.Fatalf("tasks --filter in the Backlog:\n%s", out)
+		}
+		if res := bob.fails(ExitFailed, "tasks", "--filter", "status_kind:is:doing"); !strings.Contains(res.stderr, `"status_kind:is:doing"`) {
+			t.Fatalf("tasks --filter with a bad kind: %s", res.stderr)
+		}
+		out = bob.ok("feature", "list", "--filter", "state:is:open", "--filter", "q:contains:SEARCH")
+		if !strings.Contains(out, "WEB-1") || strings.Count(out, "\n") != 1 {
+			t.Fatalf("feature list --filter:\n%s", out)
+		}
 		if res := bob.fails(ExitNothing, "next", "--wait", "0", "--timeout", "0"); res.stdout != "" {
 			t.Fatalf("next offered the Backlog: %s", res.stdout)
 		}

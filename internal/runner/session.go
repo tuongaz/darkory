@@ -46,16 +46,15 @@ type session struct {
 	// progress is the file the agent writes as it works; empty when there is none to read.
 	progress, claudeDir string
 	transcript          bool
-	// claude says the command is Claude Code, started in folder (its paths); answered are the
-	// first-run dialogs the runner has accepted in the session (firstRun), and turned says the
+	// claude says the command is Claude Code, started in folder (its paths); answered says the
+	// runner has accepted its one first-run dialog of the session (firstRun), and turned that the
 	// agent's model has answered; dialog names a dialog on screen left to a person, and toldJoin
 	// that a Note says so.
-	claude   bool
-	folder   []string
-	answered map[string]bool
-	turned   bool
-	dialog   string
-	toldJoin bool
+	claude           bool
+	folder           []string
+	answered, turned bool
+	dialog           string
+	toldJoin         bool
 
 	ended chan string
 	cmds  chan sessionCmd
@@ -330,7 +329,7 @@ func (s *session) prompt(ctx context.Context, f *FeatureInfo, checkouts []Checko
 		if err != nil {
 			return Prompt{}, err
 		}
-		p.Task.Skill = sk.Skill.Name
+		p.Task.Skill, p.Task.Review = sk.Skill.Name, s.r.isReview(ctx, s.rec, sk.Skill)
 		texts := []*client.SkillDetail{sk}
 		if sk.Skill.Kind == client.Company && sk.Skill.BaseSkillID != nil {
 			if base, err := s.rec.Skill(ctx, *sk.Skill.BaseSkillID); err == nil {
@@ -474,10 +473,10 @@ func (s *session) check(ctx context.Context) bool {
 
 // firstRun looks at the screen of a Claude Code session in tmux (Claude Code asks only on a
 // terminal) for one of its first-run dialogs, which a repository never opened in Claude Code
-// meets. The runner accepts each such dialog once in a session, and only while the agent's model
-// has not answered yet: Claude Code asks before any model turn, so after one nothing the agent
-// prints can make the runner press a key. It notes each answer. A dialog it may not answer is
-// left to a person: the session waits, with a Note saying to join it.
+// meets. The runner accepts one such dialog per session, and only while the agent's model has not
+// answered yet: Claude Code asks before any model turn, so after one nothing the agent prints can
+// make the runner press a key. It notes the answer. A dialog it may not answer is left to a
+// person: the session waits, with a Note saying to join it.
 func (s *session) firstRun(ctx context.Context) {
 	a, ok := s.proc.(Answerer)
 	if !s.claude || !ok {
@@ -489,11 +488,8 @@ func (s *session) firstRun(ctx context.Context) {
 		return
 	}
 	turned := s.agentTurned()
-	if !turned && !s.answered[p.Name] {
-		if s.answered == nil {
-			s.answered = map[string]bool{}
-		}
-		s.answered[p.Name] = true
+	if !turned && !s.answered {
+		s.answered = true
 		s.log.Info("Claude Code asks its first-run question; accepting it", "prompt", p.Name)
 		if err := a.AcceptFirstRunPrompt(); err != nil {
 			s.log.Warn("answering Claude Code's first-run question", "err", err)
@@ -512,7 +508,8 @@ func (s *session) firstRun(ctx context.Context) {
 	s.log.Warn("the session shows a Claude Code dialog the runner does not answer; it waits for a person", "prompt", p.Name, "after_first_turn", turned)
 	note := fmt.Sprintf("Claude Code shows a first-run dialog after the agent's first turn; a person can answer it with darkory join %s.", s.key)
 	if !turned {
-		note = fmt.Sprintf("Claude Code shows %s again after the runner accepted it; a person can answer it with darkory join %s.", p.Name, s.key)
+		note = fmt.Sprintf("Claude Code shows %s, and the runner accepts one first-run dialog a session; a person can answer it "+
+			"with darkory join %s.", p.Name, s.key)
 	}
 	if err := s.rec.Note(ctx, s.key, note); err != nil && ctx.Err() == nil {
 		s.log.Warn("noting the dialog left to a person", "err", err)

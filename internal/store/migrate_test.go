@@ -457,8 +457,8 @@ VALUES ('t', 'o', 'f', 'WEB-2', 'work', 'T', 'open', 'm', 0, 0, 'st')`)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !slices.Equal(res.Applied, []int{4}) {
-				t.Fatalf("applied %v, want [4]", res.Applied)
+			if len(res.Applied) == 0 || res.Applied[0] != 4 {
+				t.Fatalf("applied %v, want 4 first", res.Applied)
 			}
 
 			var teamDefault sql.NullString
@@ -485,6 +485,60 @@ VALUES ('t', 'o', 'f', 'WEB-2', 'work', 'T', 'open', 'm', 0, 0, 'st')`)
 				`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws3', 'o', 'svn', 'svn', '/src/x', 'plain', 'main', 0)`,
 				`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws4', 'o', 'pr', 'git', '/src/x', 'merge_queue', 'main', 0)`,
 				`INSERT INTO task_workspaces (org_id, task_id, workspace_id, position) VALUES ('o', 't', 'ws', 2)`,
+			} {
+				if err := exec(q); err == nil {
+					t.Errorf("accepted: %s", q)
+				}
+			}
+		})
+	}
+}
+
+// Migration 0005 adds Views to a database written under 0004: what is there keeps its rows, and
+// the new table takes a View of either list, with or without a Team, under its checks.
+func TestMigration5AddsViews(t *testing.T) {
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			migrateTo(t, s, 4)
+			exec := func(q string, args ...any) error {
+				return s.WriteNoSeq(ctx, func(tx store.Tx) error {
+					_, err := tx.Exec(ctx, q, args...)
+					return err
+				})
+			}
+			must := func(q string, args ...any) {
+				t.Helper()
+				if err := exec(q, args...); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			must(`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`)
+			must(`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`)
+			must(`INSERT INTO teams (id, org_id, key_prefix, name, created_at) VALUES ('tm', 'o', 'WEB', 'Web', 0)`)
+
+			res, err := s.Migrate(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(res.Applied) == 0 || res.Applied[0] != 5 {
+				t.Fatalf("applied %v, want 5 first", res.Applied)
+			}
+			var teams int
+			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM teams WHERE id = 'tm'`).Scan(&teams); err != nil || teams != 1 {
+				t.Fatalf("the Team after the migration: %d %v", teams, err)
+			}
+
+			must(`INSERT INTO views (id, org_id, member_id, entity, team_id, name, filters, sort, display, created_at, updated_at)
+VALUES ('v1', 'o', 'm', 'tasks', 'tm', 'Mine', '["holder:is:none"]', 'rank', '{"layout":"board"}', 0, 0)`)
+			must(`INSERT INTO views (id, org_id, member_id, entity, name, filters, created_at, updated_at)
+VALUES ('v2', 'o', 'm', 'features', 'Mine', '[]', 0, 0)`)
+			for _, q := range []string{
+				`INSERT INTO views (id, org_id, member_id, entity, name, filters, created_at, updated_at) VALUES ('v3', 'o', 'm', 'members', 'x', '[]', 0, 0)`,
+				`INSERT INTO views (id, org_id, member_id, entity, name, created_at, updated_at) VALUES ('v4', 'o', 'm', 'tasks', 'x', 0, 0)`,
+				`INSERT INTO views (id, org_id, member_id, entity, team_id, name, filters, created_at, updated_at) VALUES ('v5', 'o', 'm', 'tasks', 'nope', 'x', '[]', 0, 0)`,
+				`INSERT INTO views (id, org_id, member_id, entity, name, filters, created_at, updated_at) VALUES ('v6', 'o', 'nobody', 'tasks', 'x', '[]', 0, 0)`,
 			} {
 				if err := exec(q); err == nil {
 					t.Errorf("accepted: %s", q)
