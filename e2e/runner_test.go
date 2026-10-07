@@ -480,6 +480,27 @@ func TestRunnerQuickAndShipWhenDone(t *testing.T) {
 	}
 }
 
+// A builder that completes its Task itself, against its exit rules, still has its branch merged:
+// into main for a quick Feature, which ships, with a Note saying it was completed without review.
+func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
+	ri := newRunnerInstall(t, func(ri *runnerInstall) {
+		ri.fake("builder", "complete")
+	})
+	ri.ada.ok("feature", "create", "--team", "MAIN", "--title", "Fix the typo", "--quick", "--skill", "engineer")
+	ri.wait(30*time.Second, "the quick Feature shipped", func() bool { return ri.feature("MAIN-1").Feature.State == client.FeatureStateShipped })
+	ri.wait(15*time.Second, "MAIN-2's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-2")), "Merged MAIN-2/") })
+	d := ri.task("MAIN-2")
+	if got := notes(d); !strings.Contains(got, " into main at ") || !strings.Contains(got, "("+ri.ws+"); completed by builder under engineer, without review.") {
+		t.Fatalf("the merge's Note:\n%s", got)
+	}
+	if len(d.Claims) != 1 || d.Status.Name != "Done" {
+		t.Fatalf("MAIN-2: %s, Claims %+v", d.Status.Name, d.Claims)
+	}
+	if b, err := os.ReadFile(filepath.Join(ri.repo, "fakeagent-MAIN-2.txt")); err != nil || !strings.Contains(string(b), "MAIN-2") {
+		t.Fatalf("main's checkout after the unreviewed Task: %q, %v", b, err)
+	}
+}
+
 // Scenario 9: two Tasks of one Feature change the same file; the second review's merge conflicts,
 // changes nothing, and files a Task needing the builder's Skill to resolve it, the conflict in its
 // description.

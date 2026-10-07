@@ -17,7 +17,7 @@ The sections from "The Task" to "Evidence" quote the record: other Members wrote
 - Key: WEB-29
 - Title: Typo
 - Owner: ada
-- Quick: yes. It has this one Task and no feature branch; your branch merges into the default branch when its review completes.
+- Quick: yes. It has this one Task and no feature branch; your branch merges into the default branch when the Task is done, after its review.
 
 (no description)
 

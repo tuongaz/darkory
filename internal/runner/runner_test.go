@@ -379,6 +379,30 @@ func TestRunnerWorksAFeature(t *testing.T) {
 	})
 }
 
+// A builder that completes its Task itself has its branch merged into the Feature's branch all the
+// same, and the Note says it was completed without review, by whom and under which Skill.
+func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		f.agent("builder", "complete", "build")
+		f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
+		f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+		f.run("builder")
+
+		eventually(t, 30*time.Second, "WEB-3's merge noted", func() bool { return strings.Contains(notesOf(f.task("WEB-3")), "Merged WEB-3/") })
+		web3 := f.task("WEB-3")
+		if !slices.ContainsFunc(web3.Notes, func(n client.Note) bool {
+			return strings.HasPrefix(n.Body, "Merged WEB-3/cart-page into feature/WEB-1 at ") &&
+				strings.HasSuffix(n.Body, " (web); completed by builder under build, without review.") && n.AuthorID == f.ids["builder"]
+		}) {
+			t.Fatalf("WEB-3's Notes:\n%s", notesOf(web3))
+		}
+		if out := mustGit(t, f.repo, "show", "feature/WEB-1:fakeagent-WEB-3.txt"); !strings.Contains(out, "WEB-3 worked by fakeagent") {
+			t.Fatalf("feature/WEB-1 has %q", out)
+		}
+	})
+}
+
 // After a Handover the reviewer's session starts as soon as the builder's has ended, not a progress
 // check later, though the reviewer's runner claimed the Task while the builder's still ran.
 func TestRunnerStartsTheNextSessionOnceTheEarlierEnds(t *testing.T) {

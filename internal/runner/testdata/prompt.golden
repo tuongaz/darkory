@@ -27,7 +27,7 @@ Totals at the bottom.
 - Key: WEB-1
 - Title: Checkout
 - Owner: ada
-- Quick: no. Its Tasks' branches merge into feature/WEB-1 when their review completes, and Ship merges that into the default branch.
+- Quick: no. Its Tasks' branches merge into feature/WEB-1 when they are done, after their review, and Ship merges that into the default branch.
 
 People can pay.
 
@@ -104,8 +104,7 @@ In this session the runner does part of what the working rules ask: it pulled th
 3. Write a short Note at each milestone (`darkory note WEB-12 <text>`), so whoever works the Task next has your context.
 4. Attach the log of your tests as Evidence (`darkory attach WEB-12 <file>`).
 5. End the Task yourself, in one of these ways, and then stop:
-   - `darkory complete WEB-12 --note <what you did>` when it is done and no further Skill is needed;
-   - `darkory handover WEB-12 --skill review --status "In review" --note <what to review>` when your part is done and it needs review; a reviewer who wants more work hands it back to the Skill that built it with a Note saying what to fix;
+   - `darkory handover WEB-12 --skill review --status "In review" --note <what to review>` when your part is done. Never `darkory complete` this Task: it needs the Skill build, and whoever builds a Task hands it over to review; its reviewer completes it, and that merges its branch;
    - when you are stuck or unsure, `darkory file --blocks WEB-12 --aim ada --title <your question>`, then stop: the runner releases the Task, and it comes back once the question is answered.
 6. Do not run `next`, `claim`, `heartbeat`, `release` or `session close`, and do not work any other Task: the runner does that.
 

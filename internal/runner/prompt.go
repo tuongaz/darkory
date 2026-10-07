@@ -31,6 +31,8 @@ type Prompt struct {
 // PromptTask is the Task a session works.
 type PromptTask struct {
 	Key, Title, Description, Status, Skill, Kind string
+	// Review says Skill is review, or a company Skill built on it.
+	Review bool
 }
 
 // PromptFeature is the Task's Feature.
@@ -97,9 +99,9 @@ func BuildPrompt(p Prompt) string {
 	w("## Its Feature\n\n")
 	w("- Key: %s\n- Title: %s\n- Owner: %s\n", f.Key, line(f.Title), line(f.Owner))
 	if f.Quick {
-		w("- Quick: yes. It has this one Task and no feature branch; your branch merges into the default branch when its review completes.\n")
+		w("- Quick: yes. It has this one Task and no feature branch; your branch merges into the default branch when the Task is done, after its review.\n")
 	} else {
-		w("- Quick: no. Its Tasks' branches merge into feature/%s when their review completes, and Ship merges that into the default branch.\n", f.Key)
+		w("- Quick: no. Its Tasks' branches merge into feature/%s when they are done, after their review, and Ship merges that into the default branch.\n", f.Key)
 	}
 	w("\n%s\n\n", block(f.Description, "(no description)"))
 
@@ -166,12 +168,27 @@ func BuildPrompt(p Prompt) string {
 	}
 	step("Write a short Note at each milestone (`darkory note %s <text>`), so whoever works the Task next has your context.", t.Key)
 	step("Attach the log of your tests as Evidence (`darkory attach %s <file>`).", t.Key)
-	step("End the Task yourself, in one of these ways, and then stop:\n"+
-		"   - `darkory complete %[1]s --note <what you did>` when it is done and no further Skill is needed;\n"+
-		"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done and it needs review; "+
-		"a reviewer who wants more work hands it back to the Skill that built it with a Note saying what to fix;\n"+
-		"   - when you are stuck or unsure, `darkory file --blocks %[1]s --aim %[2]s --title <your question>`, then stop: "+
-		"the runner releases the Task, and it comes back once the question is answered.", t.Key, line(p.Manager))
+	stuck := "   - when you are stuck or unsure, `darkory file --blocks %[1]s --aim %[2]s --title <your question>`, then stop: " +
+		"the runner releases the Task, and it comes back once the question is answered."
+	switch {
+	case t.Skill != "" && !t.Review && (t.Kind == "" || t.Kind == "work"):
+		// A build Task: its builder never completes it, so its branch is merged after a review.
+		step("End the Task yourself, in one of these ways, and then stop:\n"+
+			"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done. "+
+			"Never `darkory complete` this Task: it needs the Skill %[3]s, and whoever builds a Task hands it over to review; "+
+			"its reviewer completes it, and that merges its branch;\n"+stuck, t.Key, line(p.Manager), line(t.Skill))
+	case t.Review:
+		step("End the Task yourself, in one of these ways, and then stop:\n"+
+			"   - `darkory complete %[1]s --note <what you checked>` when the work passes your review: your Complete merges its branch;\n"+
+			"   - `darkory handover %[1]s --skill <the Skill that built it> --note <what to fix>` when it needs more work;\n"+stuck,
+			t.Key, line(p.Manager))
+	default:
+		step("End the Task yourself, in one of these ways, and then stop:\n"+
+			"   - `darkory complete %[1]s --note <what you did>` when it is done and no further Skill is needed;\n"+
+			"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done and it needs review; "+
+			"a reviewer who wants more work hands it back to the Skill that built it with a Note saying what to fix;\n"+stuck,
+			t.Key, line(p.Manager))
+	}
 	step("Do not run `next`, `claim`, `heartbeat`, `release` or `session close`, and do not work any other Task: the runner does that.")
 	w("\nIf you stop without ending the Task, the runner says so (%q) twice, and then releases the Task with a Note.\n", Nudge)
 	return b.String()
