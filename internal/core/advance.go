@@ -75,7 +75,13 @@ func (s *Service) endWork(ctx context.Context, c *auth.Caller, ref string, outco
 			if review == nil {
 				return nil
 			}
-			return s.whyNotPublished(ctx, c, *review)
+			err := s.whyNotPublished(ctx, c, *review)
+			if codeOf(err) == CodeProposalStale {
+				// Another review published on the same base after the read: read again, and the
+				// next attempt sends the Task back as a stale one is.
+				return nil
+			}
+			return err
 		},
 	})
 	if err != nil {
