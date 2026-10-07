@@ -172,35 +172,11 @@ func TestRunnerUsesThePersonsClaudeCodeConfiguration(t *testing.T) {
 	})
 }
 
-// A repository never opened in Claude Code meets both first-run dialogs: each is accepted once,
-// before the agent's first turn, with a Note, and the Task is done. Claude Code asks only on a
-// terminal, so this runs in tmux.
-func TestRunnerAcceptsEachFirstRunPromptOnce(t *testing.T) {
-	if _, err := exec.LookPath("tmux"); err != nil {
-		t.Skip("no tmux")
-	}
-	f := newFixture(t, storetest.Open(t, store.SQLite))
-	f.timings.Stale = time.Minute
-	f.agent("builder", "complete", "build")
-	f.fakeClaude("builder", "complete", "always")
-	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
-	r := f.runWith("on", "builder")
-	t.Cleanup(func() { killTmux(r.Socket()) })
-
-	eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
-	notes := notesOf(f.task("WEB-3"))
-	for _, want := range []string{"The runner accepted Claude Code's first-run prompt: the folder-trust dialog.",
-		"The runner accepted Claude Code's first-run prompt: the Bypass Permissions mode warning."} {
-		if strings.Count(notes, want) != 1 {
-			t.Fatalf("WEB-3's Notes, wanting %q once:\n%s", want, notes)
-		}
-	}
-}
-
-// The same first-run dialog shown again after the runner accepted it is left to a person: the
-// session waits and a Note says to join it.
-func TestRunnerAcceptsTheSamePromptOnlyOnce(t *testing.T) {
+// A first-run dialog of a repository never opened in Claude Code is accepted, once per session
+// and only before the agent's first turn, with a Note. A second one is left to a person: the
+// session waits and a Note says to join it. Claude Code asks only on a terminal, so this runs in
+// tmux.
+func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
 	if _, err := exec.LookPath("tmux"); err != nil {
 		t.Skip("no tmux")
 	}
@@ -221,8 +197,8 @@ func TestRunnerAcceptsTheSamePromptOnlyOnce(t *testing.T) {
 	// The next session's Claude Code asks twice: the second time is a person's to answer.
 	f.fakeClaude("builder", "complete", "again")
 	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Totals")
-	waitingForAPerson(t, f, r, "WEB-4", "Claude Code shows the folder-trust dialog again after the runner accepted it; "+
-		"a person can answer it with darkory join WEB-4.")
+	waitingForAPerson(t, f, r, "WEB-4", "Claude Code shows the folder-trust dialog, and the runner accepts one first-run dialog "+
+		"a session; a person can answer it with darkory join WEB-4.")
 	n := 0
 	for l := range strings.Lines(f.log.String()) {
 		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-4 ") {
