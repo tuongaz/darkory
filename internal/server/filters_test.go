@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -47,8 +48,8 @@ func TestFilterParameter(t *testing.T) {
 		bob, bobID := h.member("bob", client.Agent, "WEB", "build")
 		f := got(bob.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Checkout"})).
 			want(t, http.StatusCreated).JSON201
-		cart := got(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key, Title: "Cart page",
-			Description: ptrStr("Totals, then tax: 10% + fees"), Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201
+		cart := got(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key,
+			Title: "Cart page: totals, then tax: 10% + fees", Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201
 		got(bob.ClaimTaskWithResponse(ctx, cart.Task.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{ModelLabel: ptrStr("opus, fast: +1")})).
 			want(t, http.StatusOK)
 
@@ -71,11 +72,22 @@ func TestFilterParameter(t *testing.T) {
 			{[]string{"holder:is:none"}, "WEB-2"},
 			{[]string{"filed_at:before:" + component(later), "kind:is:breakdown"}, "WEB-2"},
 			{[]string{"filed_at:after:" + component(later)}, ""},
+			{[]string{"claim:is:session"}, ""},
 		} {
 			if ks := strings.Join(listed(c.filters...), " "); ks != c.want {
 				t.Errorf("%q: %s, want %s", c.filters, ks, c.want)
 			}
 		}
+
+		// claim:is:session matches the Tasks the Runner beside the server runs a session for.
+		h.srv.AttachRunner(&fakeRunner{sessions: []runnerapi.Session{{TaskID: cart.Task.ID, MemberID: bobID, State: runnerapi.StateRunning}}})
+		if ks := strings.Join(listed("claim:is:session"), " "); ks != "WEB-3" {
+			t.Errorf("in a session: %s", ks)
+		}
+		if ks := strings.Join(listed("claim:not:session"), " "); ks != "WEB-2" {
+			t.Errorf("in no session: %s", ks)
+		}
+		h.srv.AttachRunner(nil)
 
 		// By hand: two filter parameters, each token query-encoded once more.
 		res := h.getAs("/v1/tasks?filter=" + url.QueryEscape("q:contains:"+component("10%")) + "&filter=" +
