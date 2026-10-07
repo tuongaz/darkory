@@ -11,6 +11,9 @@ func (s *Store) MigrateFS(ctx context.Context, fsys fs.FS, now time.Time) (Migra
 	return s.migrate(ctx, fsys, now)
 }
 
+// TransientPG exposes the batch's retry predicate to tests.
+var TransientPG = transientPG
+
 // LoadMigrations exposes the set loader to tests.
 func LoadMigrations(fsys fs.FS, engine Engine) (versions []int, err error) {
 	ms, err := loadMigrations(fsys, engine)

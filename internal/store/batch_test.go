@@ -2,10 +2,12 @@ package store_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -32,6 +34,32 @@ func seqs(t *testing.T, s *store.Store, org string) []int64 {
 		out = append(out, v)
 	}
 	return out
+}
+
+// A Postgres batch is sent again only for the server's own transient endings: a serialization
+// failure, a deadlock it broke, and 14.24's "new multixact has more than one updating member";
+// a refused guard, a constraint and any other internal error are the caller's to read.
+func TestTransientPostgresErrorsAreTheOnesSentAgain(t *testing.T) {
+	pg := func(code, msg string) error {
+		return fmt.Errorf("store: batch statement 0: %w", &pgconn.PgError{Code: code, Message: msg})
+	}
+	for _, tc := range []struct {
+		err  error
+		want bool
+	}{
+		{pg("40001", "could not serialize access due to concurrent update"), true},
+		{pg("40P01", "deadlock detected"), true},
+		{pg("XX000", "new multixact has more than one updating member: 0 3[1 (nokeyupd), 2 (keysh), 3 (nokeyupd)]"), true},
+		{pg("XX000", "could not open file"), false},
+		{pg("22012", "division by zero"), false},
+		{pg("23505", "duplicate key value violates unique constraint"), false},
+		{store.ErrConditionFailed, false},
+		{nil, false},
+	} {
+		if got := store.TransientPG(tc.err); got != tc.want {
+			t.Errorf("TransientPG(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
 }
 
 // A batch takes the counter first; a failed guard rolls everything back, the counter included, so

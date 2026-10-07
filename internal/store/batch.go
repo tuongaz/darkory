@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -142,9 +144,46 @@ func scanRows(rows rowIter, st Stmt) error {
 	return nil
 }
 
-// runPostgresBatch sends the statements as one pgx batch on one connection of the pool, reached
-// through database/sql's Raw so the store keeps a single pool and a single Tx type.
+// runPostgresBatch sends the statements as one pgx batch, and sends them again, up to three times
+// in all, when the server ended the batch for a reason of its own (transientPG): the batch rolled
+// back whole at its Sync, counter included, so sending it again is the same as having waited.
 func (s *Store) runPostgresBatch(ctx context.Context, stmts []Stmt) error {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err = s.sendPostgresBatch(ctx, stmts); !transientPG(err) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(time.Duration(attempt+1) * 5 * time.Millisecond):
+		}
+	}
+	return err
+}
+
+// transientPG reports a Postgres error that ended a batch for a reason the record played no part
+// in, so the same batch sent again goes through: a serialization failure (40001), a deadlock the
+// server broke (40P01), and "new multixact has more than one updating member" (XX000), which
+// Postgres 14.24 raised once in the two-process soak when a batch that had updated a Task row
+// aborted at its guard while another batch held the row's foreign-key lock and a third updated it.
+func transientPG(err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	switch pgErr.Code {
+	case "40001", "40P01":
+		return true
+	case "XX000":
+		return strings.HasPrefix(pgErr.Message, "new multixact has more than one updating member")
+	}
+	return false
+}
+
+// sendPostgresBatch sends the statements as one pgx batch on one connection of the pool, reached
+// through database/sql's Raw so the store keeps a single pool and a single Tx type.
+func (s *Store) sendPostgresBatch(ctx context.Context, stmts []Stmt) error {
 	conn, err := s.db.Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("store: batch: %w", err)
