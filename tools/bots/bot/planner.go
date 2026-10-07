@@ -31,7 +31,8 @@ type Step struct {
 	Title       string
 	Skill       string
 	Description string
-	// Backlog files it ahead, into the first backlog Status, where next does not offer it.
+	// Backlog files it ahead, into the first backlog Status (the intake), where next does not
+	// offer it.
 	Backlog bool
 	// BlockedBy are the Refs of the Steps that must end before this one is takeable.
 	BlockedBy []string

@@ -63,14 +63,19 @@ type WorkspaceSpec struct {
 // Persona is a human Member the bots act as, through a token of their own. One who Answers takes
 // the questions aimed at them and answers each after a while; one who Works a Skill takes its
 // Tasks from their takeable list and does them; one who Owns ships the Features they own once
-// every Task has ended, and moves one Backlog Task to Todo a round.
+// every Task has ended, and moves one Task a round from the first backlog Status, the intake, to
+// Todo.
 type Persona struct {
 	Name    string
 	Answers bool
-	Owns    bool
-	Works   []string
-	Skills  []string
-	Teams   []string
+	// Awaiting is the backlog Status, by name, that one who Answers moves the Tasks a question
+	// blocks into when they first see it, as they put it to someone outside, and back to Todo
+	// from once they have the answer; empty leaves those Tasks where they are.
+	Awaiting string
+	Owns     bool
+	Works    []string
+	Skills   []string
+	Teams    []string
 }
 
 // FeatureTemplate is a Feature the owner files: its Team, title and description, whether it is a

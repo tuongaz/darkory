@@ -352,7 +352,7 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 
 // setStatuses makes the Organisation's Statuses want, in order, when they are not already: a
 // Status keeps its id where one of the same name exists, else where one of the same kind is left
-// over (Backlog becoming Awaiting client is a rename), and one left over after that is deleted,
+// over (Done becoming Lodged is a rename), and one left over after that is deleted,
 // its Tasks moved to the first Status of the same ending. A nil want changes nothing.
 func setStatuses(ctx context.Context, c *client.ClientWithResponses, want []client.StatusInput) error {
 	if want == nil {

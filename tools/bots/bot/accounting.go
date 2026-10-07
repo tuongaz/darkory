@@ -17,6 +17,7 @@ const (
 
 // The accounting preset's Statuses, Workspace and people.
 const (
+	StatusBacklog        = "Backlog"
 	StatusAwaitingClient = "Awaiting client"
 	StatusLodged         = "Lodged"
 	WorkspaceClients     = "clients"
@@ -27,8 +28,9 @@ const (
 // Accounting is an accounting firm: Teams BOOK and TAX, a Workspace of client folders, a planner,
 // a drafter who collects, reconciles and drafts, a tax reviewer and a retro; Mai Tran, the client
 // manager, who answers the questions about clients and lodges, and Kai Nguyen, the partner, who
-// owns the work. A Task waiting for a client's documents sits in Awaiting client, where next
-// does not offer it.
+// owns the work. Both Backlog and Awaiting client are of the backlog kind, so next offers neither:
+// the planner files work ahead into Backlog, the intake, which Kai moves to Todo; a Task whose
+// question Mai has to put to the client sits in Awaiting client until she answers it.
 var Accounting = Preset{
 	Name: "accounting",
 	Teams: []TeamSpec{
@@ -55,6 +57,7 @@ var Accounting = Preset{
 			"Read the workpaper entry and the Evidence; complete the Task when it is right, or hand it back with one sentence saying what to fix."},
 	},
 	Statuses: []client.StatusInput{
+		{Name: StatusBacklog, Kind: client.StatusKindBacklog},
 		{Name: StatusAwaitingClient, Kind: client.StatusKindBacklog},
 		{Name: "Todo", Kind: client.StatusKindTodo},
 		{Name: "In progress", Kind: client.StatusKindInProgress},
@@ -91,7 +94,8 @@ var Accounting = Preset{
 		{Name: "retro", Role: RoleRetro, Teams: []string{"BOOK", "TAX"}, Skills: []string{SkillRetro}, Model: "claude-sonnet-5-5"},
 	},
 	Humans: []Persona{
-		{Name: PersonaMai, Answers: true, Works: []string{SkillLodgement}, Skills: []string{SkillClientComms, SkillLodgement}, Teams: []string{"BOOK", "TAX"}},
+		{Name: PersonaMai, Answers: true, Awaiting: StatusAwaitingClient, Works: []string{SkillLodgement}, Skills: []string{SkillClientComms, SkillLodgement},
+			Teams: []string{"BOOK", "TAX"}},
 		{Name: PersonaKai, Owns: true, Teams: []string{"BOOK", "TAX"}},
 	},
 	Manager:  PersonaKai,

@@ -236,9 +236,11 @@ func (o *owner) tend(ctx context.Context) error {
 	if err := check(statuses, err, http.StatusOK); err != nil {
 		return err
 	}
-	backlog := map[string]bool{}
-	for _, s := range statuses.JSON200.Items {
-		backlog[s.ID] = s.Kind == client.StatusKindBacklog
+	// The Backlog is the first backlog Status, the intake; a Task in another, such as Awaiting
+	// client, is work left that waits on someone, and is never dropped.
+	backlog := ""
+	if i := slices.IndexFunc(statuses.JSON200.Items, func(s client.Status) bool { return s.Kind == client.StatusKindBacklog }); i >= 0 {
+		backlog = statuses.JSON200.Items[i].ID
 	}
 	busy := 0
 	idle := map[string]bool{}
@@ -264,7 +266,7 @@ func (o *owner) tend(ctx context.Context) error {
 			if err := check(tasks, err, http.StatusOK); err != nil {
 				return err
 			}
-			if slices.ContainsFunc(tasks.JSON200.Items, func(t client.Task) bool { return !backlog[t.StatusID] }) {
+			if slices.ContainsFunc(tasks.JSON200.Items, func(t client.Task) bool { return t.StatusID != backlog }) {
 				busy++
 				continue
 			}
