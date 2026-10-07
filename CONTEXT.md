@@ -45,7 +45,7 @@ A Task that has Subtasks. It is at no Step, is never claimed or takeable, and ne
 _Avoid_: Epic, feature, container, group
 
 **Workflow**:
-A Project's Steps and the Connectors between them: one per Project, drawn on a canvas and shown as the columns of its board. A filed Task starts at the Step the filer names, by default the first Step that carries a Skill.
+A Project's Steps and the Connectors between them: one per Project, drawn on a canvas and shown as the columns of its board. A filed Task starts at the Step the filer names, by default the first Step whose Skill is the Project's own work rather than one Darkory files its Subtasks at.
 _Avoid_: Pipeline, process, scheme, status list
 
 **Step**:
