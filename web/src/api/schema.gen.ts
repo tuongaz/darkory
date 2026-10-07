@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The calling Member, their Teams and Skills, and the Session making the request */
+        /** The calling Member, their Projects and Skills, and the Session making the request */
         get: operations["getMe"];
         put?: never;
         post?: never;
@@ -252,7 +252,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a Member with their Teams, Skills and Reporting line */
+        /** Get a Member with their Projects, Skills and Reporting line */
         get: operations["getMember"];
         put?: never;
         post?: never;
@@ -387,53 +387,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/teams": {
+    "/v1/projects": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List the Organisation's Teams */
-        get: operations["listTeams"];
+        /** List the Organisation's Projects */
+        get: operations["listProjects"];
         put?: never;
         /**
-         * Create a Team (admin)
-         * @description Errors: `forbidden`, `conflict` (key or name taken).
+         * Create a Project with its first Workflow (admin)
+         * @description The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+         *     changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+         *     `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+         *     `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+         *     Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+         *     "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+         *     "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+         *     own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+         *     Tasks. The Members named are put in the Project in the same write; the creator is not,
+         *     unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+         *     when its filer does not say; both default to false. Records `project.created`. Errors:
+         *     `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+         *     such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+         *     `copy_from` with another `workflow`).
          */
-        post: operations["createTeam"];
+        post: operations["createProject"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/v1/teams/{team}": {
+    "/v1/projects/{project}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get a Team and its Members */
-        get: operations["getTeam"];
+        /** Get a Project and its Members */
+        get: operations["getProject"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /**
-         * Change a Team's name, default Workspace or Ship-when-done default (admin)
+         * Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
          * @description Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-         *     A Task filed naming no Workspace takes the Team's default; a Feature filed without
-         *     `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
+         *     The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+         *     default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+         *     already filed keep theirs. Records `project.changed` with the fields that changed.
          *     Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
          *     Workspace).
          */
-        patch: operations["updateTeam"];
+        patch: operations["updateProject"];
         trace?: never;
     };
-    "/v1/teams/{team}/members/{member}": {
+    "/v1/projects/{project}/members/{member}": {
         parameters: {
             query?: never;
             header?: never;
@@ -441,17 +455,149 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Add a Member to a Team (admin) */
-        put: operations["addTeamMember"];
+        /**
+         * Add a Member to a Project (admin)
+         * @description The Member can then take the Project's Tasks at the Steps whose Skills they have. Adding a
+         *     Member already in the Project changes nothing. Records `project.member_added`. Errors:
+         *     `forbidden` (not an admin).
+         */
+        put: operations["addProjectMember"];
         post?: never;
         /**
-         * Remove a Member from a Team (admin)
-         * @description Claims the Member holds on the Team's Tasks are not ended.
+         * Remove a Member from a Project (admin)
+         * @description Claims the Member holds on the Project's Tasks are not ended. Records
+         *     `project.member_removed`. Errors: `forbidden` (not an admin).
          */
-        delete: operations["removeTeamMember"];
+        delete: operations["removeProjectMember"];
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/workflow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a Project's Workflow with what is happening at each Step now
+         * @description The Steps in their order and the Connectors out of each, with each Step's live facts: the
+         *     open Tasks at it, how many of them are being worked, the Members who could take them by
+         *     its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
+         *     read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+         *     no Step and counted at none.
+         */
+        get: operations["getWorkflow"];
+        /**
+         * Replace a Project's Workflow (admin)
+         * @description Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+         *     reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+         *     is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+         *     unless a Connector out of the same Step with the same name exists, which it then keeps.
+         *     Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+         *     order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+         *     included, and the next `next` offers them by the new Skill. A deleted Step at which open
+         *     Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+         *     Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+         *     and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+         *     none of them: its Project then offers no Break down, files no Acceptance and no
+         *     Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+         *     Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+         *     Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+         *     names a Step that is not in the body; two Connectors out of one Step share a name,
+         *     ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+         *     `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+         *     `step_in_use`.
+         */
+        put: operations["setWorkflow"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/projects/{project}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a Project's own Labels
+         * @description The Labels the Project defined for itself. A Task of the Project may also carry the
+         *     Organisation's (`listLabels`).
+         */
+        get: operations["listProjectLabels"];
+        put?: never;
+        /**
+         * Define a Label for a Project
+         * @description By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+         *     Project can carry, ignoring case: the Project's own and the Organisation's. Records
+         *     `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+         *     Project or the Organisation has a Label of that name), `invalid`.
+         */
+        post: operations["createProjectLabel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the Organisation's Labels, which every Project's Tasks may carry */
+        get: operations["listLabels"];
+        put?: never;
+        /**
+         * Define a Label for the Organisation (admin)
+         * @description Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+         *     ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+         *     `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+         *     name), `invalid`.
+         */
+        post: operations["createLabel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labels/{label}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a Label
+         * @description With the authority that defines it, as on `updateLabel`. Every Task carrying it, open or
+         *     ended, stops carrying it in the same write; Views whose filters name it match nothing for
+         *     that value. Records `label.deleted`. Errors: `forbidden`.
+         */
+        delete: operations["deleteLabel"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename or recolour a Label
+         * @description Changes the fields given and keeps the others. With the authority that defines it: an
+         *     Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+         *     Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+         *     `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+         */
+        patch: operations["updateLabel"];
         trace?: never;
     };
     "/v1/skills": {
@@ -527,35 +673,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/statuses": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List the Organisation's Statuses, in their order */
-        get: operations["listStatuses"];
-        /**
-         * Replace the Organisation's list of Statuses (admin)
-         * @description Takes the whole list in its new order: a Status already in it carries its `id` and may be
-         *     renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-         *     Names are unique, ignoring case. The list must keep at least one Status of each kind
-         *     `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-         *     Status that Tasks are in needs `moves` to say where they go, or it is refused with
-         *     `status_in_use`; so is a Status that Tasks are in changing between an open kind
-         *     (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-         *     `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-         *     admin), `invalid`, `status_in_use`.
-         */
-        put: operations["setStatuses"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspaces": {
         parameters: {
             query?: never;
@@ -592,7 +709,7 @@ export interface paths {
         /**
          * Remove a Workspace (admin)
          * @description Refused with `conflict` while any Task, open or ended, names it: the record keeps where
-         *     its work was done. A Team whose default it was has no default afterwards. Records
+         *     its work was done. A Project whose default it was has no default afterwards. Records
          *     `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
          */
         delete: operations["removeWorkspace"];
@@ -607,186 +724,6 @@ export interface paths {
         patch: operations["updateWorkspace"];
         trace?: never;
     };
-    "/v1/features": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Features
-         * @description Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
-         *     with the others.
-         */
-        get: operations["listFeatures"];
-        put?: never;
-        /**
-         * File a Feature
-         * @description Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-         *     the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-         *     by a Retrospective names it in `from_retrospective`.
-         *
-         *     A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-         *     down it files its one work Task, with the Feature's title and description, needing
-         *     `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-         *     done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-         *     Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-         *     open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-         *     quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-         *     `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-         *     default Workspace and none named).
-         */
-        post: operations["fileFeature"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a Feature with its Tasks and Evidence */
-        get: operations["getFeature"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}/rank": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Move a Feature to a position in its Team's Rank
-         * @description Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-         *     their places and count as positions. By a Member of the Feature's Team or its owner.
-         *     Errors: `forbidden`.
-         */
-        post: operations["rankFeature"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}/ship": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ship a Feature (Feature owner)
-         * @description Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-         *     <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
-         *     `ship_when_done` ships without this call when its last open Task is completed. Errors:
-         *     `forbidden` (not the owner), `tasks_open`, `ended`.
-         */
-        post: operations["shipFeature"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}/drop": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Drop a Feature (Feature owner)
-         * @description Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-         *     <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
-         *     `forbidden` (not the owner), `ended`.
-         */
-        post: operations["dropFeature"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}/owner": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Pass a Feature's ownership to another Member
-         * @description By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-         */
-        post: operations["passFeatureOwnership"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}/observations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List the Observations recorded on a Feature's Tasks */
-        get: operations["listFeatureObservations"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/features/{feature}/evidence": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Attach Evidence to a Feature
-         * @description The request body is the file itself, sent with its own `Content-Type` and a
-         *     `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
-         *     owner or a Member of its Team. Errors: `forbidden`, `too_large`.
-         */
-        post: operations["attachFeatureEvidence"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/tasks": {
         parameters: {
             query?: never;
@@ -796,24 +733,60 @@ export interface paths {
         };
         /**
          * List Tasks
-         * @description Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
-         *     narrows the list, `filter` together with the others.
+         * @description Ordered by Project, then Rank: a Task with no Parent by its own, each Subtask after its
+         *     Parent, by how long it has waited. Every parameter given narrows the list, `filter`
+         *     together with the others.
          */
         get: operations["listTasks"];
         put?: never;
         /**
-         * File a Task
-         * @description A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-         *     question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-         *     then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-         *     even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-         *     Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-         *     starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-         *     Feature's Team's default Workspace, or none when the Team has no default. Errors:
-         *     `not_found` (no such Workspace), `ended` (the Feature has
-         *     ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-         *     `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-         *     `dropped`).
+         * File a Task, a Subtask under a Parent, or a question beside the Task it blocks
+         * @description Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+         *     question or Escalation; `project` may be given with the other two, and must then be theirs.
+         *
+         *     A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+         *     the caller, who must be a Member of the Project. It waits at `step`, or else at the
+         *     Workflow's first Step that carries a Skill, or at its first Step when none does; at a hold
+         *     no one is offered it until someone moves it on (`moveTask`). Aimed at a Member by name
+         *     (`aim`), it waits with that Member at no Step instead. With `breakdown` it is a Parent from
+         *     its first moment, at no Step: its Breakdown Subtask ("Break down: <title>", kind
+         *     `breakdown`, filed by nobody) is filed with it at the Workflow's Step carrying
+         *     `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+         *     `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+         *     default Workspace, or none when the Project has no default.
+         *
+         *     A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+         *     and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+         *     starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+         *     of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+         *     file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+         *     adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+         *     Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+         *     blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+         *     blocked: remove the Blocking first.
+         *
+         *     Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+         *     Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+         *     blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+         *     while it is held, else its ownership or membership of its Project.
+         *
+         *     A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+         *     ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+         *     Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+         *     when they apply, in the same write.
+         *
+         *     Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+         *     `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+         *     `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+         *     `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+         *     `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+         *     another Project; `from_retrospective` naming a Task that is not a Retrospective),
+         *     `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+         *     (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+         *     nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+         *     blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+         *     a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+         *     Task; the blocked Task is a Parent), `cycle`.
          */
         post: operations["fileTask"];
         delete?: never;
@@ -850,13 +823,15 @@ export interface paths {
         put?: never;
         /**
          * Wait for a takeable Task and claim it
-         * @description Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-         *     (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-         *     another come first). When none is takeable, holds the request open for up to
-         *     `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-         *     ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-         *     token's default. A Member may have a limited number of `next` calls waiting at once
-         *     (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+         * @description Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+         *     a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+         *     in any Project comes before one ranked second in any Project. A tie goes to the Task that
+         *     has waited longest since it was filed or last reached its Step; among one Parent's
+         *     Subtasks, those that block another come first. When none is takeable, holds the request
+         *     open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+         *     when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+         *     Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+         *     by default); one more is refused with `too_many_requests`.
          */
         post: operations["nextTask"];
         delete?: never;
@@ -872,7 +847,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a Task with its Claims, Notes, Evidence, blockers and Observations */
+        /** Get a Task with its Parent, Subtasks, Step and outcomes, Labels, Claims, Notes, Evidence, Blocking and Observations */
         get: operations["getTask"];
         put?: never;
         post?: never;
@@ -893,11 +868,19 @@ export interface paths {
         put?: never;
         /**
          * Claim a Task
-         * @description One conditional write: it succeeds only when the Task is takeable by the caller. The
-         *     Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-         *     bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-         *     to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-         *     than retry), `not_takeable`.
+         * @description One conditional write: it succeeds only when the Task is takeable by the caller. It is
+         *     takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+         *     these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+         *     of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+         *     in any Project; or the caller owns it and no Member could take it by its Step's Skill
+         *     (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+         *     Member who has held the Task under one Skill can take it again only under that Skill. The
+         *     Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+         *     the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+         *     timeout it is bound to the calling Session, without one to the Member. Claiming moves
+         *     nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+         *     (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+         *     a blocked or ended Task, or one the caller may not take).
          */
         post: operations["claimTask"];
         delete?: never;
@@ -940,8 +923,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Give up the caller's Claim, leaving the Task needing the same Skill
-         * @description A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+         * Give up the caller's Claim, leaving the Task at its Step
+         * @description The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+         *     added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
          */
         post: operations["releaseTask"];
         delete?: never;
@@ -950,7 +934,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tasks/{task}/handover": {
+    "/v1/tasks/{task}/advance": {
         parameters: {
             query?: never;
             header?: never;
@@ -960,14 +944,52 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * End the caller's Claim and set the Skill the Task needs next
-         * @description The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-         *     no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-         *     again only under that Skill. The Status stays as it is unless `status` names another.
-         *     Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-         *     `dropped`).
+         * End the caller's work on a Task along a Connector out of its Step
+         * @description By the Member holding the Task. The Connector is the one out of the Task's Step named
+         *     `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+         *     left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+         *     lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+         *     it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+         *     Claim, so its context goes with it to the next Step.
+         *
+         *     Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+         *     from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+         *     again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+         *
+         *     Along a Connector into Done, the Task completes, with everything `completeTask` says
+         *     follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+         *     its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+         *     and `forbidden` and `proposal_stale` as on `completeTask`.
          */
-        post: operations["handoverTask"];
+        post: operations["advanceTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task}/step": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a Task to a Step of its Workflow by hand
+         * @description Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+         *     a move rather than an advance; it is the only way out of a hold. By any Member of the
+         *     Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+         *     (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+         *     `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+         *     waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+         *     Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+         *     and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+         *     `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
+         */
+        post: operations["moveTask"];
         delete?: never;
         options?: never;
         head?: never;
@@ -984,15 +1006,36 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Complete a Task the caller holds
-         * @description Ends the Task done, in the first `done` Status. Completing a Task that needs
-         *     `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-         *     completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-         *     Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-         *     in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-         *     its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-         *     (the version the proposal was written against is no longer current; nothing changes, and
-         *     the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+         * Complete a Task the caller holds, or a Parent the caller owns
+         * @description Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+         *     completed by the Member holding it, along the one Connector out of its Step into Done;
+         *     when its Step has none or several, the request is refused with `use_advance`, whose
+         *     `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+         *     completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+         *     needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+         *     Acceptance included). `note` is added to the Task's Notes first.
+         *
+         *     Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+         *     the Task as its Skill's next version. When the version one was written against is no
+         *     longer current, the request is refused with `proposal_stale` naming the stale proposals,
+         *     nothing is published, and the Task is advanced back along the Connector named "needs
+         *     changes" (or else the first that leads to a Step) with the refusal as its Note; that
+         *     write is made and the refusal is the reply. A proposal is never published by its author
+         *     (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+         *     reviewed by it.
+         *
+         *     A Subtask ending done may finish its Parent. When the Parent is open and every other
+         *     Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+         *     `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+         *     ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+         *     Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+         *     in the same write. A Parent that ends, done or dropped, files its Retrospective
+         *     ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+         *     carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+         *     neither rule. Records `task.completed`, and the Parent's entries in the same write.
+         *     Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+         *     Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+         *     `proposal_stale`.
          */
         post: operations["completeTask"];
         delete?: never;
@@ -1011,8 +1054,12 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Drop a Task (Feature owner)
-         * @description Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+         * Drop a Task (Owner)
+         * @description Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+         *     holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+         *     Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+         *     completes no Parent; an Acceptance that ends dropped files nothing more. Records
+         *     `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
          */
         post: operations["dropTask"];
         delete?: never;
@@ -1032,9 +1079,9 @@ export interface paths {
         put?: never;
         /**
          * End another Member's Claim on a Task
-         * @description By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-         *     takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-         *     `forbidden`, `not_holder` (nobody holds it).
+         * @description By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+         *     Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+         *     `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
          */
         post: operations["takeBackTask"];
         delete?: never;
@@ -1043,7 +1090,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/tasks/{task}/status": {
+    "/v1/tasks/{task}/owner": {
         parameters: {
             query?: never;
             header?: never;
@@ -1053,17 +1100,60 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Move a Task to another Status
-         * @description By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-         *     (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-         *     whether or not someone holds it: the Status is where the Task is in its workflow, and the
-         *     Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-         *     Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-         *     Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-         *     those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-         *     `dropped` Status).
+         * Pass a Task's ownership, with its Subtasks', to another Member
+         * @description Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+         *     write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+         *     Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+         *     `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
          */
-        post: operations["setTaskStatus"];
+        post: operations["passOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task}/rank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move a Task to a position in its Project's Rank
+         * @description For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+         *     position past the end moves the Task last. Ended Tasks keep their places and count as
+         *     positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+         *     Errors: `forbidden`, `use_parent` (a Subtask).
+         */
+        post: operations["rankTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the Labels a Task carries
+         * @description Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+         *     Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+         *     Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+         *     `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+         *     such Label), `invalid` (another Project's Label).
+         */
+        put: operations["setTaskLabels"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1082,9 +1172,10 @@ export interface paths {
         /**
          * Add a Note to a Task's running log
          * @description On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-         *     a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-         *     Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-         *     just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+         *     a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+         *     recording no Skill: such as the Runner noting a merge on a Task it has just seen
+         *     completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+         *     Task), `forbidden`.
          */
         post: operations["addNote"];
         delete?: never;
@@ -1100,12 +1191,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List the Observations recorded on a Task and, for a Parent, on its Subtasks
+         * @description What a Retrospective reads about its Parent: the Parent's Observations are those recorded
+         *     on its Subtasks.
+         */
+        get: operations["listTaskObservations"];
         put?: never;
         /**
          * Record an Observation on a Task
-         * @description By the Member holding the Task; the Observation records the Skill they hold it under.
-         *     Errors: `not_holder`.
+         * @description By the Member holding the Task; the Observation records the Skill they hold it under. It
+         *     feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+         *     `not_holder`.
          */
         post: operations["observe"];
         delete?: never;
@@ -1125,15 +1222,20 @@ export interface paths {
         /**
          * Let one Task block another
          * @description `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
-         *     may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
-         *     ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
-         *     (`{task}` already blocks `{blocker}`, directly or through other Tasks).
+         *     may be under different Parents. A Parent neither blocks nor is blocked. Needs `{task}`'s
+         *     Claim when it is held, else its ownership or membership of its Project. Records
+         *     `task.blocker_added`. Errors: `forbidden`, `not_holder`, `ended`, `conflict` (either is a
+         *     Parent), `cycle` (`{task}` already blocks `{blocker}`, directly or through other Tasks, or
+         *     they are the same Task).
          */
         put: operations["addBlocker"];
         post?: never;
         /**
          * Stop one Task blocking another
-         * @description Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
+         * @description Needs the same authority as adding the blocker. An open question under an ended Parent
+         *     must keep blocking an open Task, so removing its last such edge is refused with `ended`:
+         *     complete or drop the question instead. Records `task.blocker_removed`. Errors:
+         *     `forbidden`, `not_holder`, `ended`.
          */
         delete: operations["removeBlocker"];
         options?: never;
@@ -1151,11 +1253,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Propose a new version of a company Skill from the Task the caller holds
-         * @description Written against `based_on_version`, which must be the current version, for a company
-         *     Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-         *     `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-         *     `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+         * Propose a new version of a company Skill from the Retrospective the caller holds
+         * @description Written against `based_on_version`, which must be the Skill's current version, for a
+         *     company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+         *     Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+         *     Member with `skill-review`, other than the author, publishes the proposals by advancing
+         *     it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+         *     supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+         *     Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+         *     from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
          *     company Skill).
          */
         post: operations["proposeSkillVersion"];
@@ -1178,7 +1284,8 @@ export interface paths {
          * Attach Evidence to a Task
          * @description The request body is the file itself, sent with its own `Content-Type` and a
          *     `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
-         *     Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+         *     Claim while it is held, else its ownership or membership of its Project. Evidence about a
+         *     Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
          *     `not_holder`, `forbidden`, `too_large`.
          */
         post: operations["attachTaskEvidence"];
@@ -1239,7 +1346,7 @@ export interface paths {
          *     `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
          *     entries numbered just below it, still in sequence order, and its `first_seq` is the
          *     `before` of the page before it. A `before` past the newest entry (such as
-         *     9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+         *     9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
          *     matching entries; the page is then the `limit` matching entries after `after` or just
          *     below `before`, and its `first_seq` and `last_seq` are theirs.
          */
@@ -1312,7 +1419,7 @@ export interface paths {
         put?: never;
         /**
          * Nudge the agent in a Task's session to end the Task (admin)
-         * @description Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+         * @description Types the Runner's nudge into the session: advance the Task, complete it, or file a
          *     question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
          *     Task).
          */
@@ -1389,10 +1496,10 @@ export interface paths {
         put?: never;
         /**
          * Save a View
-         * @description `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-         *     as the list checks them. A View is a Member's preference, not the record: saving,
-         *     changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-         *     of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+         * @description `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+         *     checks them. A View is a Member's preference, not the record: saving, changing or
+         *     deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+         *     for the same list, ignoring case), `not_found` (no such Project), `invalid`.
          */
         post: operations["createView"];
         delete?: never;
@@ -1421,7 +1528,7 @@ export interface paths {
         /**
          * Change one of the caller's Views
          * @description Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-         *     View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+         *     View is of (entity and Project) never changes. Errors: `not_found` (no View of the
          *     caller's with that id), `conflict` (name taken), `invalid`.
          */
         patch: operations["updateView"];
@@ -1435,7 +1542,12 @@ export interface components {
             code: components["schemas"]["ErrorCode"];
             /** @description For people; may change between releases. */
             message: string;
-            /** @description Extra facts about the failure, by code. */
+            /**
+             * @description Extra facts about the failure, by code. `no_connector` and `use_advance` carry
+             *     `outcomes`: the names of the Connectors out of the Task's Step, in order, so a caller
+             *     can choose one. `proposal_stale` from an advance or a Complete carries `proposals`:
+             *     the ids of the proposals no longer written against their Skill's current version.
+             */
             details?: {
                 [key: string]: unknown;
             };
@@ -1445,12 +1557,23 @@ export interface components {
          *     `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
          *     `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
          *     `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-         *     `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
-         *     `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+         *     `no_connector` 409 · `use_advance` 409 · `no_step` 409 · `one_level` 409 · `held` 409 ·
+         *     `step_in_use` 409 · `use_parent` 409 · `no_runner` 409 · `too_large` 413 ·
+         *     `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
          *     `not_implemented` 501.
+         *
+         *     `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
+         *     was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
+         *     several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+         *     `breakdown` for Break down, or any Step to file at), or no Connector leads from a
+         *     Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
+         *     Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
+         *     whoever may take it back, may do this. `step_in_use`: a Step being deleted has open Tasks
+         *     at it and nothing says where they go. `use_parent`: a Subtask takes this from its Parent
+         *     (its Owner, its Rank); ask it of the Parent.
          * @enum {string}
          */
-        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "status_in_use" | "use_complete" | "use_drop" | "no_runner" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
+        ErrorCode: "invalid" | "unauthenticated" | "session_required" | "forbidden" | "not_found" | "conflict" | "already_claimed" | "not_takeable" | "not_holder" | "ended" | "tasks_open" | "cycle" | "proposal_stale" | "no_connector" | "use_advance" | "no_step" | "one_level" | "held" | "step_in_use" | "use_parent" | "no_runner" | "too_large" | "idempotency_key_reused" | "too_many_requests" | "internal" | "not_implemented";
         Health: {
             /** @enum {string} */
             status: "ok";
@@ -1478,12 +1601,23 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /** @description An Organisation named by its id and name. */
+        OrganisationBrief: {
+            id: string;
+            name: string;
+        };
         Me: {
             organisation: components["schemas"]["Organisation"];
             member: components["schemas"]["Member"];
-            teams: components["schemas"]["Team"][];
+            /** @description The Projects the caller is a Member of, by name. */
+            projects: components["schemas"]["Project"][];
             skills: components["schemas"]["Skill"][];
             session: components["schemas"]["Session"];
+            /**
+             * @description The Organisations the caller's sign-in reaches, the current one included, by name,
+             *     for switching between them. Absent on Local, which holds exactly one.
+             */
+            organisations?: components["schemas"]["OrganisationBrief"][];
         };
         Session: {
             /** @description The id the running copy chose. */
@@ -1560,7 +1694,7 @@ export interface components {
             name: string;
             kind: components["schemas"]["MemberKind"];
             email?: string;
-            /** @description Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links. */
+            /** @description Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links. */
             admin: boolean;
             /** @description The Member who directs this one. Absent when there is no Reporting line. */
             manager_id?: string;
@@ -1577,7 +1711,8 @@ export interface components {
         MemberKind: "human" | "agent";
         MemberDetail: {
             member: components["schemas"]["Member"];
-            teams: components["schemas"]["Team"][];
+            /** @description The Projects the Member is in, by name. */
+            projects: components["schemas"]["Project"][];
             skills: components["schemas"]["Skill"][];
             /** @description The Members this Member directs. */
             reports: components["schemas"]["Member"][];
@@ -1651,34 +1786,227 @@ export interface components {
             /** @description Member id or name. */
             manager: string;
         };
-        Team: {
+        /**
+         * @description A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+         *     default Workspace. Every Task belongs to exactly one Project.
+         */
+        Project: {
             id: string;
-            /** @description The prefix of the Team's display keys, such as `WEB` in `WEB-42`. */
+            /** @description The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`. */
             key: string;
             name: string;
-            /** @description The Workspace a Task filed in the Team names when it names none. Absent when the Team has none. */
+            /**
+             * @description The Workspace a Task with no Parent filed in the Project names when it names none.
+             *     Absent when the Project has none.
+             */
             default_workspace_id?: string;
-            /** @description The `ship_when_done` a Feature filed in the Team takes when its filer does not say. */
-            ship_when_done: boolean;
+            /** @description The `auto_complete` a Task filed in the Project takes when its filer does not say. */
+            auto_complete: boolean;
+            /** @description The `acceptance` a Task filed in the Project takes when its filer does not say. */
+            acceptance: boolean;
             /** Format: date-time */
             created_at: string;
         };
-        TeamDetail: {
-            team: components["schemas"]["Team"];
+        ProjectDetail: {
+            project: components["schemas"]["Project"];
+            /** @description The Project's Members, by name. */
             members: components["schemas"]["Member"][];
         };
-        TeamList: {
-            items: components["schemas"]["Team"][];
+        ProjectList: {
+            items: components["schemas"]["Project"][];
         };
-        CreateTeamBody: {
+        /**
+         * @description The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
+         *     · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
+         *     `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
+         *     `default` when not given.
+         * @enum {string}
+         */
+        NewWorkflow: "default" | "empty" | "copy";
+        CreateProjectBody: {
             key: string;
             name: string;
-        };
-        UpdateTeamBody: {
-            name?: string;
-            /** @description Workspace id or name; `""` clears the Team's default. */
+            workflow?: components["schemas"]["NewWorkflow"];
+            /** @description With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied. */
+            copy_from?: string;
+            /** @description Member ids or names put in the Project with it. The creator is not, unless named. */
+            members?: string[];
+            /** @description Workspace id or name. */
             default_workspace?: string;
-            ship_when_done?: boolean;
+            /** @description Defaults to false. */
+            auto_complete?: boolean;
+            /** @description Defaults to false. */
+            acceptance?: boolean;
+        };
+        UpdateProjectBody: {
+            name?: string;
+            /** @description Workspace id or name; `""` clears the Project's default. */
+            default_workspace?: string;
+            auto_complete?: boolean;
+            acceptance?: boolean;
+        };
+        /**
+         * @description A Project's Steps, in order, and the Connectors between them. The board's columns are
+         *     the Steps in this order, then Done.
+         */
+        Workflow: {
+            project_id: string;
+            /** @description The Steps, by `position`, each with what is happening at it now. */
+            steps: components["schemas"]["WorkflowStep"][];
+            /** @description Every Connector, by its Step's `position`, then its own. */
+            connectors: components["schemas"]["Connector"][];
+        };
+        /**
+         * @description A place in a Workflow, carrying at most one Skill: a Task at it is taken by a Member with
+         *     that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human
+         *     moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
+         */
+        Step: {
+            id: string;
+            /** @description Unique in its Workflow, ignoring case. */
+            name: string;
+            /** @description The Skill a Member needs to take a Task at the Step. Absent on a hold. */
+            skill_id?: string;
+            /**
+             * Format: int64
+             * @description Its place in the Workflow, 1 first.
+             */
+            position: number;
+            /**
+             * Format: int64
+             * @description Where the canvas draws it, in pixels from the left.
+             */
+            x: number;
+            /**
+             * Format: int64
+             * @description Where the canvas draws it, in pixels from the top.
+             */
+            y: number;
+        };
+        /** @description A Step with what is happening at it now. */
+        WorkflowStep: components["schemas"]["Step"] & components["schemas"]["StepFacts"];
+        StepFacts: {
+            /** @description The open Tasks at the Step. */
+            tasks: number;
+            /** @description Those of them with a live Claim; also counted in `tasks`. */
+            working: number;
+            /**
+             * @description The active Members who could take a Task at the Step by its Skill: the Project's
+             *     Members holding it, or for `skill-review` the Organisation's, by name. None on a hold;
+             *     a Step with a Skill and no takers is one nobody can work.
+             */
+            takers: components["schemas"]["Taker"][];
+            /**
+             * Format: int64
+             * @description The median time Tasks that left the Step in the last 30 days spent at it, by advance,
+             *     move, Complete or drop. Absent when none left it.
+             */
+            median_ms?: number;
+        };
+        /** @description A Member who holds a Step's Skill. */
+        Taker: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["MemberKind"];
+        };
+        /**
+         * @description A named way out of a Step into another Step, or into Done: the outcome its holder names
+         *     when they advance the Task. Advancing into Done completes the Task; dropping needs no
+         *     Connector.
+         */
+        Connector: {
+            id: string;
+            from_step_id: string;
+            /** @description The Step it leads to. Absent when it leads into Done. */
+            to_step_id?: string;
+            /** @description The outcome, such as `pass` or `needs changes`; unique among the Connectors out of its Step, ignoring case. */
+            name: string;
+            /**
+             * Format: int64
+             * @description Its place among the Connectors out of its Step, 1 first.
+             */
+            position: number;
+        };
+        SetWorkflowBody: {
+            /**
+             * @description Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
+             *     none. A Step left out is deleted.
+             */
+            steps: components["schemas"]["StepInput"][];
+            /** @description Every Connector of the new Workflow. One left out is deleted. */
+            connectors: components["schemas"]["ConnectorInput"][];
+            /**
+             * @description Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
+             *     Workflow, by its id or its name in `steps`.
+             */
+            moves?: {
+                [key: string]: string;
+            };
+        };
+        StepInput: {
+            /** @description The id of a Step in the Workflow now; left out for a new one. */
+            id?: string;
+            name: string;
+            /** @description Skill id or name the Step carries. Left out, the Step is a hold. */
+            skill?: string;
+            /**
+             * Format: int64
+             * @description The Step's place in the Workflow; distinct among the Steps, and the Workflow numbers them 1, 2, 3… in this order.
+             */
+            position: number;
+            /**
+             * Format: int64
+             * @description Left out, a Step in the Workflow now keeps its place, and a new one is drawn at (position − 1) × 448.
+             */
+            x?: number;
+            /**
+             * Format: int64
+             * @description Left out, a Step in the Workflow now keeps its place, and a new one is drawn at 0.
+             */
+            y?: number;
+        };
+        ConnectorInput: {
+            /**
+             * @description The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
+             *     with the same name, ignoring case, keeps its id; any other is new.
+             */
+            id?: string;
+            /** @description The Step it leads out of, by its id or its name in `steps`. */
+            from: string;
+            /** @description The Step it leads to, by its id or its name in `steps`. Left out, it leads into Done. */
+            to?: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
+             */
+            position: number;
+        };
+        /**
+         * @description A named, coloured mark carried by any number of Tasks: a Project's own, or the
+         *     Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
+         */
+        Label: {
+            id: string;
+            /** @description The Project that defined it for itself. Absent for the Organisation's. */
+            project_id?: string;
+            /** @description Unique among the Labels a Task of its Project can carry, ignoring case. */
+            name: string;
+            /** @description `#rrggbb`. */
+            color: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        LabelList: {
+            items: components["schemas"]["Label"][];
+        };
+        CreateLabelBody: {
+            name: string;
+            color: string;
+        };
+        UpdateLabelBody: {
+            name?: string;
+            color?: string;
         };
         /**
          * @description A place a session works in, named on the Install. A `git` Workspace is a repository at
@@ -1705,8 +2033,9 @@ export interface components {
          */
         WorkspaceKind: "git";
         /**
-         * @description `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-         *     merged pull request carrying a Task's key completes that Task's review.
+         * @description `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+         *     instead, and reads a merged pull request carrying a Task's key as that Task's branch
+         *     having landed.
          * @enum {string}
          */
         WorkspaceMode: "plain" | "pull_request";
@@ -1734,7 +2063,7 @@ export interface components {
             kind: components["schemas"]["SkillKind"];
             /** @description The generic Skill a company Skill builds on. */
             base_skill_id?: string;
-            /** @description True for `breakdown`, `retro` and `skill-review`, which Darkory relies on. */
+            /** @description True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on. */
             builtin: boolean;
             /** Format: int64 */
             current_version: number;
@@ -1797,8 +2126,8 @@ export interface components {
         };
         /**
          * @description `pending`: waiting for review. `published`: a review published it. `superseded`: it will
-         *     not be published, because a newer proposal replaced it on its Task or its Task ended
-         *     without publishing it.
+         *     not be published, because a newer proposal for the same Skill replaced it on its Task, or
+         *     its Task ended without publishing it.
          * @enum {string}
          */
         ProposalState: "pending" | "published" | "superseded";
@@ -1809,192 +2138,127 @@ export interface components {
             based_on_version: number;
             body: string;
         };
-        Feature: {
-            id: string;
-            /** @description Display key, such as `WEB-1`. */
-            key: string;
-            team_id: string;
-            title: string;
-            description: string;
-            owner_id: string;
-            state: components["schemas"]["FeatureState"];
-            /**
-             * Format: int64
-             * @description Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-             */
-            rank: number;
-            /** @description The Retrospective that filed this Feature. */
-            from_retrospective_task_id?: string;
-            /** @description A quick Feature was filed with its one Task and no Break down; it has no Retrospective. */
-            quick: boolean;
-            /** @description The Feature ships itself when its last open Task is completed. Always true for a quick Feature. */
-            ship_when_done: boolean;
-            filed_by: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            ended_at?: string;
-            task_counts: components["schemas"]["TaskCounts"];
-        };
-        /** @description How many of the Feature's Tasks are in each state. */
-        TaskCounts: {
-            /** @description Open Tasks, claimed or not. */
-            open: number;
-            /** @description Open Tasks with a live Claim; these are also counted in `open`. */
-            claimed: number;
-            done: number;
-            dropped: number;
-        };
-        /** @enum {string} */
-        FeatureState: "open" | "shipped" | "dropped";
-        FeatureDetail: {
-            feature: components["schemas"]["Feature"];
-            tasks: components["schemas"]["Task"][];
-            evidence: components["schemas"]["Evidence"][];
-        };
-        FeatureList: {
-            items: components["schemas"]["Feature"][];
-            /** @description Pass as `cursor` for the next page. Absent on the last page. */
-            next_cursor?: string;
-        };
-        FileFeatureBody: {
-            /** @description Team id or key. */
-            team: string;
-            title: string;
-            description?: string;
-            /** @description Member id or name. Defaults to the caller. */
-            owner?: string;
-            /** @description Id or display key of the Retrospective Task filing this Feature. */
-            from_retrospective?: string;
-            /** @description File a quick Feature, with its one Task instead of a Break down. Needs `skill`. */
-            quick?: boolean;
-            /** @description A quick Feature's only. Skill id or name its one Task needs. */
-            skill?: string;
-            /** @description A quick Feature's only. Workspace ids or names its one Task names; default the Team's default Workspace. */
-            workspaces?: string[];
-            /** @description Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature. */
-            ship_when_done?: boolean;
-        };
-        RankFeatureBody: {
-            /** Format: int64 */
-            position: number;
-        };
-        PassFeatureOwnershipBody: {
-            /** @description Member id or name. */
-            owner: string;
-        };
+        /**
+         * @description The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
+         *     Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
+         *     waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+         *     neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
+         *     Blocking and are not stored.
+         */
         Task: {
             id: string;
-            /** @description Display key, such as `WEB-42`. */
+            /** @description Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence. */
             key: string;
-            feature_id: string;
+            project_id: string;
+            /** @description The Parent of a Subtask. Absent on a Task with no Parent. */
+            parent_id?: string;
             kind: components["schemas"]["TaskKind"];
             title: string;
             description: string;
             state: components["schemas"]["TaskState"];
-            /** @description The Task's Status, one of the Organisation's (`listStatuses`). */
-            status_id: string;
-            /** @description The Skill the Task needs now. Absent when it is aimed at a Member. */
+            /** @description The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's. */
+            owner_id: string;
+            /**
+             * Format: int64
+             * @description Position in the Project's Rank, 1 first; an ended Task keeps its place. Absent on a
+             *     Subtask, which sorts by its Parent's.
+             */
+            rank?: number;
+            /**
+             * @description The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
+             *     ended Task.
+             */
+            step_id?: string;
+            /**
+             * Format: date-time
+             * @description When the Task reached its Step. Absent when `step_id` is.
+             */
+            step_since?: string;
+            /**
+             * @description The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
+             *     wherever `step_id` is.
+             */
             skill_id?: string;
-            /** @description The Member the Task is aimed at by name. */
+            /** @description The Member the Task is aimed at by name, who may take it at no Step. */
             aimed_at_id?: string;
+            /** @description The ids of the Labels it carries, by name. Absent when it carries none. */
+            labels?: string[];
+            /** @description Filed with Break down on; its Breakdown Subtask was filed with it. */
+            breakdown: boolean;
+            /**
+             * @description A Parent completes itself when its last open Subtask ends done and no Acceptance is
+             *     due. Always false on a Subtask.
+             */
+            auto_complete: boolean;
+            /**
+             * @description Once every Subtask of a Parent has ended and the last to end ended done, Darkory files
+             *     an Acceptance under it, when its Workflow has a Step carrying `acceptance`. Always
+             *     false on a Subtask.
+             */
+            acceptance: boolean;
+            /** @description The Retrospective that filed this Task. */
+            from_retrospective_task_id?: string;
             claim?: components["schemas"]["Claim"];
-            /** @description True while any Task blocking this one is open. */
+            /** @description True while any Task blocking this one is open. Always false on a Parent. */
             blocked: boolean;
             /** @description The open Tasks blocking this one. Absent when none is open. */
             open_blockers?: components["schemas"]["TaskBrief"][];
             /** @description The Workspaces the Task names, in the order named. Absent when it names none. */
             workspace_ids?: string[];
-            filed_by: string;
+            /**
+             * @description The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
+             *     Acceptance, a Retrospective.
+             */
+            filed_by?: string;
             /**
              * Format: date-time
-             * @description When the Task was filed or last handed over.
+             * @description When the Task was filed or last reached a Step; `next` gives a tie to the Task that has waited longest.
              */
             waiting_since: string;
             /** Format: date-time */
             created_at: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When it ended, done or dropped.
+             */
             ended_at?: string;
+            subtask_counts?: components["schemas"]["SubtaskCounts"];
         };
-        /** @description A Task named by its id and display key. */
+        /** @description How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks. */
+        SubtaskCounts: {
+            /** @description Open Subtasks, held or not. */
+            open: number;
+            /** @description Open Subtasks with a live Claim; also counted in `open`. */
+            working: number;
+            done: number;
+            dropped: number;
+        };
+        /** @description A Task named by its id, display key and title. */
         TaskBrief: {
             id: string;
-            /** @description Display key, such as `WEB-42`. */
+            /** @description Display key, such as `MAIN-42`. */
             key: string;
+            title: string;
         };
         /**
-         * @description Claimed and lapsed are not states; they follow from the Task's Claim.
+         * @description Claimed, lapsed, waiting and blocked are not states; they follow from the Task's Claim and Blocking.
          * @enum {string}
          */
         TaskState: "open" | "done" | "dropped";
         /**
-         * @description Where a Task is in its workflow, from the list the Organisation defines and orders. The
-         *     rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
-         *     `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
-         *     a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
-         *     drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
-         *     lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
-         *     an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
-         *     holder names one. Claimed and blocked are not Statuses.
-         */
-        Status: {
-            id: string;
-            name: string;
-            kind: components["schemas"]["StatusKind"];
-            /**
-             * Format: int64
-             * @description Its place in the Organisation's list, 1 first.
-             */
-            position: number;
-        };
-        /**
-         * @description What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-         *     `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-         *     `dropped`: reached only by completing or dropping the Task, which never leaves them.
+         * @description `work`: filed by a Member, a question or Escalation included. `breakdown`, `acceptance`
+         *     and `retrospective`: the Subtasks Darkory files about a Parent as a whole, at the Steps
+         *     carrying those Skills.
          * @enum {string}
          */
-        StatusKind: "backlog" | "todo" | "in_progress" | "done" | "dropped";
-        StatusList: {
-            /** @description The Organisation's Statuses, in their order. */
-            items: components["schemas"]["Status"][];
-        };
-        SetStatusesBody: {
-            /**
-             * @description The whole list, in its new order. A Status already in the list carries its `id`; a
-             *     new one has none. A Status left out is deleted.
-             */
-            items: components["schemas"]["StatusInput"][];
-            /**
-             * @description Where the Tasks in a deleted Status go: the deleted Status's id to the id of a Status
-             *     kept in the list, of the same kind of ending (an open kind to an open kind, `done` to
-             *     `done`, `dropped` to `dropped`).
-             */
-            moves?: {
-                [key: string]: string;
-            };
-        };
-        StatusInput: {
-            /** @description The id of a Status in the list now; left out for a new one. */
-            id?: string;
-            name: string;
-            kind: components["schemas"]["StatusKind"];
-        };
-        SetTaskStatusBody: {
-            /** @description Status id or name, of kind `backlog`, `todo` or `in_progress`. */
-            status: string;
-        };
-        /**
-         * @description `breakdown` and `retrospective` Tasks are filed by Darkory.
-         * @enum {string}
-         */
-        TaskKind: "work" | "breakdown" | "retrospective";
+        TaskKind: "work" | "breakdown" | "acceptance" | "retrospective";
         Claim: {
             id: string;
             task_id: string;
             holder_id: string;
             /** @description The Session that made the Claim. */
             session_id: string;
-            /** @description The Skill the Claim was made under. Absent for a Task aimed at a Member. */
+            /** @description The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member. */
             skill_id?: string;
             /**
              * Format: int64
@@ -2016,13 +2280,28 @@ export interface components {
             ended_at?: string;
             how_ended?: components["schemas"]["ClaimEnd"];
         };
-        /** @enum {string} */
-        ClaimEnd: "released" | "handed_over" | "completed" | "lapsed" | "taken_back" | "dropped" | "token_revoked" | "session_closed" | "member_deactivated";
-        /** @description The Task with its record. `proposal` is the latest Skill proposal written on it, when any. */
+        /**
+         * @description How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
+         *     holder filed a Subtask under the Task, which became a Parent. `completed`: the Task ended
+         *     done. `taken_back`: someone on the holder's Reporting line or the Task's Owner took it
+         *     back, or moved the Task. The rest are named for what ended it.
+         * @enum {string}
+         */
+        ClaimEnd: "released" | "advanced" | "split" | "completed" | "lapsed" | "taken_back" | "dropped" | "token_revoked" | "session_closed" | "member_deactivated";
+        /** @description The Task with its record. */
         TaskDetail: {
             task: components["schemas"]["Task"];
-            status: components["schemas"]["Status"];
-            feature: components["schemas"]["Feature"];
+            parent?: components["schemas"]["TaskBrief"];
+            /** @description A Parent's Subtasks, in the order they were filed; empty on a Task with none. */
+            subtasks: components["schemas"]["Task"][];
+            step?: components["schemas"]["Step"];
+            /**
+             * @description The Connectors out of the Task's Step, in order: the outcomes its holder may advance
+             *     it along. Empty when it is at no Step.
+             */
+            connectors: components["schemas"]["Connector"][];
+            /** @description The Labels it carries, by name. */
+            labels: components["schemas"]["Label"][];
             /** @description The Workspaces the Task names, in the order of `task.workspace_ids`. */
             workspaces: components["schemas"]["Workspace"][];
             /** @description Every Claim on the Task, oldest first. */
@@ -2034,8 +2313,13 @@ export interface components {
             blockers: components["schemas"]["Task"][];
             /** @description The Tasks this one blocks. */
             blocking: components["schemas"]["Task"][];
+            /** @description The Observations recorded on the Task itself, oldest first. */
             observations: components["schemas"]["Observation"][];
-            proposal?: components["schemas"]["SkillProposal"];
+            /**
+             * @description The latest Skill proposal written on the Task for each Skill, pending or decided,
+             *     oldest first. A Retrospective carries at most one pending proposal per Skill.
+             */
+            proposals: components["schemas"]["SkillProposal"][];
         };
         TaskList: {
             items: components["schemas"]["Task"][];
@@ -2043,28 +2327,44 @@ export interface components {
             next_cursor?: string;
         };
         FileTaskBody: {
-            /** @description Feature id or display key. May be left out when `blocks` is given. */
-            feature?: string;
+            /** @description Project id or key. May be left out when `parent` or `blocks` is given. */
+            project?: string;
             title: string;
             description?: string;
-            /** @description Skill id or name the Task needs. Give this or `aimed_at`. */
-            skill?: string;
-            /** @description Member id or name the Task is aimed at. Give this or `skill`. */
-            aimed_at?: string;
+            /** @description Id or display key of the Task to file a Subtask under. */
+            parent?: string;
+            /** @description Member id or name. Defaults to the caller; a Subtask's is its Parent's and cannot be named. */
+            owner?: string;
+            /**
+             * @description Step id or name in the Project's Workflow to start at. Defaults to the first Step that
+             *     carries a Skill, or the first Step when none does.
+             */
+            step?: string;
+            /** @description File the Task with its Breakdown Subtask, making it a Parent from its first moment. */
+            breakdown?: boolean;
+            /** @description Defaults to the Project's. Not on a Subtask. */
+            auto_complete?: boolean;
+            /** @description Defaults to the Project's. Not on a Subtask. */
+            acceptance?: boolean;
+            /** @description Label ids or names, each the Project's own or the Organisation's. */
+            labels?: string[];
+            /**
+             * @description Workspace ids or names the Task names: where a session works it. Left out, a Task with
+             *     no Parent names its Project's default Workspace, or none when the Project has none,
+             *     and a Subtask names its Parent's Workspaces; an empty list names none.
+             */
+            workspaces?: string[];
+            /** @description Member id or name the Task is aimed at by name; it then waits with them at no Step. */
+            aim?: string;
             /** @description Id or display key of a Task the new one blocks (a question or Escalation). */
             blocks?: string;
             /**
-             * @description Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
-             *     `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
-             *     Status.
+             * @description Only when filing a Subtask under a Task the caller holds: added to the Parent's Notes
+             *     in the same write, as the Claim the filing ends hands its context on.
              */
-            status?: string;
-            /**
-             * @description Workspace ids or names the Task names: where a session works it. Left out, the Task
-             *     names its Feature's Team's default Workspace, or none when the Team has none; an
-             *     empty list names none.
-             */
-            workspaces?: string[];
+            note?: string;
+            /** @description Id or display key of the Retrospective filing this Task. */
+            from_retrospective?: string;
         };
         ClaimTaskBody: {
             /** @description Seconds without a Heartbeat before the Claim lapses. 0 for none. Defaults to the token's default. */
@@ -2088,8 +2388,8 @@ export interface components {
         };
         /**
          * @description `ok`: the Claim is extended. `lapsed`: it ran out before this Heartbeat. `taken_back`:
-         *     someone on the Reporting line or the Feature owner took it back. `ended`: it ended some
-         *     other way (released, handed over, completed, dropped, revoked).
+         *     someone on the Reporting line or the Task's Owner took it back, or moved the Task.
+         *     `ended`: it ended some other way (released, advanced, split, completed, dropped, revoked).
          * @enum {string}
          */
         HeartbeatStatus: "ok" | "lapsed" | "taken_back" | "ended";
@@ -2097,16 +2397,20 @@ export interface components {
             /** @description Added to the Task's Notes in the same write. */
             note?: string;
         };
-        HandoverTaskBody: {
-            /** @description Skill id or name the Task needs next. */
-            skill: string;
+        AdvanceTaskBody: {
+            /**
+             * @description The name of a Connector out of the Task's Step, ignoring case. May be left out when
+             *     the Step has exactly one.
+             */
+            outcome?: string;
+            /** @description Added to the Task's Notes in the same write, before it moves on. */
+            note?: string;
+        };
+        MoveTaskBody: {
+            /** @description Step id or name in the Task's Project's Workflow. */
+            step: string;
             /** @description Added to the Task's Notes in the same write. */
             note?: string;
-            /**
-             * @description Status id or name to move the Task to, of kind `backlog`, `todo` or `in_progress`,
-             *     such as In review. Left out, the Status stays as it is.
-             */
-            status?: string;
         };
         CompleteTaskBody: {
             /** @description Added to the Task's Notes in the same write. */
@@ -2117,6 +2421,18 @@ export interface components {
         };
         TakeBackTaskBody: {
             reason?: string;
+        };
+        PassOwnershipBody: {
+            /** @description Member id or name. */
+            owner: string;
+        };
+        RankTaskBody: {
+            /** Format: int64 */
+            position: number;
+        };
+        SetTaskLabelsBody: {
+            /** @description Label ids or names, each the Task's Project's own or the Organisation's; the whole set it carries. */
+            labels: string[];
         };
         Note: {
             id: string;
@@ -2131,10 +2447,14 @@ export interface components {
         AddNoteBody: {
             body: string;
         };
+        /**
+         * @description An entry on a Task, marked worked or didn't work, recording who wrote it and the Skill
+         *     they worked under. It feeds the Retrospective of the Task's Parent, which marks it
+         *     reviewed.
+         */
         Observation: {
             id: string;
             task_id: string;
-            feature_id: string;
             author_id: string;
             /** @description The Skill the author was working under. */
             skill_id?: string;
@@ -2156,11 +2476,13 @@ export interface components {
             outcome: components["schemas"]["ObservationOutcome"];
             body: string;
         };
+        /**
+         * @description A report, screenshot or log attached to a Task, recording who attached it; Evidence
+         *     about a Parent as a whole is attached to the Parent.
+         */
         Evidence: {
             id: string;
-            feature_id: string;
-            /** @description Absent when attached to the Feature itself. */
-            task_id?: string;
+            task_id: string;
             filename: string;
             content_type: string;
             /** Format: int64 */
@@ -2191,15 +2513,25 @@ export interface components {
         /**
          * @description What happened. The part before the dot is the `subject_type`. New kinds may be added
          *     within `/v1`; a client should skip a kind it does not know.
+         *
+         *     The entries that trace a Task's path through its Workflow carry Step ids in their
+         *     payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
+         *     Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
+         *     Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
+         *     down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
+         *     and `from` when it was at a Step; `task.became_parent`, `task.completed` and
+         *     `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
+         *     when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
+         *     itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
          * @enum {string}
          */
-        ActivityKind: "feature.filed" | "feature.ranked" | "feature.shipped" | "feature.dropped" | "feature.owner_passed" | "feature.evidence_attached" | "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.handed_over" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.status_set" | "statuses.changed" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "team.created" | "team.changed" | "team.member_added" | "team.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
         /**
-         * @description The kind of record an Activity entry is about. `statuses` is the Organisation's list of
-         *     Statuses as a whole; its `subject_id` is the Organisation's id.
+         * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
+         *     whole; its `subject_id` is the Project's id.
          * @enum {string}
          */
-        SubjectType: "feature" | "task" | "skill" | "member" | "team" | "token" | "session" | "login_link" | "statuses" | "workspace";
+        SubjectType: "task" | "workflow" | "label" | "skill" | "member" | "project" | "token" | "session" | "login_link" | "workspace";
         ActivityPage: {
             items: components["schemas"]["Activity"][];
             /**
@@ -2225,7 +2557,7 @@ export interface components {
             session_id: string;
             /** @description The machine the session runs on. */
             host: string;
-            /** @description The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined. */
+            /** @description The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined. */
             tmux?: string;
             /** Format: date-time */
             started_at: string;
@@ -2250,16 +2582,17 @@ export interface components {
             runner: boolean;
         };
         /**
-         * @description The list a View is of; its filters are that list's `filter` tokens.
+         * @description The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+         *     more may be added within `/v1`.
          * @enum {string}
          */
-        ViewEntity: "tasks" | "features";
+        ViewEntity: "tasks";
         /** @description A saved set of filters, sort and display for a list, kept by one Member for themselves. */
         View: {
             id: string;
             entity: components["schemas"]["ViewEntity"];
-            /** @description The Team whose list it is; absent for a list across Teams. */
-            team_id?: string;
+            /** @description The Project whose list it is; absent for a list across Projects. */
+            project_id?: string;
             name: string;
             /** @description The list's `filter` tokens, in the order saved. */
             filters: string[];
@@ -2279,8 +2612,8 @@ export interface components {
         };
         CreateViewBody: {
             entity: components["schemas"]["ViewEntity"];
-            /** @description The Team whose list it is, by id or key; omitted for a list across Teams. */
-            team?: string;
+            /** @description The Project whose list it is, by id or key; omitted for a list across Projects. */
+            project?: string;
             name: string;
             /** @description The list's `filter` tokens; none when omitted. */
             filters?: string[];
@@ -2320,19 +2653,19 @@ export interface components {
         IdempotencyKey: string;
         /** @description Member id or name. */
         MemberRef: string;
-        /** @description Team id or key, such as `WEB`. */
-        TeamRef: string;
+        /** @description Project id or key, such as `MAIN`. */
+        ProjectRef: string;
         /** @description Skill id or name. */
         SkillRef: string;
-        /** @description Feature id or display key, such as `WEB-1`. */
-        FeatureRef: string;
-        /** @description Task id or display key, such as `WEB-42`. */
+        /** @description Task id or display key, such as `MAIN-42`. */
         TaskRef: string;
         /** @description Id or display key of the blocking Task. */
         BlockerRef: string;
         TokenID: string;
         /** @description Workspace id or name. */
         WorkspaceRef: string;
+        /** @description Label id. */
+        LabelID: string;
         EvidenceID: string;
         ProposalID: string;
         /** @description The id the running copy chose for its Session. */
@@ -2353,50 +2686,45 @@ export interface components {
          *     nothing.
          *
          *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
-         *     boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
-         *     `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
-         *     the earlier first) and `last` (`7d`, `30d` or `90d`: at or after the server's now less
-         *     that many days). A date is RFC 3339 with its offset, to the millisecond, such as
+         *     boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
+         *     `contains` (one value) on text; on dates `before` (earlier than), `after` (later than),
+         *     `gte`, `lte` (one value), `btw` (two values, both ends included, the earlier first) and
+         *     `last` (`7d`, `30d` or `90d`: at or after the server's now less that many days). A date
+         *     is RFC 3339 with its offset, to the millisecond, such as
          *     `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
          *     `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
-         *     match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
-         *     Member, which need no Skill), and on a field with several values (`workspace`) match a
-         *     Task none of whose values is one given.
+         *     match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
+         *     Parent, a Task aimed at a Member, an ended Task), and on a field with several values
+         *     (`label`, `workspace`) match a Task none of whose values is one given.
          *
-         *     Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
-         *     `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
-         *     for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
-         *     id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
-         *     (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
-         *     and blocks an open Task) · `kind` (`work`, `breakdown`, `retrospective`, or `question`: a
-         *     work Task aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a
-         *     live Claim; `unheld`: none, as `holder:is:none`; `lapsed`: a Claim of the Task lapsed
-         *     within the last 24 hours; `session`: the Runner beside this server runs a session for
-         *     it now, as `listRunnerSessions` lists) · `workspace` (Workspace id the Task names) ·
-         *     `model` (the live Claim's model label) · `filed_at` (when it was filed) ·
-         *     `completed_at` (when it ended done; a dropped Task has none) · `q` (`contains`,
-         *     ignoring case, over the key and the title).
+         *     Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+         *     carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
+         *     `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
+         *     (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
+         *     (Member id holding a live Claim, or `none` for no live Claim) · `aimed_at` (Member id) ·
+         *     `owner` (Member id owning the Task) · `filed_by` (Member id; the Subtasks Darkory files
+         *     itself have none) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is
+         *     open and blocks an open Task) · `kind` (`work`, `breakdown`, `acceptance`,
+         *     `retrospective`, or `question`: a work Task aimed at a Member; `work` is a work Task aimed
+         *     at nobody) · `claim` (`held`: a live Claim; `unheld`: none, as `holder:is:none`;
+         *     `lapsed`: a Claim of the Task lapsed within the last 24 hours; `session`: the Runner
+         *     beside this server runs a session for it now, as `listRunnerSessions` lists) ·
+         *     `takeable_by` (`agents`: an active agent could take it by its Step's Skill, being a
+         *     Member of its Project with that Skill, or for `skill-review` any Member of the
+         *     Organisation with it; `humans`: likewise a human; `both`: an agent and a human could) ·
+         *     `rank` (a number, its place in its Project's Rank, 1 first; a Subtask's is its Parent's)
+         *     · `auto_complete` (`true`, `false`) · `acceptance` (`true`, `false`) · `workspace`
+         *     (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
+         *     it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
+         *     (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
+         *     title).
          *
-         *     Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
-         *     An unknown field, an operator the field does not take, the wrong number of values or a
-         *     value the field cannot hold is refused with `invalid`, naming the token. At most 50
-         *     `filter`s of at most 100 values each.
+         *     Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
+         *     unknown field, an operator the field does not take, the wrong number of values or a value
+         *     the field cannot hold is refused with `invalid`, naming the token. At most 50 `filter`s
+         *     of at most 100 values each.
          */
         TaskFilter: string[];
-        /**
-         * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
-         *     (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
-         *     `nin` OR within one).
-         *
-         *     Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
-         *     · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
-         *     `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
-         *     ignoring case, over the key and the title).
-         *
-         *     Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
-         *     naming the token, as on `listTasks`.
-         */
-        FeatureFilter: string[];
         ViewID: string;
     };
     requestBodies: never;
@@ -2746,8 +3074,8 @@ export interface operations {
     listMembers: {
         parameters: {
             query?: {
-                /** @description Only Members of this Team. */
-                team?: string;
+                /** @description Only Members of this Project, by id or key. */
+                project?: string;
                 kind?: components["schemas"]["MemberKind"];
             };
             header?: never;
@@ -3101,7 +3429,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    listTeams: {
+    listProjects: {
         parameters: {
             query?: never;
             header?: never;
@@ -3110,19 +3438,19 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The Teams, by name. */
+            /** @description The Projects, by name. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamList"];
+                    "application/json": components["schemas"]["ProjectList"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    createTeam: {
+    createProject: {
         parameters: {
             query?: never;
             header?: {
@@ -3137,47 +3465,47 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateTeamBody"];
+                "application/json": components["schemas"]["CreateProjectBody"];
             };
         };
         responses: {
-            /** @description The new Team. */
+            /** @description The new Project with its Members. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Team"];
+                    "application/json": components["schemas"]["ProjectDetail"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    getTeam: {
+    getProject: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Team id or key, such as `WEB`. */
-                team: components["parameters"]["TeamRef"];
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The Team. */
+            /** @description The Project. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeamDetail"];
+                    "application/json": components["schemas"]["ProjectDetail"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    updateTeam: {
+    updateProject: {
         parameters: {
             query?: never;
             header?: {
@@ -3188,30 +3516,30 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Team id or key, such as `WEB`. */
-                team: components["parameters"]["TeamRef"];
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateTeamBody"];
+                "application/json": components["schemas"]["UpdateProjectBody"];
             };
         };
         responses: {
-            /** @description The Team. */
+            /** @description The Project. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Team"];
+                    "application/json": components["schemas"]["Project"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    addTeamMember: {
+    addProjectMember: {
         parameters: {
             query?: never;
             header?: {
@@ -3222,8 +3550,8 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Team id or key, such as `WEB`. */
-                team: components["parameters"]["TeamRef"];
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
                 /** @description Member id or name. */
                 member: components["parameters"]["MemberRef"];
             };
@@ -3231,7 +3559,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The Member is in the Team. */
+            /** @description The Member is in the Project. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -3241,7 +3569,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    removeTeamMember: {
+    removeProjectMember: {
         parameters: {
             query?: never;
             header?: {
@@ -3252,8 +3580,8 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Team id or key, such as `WEB`. */
-                team: components["parameters"]["TeamRef"];
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
                 /** @description Member id or name. */
                 member: components["parameters"]["MemberRef"];
             };
@@ -3261,12 +3589,242 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The Member is not in the Team. */
+            /** @description The Member is not in the Project. */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getWorkflow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Workflow. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setWorkflow: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetWorkflowBody"];
+            };
+        };
+        responses: {
+            /** @description The new Workflow, as `getWorkflow` returns it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Workflow"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listProjectLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Labels, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createProjectLabel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLabelBody"];
+            };
+        };
+        responses: {
+            /** @description The new Label. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Labels, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabelList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createLabel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLabelBody"];
+            };
+        };
+        responses: {
+            /** @description The new Label. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteLabel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Label id. */
+                label: components["parameters"]["LabelID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Label is gone. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateLabel: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Label id. */
+                label: components["parameters"]["LabelID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLabelBody"];
+            };
+        };
+        responses: {
+            /** @description The Label. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Label"];
+                };
             };
             default: components["responses"]["Error"];
         };
@@ -3396,58 +3954,6 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    listStatuses: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The Statuses. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusList"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    setStatuses: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetStatusesBody"];
-            };
-        };
-        responses: {
-            /** @description The Statuses, in their new order. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusList"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
     listWorkspaces: {
         parameters: {
             query?: never;
@@ -3562,313 +4068,20 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    listFeatures: {
-        parameters: {
-            query?: {
-                team?: string;
-                state?: components["schemas"]["FeatureState"];
-                owner?: string;
-                /**
-                 * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
-                 *     (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
-                 *     `nin` OR within one).
-                 *
-                 *     Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
-                 *     · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
-                 *     `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
-                 *     ignoring case, over the key and the title).
-                 *
-                 *     Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
-                 *     naming the token, as on `listTasks`.
-                 */
-                filter?: components["parameters"]["FeatureFilter"];
-                /** @description At most this many items. Defaults to 100. */
-                limit?: components["parameters"]["Limit"];
-                /** @description The `next_cursor` of the previous page. */
-                cursor?: components["parameters"]["Cursor"];
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The Features. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeatureList"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    fileFeature: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileFeatureBody"];
-            };
-        };
-        responses: {
-            /** @description The Feature with its Break down Task, or a quick Feature with its one Task. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeatureDetail"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    getFeature: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The Feature. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeatureDetail"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    rankFeature: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RankFeatureBody"];
-            };
-        };
-        responses: {
-            /** @description The Feature in its new place. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Feature"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    shipFeature: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The shipped Feature with its Retrospective Task. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeatureDetail"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    dropFeature: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The dropped Feature with its Retrospective Task. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FeatureDetail"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    passFeatureOwnership: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PassFeatureOwnershipBody"];
-            };
-        };
-        responses: {
-            /** @description The Feature under its new owner. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Feature"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    listFeatureObservations: {
-        parameters: {
-            query?: {
-                /**
-                 * @description Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
-                 *     Observation, reviewed or not.
-                 */
-                reviewed?: boolean;
-            };
-            header?: never;
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The Observations, oldest first. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ObservationList"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    attachFeatureEvidence: {
-        parameters: {
-            query: {
-                /** @description The file's name, as it should be shown and downloaded. */
-                filename: components["parameters"]["EvidenceFilename"];
-            };
-            header?: {
-                /**
-                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
-                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-                 */
-                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                /** @description Feature id or display key, such as `WEB-1`. */
-                feature: components["parameters"]["FeatureRef"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "*/*": string;
-            };
-        };
-        responses: {
-            /** @description The Evidence record. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Evidence"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
     listTasks: {
         parameters: {
             query?: {
-                feature?: string;
-                team?: string;
+                /** @description Only Tasks of this Project, by id or key. */
+                project?: string;
+                /** @description Only the Subtasks of this Task, by id or display key. */
+                parent?: string;
                 state?: components["schemas"]["TaskState"];
-                /** @description Only Tasks that need this Skill now. */
-                skill?: string;
+                /** @description Only Tasks at this Step, by id, or by name together with `project`. */
+                step?: string;
                 /** @description Only Tasks aimed at this Member. */
                 aimed_at?: string;
                 /** @description Only Tasks this Member holds a live Claim on. */
                 holder?: string;
-                /** @description Only Tasks in this Status, by id or name. */
-                status?: string;
                 /**
                  * @description Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
                  *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
@@ -3878,34 +4091,43 @@ export interface operations {
                  *     nothing.
                  *
                  *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
-                 *     boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
-                 *     `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
-                 *     the earlier first) and `last` (`7d`, `30d` or `90d`: at or after the server's now less
-                 *     that many days). A date is RFC 3339 with its offset, to the millisecond, such as
+                 *     boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
+                 *     `contains` (one value) on text; on dates `before` (earlier than), `after` (later than),
+                 *     `gte`, `lte` (one value), `btw` (two values, both ends included, the earlier first) and
+                 *     `last` (`7d`, `30d` or `90d`: at or after the server's now less that many days). A date
+                 *     is RFC 3339 with its offset, to the millisecond, such as
                  *     `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
                  *     `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
-                 *     match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
-                 *     Member, which need no Skill), and on a field with several values (`workspace`) match a
-                 *     Task none of whose values is one given.
+                 *     match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
+                 *     Parent, a Task aimed at a Member, an ended Task), and on a field with several values
+                 *     (`label`, `workspace`) match a Task none of whose values is one given.
                  *
-                 *     Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
-                 *     `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
-                 *     for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
-                 *     id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
-                 *     (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
-                 *     and blocks an open Task) · `kind` (`work`, `breakdown`, `retrospective`, or `question`: a
-                 *     work Task aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a
-                 *     live Claim; `unheld`: none, as `holder:is:none`; `lapsed`: a Claim of the Task lapsed
-                 *     within the last 24 hours; `session`: the Runner beside this server runs a session for
-                 *     it now, as `listRunnerSessions` lists) · `workspace` (Workspace id the Task names) ·
-                 *     `model` (the live Claim's model label) · `filed_at` (when it was filed) ·
-                 *     `completed_at` (when it ended done; a dropped Task has none) · `q` (`contains`,
-                 *     ignoring case, over the key and the title).
+                 *     Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+                 *     carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
+                 *     `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
+                 *     (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
+                 *     (Member id holding a live Claim, or `none` for no live Claim) · `aimed_at` (Member id) ·
+                 *     `owner` (Member id owning the Task) · `filed_by` (Member id; the Subtasks Darkory files
+                 *     itself have none) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is
+                 *     open and blocks an open Task) · `kind` (`work`, `breakdown`, `acceptance`,
+                 *     `retrospective`, or `question`: a work Task aimed at a Member; `work` is a work Task aimed
+                 *     at nobody) · `claim` (`held`: a live Claim; `unheld`: none, as `holder:is:none`;
+                 *     `lapsed`: a Claim of the Task lapsed within the last 24 hours; `session`: the Runner
+                 *     beside this server runs a session for it now, as `listRunnerSessions` lists) ·
+                 *     `takeable_by` (`agents`: an active agent could take it by its Step's Skill, being a
+                 *     Member of its Project with that Skill, or for `skill-review` any Member of the
+                 *     Organisation with it; `humans`: likewise a human; `both`: an agent and a human could) ·
+                 *     `rank` (a number, its place in its Project's Rank, 1 first; a Subtask's is its Parent's)
+                 *     · `auto_complete` (`true`, `false`) · `acceptance` (`true`, `false`) · `workspace`
+                 *     (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
+                 *     it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
+                 *     (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
+                 *     title).
                  *
-                 *     Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
-                 *     An unknown field, an operator the field does not take, the wrong number of values or a
-                 *     value the field cannot hold is refused with `invalid`, naming the token. At most 50
-                 *     `filter`s of at most 100 values each.
+                 *     Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
+                 *     unknown field, an operator the field does not take, the wrong number of values or a value
+                 *     the field cannot hold is refused with `invalid`, naming the token. At most 50 `filter`s
+                 *     of at most 100 values each.
                  */
                 filter?: components["parameters"]["TaskFilter"];
                 /** @description At most this many items. Defaults to 100. */
@@ -4029,7 +4251,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4059,7 +4281,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4093,7 +4315,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4123,7 +4345,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4146,7 +4368,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    handoverTask: {
+    advanceTask: {
         parameters: {
             query?: never;
             header?: {
@@ -4157,18 +4379,52 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AdvanceTaskBody"];
+            };
+        };
+        responses: {
+            /** @description The Task, at its next Step or done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    moveTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["HandoverTaskBody"];
+                "application/json": components["schemas"]["MoveTaskBody"];
             };
         };
         responses: {
-            /** @description The Task. */
+            /** @description The Task at its new Step. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4191,7 +4447,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4225,7 +4481,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4259,7 +4515,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4282,7 +4538,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    setTaskStatus: {
+    passOwnership: {
         parameters: {
             query?: never;
             header?: {
@@ -4293,18 +4549,86 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SetTaskStatusBody"];
+                "application/json": components["schemas"]["PassOwnershipBody"];
             };
         };
         responses: {
-            /** @description The Task in its new Status. */
+            /** @description The Task under its new Owner. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rankTask: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RankTaskBody"];
+            };
+        };
+        responses: {
+            /** @description The Task in its new place. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setTaskLabels: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetTaskLabelsBody"];
+            };
+        };
+        responses: {
+            /** @description The Task with its Labels. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4327,7 +4651,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4350,6 +4674,36 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listTaskObservations: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
+                 *     Observation, reviewed or not.
+                 */
+                reviewed?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Observations, oldest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ObservationList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     observe: {
         parameters: {
             query?: never;
@@ -4361,7 +4715,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4395,7 +4749,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
                 /** @description Id or display key of the blocking Task. */
                 blocker: components["parameters"]["BlockerRef"];
@@ -4425,7 +4779,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
                 /** @description Id or display key of the blocking Task. */
                 blocker: components["parameters"]["BlockerRef"];
@@ -4455,7 +4809,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4492,7 +4846,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4573,13 +4927,17 @@ export interface operations {
                 before?: number;
                 /**
                  * @description Only entries this Member (id or name) acted in, or that ended a Claim they held: a
-                 *     lapse, a take-back, a drop, a revoked token, a closed Session or a deactivation.
+                 *     lapse, a take-back, a move, a drop, a revoked token, a closed Session or a
+                 *     deactivation.
                  */
                 member?: string;
                 /** @description Only entries of these kinds; repeat it for several. */
                 kind?: components["schemas"]["ActivityKind"][];
-                /** @description Only entries about a Feature of this Team (id or key), or about a Task of one. */
-                team?: string;
+                /**
+                 * @description Only entries about this Project (id or key): the Project itself, its Workflow, its own
+                 *     Labels, or a Task of it.
+                 */
+                project?: string;
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
             };
@@ -4659,7 +5017,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4687,7 +5045,7 @@ export interface operations {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
             };
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4712,7 +5070,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Task id or display key, such as `WEB-42`. */
+                /** @description Task id or display key, such as `MAIN-42`. */
                 task: components["parameters"]["TaskRef"];
             };
             cookie?: never;
@@ -4734,8 +5092,8 @@ export interface operations {
             query?: {
                 /** @description Only Views of this list. */
                 entity?: components["schemas"]["ViewEntity"];
-                /** @description Only Views of this Team's list, by id or key. */
-                team?: string;
+                /** @description Only Views of this Project's list, by id or key. */
+                project?: string;
             };
             header?: never;
             path?: never;
