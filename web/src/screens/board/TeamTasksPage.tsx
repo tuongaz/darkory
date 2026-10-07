@@ -58,7 +58,8 @@ export function TeamTasksPage() {
     [sorted, display, filters, model.featureById, model.statusById, model.now, view],
   );
 
-  const crumbs = [{ label: team?.name ?? teamRef, icon: team ? <TeamMark team={team} /> : undefined }, { label: "Tasks" }];
+  // On a phone the bar shows the Team alone, beside the view switch and the actions.
+  const crumbs = [{ label: team?.name ?? teamRef, icon: team ? <TeamMark team={team} /> : undefined }, { label: "Tasks", wide: true }];
   const top = (
     <>
       <h1 className="sr-only">{view === "board" ? "Tasks, board" : "Tasks, list"}</h1>

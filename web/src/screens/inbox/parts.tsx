@@ -9,6 +9,7 @@ import { StatusGlyph } from "@/components/StatusGlyph";
 import { Button } from "@/components/ui/button";
 import { usePeekLink } from "@/app/peek";
 import { cn } from "@/lib/utils";
+import { kindLabel } from "@/work";
 import { startOfDay } from "./derive";
 import { refusalToast } from "./toast";
 import type { StatusView } from "./queries";
@@ -137,8 +138,8 @@ export function AnswerButton({ task, primary }: { task: Task; primary?: boolean 
   );
 }
 
-/** A Task's kind as a chip, for the Tasks Darkory files. */
+/** A Task's kind as a chip, for the Tasks Darkory files, unless the title already says it. */
 export function KindPill({ task }: { task: Task }) {
-  if (task.kind === "work") return null;
-  return <Pill tone="secondary">{task.kind === "breakdown" ? "Break down" : "Retrospective"}</Pill>;
+  const label = kindLabel(task);
+  return label ? <Pill tone="secondary">{label}</Pill> : null;
 }

@@ -18,7 +18,7 @@ import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { TeamMark } from "@/components/TeamMark";
-import { ClockTime } from "@/components/Time";
+import { ClockTime, DayTime } from "@/components/Time";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { featureBranch } from "@/lib/branch";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { liveClaim } from "@/work";
+import { kindLabel, liveClaim } from "@/work";
 import { Field } from "./dialogs";
 import { orderTasks, sizeText, statusGlyph, useMemberName, type StatusLike } from "./format";
 import { Avatar, MemberName, Needs, TaskLink } from "./parts";
@@ -34,8 +34,6 @@ import { useFeature, useFeatureObservations, useStatuses, useTasks } from "./que
 import { lapsedClaim } from "./record";
 import { Branch } from "./TaskProperties";
 import { OutcomePill } from "./TaskRecord";
-
-const kinds = { work: undefined, breakdown: "Break down", retrospective: "Retrospective" } as const;
 
 /** /features/:feature (F-F1): the header, the Tasks by Status, the Evidence, the unreviewed Observations. */
 export function FeaturePage() {
@@ -137,11 +135,11 @@ function FeatureBody({ detail }: { detail: FeatureDetail }) {
           </span>
         </div>
         <div>
-          <div className="flex h-7 items-center gap-2.5 border-b px-2 text-xs font-medium text-muted-foreground" aria-hidden>
-            <span className="w-[80px]">Status</span>
-            <span className="flex-1">Task</span>
-            <span className="hidden w-[140px] md:block">Needs</span>
-            <span className="w-[72px]" />
+          <div className={cn(taskGrid, "h-7 border-b text-xs font-medium text-muted-foreground")} aria-hidden>
+            <span className="col-span-3">Task</span>
+            <span className="hidden md:block">Needs</span>
+            <span>Held by</span>
+            <span className="text-right">Updated</span>
           </div>
           <ul>
             {tasks.map((t) => (
@@ -157,6 +155,9 @@ function FeatureBody({ detail }: { detail: FeatureDetail }) {
   );
 }
 
+// Status · key · title, its kind and marks · Needs · Held by · Updated; a phone leaves out Needs.
+const taskGrid = "grid grid-cols-[14px_56px_minmax(0,1fr)_48px_48px] items-center gap-2.5 px-2 md:grid-cols-[14px_56px_minmax(0,1fr)_140px_48px_48px]";
+
 /** One of the Feature's Tasks, opening its peek: Status, key, title, its marks, what it needs, who holds it. */
 function TaskRow({ task, detail, statuses }: { task: Task; detail: TaskDetail | undefined; statuses: StatusLike[] | undefined }) {
   const peek = usePeekLink();
@@ -165,7 +166,7 @@ function TaskRow({ task, detail, statuses }: { task: Task; detail: TaskDetail | 
   const claim = liveClaim(task, now);
   const lapsed = !claim && detail ? lapsedClaim(detail) : undefined;
   const ended = task.state !== "open";
-  const kind = kinds[task.kind];
+  const kind = kindLabel(task);
   // A question (a Task aimed at a Member) says which Task waits on its answer.
   const blocks = task.aimed_at_id && !ended ? (detail?.blocking.filter((b) => b.state === "open") ?? []) : [];
   const last = detail?.claims.at(-1);
@@ -174,39 +175,43 @@ function TaskRow({ task, detail, statuses }: { task: Task; detail: TaskDetail | 
     <li>
       <Link
         to={peek(task.key)}
-        className={cn("flex h-9 items-center gap-2.5 border-b px-2 hover:bg-accent", ended && "text-muted-foreground")}
+        className={cn(taskGrid, "h-9 border-b hover:bg-accent", ended && "text-muted-foreground")}
         aria-label={`${task.key} ${task.title}`}
       >
         {status ? <StatusGlyph glyph={statusGlyph(status, statuses)} label={status.name} /> : <span className="size-3.5" />}
-        <Key className="w-[56px]">{task.key}</Key>
-        <span className={cn("min-w-0 flex-1 truncate", !ended && "font-medium")}>{task.title}</span>
-        <span className="hidden flex-none items-center gap-1.5 sm:flex">
-          {lapsed?.ended_at && (
-            <Pill tone="dropped">
-              Lapsed <ClockTime at={lapsed.ended_at} />
-            </Pill>
-          )}
-          {task.open_blockers?.[0] && <Pill tone="blocked">Blocked by {task.open_blockers[0].key}</Pill>}
-          {blocks[0] && (
-            <Pill tone="secondary">
-              <LinkIcon aria-hidden />
-              blocks {blocks[0].key}
-            </Pill>
-          )}
-          {claim?.expires_at && <HeartbeatMeter claim={claim} variant="compact" />}
+        <Key>{task.key}</Key>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={cn("min-w-0 truncate", !ended && "font-medium")}>{task.title}</span>
           {kind && <Pill tone="secondary">{kind}</Pill>}
-          {detail && detail.evidence.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-muted-foreground" title={`${detail.evidence.length} Evidence`}>
-              <PaperclipIcon className="size-3" aria-hidden />
-              {detail.evidence.length}
-            </span>
-          )}
+          <span className="ml-auto hidden flex-none items-center gap-1.5 pl-1.5 sm:flex">
+            {lapsed?.ended_at && (
+              <Pill tone="dropped">
+                Lapsed <ClockTime at={lapsed.ended_at} />
+              </Pill>
+            )}
+            {task.open_blockers?.[0] && <Pill tone="blocked">Blocked by {task.open_blockers[0].key}</Pill>}
+            {blocks[0] && (
+              <Pill tone="secondary">
+                <LinkIcon aria-hidden />
+                blocks {blocks[0].key}
+              </Pill>
+            )}
+            {claim?.expires_at && <HeartbeatMeter claim={claim} variant="compact" />}
+            {detail && detail.evidence.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground" title={`${detail.evidence.length} Evidence`}>
+                <PaperclipIcon className="size-3" aria-hidden />
+                {detail.evidence.length}
+              </span>
+            )}
+          </span>
         </span>
-        <span className="hidden w-[140px] flex-none truncate md:block">{!kind && !ended && <Needs task={task} short />}</span>
-        <span className="flex w-5 flex-none justify-center">{who && <Avatar id={who} />}</span>
-        <span className="w-11 flex-none text-right text-muted-foreground tabular-nums">
-          <ClockTime at={task.ended_at ?? task.waiting_since} />
-        </span>
+        <span className="hidden min-w-0 truncate md:block">{!ended && <Needs task={task} short />}</span>
+        <span className="flex">{who && <Avatar id={who} />}</span>
+        <DayTime
+          at={task.ended_at ?? task.waiting_since}
+          what={task.ended_at ? "Ended" : "Waiting since"}
+          className="text-right text-muted-foreground"
+        />
       </Link>
     </li>
   );

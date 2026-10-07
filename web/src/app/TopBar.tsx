@@ -3,7 +3,8 @@ import { Link } from "react-router";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode };
+/** A step of the breadcrumb. `wide` leaves it out on a phone, where the bar has room for the area alone. */
+export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: boolean };
 
 /**
  * The 44px bar over every screen (kit `.topbar`): where you are, then the view switcher, then the
@@ -30,11 +31,11 @@ export function TopBar({
         {crumbs.map((c, i) => (
           <Fragment key={i}>
             {i > 0 && (
-              <span aria-hidden className="text-border">
+              <span aria-hidden className={cn("text-border", c.wide && "hidden sm:inline")}>
                 /
               </span>
             )}
-            <span className={cn("flex min-w-0 items-center gap-1.5", i === 0 && "font-medium text-foreground")}>
+            <span className={cn("flex min-w-0 items-center gap-1.5", i === 0 && "font-medium text-foreground", c.wide && "hidden sm:flex")}>
               {c.icon}
               {c.to ? (
                 <Link to={c.to} className="truncate hover:underline">

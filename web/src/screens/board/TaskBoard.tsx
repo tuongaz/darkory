@@ -18,7 +18,7 @@ import {
   type DragStartEvent,
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
-import { PlusIcon } from "lucide-react";
+import { ChevronRightIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Task } from "@/api/client";
@@ -29,6 +29,7 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { liveClaim } from "@/work";
 import { AimedAt, BlocksPill, FeatureRef, HeartbeatLine, MarkPill, SkillPill } from "./bits";
 import { isOpenKind, marksOf, type Status } from "./derive";
 import { aimedAt, featureOf, holderOf, type BoardModel } from "./model";
@@ -152,17 +153,21 @@ function BoardColumn({
   const glyph = <StatusGlyph glyph={model.glyphs.get(status.id) ?? "todo"} label={status.name} />;
   const outline = dropTarget && "rounded-md outline-2 outline-offset-4 outline-ring outline-dashed";
   if (collapsed) {
+    // A hidden column keeps only its header, glyph and name on one line as every column's are, so
+    // the glyph reads as the Status's and not as a close button; a click shows the column.
     return (
-      <section ref={setNodeRef} aria-label={status.name} data-status={status.name} className={cn("flex w-9 flex-none flex-col", outline)}>
+      <section ref={setNodeRef} aria-label={status.name} data-status={status.name} className={cn("flex flex-none flex-col", outline)}>
         <button
           type="button"
           onClick={() => onExpand(status)}
           aria-label={`Show ${status.name}, ${tasks.length}`}
-          className="flex items-center gap-1.5 rounded-md py-2 font-medium [writing-mode:vertical-rl] hover:bg-accent"
+          title={`Show ${status.name}`}
+          className="flex h-7 items-center gap-2 rounded-md px-1.5 font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           {glyph}
           {status.name}
-          <span className="font-normal text-muted-foreground tabular-nums">{tasks.length}</span>
+          <span className="font-normal tabular-nums">{tasks.length}</span>
+          <ChevronRightIcon className="size-3.5" aria-hidden />
         </button>
       </section>
     );
@@ -224,6 +229,12 @@ function CardBody({ task, model, lifted }: { task: Task; model: BoardModel; lift
   const holder = holderOf(task, model);
   const aimed = aimedAt(task, model);
   const blocks = model.blocks.get(task.id) ?? [];
+  const needs = ended
+    ? null
+    : task.skill_id
+      ? model.skills.has(task.skill_id) && <SkillPill task={task} model={model} />
+      : blocks.length > 0 && <BlocksPill blocks={blocks} />;
+  const held = !!liveClaim(task, model.now)?.expires_at;
   return (
     <div
       className={cn(
@@ -237,12 +248,15 @@ function CardBody({ task, model, lifted }: { task: Task; model: BoardModel; lift
         {holder ? <MemberAvatar member={holder} /> : aimed && <AimedAt member={aimed} />}
       </div>
       <div className="leading-[1.35] font-medium">{task.title}</div>
-      <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-        <FeatureRef feature={featureOf(model, task)} className="flex-1" />
-        {/* A question aimed at a Member shows what it holds up; any other Task the Skill it needs. */}
-        {!ended && (task.skill_id ? <SkillPill task={task} model={model} /> : <BlocksPill blocks={blocks} />)}
-      </div>
-      <HeartbeatLine task={task} now={model.now} />
+      {/* The Feature on a line of its own, so two clients' Features read apart at five columns. */}
+      <FeatureRef feature={featureOf(model, task)} />
+      {/* The pills: what an open Task needs (a question: what it holds up), then the Heartbeat. */}
+      {(needs || held) && (
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          {needs}
+          <HeartbeatLine task={task} now={model.now} />
+        </div>
+      )}
     </div>
   );
 }

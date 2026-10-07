@@ -4,7 +4,7 @@
 import type { Activity, Feature, Task, TaskBrief, TaskCounts } from "@/api/client";
 import type { components } from "@/api/schema.gen";
 import { glyphFor, type Glyph } from "@/lib/status";
-import { liveClaim } from "@/work";
+import { kindLabel, liveClaim } from "@/work";
 
 export type Status = components["schemas"]["Status"];
 export type StatusKind = Status["kind"];
@@ -212,8 +212,9 @@ export function marksOf(task: Task, trail: ClaimTrail | undefined, now: number):
   if (task.state === "open" && task.blocked) marks.push({ kind: "blocked", by: task.open_blockers?.[0]?.key ?? "" });
   const lapsed = lapsedAt(task, trail, now);
   if (lapsed) marks.push({ kind: "lapsed", at: lapsed });
-  if (task.kind === "breakdown") marks.push({ kind: "task-kind", label: "Break down" });
-  if (task.kind === "retrospective") marks.push({ kind: "task-kind", label: "Retrospective" });
+  // The kind, unless the title already says it ("Break down: Checkout").
+  const label = kindLabel(task);
+  if (label) marks.push({ kind: "task-kind", label });
   return marks;
 }
 
@@ -303,16 +304,4 @@ export function countsText(counts: TaskCounts): string {
   const parts = [`${counts.done} done`, `${counts.open} open`];
   if (counts.dropped > 0) parts.push(`${counts.dropped} dropped`);
   return parts.join(" · ");
-}
-
-const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
-const dayYear = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
-
-/** A time as a row shows it: "22:18" today, "6 Oct" this year, "6 Oct 2025" before. */
-export function shortWhen(at: string, now: number): string {
-  const d = new Date(at);
-  const n = new Date(now);
-  if (d.toDateString() === n.toDateString()) return clock.format(d);
-  return d.getFullYear() === n.getFullYear() ? day.format(d) : dayYear.format(d);
 }

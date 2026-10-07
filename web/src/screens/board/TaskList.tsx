@@ -9,19 +9,35 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { StatusGlyph } from "@/components/StatusGlyph";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
+import { DayTime } from "@/components/Time";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import { BlocksPill, FeatureRef, MarkPill, SkillPill } from "./bits";
-import { marksOf, shortWhen, type Group } from "./derive";
+import { marksOf, type Group } from "./derive";
 import { aimedAt, featureOf, holderOf, type BoardModel } from "./model";
 
-// glyph · key · title · marks · Feature · Skill · holder · waiting since; on a phone the last four go.
-const rowGrid =
-  "grid grid-cols-[14px_56px_minmax(0,1fr)_minmax(0,auto)] md:grid-cols-[14px_56px_minmax(0,1fr)_auto_200px_118px_28px_56px]";
+// glyph · key · title · marks · Feature · Skill · holder · updated (waiting since, or ended); on a
+// phone the last four go.
+const columns = "grid-cols-[14px_56px_minmax(0,1fr)_minmax(0,auto)] md:grid-cols-[14px_56px_minmax(0,1fr)_auto_200px_118px_28px_56px]";
+const rowGrid = `grid ${columns}`;
 
 export function TaskList({ model, groups, footer }: { model: BoardModel; groups: Group[]; footer: string }) {
   return (
     <div className="flex flex-col">
+      {/* The columns' names, over the groups; a phone, which leaves those columns out, shows none. */}
+      <div
+        aria-hidden
+        className={cn(
+          columns,
+          "sticky top-0 z-10 hidden h-8 items-center gap-2.5 border-b bg-background pr-4 pl-6 text-xs font-medium text-muted-foreground md:grid",
+        )}
+      >
+        <span className="col-span-4">Task</span>
+        <span>Feature</span>
+        <span>Needs</span>
+        <span />
+        <span className="text-right">Updated</span>
+      </div>
       {groups.map((g) => (
         <section key={`${g.by}:${g.id}`} aria-label={groupLabel(g, model)}>
           <GroupHeader group={g} model={model} />
@@ -124,8 +140,8 @@ function TaskRow({ task, model }: { task: Task; model: BoardModel }) {
         {aimed ? <span className="truncate text-muted-foreground">aimed at {aimed.name}</span> : !ended && <SkillPill task={task} model={model} />}
       </span>
       <span className="hidden md:flex">{face && <MemberAvatar member={face} />}</span>
-      <span className="hidden text-right text-muted-foreground tabular-nums md:block" title={new Date(when).toLocaleString()}>
-        {shortWhen(when, model.now)}
+      <span className="hidden text-right text-muted-foreground md:block">
+        <DayTime at={when} what={ended && task.ended_at ? "Ended" : "Waiting since"} />
       </span>
     </Link>
   );
