@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -131,6 +132,8 @@ func (l *logBuffer) String() string {
 // install is one Darkory Install: its data directory, its database and the serve processes on it.
 type install struct {
 	t *testing.T
+	// serveEnv is added to every serve process's environment, as the runner's timings.
+	serveEnv []string
 	// dir is the data directory, and HOME for every process, so pid files and caches stay in it.
 	dir string
 	db  string
@@ -229,9 +232,14 @@ var servingURL = regexp.MustCompile(`msg="darkory is serving".* url=(\S+)`)
 func (in *install) serve(args ...string) *serveProc {
 	in.t.Helper()
 	p := &serveProc{log: &logBuffer{}, exited: make(chan struct{})}
+	// No Runner unless a test asks for one: an Install init seeded runs its agents' sessions, and
+	// the roster's default command is Claude Code.
+	if !slices.ContainsFunc(args, func(a string) bool { return strings.HasPrefix(a, "--runner") }) {
+		args = append(args, "--runner=off")
+	}
 	p.cmd = exec.Command(bin, append([]string{"serve", "--listen", "127.0.0.1:0", "--data", in.dir, "--db", in.db,
 		"--no-browser", "--no-update-check"}, args...)...)
-	p.cmd.Env = in.env()
+	p.cmd.Env = in.env(in.serveEnv...)
 	p.cmd.Stdout, p.cmd.Stderr = p.log, p.log
 	if err := p.cmd.Start(); err != nil {
 		in.t.Fatal(err)

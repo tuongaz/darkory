@@ -1287,7 +1287,7 @@ export interface paths {
          * List the agent sessions the Runner is running now
          * @description A read model of the Runner beside this server, not part of the record: what it runs now,
          *     one session per Task it holds a Claim on for an agent. With no Runner attached to this
-         *     server (as with `serve --agents=off`) it answers `runner: false` and no sessions, not an
+         *     server (as with `serve --runner=off`) it answers `runner: false` and no sessions, not an
          *     error, so a page can poll it.
          */
         get: operations["listRunnerSessions"];

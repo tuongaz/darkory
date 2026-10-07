@@ -8,7 +8,7 @@ A Local Install should come up with agents ready: file a Feature, and agents bre
 |---|---|---|
 | D1 | What runs an agent | A per-agent **command template** (pluggable); Claude Code is the default; each agent has a **model**. External agents (not started by Darkory) keep working as today. |
 | D2 | What a session works in | **Workspaces**: a list on the Install, each of a kind (`git` now), with a Team default; a Task names **one or more**; the runner prepares a workspace directory with one checkout per Workspace. |
-| D3 | Who pulls and starts | A **runner inside `darkory serve`** (on by default on Local when agents are configured); the same loop as `darkory agents` for a worker machine later. The runner calls `next` per agent, then starts the session with the Task in hand. |
+| D3 | Who pulls and starts | A **runner inside `darkory serve`** (on by default on Local when agents are configured); the same loop as `darkory runner` for a worker machine later. The runner calls `next` per agent, then starts the session with the Task in hand. |
 | D4 | What `init` seeds | Team `MAIN`; the current git repository as the first Workspace; agents `planner` (breakdown), `builder` (engineer), `reviewer` (review, skill-review), `retro` (retro), reporting to the first human; tokens in `<data>/agents/`. |
 | D5 | How a session runs and ends | Interactive Claude Code **in tmux** `dk-<TASK-KEY>`; the prompt carries the Skill text, the record and the exit rules; the agent ends the Task itself through MCP (complete / hand over / a question), the runner then exits the session (0) and attaches the log as Evidence. Turn ended without a decision → nudge twice → release with a Note. |
 | D6 | Watching and joining | **xterm.js in the web** over a WebSocket to `tmux attach` (admins read-write, others read-only, a Note on join); `darkory attach <task>` in a shell. |
@@ -32,11 +32,11 @@ A Local Install should come up with agents ready: file a Feature, and agents bre
 
 ## `/v1` additions (spec first, then `make gen`, `npm run gen`)
 
-`GET/POST /v1/workspaces`, `PATCH/DELETE /v1/workspaces/{ws}`; `workspaces` on `FileTaskBody`, `TaskDetail.workspaces`; `quick`, `ship_when_done` on `FileFeatureBody` and `Feature`; `default_workspace`, `ship_when_done` on Team; `PATCH /v1/members/{m}/agent`; `GET /v1/runner/sessions`, `…/{task}/terminal` (WebSocket, cookie or token, Origin-checked), `…/{task}/nudge`, `…/{task}/stop`; `darkory attach <task>`, `darkory agents [--member …]`, `darkory workspace add|list|remove`, `darkory feature create --quick --skill … --ship-when-done`, `darkory file --workspace …`.
+`GET/POST /v1/workspaces`, `PATCH/DELETE /v1/workspaces/{ws}`; `workspaces` on `FileTaskBody`, `TaskDetail.workspaces`; `quick`, `ship_when_done` on `FileFeatureBody` and `Feature`; `default_workspace`, `ship_when_done` on Team; `PATCH /v1/members/{m}/agent`; `GET /v1/runner/sessions`, `…/{task}/terminal` (WebSocket, cookie or token, Origin-checked), `…/{task}/nudge`, `…/{task}/stop`; `darkory attach <task>`, `darkory runner [--member …]`, `darkory workspace add|list|remove`, `darkory feature create --quick --skill … --ship-when-done`, `darkory file --workspace …`.
 
 ## The runner
 
-One goroutine per agent Member whose settings exist and are not paused, started by `serve` (`--agents=off` disables; `darkory agents` runs the same with tokens read from `<data>/agents/` or `--token`):
+One goroutine per agent Member whose settings exist and are not paused, started by `serve` (`--runner=off` disables; `darkory runner` runs the same with tokens read from `<data>/agents/` or `--token`):
 
 1. `next` as the agent (wait 30 s, loop) with the agent's model label; the Claim's Heartbeat timeout is 5 min.
 2. **Workspace:** for each Workspace the Task names (default the Team's): `git worktree add <data>/workspaces/<task-key>/<ws-name> -b <task-key>/<slug>` from the Feature's branch (`feature/<FEATURE-KEY>`, created at Break down from the default branch) or from the default branch for a quick Feature. Everything under `<data>/workspaces/` is the runner's; it never touches a branch it did not create and never force-pushes.
@@ -50,7 +50,7 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 
 ## Web
 
-- **Session panel** on the Task peek and page when a runner session exists: host, started, state, `darkory attach WEB-12`, and the **terminal** (xterm.js over the WebSocket; read-only unless admin). A Note "tuongaz joined the session" when a client attaches.
+- **Session panel** on the Task peek and page when a runner session exists: host, started, state, `darkory join WEB-12`, and the **terminal** (xterm.js over the WebSocket; read-only unless admin). A Note "tuongaz joined the session" when a client attaches.
 - **Agents page:** session column (running since, View), Pause/Resume per agent (admins), New agent → the Member dialog gains the agent settings.
 - **Admin → Workspaces** (list, add with path and mode, Team defaults) and the agent settings on the Member page (command, model, paused, unattended).
 - **File Feature:** Quick and Ship-when-done switches; **File Task:** Workspaces (multi-select, default the Team's). The Feature page shows the feature branch and the merge Activity; a Task shows its branch and merge state.
@@ -58,7 +58,7 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 ## Phases
 
 - **R0 — Spec and model.** Migration 0004 (workspaces, task_workspaces, feature flags, team defaults, member agent settings as JSON), the `/v1` additions, generated code, CLI commands, MCP (`workspaces` in `show_task`), `init` seeding the Team, the Workspace from the current repo, the roster and its tokens. Tests on both engines.
-- **R1 — Runner core**, with a **fake agent** (a script that acts through the CLI: note, attach, complete / handover / question) so the loop is tested end to end on both engines without a model: `next` → workspace → start → heartbeat gating → exit → Evidence; nudge and release; the merge flow (feature branch, review-complete merge, conflict, Ship, quick, ship-when-done); the `gh` poll stubbed. `darkory agents` and `--agents=off`.
+- **R1 — Runner core**, with a **fake agent** (a script that acts through the CLI: note, attach, complete / handover / question) so the loop is tested end to end on both engines without a model: `next` → workspace → start → heartbeat gating → exit → Evidence; nudge and release; the merge flow (feature branch, review-complete merge, conflict, Ship, quick, ship-when-done); the `gh` poll stubbed. `darkory runner` and `--runner=off`.
 - **R2 — tmux and the terminal**: tmux sessions, `pipe-pane`, `darkory attach`, the WebSocket terminal endpoint, xterm.js panel, Agents page state, admin nudge/stop. A real Claude Code smoke run by hand against a scratch Install, recorded as evidence.
 - **R3 — Web settings**: Admin → Workspaces, agent settings on the Member page, File Feature/Task switches, Session panel polish.
 - **R4 — Proof**: the fake-agent scenarios in `e2e/`, the bots extended to run under the runner, Playwright scenarios below, screenshots, review.
@@ -76,7 +76,7 @@ One goroutine per agent Member whose settings exist and are not paused, started 
 9. A merge conflict: the build Task returns to Todo with the conflict Note; the next session resolves it.
 10. `pull_request` Workspace: the PR's merge completes the review Task.
 11. Two builders, one Feature, two Workspaces named on one Task: one workspace directory with two checkouts.
-12. `darkory agents` on the same machine with the server's `--agents=off`: identical behaviour.
+12. `darkory runner` on the same machine with the server's `--runner=off`: identical behaviour.
 
 ## Not now
 
@@ -97,3 +97,22 @@ Allowlist permissions (B/C), workers on other machines (the terminal relay and t
 - **Generated names.** oapi-codegen spells `workspace_ids` as `WorkspaceIds` in Go; the other id fields keep `ID`.
 - **The Runner's Activity** (`task.session_started`, `task.session_ended`, `task.session_joined`, `task.merged`, `feature.branch_created`) is not in the spec yet; R1 and R2 add the kinds they write, with their payloads.
 - **Activity's `team` filter** keeps only entries about a Feature or Task of the Team, so `team.changed` (and `team.created`, `team.member_added`) never show under it. Admin → Teams (R3) will want them; widening the filter is an additive change to `listActivity`.
+
+### R1
+
+- **A Note needed the Claim**, so the runner could not note "Merged WEB-12/cart-page into feature/WEB-1 at …" on a Task whose review had just completed it; R0 opened Notes on a Task nobody holds to its Feature's Team and owner, and the runner notes merges and conflicts there. A Ship's merge goes on the Feature as Evidence (`merge-<KEY>.txt`). The plan's `task.merged`, `task.merge_conflict`, `feature.branch_created` and `feature.merged` Activity kinds were not built, as the lead asked.
+- **`darkory mcp` heartbeats its own Session's Claims.** In the session's MCP configuration it would keep a hung session's Claim alive for as long as the process lives, and D8's gate would gate nothing; the runner's configuration runs `darkory mcp --no-heartbeat`.
+- **`darkory attach <task> <file>` already attached Evidence**, so joining a session is `darkory join <task>` (the lead's call).
+- **`darkory agents` sat one letter from `darkory agent set|list`**, so the loop alone is `darkory runner`, and `serve --runner` runs it in the server (the lead's call).
+- **Evidence after a Handover races the next holder.** The reviewer's runner claims within a second of the builder's Handover, and Evidence on a held Task is the holder's alone; the builder's session log then goes on the Feature, named for the Task.
+- **Interactive Claude Code waits for a first message**, and the default arguments R0 stores carry none: the runner appends "Work on Task WEB-12: …" when no argument names `{task}`.
+- **Claude Code 2.1 appends bookkeeping after its last message** (`ai-title`, `cost-state`, `last-prompt`, attachments), so "the transcript's last record" is the last user or assistant message of the main conversation. Its project directory is the working directory's real path with every character but letters and digits made `-` (checked against this machine's `~/.claude/projects`).
+- **Two sessions of one Task overlap after a Handover** (the builder's still exiting, the reviewer's starting) and share the worktree, `pane.log` and the tmux name: the second waits for the first.
+- **Two sessions preparing in one repository at once** (two builders on one Feature) raced to make `feature/<KEY>` there: the runner holds a lock per repository while it prepares or merges.
+- **tmux targets a session's pane as `=<name>:`**; `=<name>` alone matches sessions only (`can't find pane`).
+- **The default branch is usually checked out in the person's own repository**, so Ship merges there, with `git merge --no-ff`, only while that checkout is clean; anywhere else the runner merges with `git merge-tree` and moves the branch without a checkout.
+- **A quick or ship-when-done Feature ships in its last review's own write**, before the runner merges; a conflict then cannot file the resolving Task on the ended Feature, and the runner logs it for a person to merge by hand.
+- **An Install init seeds in this repository** (TestBots) has the roster's Claude Code as its agents' command: the e2e harness starts `serve` with `--runner=off` unless a test asks for the Runner.
+- **A session log can be refused outright**: a reviewer from another Team (skill-review reaches across Teams) may attach to the Task only while it holds it, and not to the Feature at all; its session log is then lost and the runner logs an error. Not met in R1's scenarios.
+- **tmux leaves its socket file behind** when its server exits; the tests remove theirs, the runner leaves `/tmp/tmux-<uid>/darkory-*` as tmux does.
+- **Not done in R1**: pull-request mode end to end (scenario 10; `gh` is behind an interface and the poll is written, not run against GitHub); a real Claude Code session (R2's smoke run: a fresh worktree may meet Claude Code's folder-trust and bypass-permissions prompts, which would stall an unattended session); a runner restarted while its tmux sessions run does not adopt them (their Claims lapse; the tmux sessions stay until killed).

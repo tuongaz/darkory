@@ -293,6 +293,25 @@ func TestHeartbeatsKeepAClaimAlive(t *testing.T) {
 	})
 }
 
+// With NoHeartbeats the server leaves Heartbeats to the runner that started the session: a Claim
+// with a short timeout lapses while the server runs, and the instructions say who heartbeats.
+func TestNoHeartbeatsLeavesTheClaimToTheRunner(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite), server.Options{})
+	_, cs := f.connect("bob-mcp", Options{NoHeartbeats: true})
+	if ins := cs.InitializeResult().Instructions; !strings.Contains(ins, "The runner that started\nthis session sends its Heartbeats") ||
+		strings.Contains(ins, "This server sends") {
+		t.Errorf("instructions: %q", ins)
+	}
+	var claimed client.TaskDetail
+	ok(t, cs, &claimed, "claim", map[string]any{"task": "WEB-3", "heartbeat_timeout_seconds": 1})
+	time.Sleep(2500 * time.Millisecond)
+	var shown client.TaskDetail
+	ok(t, cs, &shown, "show_task", map[string]any{"task": "WEB-3"})
+	if shown.Task.Claim != nil {
+		t.Fatalf("after 2.5 s on a 1 s timeout with no Heartbeats, the Claim is still live: %+v", shown.Task.Claim)
+	}
+}
+
 // A Claim that lapses under the server — here, the server's clock jumps past its expiry — is
 // reported in the next tool result, and the server stops heartbeating it.
 func TestALapsedClaimIsReported(t *testing.T) {

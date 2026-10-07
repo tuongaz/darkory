@@ -80,6 +80,9 @@ type Serve struct {
 	// MaxWaiting is how many Activity streams, and separately how many waiting `next` calls, one
 	// Member may have open on a server process at once (DARKORY_MAX_WAITING, --max-waiting).
 	MaxWaiting int
+	// Runner says whether serve runs the Runner beside the server (ADR 0013): on, off, or auto —
+	// on when <data>/agents holds agent tokens (DARKORY_RUNNER, --runner).
+	Runner string
 }
 
 // Defaults for browser Sessions and long requests.
@@ -220,6 +223,7 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 		}
 	}
 	fs.IntVar(&c.MaxWaiting, "max-waiting", maxWaiting, "Activity streams, and waiting next calls, one Member may have open at once (DARKORY_MAX_WAITING)")
+	fs.StringVar(&c.Runner, "runner", or(getenv("DARKORY_RUNNER"), "auto"), "run the Runner, agent sessions, beside the server: auto (when <data>/agents holds tokens), on or off (DARKORY_RUNNER)")
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
 	}
@@ -228,6 +232,15 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	}
 	if c.MaxWaiting < 1 {
 		return Serve{}, fmt.Errorf("--max-waiting is 1 or more, got %d", c.MaxWaiting)
+	}
+	switch c.Runner {
+	case "auto", "on", "off":
+	case "true", "1":
+		c.Runner = "on"
+	case "false", "0":
+		c.Runner = "off"
+	default:
+		return Serve{}, fmt.Errorf("--runner is auto, on or off, got %q", c.Runner)
 	}
 	if c.EvidenceMaxMB < 1 {
 		return Serve{}, fmt.Errorf("--evidence-max-mb is 1 or more, got %d", c.EvidenceMaxMB)
