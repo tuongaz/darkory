@@ -146,7 +146,7 @@ describe("Admin › Workspaces", () => {
     mockApi(
       routes({
         "GET /v1/tasks": { items: [] },
-        "DELETE /v1/workspaces/:workspace": refuse(409, "conflict", "1 Tasks name Workspace docs; the record keeps where their work was done"),
+        "DELETE /v1/workspaces/:workspace": refuse(409, "conflict", "1 Task names Workspace docs; the record keeps where their work was done"),
       }),
     );
     renderApp("/admin/workspaces");

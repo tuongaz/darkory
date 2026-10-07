@@ -185,7 +185,7 @@ describe("an agent's settings", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Stop using the Runner" }));
     const confirm = await screen.findByRole("dialog", { name: "Stop using the Runner for builder?" });
     expect(confirm).toHaveTextContent("Clearsclaude4 argumentsclaude-sonnet-5-51 variable");
-    expect(confirm).toHaveTextContent("The Runner starts no session for builder; it works through its own token.");
+    expect(confirm).toHaveTextContent("The Runner starts no new session for builder, which works through its own tokens; one running carries on until its Claim ends.");
     expect(api.calls.some((c) => c.method === "DELETE")).toBe(false);
 
     await user.click(within(confirm).getByRole("button", { name: "Stop using the Runner" }));

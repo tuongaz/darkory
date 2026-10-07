@@ -410,6 +410,22 @@ test("agents plan R3: a Workspace, a Team's default, an agent's model and Paused
     await shot(page, "r3-members");
   });
 
+  await test.step("Stop using the Runner, behind the Agent card's ⋯, says what it clears and clears it", async () => {
+    await page.goto(`${base}/admin/members/planner-1`);
+    await page.getByRole("button", { name: "More for the Agent settings of planner-1" }).click();
+    await page.getByRole("menuitem", { name: "Stop using the Runner" }).click();
+    const confirm = page.getByRole("dialog", { name: "Stop using the Runner for planner-1?" });
+    await expect(confirm).toContainText("claude-haiku-4-5-20251001");
+    await expect(confirm).toContainText("9 arguments");
+    await shot(page, "r3-stop-runner");
+    await confirm.getByRole("button", { name: "Stop using the Runner" }).click();
+    await expect(confirm).toHaveCount(0);
+    const card = page.getByRole("group", { name: "Agent settings of planner-1" });
+    await expect(card).toContainText("the Runner does not start it");
+    await expect(card.getByRole("button", { name: "Use the Runner" })).toBeVisible();
+    expect((await v1<{ member: { agent?: unknown } }>(page, "GET", "/v1/members/planner-1")).member.agent).toBeUndefined();
+  });
+
   await test.step("New Member as an Agent with Run with the Runner off has no agent settings", async () => {
     await page.goto(`${base}/admin/members?new=1&kind=agent`);
     const dialog = page.getByRole("dialog", { name: "New Member" });

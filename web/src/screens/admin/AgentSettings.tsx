@@ -69,7 +69,10 @@ function StopRunnerDialog({ member, settings: s, onClose }: { member: Member; se
           {vars > 0 && count(vars, "variable")}
         </Fact>
         <Fact label="Then">
-          <span className="font-normal">The Runner starts no session for {member.name}; it works through its own token.</span>
+          <span className="font-normal">
+            The Runner starts no new session for {member.name}, which works through its own tokens; one running carries on until its Claim
+            ends.
+          </span>
         </Fact>
       </Facts>
     </ConfirmDialog>

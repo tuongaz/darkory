@@ -42,10 +42,7 @@ export const createSkill = (body: Schemas["CreateSkillBody"]) => call(api.POST("
 export const setAgentSettings = (member: string, body: Schemas["SetAgentSettingsBody"]) =>
   call(api.PATCH("/v1/members/{member}/agent", { params: { path: { member } }, body }));
 
-// R0 is adding DELETE /v1/members/{member}/agent to api/openapi.yaml; until this branch's spec
-// carries it, the path is not among the typed ones. Drop the casts after merging and npm run gen.
-export const clearAgentSettings = (member: string) =>
-  call(api.DELETE("/v1/members/{member}/agent" as never, { params: { path: { member } } } as never));
+export const clearAgentSettings = (member: string) => call(api.DELETE("/v1/members/{member}/agent", { params: { path: { member } } }));
 
 // Workspaces are named by id, as Members are.
 export const createWorkspace = (body: Schemas["CreateWorkspaceBody"]) => call(api.POST("/v1/workspaces", { body }));
