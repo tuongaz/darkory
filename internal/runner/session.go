@@ -45,6 +45,10 @@ type session struct {
 	// progress is the file the agent writes as it works; empty when there is none to read.
 	progress, claudeDir string
 	transcript          bool
+	// claude says the command is Claude Code; answered are the first-run prompts of its the
+	// runner has answered.
+	claude   bool
+	answered map[string]bool
 
 	ended chan string
 	cmds  chan sessionCmd
@@ -232,6 +236,22 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Claude Code runs in a configuration directory of the agent's own, unless its settings name
+	// one, that trusts the session's folders (claude.go).
+	if s.claude = IsClaude(s.set.Command); s.claude && s.set.Env[envConfigDir] == "" {
+		dir := ClaudeConfigDir(r.cfg.Data, s.a.name())
+		trusted := []string{cwd, TaskDir(r.cfg.Data, s.key)}
+		for _, c := range checkouts {
+			trusted = append(trusted, c.Dir, c.Workspace.Path)
+		}
+		if err := prepareClaude(dir, trusted, s.set.Unattended, filepath.Join(r.cfg.Data, "workspaces")); err != nil {
+			return fmt.Errorf("preparing Claude Code's configuration directory: %w", err)
+		}
+		for _, kv := range claudeEnv(dir, os.Environ()) {
+			k, v, _ := strings.Cut(kv, "=")
+			env = setEnv(env, k, v)
+		}
+	}
 	keys := make([]string, 0, len(s.set.Env))
 	for k := range s.set.Env {
 		keys = append(keys, k)
@@ -248,7 +268,7 @@ func (s *session) start(ctx context.Context) error {
 		if !filepath.IsAbs(s.progress) {
 			s.progress = filepath.Join(cwd, s.progress)
 		}
-	case IsClaude(s.set.Command):
+	case s.claude:
 		s.claudeDir = ClaudeDir(env)
 		s.progress, s.transcript = TranscriptPath(s.claudeDir, cwd, s.rec.Session()), true
 	}
@@ -376,6 +396,9 @@ func (s *session) watch(ctx context.Context) {
 // check reads the session's progress: a Heartbeat while it is fresh, none once it is stale, and a
 // nudge when the agent's turn ended with the Claim still held. It says whether the session ended.
 func (s *session) check(ctx context.Context) bool {
+	if s.firstRun(ctx) {
+		return true
+	}
 	var rd Reading
 	if s.progress == "" {
 		// Nothing to read: the session counts as working while its command runs.
@@ -429,6 +452,44 @@ func (s *session) check(ctx context.Context) bool {
 		return false
 	}
 	return s.turnEnded(ctx)
+}
+
+// firstRun answers a first-run prompt of Claude Code's that the session shows although its
+// configuration directory should have answered it: the accepting choice, once, with a Note. Seen
+// again after that, the prompt stops the session with a Note saying so. Claude Code asks them only
+// on a terminal, so only a session in tmux is looked at. It says whether the session ended.
+func (s *session) firstRun(ctx context.Context) bool {
+	k, ok := s.proc.(Keyed)
+	if !s.claude || !ok {
+		return false
+	}
+	p, keys, ok := findFirstRunPrompt(k.Shown())
+	if !ok {
+		return false
+	}
+	if s.answered[p.Name] {
+		s.log.Warn("Claude Code asks its first-run question again after the runner answered it; stopping the session", "prompt", p.Name)
+		return s.giveUp(ctx, fmt.Sprintf("Claude Code showed %s again after the runner accepted it, so it cannot run here unattended; "+
+			"a person can answer it in the next session (darkory join %s)", p.Name, s.key))
+	}
+	if s.answered == nil {
+		s.answered = map[string]bool{}
+	}
+	s.answered[p.Name] = true
+	s.log.Info("Claude Code asks its first-run question; accepting it", "prompt", p.Name, "keys", keys)
+	for i, key := range keys {
+		if i > 0 {
+			time.Sleep(200 * time.Millisecond)
+		}
+		if err := k.Key(key); err != nil {
+			s.log.Warn("answering Claude Code's first-run question", "err", err)
+			return false
+		}
+	}
+	if err := s.rec.Note(ctx, s.key, fmt.Sprintf("The runner accepted Claude Code's first-run prompt: %s.", p.Name)); err != nil && ctx.Err() == nil {
+		s.log.Warn("noting the first-run prompt", "err", err)
+	}
+	return false
 }
 
 // holds says whether the session still holds the Task's Claim.
@@ -534,14 +595,17 @@ func (s *session) giveUp(ctx context.Context, why string) bool {
 	bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.r.t.Exit+30*time.Second)
 	defer cancel()
 	note := silentPrefix
-	if why != "" {
+	screen := ""
+	if s.proc != nil {
+		screen = s.proc.Screen(20)
+	}
+	s.stopCommand(bctx, s.r.t.Exit)
+	switch {
+	case why != "" && s.proc != nil:
+		note += "; " + why + "; last 20 lines:\n" + or(remote.Clean(screen), "(none)")
+	case why != "":
 		note += "; " + why + "."
-	} else {
-		screen := ""
-		if s.proc != nil {
-			screen = s.proc.Screen(20)
-		}
-		s.stopCommand(bctx, s.r.t.Exit)
+	default:
 		code := s.proc.ExitCode()
 		if s.nudges > 0 {
 			note += fmt.Sprintf(" after %d nudges", s.nudges)

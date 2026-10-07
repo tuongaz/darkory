@@ -53,6 +53,15 @@ type Proc interface {
 	Screen(lines int) string
 }
 
+// Keyed is a Proc whose screen can be read as it shows now and answered with keys, as a person
+// at its terminal would: a session in tmux.
+type Keyed interface {
+	// Shown is the screen as it shows now, without the lines scrolled off it.
+	Shown() string
+	// Key presses one key, by tmux's name for it (Down, Enter).
+	Key(key string) error
+}
+
 // Host starts sessions.
 type Host interface {
 	Start(ctx context.Context, s Spec) (Proc, error)
@@ -284,6 +293,16 @@ func (p *tmuxProc) Kill() error {
 }
 
 func (p *tmuxProc) Tmux() bool { return true }
+
+func (p *tmuxProc) Shown() string {
+	out, _ := p.h.tmux(context.Background(), "capture-pane", "-p", "-J", "-t", pane(p.name))
+	return out
+}
+
+func (p *tmuxProc) Key(key string) error {
+	_, err := p.h.tmux(context.Background(), "send-keys", "-t", pane(p.name), key)
+	return err
+}
 
 func (p *tmuxProc) Screen(lines int) string {
 	out, err := p.h.tmux(context.Background(), "capture-pane", "-p", "-J", "-t", pane(p.name), "-S", "-"+strconv.Itoa(lines*3))

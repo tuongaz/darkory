@@ -13,7 +13,8 @@
 //	crash     exit 1
 //
 // The commit is of fakeagent-<KEY>.txt, or of the file FAKEAGENT_FILE names, so two Tasks can
-// make a conflict.
+// make a conflict. FAKEAGENT_PROMPT has it ask Claude Code's first-run questions before anything
+// else (see firstRun), to test how the runner meets them.
 // Like Claude Code it then waits at its prompt until the runner types /exit. It imports nothing
 // under internal/.
 package main
@@ -67,6 +68,9 @@ func run() error {
 	scenario := os.Getenv("FAKEAGENT_SCENARIO")
 	if scenario == "" {
 		scenario = "complete"
+	}
+	if err := firstRun(os.Getenv("FAKEAGENT_PROMPT")); err != nil {
+		return err
 	}
 	fmt.Printf("fakeagent: working %s (%s) as %s in %v\n", a.key, a.kind, scenario, a.dirs)
 	a.user("Work on Task " + a.key)
@@ -151,9 +155,8 @@ func run() error {
 // wait sits at the prompt, as Claude Code does, until /exit. A silent agent answers every other
 // line by ending its turn again.
 func (a *agent) wait(scenario string) error {
-	sc := bufio.NewScanner(os.Stdin)
-	for sc.Scan() {
-		in := strings.TrimSpace(sc.Text())
+	for stdin.Scan() {
+		in := strings.TrimSpace(stdin.Text())
 		fmt.Printf("fakeagent: read %q\n", in)
 		if in == "/exit" {
 			return nil
@@ -163,6 +166,78 @@ func (a *agent) wait(scenario string) error {
 		if scenario == "silent" {
 			a.line("TURN_ENDED")
 		}
+	}
+	return nil
+}
+
+// stdin is the lines typed into the agent.
+var stdin = bufio.NewScanner(os.Stdin)
+
+// firstRun asks Claude Code's first-run questions, as its dialogs show them, as mode says:
+//
+//	claude  as Claude Code 2.1 does: the folder-trust dialog unless $CLAUDE_CONFIG_DIR/.claude.json
+//	        trusts the working directory, then the Bypass Permissions mode warning unless its
+//	        settings.json has accepted it
+//	always  both, whatever the configuration says
+//	again   the folder-trust dialog, and once it is accepted the same again
+//
+// A dialog's highlighted choice is "No, exit": it is accepted by a Down before the Enter, and
+// declining it exits 1. An accepted dialog clears the screen, as Claude Code's does.
+func firstRun(mode string) error {
+	if mode == "" {
+		return nil
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if real, err := filepath.EvalSymlinks(wd); err == nil {
+		wd = real
+	}
+	dir := os.Getenv("CLAUDE_CONFIG_DIR")
+	var config struct {
+		Projects map[string]struct {
+			Trusted bool `json:"hasTrustDialogAccepted"`
+		} `json:"projects"`
+	}
+	var settings struct {
+		Accepted bool `json:"skipDangerousModePermissionPrompt"`
+	}
+	if dir != "" {
+		if b, err := os.ReadFile(filepath.Join(dir, ".claude.json")); err == nil {
+			json.Unmarshal(b, &config)
+		}
+		if b, err := os.ReadFile(filepath.Join(dir, "settings.json")); err == nil {
+			json.Unmarshal(b, &settings)
+		}
+	}
+	trust := " Accessing workspace:\n\n " + wd + "\n\n Quick safety check: Is this a project you created or one you trust?\n\n" +
+		" ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n"
+	bypass := "  WARNING: Claude Code running in Bypass Permissions mode\n\n  ❯ No, exit\n    Yes, I accept\n\n" +
+		"  Enter to confirm · Esc to cancel\n"
+	var ask []string
+	switch mode {
+	case "claude":
+		if !config.Projects[wd].Trusted {
+			ask = append(ask, trust)
+		}
+		if !settings.Accepted {
+			ask = append(ask, bypass)
+		}
+	case "always":
+		ask = []string{trust, bypass}
+	case "again":
+		ask = []string{trust, trust}
+	default:
+		return fmt.Errorf("FAKEAGENT_PROMPT: no mode %q", mode)
+	}
+	for _, dialog := range ask {
+		fmt.Print(dialog)
+		if !stdin.Scan() || !strings.Contains(stdin.Text(), "\x1b[B") && !strings.Contains(stdin.Text(), "\x1bOB") {
+			fmt.Println("fakeagent: declined; exiting")
+			os.Exit(1)
+		}
+		fmt.Print("\x1b[2J\x1b[H")
 	}
 	return nil
 }
