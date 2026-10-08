@@ -26,11 +26,7 @@ import (
 // Organisation's counter (ADR 0011); a record that fails deletes the file.
 
 func (s *Server) AttachTaskEvidence(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AttachTaskEvidenceParams) {
-	s.attachEvidence(w, r, core.EvidenceTarget{Task: &task}, params.Filename, params.IdempotencyKey)
-}
-
-func (s *Server) AttachFeatureEvidence(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.AttachFeatureEvidenceParams) {
-	s.attachEvidence(w, r, core.EvidenceTarget{Feature: &feature}, params.Filename, params.IdempotencyKey)
+	s.attachEvidence(w, r, core.EvidenceTarget{Task: task}, params.Filename, params.IdempotencyKey)
 }
 
 func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target core.EvidenceTarget, filename string, key *string) {

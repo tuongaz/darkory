@@ -61,9 +61,10 @@ type Server struct {
 
 // mcpPreamble comes before the working rules in the server's instructions, with the sentence
 // about Heartbeats that fits the server.
-const mcpPreamble = `This MCP server is the darkory CLI as tools: next, claim, show_task, note, observe,
-attach_evidence, handover, complete, release, file_task (with blocks for a question), set_status
-(darkory status), workflow, and so on.
+const mcpPreamble = `This MCP server is the darkory CLI as tools: next, claim, show_task (darkory show),
+note, observe, attach_evidence (darkory attach), advance, move_step (darkory move), complete,
+release, file_task (darkory file; with parent for a Subtask, with blocks for a question),
+set_labels (darkory label set), workflow (darkory workflow show), observations, and so on.
 Where the rules below name a darkory command, call the tool of that name. %s
 
 `

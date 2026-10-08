@@ -2,8 +2,11 @@ package runner
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -11,12 +14,14 @@ import (
 	"github.com/tuongaz/darkory/internal/cli/remote"
 )
 
-// Merges follow the record (ADR 0014): a work Task ending Done merges its branch into its
-// Feature's branch, or into the default branch for a quick Feature, whoever completed it: the
-// review's Complete normally, its holder's own, without review, otherwise, which the merge's Note
-// then says. Ship merges the Feature's branch into the default branch, or opens its pull request.
-// The merger works through the Activity entries one at a time, in order, so a Task's merge lands
-// before the Ship that follows it.
+// Merges follow the record (ADR 0015): a worked Task ending Done merges its branch into its base,
+// its Parent's branch for a Subtask or the default branch for a Task with no Parent, whoever
+// completed it: a review's advance into Done normally, its holder's own, without review,
+// otherwise, which the merge's Note then says. A Parent's Complete merges its branch into the
+// default branch, or opens its pull request. In a Workspace merged through pull requests GitHub
+// merges, and the runner reads the merged pull request carrying the Task's key. The merger works
+// through the Activity entries one at a time, in order, so a Subtask's merge lands before the
+// Complete of its Parent that follows it.
 
 // logError reports a failure the merger met, unless the runner is stopping, which explains it.
 func (r *Runner) logError(ctx context.Context, msg string, args ...any) {
@@ -24,9 +29,6 @@ func (r *Runner) logError(ctx context.Context, msg string, args ...any) {
 		r.log.Error(msg, args...)
 	}
 }
-
-// shipRecord names the Evidence a Ship's merge is recorded in on its Feature, which has no Notes.
-func shipRecord(feature string) string { return "merge-" + feature + ".txt" }
 
 func (r *Runner) merger(ctx context.Context) {
 	for {
@@ -36,12 +38,19 @@ func (r *Runner) merger(ctx context.Context) {
 		case a := <-r.merges:
 			switch a.Kind {
 			case client.ActivityKindTaskCompleted:
-				r.completed(ctx, a)
+				d, err := r.reader.Task(ctx, a.SubjectID)
+				if err != nil {
+					r.logError(ctx, "reading a completed Task", "task", a.SubjectID, "err", err)
+					continue
+				}
+				if len(d.Subtasks) > 0 {
+					r.parentCompleted(ctx, a, d)
+					continue
+				}
+				r.completed(ctx, a, d)
 				r.taskEnded(ctx, a.SubjectID)
 			case client.ActivityKindTaskDropped:
 				r.taskEnded(ctx, a.SubjectID)
-			case client.ActivityKindFeatureShipped:
-				r.shipped(ctx, a.SubjectID)
 			}
 		}
 	}
@@ -74,19 +83,18 @@ func (r *Runner) isReview(ctx context.Context, rec Record, sk client.Skill) bool
 	return false
 }
 
-// completed merges the branch of a work Task a Complete just ended Done. A Break down's or a
-// Retrospective's branch only holds what its agent read, and is never merged.
-func (r *Runner) completed(ctx context.Context, a client.Activity) {
+// merged says whether a Task of kind has its branch merged when it ends Done: worked Tasks and an
+// Acceptance, whose fixes are work like any other. A Breakdown's or a Retrospective's branch only
+// holds what its agent read.
+func merged(kind client.TaskKind) bool { return kind == client.Work || kind == client.Acceptance }
+
+// completed merges the branch of a Task that just ended Done.
+func (r *Runner) completed(ctx context.Context, a client.Activity, d *client.TaskDetail) {
+	if !merged(d.Task.Kind) {
+		return
+	}
 	rec := r.reader
 	claimID, _ := a.Payload["claim_id"].(string)
-	d, err := rec.Task(ctx, a.SubjectID)
-	if err != nil {
-		r.logError(ctx, "reading a completed Task", "task", a.SubjectID, "err", err)
-		return
-	}
-	if d.Task.Kind != client.Work {
-		return
-	}
 	var claim *client.Claim
 	for i := range d.Claims {
 		if d.Claims[i].ID == claimID {
@@ -139,8 +147,8 @@ func (r *Runner) memberName(ctx context.Context, id string) string {
 	return or(id, "someone")
 }
 
-// actingAs is the Record of the runner's agent member whose Complete merged, the reviewer
-// normally, so the merge's Notes and Tasks are that agent's; the runner's reader when the
+// actingAs is the Record of the runner's agent member whose advance or Complete merged, the
+// reviewer normally, so the merge's Notes and Tasks are that agent's; the runner's reader when the
 // completer is not one of its agents.
 func (r *Runner) actingAs(member string) Record {
 	for _, a := range r.agents {
@@ -151,17 +159,18 @@ func (r *Runner) actingAs(member string) Record {
 	return r.reader
 }
 
-// mergeTask merges a done Task's branch in each of its Workspaces and records how it went, as rec.
-// unreviewed says who completed it, and under which Skill, when it was not a review's Complete.
+// mergeTask merges a done Task's branch into its base in each of its Workspaces, or reads its
+// merged pull request, and records how it went in a Note on the Task, as rec. unreviewed says who
+// completed it, and under which Skill, when it was not a review's.
 func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail, unreviewed string) {
 	how := ""
 	if unreviewed != "" {
 		how = "; " + unreviewed
 	}
 	key := d.Task.Key
-	f, err := rec.Feature(ctx, d.Feature.Key)
+	parent, err := rec.Parent(ctx, d)
 	if err != nil {
-		r.logError(ctx, "reading a done Task's Feature", "task", key, "err", err)
+		r.logError(ctx, "reading a done Task's Parent", "task", key, "err", err)
 		return
 	}
 	wss, err := rec.Workspaces(ctx, d)
@@ -171,22 +180,18 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 	}
 	var lines []string
 	for _, ws := range wss {
-		made, err := r.ledger.find(ws.Path, func(m Made) bool { return m.Task == key && strings.HasPrefix(m.Branch, key+"/") })
+		made, err := r.ledger.find(ws.Path, func(m Made) bool { return m.Task == key && strings.HasPrefix(m.Branch, taskPrefix(key)) })
 		if err != nil || len(made) == 0 {
 			continue
 		}
-		branch := made[0].Branch
+		branch, target := made[0].Branch, made[0].Base
 		if ws.Mode == ModePullRequest {
-			lines = append(lines, fmt.Sprintf("%s: %s lands through its pull request%s.", ws.Name, branch, how))
+			lines = append(lines, r.pullRequestLine(ctx, ws, branch, target, how))
 			continue
 		}
-		def := or(ws.DefaultBranch, defaultBranch(ctx, ws.Path))
-		target := FeatureBranch(f.Key)
 		unlock := r.lockRepo(ws.Path)
-		if f.Quick {
-			target = def
-		} else if !branchExists(ctx, ws.Path, target) {
-			if err := r.makeFeatureBranch(ctx, ws, f.Key); err != nil {
+		if parent != nil && target == ParentBranch(parent.Key) && !branchExists(ctx, ws.Path, target) {
+			if err := r.makeParentBranch(ctx, ws, parent.Key); err != nil {
 				unlock()
 				lines = append(lines, fmt.Sprintf("%s: could not make %s: %v", ws.Name, target, err))
 				continue
@@ -197,14 +202,14 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 		var dirty ErrDirty
 		switch {
 		case errors.As(err, &dirty):
-			lines = append(lines, fmt.Sprintf("%s: did not merge %s into %s: %v.", ws.Name, branch, target, err))
-			r.resolve(ctx, rec, d, f, ws, branch, target, err.Error()+"; commit or stash them, then merge "+branch+" by hand or here.", unreviewed)
+			line := fmt.Sprintf("%s: did not merge %s into %s: %v.", ws.Name, branch, target, err)
+			lines = append(lines, line+r.resolve(ctx, rec, d, parent, ws, branch, target, err.Error()+"; commit or stash them, then merge "+branch+" by hand or here.", unreviewed))
 		case err != nil:
 			lines = append(lines, fmt.Sprintf("%s: could not merge %s into %s: %v", ws.Name, branch, target, err))
 			r.logError(ctx, "merging a done Task's branch", "task", key, "workspace", ws.Name, "err", err)
 		case res.Conflict != "":
-			lines = append(lines, fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged.\n%s", ws.Name, branch, target, res.Conflict))
-			r.resolve(ctx, rec, d, f, ws, branch, target, res.Conflict, unreviewed)
+			line := fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged.", ws.Name, branch, target)
+			lines = append(lines, line+r.resolve(ctx, rec, d, parent, ws, branch, target, res.Conflict, unreviewed)+"\n"+res.Conflict)
 		case res.Already:
 			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).", ws.Name, branch, target, short(res.Commit)))
 		default:
@@ -216,82 +221,103 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 	if len(lines) == 0 {
 		return
 	}
-	r.recordMerge(ctx, rec, key, d.Feature.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, key, strings.Join(lines, "\n"))
+}
+
+// pullRequestLine says how a done Task's branch lands in a Workspace merged through pull requests:
+// the merged pull request whose head is the branch, or that it lands when its pull request merges.
+func (r *Runner) pullRequestLine(ctx context.Context, ws Workspace, branch, target, how string) string {
+	prs, err := r.gh.MergedPRs(ctx, ws.Path)
+	if err == nil {
+		for _, pr := range prs {
+			if pr.HeadRefName == branch {
+				return fmt.Sprintf("%s: %s was merged into %s through pull request #%d (%s)%s.", ws.Name, branch, target, pr.Number, pr.URL, how)
+			}
+		}
+	}
+	return fmt.Sprintf("%s: %s lands in %s through its pull request, not merged on GitHub yet%s.", ws.Name, branch, target, how)
 }
 
 // short is a commit's short name.
 func short(sha string) string { return sha[:min(len(sha), 12)] }
 
-// recordMerge records what a merge did: a Note on the done Task key, which a Member of its
-// Feature's Team may write though nobody holds it; or, for a Ship (key the Feature's), Evidence on
-// the Feature.
-func (r *Runner) recordMerge(ctx context.Context, rec Record, key, feature, text string) {
-	var err error
-	if key == feature {
-		err = rec.AttachFeature(ctx, feature, shipRecord(feature), []byte(text+"\n"))
-	} else {
-		err = rec.Note(ctx, key, text)
-	}
-	if err != nil {
+// recordMerge records what a merge did in a Note on the done Task key, which a Member of its
+// Project may write though nobody holds it.
+func (r *Runner) recordMerge(ctx context.Context, rec Record, key, text string) {
+	if err := rec.Note(ctx, key, text); err != nil {
 		r.logError(ctx, "could not record a merge", "on", key, "err", err)
 	}
 }
 
-// resolve files the work Task that resolves a merge the runner could not make: on the Feature
-// while it is open, needing the Skill that built the done Task. unreviewed is as for mergeTask.
-func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, f *FeatureInfo, ws Workspace, branch, target, conflict, unreviewed string) {
-	title := fmt.Sprintf("Resolve the merge of %s into %s", branch, target)
-	done := fmt.Sprintf("The review of %s completed", d.Task.Key)
+// resolve files the Task that resolves a merge of a done Task's branch the runner could not make,
+// at the Step a session of this runner last committed to that branch at (its builder's), else the
+// Project's first work Step; it says so in the words it returns for the merge's Note. A done Task
+// stays done (CONTEXT.md: a Task ends done or dropped), so its work goes on in the new Task, whose
+// branch merges into the done Task's base while that base is open: the Parent's branch, under the
+// Parent. When the Parent has ended (the conflicting Subtask's end completed it) the new Task
+// stands alone on a branch from the default branch and carries the work there, the Parent's own
+// merge having gone without it (parentCompleted). unreviewed is as for mergeTask.
+func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, parent *ParentInfo, ws Workspace, branch, target, conflict, unreviewed string) string {
+	key := d.Task.Key
+	done := fmt.Sprintf("The review of %s advanced it into Done", key)
 	if unreviewed != "" {
-		done = fmt.Sprintf("%s was %s", d.Task.Key, unreviewed)
+		done = fmt.Sprintf("%s was %s", key, unreviewed)
+	}
+	title := fmt.Sprintf("Resolve the merge of %s into %s", branch, target)
+	work := fmt.Sprintf("Merge %s into this Task's branch, resolve what conflicts, run the tests, commit, and advance it as any "+
+		"work: this Task's branch merges into %s when it is done.", branch, target)
+	// It works in the Workspace the merge did not go into, whatever its Parent or Project names.
+	nt := client.FileTaskBody{Title: title, Workspaces: &[]string{ws.ID}}
+	switch {
+	case parent != nil && parent.Open:
+		nt.Parent = &parent.ID
+	case parent != nil:
+		def := or(ws.DefaultBranch, defaultBranch(ctx, ws.Path))
+		nt.Title, nt.Project = fmt.Sprintf("Resolve the merge of %s into %s", branch, def), &d.Task.ProjectID
+		work = fmt.Sprintf("%s has ended, so its branch %s merged into %s without %s's work, and this Task stands alone, on a "+
+			"branch from %s. Merge %s into this Task's branch, resolve what conflicts, run the tests, commit, and advance it as any "+
+			"work: this Task's branch merges into %s when it is done, carrying %s's work there.", parent.Key, target, def, key, def,
+			branch, def, key)
+	default:
+		nt.Project = &d.Task.ProjectID
 	}
 	body := fmt.Sprintf("%s, but merging its branch %s into %s in the Workspace %s did not go in, so the runner "+
-		"left both branches as they were.\n\n%s\n\nMerge %s into this Task's branch, resolve what conflicts, run the tests, commit, and hand "+
-		"over to review: this Task's branch merges into %s when its review completes.", done, branch, target, ws.Name, conflict, branch, target)
-	skill := r.buildSkill(ctx, d)
-	if f.State != client.FeatureStateOpen {
-		r.logError(ctx, "a merge did not go in and its Feature has ended, so no Task can be filed on it; merge it by hand",
-			"task", d.Task.Key, "branch", branch, "into", target, "workspace", ws.Name)
-		return
+		"left both branches as they were.\n\n%s\n\n%s", done, branch, target, ws.Name, conflict, work)
+	nt.Description = &body
+	step, stepName := r.builtAt(key)
+	if step != "" {
+		nt.Step = &step
 	}
-	t, err := rec.File(ctx, client.FileTaskBody{Feature: &f.Key, Skill: &skill, Title: title, Description: &body})
+	t, err := rec.File(ctx, nt)
+	if err != nil && step != "" && refusedBy(err, client.ErrorCodeNotFound, client.ErrorCodeInvalid, client.ErrorCodeNoStep) {
+		// The Step went from the Workflow since: the Project's first work Step then.
+		nt.Step, stepName = nil, ""
+		t, err = rec.File(ctx, nt)
+	}
 	if err != nil {
-		r.logError(ctx, "could not file the Task that resolves a merge", "task", d.Task.Key, "err", err)
-		return
+		r.logError(ctx, "could not file the Task that resolves a merge; merge it by hand", "task", key, "branch", branch, "into", target,
+			"workspace", ws.Name, "err", err)
+		return " No Task could be filed to resolve it; merge it by hand."
 	}
-	r.log.Info("a merge conflicted; filed a Task to resolve it", "task", d.Task.Key, "resolve", t.Key, "branch", branch, "into", target)
+	r.log.Info("a merge did not go in; filed a Task to resolve it", "task", key, "resolve", t.Key, "branch", branch, "into", target)
+	where := ""
+	if stepName != "" {
+		where = " at " + stepName + ", where it was built,"
+	}
+	return fmt.Sprintf(" Filed %s%s to resolve it.", t.Key, where)
 }
 
-// buildSkill is the Skill that built a Task: the one its last Claim under a Skill other than
-// review was made under; engineer, the roster's, when there is none.
-func (r *Runner) buildSkill(ctx context.Context, d *client.TaskDetail) string {
-	for i := len(d.Claims) - 1; i >= 0; i-- {
-		if id := d.Claims[i].SkillID; id != nil {
-			if sk, ok := r.skill(ctx, r.reader, *id); ok && !r.isReview(ctx, r.reader, sk) {
-				return sk.Name
-			}
-		}
-	}
-	return "engineer"
-}
-
-// shipped merges a shipped Feature's branch into the default branch in every Workspace it has
-// one, or opens its pull request.
-func (r *Runner) shipped(ctx context.Context, featureID string) {
-	rec := r.reader
-	f, err := rec.Feature(ctx, featureID)
-	if err != nil {
-		r.logError(ctx, "reading a shipped Feature", "feature", featureID, "err", err)
-		return
-	}
-	if f.Quick {
-		return // its one Task merged into the default branch when it was done
-	}
-	branch := FeatureBranch(f.Key)
-	made, err := r.ledger.find("", func(m Made) bool { return m.Feature == f.Key && m.Branch == branch })
+// parentCompleted merges a completed Parent's branch into the default branch in every Workspace
+// it has one, or opens its pull request, and records it in a Note on the Parent, which names any
+// done Subtask whose work the branch lacks (its merge conflicted).
+func (r *Runner) parentCompleted(ctx context.Context, a client.Activity, d *client.TaskDetail) {
+	key := d.Task.Key
+	branch := ParentBranch(key)
+	made, err := r.ledger.find("", func(m Made) bool { return m.Parent == key && m.Branch == branch })
 	if err != nil || len(made) == 0 {
 		return
 	}
+	rec := r.actingAs(ptrValue(a.ActorID))
 	all, _ := rec.AllWorkspaces(ctx)
 	var lines []string
 	for _, m := range made {
@@ -301,39 +327,68 @@ func (r *Runner) shipped(ctx context.Context, featureID string) {
 				ws = w
 			}
 		}
-		def := or(ws.DefaultBranch, m.Base)
+		def := or(ws.DefaultBranch, defaultBranch(ctx, m.Repo))
 		if ws.Mode == ModePullRequest {
-			url, err := r.gh.CreatePR(ctx, m.Repo, def, branch, fmt.Sprintf("%s: %s", f.Key, f.Title),
-				fmt.Sprintf("Ships %s, %s. Merging this pull request lands it on %s.", f.Key, f.Title, def))
+			url, err := r.gh.CreatePR(ctx, m.Repo, def, branch, fmt.Sprintf("%s: %s", key, d.Task.Title),
+				fmt.Sprintf("Completes %s, %s. Merging this pull request lands its Subtasks' work on %s.", key, d.Task.Title, def))
 			if err != nil {
 				lines = append(lines, fmt.Sprintf("%s: could not open the pull request of %s into %s: %v", ws.Name, branch, def, err))
-				r.logError(ctx, "opening a shipped Feature's pull request", "feature", f.Key, "workspace", ws.Name, "err", err)
+				r.logError(ctx, "opening a completed Parent's pull request", "parent", key, "workspace", ws.Name, "err", err)
 				continue
 			}
 			lines = append(lines, fmt.Sprintf("%s: opened %s, the pull request of %s into %s.", ws.Name, url, branch, def))
 			continue
 		}
+		// A done Subtask whose merge into the branch conflicted is missing from it: the merge goes on
+		// without that work, which the Task resolving the conflict carries into the default branch.
+		without := ""
+		if missing := r.unmerged(ctx, d, m.Repo, branch); len(missing) > 0 {
+			without = fmt.Sprintf(" It went without the work of %s, whose merge into %s conflicted; the Task filed to resolve that carries "+
+				"it into %s.", strings.Join(missing, ", "), branch, def)
+		}
 		unlock := r.lockRepo(m.Repo)
-		res, err := mergeBranch(ctx, m.Repo, branch, def, fmt.Sprintf("Merge %s into %s\n\nShip %s: %s", branch, def, f.Key, f.Title))
+		res, err := mergeBranch(ctx, m.Repo, branch, def, fmt.Sprintf("Merge %s into %s\n\nComplete %s: %s", branch, def, key, d.Task.Title))
 		unlock()
 		switch {
 		case err != nil:
 			lines = append(lines, fmt.Sprintf("%s: could not merge %s into %s: %v. Merge it by hand.", ws.Name, branch, def, err))
-			r.logError(ctx, "merging a shipped Feature's branch", "feature", f.Key, "workspace", ws.Name, "err", err)
+			r.logError(ctx, "merging a completed Parent's branch", "parent", key, "workspace", ws.Name, "err", err)
 		case res.Conflict != "":
 			lines = append(lines, fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged; merge it by hand.\n%s", ws.Name, branch, def, res.Conflict))
-			r.logError(ctx, "a shipped Feature's branch conflicts with the default branch; merge it by hand", "feature", f.Key, "workspace", ws.Name)
+			r.logError(ctx, "a completed Parent's branch conflicts with the default branch; merge it by hand", "parent", key, "workspace", ws.Name)
 		case res.Already:
-			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).", ws.Name, branch, def, short(res.Commit)))
+			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).%s", ws.Name, branch, def, short(res.Commit), without))
 		default:
-			lines = append(lines, fmt.Sprintf("Merged %s into %s at %s (%s).", branch, def, short(res.Commit), ws.Name))
-			r.log.Info("shipped a Feature's branch", "feature", f.Key, "workspace", ws.Name, "into", def, "commit", short(res.Commit))
+			lines = append(lines, fmt.Sprintf("Merged %s into %s at %s (%s).%s", branch, def, short(res.Commit), ws.Name, without))
+			r.log.Info("merged a completed Parent's branch", "parent", key, "workspace", ws.Name, "into", def, "commit", short(res.Commit))
 		}
 	}
-	r.recordMerge(ctx, rec, f.Key, f.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, key, strings.Join(lines, "\n"))
 }
 
-// pollPullRequests completes the review of a Task whose pull request was merged on GitHub, in
+// unmerged are the keys of a Parent's Subtasks that ended Done with a branch in repo whose work is
+// not in the Parent's branch.
+func (r *Runner) unmerged(ctx context.Context, d *client.TaskDetail, repo, branch string) []string {
+	var out []string
+	for _, st := range d.Subtasks {
+		if st.State != client.TaskStateDone || !merged(st.Kind) {
+			continue
+		}
+		made, err := r.ledger.find(repo, func(m Made) bool { return m.Task == st.Key && m.Base == branch })
+		if err != nil {
+			continue
+		}
+		for _, m := range made {
+			if branchExists(ctx, repo, m.Branch) && !isAncestor(ctx, repo, m.Branch, branch) {
+				out = append(out, st.Key)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// pollPullRequests completes a Task at a review Step whose pull request was merged on GitHub, in
 // every Workspace in pull_request mode, every Poll.
 func (r *Runner) pollPullRequests(ctx context.Context) {
 	t := time.NewTicker(r.t.Poll)
@@ -366,7 +421,8 @@ func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 		for _, pr := range prs {
 			id := fmt.Sprintf("%s#%d", ws.Path, pr.Number)
 			key := or(KeyOf(pr.HeadRefName), KeyOf(pr.Title))
-			if seen[id] || key == "" || strings.HasPrefix(pr.HeadRefName, "feature/") {
+			if seen[id] || key == "" || pr.HeadRefName == ParentBranch(key) {
+				// A Parent's own pull request lands it; there is nothing to complete.
 				continue
 			}
 			if r.completeByPR(ctx, key, pr) {
@@ -376,33 +432,53 @@ func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 	}
 }
 
-// completeByPR completes the review of Task key, whose pull request pr was merged. It says
-// whether the pull request needs no more looking at.
+// completeByPR completes Task key, whose pull request pr was merged, when it waits at a review
+// Step: it advances it along the one Connector out of that Step into Done. It says whether the
+// pull request needs no more looking at.
 func (r *Runner) completeByPR(ctx context.Context, key string, pr PullRequest) bool {
 	d, err := r.reader.Task(ctx, key)
 	if err != nil {
 		return remote.CodeOf(err) == client.ErrorCodeNotFound
 	}
-	if d.Task.State != client.TaskStateOpen {
+	if d.Task.State != client.TaskStateOpen || len(d.Subtasks) > 0 {
 		return true
 	}
 	if d.Task.SkillID == nil {
-		return true
+		return false // at a hold or aimed; it may reach review later
 	}
 	if sk, ok := r.skill(ctx, r.reader, *d.Task.SkillID); !ok || !r.isReview(ctx, r.reader, sk) {
 		return false // not at review yet; look again next time
 	}
+	s := r.session(d.Task.ID)
+	if s == nil && d.Task.Claim != nil {
+		return false // someone else holds it; look again next time
+	}
+	var done []string
+	for _, k := range d.Connectors {
+		if k.ToStepID == nil {
+			done = append(done, k.Name)
+		}
+	}
+	if len(done) != 1 {
+		note := fmt.Sprintf("Pull request #%d (%s) was merged on GitHub, but %d ways lead from %s into Done, so the runner "+
+			"cannot tell which the merge means: advance %s by hand.", pr.Number, pr.URL, len(done), stepName(d), key)
+		rec := r.reader
+		if s != nil {
+			rec = s.rec
+		}
+		if err := rec.Note(ctx, key, note); err != nil {
+			r.logError(ctx, "noting a merged pull request the runner cannot act on", "task", key, "err", err)
+		}
+		return true
+	}
 	note := fmt.Sprintf("Pull request #%d (%s) was merged on GitHub, which completes the review.", pr.Number, pr.URL)
-	if s := r.session(d.Task.ID); s != nil {
-		// This runner's session holds the review: complete it in that Session.
-		if err := s.rec.Complete(ctx, key, note); err != nil {
+	if s != nil {
+		// This runner's session holds the review: advance it in that Session.
+		if err := s.rec.Advance(ctx, key, done[0], note); err != nil {
 			r.logError(ctx, "completing a review whose pull request merged", "task", key, "err", err)
 			return false
 		}
 		return true
-	}
-	if d.Task.Claim != nil {
-		return false // someone else holds it; look again next time
 	}
 	for _, a := range r.agents {
 		rec, err := r.dial(a.token, remote.NewSessionID())
@@ -412,7 +488,7 @@ func (r *Runner) completeByPR(ctx context.Context, key string, pr PullRequest) b
 		if _, err := rec.Claim(ctx, key, r.t.ClaimTimeout, ""); err != nil {
 			continue
 		}
-		err = rec.Complete(ctx, key, note)
+		err = rec.Advance(ctx, key, done[0], note)
 		rec.CloseSession(context.WithoutCancel(ctx))
 		if err != nil {
 			r.logError(ctx, "completing a review whose pull request merged", "task", key, "agent", a.name(), "err", err)
@@ -423,4 +499,18 @@ func (r *Runner) completeByPR(ctx context.Context, key string, pr PullRequest) b
 	}
 	r.log.Warn("no agent of this runner may take a review whose pull request merged", "task", key, "pr", pr.Number)
 	return false
+}
+
+// builtAt is the Step a session of this runner last committed to Task key's branch at, by id and
+// name; empty when none did.
+func (r *Runner) builtAt(key string) (id, name string) {
+	b, err := os.ReadFile(filepath.Join(r.cfg.Data, "sessions", key, builtFile))
+	if err != nil {
+		return "", ""
+	}
+	var rec builtRecord
+	if json.Unmarshal(b, &rec) != nil {
+		return "", ""
+	}
+	return rec.StepID, rec.Step
 }

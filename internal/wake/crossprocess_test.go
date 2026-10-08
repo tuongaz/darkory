@@ -107,13 +107,16 @@ func TestWritesOnOneProcessWakeWaitersOnAnother(t *testing.T) {
 	}
 	org, secret := init.Organisation.ID, init.Token.Secret
 	adminB := b.client(t, secret, "ada-b")
-	got(adminB.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).ok(t)
+	got(adminB.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).ok(t)
 	got(adminB.CreateMemberWithResponse(ctx, &client.CreateMemberParams{}, client.CreateMemberBody{Name: "bot", Kind: client.Agent})).ok(t)
-	got(adminB.AddTeamMemberWithResponse(ctx, "WEB", "bot", &client.AddTeamMemberParams{})).ok(t)
-	got(adminB.AddTeamMemberWithResponse(ctx, "WEB", "ada", &client.AddTeamMemberParams{})).ok(t)
+	got(adminB.AddProjectMemberWithResponse(ctx, "WEB", "bot", &client.AddProjectMemberParams{})).ok(t)
+	got(adminB.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).ok(t)
 	got(adminB.GrantSkillWithResponse(ctx, "bot", "breakdown", &client.GrantSkillParams{})).ok(t)
 	tok := got(adminB.IssueTokenWithResponse(ctx, "bot", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "main"})).ok(t)
 	botA := a.client(t, tok.JSON201.Secret, "bot-a")
+	// The Task each round files bot's question under, at the Backlog hold, where nobody takes it.
+	anchor := got(adminB.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("WEB"), Title: "Anchor",
+		Step: ptr("Backlog")})).ok(t).JSON201
 
 	page := got(a.client(t, secret, "ada-a").ListActivityWithResponse(ctx, &client.ListActivityParams{})).ok(t)
 	events := a.stream(t, secret, "ada-stream", page.JSON200.LastSeq)
@@ -123,9 +126,9 @@ func TestWritesOnOneProcessWakeWaitersOnAnother(t *testing.T) {
 	check := func(round string) {
 		t.Helper()
 		// The Activity stream on A, woken by a write on B.
-		team := "T" + strings.ToUpper(round[:1])
+		project := "T" + strings.ToUpper(round[:1])
 		start := time.Now()
-		got(adminB.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: team, Name: team})).ok(t)
+		got(adminB.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: project, Name: project})).ok(t)
 		select {
 		case seq := <-events:
 			if since := time.Since(start); since > time.Second {
@@ -149,7 +152,8 @@ func TestWritesOnOneProcessWakeWaitersOnAnother(t *testing.T) {
 		}()
 		time.Sleep(300 * time.Millisecond)
 		start = time.Now()
-		got(adminB.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Feature " + round})).ok(t)
+		got(adminB.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &anchor.Task.Key, Title: "Question " + round,
+			Aim: ptr("bot")})).ok(t)
 		select {
 		case r := <-done:
 			if r.err != nil || r.res.StatusCode() != http.StatusOK {

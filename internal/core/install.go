@@ -11,28 +11,26 @@ import (
 	"github.com/tuongaz/darkory/internal/store"
 )
 
-// The built-in Skills `darkory init` creates; Darkory files Tasks needing the first two, and the
-// third reviews proposed Skill versions (ADR 0010).
+// The built-in Skills `darkory init` creates. The Steps carrying the first three are where
+// Darkory files the Subtasks it owns about a Parent — its Breakdown, Acceptance and Retrospective —
+// and the fourth reviews proposed Skill versions (ADR 0010, ADR 0016).
 const (
 	SkillBreakdown   = "breakdown"
+	SkillAcceptance  = "acceptance"
 	SkillRetro       = "retro"
 	SkillSkillReview = "skill-review"
 )
 
-var builtinSkills = []struct{ name, body string }{
-	{SkillBreakdown, "Break a Feature down into Tasks. Read the Feature, file the Tasks it needs, each needing a Skill or aimed at a Member, and let Tasks block one another where their order matters. Complete this Task when the Feature's work is filed."},
-	{SkillRetro, "Run a Feature's Retrospective. Read the Observations recorded on its Tasks, propose a new version of any company Skill that should change, and file new Features for problems that need work rather than a Skill change."},
-	{SkillSkillReview, "Review a proposed Skill version. Complete the Task to publish it, or hand it back to retro with a Note saying what to fix. Nobody reviews their own proposal."},
-}
-
-// The roster `darkory init` seeds on a Local Install so it comes up with agents ready
-// (docs/build/agents-plan.md, D4): Team MAIN, the generic Skills engineer and review, and four
-// agents in the Team reporting to the first Member, each with agent settings and a token.
+// What `darkory init` seeds on a Local Install: Project MAIN on the default Workflow, always, and
+// unless told --no-agents the roster, so it comes up with agents ready (docs/build/agents-plan.md,
+// D4): four agents in MAIN reporting to the first Member, each with agent settings and a token.
+// The generic Skills engineer and review, which the default Workflow's Build and Review Steps
+// carry, are seeded whether or not the roster is.
 const (
-	RosterTeamKey  = "MAIN"
-	RosterTeamName = "Main"
-	SkillEngineer  = "engineer"
-	SkillReview    = "review"
+	RosterProjectKey  = "MAIN"
+	RosterProjectName = "Main"
+	SkillEngineer     = "engineer"
+	SkillReview       = "review"
 	// RosterTokenName names the token each agent of the roster is issued, for the Runner.
 	RosterTokenName = "runner"
 	// RosterTokenTimeout is that token's default heartbeat timeout: the Runner sends Heartbeats
@@ -40,11 +38,27 @@ const (
 	RosterTokenTimeout = 5 * time.Minute
 )
 
-var rosterSkills = []struct{ name, body string }{
-	{SkillEngineer, "Build what the Task describes. Work on the Task's branch in its Workspace, test as you go, run the tests, and attach the test log as Evidence. " +
-		"Hand the Task over to review when it is built, with a Note saying what changed and how you checked it."},
-	{SkillReview, "Review the work a Task describes: read the change on its branch and its Evidence, run the tests, and check it does what the Task asks. " +
-		"Complete the Task when it is right, with a Note saying what you checked; hand it back with a Note saying what to fix when it is not. Nobody reviews their own work."},
+// seededSkills are the generic Skills `darkory init` creates, with their first versions.
+var seededSkills = []struct {
+	name, body string
+	builtin    bool
+}{
+	{SkillBreakdown, "Break a Task down into Subtasks. Read the Task and file the Subtasks its work needs under it, each with --parent " +
+		"and at the Step that should take it first, and let Subtasks block one another where their order matters. " +
+		"Advance this Task when the work is filed.", true},
+	{SkillAcceptance, "Confirm a Parent as a whole before it is called done. Read the Parent, its Subtasks, their Notes and Evidence, " +
+		"and check that together they do what the Parent asks. Advance this Task into Done when they do. When something is missing, " +
+		"file a Subtask under the Parent for each thing, then advance this Task; Darkory files a new Acceptance once they are done.", true},
+	{SkillRetro, "Run a Parent's Retrospective. Read the Observations recorded on its Subtasks, propose a new version of any company " +
+		"Skill that should change and advance this Task to skill review, and file new Tasks for problems that need work rather than a " +
+		"Skill change.", true},
+	{SkillSkillReview, "Review a proposed Skill version. Advance this Task into Done to publish it, or back to the Retrospective with a " +
+		"Note saying what to fix. Nobody reviews their own proposal.", true},
+	{SkillEngineer, "Build what the Task describes. Work on the Task's branch in its Workspace, test as you go, run the tests, and attach " +
+		"the test log as Evidence. Advance the Task when it is built, with a Note saying what changed and how you checked it.", false},
+	{SkillReview, "Review the work a Task describes: read the change on its branch and its Evidence, run the tests, and check it does " +
+		"what the Task asks. Advance it when it is right, with a Note saying what you checked; advance it back with a Note saying what " +
+		"to fix when it is not. Nobody reviews their own work.", false},
 }
 
 // RosterAgent is one agent of the roster: its Skills and model.
@@ -77,9 +91,9 @@ type Initialised struct {
 	Member       Member
 	Token        IssuedToken
 	Link         LoginLink
-	// Team, Workspace and Agents are the roster, when InitWith seeded one; Workspace is nil
-	// when none was given.
-	Team      *Team
+	// Project is Project MAIN, when InitWith seeded it; Workspace is its default, nil when none
+	// was given; Agents are the roster's agents, when it seeded them.
+	Project   *Project
 	Workspace *Workspace
 	Agents    []SeededAgent
 }
@@ -93,17 +107,18 @@ type SeededAgent struct {
 
 // InitOptions are what InitWith seeds besides what Init does.
 type InitOptions struct {
-	// Roster seeds Team MAIN with the first Member in it, the Skills engineer and review, and
-	// the Roster's agents in the Team, reporting to the first Member, each with agent settings
-	// and a token named RosterTokenName.
+	// Project seeds Project MAIN on the default Workflow with the first Member in it.
+	Project bool
+	// Roster seeds Project MAIN as Project does, and the Roster's agents in it, reporting to the
+	// first Member, each with agent settings and a token named RosterTokenName.
 	Roster bool
-	// Workspace, with Roster, is added and made Team MAIN's default.
+	// Workspace, with Project or Roster, is added and made Project MAIN's default.
 	Workspace *NewWorkspace
 }
 
 // Init creates the Install's Organisation, its first Member — a human admin — the built-in
-// Skills, the default Statuses, a token for that Member and a login link. It refuses when an
-// Organisation exists.
+// Skills and the generic Skills engineer and review, a token for that Member and a login link.
+// It refuses when an Organisation exists.
 func (s *Service) Init(ctx context.Context, orgName, memberName string) (Initialised, error) {
 	return s.InitWith(ctx, orgName, memberName, InitOptions{})
 }
@@ -140,13 +155,10 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 		if err := t.record(nil, "member.created", memberID, map[string]any{"name": memberName, "kind": "human", "admin": true}); err != nil {
 			return err
 		}
-		for _, b := range builtinSkills {
-			if _, err := createSkill(t, b.name, "generic", nil, b.body, true); err != nil {
+		for _, b := range seededSkills {
+			if _, err := createSkill(t, b.name, "generic", nil, b.body, b.builtin); err != nil {
 				return err
 			}
-		}
-		if err := seedStatuses(t); err != nil {
-			return err
 		}
 		if out.Token, err = issueToken(t, memberID, "init", 0); err != nil {
 			return err
@@ -154,10 +166,14 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 		if out.Link, err = issueLoginLink(t, memberID, nil); err != nil {
 			return err
 		}
-		if o.Roster {
-			return seedRoster(t, memberID, o.Workspace, &out)
+		if !o.Project && !o.Roster {
+			return nil
 		}
-		return nil
+		project, err := seedProject(t, memberID, o.Workspace, &out)
+		if err != nil || !o.Roster {
+			return err
+		}
+		return seedRoster(t, project, memberID, &out)
 	})
 	if err != nil {
 		return out, fmt.Errorf("core: init: %w", err)
@@ -167,46 +183,51 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 	return out, err
 }
 
-// seedRoster seeds the roster inside Init's write, the first Member, human, being humanID.
-func seedRoster(t *tx, humanID string, nw *NewWorkspace, out *Initialised) error {
-	team, err := createTeam(t, RosterTeamKey, RosterTeamName)
+// seedProject seeds Project MAIN inside Init's write, with the first Member, humanID, in it and
+// nw, when given, as its default Workspace, and returns its id.
+func seedProject(t *tx, humanID string, nw *NewWorkspace, out *Initialised) (string, error) {
+	project, err := createProject(t, projectRow{key: RosterProjectKey, name: RosterProjectName, workflow: WorkflowDefault})
 	if err != nil {
-		return err
+		return "", err
 	}
-	if err := addTeamMember(t, team, humanID); err != nil {
-		return err
+	if err := addProjectMember(t, project, humanID); err != nil {
+		return "", err
 	}
 	if nw != nil {
 		ws, err := createWorkspace(t, *nw)
 		if err != nil {
-			return err
+			return "", err
 		}
-		if _, err := t.Exec(t.ctx, `UPDATE teams SET default_workspace_id = $1 WHERE org_id = $2 AND id = $3`, ws, t.caller.OrgID, team); err != nil {
-			return err
+		if _, err := t.Exec(t.ctx, `UPDATE projects SET default_workspace_id = $1 WHERE org_id = $2 AND id = $3`, ws, t.caller.OrgID, project); err != nil {
+			return "", err
 		}
-		if err := t.recordByCaller("team.changed", team, map[string]any{"default_workspace_id": ws}); err != nil {
-			return err
+		if err := t.recordByCaller("project.changed", project, map[string]any{"default_workspace_id": ws}); err != nil {
+			return "", err
 		}
 		w, err := getWorkspace(t.ctx, t, t.caller.OrgID, ws)
 		if err != nil {
-			return err
+			return "", err
 		}
 		out.Workspace = &w
 	}
-	tm, err := getTeam(t.ctx, t, t.caller.OrgID, team)
+	p, err := getProject(t.ctx, t, t.caller.OrgID, project)
 	if err != nil {
-		return err
+		return "", err
 	}
-	out.Team = &tm
+	out.Project = &p
+	return project, nil
+}
+
+// seedRoster seeds the roster's agents in Project MAIN, project, inside Init's write, reporting to
+// the first Member, humanID.
+func seedRoster(t *tx, project, humanID string, out *Initialised) error {
+	var err error
 	skills := map[string]string{}
-	for _, b := range rosterSkills {
-		if skills[b.name], err = createSkill(t, b.name, "generic", nil, b.body, false); err != nil {
-			return err
-		}
-	}
-	for _, name := range []string{SkillBreakdown, SkillRetro, SkillSkillReview} {
-		if skills[name], err = skillByName(t.ctx, t, t.caller.OrgID, name); err != nil {
-			return err
+	for _, a := range Roster {
+		for _, sk := range a.Skills {
+			if skills[sk], err = skillByName(t.ctx, t, t.caller.OrgID, sk); err != nil {
+				return err
+			}
 		}
 	}
 	for _, a := range Roster {
@@ -214,7 +235,7 @@ func seedRoster(t *tx, humanID string, nw *NewWorkspace, out *Initialised) error
 		if err != nil {
 			return err
 		}
-		if err := addTeamMember(t, team, id); err != nil {
+		if err := addProjectMember(t, project, id); err != nil {
 			return err
 		}
 		for _, sk := range a.Skills {
@@ -274,7 +295,8 @@ WHERE m.org_id = $1 AND m.kind = 'human' AND m.deactivated_at IS NULL ORDER BY m
 	return m, link, err
 }
 
-// GetMe returns the caller, their Teams and Skills, and the Session they call through.
+// GetMe returns the caller, their Projects and Skills, and the Session they call through. A Local
+// Install holds one Organisation, so Organisations is left out.
 func (s *Service) GetMe(ctx context.Context, c *auth.Caller) (Me, error) {
 	var me Me
 	var created int64
@@ -287,7 +309,7 @@ func (s *Service) GetMe(ctx context.Context, c *auth.Caller) (Me, error) {
 	if me.Member, err = getMember(ctx, s.store, c.OrgID, c.MemberID); err != nil {
 		return me, err
 	}
-	if me.Teams, err = memberTeams(ctx, s.store, c.OrgID, c.MemberID); err != nil {
+	if me.Projects, err = memberProjects(ctx, s.store, c.OrgID, c.MemberID); err != nil {
 		return me, err
 	}
 	if me.Skills, err = memberSkills(ctx, s.store, c.OrgID, c.MemberID); err != nil {

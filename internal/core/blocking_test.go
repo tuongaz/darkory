@@ -13,31 +13,32 @@ import (
 )
 
 // A blocked Task is not takeable until every Task blocking it has ended, done or dropped. Edges
-// may cross Features; one that would close a loop is refused.
+// may cross Parents and Projects; one that would close a loop is refused, and a Parent neither
+// blocks nor is blocked.
 func TestBlocking(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		f.team("API")
+		f.project("WEB")
+		f.project("API")
 		f.skill("build")
+		f.chain("WEB", [2]string{"Build", "build"})
+		f.chain("API", [2]string{"Build", "build"})
 		owner := f.member("owner", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB", "API"}, []string{"build"})
 		outsider := f.member("outsider", []string{"API"}, nil)
-		web := f.feature(owner, "WEB", "Sign-up").Feature.ID
-		api := f.feature(outsider, "API", "Accounts").Feature.ID
-		a := f.task(owner, web, "A", "build")
-		b := f.task(owner, web, "B", "build")
-		c := f.task(outsider, api, "C in another Feature", "build")
+		a := f.task(owner, "WEB", "A", "Build")
+		b := f.task(owner, "WEB", "B", "Build")
+		c := f.task(outsider, "API", "C in another Project", "Build")
 
-		// A Team Member and the Feature's owner may shape a Task nobody holds; others may not.
+		// A Project Member and the Task's Owner may shape a Task nobody holds; others may not.
 		err := f.svc.AddBlocker(ctx, outsider, a.Key, b.Key, core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
 		if err := f.svc.AddBlocker(ctx, builder, a.Key, b.Key, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		if err := f.svc.AddBlocker(ctx, owner, a.Key, c.Key, core.Idem{}); err != nil {
-			t.Fatalf("a blocker in another Feature: %v", err)
+			t.Fatalf("a blocker in another Project: %v", err)
 		}
 		before := f.checkActivity()
 		if err := f.svc.AddBlocker(ctx, owner, a.Key, b.Key, core.Idem{}); err != nil {
@@ -49,7 +50,7 @@ func TestBlocking(t *testing.T) {
 
 		// Loops, direct, through another Task and onto itself, are refused.
 		wantCode(t, f.svc.AddBlocker(ctx, owner, b.Key, a.Key, core.Idem{}), core.CodeCycle)
-		d := f.task(owner, web, "D", "build")
+		d := f.task(owner, "WEB", "D", "Build")
 		if err := f.svc.AddBlocker(ctx, owner, b.Key, d.Key, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
@@ -63,15 +64,23 @@ func TestBlocking(t *testing.T) {
 		if len(got.Blockers) != 2 {
 			t.Fatalf("A's blockers %+v", got.Blockers)
 		}
-		fd, err := f.svc.GetFeature(ctx, owner, web)
+		list, err := f.svc.ListTasks(ctx, owner, core.TaskFilter{Project: ptrStr("WEB")})
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, task := range fd.Tasks {
+		for _, task := range list.Items {
 			if task.ID == a.ID && len(task.OpenBlockers) != 2 {
-				t.Fatalf("the Feature names A's blockers as %+v", task.OpenBlockers)
+				t.Fatalf("the list names A's blockers as %+v", task.OpenBlockers)
 			}
 		}
+
+		// A Parent neither blocks nor is blocked; nor does a Task in a Blocking become one.
+		p := f.task(owner, "WEB", "P", "Build")
+		f.subtask(owner, p.ID, "P's part", "Build")
+		wantCode(t, f.svc.AddBlocker(ctx, owner, p.Key, b.Key, core.Idem{}), core.CodeConflict)
+		wantCode(t, f.svc.AddBlocker(ctx, owner, b.Key, p.Key, core.Idem{}), core.CodeConflict)
+		_, err = f.svc.FileTask(ctx, owner, core.NewTask{Parent: &a.Key, Title: "A's part", Step: ptrStr("Build")}, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
 
 		// A stays blocked until both its blockers end, one done and one dropped.
 		if f.takeable(builder)[a.ID] {
@@ -97,7 +106,7 @@ func TestBlocking(t *testing.T) {
 		}
 
 		// Removing an edge needs the same authority.
-		e := f.task(owner, web, "E", "build")
+		e := f.task(owner, "WEB", "E", "Build")
 		if err := f.svc.AddBlocker(ctx, owner, e.Key, a.Key, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
@@ -116,23 +125,25 @@ func TestBlocking(t *testing.T) {
 	})
 }
 
-// A stuck Member files a question aimed at someone above them, in another Team, and lets it block
-// their Task: the question joins the Task's Feature, the asker keeps their Claim, and the Member
-// asked takes it from their own Team.
+// A stuck Member files a question aimed at someone above them, in another Project, and lets it
+// block their Task: the question joins the Task's Parent, or stands alone in its Project beside a
+// Task that has none; the asker keeps their Claim, and the Member asked takes it from their own
+// Project.
 func TestQuestionsAndEscalations(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		f.team("OPS")
+		f.project("WEB")
+		f.project("OPS")
 		f.skill("build")
+		f.chain("WEB", [2]string{"Build", "build"})
 		owner := f.member("owner", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB"}, []string{"build"})
 		boss := f.member("boss", []string{"OPS"}, nil)
 		other := f.member("other", []string{"WEB"}, []string{"build"})
 		f.manager("builder", "boss")
-		web := f.feature(owner, "WEB", "Payments").Feature.ID
-		task := f.task(owner, web, "Charge the card", "build")
+		p := f.task(owner, "WEB", "Payments", "Build")
+		task := f.subtask(owner, p.ID, "Charge the card", "Build")
 		f.claim(builder, task.Key, timeout(time.Minute))
 
 		// Only the holder may let a question block a held Task.
@@ -142,8 +153,8 @@ func TestQuestionsAndEscalations(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if q.Task.FeatureID != web || q.Task.AimedAtID == nil || *q.Task.AimedAtID != boss.MemberID ||
-			len(q.Blocking) != 1 || q.Blocking[0].ID != task.ID {
+		if q.Task.ParentID == nil || *q.Task.ParentID != p.ID || q.Task.StepID != nil || q.Task.AimedAtID == nil ||
+			*q.Task.AimedAtID != boss.MemberID || q.Task.OwnerID != owner.MemberID || len(q.Blocking) != 1 || q.Blocking[0].ID != task.ID {
 			t.Fatalf("question %+v blocking %+v", q.Task, q.Blocking)
 		}
 		held := f.get(task.Key)
@@ -154,7 +165,7 @@ func TestQuestionsAndEscalations(t *testing.T) {
 			t.Fatalf("the asker's Heartbeat: %+v, %v", hb, err)
 		}
 		if !f.takeable(boss)[q.Task.ID] {
-			t.Fatal("the Member asked cannot take the question from another Team")
+			t.Fatal("the Member asked cannot take the question from another Project")
 		}
 		f.claim(boss, q.Task.Key, noTimeout)
 		f.complete(boss, q.Task.Key)
@@ -162,11 +173,20 @@ func TestQuestionsAndEscalations(t *testing.T) {
 			t.Fatal("the Task is still blocked after its question was answered")
 		}
 
-		// A question names the Feature of the Task it blocks, or none; it blocks open Tasks only.
-		_, err = f.svc.FileTask(ctx, builder, core.NewTask{Feature: ptrStr(f.feature(owner, "WEB", "Elsewhere").Feature.Key),
-			Title: "Q", Skill: ptrStr("build"), Blocks: &task.Key}, core.Idem{})
+		// Beside a Task with no Parent, the question stands alone in its Project.
+		alone := f.task(owner, "WEB", "Refunds", "Build")
+		f.claim(builder, alone.Key, noTimeout)
+		q2, err := f.svc.FileTask(ctx, builder, core.NewTask{Title: "Partial refunds?", AimedAt: ptrStr("boss"), Blocks: &alone.Key}, core.Idem{})
+		if err != nil || q2.Task.ParentID != nil || q2.Task.ProjectID != alone.ProjectID || q2.Task.Rank == nil || q2.Task.OwnerID != builder.MemberID {
+			t.Fatalf("the question beside a Task with no Parent: %+v, %v", q2.Task, err)
+		}
+
+		// A question names the Parent of the Task it blocks, or none; it blocks open Tasks only.
+		elsewhere := f.task(owner, "WEB", "Elsewhere", "Build")
+		f.subtask(owner, elsewhere.ID, "Elsewhere's part", "Build")
+		_, err = f.svc.FileTask(ctx, builder, core.NewTask{Parent: &elsewhere.Key, Title: "Q", Blocks: &task.Key}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
-		_, err = f.svc.FileTask(ctx, builder, core.NewTask{Title: "Q", Skill: ptrStr("build"), Blocks: &q.Task.Key}, core.Idem{})
+		_, err = f.svc.FileTask(ctx, builder, core.NewTask{Title: "Q", Blocks: &q.Task.Key}, core.Idem{})
 		wantCode(t, err, core.CodeEnded)
 		if got := f.kinds(task.ID); got != "task.filed task.claimed task.blocker_added" {
 			t.Fatalf("Activity: %s", got)
@@ -175,33 +195,31 @@ func TestQuestionsAndEscalations(t *testing.T) {
 	})
 }
 
-// A question on an ended Feature stays open only while it blocks an open Task (ADR 0010): removing
-// its last such edge is refused with ended, and the question is completed or dropped instead. While
-// it still blocks another open Task, or once it has ended, its edges come off as any other.
-func TestUnblockingAQuestionOnAnEndedFeature(t *testing.T) {
+// A question under an ended Parent stays open only while it blocks an open Task (ADR 0010):
+// removing its last such edge is refused with ended, and the question is completed or dropped
+// instead. While it still blocks another open Task, or once it has ended, its edges come off as
+// any other.
+func TestUnblockingAQuestionUnderAnEndedParent(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		f.skill("build")
-		owner := f.member("owner", []string{"WEB"}, []string{core.SkillBreakdown, "build"})
+		f.project("WEB")
+		owner := f.member("owner", []string{"WEB"}, []string{core.SkillBreakdown, core.SkillEngineer})
 		retro := f.member("retro", []string{"WEB"}, []string{core.SkillRetro})
-		f.member("builder", []string{"WEB"}, []string{"build"})
-		fd := f.feature(owner, "WEB", "Search")
-		f.claim(owner, fd.Tasks[0].Key, noTimeout)
-		f.complete(owner, fd.Tasks[0].Key)
-		shipped, err := f.svc.ShipFeature(ctx, owner, fd.Feature.Key, core.Idem{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		r := shipped.Tasks[len(shipped.Tasks)-1]
+		f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
+		pd := f.parent(owner, "WEB", "Search")
+		f.claim(owner, pd.Subtasks[0].Key, noTimeout)
+		f.complete(owner, pd.Subtasks[0].Key)
+		f.complete(owner, pd.Task.Key)
+		subs := f.get(pd.Task.Key).Subtasks
+		r := subs[len(subs)-1]
 		f.claim(retro, r.Key, noTimeout)
 		q, err := f.svc.FileTask(ctx, retro, core.NewTask{Title: "Why was search slow?", AimedAt: ptrStr("builder"), Blocks: &r.Key}, core.Idem{})
-		if err != nil {
-			t.Fatal(err)
+		if err != nil || q.Task.ParentID == nil || *q.Task.ParentID != pd.Task.ID {
+			t.Fatalf("the question %+v, %v", q.Task, err)
 		}
 
-		// The question's one edge: removing it would leave an open Task on a shipped Feature that
+		// The question's one edge: removing it would leave an open Task under a done Parent that
 		// blocks nothing.
 		err = f.svc.RemoveBlocker(ctx, retro, r.Key, q.Task.Key, core.Idem{})
 		wantCode(t, err, core.CodeEnded)
@@ -214,7 +232,7 @@ func TestUnblockingAQuestionOnAnEndedFeature(t *testing.T) {
 
 		// While it also blocks an open Task elsewhere, the edge to the Retrospective comes off; the
 		// last one does not.
-		other := f.task(owner, f.feature(owner, "WEB", "Next").Feature.ID, "Other", "build")
+		other := f.task(owner, "WEB", "Other", "Build")
 		if err := f.svc.AddBlocker(ctx, owner, other.Key, q.Task.Key, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
@@ -242,16 +260,14 @@ func TestUnblockingAQuestionOnAnEndedFeature(t *testing.T) {
 func TestRaceOppositeBlockEdges(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
-		f.team("WEB")
-		f.skill("build")
+		f.project("WEB")
 		owner := f.member("owner", []string{"WEB"}, nil)
 		mates := []*auth.Caller{owner}
 		for i := range 5 {
 			mates = append(mates, f.member(name("mate", i), []string{"WEB"}, nil))
 		}
-		feature := f.feature(owner, "WEB", "Race").Feature.ID
 		type edge struct{ task, blocker string }
-		key := func(prefix string, i int) string { return f.task(owner, feature, name(prefix, i), "build").Key }
+		key := func(prefix string, i int) string { return f.task(owner, "WEB", name(prefix, i), "Build").Key }
 		// Each group would close a loop: two opposite edges, and the three edges of a triangle.
 		var edges [][]edge
 		for i := range 10 {

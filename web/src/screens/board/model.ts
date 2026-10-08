@@ -1,76 +1,70 @@
 import { useMemo } from "react";
-import type { Feature, Member, Task, Team } from "@/api/client";
-import { useDirectory, useTeams } from "@/api/queries";
+import type { Label, Member, Project, RunnerSession, Task, WorkflowStep } from "@/api/client";
+import { useDirectory, useLabels, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { useNow } from "@/clock";
+import { useClaimTrails } from "@/components/filters/useTaskFilter";
 import { useCurrentMe } from "@/me";
-import { liveClaim } from "@/work";
-import { blocking, mayMove, statusGlyphs, type Status } from "./derive";
-import { useClaimTrails, useStatuses, useTeamFeatures, useTeamTasks } from "./queries";
+import { liveClaim, taskWorkGlyph } from "@/work";
+import type { WorkGlyph } from "@/lib/work";
+import { blocking, childrenOf, moveProblem, stepsInOrder } from "./derive";
+import { useProjectTasks } from "./queries";
 
-/** Everything the Team's Tasks views read, joined: the records, lookups by id, and who is looking. */
-export type BoardModel = ReturnType<typeof useBoardModel>;
+/** Everything a Project's Tasks views read, joined: the records, lookups by id, and who is looking. */
+export type TasksModel = ReturnType<typeof useTasksModel>;
 
-export function useBoardModel(teamRef: string) {
-  const teams = useTeams();
-  const team: Team | undefined = teams.data?.find((t) => t.key === teamRef || t.id === teamRef);
-  const statuses = useStatuses();
-  const features = useTeamFeatures(team?.key);
-  const tasks = useTeamTasks(team?.key);
-  const trails = useClaimTrails(team?.key);
+export function useTasksModel(project: Project) {
+  const tasks = useProjectTasks(project.key);
+  const workflow = useWorkflow(project.key);
+  const labels = useLabels(project.key);
+  // The Project's one Claim trail read: the Filter's Lapsed, the rows' Lapsed and Evidence.
+  const trails = useClaimTrails(project.key);
   const dir = useDirectory();
   const me = useCurrentMe();
   const now = useNow();
+  const sessions = useRunnerSessions().data?.items;
 
   const lookups = useMemo(() => {
-    const statusList = statuses.data ?? [];
+    const list = tasks.data ?? [];
+    const steps = stepsInOrder(workflow.data?.steps ?? []);
     return {
-      statusList,
-      statusById: new Map<string, Status>(statusList.map((s) => [s.id, s])),
-      glyphs: statusGlyphs(statusList),
-      featureList: features.data ?? [],
-      featureById: new Map<string, Feature>((features.data ?? []).map((f) => [f.id, f])),
-      blocks: blocking(tasks.data ?? []),
+      steps,
+      stepById: new Map<string, WorkflowStep>(steps.map((s) => [s.id, s])),
+      byId: new Map<string, Task>(list.map((t) => [t.id, t])),
+      children: childrenOf(list),
+      blocks: blocking(list),
+      labelById: new Map<string, Label>((labels.data ?? []).map((l) => [l.id, l])),
+      sessionByTask: new Map<string, RunnerSession>((sessions ?? []).map((s) => [s.task_id, s])),
     };
-  }, [statuses.data, features.data, tasks.data]);
+  }, [tasks.data, workflow.data, labels.data, sessions]);
 
-  const inTeam = !!team && me.teams.some((t) => t.id === team.id);
+  const kindOf = (id: string) => dir.members.get(id)?.kind;
   return {
-    team,
-    teamsLoaded: !teams.isPending,
-    statuses,
-    features,
+    project,
     tasks,
+    workflow,
+    labels,
     trails,
     members: dir.members,
+    memberList: dir.memberList,
     skills: dir.skills,
     me,
-    /** Whether the signed-in Member is in the Team. */
-    inTeam,
-    /** Whether the signed-in Member may drag the Task to another Status. */
-    canMove: (task: Task) => mayMove(task, { member: me.member.id, inTeam, feature: lookups.featureById.get(task.feature_id), now }),
     now,
     ...lookups,
+    /** The Task's WorkGlyph, its Runner session's state included. */
+    glyph: (task: Task): WorkGlyph => taskWorkGlyph(task, now, kindOf, lookups.sessionByTask.get(task.id)?.state),
+    /** Why the signed-in Member may not move the Task by hand, or undefined when they may. */
+    moveProblem: (task: Task) => moveProblem(task, { me: me.member.id, projects: me.projects, members: dir.members, now, projectName: project.name }),
   };
 }
 
-/** The Task's Feature, from the model's lookups. */
-export function featureOf(model: Pick<BoardModel, "featureById">, task: Task): Feature | undefined {
-  return model.featureById.get(task.feature_id);
-}
-
-/** The Member holding the Task's live Claim, or for a done Task the one who completed it. */
-export function holderOf(task: Task, model: Pick<BoardModel, "members" | "trails" | "now">): Member | undefined {
+/** The Member holding the Task's live Claim. */
+export function holderOf(task: Task, model: Pick<TasksModel, "members" | "now">): Member | undefined {
   const claim = liveClaim(task, model.now);
-  if (claim) return model.members.get(claim.holder_id);
-  if (task.state === "done") {
-    const by = model.trails.get(task.id)?.completedBy;
-    return by ? model.members.get(by) : undefined;
-  }
-  return undefined;
+  return claim ? model.members.get(claim.holder_id) : undefined;
 }
 
-/** The Member a Task is aimed at by name, while nobody holds it. */
-export function aimedAt(task: Task, model: Pick<BoardModel, "members" | "now">): Member | undefined {
+/** The Member an open Task nobody holds is aimed at. */
+export function aimedAt(task: Task, model: Pick<TasksModel, "members" | "now">): Member | undefined {
   if (!task.aimed_at_id || task.state !== "open" || liveClaim(task, model.now)) return undefined;
   return model.members.get(task.aimed_at_id);
 }

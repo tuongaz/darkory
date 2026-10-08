@@ -17,68 +17,64 @@ import (
 
 // Defines values for ActivityKind.
 const (
-	ActivityKindFeatureDropped          ActivityKind = "feature.dropped"
-	ActivityKindFeatureEvidenceAttached ActivityKind = "feature.evidence_attached"
-	ActivityKindFeatureFiled            ActivityKind = "feature.filed"
-	ActivityKindFeatureOwnerPassed      ActivityKind = "feature.owner_passed"
-	ActivityKindFeatureRanked           ActivityKind = "feature.ranked"
-	ActivityKindFeatureShipped          ActivityKind = "feature.shipped"
-	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
-	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
-	ActivityKindMemberAgentChanged      ActivityKind = "member.agent_changed"
-	ActivityKindMemberCreated           ActivityKind = "member.created"
-	ActivityKindMemberDeactivated       ActivityKind = "member.deactivated"
-	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
-	ActivityKindMemberManagerSet        ActivityKind = "member.manager_set"
-	ActivityKindMemberReactivated       ActivityKind = "member.reactivated"
-	ActivityKindMemberSkillGranted      ActivityKind = "member.skill_granted"
-	ActivityKindMemberSkillRevoked      ActivityKind = "member.skill_revoked"
-	ActivityKindMemberUpdated           ActivityKind = "member.updated"
-	ActivityKindSessionClosed           ActivityKind = "session.closed"
-	ActivityKindSkillCreated            ActivityKind = "skill.created"
-	ActivityKindSkillVersionPublished   ActivityKind = "skill.version_published"
-	ActivityKindStatusesChanged         ActivityKind = "statuses.changed"
-	ActivityKindTaskBlockerAdded        ActivityKind = "task.blocker_added"
-	ActivityKindTaskBlockerRemoved      ActivityKind = "task.blocker_removed"
-	ActivityKindTaskClaimEnded          ActivityKind = "task.claim_ended"
-	ActivityKindTaskClaimed             ActivityKind = "task.claimed"
-	ActivityKindTaskCompleted           ActivityKind = "task.completed"
-	ActivityKindTaskDropped             ActivityKind = "task.dropped"
-	ActivityKindTaskEvidenceAttached    ActivityKind = "task.evidence_attached"
-	ActivityKindTaskFiled               ActivityKind = "task.filed"
-	ActivityKindTaskHandedOver          ActivityKind = "task.handed_over"
-	ActivityKindTaskLapsed              ActivityKind = "task.lapsed"
-	ActivityKindTaskNoteAdded           ActivityKind = "task.note_added"
-	ActivityKindTaskObserved            ActivityKind = "task.observed"
-	ActivityKindTaskReleased            ActivityKind = "task.released"
-	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
-	ActivityKindTaskStatusSet           ActivityKind = "task.status_set"
-	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
-	ActivityKindTeamChanged             ActivityKind = "team.changed"
-	ActivityKindTeamCreated             ActivityKind = "team.created"
-	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
-	ActivityKindTeamMemberRemoved       ActivityKind = "team.member_removed"
-	ActivityKindTokenIssued             ActivityKind = "token.issued"
-	ActivityKindTokenRevoked            ActivityKind = "token.revoked"
-	ActivityKindWorkspaceAdded          ActivityKind = "workspace.added"
-	ActivityKindWorkspaceChanged        ActivityKind = "workspace.changed"
-	ActivityKindWorkspaceRemoved        ActivityKind = "workspace.removed"
+	ActivityKindLabelChanged          ActivityKind = "label.changed"
+	ActivityKindLabelCreated          ActivityKind = "label.created"
+	ActivityKindLabelDeleted          ActivityKind = "label.deleted"
+	ActivityKindLoginLinkIssued       ActivityKind = "login_link.issued"
+	ActivityKindLoginLinkRedeemed     ActivityKind = "login_link.redeemed"
+	ActivityKindMemberAgentChanged    ActivityKind = "member.agent_changed"
+	ActivityKindMemberCreated         ActivityKind = "member.created"
+	ActivityKindMemberDeactivated     ActivityKind = "member.deactivated"
+	ActivityKindMemberManagerCleared  ActivityKind = "member.manager_cleared"
+	ActivityKindMemberManagerSet      ActivityKind = "member.manager_set"
+	ActivityKindMemberReactivated     ActivityKind = "member.reactivated"
+	ActivityKindMemberSkillGranted    ActivityKind = "member.skill_granted"
+	ActivityKindMemberSkillRevoked    ActivityKind = "member.skill_revoked"
+	ActivityKindMemberUpdated         ActivityKind = "member.updated"
+	ActivityKindProjectChanged        ActivityKind = "project.changed"
+	ActivityKindProjectCreated        ActivityKind = "project.created"
+	ActivityKindProjectMemberAdded    ActivityKind = "project.member_added"
+	ActivityKindProjectMemberRemoved  ActivityKind = "project.member_removed"
+	ActivityKindSessionClosed         ActivityKind = "session.closed"
+	ActivityKindSkillCreated          ActivityKind = "skill.created"
+	ActivityKindSkillVersionPublished ActivityKind = "skill.version_published"
+	ActivityKindTaskAdvanced          ActivityKind = "task.advanced"
+	ActivityKindTaskBecameParent      ActivityKind = "task.became_parent"
+	ActivityKindTaskBlockerAdded      ActivityKind = "task.blocker_added"
+	ActivityKindTaskBlockerRemoved    ActivityKind = "task.blocker_removed"
+	ActivityKindTaskClaimEnded        ActivityKind = "task.claim_ended"
+	ActivityKindTaskClaimed           ActivityKind = "task.claimed"
+	ActivityKindTaskCompleted         ActivityKind = "task.completed"
+	ActivityKindTaskDropped           ActivityKind = "task.dropped"
+	ActivityKindTaskEvidenceAttached  ActivityKind = "task.evidence_attached"
+	ActivityKindTaskFiled             ActivityKind = "task.filed"
+	ActivityKindTaskLabelsSet         ActivityKind = "task.labels_set"
+	ActivityKindTaskLapsed            ActivityKind = "task.lapsed"
+	ActivityKindTaskMoved             ActivityKind = "task.moved"
+	ActivityKindTaskNoteAdded         ActivityKind = "task.note_added"
+	ActivityKindTaskObserved          ActivityKind = "task.observed"
+	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
+	ActivityKindTaskRanked            ActivityKind = "task.ranked"
+	ActivityKindTaskReleased          ActivityKind = "task.released"
+	ActivityKindTaskSkillProposed     ActivityKind = "task.skill_proposed"
+	ActivityKindTaskSplit             ActivityKind = "task.split"
+	ActivityKindTaskTakenBack         ActivityKind = "task.taken_back"
+	ActivityKindTokenIssued           ActivityKind = "token.issued"
+	ActivityKindTokenRevoked          ActivityKind = "token.revoked"
+	ActivityKindWorkflowChanged       ActivityKind = "workflow.changed"
+	ActivityKindWorkspaceAdded        ActivityKind = "workspace.added"
+	ActivityKindWorkspaceChanged      ActivityKind = "workspace.changed"
+	ActivityKindWorkspaceRemoved      ActivityKind = "workspace.removed"
 )
 
 // Valid indicates whether the value is a known member of the ActivityKind enum.
 func (e ActivityKind) Valid() bool {
 	switch e {
-	case ActivityKindFeatureDropped:
+	case ActivityKindLabelChanged:
 		return true
-	case ActivityKindFeatureEvidenceAttached:
+	case ActivityKindLabelCreated:
 		return true
-	case ActivityKindFeatureFiled:
-		return true
-	case ActivityKindFeatureOwnerPassed:
-		return true
-	case ActivityKindFeatureRanked:
-		return true
-	case ActivityKindFeatureShipped:
+	case ActivityKindLabelDeleted:
 		return true
 	case ActivityKindLoginLinkIssued:
 		return true
@@ -102,13 +98,23 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindMemberUpdated:
 		return true
+	case ActivityKindProjectChanged:
+		return true
+	case ActivityKindProjectCreated:
+		return true
+	case ActivityKindProjectMemberAdded:
+		return true
+	case ActivityKindProjectMemberRemoved:
+		return true
 	case ActivityKindSessionClosed:
 		return true
 	case ActivityKindSkillCreated:
 		return true
 	case ActivityKindSkillVersionPublished:
 		return true
-	case ActivityKindStatusesChanged:
+	case ActivityKindTaskAdvanced:
+		return true
+	case ActivityKindTaskBecameParent:
 		return true
 	case ActivityKindTaskBlockerAdded:
 		return true
@@ -126,33 +132,33 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindTaskFiled:
 		return true
-	case ActivityKindTaskHandedOver:
+	case ActivityKindTaskLabelsSet:
 		return true
 	case ActivityKindTaskLapsed:
+		return true
+	case ActivityKindTaskMoved:
 		return true
 	case ActivityKindTaskNoteAdded:
 		return true
 	case ActivityKindTaskObserved:
 		return true
+	case ActivityKindTaskOwnerPassed:
+		return true
+	case ActivityKindTaskRanked:
+		return true
 	case ActivityKindTaskReleased:
 		return true
 	case ActivityKindTaskSkillProposed:
 		return true
-	case ActivityKindTaskStatusSet:
+	case ActivityKindTaskSplit:
 		return true
 	case ActivityKindTaskTakenBack:
-		return true
-	case ActivityKindTeamChanged:
-		return true
-	case ActivityKindTeamCreated:
-		return true
-	case ActivityKindTeamMemberAdded:
-		return true
-	case ActivityKindTeamMemberRemoved:
 		return true
 	case ActivityKindTokenIssued:
 		return true
 	case ActivityKindTokenRevoked:
+		return true
+	case ActivityKindWorkflowChanged:
 		return true
 	case ActivityKindWorkspaceAdded:
 		return true
@@ -167,13 +173,14 @@ func (e ActivityKind) Valid() bool {
 
 // Defines values for ClaimEnd.
 const (
+	ClaimEndAdvanced          ClaimEnd = "advanced"
 	ClaimEndCompleted         ClaimEnd = "completed"
 	ClaimEndDropped           ClaimEnd = "dropped"
-	ClaimEndHandedOver        ClaimEnd = "handed_over"
 	ClaimEndLapsed            ClaimEnd = "lapsed"
 	ClaimEndMemberDeactivated ClaimEnd = "member_deactivated"
 	ClaimEndReleased          ClaimEnd = "released"
 	ClaimEndSessionClosed     ClaimEnd = "session_closed"
+	ClaimEndSplit             ClaimEnd = "split"
 	ClaimEndTakenBack         ClaimEnd = "taken_back"
 	ClaimEndTokenRevoked      ClaimEnd = "token_revoked"
 )
@@ -181,11 +188,11 @@ const (
 // Valid indicates whether the value is a known member of the ClaimEnd enum.
 func (e ClaimEnd) Valid() bool {
 	switch e {
+	case ClaimEndAdvanced:
+		return true
 	case ClaimEndCompleted:
 		return true
 	case ClaimEndDropped:
-		return true
-	case ClaimEndHandedOver:
 		return true
 	case ClaimEndLapsed:
 		return true
@@ -194,6 +201,8 @@ func (e ClaimEnd) Valid() bool {
 	case ClaimEndReleased:
 		return true
 	case ClaimEndSessionClosed:
+		return true
+	case ClaimEndSplit:
 		return true
 	case ClaimEndTakenBack:
 		return true
@@ -211,23 +220,27 @@ const (
 	ErrorCodeCycle                ErrorCode = "cycle"
 	ErrorCodeEnded                ErrorCode = "ended"
 	ErrorCodeForbidden            ErrorCode = "forbidden"
+	ErrorCodeHeld                 ErrorCode = "held"
 	ErrorCodeIdempotencyKeyReused ErrorCode = "idempotency_key_reused"
 	ErrorCodeInternal             ErrorCode = "internal"
 	ErrorCodeInvalid              ErrorCode = "invalid"
+	ErrorCodeNoConnector          ErrorCode = "no_connector"
 	ErrorCodeNoRunner             ErrorCode = "no_runner"
+	ErrorCodeNoStep               ErrorCode = "no_step"
 	ErrorCodeNotFound             ErrorCode = "not_found"
 	ErrorCodeNotHolder            ErrorCode = "not_holder"
 	ErrorCodeNotImplemented       ErrorCode = "not_implemented"
 	ErrorCodeNotTakeable          ErrorCode = "not_takeable"
+	ErrorCodeOneLevel             ErrorCode = "one_level"
 	ErrorCodeProposalStale        ErrorCode = "proposal_stale"
 	ErrorCodeSessionRequired      ErrorCode = "session_required"
-	ErrorCodeStatusInUse          ErrorCode = "status_in_use"
+	ErrorCodeStepInUse            ErrorCode = "step_in_use"
 	ErrorCodeTasksOpen            ErrorCode = "tasks_open"
 	ErrorCodeTooLarge             ErrorCode = "too_large"
 	ErrorCodeTooManyRequests      ErrorCode = "too_many_requests"
 	ErrorCodeUnauthenticated      ErrorCode = "unauthenticated"
-	ErrorCodeUseComplete          ErrorCode = "use_complete"
-	ErrorCodeUseDrop              ErrorCode = "use_drop"
+	ErrorCodeUseAdvance           ErrorCode = "use_advance"
+	ErrorCodeUseParent            ErrorCode = "use_parent"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -243,13 +256,19 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeForbidden:
 		return true
+	case ErrorCodeHeld:
+		return true
 	case ErrorCodeIdempotencyKeyReused:
 		return true
 	case ErrorCodeInternal:
 		return true
 	case ErrorCodeInvalid:
 		return true
+	case ErrorCodeNoConnector:
+		return true
 	case ErrorCodeNoRunner:
+		return true
+	case ErrorCodeNoStep:
 		return true
 	case ErrorCodeNotFound:
 		return true
@@ -259,11 +278,13 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeNotTakeable:
 		return true
+	case ErrorCodeOneLevel:
+		return true
 	case ErrorCodeProposalStale:
 		return true
 	case ErrorCodeSessionRequired:
 		return true
-	case ErrorCodeStatusInUse:
+	case ErrorCodeStepInUse:
 		return true
 	case ErrorCodeTasksOpen:
 		return true
@@ -273,30 +294,9 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeUnauthenticated:
 		return true
-	case ErrorCodeUseComplete:
+	case ErrorCodeUseAdvance:
 		return true
-	case ErrorCodeUseDrop:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for FeatureState.
-const (
-	FeatureStateDropped FeatureState = "dropped"
-	FeatureStateOpen    FeatureState = "open"
-	FeatureStateShipped FeatureState = "shipped"
-)
-
-// Valid indicates whether the value is a known member of the FeatureState enum.
-func (e FeatureState) Valid() bool {
-	switch e {
-	case FeatureStateDropped:
-		return true
-	case FeatureStateOpen:
-		return true
-	case FeatureStateShipped:
+	case ErrorCodeUseParent:
 		return true
 	default:
 		return false
@@ -354,6 +354,27 @@ func (e MemberKind) Valid() bool {
 	case Agent:
 		return true
 	case Human:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewWorkflow.
+const (
+	NewWorkflowCopy    NewWorkflow = "copy"
+	NewWorkflowDefault NewWorkflow = "default"
+	NewWorkflowEmpty   NewWorkflow = "empty"
+)
+
+// Valid indicates whether the value is a known member of the NewWorkflow enum.
+func (e NewWorkflow) Valid() bool {
+	switch e {
+	case NewWorkflowCopy:
+		return true
+	case NewWorkflowDefault:
+		return true
+	case NewWorkflowEmpty:
 		return true
 	default:
 		return false
@@ -477,67 +498,40 @@ func (e SkillKind) Valid() bool {
 	}
 }
 
-// Defines values for StatusKind.
-const (
-	StatusKindBacklog    StatusKind = "backlog"
-	StatusKindDone       StatusKind = "done"
-	StatusKindDropped    StatusKind = "dropped"
-	StatusKindInProgress StatusKind = "in_progress"
-	StatusKindTodo       StatusKind = "todo"
-)
-
-// Valid indicates whether the value is a known member of the StatusKind enum.
-func (e StatusKind) Valid() bool {
-	switch e {
-	case StatusKindBacklog:
-		return true
-	case StatusKindDone:
-		return true
-	case StatusKindDropped:
-		return true
-	case StatusKindInProgress:
-		return true
-	case StatusKindTodo:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SubjectType.
 const (
-	SubjectTypeFeature   SubjectType = "feature"
+	SubjectTypeLabel     SubjectType = "label"
 	SubjectTypeLoginLink SubjectType = "login_link"
 	SubjectTypeMember    SubjectType = "member"
+	SubjectTypeProject   SubjectType = "project"
 	SubjectTypeSession   SubjectType = "session"
 	SubjectTypeSkill     SubjectType = "skill"
-	SubjectTypeStatuses  SubjectType = "statuses"
 	SubjectTypeTask      SubjectType = "task"
-	SubjectTypeTeam      SubjectType = "team"
 	SubjectTypeToken     SubjectType = "token"
+	SubjectTypeWorkflow  SubjectType = "workflow"
 	SubjectTypeWorkspace SubjectType = "workspace"
 )
 
 // Valid indicates whether the value is a known member of the SubjectType enum.
 func (e SubjectType) Valid() bool {
 	switch e {
-	case SubjectTypeFeature:
+	case SubjectTypeLabel:
 		return true
 	case SubjectTypeLoginLink:
 		return true
 	case SubjectTypeMember:
 		return true
+	case SubjectTypeProject:
+		return true
 	case SubjectTypeSession:
 		return true
 	case SubjectTypeSkill:
 		return true
-	case SubjectTypeStatuses:
-		return true
 	case SubjectTypeTask:
 		return true
-	case SubjectTypeTeam:
-		return true
 	case SubjectTypeToken:
+		return true
+	case SubjectTypeWorkflow:
 		return true
 	case SubjectTypeWorkspace:
 		return true
@@ -548,6 +542,7 @@ func (e SubjectType) Valid() bool {
 
 // Defines values for TaskKind.
 const (
+	Acceptance    TaskKind = "acceptance"
 	Breakdown     TaskKind = "breakdown"
 	Retrospective TaskKind = "retrospective"
 	Work          TaskKind = "work"
@@ -556,6 +551,8 @@ const (
 // Valid indicates whether the value is a known member of the TaskKind enum.
 func (e TaskKind) Valid() bool {
 	switch e {
+	case Acceptance:
+		return true
 	case Breakdown:
 		return true
 	case Retrospective:
@@ -590,15 +587,12 @@ func (e TaskState) Valid() bool {
 
 // Defines values for ViewEntity.
 const (
-	ViewEntityFeatures ViewEntity = "features"
-	ViewEntityTasks    ViewEntity = "tasks"
+	ViewEntityTasks ViewEntity = "tasks"
 )
 
 // Valid indicates whether the value is a known member of the ViewEntity enum.
 func (e ViewEntity) Valid() bool {
 	switch e {
-	case ViewEntityFeatures:
-		return true
 	case ViewEntityTasks:
 		return true
 	default:
@@ -647,6 +641,16 @@ type Activity struct {
 
 	// Kind What happened. The part before the dot is the `subject_type`. New kinds may be added
 	// within `/v1`; a client should skip a kind it does not know.
+	//
+	// The entries that trace a Task's path through its Workflow carry Step ids in their
+	// payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
+	// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
+	// Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
+	// down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
+	// and `from` when it was at a Step; `task.became_parent`, `task.completed` and
+	// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
+	// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
+	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
 	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
@@ -656,13 +660,23 @@ type Activity struct {
 	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID string `json:"subject_id"`
 
-	// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
-	// Statuses as a whole; its `subject_id` is the Organisation's id.
+	// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
+	// whole; its `subject_id` is the Project's id.
 	SubjectType SubjectType `json:"subject_type"`
 }
 
 // ActivityKind What happened. The part before the dot is the `subject_type`. New kinds may be added
 // within `/v1`; a client should skip a kind it does not know.
+//
+// The entries that trace a Task's path through its Workflow carry Step ids in their
+// payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
+// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
+// Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
+// down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
+// and `from` when it was at a Step; `task.became_parent`, `task.completed` and
+// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
+// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
+// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
 type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
@@ -678,6 +692,16 @@ type ActivityPage struct {
 // AddNoteBody defines model for AddNoteBody.
 type AddNoteBody struct {
 	Body string `json:"body"`
+}
+
+// AdvanceTaskBody defines model for AdvanceTaskBody.
+type AdvanceTaskBody struct {
+	// Note Added to the Task's Notes in the same write, before it moves on.
+	Note *string `json:"note,omitempty"`
+
+	// Outcome The name of a Connector out of the Task's Step, ignoring case. May be left out when
+	// the Step has exactly one.
+	Outcome *string `json:"outcome,omitempty"`
 }
 
 // AgentSettings How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
@@ -725,10 +749,15 @@ type Claim struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// HeartbeatTimeoutSeconds Absent when the Claim never lapses on its own.
-	HeartbeatTimeoutSeconds *int      `json:"heartbeat_timeout_seconds,omitempty"`
-	HolderID                string    `json:"holder_id"`
-	HowEnded                *ClaimEnd `json:"how_ended,omitempty"`
-	ID                      string    `json:"id"`
+	HeartbeatTimeoutSeconds *int   `json:"heartbeat_timeout_seconds,omitempty"`
+	HolderID                string `json:"holder_id"`
+
+	// HowEnded How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
+	// holder filed a Subtask under the Task, which became a Parent. `completed`: the Task ended
+	// done. `taken_back`: someone on the holder's Reporting line or the Task's Owner took it
+	// back, or moved the Task. The rest are named for what ended it.
+	HowEnded *ClaimEnd `json:"how_ended,omitempty"`
+	ID       string    `json:"id"`
 
 	// ModelLabel The AI model the holder said it used. Stored, never interpreted.
 	ModelLabel *string `json:"model_label,omitempty"`
@@ -736,7 +765,7 @@ type Claim struct {
 	// SessionID The Session that made the Claim.
 	SessionID string `json:"session_id"`
 
-	// SkillID The Skill the Claim was made under. Absent for a Task aimed at a Member.
+	// SkillID The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member.
 	SkillID *string `json:"skill_id,omitempty"`
 
 	// SkillVersion The version of the Skill the Claim was worked under.
@@ -745,7 +774,10 @@ type Claim struct {
 	TaskID       string    `json:"task_id"`
 }
 
-// ClaimEnd defines model for ClaimEnd.
+// ClaimEnd How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
+// holder filed a Subtask under the Task, which became a Parent. `completed`: the Task ended
+// done. `taken_back`: someone on the holder's Reporting line or the Task's Owner took it
+// back, or moved the Task. The rest are named for what ended it.
 type ClaimEnd string
 
 // ClaimTaskBody defines model for ClaimTaskBody.
@@ -768,12 +800,78 @@ type CompleteTaskBody struct {
 	Note *string `json:"note,omitempty"`
 }
 
+// Connector A named way out of a Step into another Step, or into Done: the outcome its holder names
+// when they advance the Task. Advancing into Done completes the Task; dropping needs no
+// Connector.
+type Connector struct {
+	FromStepID string `json:"from_step_id"`
+	ID         string `json:"id"`
+
+	// Name The outcome, such as `pass` or `needs changes`; unique among the Connectors out of its Step, ignoring case.
+	Name string `json:"name"`
+
+	// Position Its place among the Connectors out of its Step, 1 first.
+	Position int64 `json:"position"`
+
+	// ToStepID The Step it leads to. Absent when it leads into Done.
+	ToStepID *string `json:"to_step_id,omitempty"`
+}
+
+// ConnectorInput defines model for ConnectorInput.
+type ConnectorInput struct {
+	// From The Step it leads out of, by its id or its name in `steps`.
+	From string `json:"from"`
+
+	// ID The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
+	// with the same name, ignoring case, keeps its id; any other is new.
+	ID   *string `json:"id,omitempty"`
+	Name string  `json:"name"`
+
+	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
+	Position int64 `json:"position"`
+
+	// To The Step it leads to, by its id or its name in `steps`. Left out, it leads into Done.
+	To *string `json:"to,omitempty"`
+}
+
+// CreateLabelBody defines model for CreateLabelBody.
+type CreateLabelBody struct {
+	Color string `json:"color"`
+	Name  string `json:"name"`
+}
+
 // CreateMemberBody defines model for CreateMemberBody.
 type CreateMemberBody struct {
 	Admin *bool                `json:"admin,omitempty"`
 	Email *openapi_types.Email `json:"email,omitempty"`
 	Kind  MemberKind           `json:"kind"`
 	Name  string               `json:"name"`
+}
+
+// CreateProjectBody defines model for CreateProjectBody.
+type CreateProjectBody struct {
+	// Acceptance Defaults to false.
+	Acceptance *bool `json:"acceptance,omitempty"`
+
+	// AutoComplete Defaults to false.
+	AutoComplete *bool `json:"auto_complete,omitempty"`
+
+	// CopyFrom With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied.
+	CopyFrom *string `json:"copy_from,omitempty"`
+
+	// DefaultWorkspace Workspace id or name.
+	DefaultWorkspace *string `json:"default_workspace,omitempty"`
+	Key              string  `json:"key"`
+
+	// Members Member ids or names put in the Project with it. The creator is not, unless named.
+	Members *[]string `json:"members,omitempty"`
+	Name    string    `json:"name"`
+
+	// Workflow The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
+	// · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
+	// `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
+	// `default` when not given.
+	Workflow *NewWorkflow `json:"workflow,omitempty"`
 }
 
 // CreateSkillBody defines model for CreateSkillBody.
@@ -787,27 +885,22 @@ type CreateSkillBody struct {
 	Name string    `json:"name"`
 }
 
-// CreateTeamBody defines model for CreateTeamBody.
-type CreateTeamBody struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
-}
-
 // CreateViewBody defines model for CreateViewBody.
 type CreateViewBody struct {
 	// Display At most 16 KiB as JSON.
 	Display *map[string]interface{} `json:"display,omitempty"`
 
-	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	// Entity The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+	// more may be added within `/v1`.
 	Entity ViewEntity `json:"entity"`
 
 	// Filters The list's `filter` tokens; none when omitted.
 	Filters *[]string `json:"filters,omitempty"`
 	Name    string    `json:"name"`
-	Sort    *string   `json:"sort,omitempty"`
 
-	// Team The Team whose list it is, by id or key; omitted for a list across Teams.
-	Team *string `json:"team,omitempty"`
+	// Project The Project whose list it is, by id or key; omitted for a list across Projects.
+	Project *string `json:"project,omitempty"`
+	Sort    *string `json:"sort,omitempty"`
 }
 
 // CreateWorkspaceBody defines model for CreateWorkspaceBody.
@@ -818,8 +911,9 @@ type CreateWorkspaceBody struct {
 	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
 	Kind *WorkspaceKind `json:"kind,omitempty"`
 
-	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-	// merged pull request carrying a Task's key completes that Task's review.
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+	// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+	// having landed.
 	Mode *WorkspaceMode `json:"mode,omitempty"`
 	Name string         `json:"name"`
 
@@ -843,12 +937,26 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
-	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `no_connector` 409 · `use_advance` 409 · `no_step` 409 · `one_level` 409 · `held` 409 ·
+	// `step_in_use` 409 · `use_parent` 409 · `no_runner` 409 · `too_large` 413 ·
+	// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 	// `not_implemented` 501.
+	//
+	// `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
+	// was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
+	// several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+	// `breakdown` for Break down, or any Step to file at), or no Connector leads from a
+	// Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
+	// Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
+	// whoever may take it back, may do this. `step_in_use`: a Step being deleted has open Tasks
+	// at it and nothing says where they go. `use_parent`: a Subtask takes this from its Parent
+	// (its Owner, its Rank); ask it of the Parent.
 	Code ErrorCode `json:"code"`
 
-	// Details Extra facts about the failure, by code.
+	// Details Extra facts about the failure, by code. `no_connector` and `use_advance` carry
+	// `outcomes`: the names of the Connectors out of the Task's Step, in order, so a caller
+	// can choose one. `proposal_stale` from an advance or a Complete carries `proposals`:
+	// the ids of the proposals no longer written against their Skill's current version.
 	Details *map[string]interface{} `json:"details,omitempty"`
 
 	// Message For people; may change between releases.
@@ -859,140 +967,83 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
-// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `no_connector` 409 · `use_advance` 409 · `no_step` 409 · `one_level` 409 · `held` 409 ·
+// `step_in_use` 409 · `use_parent` 409 · `no_runner` 409 · `too_large` 413 ·
+// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 // `not_implemented` 501.
+//
+// `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
+// was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
+// several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+// `breakdown` for Break down, or any Step to file at), or no Connector leads from a
+// Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
+// Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
+// whoever may take it back, may do this. `step_in_use`: a Step being deleted has open Tasks
+// at it and nothing says where they go. `use_parent`: a Subtask takes this from its Parent
+// (its Owner, its Rank); ask it of the Parent.
 type ErrorCode string
 
-// Evidence defines model for Evidence.
+// Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
+// about a Parent as a whole is attached to the Parent.
 type Evidence struct {
 	AttachedBy  string    `json:"attached_by"`
 	ContentType string    `json:"content_type"`
 	CreatedAt   time.Time `json:"created_at"`
-	FeatureID   string    `json:"feature_id"`
 	Filename    string    `json:"filename"`
 	ID          string    `json:"id"`
 	Sha256      string    `json:"sha256"`
 	Size        int64     `json:"size"`
-
-	// TaskID Absent when attached to the Feature itself.
-	TaskID *string `json:"task_id,omitempty"`
-}
-
-// Feature defines model for Feature.
-type Feature struct {
-	CreatedAt   time.Time  `json:"created_at"`
-	Description string     `json:"description"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
-	FiledBy     string     `json:"filed_by"`
-
-	// FromRetrospectiveTaskID The Retrospective that filed this Feature.
-	FromRetrospectiveTaskID *string `json:"from_retrospective_task_id,omitempty"`
-	ID                      string  `json:"id"`
-
-	// Key Display key, such as `WEB-1`.
-	Key     string `json:"key"`
-	OwnerID string `json:"owner_id"`
-
-	// Quick A quick Feature was filed with its one Task and no Break down; it has no Retrospective.
-	Quick bool `json:"quick"`
-
-	// Rank Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-	Rank int64 `json:"rank"`
-
-	// ShipWhenDone The Feature ships itself when its last open Task is completed. Always true for a quick Feature.
-	ShipWhenDone bool         `json:"ship_when_done"`
-	State        FeatureState `json:"state"`
-
-	// TaskCounts How many of the Feature's Tasks are in each state.
-	TaskCounts TaskCounts `json:"task_counts"`
-	TeamID     string     `json:"team_id"`
-	Title      string     `json:"title"`
-}
-
-// FeatureDetail defines model for FeatureDetail.
-type FeatureDetail struct {
-	Evidence []Evidence `json:"evidence"`
-	Feature  Feature    `json:"feature"`
-	Tasks    []Task     `json:"tasks"`
-}
-
-// FeatureList defines model for FeatureList.
-type FeatureList struct {
-	Items []Feature `json:"items"`
-
-	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
-	NextCursor *string `json:"next_cursor,omitempty"`
-}
-
-// FeatureState defines model for FeatureState.
-type FeatureState string
-
-// FileFeatureBody defines model for FileFeatureBody.
-type FileFeatureBody struct {
-	Description *string `json:"description,omitempty"`
-
-	// FromRetrospective Id or display key of the Retrospective Task filing this Feature.
-	FromRetrospective *string `json:"from_retrospective,omitempty"`
-
-	// Owner Member id or name. Defaults to the caller.
-	Owner *string `json:"owner,omitempty"`
-
-	// Quick File a quick Feature, with its one Task instead of a Break down. Needs `skill`.
-	Quick *bool `json:"quick,omitempty"`
-
-	// ShipWhenDone Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature.
-	ShipWhenDone *bool `json:"ship_when_done,omitempty"`
-
-	// Skill A quick Feature's only. Skill id or name its one Task needs.
-	Skill *string `json:"skill,omitempty"`
-
-	// Team Team id or key.
-	Team  string `json:"team"`
-	Title string `json:"title"`
-
-	// Workspaces A quick Feature's only. Workspace ids or names its one Task names; default the Team's default Workspace.
-	Workspaces *[]string `json:"workspaces,omitempty"`
+	TaskID      string    `json:"task_id"`
 }
 
 // FileTaskBody defines model for FileTaskBody.
 type FileTaskBody struct {
-	// AimedAt Member id or name the Task is aimed at. Give this or `skill`.
-	AimedAt *string `json:"aimed_at,omitempty"`
+	// Acceptance Defaults to the Project's. Not on a Subtask.
+	Acceptance *bool `json:"acceptance,omitempty"`
+
+	// Aim Member id or name the Task is aimed at by name; it then waits with them at no Step.
+	Aim *string `json:"aim,omitempty"`
+
+	// AutoComplete Defaults to the Project's. Not on a Subtask.
+	AutoComplete *bool `json:"auto_complete,omitempty"`
 
 	// Blocks Id or display key of a Task the new one blocks (a question or Escalation).
-	Blocks      *string `json:"blocks,omitempty"`
+	Blocks *string `json:"blocks,omitempty"`
+
+	// Breakdown File the Task with its Breakdown Subtask, making it a Parent from its first moment.
+	Breakdown   *bool   `json:"breakdown,omitempty"`
 	Description *string `json:"description,omitempty"`
 
-	// Feature Feature id or display key. May be left out when `blocks` is given.
-	Feature *string `json:"feature,omitempty"`
+	// FromRetrospective Id or display key of the Retrospective filing this Task.
+	FromRetrospective *string `json:"from_retrospective,omitempty"`
 
-	// Skill Skill id or name the Task needs. Give this or `aimed_at`.
-	Skill *string `json:"skill,omitempty"`
+	// Labels Label ids or names, each the Project's own or the Organisation's.
+	Labels *[]string `json:"labels,omitempty"`
 
-	// Status Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
-	// `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
-	// Status.
-	Status *string `json:"status,omitempty"`
-	Title  string  `json:"title"`
-
-	// Workspaces Workspace ids or names the Task names: where a session works it. Left out, the Task
-	// names its Feature's Team's default Workspace, or none when the Team has none; an
-	// empty list names none.
-	Workspaces *[]string `json:"workspaces,omitempty"`
-}
-
-// HandoverTaskBody defines model for HandoverTaskBody.
-type HandoverTaskBody struct {
-	// Note Added to the Task's Notes in the same write.
+	// Note Only when filing a Subtask under a Task the caller holds: added to the Parent's Notes
+	// in the same write, as the Claim the filing ends hands its context on.
 	Note *string `json:"note,omitempty"`
 
-	// Skill Skill id or name the Task needs next.
-	Skill string `json:"skill"`
+	// Owner Member id or name. Defaults to the caller; a Subtask's is its Parent's and cannot be named.
+	Owner *string `json:"owner,omitempty"`
 
-	// Status Status id or name to move the Task to, of kind `backlog`, `todo` or `in_progress`,
-	// such as In review. Left out, the Status stays as it is.
-	Status *string `json:"status,omitempty"`
+	// Parent Id or display key of the Task to file a Subtask under.
+	Parent *string `json:"parent,omitempty"`
+
+	// Project Project id or key. May be left out when `parent` or `blocks` is given.
+	Project *string `json:"project,omitempty"`
+
+	// Step Step id or name in the Project's Workflow to start at. Defaults to the first Step
+	// carrying a Skill other than `breakdown`, `acceptance`, `retro` and `skill-review`
+	// (Build in the default Workflow); failing that, the first Step carrying any Skill;
+	// failing that, the first Step.
+	Step  *string `json:"step,omitempty"`
+	Title string  `json:"title"`
+
+	// Workspaces Workspace ids or names the Task names: where a session works it. Left out, a Task with
+	// no Parent names its Project's default Workspace, or none when the Project has none,
+	// and a Subtask names its Parent's Workspaces; an empty list names none.
+	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
 // Health defines model for Health.
@@ -1021,14 +1072,14 @@ type HeartbeatReply struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Status `ok`: the Claim is extended. `lapsed`: it ran out before this Heartbeat. `taken_back`:
-	// someone on the Reporting line or the Feature owner took it back. `ended`: it ended some
-	// other way (released, handed over, completed, dropped, revoked).
+	// someone on the Reporting line or the Task's Owner took it back, or moved the Task.
+	// `ended`: it ended some other way (released, advanced, split, completed, dropped, revoked).
 	Status HeartbeatStatus `json:"status"`
 }
 
 // HeartbeatStatus `ok`: the Claim is extended. `lapsed`: it ran out before this Heartbeat. `taken_back`:
-// someone on the Reporting line or the Feature owner took it back. `ended`: it ended some
-// other way (released, handed over, completed, dropped, revoked).
+// someone on the Reporting line or the Task's Owner took it back, or moved the Task.
+// `ended`: it ended some other way (released, advanced, split, completed, dropped, revoked).
 type HeartbeatStatus string
 
 // IssueTokenBody defines model for IssueTokenBody.
@@ -1044,6 +1095,26 @@ type IssuedToken struct {
 	Token  Token  `json:"token"`
 }
 
+// Label A named, coloured mark carried by any number of Tasks: a Project's own, or the
+// Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
+type Label struct {
+	// Color `#rrggbb`.
+	Color     string    `json:"color"`
+	CreatedAt time.Time `json:"created_at"`
+	ID        string    `json:"id"`
+
+	// Name Unique among the Labels a Task of its Project can carry, ignoring case.
+	Name string `json:"name"`
+
+	// ProjectID The Project that defined it for itself. Absent for the Organisation's.
+	ProjectID *string `json:"project_id,omitempty"`
+}
+
+// LabelList defines model for LabelList.
+type LabelList struct {
+	Items []Label `json:"items"`
+}
+
 // LoginLink defines model for LoginLink.
 type LoginLink struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -1056,14 +1127,20 @@ type LoginLink struct {
 type Me struct {
 	Member       Member       `json:"member"`
 	Organisation Organisation `json:"organisation"`
-	Session      Session      `json:"session"`
-	Skills       []Skill      `json:"skills"`
-	Teams        []Team       `json:"teams"`
+
+	// Organisations The Organisations the caller's sign-in reaches, the current one included, by name,
+	// for switching between them. Absent on Local, which holds exactly one.
+	Organisations *[]OrganisationBrief `json:"organisations,omitempty"`
+
+	// Projects The Projects the caller is a Member of, by name.
+	Projects []Project `json:"projects"`
+	Session  Session   `json:"session"`
+	Skills   []Skill   `json:"skills"`
 }
 
 // Member defines model for Member.
 type Member struct {
-	// Admin Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
+	// Admin Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links.
 	Admin bool `json:"admin"`
 
 	// Agent How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
@@ -1096,10 +1173,12 @@ type Member struct {
 type MemberDetail struct {
 	Member Member `json:"member"`
 
+	// Projects The Projects the Member is in, by name.
+	Projects []Project `json:"projects"`
+
 	// Reports The Members this Member directs.
 	Reports []Member `json:"reports"`
 	Skills  []Skill  `json:"skills"`
-	Teams   []Team   `json:"teams"`
 }
 
 // MemberKind defines model for MemberKind.
@@ -1109,6 +1188,21 @@ type MemberKind string
 type MemberList struct {
 	Items []Member `json:"items"`
 }
+
+// MoveTaskBody defines model for MoveTaskBody.
+type MoveTaskBody struct {
+	// Note Added to the Task's Notes in the same write.
+	Note *string `json:"note,omitempty"`
+
+	// Step Step id or name in the Task's Project's Workflow.
+	Step string `json:"step"`
+}
+
+// NewWorkflow The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
+// · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
+// `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
+// `default` when not given.
+type NewWorkflow string
 
 // NextTaskBody defines model for NextTaskBody.
 type NextTaskBody struct {
@@ -1132,12 +1226,13 @@ type Note struct {
 	TaskID  string  `json:"task_id"`
 }
 
-// Observation defines model for Observation.
+// Observation An entry on a Task, marked worked or didn't work, recording who wrote it and the Skill
+// they worked under. It feeds the Retrospective of the Task's Parent, which marks it
+// reviewed.
 type Observation struct {
 	AuthorID   string             `json:"author_id"`
 	Body       string             `json:"body"`
 	CreatedAt  time.Time          `json:"created_at"`
-	FeatureID  string             `json:"feature_id"`
 	ID         string             `json:"id"`
 	Outcome    ObservationOutcome `json:"outcome"`
 	ReviewedAt *time.Time         `json:"reviewed_at,omitempty"`
@@ -1171,15 +1266,56 @@ type Organisation struct {
 	Name      string    `json:"name"`
 }
 
-// PassFeatureOwnershipBody defines model for PassFeatureOwnershipBody.
-type PassFeatureOwnershipBody struct {
+// OrganisationBrief An Organisation named by its id and name.
+type OrganisationBrief struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// PassOwnershipBody defines model for PassOwnershipBody.
+type PassOwnershipBody struct {
 	// Owner Member id or name.
 	Owner string `json:"owner"`
 }
 
+// Project A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+// default Workspace. Every Task belongs to exactly one Project.
+type Project struct {
+	// Acceptance The `acceptance` a Task filed in the Project takes when its filer does not say.
+	Acceptance bool `json:"acceptance"`
+
+	// AutoComplete The `auto_complete` a Task filed in the Project takes when its filer does not say.
+	AutoComplete bool      `json:"auto_complete"`
+	CreatedAt    time.Time `json:"created_at"`
+
+	// DefaultWorkspaceID The Workspace a Task with no Parent filed in the Project names when it names none.
+	// Absent when the Project has none.
+	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
+	ID                 string  `json:"id"`
+
+	// Key The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`.
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// ProjectDetail defines model for ProjectDetail.
+type ProjectDetail struct {
+	// Members The Project's Members, by name.
+	Members []Member `json:"members"`
+
+	// Project A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+	// default Workspace. Every Task belongs to exactly one Project.
+	Project Project `json:"project"`
+}
+
+// ProjectList defines model for ProjectList.
+type ProjectList struct {
+	Items []Project `json:"items"`
+}
+
 // ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
-// not be published, because a newer proposal replaced it on its Task or its Task ended
-// without publishing it.
+// not be published, because a newer proposal for the same Skill replaced it on its Task, or
+// its Task ended without publishing it.
 type ProposalState string
 
 // ProposeSkillVersionBody defines model for ProposeSkillVersionBody.
@@ -1191,8 +1327,8 @@ type ProposeSkillVersionBody struct {
 	Skill string `json:"skill"`
 }
 
-// RankFeatureBody defines model for RankFeatureBody.
-type RankFeatureBody struct {
+// RankTaskBody defines model for RankTaskBody.
+type RankTaskBody struct {
 	Position int64 `json:"position"`
 }
 
@@ -1228,7 +1364,7 @@ type RunnerSession struct {
 	State  RunnerSessionState `json:"state"`
 	TaskID string             `json:"task_id"`
 
-	// Tmux The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined.
+	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
 }
 
@@ -1299,22 +1435,24 @@ type SetManagerBody struct {
 	Manager string `json:"manager"`
 }
 
-// SetStatusesBody defines model for SetStatusesBody.
-type SetStatusesBody struct {
-	// Items The whole list, in its new order. A Status already in the list carries its `id`; a
-	// new one has none. A Status left out is deleted.
-	Items []StatusInput `json:"items"`
-
-	// Moves Where the Tasks in a deleted Status go: the deleted Status's id to the id of a Status
-	// kept in the list, of the same kind of ending (an open kind to an open kind, `done` to
-	// `done`, `dropped` to `dropped`).
-	Moves *map[string]string `json:"moves,omitempty"`
+// SetTaskLabelsBody defines model for SetTaskLabelsBody.
+type SetTaskLabelsBody struct {
+	// Labels Label ids or names, each the Task's Project's own or the Organisation's; the whole set it carries.
+	Labels []string `json:"labels"`
 }
 
-// SetTaskStatusBody defines model for SetTaskStatusBody.
-type SetTaskStatusBody struct {
-	// Status Status id or name, of kind `backlog`, `todo` or `in_progress`.
-	Status string `json:"status"`
+// SetWorkflowBody defines model for SetWorkflowBody.
+type SetWorkflowBody struct {
+	// Connectors Every Connector of the new Workflow. One left out is deleted.
+	Connectors []ConnectorInput `json:"connectors"`
+
+	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
+	// Workflow, by its id or its name in `steps`.
+	Moves *map[string]string `json:"moves,omitempty"`
+
+	// Steps Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
+	// none. A Step left out is deleted.
+	Steps []StepInput `json:"steps"`
 }
 
 // SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
@@ -1326,7 +1464,7 @@ type Skill struct {
 	// BaseSkillID The generic Skill a company Skill builds on.
 	BaseSkillID *string `json:"base_skill_id,omitempty"`
 
-	// Builtin True for `breakdown`, `retro` and `skill-review`, which Darkory relies on.
+	// Builtin True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on.
 	Builtin        bool      `json:"builtin"`
 	CreatedAt      time.Time `json:"created_at"`
 	CurrentVersion int64     `json:"current_version"`
@@ -1365,8 +1503,8 @@ type SkillProposal struct {
 	SkillID          string `json:"skill_id"`
 
 	// State `pending`: waiting for review. `published`: a review published it. `superseded`: it will
-	// not be published, because a newer proposal replaced it on its Task or its Task ended
-	// without publishing it.
+	// not be published, because a newer proposal for the same Skill replaced it on its Task, or
+	// its Task ended without publishing it.
 	State  ProposalState `json:"state"`
 	TaskID string        `json:"task_id"`
 }
@@ -1390,120 +1528,191 @@ type SkillVersionList struct {
 	Items []SkillVersion `json:"items"`
 }
 
-// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
-// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
-// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
-// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
-// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
-// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
-// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
-// holder names one. Claimed and blocked are not Statuses.
-type Status struct {
+// Step A place in a Workflow, carrying at most one Skill: a Task at it is taken by a Member with
+// that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human
+// moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
+type Step struct {
 	ID string `json:"id"`
 
-	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
-	Kind StatusKind `json:"kind"`
-	Name string     `json:"name"`
+	// Name Unique in its Workflow, ignoring case.
+	Name string `json:"name"`
 
-	// Position Its place in the Organisation's list, 1 first.
+	// Position Its place in the Workflow, 1 first.
 	Position int64 `json:"position"`
+
+	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
+	SkillID *string `json:"skill_id,omitempty"`
+
+	// X Where the canvas draws it, in pixels from the left.
+	X int64 `json:"x"`
+
+	// Y Where the canvas draws it, in pixels from the top.
+	Y int64 `json:"y"`
 }
 
-// StatusInput defines model for StatusInput.
-type StatusInput struct {
-	// ID The id of a Status in the list now; left out for a new one.
-	ID *string `json:"id,omitempty"`
+// StepFacts defines model for StepFacts.
+type StepFacts struct {
+	// MedianMs The median time Tasks that left the Step in the last 30 days spent at it, by advance,
+	// move, Complete or drop. Absent when none left it.
+	MedianMs *int64 `json:"median_ms,omitempty"`
 
-	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
-	Kind StatusKind `json:"kind"`
-	Name string     `json:"name"`
+	// Takers The active Members who could take a Task at the Step by its Skill: the Project's
+	// Members holding it, or for `skill-review` the Organisation's, by name. None on a hold;
+	// a Step with a Skill and no takers is one nobody can work.
+	Takers []Taker `json:"takers"`
+
+	// Tasks The open Tasks at the Step.
+	Tasks int `json:"tasks"`
+
+	// Working Those of them with a live Claim; also counted in `tasks`.
+	Working int `json:"working"`
 }
 
-// StatusKind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-// `dropped`: reached only by completing or dropping the Task, which never leaves them.
-type StatusKind string
+// StepInput defines model for StepInput.
+type StepInput struct {
+	// ID The id of a Step in the Workflow now; left out for a new one.
+	ID   *string `json:"id,omitempty"`
+	Name string  `json:"name"`
 
-// StatusList defines model for StatusList.
-type StatusList struct {
-	// Items The Organisation's Statuses, in their order.
-	Items []Status `json:"items"`
+	// Position The Step's place in the Workflow; distinct among the Steps, and the Workflow numbers them 1, 2, 3… in this order.
+	Position int64 `json:"position"`
+
+	// Skill Skill id or name the Step carries. Left out, the Step is a hold.
+	Skill *string `json:"skill,omitempty"`
+
+	// X Left out, a Step in the Workflow now keeps its place, and a new one is drawn at (position − 1) × 448.
+	X *int64 `json:"x,omitempty"`
+
+	// Y Left out, a Step in the Workflow now keeps its place, and a new one is drawn at 0.
+	Y *int64 `json:"y,omitempty"`
 }
 
-// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
-// Statuses as a whole; its `subject_id` is the Organisation's id.
+// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
+// whole; its `subject_id` is the Project's id.
 type SubjectType string
+
+// SubtaskCounts How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks.
+type SubtaskCounts struct {
+	Done    int `json:"done"`
+	Dropped int `json:"dropped"`
+
+	// Open Open Subtasks, held or not.
+	Open int `json:"open"`
+
+	// Working Open Subtasks with a live Claim; also counted in `open`.
+	Working int `json:"working"`
+}
 
 // TakeBackTaskBody defines model for TakeBackTaskBody.
 type TakeBackTaskBody struct {
 	Reason *string `json:"reason,omitempty"`
 }
 
-// Task defines model for Task.
+// Taker A Member who holds a Step's Skill.
+type Taker struct {
+	ID   string     `json:"id"`
+	Kind MemberKind `json:"kind"`
+	Name string     `json:"name"`
+}
+
+// Task The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
+// Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
+// waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+// neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
+// Blocking and are not stored.
 type Task struct {
-	// AimedAtID The Member the Task is aimed at by name.
+	// Acceptance Once every Subtask of a Parent has ended and the last to end ended done, Darkory files
+	// an Acceptance under it, when its Workflow has a Step carrying `acceptance`. Always
+	// false on a Subtask.
+	Acceptance bool `json:"acceptance"`
+
+	// AimedAtID The Member the Task is aimed at by name, who may take it at no Step.
 	AimedAtID *string `json:"aimed_at_id,omitempty"`
 
-	// Blocked True while any Task blocking this one is open.
-	Blocked     bool       `json:"blocked"`
-	Claim       *Claim     `json:"claim,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Description string     `json:"description"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
-	FeatureID   string     `json:"feature_id"`
-	FiledBy     string     `json:"filed_by"`
-	ID          string     `json:"id"`
+	// AutoComplete A Parent completes itself when its last open Subtask ends done and no Acceptance is
+	// due. Always false on a Subtask.
+	AutoComplete bool `json:"auto_complete"`
 
-	// Key Display key, such as `WEB-42`.
+	// Blocked True while any Task blocking this one is open. Always false on a Parent.
+	Blocked bool `json:"blocked"`
+
+	// Breakdown Filed with Break down on; its Breakdown Subtask was filed with it.
+	Breakdown   bool      `json:"breakdown"`
+	Claim       *Claim    `json:"claim,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	Description string    `json:"description"`
+
+	// EndedAt When it ended, done or dropped.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
+
+	// FiledBy The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
+	// Acceptance, a Retrospective.
+	FiledBy *string `json:"filed_by,omitempty"`
+
+	// FromRetrospectiveTaskID The Retrospective that filed this Task.
+	FromRetrospectiveTaskID *string `json:"from_retrospective_task_id,omitempty"`
+	ID                      string  `json:"id"`
+
+	// Key Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence.
 	Key string `json:"key"`
 
-	// Kind `breakdown` and `retrospective` Tasks are filed by Darkory.
+	// Kind `work`: filed by a Member, a question or Escalation included. `breakdown`, `acceptance`
+	// and `retrospective`: the Subtasks Darkory files about a Parent as a whole, at the Steps
+	// carrying those Skills.
 	Kind TaskKind `json:"kind"`
+
+	// Labels The ids of the Labels it carries, by name. Absent when it carries none.
+	Labels *[]string `json:"labels,omitempty"`
 
 	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
 	OpenBlockers *[]TaskBrief `json:"open_blockers,omitempty"`
 
-	// SkillID The Skill the Task needs now. Absent when it is aimed at a Member.
+	// OwnerID The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's.
+	OwnerID string `json:"owner_id"`
+
+	// ParentID The Parent of a Subtask. Absent on a Task with no Parent.
+	ParentID  *string `json:"parent_id,omitempty"`
+	ProjectID string  `json:"project_id"`
+
+	// Rank Position in the Project's Rank, 1 first; an ended Task keeps its place. Absent on a
+	// Subtask, which sorts by its Parent's.
+	Rank *int64 `json:"rank,omitempty"`
+
+	// SkillID The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
+	// wherever `step_id` is.
 	SkillID *string `json:"skill_id,omitempty"`
 
-	// State Claimed and lapsed are not states; they follow from the Task's Claim.
+	// State Claimed, lapsed, waiting and blocked are not states; they follow from the Task's Claim and Blocking.
 	State TaskState `json:"state"`
 
-	// StatusID The Task's Status, one of the Organisation's (`listStatuses`).
-	StatusID string `json:"status_id"`
-	Title    string `json:"title"`
+	// StepID The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
+	// ended Task.
+	StepID *string `json:"step_id,omitempty"`
 
-	// WaitingSince When the Task was filed or last handed over.
+	// StepSince When the Task reached its Step. Absent when `step_id` is.
+	StepSince *time.Time `json:"step_since,omitempty"`
+
+	// SubtaskCounts How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks.
+	SubtaskCounts *SubtaskCounts `json:"subtask_counts,omitempty"`
+	Title         string         `json:"title"`
+
+	// WaitingSince When the Task was filed or last reached a Step; `next` gives a tie to the Task that has waited longest.
 	WaitingSince time.Time `json:"waiting_since"`
 
 	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
 	WorkspaceIds *[]string `json:"workspace_ids,omitempty"`
 }
 
-// TaskBrief A Task named by its id and display key.
+// TaskBrief A Task named by its id, display key and title.
 type TaskBrief struct {
 	ID string `json:"id"`
 
-	// Key Display key, such as `WEB-42`.
-	Key string `json:"key"`
+	// Key Display key, such as `MAIN-42`.
+	Key   string `json:"key"`
+	Title string `json:"title"`
 }
 
-// TaskCounts How many of the Feature's Tasks are in each state.
-type TaskCounts struct {
-	// Claimed Open Tasks with a live Claim; these are also counted in `open`.
-	Claimed int `json:"claimed"`
-	Done    int `json:"done"`
-	Dropped int `json:"dropped"`
-
-	// Open Open Tasks, claimed or not.
-	Open int `json:"open"`
-}
-
-// TaskDetail The Task with its record. `proposal` is the latest Skill proposal written on it, when any.
+// TaskDetail The Task with its record.
 type TaskDetail struct {
 	// Blockers The Tasks blocking this one.
 	Blockers []Task `json:"blockers"`
@@ -1512,31 +1721,51 @@ type TaskDetail struct {
 	Blocking []Task `json:"blocking"`
 
 	// Claims Every Claim on the Task, oldest first.
-	Claims   []Claim    `json:"claims"`
-	Evidence []Evidence `json:"evidence"`
-	Feature  Feature    `json:"feature"`
+	Claims []Claim `json:"claims"`
+
+	// Connectors The Connectors out of the Task's Step, in order: the outcomes its holder may advance
+	// it along. Empty when it is at no Step.
+	Connectors []Connector `json:"connectors"`
+	Evidence   []Evidence  `json:"evidence"`
+
+	// Labels The Labels it carries, by name.
+	Labels []Label `json:"labels"`
 
 	// Notes The running log, oldest first.
-	Notes        []Note         `json:"notes"`
-	Observations []Observation  `json:"observations"`
-	Proposal     *SkillProposal `json:"proposal,omitempty"`
+	Notes []Note `json:"notes"`
 
-	// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
-	// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
-	// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
-	// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
-	// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
-	// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
-	// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
-	// holder names one. Claimed and blocked are not Statuses.
-	Status Status `json:"status"`
-	Task   Task   `json:"task"`
+	// Observations The Observations recorded on the Task itself, oldest first.
+	Observations []Observation `json:"observations"`
+
+	// Parent A Task named by its id, display key and title.
+	Parent *TaskBrief `json:"parent,omitempty"`
+
+	// Proposals The latest Skill proposal written on the Task for each Skill, pending or decided,
+	// oldest first. A Retrospective carries at most one pending proposal per Skill.
+	Proposals []SkillProposal `json:"proposals"`
+
+	// Step A place in a Workflow, carrying at most one Skill: a Task at it is taken by a Member with
+	// that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human
+	// moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
+	Step *Step `json:"step,omitempty"`
+
+	// Subtasks A Parent's Subtasks, in the order they were filed; empty on a Task with none.
+	Subtasks []Task `json:"subtasks"`
+
+	// Task The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
+	// Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
+	// waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+	// neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
+	// Blocking and are not stored.
+	Task Task `json:"task"`
 
 	// Workspaces The Workspaces the Task names, in the order of `task.workspace_ids`.
 	Workspaces []Workspace `json:"workspaces"`
 }
 
-// TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
+// TaskKind `work`: filed by a Member, a question or Escalation included. `breakdown`, `acceptance`
+// and `retrospective`: the Subtasks Darkory files about a Parent as a whole, at the Steps
+// carrying those Skills.
 type TaskKind string
 
 // TaskList defines model for TaskList.
@@ -1547,35 +1776,8 @@ type TaskList struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
-// TaskState Claimed and lapsed are not states; they follow from the Task's Claim.
+// TaskState Claimed, lapsed, waiting and blocked are not states; they follow from the Task's Claim and Blocking.
 type TaskState string
-
-// Team defines model for Team.
-type Team struct {
-	CreatedAt time.Time `json:"created_at"`
-
-	// DefaultWorkspaceID The Workspace a Task filed in the Team names when it names none. Absent when the Team has none.
-	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
-	ID                 string  `json:"id"`
-
-	// Key The prefix of the Team's display keys, such as `WEB` in `WEB-42`.
-	Key  string `json:"key"`
-	Name string `json:"name"`
-
-	// ShipWhenDone The `ship_when_done` a Feature filed in the Team takes when its filer does not say.
-	ShipWhenDone bool `json:"ship_when_done"`
-}
-
-// TeamDetail defines model for TeamDetail.
-type TeamDetail struct {
-	Members []Member `json:"members"`
-	Team    Team     `json:"team"`
-}
-
-// TeamList defines model for TeamList.
-type TeamList struct {
-	Items []Team `json:"items"`
-}
 
 // Token defines model for Token.
 type Token struct {
@@ -1598,6 +1800,12 @@ type TokenList struct {
 	Items []Token `json:"items"`
 }
 
+// UpdateLabelBody defines model for UpdateLabelBody.
+type UpdateLabelBody struct {
+	Color *string `json:"color,omitempty"`
+	Name  *string `json:"name,omitempty"`
+}
+
 // UpdateMemberBody defines model for UpdateMemberBody.
 type UpdateMemberBody struct {
 	Admin *bool                `json:"admin,omitempty"`
@@ -1605,12 +1813,14 @@ type UpdateMemberBody struct {
 	Name  *string              `json:"name,omitempty"`
 }
 
-// UpdateTeamBody defines model for UpdateTeamBody.
-type UpdateTeamBody struct {
-	// DefaultWorkspace Workspace id or name; `""` clears the Team's default.
+// UpdateProjectBody defines model for UpdateProjectBody.
+type UpdateProjectBody struct {
+	Acceptance   *bool `json:"acceptance,omitempty"`
+	AutoComplete *bool `json:"auto_complete,omitempty"`
+
+	// DefaultWorkspace Workspace id or name; `""` clears the Project's default.
 	DefaultWorkspace *string `json:"default_workspace,omitempty"`
 	Name             *string `json:"name,omitempty"`
-	ShipWhenDone     *bool   `json:"ship_when_done,omitempty"`
 }
 
 // UpdateViewBody defines model for UpdateViewBody.
@@ -1628,8 +1838,9 @@ type UpdateViewBody struct {
 type UpdateWorkspaceBody struct {
 	DefaultBranch *string `json:"default_branch,omitempty"`
 
-	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-	// merged pull request carrying a Task's key completes that Task's review.
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+	// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+	// having landed.
 	Mode *WorkspaceMode `json:"mode,omitempty"`
 	Name *string        `json:"name,omitempty"`
 	Path *string        `json:"path,omitempty"`
@@ -1642,7 +1853,8 @@ type View struct {
 	// Display How the list is shown, as the client wrote it; the server does not read it.
 	Display *map[string]interface{} `json:"display,omitempty"`
 
-	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	// Entity The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+	// more may be added within `/v1`.
 	Entity ViewEntity `json:"entity"`
 
 	// Filters The list's `filter` tokens, in the order saved.
@@ -1650,20 +1862,67 @@ type View struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 
-	// Sort How the list is sorted, as the client wrote it; the server does not read it.
-	Sort *string `json:"sort,omitempty"`
+	// ProjectID The Project whose list it is; absent for a list across Projects.
+	ProjectID *string `json:"project_id,omitempty"`
 
-	// TeamID The Team whose list it is; absent for a list across Teams.
-	TeamID    *string   `json:"team_id,omitempty"`
+	// Sort How the list is sorted, as the client wrote it; the server does not read it.
+	Sort      *string   `json:"sort,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ViewEntity The list a View is of; its filters are that list's `filter` tokens.
+// ViewEntity The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+// more may be added within `/v1`.
 type ViewEntity string
 
 // ViewList defines model for ViewList.
 type ViewList struct {
 	Items []View `json:"items"`
+}
+
+// Workflow A Project's Steps, in order, and the Connectors between them. The board's columns are
+// the Steps in this order, then Done.
+type Workflow struct {
+	// Connectors Every Connector, by its Step's `position`, then its own.
+	Connectors []Connector `json:"connectors"`
+	ProjectID  string      `json:"project_id"`
+
+	// Steps The Steps, by `position`, each with what is happening at it now.
+	Steps []WorkflowStep `json:"steps"`
+}
+
+// WorkflowStep A Step with what is happening at it now.
+type WorkflowStep struct {
+	ID string `json:"id"`
+
+	// MedianMs The median time Tasks that left the Step in the last 30 days spent at it, by advance,
+	// move, Complete or drop. Absent when none left it.
+	MedianMs *int64 `json:"median_ms,omitempty"`
+
+	// Name Unique in its Workflow, ignoring case.
+	Name string `json:"name"`
+
+	// Position Its place in the Workflow, 1 first.
+	Position int64 `json:"position"`
+
+	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
+	SkillID *string `json:"skill_id,omitempty"`
+
+	// Takers The active Members who could take a Task at the Step by its Skill: the Project's
+	// Members holding it, or for `skill-review` the Organisation's, by name. None on a hold;
+	// a Step with a Skill and no takers is one nobody can work.
+	Takers []Taker `json:"takers"`
+
+	// Tasks The open Tasks at the Step.
+	Tasks int `json:"tasks"`
+
+	// Working Those of them with a live Claim; also counted in `tasks`.
+	Working int `json:"working"`
+
+	// X Where the canvas draws it, in pixels from the left.
+	X int64 `json:"x"`
+
+	// Y Where the canvas draws it, in pixels from the top.
+	Y int64 `json:"y"`
 }
 
 // Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
@@ -1680,8 +1939,9 @@ type Workspace struct {
 	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
 	Kind WorkspaceKind `json:"kind"`
 
-	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-	// merged pull request carrying a Task's key completes that Task's review.
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+	// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+	// having landed.
 	Mode WorkspaceMode `json:"mode"`
 
 	// Name Unique on the Install, ignoring case; it names the session's checkout directory.
@@ -1699,8 +1959,9 @@ type WorkspaceList struct {
 	Items []Workspace `json:"items"`
 }
 
-// WorkspaceMode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-// merged pull request carrying a Task's key completes that Task's review.
+// WorkspaceMode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+// having landed.
 type WorkspaceMode string
 
 // BlockerRef defines model for BlockerRef.
@@ -1715,14 +1976,11 @@ type EvidenceFilename = string
 // EvidenceID defines model for EvidenceID.
 type EvidenceID = string
 
-// FeatureFilter defines model for FeatureFilter.
-type FeatureFilter = []string
-
-// FeatureRef defines model for FeatureRef.
-type FeatureRef = string
-
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
+
+// LabelID defines model for LabelID.
+type LabelID = string
 
 // Limit defines model for Limit.
 type Limit = int
@@ -1732,6 +1990,9 @@ type LoginCode = string
 
 // MemberRef defines model for MemberRef.
 type MemberRef = string
+
+// ProjectRef defines model for ProjectRef.
+type ProjectRef = string
 
 // ProposalID defines model for ProposalID.
 type ProposalID = string
@@ -1747,9 +2008,6 @@ type TaskFilter = []string
 
 // TaskRef defines model for TaskRef.
 type TaskRef = string
-
-// TeamRef defines model for TeamRef.
-type TeamRef = string
 
 // TokenID defines model for TokenID.
 type TokenID = string
@@ -1769,14 +2027,21 @@ type ListActivityParams struct {
 	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
 
 	// Member Only entries this Member (id or name) acted in, or that ended a Claim they held: a
-	// lapse, a take-back, a drop, a revoked token, a closed Session or a deactivation.
+	// lapse, a take-back, a move, a drop, a revoked token, a closed Session or a
+	// deactivation.
 	Member *string `form:"member,omitempty" json:"member,omitempty"`
 
 	// Kind Only entries of these kinds; repeat it for several.
 	Kind *[]ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
 
-	// Team Only entries about a Feature of this Team (id or key), or about a Task of one.
-	Team *string `form:"team,omitempty" json:"team,omitempty"`
+	// Project Only entries about this Project (id or key): the Project itself, its Workflow, its own
+	// Labels, or a Task of it.
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
+
+	// Task Only entries about this Task (id or key): those whose subject is the Task, and for a
+	// Parent its Subtasks' too, the ones filed after the request included. Errors:
+	// `not_found` (no such Task).
+	Task *string `form:"task,omitempty" json:"task,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1789,79 +2054,22 @@ type StreamActivityParams struct {
 	LastEventID *int64 `json:"Last-Event-ID,omitempty"`
 }
 
-// ListFeaturesParams defines parameters for ListFeatures.
-type ListFeaturesParams struct {
-	Team  *string       `form:"team,omitempty" json:"team,omitempty"`
-	State *FeatureState `form:"state,omitempty" json:"state,omitempty"`
-	Owner *string       `form:"owner,omitempty" json:"owner,omitempty"`
-
-	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
-	// (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
-	// `nin` OR within one).
-	//
-	// Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
-	// · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
-	// `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
-	// ignoring case, over the key and the title).
-	//
-	// Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
-	// naming the token, as on `listTasks`.
-	Filter *FeatureFilter `form:"filter,omitempty" json:"filter,omitempty"`
-
-	// Limit At most this many items. Defaults to 100.
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-
-	// Cursor The `next_cursor` of the previous page.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-}
-
-// FileFeatureParams defines parameters for FileFeature.
-type FileFeatureParams struct {
+// CreateLabelParams defines parameters for CreateLabel.
+type CreateLabelParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// DropFeatureParams defines parameters for DropFeature.
-type DropFeatureParams struct {
+// DeleteLabelParams defines parameters for DeleteLabel.
+type DeleteLabelParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// AttachFeatureEvidenceParams defines parameters for AttachFeatureEvidence.
-type AttachFeatureEvidenceParams struct {
-	// Filename The file's name, as it should be shown and downloaded.
-	Filename EvidenceFilename `form:"filename" json:"filename"`
-
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// ListFeatureObservationsParams defines parameters for ListFeatureObservations.
-type ListFeatureObservationsParams struct {
-	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
-	// Observation, reviewed or not.
-	Reviewed *bool `form:"reviewed,omitempty" json:"reviewed,omitempty"`
-}
-
-// PassFeatureOwnershipParams defines parameters for PassFeatureOwnership.
-type PassFeatureOwnershipParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// RankFeatureParams defines parameters for RankFeature.
-type RankFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// ShipFeatureParams defines parameters for ShipFeature.
-type ShipFeatureParams struct {
+// UpdateLabelParams defines parameters for UpdateLabel.
+type UpdateLabelParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -1883,9 +2091,9 @@ type LogoutParams struct {
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
-	// Team Only Members of this Team.
-	Team *string     `form:"team,omitempty" json:"team,omitempty"`
-	Kind *MemberKind `form:"kind,omitempty" json:"kind,omitempty"`
+	// Project Only Members of this Project, by id or key.
+	Project *string     `form:"project,omitempty" json:"project,omitempty"`
+	Kind    *MemberKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
 // CreateMemberParams defines parameters for CreateMember.
@@ -1981,6 +2189,48 @@ type IssueTokenParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// CreateProjectParams defines parameters for CreateProject.
+type CreateProjectParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateProjectParams defines parameters for UpdateProject.
+type UpdateProjectParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// CreateProjectLabelParams defines parameters for CreateProjectLabel.
+type CreateProjectLabelParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RemoveProjectMemberParams defines parameters for RemoveProjectMember.
+type RemoveProjectMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// AddProjectMemberParams defines parameters for AddProjectMember.
+type AddProjectMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetWorkflowParams defines parameters for SetWorkflow.
+type SetWorkflowParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // NudgeRunnerSessionParams defines parameters for NudgeRunnerSession.
 type NudgeRunnerSessionParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2030,30 +2280,23 @@ type CreateSkillParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// SetStatusesParams defines parameters for SetStatuses.
-type SetStatusesParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
-	Feature *string    `form:"feature,omitempty" json:"feature,omitempty"`
-	Team    *string    `form:"team,omitempty" json:"team,omitempty"`
-	State   *TaskState `form:"state,omitempty" json:"state,omitempty"`
+	// Project Only Tasks of this Project, by id or key.
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
-	// Skill Only Tasks that need this Skill now.
-	Skill *string `form:"skill,omitempty" json:"skill,omitempty"`
+	// Parent Only the Subtasks of this Task, by id or display key.
+	Parent *string    `form:"parent,omitempty" json:"parent,omitempty"`
+	State  *TaskState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Step Only Tasks at this Step, by id, or by name together with `project`.
+	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
 	// AimedAt Only Tasks aimed at this Member.
 	AimedAt *string `form:"aimed_at,omitempty" json:"aimed_at,omitempty"`
 
 	// Holder Only Tasks this Member holds a live Claim on.
 	Holder *string `form:"holder,omitempty" json:"holder,omitempty"`
-
-	// Status Only Tasks in this Status, by id or name.
-	Status *string `form:"status,omitempty" json:"status,omitempty"`
 
 	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
 	// with the other parameters; `in` and `nin` match any of their values (OR). Each value is
@@ -2063,34 +2306,43 @@ type ListTasksParams struct {
 	// nothing.
 	//
 	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
-	// boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
-	// `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
-	// the earlier first) and `last` (`7d`, `30d` or `90d`: at or after the server's now less
-	// that many days). A date is RFC 3339 with its offset, to the millisecond, such as
+	// boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
+	// `contains` (one value) on text; on dates `before` (earlier than), `after` (later than),
+	// `gte`, `lte` (one value), `btw` (two values, both ends included, the earlier first) and
+	// `last` (`7d`, `30d` or `90d`: at or after the server's now less that many days). A date
+	// is RFC 3339 with its offset, to the millisecond, such as
 	// `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
 	// `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
-	// match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
-	// Member, which need no Skill), and on a field with several values (`workspace`) match a
-	// Task none of whose values is one given.
+	// match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
+	// Parent, a Task aimed at a Member, an ended Task), and on a field with several values
+	// (`label`, `workspace`) match a Task none of whose values is one given.
 	//
-	// Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
-	// `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
-	// for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
-	// id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
-	// (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
-	// and blocks an open Task) · `kind` (`work`, `breakdown`, `retrospective`, or `question`: a
-	// work Task aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a
-	// live Claim; `unheld`: none, as `holder:is:none`; `lapsed`: a Claim of the Task lapsed
-	// within the last 24 hours; `session`: the Runner beside this server runs a session for
-	// it now, as `listRunnerSessions` lists) · `workspace` (Workspace id the Task names) ·
-	// `model` (the live Claim's model label) · `filed_at` (when it was filed) ·
-	// `completed_at` (when it ended done; a dropped Task has none) · `q` (`contains`,
-	// ignoring case, over the key and the title).
+	// Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+	// carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
+	// `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
+	// (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
+	// (Member id holding a live Claim, or `none` for no live Claim) · `aimed_at` (Member id) ·
+	// `owner` (Member id owning the Task) · `filed_by` (Member id; the Subtasks Darkory files
+	// itself have none) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is
+	// open and blocks an open Task) · `kind` (`work`, `breakdown`, `acceptance`,
+	// `retrospective`, or `question`: a work Task aimed at a Member; `work` is a work Task aimed
+	// at nobody) · `claim` (`held`: a live Claim; `unheld`: none, as `holder:is:none`;
+	// `lapsed`: a Claim of the Task lapsed within the last 24 hours; `session`: the Runner
+	// beside this server runs a session for it now, as `listRunnerSessions` lists) ·
+	// `takeable_by` (`agents`: an active agent could take it by its Step's Skill, being a
+	// Member of its Project with that Skill, or for `skill-review` any Member of the
+	// Organisation with it; `humans`: likewise a human; `both`: an agent and a human could) ·
+	// `rank` (a number, its place in its Project's Rank, 1 first; a Subtask's is its Parent's)
+	// · `auto_complete` (`true`, `false`) · `acceptance` (`true`, `false`) · `workspace`
+	// (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
+	// it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
+	// (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
+	// title).
 	//
-	// Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
-	// An unknown field, an operator the field does not take, the wrong number of values or a
-	// value the field cannot hold is refused with `invalid`, naming the token. At most 50
-	// `filter`s of at most 100 values each.
+	// Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
+	// unknown field, an operator the field does not take, the wrong number of values or a value
+	// the field cannot hold is refused with `invalid`, naming the token. At most 50 `filter`s
+	// of at most 100 values each.
 	Filter *TaskFilter `form:"filter,omitempty" json:"filter,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
@@ -2118,6 +2370,13 @@ type NextTaskParams struct {
 type ListTakeableTasksParams struct {
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// AdvanceTaskParams defines parameters for AdvanceTask.
+type AdvanceTaskParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RemoveBlockerParams defines parameters for RemoveBlocker.
@@ -2165,15 +2424,15 @@ type AttachTaskEvidenceParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// HandoverTaskParams defines parameters for HandoverTask.
-type HandoverTaskParams struct {
+// HeartbeatParams defines parameters for Heartbeat.
+type HeartbeatParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// HeartbeatParams defines parameters for Heartbeat.
-type HeartbeatParams struct {
+// SetTaskLabelsParams defines parameters for SetTaskLabels.
+type SetTaskLabelsParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2186,8 +2445,29 @@ type AddNoteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListTaskObservationsParams defines parameters for ListTaskObservations.
+type ListTaskObservationsParams struct {
+	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
+	// Observation, reviewed or not.
+	Reviewed *bool `form:"reviewed,omitempty" json:"reviewed,omitempty"`
+}
+
 // ObserveParams defines parameters for Observe.
 type ObserveParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// PassOwnershipParams defines parameters for PassOwnership.
+type PassOwnershipParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RankTaskParams defines parameters for RankTask.
+type RankTaskParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2207,8 +2487,8 @@ type ProposeSkillVersionParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// SetTaskStatusParams defines parameters for SetTaskStatus.
-type SetTaskStatusParams struct {
+// MoveTaskParams defines parameters for MoveTask.
+type MoveTaskParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2216,34 +2496,6 @@ type SetTaskStatusParams struct {
 
 // TakeBackTaskParams defines parameters for TakeBackTask.
 type TakeBackTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// CreateTeamParams defines parameters for CreateTeam.
-type CreateTeamParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// UpdateTeamParams defines parameters for UpdateTeam.
-type UpdateTeamParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// RemoveTeamMemberParams defines parameters for RemoveTeamMember.
-type RemoveTeamMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// AddTeamMemberParams defines parameters for AddTeamMember.
-type AddTeamMemberParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2261,8 +2513,8 @@ type ListViewsParams struct {
 	// Entity Only Views of this list.
 	Entity *ViewEntity `form:"entity,omitempty" json:"entity,omitempty"`
 
-	// Team Only Views of this Team's list, by id or key.
-	Team *string `form:"team,omitempty" json:"team,omitempty"`
+	// Project Only Views of this Project's list, by id or key.
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
 }
 
 // CreateViewParams defines parameters for CreateView.
@@ -2307,14 +2559,11 @@ type UpdateWorkspaceParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// FileFeatureJSONRequestBody defines body for FileFeature for application/json ContentType.
-type FileFeatureJSONRequestBody = FileFeatureBody
+// CreateLabelJSONRequestBody defines body for CreateLabel for application/json ContentType.
+type CreateLabelJSONRequestBody = CreateLabelBody
 
-// PassFeatureOwnershipJSONRequestBody defines body for PassFeatureOwnership for application/json ContentType.
-type PassFeatureOwnershipJSONRequestBody = PassFeatureOwnershipBody
-
-// RankFeatureJSONRequestBody defines body for RankFeature for application/json ContentType.
-type RankFeatureJSONRequestBody = RankFeatureBody
+// UpdateLabelJSONRequestBody defines body for UpdateLabel for application/json ContentType.
+type UpdateLabelJSONRequestBody = UpdateLabelBody
 
 // CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
 type CreateMemberJSONRequestBody = CreateMemberBody
@@ -2331,20 +2580,32 @@ type SetManagerJSONRequestBody = SetManagerBody
 // IssueTokenJSONRequestBody defines body for IssueToken for application/json ContentType.
 type IssueTokenJSONRequestBody = IssueTokenBody
 
+// CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
+type CreateProjectJSONRequestBody = CreateProjectBody
+
+// UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
+type UpdateProjectJSONRequestBody = UpdateProjectBody
+
+// CreateProjectLabelJSONRequestBody defines body for CreateProjectLabel for application/json ContentType.
+type CreateProjectLabelJSONRequestBody = CreateLabelBody
+
+// SetWorkflowJSONRequestBody defines body for SetWorkflow for application/json ContentType.
+type SetWorkflowJSONRequestBody = SetWorkflowBody
+
 // RequestEmailSignInJSONRequestBody defines body for RequestEmailSignIn for application/json ContentType.
 type RequestEmailSignInJSONRequestBody = EmailSignInBody
 
 // CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
 type CreateSkillJSONRequestBody = CreateSkillBody
 
-// SetStatusesJSONRequestBody defines body for SetStatuses for application/json ContentType.
-type SetStatusesJSONRequestBody = SetStatusesBody
-
 // FileTaskJSONRequestBody defines body for FileTask for application/json ContentType.
 type FileTaskJSONRequestBody = FileTaskBody
 
 // NextTaskJSONRequestBody defines body for NextTask for application/json ContentType.
 type NextTaskJSONRequestBody = NextTaskBody
+
+// AdvanceTaskJSONRequestBody defines body for AdvanceTask for application/json ContentType.
+type AdvanceTaskJSONRequestBody = AdvanceTaskBody
 
 // ClaimTaskJSONRequestBody defines body for ClaimTask for application/json ContentType.
 type ClaimTaskJSONRequestBody = ClaimTaskBody
@@ -2355,8 +2616,8 @@ type CompleteTaskJSONRequestBody = CompleteTaskBody
 // DropTaskJSONRequestBody defines body for DropTask for application/json ContentType.
 type DropTaskJSONRequestBody = DropTaskBody
 
-// HandoverTaskJSONRequestBody defines body for HandoverTask for application/json ContentType.
-type HandoverTaskJSONRequestBody = HandoverTaskBody
+// SetTaskLabelsJSONRequestBody defines body for SetTaskLabels for application/json ContentType.
+type SetTaskLabelsJSONRequestBody = SetTaskLabelsBody
 
 // AddNoteJSONRequestBody defines body for AddNote for application/json ContentType.
 type AddNoteJSONRequestBody = AddNoteBody
@@ -2364,23 +2625,23 @@ type AddNoteJSONRequestBody = AddNoteBody
 // ObserveJSONRequestBody defines body for Observe for application/json ContentType.
 type ObserveJSONRequestBody = ObserveBody
 
+// PassOwnershipJSONRequestBody defines body for PassOwnership for application/json ContentType.
+type PassOwnershipJSONRequestBody = PassOwnershipBody
+
+// RankTaskJSONRequestBody defines body for RankTask for application/json ContentType.
+type RankTaskJSONRequestBody = RankTaskBody
+
 // ReleaseTaskJSONRequestBody defines body for ReleaseTask for application/json ContentType.
 type ReleaseTaskJSONRequestBody = ReleaseTaskBody
 
 // ProposeSkillVersionJSONRequestBody defines body for ProposeSkillVersion for application/json ContentType.
 type ProposeSkillVersionJSONRequestBody = ProposeSkillVersionBody
 
-// SetTaskStatusJSONRequestBody defines body for SetTaskStatus for application/json ContentType.
-type SetTaskStatusJSONRequestBody = SetTaskStatusBody
+// MoveTaskJSONRequestBody defines body for MoveTask for application/json ContentType.
+type MoveTaskJSONRequestBody = MoveTaskBody
 
 // TakeBackTaskJSONRequestBody defines body for TakeBackTask for application/json ContentType.
 type TakeBackTaskJSONRequestBody = TakeBackTaskBody
-
-// CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
-type CreateTeamJSONRequestBody = CreateTeamBody
-
-// UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
-type UpdateTeamJSONRequestBody = UpdateTeamBody
 
 // CreateViewJSONRequestBody defines body for CreateView for application/json ContentType.
 type CreateViewJSONRequestBody = CreateViewBody
@@ -2408,36 +2669,21 @@ type ServerInterface interface {
 	// DownloadEvidence Download an Evidence file
 	// (GET /v1/evidence/{evidence}/content)
 	DownloadEvidence(w http.ResponseWriter, r *http.Request, evidence EvidenceID)
-	// ListFeatures List Features
-	// (GET /v1/features)
-	ListFeatures(w http.ResponseWriter, r *http.Request, params ListFeaturesParams)
-	// FileFeature File a Feature
-	// (POST /v1/features)
-	FileFeature(w http.ResponseWriter, r *http.Request, params FileFeatureParams)
-	// GetFeature Get a Feature with its Tasks and Evidence
-	// (GET /v1/features/{feature})
-	GetFeature(w http.ResponseWriter, r *http.Request, feature FeatureRef)
-	// DropFeature Drop a Feature (Feature owner)
-	// (POST /v1/features/{feature}/drop)
-	DropFeature(w http.ResponseWriter, r *http.Request, feature FeatureRef, params DropFeatureParams)
-	// AttachFeatureEvidence Attach Evidence to a Feature
-	// (POST /v1/features/{feature}/evidence)
-	AttachFeatureEvidence(w http.ResponseWriter, r *http.Request, feature FeatureRef, params AttachFeatureEvidenceParams)
-	// ListFeatureObservations List the Observations recorded on a Feature's Tasks
-	// (GET /v1/features/{feature}/observations)
-	ListFeatureObservations(w http.ResponseWriter, r *http.Request, feature FeatureRef, params ListFeatureObservationsParams)
-	// PassFeatureOwnership Pass a Feature's ownership to another Member
-	// (POST /v1/features/{feature}/owner)
-	PassFeatureOwnership(w http.ResponseWriter, r *http.Request, feature FeatureRef, params PassFeatureOwnershipParams)
-	// RankFeature Move a Feature to a position in its Team's Rank
-	// (POST /v1/features/{feature}/rank)
-	RankFeature(w http.ResponseWriter, r *http.Request, feature FeatureRef, params RankFeatureParams)
-	// ShipFeature Ship a Feature (Feature owner)
-	// (POST /v1/features/{feature}/ship)
-	ShipFeature(w http.ResponseWriter, r *http.Request, feature FeatureRef, params ShipFeatureParams)
 	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	// (GET /v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// ListLabels List the Organisation's Labels, which every Project's Tasks may carry
+	// (GET /v1/labels)
+	ListLabels(w http.ResponseWriter, r *http.Request)
+	// CreateLabel Define a Label for the Organisation (admin)
+	// (POST /v1/labels)
+	CreateLabel(w http.ResponseWriter, r *http.Request, params CreateLabelParams)
+	// DeleteLabel Delete a Label
+	// (DELETE /v1/labels/{label})
+	DeleteLabel(w http.ResponseWriter, r *http.Request, label LabelID, params DeleteLabelParams)
+	// UpdateLabel Rename or recolour a Label
+	// (PATCH /v1/labels/{label})
+	UpdateLabel(w http.ResponseWriter, r *http.Request, label LabelID, params UpdateLabelParams)
 	// ShowLoginLink Show a login link's sign-in page
 	// (GET /v1/login-links/{code})
 	ShowLoginLink(w http.ResponseWriter, r *http.Request, code LoginCode)
@@ -2447,7 +2693,7 @@ type ServerInterface interface {
 	// Logout End the browser Session and clear its cookie
 	// (POST /v1/logout)
 	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
-	// GetMe The calling Member, their Teams and Skills, and the Session making the request
+	// GetMe The calling Member, their Projects and Skills, and the Session making the request
 	// (GET /v1/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
 	// ListMembers List the Organisation's Members
@@ -2456,7 +2702,7 @@ type ServerInterface interface {
 	// CreateMember Create a Member (admin)
 	// (POST /v1/members)
 	CreateMember(w http.ResponseWriter, r *http.Request, params CreateMemberParams)
-	// GetMember Get a Member with their Teams, Skills and Reporting line
+	// GetMember Get a Member with their Projects, Skills and Reporting line
 	// (GET /v1/members/{member})
 	GetMember(w http.ResponseWriter, r *http.Request, member MemberRef)
 	// UpdateMember Change a Member's name, email or admin mark (admin)
@@ -2498,6 +2744,36 @@ type ServerInterface interface {
 	// IssueToken Issue a token for a Member (admin)
 	// (POST /v1/members/{member}/tokens)
 	IssueToken(w http.ResponseWriter, r *http.Request, member MemberRef, params IssueTokenParams)
+	// ListProjects List the Organisation's Projects
+	// (GET /v1/projects)
+	ListProjects(w http.ResponseWriter, r *http.Request)
+	// CreateProject Create a Project with its first Workflow (admin)
+	// (POST /v1/projects)
+	CreateProject(w http.ResponseWriter, r *http.Request, params CreateProjectParams)
+	// GetProject Get a Project and its Members
+	// (GET /v1/projects/{project})
+	GetProject(w http.ResponseWriter, r *http.Request, project ProjectRef)
+	// UpdateProject Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	// (PATCH /v1/projects/{project})
+	UpdateProject(w http.ResponseWriter, r *http.Request, project ProjectRef, params UpdateProjectParams)
+	// ListProjectLabels List a Project's own Labels
+	// (GET /v1/projects/{project}/labels)
+	ListProjectLabels(w http.ResponseWriter, r *http.Request, project ProjectRef)
+	// CreateProjectLabel Define a Label for a Project
+	// (POST /v1/projects/{project}/labels)
+	CreateProjectLabel(w http.ResponseWriter, r *http.Request, project ProjectRef, params CreateProjectLabelParams)
+	// RemoveProjectMember Remove a Member from a Project (admin)
+	// (DELETE /v1/projects/{project}/members/{member})
+	RemoveProjectMember(w http.ResponseWriter, r *http.Request, project ProjectRef, member MemberRef, params RemoveProjectMemberParams)
+	// AddProjectMember Add a Member to a Project (admin)
+	// (PUT /v1/projects/{project}/members/{member})
+	AddProjectMember(w http.ResponseWriter, r *http.Request, project ProjectRef, member MemberRef, params AddProjectMemberParams)
+	// GetWorkflow Get a Project's Workflow with what is happening at each Step now
+	// (GET /v1/projects/{project}/workflow)
+	GetWorkflow(w http.ResponseWriter, r *http.Request, project ProjectRef)
+	// SetWorkflow Replace a Project's Workflow (admin)
+	// (PUT /v1/projects/{project}/workflow)
+	SetWorkflow(w http.ResponseWriter, r *http.Request, project ProjectRef, params SetWorkflowParams)
 	// ListRunnerSessions List the agent sessions the Runner is running now
 	// (GET /v1/runner/sessions)
 	ListRunnerSessions(w http.ResponseWriter, r *http.Request)
@@ -2531,16 +2807,10 @@ type ServerInterface interface {
 	// ListSkillVersions List a Skill's published versions
 	// (GET /v1/skills/{skill}/versions)
 	ListSkillVersions(w http.ResponseWriter, r *http.Request, skill SkillRef)
-	// ListStatuses List the Organisation's Statuses, in their order
-	// (GET /v1/statuses)
-	ListStatuses(w http.ResponseWriter, r *http.Request)
-	// SetStatuses Replace the Organisation's list of Statuses (admin)
-	// (PUT /v1/statuses)
-	SetStatuses(w http.ResponseWriter, r *http.Request, params SetStatusesParams)
 	// ListTasks List Tasks
 	// (GET /v1/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, params ListTasksParams)
-	// FileTask File a Task
+	// FileTask File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 	// (POST /v1/tasks)
 	FileTask(w http.ResponseWriter, r *http.Request, params FileTaskParams)
 	// NextTask Wait for a takeable Task and claim it
@@ -2549,9 +2819,12 @@ type ServerInterface interface {
 	// ListTakeableTasks List the Tasks the caller can take now, in the order `next` would offer them
 	// (GET /v1/tasks/takeable)
 	ListTakeableTasks(w http.ResponseWriter, r *http.Request, params ListTakeableTasksParams)
-	// GetTask Get a Task with its Claims, Notes, Evidence, blockers and Observations
+	// GetTask Get a Task with its Parent, Subtasks, Step and outcomes, Labels, Claims, Notes, Evidence, Blocking and Observations
 	// (GET /v1/tasks/{task})
 	GetTask(w http.ResponseWriter, r *http.Request, task TaskRef)
+	// AdvanceTask End the caller's work on a Task along a Connector out of its Step
+	// (POST /v1/tasks/{task}/advance)
+	AdvanceTask(w http.ResponseWriter, r *http.Request, task TaskRef, params AdvanceTaskParams)
 	// RemoveBlocker Stop one Task blocking another
 	// (DELETE /v1/tasks/{task}/blockers/{blocker})
 	RemoveBlocker(w http.ResponseWriter, r *http.Request, task TaskRef, blocker BlockerRef, params RemoveBlockerParams)
@@ -2561,57 +2834,48 @@ type ServerInterface interface {
 	// ClaimTask Claim a Task
 	// (POST /v1/tasks/{task}/claim)
 	ClaimTask(w http.ResponseWriter, r *http.Request, task TaskRef, params ClaimTaskParams)
-	// CompleteTask Complete a Task the caller holds
+	// CompleteTask Complete a Task the caller holds, or a Parent the caller owns
 	// (POST /v1/tasks/{task}/complete)
 	CompleteTask(w http.ResponseWriter, r *http.Request, task TaskRef, params CompleteTaskParams)
-	// DropTask Drop a Task (Feature owner)
+	// DropTask Drop a Task (Owner)
 	// (POST /v1/tasks/{task}/drop)
 	DropTask(w http.ResponseWriter, r *http.Request, task TaskRef, params DropTaskParams)
 	// AttachTaskEvidence Attach Evidence to a Task
 	// (POST /v1/tasks/{task}/evidence)
 	AttachTaskEvidence(w http.ResponseWriter, r *http.Request, task TaskRef, params AttachTaskEvidenceParams)
-	// HandoverTask End the caller's Claim and set the Skill the Task needs next
-	// (POST /v1/tasks/{task}/handover)
-	HandoverTask(w http.ResponseWriter, r *http.Request, task TaskRef, params HandoverTaskParams)
 	// Heartbeat Tell Darkory the caller is still working a Task
 	// (POST /v1/tasks/{task}/heartbeat)
 	Heartbeat(w http.ResponseWriter, r *http.Request, task TaskRef, params HeartbeatParams)
+	// SetTaskLabels Set the Labels a Task carries
+	// (PUT /v1/tasks/{task}/labels)
+	SetTaskLabels(w http.ResponseWriter, r *http.Request, task TaskRef, params SetTaskLabelsParams)
 	// AddNote Add a Note to a Task's running log
 	// (POST /v1/tasks/{task}/notes)
 	AddNote(w http.ResponseWriter, r *http.Request, task TaskRef, params AddNoteParams)
+	// ListTaskObservations List the Observations recorded on a Task and, for a Parent, on its Subtasks
+	// (GET /v1/tasks/{task}/observations)
+	ListTaskObservations(w http.ResponseWriter, r *http.Request, task TaskRef, params ListTaskObservationsParams)
 	// Observe Record an Observation on a Task
 	// (POST /v1/tasks/{task}/observations)
 	Observe(w http.ResponseWriter, r *http.Request, task TaskRef, params ObserveParams)
-	// ReleaseTask Give up the caller's Claim, leaving the Task needing the same Skill
+	// PassOwnership Pass a Task's ownership, with its Subtasks', to another Member
+	// (POST /v1/tasks/{task}/owner)
+	PassOwnership(w http.ResponseWriter, r *http.Request, task TaskRef, params PassOwnershipParams)
+	// RankTask Move a Task to a position in its Project's Rank
+	// (POST /v1/tasks/{task}/rank)
+	RankTask(w http.ResponseWriter, r *http.Request, task TaskRef, params RankTaskParams)
+	// ReleaseTask Give up the caller's Claim, leaving the Task at its Step
 	// (POST /v1/tasks/{task}/release)
 	ReleaseTask(w http.ResponseWriter, r *http.Request, task TaskRef, params ReleaseTaskParams)
-	// ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
+	// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
 	// (POST /v1/tasks/{task}/skill-proposals)
 	ProposeSkillVersion(w http.ResponseWriter, r *http.Request, task TaskRef, params ProposeSkillVersionParams)
-	// SetTaskStatus Move a Task to another Status
-	// (POST /v1/tasks/{task}/status)
-	SetTaskStatus(w http.ResponseWriter, r *http.Request, task TaskRef, params SetTaskStatusParams)
+	// MoveTask Move a Task to a Step of its Workflow by hand
+	// (POST /v1/tasks/{task}/step)
+	MoveTask(w http.ResponseWriter, r *http.Request, task TaskRef, params MoveTaskParams)
 	// TakeBackTask End another Member's Claim on a Task
 	// (POST /v1/tasks/{task}/take-back)
 	TakeBackTask(w http.ResponseWriter, r *http.Request, task TaskRef, params TakeBackTaskParams)
-	// ListTeams List the Organisation's Teams
-	// (GET /v1/teams)
-	ListTeams(w http.ResponseWriter, r *http.Request)
-	// CreateTeam Create a Team (admin)
-	// (POST /v1/teams)
-	CreateTeam(w http.ResponseWriter, r *http.Request, params CreateTeamParams)
-	// GetTeam Get a Team and its Members
-	// (GET /v1/teams/{team})
-	GetTeam(w http.ResponseWriter, r *http.Request, team TeamRef)
-	// UpdateTeam Change a Team's name, default Workspace or Ship-when-done default (admin)
-	// (PATCH /v1/teams/{team})
-	UpdateTeam(w http.ResponseWriter, r *http.Request, team TeamRef, params UpdateTeamParams)
-	// RemoveTeamMember Remove a Member from a Team (admin)
-	// (DELETE /v1/teams/{team}/members/{member})
-	RemoveTeamMember(w http.ResponseWriter, r *http.Request, team TeamRef, member MemberRef, params RemoveTeamMemberParams)
-	// AddTeamMember Add a Member to a Team (admin)
-	// (PUT /v1/teams/{team}/members/{member})
-	AddTeamMember(w http.ResponseWriter, r *http.Request, team TeamRef, member MemberRef, params AddTeamMemberParams)
 	// RevokeToken Revoke a token
 	// (POST /v1/tokens/{token}/revoke)
 	RevokeToken(w http.ResponseWriter, r *http.Request, token TokenID, params RevokeTokenParams)
@@ -2711,15 +2975,28 @@ func (siw *ServerInterfaceWrapper) ListActivity(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// ------------- Optional query parameter "team" -------------
+	// ------------- Optional query parameter "project" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "task" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "task", r.URL.Query(), &params.Task, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "task"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
 		}
 		return
 	}
@@ -2854,481 +3131,166 @@ func (siw *ServerInterfaceWrapper) DownloadEvidence(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
-// ListFeatures operation middleware
-func (siw *ServerInterfaceWrapper) ListFeatures(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListFeaturesParams
-
-	// ------------- Optional query parameter "team" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "state" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "owner" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "owner", r.URL.Query(), &params.Owner, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "owner"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "owner", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "filter" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "filter", r.URL.Query(), &params.Filter, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filter"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filter", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "cursor" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListFeatures(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// FileFeature operation middleware
-func (siw *ServerInterfaceWrapper) FileFeature(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params FileFeatureParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.FileFeature(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetFeature operation middleware
-func (siw *ServerInterfaceWrapper) GetFeature(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetFeature(w, r, feature)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DropFeature operation middleware
-func (siw *ServerInterfaceWrapper) DropFeature(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DropFeatureParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DropFeature(w, r, feature, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// AttachFeatureEvidence operation middleware
-func (siw *ServerInterfaceWrapper) AttachFeatureEvidence(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params AttachFeatureEvidenceParams
-
-	// ------------- Required query parameter "filename" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "filename", r.URL.Query(), &params.Filename, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "filename"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "filename", Err: err})
-		}
-		return
-	}
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AttachFeatureEvidence(w, r, feature, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListFeatureObservations operation middleware
-func (siw *ServerInterfaceWrapper) ListFeatureObservations(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListFeatureObservationsParams
-
-	// ------------- Optional query parameter "reviewed" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "reviewed", r.URL.Query(), &params.Reviewed, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reviewed"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reviewed", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListFeatureObservations(w, r, feature, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// PassFeatureOwnership operation middleware
-func (siw *ServerInterfaceWrapper) PassFeatureOwnership(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params PassFeatureOwnershipParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PassFeatureOwnership(w, r, feature, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RankFeature operation middleware
-func (siw *ServerInterfaceWrapper) RankFeature(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RankFeatureParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RankFeature(w, r, feature, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ShipFeature operation middleware
-func (siw *ServerInterfaceWrapper) ShipFeature(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "feature" -------------
-	var feature FeatureRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "feature", r.PathValue("feature"), &feature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ShipFeatureParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ShipFeature(w, r, feature, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLabels operation middleware
+func (siw *ServerInterfaceWrapper) ListLabels(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLabels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateLabel operation middleware
+func (siw *ServerInterfaceWrapper) CreateLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateLabel(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteLabel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "label" -------------
+	var label LabelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &label, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteLabel(w, r, label, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateLabel operation middleware
+func (siw *ServerInterfaceWrapper) UpdateLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "label" -------------
+	var label LabelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &label, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateLabel(w, r, label, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3478,15 +3440,15 @@ func (siw *ServerInterfaceWrapper) ListMembers(w http.ResponseWriter, r *http.Re
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListMembersParams
 
-	// ------------- Optional query parameter "team" -------------
+	// ------------- Optional query parameter "project" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
 		}
 		return
 	}
@@ -4231,6 +4193,407 @@ func (siw *ServerInterfaceWrapper) IssueToken(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListProjects operation middleware
+func (siw *ServerInterfaceWrapper) ListProjects(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProjects(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProject operation middleware
+func (siw *ServerInterfaceWrapper) CreateProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateProjectParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProject(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProject operation middleware
+func (siw *ServerInterfaceWrapper) GetProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProject(w, r, project)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateProject operation middleware
+func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateProjectParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateProject(w, r, project, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProjectLabels operation middleware
+func (siw *ServerInterfaceWrapper) ListProjectLabels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProjectLabels(w, r, project)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateProjectLabel operation middleware
+func (siw *ServerInterfaceWrapper) CreateProjectLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateProjectLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateProjectLabel(w, r, project, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveProjectMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveProjectMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveProjectMemberParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveProjectMember(w, r, project, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddProjectMember operation middleware
+func (siw *ServerInterfaceWrapper) AddProjectMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "member" -------------
+	var member MemberRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddProjectMemberParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddProjectMember(w, r, project, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkflow operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkflow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkflow(w, r, project)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWorkflow operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkflow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetWorkflowParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkflow(w, r, project, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRunnerSessions operation middleware
 func (siw *ServerInterfaceWrapper) ListRunnerSessions(w http.ResponseWriter, r *http.Request) {
 
@@ -4643,61 +5006,6 @@ func (siw *ServerInterfaceWrapper) ListSkillVersions(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
-// ListStatuses operation middleware
-func (siw *ServerInterfaceWrapper) ListStatuses(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListStatuses(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetStatuses operation middleware
-func (siw *ServerInterfaceWrapper) SetStatuses(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetStatusesParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetStatuses(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListTasks operation middleware
 func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
 
@@ -4707,28 +5015,28 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTasksParams
 
-	// ------------- Optional query parameter "feature" -------------
+	// ------------- Optional query parameter "project" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "feature", r.URL.Query(), &params.Feature, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "feature"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "feature", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
 		}
 		return
 	}
 
-	// ------------- Optional query parameter "team" -------------
+	// ------------- Optional query parameter "parent" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "parent", r.URL.Query(), &params.Parent, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "parent"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "parent", Err: err})
 		}
 		return
 	}
@@ -4746,15 +5054,15 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ------------- Optional query parameter "skill" -------------
+	// ------------- Optional query parameter "step" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "skill", r.URL.Query(), &params.Skill, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "step", r.URL.Query(), &params.Step, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "skill"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "step"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "skill", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "step", Err: err})
 		}
 		return
 	}
@@ -4781,19 +5089,6 @@ func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Requ
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "holder"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "holder", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "status" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
 		}
 		return
 	}
@@ -4980,6 +5275,56 @@ func (siw *ServerInterfaceWrapper) GetTask(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetTask(w, r, task)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdvanceTask operation middleware
+func (siw *ServerInterfaceWrapper) AdvanceTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdvanceTaskParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdvanceTask(w, r, task, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5320,56 +5665,6 @@ func (siw *ServerInterfaceWrapper) AttachTaskEvidence(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
-// HandoverTask operation middleware
-func (siw *ServerInterfaceWrapper) HandoverTask(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "task" -------------
-	var task TaskRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params HandoverTaskParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.HandoverTask(w, r, task, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // Heartbeat operation middleware
 func (siw *ServerInterfaceWrapper) Heartbeat(w http.ResponseWriter, r *http.Request) {
 
@@ -5411,6 +5706,56 @@ func (siw *ServerInterfaceWrapper) Heartbeat(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Heartbeat(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTaskLabels operation middleware
+func (siw *ServerInterfaceWrapper) SetTaskLabels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetTaskLabelsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTaskLabels(w, r, task, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5470,6 +5815,48 @@ func (siw *ServerInterfaceWrapper) AddNote(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// ListTaskObservations operation middleware
+func (siw *ServerInterfaceWrapper) ListTaskObservations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTaskObservationsParams
+
+	// ------------- Optional query parameter "reviewed" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "reviewed", r.URL.Query(), &params.Reviewed, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reviewed"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reviewed", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTaskObservations(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Observe operation middleware
 func (siw *ServerInterfaceWrapper) Observe(w http.ResponseWriter, r *http.Request) {
 
@@ -5511,6 +5898,106 @@ func (siw *ServerInterfaceWrapper) Observe(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Observe(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PassOwnership operation middleware
+func (siw *ServerInterfaceWrapper) PassOwnership(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PassOwnershipParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PassOwnership(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RankTask operation middleware
+func (siw *ServerInterfaceWrapper) RankTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RankTaskParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RankTask(w, r, task, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5620,8 +6107,8 @@ func (siw *ServerInterfaceWrapper) ProposeSkillVersion(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
-// SetTaskStatus operation middleware
-func (siw *ServerInterfaceWrapper) SetTaskStatus(w http.ResponseWriter, r *http.Request) {
+// MoveTask operation middleware
+func (siw *ServerInterfaceWrapper) MoveTask(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
@@ -5636,7 +6123,7 @@ func (siw *ServerInterfaceWrapper) SetTaskStatus(w http.ResponseWriter, r *http.
 	}
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params SetTaskStatusParams
+	var params MoveTaskParams
 
 	headers := r.Header
 
@@ -5660,7 +6147,7 @@ func (siw *ServerInterfaceWrapper) SetTaskStatus(w http.ResponseWriter, r *http.
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetTaskStatus(w, r, task, params)
+		siw.Handler.MoveTask(w, r, task, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5711,255 +6198,6 @@ func (siw *ServerInterfaceWrapper) TakeBackTask(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.TakeBackTask(w, r, task, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListTeams operation middleware
-func (siw *ServerInterfaceWrapper) ListTeams(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTeams(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateTeam operation middleware
-func (siw *ServerInterfaceWrapper) CreateTeam(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params CreateTeamParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateTeam(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetTeam operation middleware
-func (siw *ServerInterfaceWrapper) GetTeam(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "team" -------------
-	var team TeamRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetTeam(w, r, team)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// UpdateTeam operation middleware
-func (siw *ServerInterfaceWrapper) UpdateTeam(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "team" -------------
-	var team TeamRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params UpdateTeamParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.UpdateTeam(w, r, team, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RemoveTeamMember operation middleware
-func (siw *ServerInterfaceWrapper) RemoveTeamMember(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "team" -------------
-	var team TeamRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "member" -------------
-	var member MemberRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RemoveTeamMemberParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RemoveTeamMember(w, r, team, member, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// AddTeamMember operation middleware
-func (siw *ServerInterfaceWrapper) AddTeamMember(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "team" -------------
-	var team TeamRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "team", r.PathValue("team"), &team, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "member" -------------
-	var member MemberRef
-
-	err = runtime.BindStyledParameterWithOptions("simple", "member", r.PathValue("member"), &member, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params AddTeamMemberParams
-
-	headers := r.Header
-
-	// ------------- Optional header parameter "Idempotency-Key" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
-		var IdempotencyKey IdempotencyKey
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
-			return
-		}
-
-		params.IdempotencyKey = &IdempotencyKey
-
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AddTeamMember(w, r, team, member, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6041,15 +6279,15 @@ func (siw *ServerInterfaceWrapper) ListViews(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ------------- Optional query parameter "team" -------------
+	// ------------- Optional query parameter "project" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "team", r.URL.Query(), &params.Team, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "team"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "team", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
 		}
 		return
 	}
@@ -6505,32 +6743,29 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/members/{member}/skills/{skill}", wrapper.GrantSkill)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/members/{member}/manager", wrapper.ClearManager)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/members/{member}/manager", wrapper.SetManager)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/teams", wrapper.ListTeams)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/teams", wrapper.CreateTeam)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/teams/{team}", wrapper.GetTeam)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/teams/{team}", wrapper.UpdateTeam)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/teams/{team}/members/{member}", wrapper.RemoveTeamMember)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/teams/{team}/members/{member}", wrapper.AddTeamMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects", wrapper.ListProjects)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/projects", wrapper.CreateProject)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects/{project}", wrapper.GetProject)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/projects/{project}", wrapper.UpdateProject)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/projects/{project}/members/{member}", wrapper.RemoveProjectMember)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/projects/{project}/members/{member}", wrapper.AddProjectMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects/{project}/workflow", wrapper.GetWorkflow)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/projects/{project}/workflow", wrapper.SetWorkflow)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects/{project}/labels", wrapper.ListProjectLabels)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/projects/{project}/labels", wrapper.CreateProjectLabel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/labels", wrapper.ListLabels)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/labels", wrapper.CreateLabel)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/labels/{label}", wrapper.DeleteLabel)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/labels/{label}", wrapper.UpdateLabel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills", wrapper.ListSkills)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/skills", wrapper.CreateSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}", wrapper.GetSkill)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skills/{skill}/versions", wrapper.ListSkillVersions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/skill-proposals/{proposal}", wrapper.GetSkillProposal)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/statuses", wrapper.ListStatuses)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/statuses", wrapper.SetStatuses)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces", wrapper.ListWorkspaces)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/workspaces", wrapper.CreateWorkspace)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/workspaces/{workspace}", wrapper.RemoveWorkspace)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/workspaces/{workspace}", wrapper.UpdateWorkspace)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features", wrapper.ListFeatures)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features", wrapper.FileFeature)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features/{feature}", wrapper.GetFeature)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features/{feature}/rank", wrapper.RankFeature)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features/{feature}/ship", wrapper.ShipFeature)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features/{feature}/drop", wrapper.DropFeature)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features/{feature}/owner", wrapper.PassFeatureOwnership)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/features/{feature}/observations", wrapper.ListFeatureObservations)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/features/{feature}/evidence", wrapper.AttachFeatureEvidence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tasks", wrapper.ListTasks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks", wrapper.FileTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tasks/takeable", wrapper.ListTakeableTasks)
@@ -6539,12 +6774,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/claim", wrapper.ClaimTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/heartbeat", wrapper.Heartbeat)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/release", wrapper.ReleaseTask)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/handover", wrapper.HandoverTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/advance", wrapper.AdvanceTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/step", wrapper.MoveTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/complete", wrapper.CompleteTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/drop", wrapper.DropTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/take-back", wrapper.TakeBackTask)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/status", wrapper.SetTaskStatus)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/owner", wrapper.PassOwnership)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/rank", wrapper.RankTask)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tasks/{task}/labels", wrapper.SetTaskLabels)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/notes", wrapper.AddNote)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/tasks/{task}/observations", wrapper.ListTaskObservations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/observations", wrapper.Observe)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/tasks/{task}/blockers/{blocker}", wrapper.RemoveBlocker)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/tasks/{task}/blockers/{blocker}", wrapper.AddBlocker)

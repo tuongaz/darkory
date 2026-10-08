@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -42,14 +41,12 @@ func TestFilterParameter(t *testing.T) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "b"})).
 			want(t, http.StatusCreated)
-		bob, bobID := h.member("bob", client.Agent, "WEB", "build")
-		f := got(bob.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Checkout"})).
-			want(t, http.StatusCreated).JSON201
-		cart := got(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key,
-			Title: "Cart page: totals, then tax: 10% + fees", Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201
+		bob, bobID := h.member("bob", client.Agent, "WEB", "engineer")
+		f := h.file(bob, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout", Breakdown: ptrBool(true)})
+		cart := h.file(bob, client.FileTaskBody{Parent: &f.Task.Key, Title: "Cart page: totals, then tax: 10% + fees", Step: ptrStr("Build")})
 		got(bob.ClaimTaskWithResponse(ctx, cart.Task.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{ModelLabel: ptrStr("opus, fast: +1")})).
 			want(t, http.StatusOK)
 
@@ -69,7 +66,7 @@ func TestFilterParameter(t *testing.T) {
 		}{
 			{[]string{"model:is:" + component("opus, fast: +1")}, "WEB-3"},
 			{[]string{"holder:is:" + bobID, "q:contains:" + component("tax: 10% + f")}, "WEB-3"},
-			{[]string{"holder:is:none"}, "WEB-2"},
+			{[]string{"holder:is:none"}, "WEB-1 WEB-2"},
 			{[]string{"filed_at:before:" + component(later), "kind:is:breakdown"}, "WEB-2"},
 			{[]string{"filed_at:after:" + component(later)}, ""},
 			{[]string{"claim:is:session"}, ""},
@@ -84,14 +81,14 @@ func TestFilterParameter(t *testing.T) {
 		if ks := strings.Join(listed("claim:is:session"), " "); ks != "WEB-3" {
 			t.Errorf("in a session: %s", ks)
 		}
-		if ks := strings.Join(listed("claim:not:session"), " "); ks != "WEB-2" {
+		if ks := strings.Join(listed("claim:not:session"), " "); ks != "WEB-1 WEB-2" {
 			t.Errorf("in no session: %s", ks)
 		}
 		h.srv.AttachRunner(nil)
 
 		// By hand: two filter parameters, each token query-encoded once more.
 		res := h.getAs("/v1/tasks?filter=" + url.QueryEscape("q:contains:"+component("10%")) + "&filter=" +
-			url.QueryEscape("filed_at:lte:"+component(later)) + "&feature=WEB-1")
+			url.QueryEscape("filed_at:lte:"+component(later)) + "&parent=WEB-1")
 		var page gen.TaskList
 		decode(t, res, &page)
 		if res.StatusCode != http.StatusOK || len(page.Items) != 1 || page.Items[0].Key != "WEB-3" {
@@ -110,15 +107,6 @@ func TestFilterParameter(t *testing.T) {
 			if res.StatusCode != http.StatusBadRequest || body.Code != gen.ErrorCodeInvalid || !strings.Contains(body.Message, `filter "`) {
 				t.Errorf("%s: %d %+v", raw, res.StatusCode, body)
 			}
-		}
-		res = h.getAs("/v1/features?filter=" + url.QueryEscape("kind:is:work"))
-		assertError(t, res, http.StatusBadRequest, gen.ErrorCodeInvalid)
-
-		features := got(ada.ListFeaturesWithResponse(ctx, &client.ListFeaturesParams{Filter: &[]string{"state:is:open", "q:contains:check"}})).
-			want(t, http.StatusOK).JSON200.Items
-		if len(features) != 1 || features[0].Key != "WEB-1" {
-			b, _ := json.Marshal(features)
-			t.Fatalf("features: %s", b)
 		}
 	})
 }

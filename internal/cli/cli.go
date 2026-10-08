@@ -57,7 +57,7 @@ func OSEnv() Env {
 
 // command is one CLI command.
 type command struct {
-	// path is the command's words, such as "feature create".
+	// path is the command's words, such as "project create".
 	path string
 	// args is the usage after the path.
 	args  string
@@ -71,7 +71,7 @@ type command struct {
 var commands []command
 
 func init() {
-	commands = slices.Concat(workCommands, featureCommands, adminCommands, agentCommands)
+	commands = slices.Concat(workCommands, projectCommands, adminCommands, agentCommands)
 }
 
 // Usage lists every CLI command; cmd/darkory prints it after the server commands.
@@ -92,7 +92,7 @@ func Usage() string {
 		}
 	}
 	group("Work", workCommands)
-	group("Features", featureCommands)
+	group("Projects, Workflows and Labels", projectCommands)
 	group("Organisation, tokens and sign-in", adminCommands)
 	group("Agents, Workspaces and the Runner", agentCommands)
 	b.WriteString(`

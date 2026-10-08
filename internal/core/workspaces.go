@@ -13,9 +13,9 @@ import (
 	"github.com/tuongaz/darkory/internal/store"
 )
 
-// Workspaces are the places sessions work in, named on the Install (ADR 0013). A Team has a
-// default, and a Task names one or more; a Task filed naming none takes its Team's default, or
-// names none when the Team has none (decisions.md).
+// Workspaces are the places sessions work in, named on the Install (ADR 0013). A Project has a
+// default, and a Task names one or more; a Task filed naming none takes its Project's default, or
+// names none when the Project has none (decisions.md).
 
 var workspaceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
 
@@ -210,8 +210,8 @@ func (s *Service) UpdateWorkspace(ctx context.Context, c *auth.Caller, ref strin
 	return res.(Workspace), nil
 }
 
-// RemoveWorkspace removes a Workspace no Task names, open or ended (admin). A Team whose default
-// it was has none afterwards, recorded as team.changed.
+// RemoveWorkspace removes a Workspace no Task names, open or ended (admin). A Project whose
+// default it was has none afterwards, recorded as project.changed.
 func (s *Service) RemoveWorkspace(ctx context.Context, c *auth.Caller, ref string, idem Idem) error {
 	if err := mustAdmin(c); err != nil {
 		return err
@@ -235,14 +235,14 @@ func (s *Service) RemoveWorkspace(ctx context.Context, c *auth.Caller, ref strin
 		case n > 1:
 			return nil, refuse(CodeConflict, "%d Tasks name Workspace %s; the record keeps where their work was done", n, w.Name)
 		}
-		teams, err := collect(ctx, t, func(row interface{ Scan(...any) error }) (string, error) {
-			var team string
-			return team, row.Scan(&team)
-		}, `SELECT id FROM teams WHERE org_id = $1 AND default_workspace_id = $2 ORDER BY id`, c.OrgID, id)
+		projects, err := collect(ctx, t, func(row interface{ Scan(...any) error }) (string, error) {
+			var project string
+			return project, row.Scan(&project)
+		}, `SELECT id FROM projects WHERE org_id = $1 AND default_workspace_id = $2 ORDER BY id`, c.OrgID, id)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, `UPDATE teams SET default_workspace_id = NULL WHERE org_id = $1 AND default_workspace_id = $2`, c.OrgID, id); err != nil {
+		if _, err := t.Exec(ctx, `UPDATE projects SET default_workspace_id = NULL WHERE org_id = $1 AND default_workspace_id = $2`, c.OrgID, id); err != nil {
 			return nil, err
 		}
 		if _, err := t.Exec(ctx, `DELETE FROM workspaces WHERE org_id = $1 AND id = $2`, c.OrgID, id); err != nil {
@@ -251,8 +251,8 @@ func (s *Service) RemoveWorkspace(ctx context.Context, c *auth.Caller, ref strin
 		if err := t.recordByCaller("workspace.removed", id, map[string]any{"name": w.Name}); err != nil {
 			return nil, err
 		}
-		for _, team := range teams {
-			if err := t.recordByCaller("team.changed", team, map[string]any{"default_workspace_id": nil}); err != nil {
+		for _, project := range projects {
+			if err := t.recordByCaller("project.changed", project, map[string]any{"default_workspace_id": nil}); err != nil {
 				return nil, err
 			}
 		}
@@ -274,12 +274,12 @@ func resolveWorkspace(ctx context.Context, r store.Reader, orgID, ref string) (s
 	return resolve(ctx, r, "Workspace", `SELECT id FROM workspaces WHERE org_id = $1 AND (id = $2 OR lower(name) = lower($2))`, orgID, ref)
 }
 
-// taskWorkspaces resolves the Workspaces a Task to be filed in teamID names: refs when given, in
-// their order and each once, an empty list naming none; else the Team's default, or none.
-func taskWorkspaces(t *tx, teamID string, refs *[]string) ([]string, error) {
+// taskWorkspaces resolves the Workspaces a Task to be filed in projectID names: refs when given,
+// in their order and each once, an empty list naming none; else the Project's default, or none.
+func taskWorkspaces(t *tx, projectID string, refs *[]string) ([]string, error) {
 	if refs == nil {
 		var def sql.NullString
-		if err := t.QueryRow(t.ctx, `SELECT default_workspace_id FROM teams WHERE org_id = $1 AND id = $2`, t.caller.OrgID, teamID).Scan(&def); err != nil {
+		if err := t.QueryRow(t.ctx, `SELECT default_workspace_id FROM projects WHERE org_id = $1 AND id = $2`, t.caller.OrgID, projectID).Scan(&def); err != nil {
 			return nil, err
 		}
 		if !def.Valid {

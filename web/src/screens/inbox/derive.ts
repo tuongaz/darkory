@@ -1,95 +1,9 @@
-import type { Activity, Feature, Member, RunnerSessionState, Task, TaskDetail } from "@/api/client";
+import type { Activity, Member, RunnerSessionState, Skill, Task, TaskDetail } from "@/api/client";
 import { liveClaim } from "@/work";
 
-// The rules the four screens read, apart from rendering, so the tests can hold them to the mock.
+// The rules the four screens read, apart from rendering, so the tests can hold them to the plan.
 
-/** How many Takeable Tasks the Inbox shows; My work shows them all. */
-export const takeableCap = 3;
-
-/**
- * The Inbox's Takeable now: the takeable Tasks in `next` order, less those already shown under
- * Aimed at me (a Task aimed at me is also takeable by me), and at most `takeableCap` of them.
- */
-export function takeableNow(takeable: Task[], aimedAtMe: Task[]): { shown: Task[]; total: number } {
-  const aimed = new Set(aimedAtMe.map((t) => t.id));
-  const rest = takeable.filter((t) => !aimed.has(t.id));
-  return { shown: rest.slice(0, takeableCap), total: rest.length };
-}
-
-/** The open Tasks `task` blocks: the question's "blocks WEB-3". */
-export function blocksOf(task: Task, openTasks: Task[]): Task[] {
-  return openTasks.filter((t) => t.open_blockers?.some((b) => b.id === task.id));
-}
-
-export type OwnedFeature = {
-  feature: Feature;
-  /** Open Tasks of the Feature that are blocked. */
-  blocked: number;
-  /** The open Break down Task, while the Feature has one. */
-  breakdown?: Task;
-  /** The open Retrospective of a shipped or dropped Feature. */
-  retrospective?: Task;
-};
-
-/**
- * Features I own that still need something: every open one, and a shipped or dropped one while
- * its Retrospective is open. `features` is the owner's, in Team then Rank order.
- */
-export function featuresIOwn(features: Feature[], openTasks: Task[]): OwnedFeature[] {
-  const byFeature = new Map<string, Task[]>();
-  for (const t of openTasks) byFeature.set(t.feature_id, [...(byFeature.get(t.feature_id) ?? []), t]);
-  const out: OwnedFeature[] = [];
-  for (const feature of features) {
-    const tasks = byFeature.get(feature.id) ?? [];
-    if (feature.state === "open") {
-      out.push({
-        feature,
-        blocked: tasks.filter((t) => t.blocked).length,
-        breakdown: tasks.find((t) => t.kind === "breakdown"),
-      });
-      continue;
-    }
-    const retrospective = tasks.find((t) => t.kind === "retrospective");
-    if (retrospective) out.push({ feature, blocked: 0, retrospective });
-  }
-  return out;
-}
-
-/** The share of a Feature's Tasks in each part of its bar: done, held, open and not held, out of all of them. */
-export function featureBar(f: Feature): { done: number; held: number; waiting: number } {
-  const c = f.task_counts;
-  const total = c.open + c.done + c.dropped;
-  if (total === 0) return { done: 0, held: 0, waiting: 0 };
-  return { done: c.done / total, held: c.claimed / total, waiting: (c.open - c.claimed) / total };
-}
-
-/** The open Retrospective Tasks of Features in `teamIds`: where a proposal of mine may wait. */
-export function retrospectivesIn(openTasks: Task[], features: Map<string, Feature>, teamIds: Set<string>): Task[] {
-  return openTasks.filter((t) => t.kind === "retrospective" && teamIds.has(features.get(t.feature_id)?.team_id ?? ""));
-}
-
-/** My proposals: the Retrospectives carrying a pending Skill proposal `memberId` wrote. */
-export function myProposals(details: TaskDetail[], memberId: string): TaskDetail[] {
-  return details.filter((d) => d.proposal?.state === "pending" && d.proposal.author_id === memberId);
-}
-
-// ---------------------------------------------------------------- Agents
-
-/** The Claim kinds an agent's history is made of; the first starts a Claim, the rest end one. */
-export const claimKinds = [
-  "task.claimed",
-  "task.completed",
-  "task.handed_over",
-  "task.released",
-  "task.lapsed",
-  "task.taken_back",
-  "task.claim_ended",
-  "task.dropped",
-] as const satisfies Activity["kind"][];
-
-// The holder acts these ends; the others name the holder in the payload (no one, or someone else, acted).
-const endedByHolder = new Set<string>(["task.completed", "task.handed_over", "task.released"]);
-const endedForHolder = new Set<string>(["task.lapsed", "task.taken_back", "task.claim_ended", "task.dropped"]);
+const dayMs = 24 * 60 * 60 * 1000;
 
 function str(payload: Record<string, unknown>, key: string): string | undefined {
   const v = payload[key];
@@ -101,19 +15,130 @@ function num(payload: Record<string, unknown>, key: string): number | undefined 
   return typeof v === "number" ? v : undefined;
 }
 
+// ---------------------------------------------------------------- Inbox
+
+/** How many takeable Tasks the Inbox shows before "Show all". */
+export const takeableCap = 5;
+
+/**
+ * The Inbox's Takeable by you: the takeable Tasks in `next` order, less those already listed as
+ * aimed at you (a Task aimed at you is also takeable by you).
+ */
+export function takeableNow(takeable: Task[], aimedAtMe: Task[]): Task[] {
+  const aimed = new Set(aimedAtMe.map((t) => t.id));
+  return takeable.filter((t) => !aimed.has(t.id));
+}
+
+/** The open Tasks `task` blocks: the question's "blocks WEB-3". */
+export function blocksOf(task: Task, openTasks: Task[]): Task[] {
+  return openTasks.filter((t) => t.open_blockers?.some((b) => b.id === task.id));
+}
+
+/** Why a Task the signed-in Member owns waits on their decision. */
+export type Decision =
+  /** A Parent whose Subtasks have all ended: its Owner completes or drops it. */
+  | { kind: "complete"; task: Task; acceptance?: "done" | "dropped" }
+  /** A Retrospective carrying a proposal written against a Skill version no longer current. */
+  | { kind: "stale"; task: Task; skill: string; basedOn: number; current: number };
+
+/**
+ * The open Parents among `owned` whose every Subtask has ended and which wait for their Owner's
+ * Complete (Auto-complete off, or an Acceptance that did not end done). `details` (by Task id) say
+ * how the last Acceptance under each ended, where it had one.
+ */
+export function awaitingComplete(owned: Task[], details: Map<string, TaskDetail>): Decision[] {
+  return owned
+    .filter((t) => t.state === "open" && t.subtask_counts && t.subtask_counts.open === 0)
+    .map((task) => {
+      const subtasks = details.get(task.id)?.subtasks ?? [];
+      const last = subtasks.filter((s) => s.kind === "acceptance").at(-1);
+      const acceptance = last && last.state !== "open" ? last.state : undefined;
+      return { kind: "complete" as const, task, acceptance };
+    });
+}
+
+/**
+ * The pending proposals on the open Retrospectives `details` hold (the signed-in Member owns
+ * them) whose Skill has moved past the version they were written against: Skill review would
+ * refuse them `proposal_stale`, so their Owner decides what becomes of them.
+ */
+export function staleProposals(details: TaskDetail[], skills: Map<string, Pick<Skill, "name" | "current_version">>): Decision[] {
+  const out: Decision[] = [];
+  for (const d of details) {
+    if (d.task.state !== "open" || d.task.kind !== "retrospective") continue;
+    for (const p of d.proposals) {
+      const skill = skills.get(p.skill_id);
+      if (p.state === "pending" && skill && p.based_on_version < skill.current_version) {
+        out.push({ kind: "stale", task: d.task, skill: skill.name, basedOn: p.based_on_version, current: skill.current_version });
+      }
+    }
+  }
+  return out;
+}
+
+export type Lapse = { task: Task; at: string; holderId?: string };
+
+/**
+ * The Claims on `owned` Tasks that lapsed in the 24 hours before `now` and were not taken up
+ * again: the Task is open and nobody holds it. One row per Task, its latest lapse.
+ */
+export function lapsesOn(owned: Task[], entries: Activity[], now: number): Lapse[] {
+  const byId = new Map(owned.map((t) => [t.id, t]));
+  const out = new Map<string, Lapse>();
+  for (const e of [...entries].sort((a, b) => b.seq - a.seq)) {
+    if (e.kind !== "task.lapsed" || out.has(e.subject_id)) continue;
+    const task = byId.get(e.subject_id);
+    if (!task || task.state !== "open" || liveClaim(task, now)) continue;
+    if (Date.parse(e.at) <= now - dayMs) continue;
+    out.set(task.id, { task, at: e.at, holderId: str(e.payload, "holder_id") });
+  }
+  return [...out.values()];
+}
+
+/** A Parent's progress in words: "3 of 5 done", with the dropped ones when there are any. */
+export function progressText(counts: NonNullable<Task["subtask_counts"]>): string {
+  const total = counts.open + counts.done + counts.dropped;
+  return `${counts.done} of ${total} done${counts.dropped ? ` · ${counts.dropped} dropped` : ""}`;
+}
+
+/** The open Parents among `owned`, by Project then Rank: My work's What you own. */
+export function ownedParents(owned: Task[]): Task[] {
+  return owned
+    .filter((t) => t.state === "open" && t.subtask_counts && !t.parent_id)
+    .sort((a, b) => a.project_id.localeCompare(b.project_id) || (a.rank ?? 0) - (b.rank ?? 0));
+}
+
+// ---------------------------------------------------------------- Agents
+
+/** The Claim kinds an agent's history is made of; the first starts a Claim, the rest end one. */
+export const claimKinds = [
+  "task.claimed",
+  "task.completed",
+  "task.advanced",
+  "task.released",
+  "task.split",
+  "task.lapsed",
+  "task.taken_back",
+  "task.claim_ended",
+  "task.dropped",
+] as const satisfies Activity["kind"][];
+
+// The holder acts these ends; the others name the holder in the payload (no one, or someone else, acted).
+const endedByHolder = new Set<string>(["task.completed", "task.advanced", "task.released"]);
+const endedForHolder = new Set<string>(["task.lapsed", "task.taken_back", "task.claim_ended", "task.dropped", "task.split"]);
+
 /** The Member whose Claim a Claim entry starts or ends, or undefined for any other entry. */
 export function claimHolder(e: Activity): string | undefined {
-  if (e.kind === "task.claimed" || endedByHolder.has(e.kind)) return e.actor_id;
+  if (e.kind === "task.claimed") return e.actor_id;
+  if (endedByHolder.has(e.kind)) return str(e.payload, "claim_id") ? e.actor_id : undefined;
   if (endedForHolder.has(e.kind)) return str(e.payload, "holder_id");
   return undefined;
 }
 
-const dayMs = 24 * 60 * 60 * 1000;
-
 /** The lapses of `memberId`'s Claims in the 24 hours before `now`, newest first. */
 export function lapsesIn24h(entries: Activity[], memberId: string, now: number): Activity[] {
   return entries
-    .filter((e) => e.kind === "task.lapsed" && str(e.payload, "holder_id") === memberId && new Date(e.at).getTime() > now - dayMs)
+    .filter((e) => e.kind === "task.lapsed" && str(e.payload, "holder_id") === memberId && Date.parse(e.at) > now - dayMs)
     .sort((a, b) => b.seq - a.seq);
 }
 
@@ -121,6 +146,13 @@ export function lapsesIn24h(entries: Activity[], memberId: string, now: number):
 export function lastClaimEntry(entries: Activity[], memberId: string): Activity | undefined {
   let last: Activity | undefined;
   for (const e of entries) if (claimHolder(e) === memberId && (!last || e.seq > last.seq)) last = e;
+  return last;
+}
+
+/** The newest entry `memberId` acted in, or whose Claim it ended: the agent's last activity. */
+export function lastActivity(entries: Activity[], memberId: string): Activity | undefined {
+  let last: Activity | undefined;
+  for (const e of entries) if ((e.actor_id === memberId || claimHolder(e) === memberId) && (!last || e.seq > last.seq)) last = e;
   return last;
 }
 
@@ -136,13 +168,13 @@ export type AgentRow = {
 const stateBands: Partial<Record<RunnerSessionState, number>> = { stalled: -2, waiting: -1 };
 
 /**
- * The agent Members for the Agents table: those whose runner session is Stalled, then Waiting
- * (`stateOf` says, by Member id); then those holding a live Claim, the one whose Heartbeat is due
- * first at the top and Member-bound Claims after the timed ones; then the idle ones; deactivated
- * agents last. Names break ties.
+ * The agents for the Agents table: those whose runner session is Stalled, then Waiting (`stateOf`
+ * says, by Member id); then those holding a live Claim, the one whose Heartbeat is due first at
+ * the top and Member-bound Claims after the timed ones; then the idle ones; deactivated agents
+ * last. Names break ties.
  */
 export function agentRows(
-  members: Member[],
+  agents: Member[],
   openTasks: Task[],
   now: number,
   stateOf: (memberId: string) => RunnerSessionState | undefined = () => undefined,
@@ -152,8 +184,8 @@ export function agentRows(
     const c = liveClaim(t, now);
     if (c) held.set(c.holder_id, [...(held.get(c.holder_id) ?? []), t]);
   }
-  const expiry = (t: Task) => (t.claim?.expires_at ? new Date(t.claim.expires_at).getTime() : Infinity);
-  const rows = members
+  const expiry = (t: Task) => (t.claim?.expires_at ? Date.parse(t.claim.expires_at) : Infinity);
+  const rows = agents
     .filter((m) => m.kind === "agent")
     .map((agent): AgentRow => {
       const tasks = (held.get(agent.id) ?? []).sort((a, b) => expiry(a) - expiry(b));
@@ -166,9 +198,7 @@ export function agentRows(
     if (state && stateBands[state] !== undefined) return stateBands[state];
     return r.held.length === 0 ? 2 : r.deadline === undefined ? 1 : 0;
   };
-  return rows.sort(
-    (a, b) => band(a) - band(b) || (a.deadline ?? 0) - (b.deadline ?? 0) || a.agent.name.localeCompare(b.agent.name),
-  );
+  return rows.sort((a, b) => band(a) - band(b) || (a.deadline ?? 0) - (b.deadline ?? 0) || a.agent.name.localeCompare(b.agent.name));
 }
 
 export type ClaimRecord = {
@@ -190,7 +220,7 @@ export function claimsSince(entries: Activity[], memberId: string, since: number
     const claimId = str(e.payload, "claim_id");
     if (!claimId) continue;
     if (e.kind === "task.claimed") {
-      if (e.actor_id !== memberId || new Date(e.at).getTime() < since) continue;
+      if (e.actor_id !== memberId || Date.parse(e.at) < since) continue;
       records.set(claimId, {
         claimId,
         taskId: e.subject_id,
@@ -216,29 +246,43 @@ export function startOfDay(now: number): number {
 
 // ---------------------------------------------------------------- Activity
 
-export type ActivityFilter = { member?: string; kind?: string; team?: string };
+/** The Activity page's filters, by id; `parentOf` names a Task's Parent, for the Task filter. */
+export type ActivityFilter = { member?: string; kind?: string; task?: string; parentOf?: (taskId: string) => string | undefined };
 
-/** Where the Activity page finds a Task's Feature and a Feature's Team, for the Team filter. */
-export type Placement = { taskFeature: (taskId: string) => string | undefined; featureTeam: (featureId: string) => string | undefined };
+/** Where the Activity page places an entry: a Task's Project, by the Task's id. */
+export type Placement = { taskProject: (taskId: string) => string | undefined };
 
 /**
- * Whether an entry from the stream belongs on a filtered Activity page, by the rule /v1 applies to
- * `member`, `kind` and `team` (ids): the Member acted in it or held the Claim it ended; it is of
- * the kind; it is about a Feature of the Team or a Task of one.
+ * Whether an entry belongs on a Project's Activity, by the rule /v1 applies to `project`: the
+ * Project itself, its Workflow, its own Labels, or a Task of it.
  */
-export function matchesFilter(e: Activity, f: ActivityFilter, where: Placement): boolean {
+export function aboutProject(e: Activity, projectId: string, where: Placement): boolean {
+  switch (e.subject_type) {
+    case "project":
+    case "workflow":
+      return e.subject_id === projectId;
+    case "label":
+      return str(e.payload, "project_id") === projectId;
+    case "task":
+      return (where.taskProject(e.subject_id) ?? str(e.payload, "project_id")) === projectId;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Whether an entry passes the Activity page's filters (ids), by the rules /v1 applies to `member`,
+ * `kind` and `task`: the Member acted in it or held the Claim it ended; it is of the kind; it is
+ * about the Task or, when the Task is a Parent, one of its Subtasks.
+ */
+export function matchesFilter(e: Activity, f: ActivityFilter): boolean {
   if (f.kind && e.kind !== f.kind) return false;
   if (f.member && e.actor_id !== f.member && !(endedForHolder.has(e.kind) && str(e.payload, "holder_id") === f.member)) return false;
-  if (f.team) {
-    let feature: string | undefined;
-    if (e.subject_type === "feature") feature = e.subject_id;
-    else if (e.subject_type === "task") feature = where.taskFeature(e.subject_id) ?? str(e.payload, "feature_id");
-    if (!feature || where.featureTeam(feature) !== f.team) return false;
-  }
+  if (f.task && !(e.subject_type === "task" && (e.subject_id === f.task || f.parentOf?.(e.subject_id) === f.task))) return false;
   return true;
 }
 
-export type DayGroup = { key: string; label: string; entries: Activity[] };
+export type TimeGroup = { key: string; label: string; entries: Activity[] };
 
 const shortDay = new Intl.DateTimeFormat(undefined, { weekday: "short", day: "numeric", month: "short" });
 
@@ -252,8 +296,8 @@ export function dayLabel(at: Date, now: number): string {
 }
 
 /** Entries, newest first, in runs of one day each, labelled "Today", "Yesterday", "Mon 6 Oct". */
-export function groupByDay(entries: Activity[], now: number): DayGroup[] {
-  const groups: DayGroup[] = [];
+export function groupByDay(entries: Activity[], now: number): TimeGroup[] {
+  const groups: TimeGroup[] = [];
   for (const e of entries) {
     const at = new Date(e.at);
     const key = String(startOfDay(at.getTime()));
@@ -262,11 +306,6 @@ export function groupByDay(entries: Activity[], now: number): DayGroup[] {
     else groups.push({ key, label: dayLabel(at, now), entries: [e] });
   }
   return groups;
-}
-
-/** The kinds a sign-in leaves, kept out of the trail unless asked for: they are not work. */
-export function isSignIn(kind: string): boolean {
-  return kind.startsWith("login_link.");
 }
 
 /** How long something has waited: "< 1 min", "4 min", "3 h", "2 d". */
@@ -282,12 +321,6 @@ export function sinceText(ms: number): string {
 /** "1 Task", "3 Tasks": a number with its noun. */
 export function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
-}
-
-/** The Skill a Task needs now, or that its Claim was made under. */
-export function skillOf(task: Task, skills: Map<string, { name: string }>): string | undefined {
-  const id = task.claim?.skill_id ?? task.skill_id;
-  return id ? skills.get(id)?.name : undefined;
 }
 
 /** "70 B", "1.2 kB", "3.4 MB". */

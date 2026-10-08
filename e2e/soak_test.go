@@ -28,13 +28,15 @@ import (
 )
 
 // The soak: 40 agent Sessions of 4 Members with mixed Skills work 300 and more Tasks for a few
-// minutes through the generated client, while two humans file Features and Tasks and readers
-// follow the Activity stream. Agents take work by next and by claim, heartbeat, release, hand
-// over to another Skill, ask blocking questions, and sometimes go silent so their Claims lapse;
-// some writes are sent twice under one Idempotency-Key, one after the other or at once. Then the
-// record is checked: Claims on a Task never overlap; no Member held a Task under two Skills;
-// Activity has no gaps and every stream saw all of it in order; no 5xx and no busy database
-// anywhere; every Task's state agrees with its Claims; retries wrote nothing twice.
+// minutes through the generated client, while two humans file Tasks with Break down and their
+// Subtasks, complete the Parents whose Subtasks have ended, and readers follow the Activity
+// stream. Agents take work by next and by claim, heartbeat, release, advance to another Step,
+// complete, ask blocking questions, and sometimes go silent so their Claims lapse; some writes are
+// sent twice under one Idempotency-Key, one after the other or at once. Then the record is
+// checked: Claims on a Task never overlap; no Member held a Task under two Skills; a Task is at
+// exactly one Step of its own Project's Workflow or none, and none when it is a Parent or has
+// ended; Activity has no gaps and every stream saw all of it in order; no 5xx and no busy
+// database anywhere; every Task's state agrees with its Claims; retries wrote nothing twice.
 //
 // DARKORY_E2E_SOAK sets how long the agents work (default 2m), and DARKORY_E2E_SOAK_TASKS how
 // many Tasks the humans file (default 360), a quarter of them at once.
@@ -65,6 +67,42 @@ func soakTasks(t *testing.T) int {
 
 var soakSkills = []string{"s-a", "s-b", "s-c", "s-d"}
 
+// soakSteps are the work Steps of the soak's Workflow, each carrying the Skill of soakSkills at
+// its index.
+var soakSteps = []string{"A", "B", "C", "D"}
+
+// soakFlow is the soak's Workflow: Plan carrying breakdown and Retro carrying retro, each with one
+// way into Done; and the work Steps A to D, each with one way into Done, "done", and one to every
+// other work Step, "to-<step>", so a holder may complete a Task at any of them or advance it on.
+func soakFlow() string {
+	type step struct {
+		Name     string `json:"name"`
+		Skill    string `json:"skill"`
+		Position int    `json:"position"`
+	}
+	type connector struct {
+		From     string  `json:"from"`
+		To       *string `json:"to,omitempty"`
+		Name     string  `json:"name"`
+		Position int     `json:"position"`
+	}
+	steps := []step{{"Plan", "breakdown", 1}}
+	connectors := []connector{{From: "Plan", Name: "done", Position: 1}}
+	for i, name := range soakSteps {
+		steps = append(steps, step{name, soakSkills[i], i + 2})
+		connectors = append(connectors, connector{From: name, Name: "done", Position: 1})
+		for j, to := range soakSteps {
+			if to != name {
+				connectors = append(connectors, connector{From: name, To: ptr(to), Name: "to-" + strings.ToLower(to), Position: j + 2})
+			}
+		}
+	}
+	steps = append(steps, step{"Retro", "retro", len(soakSteps) + 2})
+	connectors = append(connectors, connector{From: "Retro", Name: "done", Position: 1})
+	b, _ := json.Marshal(map[string]any{"steps": steps, "connectors": connectors})
+	return string(b)
+}
+
 // expected are the refusals a busy record gives honest callers who race each other.
 var expected = []client.ErrorCode{client.ErrorCodeAlreadyClaimed, client.ErrorCodeNotTakeable, client.ErrorCodeNotHolder,
 	client.ErrorCodeEnded, client.ErrorCodeTasksOpen}
@@ -82,17 +120,21 @@ func soakDuration(t *testing.T) time.Duration {
 
 // soakRun holds what a soak measures and what it found wrong.
 type soakRun struct {
-	t        *testing.T
-	hc       *http.Client
-	mu       sync.Mutex
-	lat      map[string][]time.Duration
-	codes    map[string]int // op and refusal code
+	t     *testing.T
+	hc    *http.Client
+	mu    sync.Mutex
+	lat   map[string][]time.Duration
+	codes map[string]int // op and refusal code
+	// steps are each Project's Steps by id, read once the soak is over.
+	steps    map[string]map[string]bool
 	problems []string
 	requests atomic.Int64
 	writes   atomic.Int64
 	// What happened, by kind.
-	claims, completes, handovers, releases, questions, silent, lapsedUnplanned, retries atomic.Int64
-	titles                                                                              sync.Map // title → filer, to find duplicates
+	claims, completes, advances, releases, questions, silent, lapsedUnplanned, retries, parents atomic.Int64
+	titles                                                                                      sync.Map // title → filer, to find duplicates
+	// skillIDs are the soak's Skills' ids by name.
+	skillIDs sync.Map
 }
 
 func (r *soakRun) problem(format string, a ...any) {
@@ -212,17 +254,17 @@ func soak(t *testing.T, procs int) {
 		in.serve()
 	}
 	ada := in.ada
-	ada.ok("team", "create", "S1", "Soak one")
-	ada.ok("team", "create", "S2", "Soak two")
 	for _, s := range soakSkills {
 		ada.ok("skill", "create", s, "--kind", "generic", "--body", "Do "+s+".")
 	}
-	// Each agent has two work Skills, so every Skill is held in both Teams, and Handover always
-	// has someone to go to.
+	in.project("S1", "Soak one", soakFlow())
+	in.project("S2", "Soak two", soakFlow())
+	// Each agent has two work Skills, so every Skill is held in both Projects, and advancing to
+	// another Step always has someone to go to.
 	agents := []struct {
-		name   string
-		teams  []string
-		skills []string
+		name     string
+		projects []string
+		skills   []string
 	}{
 		{"m1", []string{"S1"}, []string{"s-a", "s-b", "breakdown", "retro"}},
 		{"m2", []string{"S1", "S2"}, []string{"s-b", "s-c", "breakdown", "retro"}},
@@ -236,25 +278,30 @@ func soak(t *testing.T, procs int) {
 		skills []string
 		c      *client.ClientWithResponses
 	}
+	for _, name := range soakSkills {
+		var sk client.SkillDetail
+		ada.json(&sk, "skill", "show", name)
+		r.skillIDs.Store(name, sk.Skill.ID)
+	}
 	var sessions []session
 	for _, a := range agents {
-		m := in.agent(a.name, a.teams, a.skills)
+		m := in.agent(a.name, a.projects, a.skills)
 		for i := range soakSessionsPerMember {
 			url := in.servers[i%len(in.servers)].url
 			sessions = append(sessions, session{a.name, a.skills, r.dial(url, m.token, m.prime())})
 		}
 	}
 	type filer struct {
-		name, team string
-		c          *client.ClientWithResponses
+		name, project string
+		c             *client.ClientWithResponses
 	}
 	var filers []filer
-	for i, f := range []struct{ name, team string }{{"f1", "S1"}, {"f2", "S2"}} {
+	for i, f := range []struct{ name, project string }{{"f1", "S1"}, {"f2", "S2"}} {
 		in.ada.ok("member", "create", f.name, "--kind", "human")
-		in.ada.ok("team", "add", f.team, f.name)
+		in.ada.ok("project", "add", f.project, f.name)
 		var tok client.IssuedToken
 		in.ada.json(&tok, "token", "issue", f.name, "--name", f.name)
-		filers = append(filers, filer{f.name, f.team, r.dial(in.servers[i%len(in.servers)].url, tok.Secret, uuid.NewString())})
+		filers = append(filers, filer{f.name, f.project, r.dial(in.servers[i%len(in.servers)].url, tok.Secret, uuid.NewString())})
 	}
 
 	// Readers follow the stream from the first entry, one per server.
@@ -275,7 +322,7 @@ func soak(t *testing.T, procs int) {
 	var filed atomic.Int64
 	for i, f := range filers {
 		wg.Go(func() {
-			r.file(ctx, rand.New(rand.NewPCG(uint64(i), 1)), f.name, f.team, f.c, duration, soakTasks(t)/len(filers), &filed)
+			r.file(ctx, rand.New(rand.NewPCG(uint64(i), 1)), f.name, f.project, f.c, duration, soakTasks(t)/len(filers), &filed)
 		})
 	}
 	for i, s := range sessions {
@@ -310,39 +357,43 @@ func soak(t *testing.T, procs int) {
 	}
 }
 
-// file is a human filing Features and Tasks for the length of the soak: a quarter of its share
-// at once, the rest spread out, shipping its Features whose Tasks have all ended.
-func (r *soakRun) file(ctx context.Context, rng *rand.Rand, name, team string, c *client.ClientWithResponses, duration time.Duration, share int, filed *atomic.Int64) {
+// file is a human filing Tasks for the length of the soak: a Task with Break down, then eight
+// Subtasks under it at Steps picked at random, then another; a quarter of its share at once, the
+// rest spread out, completing its Parents whose Subtasks have all ended.
+func (r *soakRun) file(ctx context.Context, rng *rand.Rand, name, project string, c *client.ClientWithResponses, duration time.Duration, share int, filed *atomic.Int64) {
 	share += 10
 	pace := (duration - 20*time.Second) / time.Duration(share)
-	var feature string
-	inFeature := 0
+	var parent string
+	var parents []string
+	inParent := 0
 	for n := 0; n < share && ctx.Err() == nil; n++ {
-		if feature == "" || inFeature == 8 {
-			title := fmt.Sprintf("%s feature %d", name, n)
-			res, _, ok := twice(ctx, r, rng, "file feature", func(k *string) (*client.FileFeatureResponse, error) {
-				return c.FileFeatureWithResponse(ctx, &client.FileFeatureParams{IdempotencyKey: k}, client.FileFeatureBody{Team: team, Title: title})
+		if parent == "" || inParent == 8 {
+			title := fmt.Sprintf("%s parent %d", name, n)
+			res, _, ok := twice(ctx, r, rng, "file parent", func(k *string) (*client.FileTaskResponse, error) {
+				return c.FileTaskWithResponse(ctx, &client.FileTaskParams{IdempotencyKey: k}, client.FileTaskBody{Project: &project, Title: title, Breakdown: ptr(true)})
 			}, http.StatusCreated)
 			if !ok {
 				continue
 			}
 			r.noteTitle(title, name)
-			feature, inFeature = res.JSON201.Feature.Key, 0
+			r.parents.Add(1)
+			parent, inParent = res.JSON201.Task.Key, 0
+			parents = append(parents, parent)
 		}
 		title := fmt.Sprintf("%s task %d", name, n)
-		skill := soakSkills[rng.IntN(len(soakSkills))]
+		step := soakSteps[rng.IntN(len(soakSteps))]
 		_, code, ok := twice(ctx, r, rng, "file task", func(k *string) (*client.FileTaskResponse, error) {
-			return c.FileTaskWithResponse(ctx, &client.FileTaskParams{IdempotencyKey: k}, client.FileTaskBody{Feature: &feature, Title: title, Skill: &skill})
+			return c.FileTaskWithResponse(ctx, &client.FileTaskParams{IdempotencyKey: k}, client.FileTaskBody{Parent: &parent, Title: title, Step: &step})
 		}, http.StatusCreated)
 		if ok {
 			r.noteTitle(title, name)
 			filed.Add(1)
-			inFeature++
+			inParent++
 		} else if code == client.ErrorCodeEnded {
-			feature = ""
+			parent = ""
 		}
 		if n%15 == 14 {
-			r.shipEnded(ctx, c, name)
+			parents = r.completeEnded(ctx, c, parents, &parent)
 		}
 		if n >= share/4 {
 			select {
@@ -351,7 +402,7 @@ func (r *soakRun) file(ctx context.Context, rng *rand.Rand, name, team string, c
 			}
 		}
 	}
-	r.shipEnded(ctx, c, name)
+	r.completeEnded(ctx, c, parents, &parent)
 }
 
 func (r *soakRun) noteTitle(title, by string) {
@@ -360,22 +411,36 @@ func (r *soakRun) noteTitle(title, by string) {
 	}
 }
 
-// shipEnded ships the filer's open Features whose Tasks have all ended.
-func (r *soakRun) shipEnded(ctx context.Context, c *client.ClientWithResponses, name string) {
-	open := client.FeatureStateOpen
-	res, _, ok := do(ctx, r, "list features", false, func() (*client.ListFeaturesResponse, error) {
-		return c.ListFeaturesWithResponse(ctx, &client.ListFeaturesParams{Owner: &name, State: &open, Limit: ptr(500)})
-	}, http.StatusOK)
-	if !ok {
-		return
-	}
-	for _, f := range res.JSON200.Items {
-		if f.TaskCounts.Open == 0 {
-			do(ctx, r, "ship", true, func() (*client.ShipFeatureResponse, error) {
-				return c.ShipFeatureWithResponse(ctx, f.Key, &client.ShipFeatureParams{})
-			}, http.StatusOK)
+// completeEnded completes the filer's open Parents whose Subtasks have all ended, and returns
+// those still open; current, the Parent the filer files under, is cleared when it ends.
+func (r *soakRun) completeEnded(ctx context.Context, c *client.ClientWithResponses, parents []string, current *string) []string {
+	var open []string
+	for _, key := range parents {
+		res, _, ok := do(ctx, r, "show parent", false, func() (*client.GetTaskResponse, error) {
+			return c.GetTaskWithResponse(ctx, key)
+		}, http.StatusOK)
+		if !ok {
+			open = append(open, key)
+			continue
+		}
+		t := res.JSON200.Task
+		if t.State != client.TaskStateOpen {
+			continue
+		}
+		if t.SubtaskCounts == nil || t.SubtaskCounts.Open > 0 {
+			open = append(open, key)
+			continue
+		}
+		if key == *current {
+			*current = ""
+		}
+		if _, _, ok := do(ctx, r, "complete parent", true, func() (*client.CompleteTaskResponse, error) {
+			return c.CompleteTaskWithResponse(ctx, key, &client.CompleteTaskParams{}, client.CompleteTaskBody{})
+		}, http.StatusOK); !ok {
+			open = append(open, key)
 		}
 	}
+	return open
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -460,7 +525,12 @@ func (r *soakRun) work(ctx context.Context, rng *rand.Rand, skills []string, c *
 			r.lapsedUnplanned.Add(1)
 		}
 	}
-	switch x := rng.Float64(); {
+	x := rng.Float64()
+	if t.Kind != client.Work {
+		// A Breakdown or a Retrospective has one way out, into Done.
+		x = 1
+	}
+	switch {
 	case x < 0.10:
 		_, code, ok := twice(ctx, r, rng, "release", func(k *string) (*client.ReleaseTaskResponse, error) {
 			return c.ReleaseTaskWithResponse(ctx, t.ID, &client.ReleaseTaskParams{IdempotencyKey: k}, client.ReleaseTaskBody{})
@@ -470,26 +540,30 @@ func (r *soakRun) work(ctx context.Context, rng *rand.Rand, skills []string, c *
 		}
 		note(code)
 	case x < 0.28:
+		// Advance to another work Step, mostly one whose Skill this Session lacks.
 		var next string
 		for {
-			next = soakSkills[rng.IntN(len(soakSkills))]
-			if t.SkillID == nil || !slices.Contains(skills, next) || rng.Float64() < 0.3 {
+			i := rng.IntN(len(soakSteps))
+			next = soakSteps[i]
+			if (t.SkillID == nil || !slices.Contains(skills, soakSkills[i]) || rng.Float64() < 0.3) && !r.atStep(t, next) {
 				break
 			}
 		}
-		_, code, ok := twice(ctx, r, rng, "handover", func(k *string) (*client.HandoverTaskResponse, error) {
-			return c.HandoverTaskWithResponse(ctx, t.ID, &client.HandoverTaskParams{IdempotencyKey: k}, client.HandoverTaskBody{Skill: next})
+		outcome := "to-" + strings.ToLower(next)
+		_, code, ok := twice(ctx, r, rng, "advance", func(k *string) (*client.AdvanceTaskResponse, error) {
+			return c.AdvanceTaskWithResponse(ctx, t.ID, &client.AdvanceTaskParams{IdempotencyKey: k}, client.AdvanceTaskBody{Outcome: &outcome})
 		}, http.StatusOK)
 		if ok {
-			r.handovers.Add(1)
+			r.advances.Add(1)
 		}
 		note(code)
 	case x < 0.36:
-		// A blocking question to some Skill, then release: the Task waits for the answer.
-		skill := soakSkills[rng.IntN(len(soakSkills))]
+		// A blocking question at some Step, beside the Task under its Parent, then release: the
+		// Task waits for the answer.
+		step := soakSteps[rng.IntN(len(soakSteps))]
 		title := "question " + uuid.NewString()
 		_, code, ok := twice(ctx, r, rng, "file question", func(k *string) (*client.FileTaskResponse, error) {
-			return c.FileTaskWithResponse(ctx, &client.FileTaskParams{IdempotencyKey: k}, client.FileTaskBody{Title: title, Skill: &skill, Blocks: &t.ID})
+			return c.FileTaskWithResponse(ctx, &client.FileTaskParams{IdempotencyKey: k}, client.FileTaskBody{Title: title, Step: &step, Blocks: &t.ID})
 		}, http.StatusCreated)
 		note(code)
 		if !ok {
@@ -513,6 +587,16 @@ func (r *soakRun) work(ctx context.Context, rng *rand.Rand, skills []string, c *
 		}
 		note(code)
 	}
+}
+
+// atStep says whether t, as claimed, is at the work Step named step.
+func (r *soakRun) atStep(t client.Task, step string) bool {
+	if t.SkillID == nil {
+		return false
+	}
+	i := slices.Index(soakSteps, step)
+	id, _ := r.skillIDs.Load(soakSkills[i])
+	return id == *t.SkillID
 }
 
 func sleep(ctx context.Context, d time.Duration) {
@@ -696,23 +780,36 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 				r.problem("%s: Member %s held it under %d Skills", tk.Key, holder, len(sk))
 			}
 		}
+		parent := d.Task.SubtaskCounts != nil
 		switch d.Task.State {
 		case client.TaskStateOpen:
 			if d.Task.Claim != nil || d.Task.EndedAt != nil {
 				r.problem("%s is open with Claim %+v, ended %v", tk.Key, d.Task.Claim, d.Task.EndedAt)
 			}
 		case client.TaskStateDone:
-			if d.Task.Claim != nil || d.Task.EndedAt == nil || len(cs) == 0 || cs[len(cs)-1].HowEnded == nil || *cs[len(cs)-1].HowEnded != client.ClaimEndCompleted {
-				r.problem("%s is done with Claim %+v, ended %v, and Claims %+v", tk.Key, d.Task.Claim, d.Task.EndedAt, cs)
+			switch {
+			case d.Task.Claim != nil || d.Task.EndedAt == nil:
+				r.problem("%s is done with Claim %+v, ended %v", tk.Key, d.Task.Claim, d.Task.EndedAt)
+			case parent && len(cs) > 0:
+				r.problem("%s is a Parent with Claims %+v", tk.Key, cs)
+			case !parent && (len(cs) == 0 || cs[len(cs)-1].HowEnded == nil || *cs[len(cs)-1].HowEnded != client.ClaimEndCompleted):
+				r.problem("%s is done with Claims %+v", tk.Key, cs)
 			}
 		default:
 			r.problem("%s is %s; nothing in the soak drops a Task", tk.Key, d.Task.State)
 		}
-		// Nobody in the soak names a Status, so Darkory's own moves decide it, and a Task never
-		// claimed is in Todo, where filing put it.
-		if want := restingKind(*d, cs, client.StatusKindTodo); d.Status.ID != d.Task.StatusID || d.Status.Kind != want {
-			r.problem("%s is %s, its last Claim ended %v, and it is in %s (%s, Task says %s); want a %s Status",
-				tk.Key, d.Task.State, lastEnd(cs), d.Status.Name, d.Status.Kind, d.Task.StatusID, want)
+		// A Task is at exactly one Step of its own Project's Workflow, or none: none once it has
+		// ended or when it is a Parent (or aimed at a Member, which nothing in the soak is).
+		steps := r.stepsOf(ctx, c, d.Task.ProjectID)
+		switch {
+		case d.Task.State != client.TaskStateOpen || parent || d.Task.AimedAtID != nil:
+			if d.Task.StepID != nil || d.Step != nil {
+				r.problem("%s (%s, Parent %v) is at Step %v", tk.Key, d.Task.State, parent, *d.Task.StepID)
+			}
+		case d.Task.StepID == nil || d.Step == nil || d.Step.ID != *d.Task.StepID:
+			r.problem("%s is open and at no Step: %v, %+v", tk.Key, d.Task.StepID, d.Step)
+		case !steps[*d.Task.StepID]:
+			r.problem("%s is at Step %s, not one of its Project's", tk.Key, *d.Task.StepID)
 		}
 		if tk.Kind == client.Work && !strings.HasPrefix(tk.Title, "question ") {
 			if _, ok := r.titles.Load(tk.Title); !ok {
@@ -726,30 +823,26 @@ func (r *soakRun) checkTasks(ctx context.Context, c *client.ClientWithResponses)
 	return tasks
 }
 
-// restingKind is the kind of Status a Task nobody holds must be in when no Member has named one
-// since its last Claim, cs oldest first (ADR 0012): done or dropped as it ended; in progress when
-// its last Claim was handed over, which leaves the Status; todo when that Claim ended any other
-// way; and unclaimed, the kind it was filed into or moved to, when it has had no Claim.
-func restingKind(d client.TaskDetail, cs []client.Claim, unclaimed client.StatusKind) client.StatusKind {
-	switch {
-	case d.Task.State == client.TaskStateDone:
-		return client.StatusKindDone
-	case d.Task.State == client.TaskStateDropped:
-		return client.StatusKindDropped
-	case len(cs) == 0:
-		return unclaimed
-	case cs[len(cs)-1].HowEnded != nil && *cs[len(cs)-1].HowEnded == client.ClaimEndHandedOver:
-		return client.StatusKindInProgress
+// stepsOf is the set of a Project's Steps, by id.
+func (r *soakRun) stepsOf(ctx context.Context, c *client.ClientWithResponses, project string) map[string]bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.steps == nil {
+		r.steps = map[string]map[string]bool{}
 	}
-	return client.StatusKindTodo
-}
-
-// lastEnd says how the last of cs ended, or "none" without Claims.
-func lastEnd(cs []client.Claim) string {
-	if len(cs) == 0 || cs[len(cs)-1].HowEnded == nil {
-		return "none"
+	if s, ok := r.steps[project]; ok {
+		return s
 	}
-	return string(*cs[len(cs)-1].HowEnded)
+	res, err := c.GetWorkflowWithResponse(ctx, project)
+	if err != nil || res.JSON200 == nil {
+		r.t.Fatalf("reading the Workflow of %s: %v %s", project, err, bodyOf(res))
+	}
+	s := map[string]bool{}
+	for _, st := range res.JSON200.Steps {
+		s[st.ID] = true
+	}
+	r.steps[project] = s
+	return s
 }
 
 // checkTables reads the database, read-only, for what the API does not show: every Claim row
@@ -772,6 +865,12 @@ func (r *soakRun) checkTables(in *install, last int64) {
 		{"Claims not ended", `SELECT COUNT(*) FROM claims WHERE ended_at IS NULL`, 0},
 		{"Tasks pointing at a Claim", `SELECT COUNT(*) FROM tasks WHERE claim_id IS NOT NULL OR claim_holder_id IS NOT NULL`, 0},
 		{"Claims ended before they started", `SELECT COUNT(*) FROM claims WHERE ended_at < started_at`, 0},
+		{"ended Tasks at a Step", `SELECT COUNT(*) FROM tasks WHERE state <> 'open' AND step_id IS NOT NULL`, 0},
+		{"Parents at a Step", `SELECT COUNT(*) FROM tasks p WHERE p.step_id IS NOT NULL AND EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = p.id)`, 0},
+		{"Tasks at another Project's Step", `SELECT COUNT(*) FROM tasks t JOIN steps s ON s.id = t.step_id WHERE s.project_id <> t.project_id`, 0},
+		{"open Tasks at no Step", `SELECT COUNT(*) FROM tasks t WHERE t.state = 'open' AND t.step_id IS NULL AND t.aimed_at_id IS NULL
+AND NOT EXISTS (SELECT 1 FROM tasks c WHERE c.parent_id = t.id)`, 0},
+		{"Subtasks of Subtasks", `SELECT COUNT(*) FROM tasks c JOIN tasks p ON p.id = c.parent_id WHERE p.parent_id IS NOT NULL`, 0},
 		{"Activity entries", `SELECT COUNT(*) FROM activity`, last},
 		{"the counter", `SELECT MAX(seq) FROM organisations`, last},
 		{"claims without their task.claimed", `SELECT (SELECT COUNT(*) FROM claims) - (SELECT COUNT(*) FROM activity WHERE kind = 'task.claimed')`, 0},
@@ -802,9 +901,10 @@ func (r *soakRun) report(t *testing.T, procs int, elapsed time.Duration, filed i
 		engine(), procs, elapsed.Round(time.Second), 4*soakSessionsPerMember, tasks, filed)
 	t.Logf("  %d requests, %.0f/s; %d writes, %.0f/s", r.requests.Load(), float64(r.requests.Load())/elapsed.Seconds(),
 		r.writes.Load(), float64(r.writes.Load())/elapsed.Seconds())
-	t.Logf("  claims %d, completes %d, handovers %d, releases %d, questions %d, gone silent %d, lapsed unplanned %d, retried writes %d",
-		r.claims.Load(), r.completes.Load(), r.handovers.Load(), r.releases.Load(), r.questions.Load(), r.silent.Load(), r.lapsedUnplanned.Load(), r.retries.Load())
-	for _, op := range []string{"claim", "next", "heartbeat", "complete", "handover", "file task"} {
+	t.Logf("  claims %d, completes %d, advances %d, releases %d, questions %d, Parents %d, gone silent %d, lapsed unplanned %d, retried writes %d",
+		r.claims.Load(), r.completes.Load(), r.advances.Load(), r.releases.Load(), r.questions.Load(), r.parents.Load(), r.silent.Load(),
+		r.lapsedUnplanned.Load(), r.retries.Load())
+	for _, op := range []string{"claim", "next", "heartbeat", "complete", "advance", "file task", "complete parent"} {
 		p50, n := pct(op, 0.50)
 		p99, _ := pct(op, 0.99)
 		t.Logf("  %-10s n=%-6d p50 %-8s p99 %s", op, n, p50.Round(10*time.Microsecond), p99.Round(10*time.Microsecond))

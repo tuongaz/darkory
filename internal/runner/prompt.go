@@ -9,13 +9,14 @@ import (
 )
 
 // Prompt is what a session's prompt file says (ADR 0013): the Skill's text, the Task and its
-// Feature, the record so far, where to work, and the rules for working and for ending. Every
+// Parent, the record so far, where to work, and the rules for working and for ending. Every
 // field is resolved before the prompt is built, so building it is pure.
 type Prompt struct {
 	// Agent is the agent Member's name, and Manager the Member its questions are aimed at.
 	Agent, Manager string
 	Task           PromptTask
-	Feature        PromptFeature
+	// Parent is the Task's Parent; nil when it has none.
+	Parent *PromptParent
 	// Skills are the texts of the Skill the Task needs: the company version first, then the
 	// generic Skill it builds on.
 	Skills   []PromptSkill
@@ -30,15 +31,23 @@ type Prompt struct {
 
 // PromptTask is the Task a session works.
 type PromptTask struct {
-	Key, Title, Description, Status, Skill, Kind string
+	// Step is the name of the Step the Task is at; empty when it is at none (aimed at a Member).
+	Key, Title, Description, Step, Skill, Kind string
 	// Review says Skill is review, or a company Skill built on it.
 	Review bool
+	// Outcomes are the Connectors out of the Task's Step, in order: the ways its holder ends it.
+	Outcomes []PromptOutcome
 }
 
-// PromptFeature is the Task's Feature.
-type PromptFeature struct {
+// PromptOutcome is one way out of a Task's Step: Name, into Done when Done.
+type PromptOutcome struct {
+	Name string
+	Done bool
+}
+
+// PromptParent is the Task's Parent.
+type PromptParent struct {
 	Key, Title, Description, Owner string
-	Quick                          bool
 }
 
 // PromptSkill is one Skill's current text.
@@ -63,13 +72,13 @@ type PromptEvidence struct {
 }
 
 // Nudge is what the runner types into a session whose turn ended while it still holds the Task.
-const Nudge = "You stopped without ending the Task: complete it, hand it over, or file a question."
+const Nudge = "You stopped without ending the Task: advance it, complete it, or file a question."
 
 // BuildPrompt writes the prompt file's text.
 func BuildPrompt(p Prompt) string {
 	var b strings.Builder
 	w := func(format string, args ...any) { fmt.Fprintf(&b, format, args...) }
-	t, f := p.Task, p.Feature
+	t, parent := p.Task, p.Parent
 	w("# %s: %s\n\n", t.Key, line(t.Title))
 	w("You are %s, an agent Member of this Organisation, in a session the Darkory runner started to work Task %s. "+
 		"The darkory MCP server is connected as you, in this session's Darkory Session, and the darkory CLI on your PATH "+
@@ -87,7 +96,12 @@ func BuildPrompt(p Prompt) string {
 	}
 
 	w("## The Task\n\n")
-	w("- Key: %s\n- Title: %s\n- Status: %s\n", t.Key, line(t.Title), line(t.Status))
+	w("- Key: %s\n- Title: %s\n", t.Key, line(t.Title))
+	if t.Step != "" {
+		w("- Step: %s\n", line(t.Step))
+	} else {
+		w("- Step: none; it is aimed at you by name\n")
+	}
 	if t.Skill != "" {
 		w("- Needs the Skill: %s\n", line(t.Skill))
 	}
@@ -96,14 +110,30 @@ func BuildPrompt(p Prompt) string {
 	}
 	w("\n%s\n\n", block(t.Description, "(no description)"))
 
-	w("## Its Feature\n\n")
-	w("- Key: %s\n- Title: %s\n- Owner: %s\n", f.Key, line(f.Title), line(f.Owner))
-	if f.Quick {
-		w("- Quick: yes. It has this one Task and no feature branch; your branch merges into the default branch when the Task is done, after its review.\n")
-	} else {
-		w("- Quick: no. Its Tasks' branches merge into feature/%s when they are done, after their review, and Ship merges that into the default branch.\n", f.Key)
+	if t.Kind == "acceptance" && parent != nil {
+		w("This is %s's Acceptance: every other Subtask of it has ended, and you confirm the whole, against what the Parent "+
+			"asks below, before it is called done. ", parent.Key)
+		if len(p.Checkouts) > 0 {
+			w("Your checkout starts from %s's branch with every Subtask's work merged into it.", parent.Key)
+		}
+		w("\n\n")
 	}
-	w("\n%s\n\n", block(f.Description, "(no description)"))
+
+	w("## Its Parent\n\n")
+	if parent == nil {
+		w("None: the Task stands alone.")
+		if len(p.Checkouts) > 0 {
+			w(" Its branch merges into the default branch when it is done.")
+		}
+		w("\n\n")
+	} else {
+		w("- Key: %s\n- Title: %s\n- Owner: %s\n", parent.Key, line(parent.Title), line(parent.Owner))
+		if len(p.Checkouts) > 0 {
+			w("- Branch: %s. Each of its Subtasks works on a branch from it and merges back into it when it is done; it merges "+
+				"into the default branch when its Owner completes the Parent.\n", ParentBranch(parent.Key))
+		}
+		w("\n%s\n\n", block(parent.Description, "(no description)"))
+	}
 
 	w("## Notes so far\n\n")
 	if len(p.Notes) == 0 {
@@ -161,33 +191,38 @@ func BuildPrompt(p Prompt) string {
 	}
 	for _, c := range p.Checkouts {
 		if c.Workspace.Mode == ModePullRequest {
-			step("%s is merged through pull requests: before you hand over to review, push your branch (`git push -u origin %s`) "+
+			step("%s is merged through pull requests: before you advance the Task, push your branch (`git push -u origin %s`) "+
 				"and open a pull request into %s whose title starts with %s (`gh pr create --base %s --title \"%s: …\"`). "+
-				"The pull request's merge completes the review.", line(c.Workspace.Name), c.Branch, c.Base, t.Key, c.Base, t.Key)
+				"Its merge on GitHub lands your work, and completes the Task while it is at a review Step.",
+				line(c.Workspace.Name), c.Branch, c.Base, t.Key, c.Base, t.Key)
 		}
 	}
 	step("Write a short Note at each milestone (`darkory note %s <text>`), so whoever works the Task next has your context.", t.Key)
 	step("Attach the log of your tests as Evidence (`darkory attach %s <file>`).", t.Key)
 	stuck := "   - when you are stuck or unsure, `darkory file --blocks %[1]s --aim %[2]s --title <your question>`, then stop: " +
 		"the runner releases the Task, and it comes back once the question is answered."
-	switch {
-	case t.Skill != "" && !t.Review && (t.Kind == "" || t.Kind == "work"):
-		// A build Task: its builder never completes it, so its branch is merged after a review.
+	if len(t.Outcomes) == 0 {
 		step("End the Task yourself, in one of these ways, and then stop:\n"+
-			"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done. "+
-			"Never `darkory complete` this Task: it needs the Skill %[3]s, and whoever builds a Task hands it over to review; "+
-			"its reviewer completes it, and that merges its branch;\n"+stuck, t.Key, line(p.Manager), line(t.Skill))
-	case t.Review:
-		step("End the Task yourself, in one of these ways, and then stop:\n"+
-			"   - `darkory complete %[1]s --note <what you checked>` when the work passes your review: your Complete merges its branch;\n"+
-			"   - `darkory handover %[1]s --skill <the Skill that built it> --note <what to fix>` when it needs more work;\n"+stuck,
-			t.Key, line(p.Manager))
-	default:
-		step("End the Task yourself, in one of these ways, and then stop:\n"+
-			"   - `darkory complete %[1]s --note <what you did>` when it is done and no further Skill is needed;\n"+
-			"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done and it needs review; "+
-			"a reviewer who wants more work hands it back to the Skill that built it with a Note saying what to fix;\n"+stuck,
-			t.Key, line(p.Manager))
+			"   - `darkory complete %[1]s --note <what you did>` when it is done;\n"+stuck, t.Key, line(p.Manager))
+	} else {
+		var outs []string
+		var done []string
+		for _, o := range t.Outcomes {
+			if o.Done {
+				outs = append(outs, fmt.Sprintf("`%s` (into Done)", line(o.Name)))
+				done = append(done, o.Name)
+			} else {
+				outs = append(outs, fmt.Sprintf("`%s`", line(o.Name)))
+			}
+		}
+		ways := "   - `darkory advance %[1]s <outcome> --note <what you did, or what to fix>` when your part is done, where the " +
+			"outcome is one of %[3]s: it goes on to the next Step for whoever has its Skill, and into Done completes it, " +
+			"which merges its branch. Choose the outcome your work earned; never skip a review;\n"
+		if len(done) == 1 {
+			ways += "   - `darkory complete %[1]s --note <what you did>` is the same as advancing along `%[4]s`, the one way into Done;\n"
+		}
+		step("End the Task yourself, in one of these ways, and then stop:\n"+ways+stuck,
+			t.Key, line(p.Manager), strings.Join(outs, ", "), line(strings.Join(done, "")))
 	}
 	step("Do not run `next`, `claim`, `heartbeat`, `release` or `session close`, and do not work any other Task: the runner does that.")
 	w("\nIf you stop without ending the Task, the runner says so (%q) twice, and then releases the Task with a Note.\n", Nudge)

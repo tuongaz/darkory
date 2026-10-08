@@ -42,19 +42,18 @@ func TestEvidenceThroughTheAPIInS3(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res, err := ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"}); err != nil || res.StatusCode() != http.StatusCreated {
-		t.Fatalf("create team: %v", err)
+	members := []string{"ada"}
+	if res, err := ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web", Members: &members}); err != nil || res.StatusCode() != http.StatusCreated {
+		t.Fatalf("create project: %v", err)
 	}
-	if res, err := ada.AddTeamMemberWithResponse(ctx, "WEB", "ada", &client.AddTeamMemberParams{}); err != nil || res.StatusCode() != http.StatusNoContent {
-		t.Fatalf("join team: %v", err)
-	}
-	filed, err := ada.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Sign-up"})
+	project := "WEB"
+	filed, err := ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: &project, Title: "Sign-up"})
 	if err != nil || filed.JSON201 == nil {
-		t.Fatalf("file feature: %v", err)
+		t.Fatalf("file task: %v", err)
 	}
 	png := bytes.Repeat([]byte("screenshot "), 1000)
-	att, err := ada.AttachFeatureEvidenceWithBodyWithResponse(ctx, filed.JSON201.Feature.Key,
-		&client.AttachFeatureEvidenceParams{Filename: "shot.png"}, "image/png", bytes.NewReader(png))
+	att, err := ada.AttachTaskEvidenceWithBodyWithResponse(ctx, filed.JSON201.Task.Key,
+		&client.AttachTaskEvidenceParams{Filename: "shot.png"}, "image/png", bytes.NewReader(png))
 	if err != nil || att.JSON201 == nil {
 		t.Fatalf("attach: %v %s", err, att.Body)
 	}

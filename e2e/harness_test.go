@@ -154,7 +154,8 @@ type serveProc struct {
 }
 
 // newInstall runs darkory init --no-agents on a fresh database and starts one server: the
-// Organisation and ada, without the roster init seeds by default.
+// Organisation, ada and Project MAIN holding her, without the agents and Workspace init seeds by
+// default.
 func newInstall(t *testing.T) *install {
 	t.Helper()
 	return newInstallWith(t, "--no-agents")
@@ -381,14 +382,30 @@ func (m *member) on(p *serveProc) *member {
 	return &s
 }
 
-// agent creates an agent Member through ada's CLI: in teams, granted skills, with a token issued
+// buildFlow is a Workflow of one Step, Build, carrying the Skill build, with one way out, "pass",
+// into Done.
+const buildFlow = `{"steps": [{"name": "Build", "skill": "build", "position": 1}], "connectors": [{"from": "Build", "name": "pass", "position": 1}]}`
+
+// project creates a Project through ada's CLI, with ada in it, on the Workflow flow: a body as
+// darkory workflow set reads it, or "" for the default Workflow.
+func (in *install) project(key, name, flow string) {
+	in.t.Helper()
+	if flow == "" {
+		in.ada.ok("project", "create", key, name, "--member", "ada")
+		return
+	}
+	in.ada.ok("project", "create", key, name, "--member", "ada", "--workflow", "empty")
+	in.ada.ok("workflow", "set", key, "--file", writeFile(in.t, filepath.Join(in.dir, key+"-workflow.json"), flow))
+}
+
+// agent creates an agent Member through ada's CLI: in projects, granted skills, with a token issued
 // with tokenArgs (such as --timeout 5s), in a Session darkory prime chose.
-func (in *install) agent(name string, teams, skills []string, tokenArgs ...string) *member {
+func (in *install) agent(name string, projects, skills []string, tokenArgs ...string) *member {
 	in.t.Helper()
 	var mem client.Member
 	in.ada.json(&mem, "member", "create", name, "--kind", "agent")
-	for _, tm := range teams {
-		in.ada.ok("team", "add", tm, name)
+	for _, p := range projects {
+		in.ada.ok("project", "add", p, name)
 	}
 	for _, s := range skills {
 		in.ada.ok("grant", name, s)

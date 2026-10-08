@@ -30,7 +30,9 @@ type call struct {
 	// warned is set once the --token warning has been printed.
 	warned bool
 
-	members, skills, teams, statuses, workspaces map[string]string
+	members, skills, projects, workspaces, taskKeys map[string]string
+	// steps and labels are each Project's Step and Label names by id, by the Project's id.
+	steps, labels map[string]map[string]string
 }
 
 // args parses the command's flags, which may come before, between or after its arguments (a
@@ -284,7 +286,10 @@ func (c *call) member(id string) string {
 }
 
 // skill returns a Skill's name for human output, or the id when it cannot be found.
-func (c *call) skill(id string) string {
+func (c *call) skill(id string) string { return one(c.skillName(id)) }
+
+// skillName returns a Skill's name as written, or the id when it cannot be found.
+func (c *call) skillName(id string) string {
 	if c.skills == nil {
 		c.skills = map[string]string{}
 		res, err := c.conn.ListSkillsWithResponse(c.ctx, &client.ListSkillsParams{})
@@ -295,26 +300,88 @@ func (c *call) skill(id string) string {
 		}
 	}
 	if n, ok := c.skills[id]; ok {
+		return n
+	}
+	return id
+}
+
+// project returns a Project's key for human output, or the id when it cannot be found.
+func (c *call) project(id string) string {
+	if c.projects == nil {
+		c.projects = map[string]string{}
+		res, err := c.conn.ListProjectsWithResponse(c.ctx)
+		if check(res, err, http.StatusOK) == nil {
+			for _, p := range res.JSON200.Items {
+				c.projects[p.ID] = p.Key
+			}
+		}
+	}
+	if n, ok := c.projects[id]; ok {
 		return one(n)
 	}
 	return one(id)
 }
 
-// team returns a Team's key for human output, or the id when it cannot be found.
-func (c *call) team(id string) string {
-	if c.teams == nil {
-		c.teams = map[string]string{}
-		res, err := c.conn.ListTeamsWithResponse(c.ctx)
+// step returns the name of a Step of a Project's Workflow for human output, or the id when it
+// cannot be found. Step names are the Project's own, so they are read per Project.
+func (c *call) step(projectID, id string) string {
+	if c.steps == nil {
+		c.steps = map[string]map[string]string{}
+	}
+	names, ok := c.steps[projectID]
+	if !ok {
+		names = map[string]string{}
+		res, err := c.conn.GetWorkflowWithResponse(c.ctx, projectID)
 		if check(res, err, http.StatusOK) == nil {
-			for _, t := range res.JSON200.Items {
-				c.teams[t.ID] = t.Key
+			for _, s := range res.JSON200.Steps {
+				names[s.ID] = s.Name
 			}
 		}
+		c.steps[projectID] = names
 	}
-	if n, ok := c.teams[id]; ok {
+	if n, ok := names[id]; ok {
 		return one(n)
 	}
 	return one(id)
+}
+
+// label returns the name of a Label a Task of a Project may carry, the Project's own or the
+// Organisation's, for human output; the id when it cannot be found.
+func (c *call) label(projectID, id string) string {
+	if c.labels == nil {
+		c.labels = map[string]map[string]string{}
+	}
+	names, ok := c.labels[projectID]
+	if !ok {
+		names = map[string]string{}
+		if ls, _, err := c.labelsOf(projectID); err == nil {
+			for _, l := range ls {
+				names[l.ID] = l.Name
+			}
+		}
+		c.labels[projectID] = names
+	}
+	if n, ok := names[id]; ok {
+		return one(n)
+	}
+	return one(id)
+}
+
+// taskKey returns a Task's display key for human output, or the id when it cannot be found.
+func (c *call) taskKey(id string) string {
+	if c.taskKeys == nil {
+		c.taskKeys = map[string]string{}
+	}
+	if k, ok := c.taskKeys[id]; ok {
+		return one(k)
+	}
+	k := id
+	res, err := c.conn.GetTaskWithResponse(c.ctx, id)
+	if check(res, err, http.StatusOK) == nil {
+		k = res.JSON200.Task.Key
+	}
+	c.taskKeys[id] = k
+	return one(k)
 }
 
 // me returns the caller's Member id.

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/core"
@@ -74,8 +75,9 @@ func TestActivityPagesBackwards(t *testing.T) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		for _, k := range []string{"AA", "BB", "CC", "DD", "EE"} {
-			got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: k, Name: k})).want(t, http.StatusCreated)
+			got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: k, Name: k})).want(t, http.StatusCreated)
 		}
+		// Each Project records its creation and its first Workflow.
 		all := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{})).want(t, http.StatusOK).JSON200
 		n := len(all.Items)
 		latest := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{Before: ptr64(1 << 53), Limit: ptrInt(3)})).want(t, http.StatusOK).JSON200
@@ -83,7 +85,7 @@ func TestActivityPagesBackwards(t *testing.T) {
 			t.Fatalf("latest page %+v", latest)
 		}
 		for _, a := range latest.Items {
-			if a.Kind != client.ActivityKindTeamCreated || a.SubjectType != client.SubjectTypeTeam {
+			if (a.Kind != "project.created" || a.SubjectType != "project") && (a.Kind != "workflow.changed" || a.SubjectType != "workflow") {
 				t.Fatalf("entry %+v", a)
 			}
 		}
@@ -107,20 +109,20 @@ func TestActivityStreamStartsFromNow(t *testing.T) {
 		before := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{})).want(t, http.StatusOK).JSON200.LastSeq
 		stream := h.openStream(t, "")
 		defer stream.close()
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		if ids := stream.events(t, 1); ids[0] != before+1 {
 			t.Fatalf("the stream began with %v, want %d", ids, before+1)
 		}
 	})
 }
 
-// member makes a Member in team with skills and a token, and returns its client.
-func (h *harness) member(name string, kind client.MemberKind, team string, skills ...string) (*client.ClientWithResponses, string) {
+// member makes a Member in project with skills and a token, and returns its client.
+func (h *harness) member(name string, kind client.MemberKind, project string, skills ...string) (*client.ClientWithResponses, string) {
 	t := h.t
 	ctx := t.Context()
 	m := got(h.admin.CreateMemberWithResponse(ctx, &client.CreateMemberParams{}, client.CreateMemberBody{Name: name, Kind: kind})).want(t, http.StatusCreated)
-	if team != "" {
-		got(h.admin.AddTeamMemberWithResponse(ctx, team, name, &client.AddTeamMemberParams{})).want(t, http.StatusNoContent)
+	if project != "" {
+		got(h.admin.AddProjectMemberWithResponse(ctx, project, name, &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
 	}
 	for _, s := range skills {
 		got(h.admin.GrantSkillWithResponse(ctx, name, s, &client.GrantSkillParams{})).want(t, http.StatusNoContent)
@@ -157,8 +159,8 @@ func attach(t *testing.T, c *client.ClientWithResponses, task, filename, content
 }
 
 // Evidence goes to the store before its record; only the holder attaches to a held Task, and the
-// owner or the Team to a Feature. A file over the limit, a path for a name or a refused record
-// leaves no file behind. Downloads are attachments that are never sniffed.
+// Owner or a Member of its Project to one nobody holds. A file over the limit, a path for a name
+// or a refused record leaves no file behind. Downloads are attachments that are never sniffed.
 func TestEvidence(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		dir := filepath.Join(t.TempDir(), "evidence")
@@ -168,14 +170,12 @@ func TestEvidence(t *testing.T) {
 		}
 		h := newHarnessWith(t, st, Options{Blobs: disk, MaxEvidenceSize: 1024})
 		ctx := t.Context()
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "OPS", Name: "Ops"})).want(t, http.StatusCreated)
-		got(h.admin.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "b"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "OPS", Name: "Ops"})).want(t, http.StatusCreated)
 		lead, _ := h.member("lead", client.Agent, "WEB")
-		builder, builderID := h.member("builder", client.Agent, "WEB", "build")
+		builder, builderID := h.member("builder", client.Agent, "WEB", "engineer")
 		outsider, _ := h.member("outsider", client.Agent, "OPS")
-		feature := got(lead.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Reports"})).want(t, http.StatusCreated).JSON201
-		task := got(lead.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &feature.Feature.Key, Title: "Build", Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201.Task
+		task := h.file(lead, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Build", Step: ptrStr("Build")}).Task
 		got(builder.ClaimTaskWithResponse(ctx, task.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{})).want(t, http.StatusOK)
 
 		for _, c := range []*client.ClientWithResponses{lead, outsider} {
@@ -191,7 +191,7 @@ func TestEvidence(t *testing.T) {
 		sum := sha256.Sum256(report)
 		ev := first.JSON201
 		if ev.Sha256 != hex.EncodeToString(sum[:]) || ev.Size != int64(len(report)) || ev.AttachedBy != builderID ||
-			ev.TaskID == nil || *ev.TaskID != task.ID || ev.FeatureID != feature.Feature.ID || ev.Filename != "report.txt" {
+			ev.TaskID != task.ID || ev.Filename != "report.txt" {
 			t.Fatalf("evidence %+v", ev)
 		}
 		// A retry with its key gets the first reply; the key on another file is refused. Neither
@@ -246,27 +246,16 @@ func TestEvidence(t *testing.T) {
 			t.Fatalf("record %+v", meta)
 		}
 
-		// A Feature takes Evidence from its owner or Team, not from another Team.
-		png := []byte("\x89PNG\r\n\x1a\nnot really")
-		fres, err := outsider.AttachFeatureEvidenceWithBodyWithResponse(ctx, feature.Feature.Key, &client.AttachFeatureEvidenceParams{Filename: "shot.png"}, "image/png", bytes.NewReader(png))
-		if err != nil || fres.StatusCode() != http.StatusForbidden {
-			t.Fatalf("outsider on the Feature: %v %d %s", err, fres.StatusCode(), fres.Body)
-		}
-		fres, err = builder.AttachFeatureEvidenceWithBodyWithResponse(ctx, feature.Feature.Key, &client.AttachFeatureEvidenceParams{Filename: "shot.png"}, "image/png", bytes.NewReader(png))
-		if err != nil || fres.StatusCode() != http.StatusCreated || fres.JSON201.TaskID != nil {
-			t.Fatalf("Team Member on the Feature: %v %d %s", err, fres.StatusCode(), fres.Body)
-		}
-		fd := got(lead.GetFeatureWithResponse(ctx, feature.Feature.Key)).want(t, http.StatusOK).JSON200
 		td := got(lead.GetTaskWithResponse(ctx, task.Key)).want(t, http.StatusOK).JSON200
-		if len(fd.Evidence) != 1 || len(td.Evidence) != 2 {
-			t.Fatalf("Feature Evidence %d, Task Evidence %d", len(fd.Evidence), len(td.Evidence))
+		if len(td.Evidence) != 2 {
+			t.Fatalf("Task Evidence %d", len(td.Evidence))
 		}
-		// Once nobody holds the Task, its Team attaches to it.
-		got(builder.CompleteTaskWithResponse(ctx, task.Key, &client.CompleteTaskParams{}, client.CompleteTaskBody{})).want(t, http.StatusOK)
+		// Once nobody holds the Task, its Project attaches to it.
+		got(builder.ReleaseTaskWithResponse(ctx, task.Key, &client.ReleaseTaskParams{}, client.ReleaseTaskBody{})).want(t, http.StatusOK)
 		if res := attach(t, lead, task.Key, "after.txt", "text/plain", []byte("late"), nil); res.StatusCode() != http.StatusCreated {
-			t.Fatalf("Team Member on a Task nobody holds: %d %s", res.StatusCode(), res.Body)
+			t.Fatalf("a Member of its Project on a Task nobody holds: %d %s", res.StatusCode(), res.Body)
 		}
-		if files := blobFiles(t, dir); len(files) != 4 {
+		if files := blobFiles(t, dir); len(files) != 3 {
 			t.Fatalf("files %v", files)
 		}
 		for _, f := range blobFiles(t, dir) {
@@ -280,3 +269,47 @@ func TestEvidence(t *testing.T) {
 func ptrStr(s string) *string { return &s }
 
 func ptr64(n int64) *int64 { return &n }
+
+// task keeps the entries about one Task, and for a Parent its Subtasks' too, together with the
+// other filters.
+func TestActivityOfATask(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		members := []string{"ada"}
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web", Members: &members})).
+			want(t, http.StatusCreated)
+		web := "WEB"
+		parent := h.file(h.admin, client.FileTaskBody{Project: &web, Title: "Search", Breakdown: ptrBool(true)})
+		other := h.file(h.admin, client.FileTaskBody{Project: &web, Title: "Elsewhere"})
+		sub := h.file(h.admin, client.FileTaskBody{Parent: &parent.Task.Key, Title: "Index"})
+		got(h.admin.AddNoteWithResponse(ctx, sub.Task.Key, &client.AddNoteParams{}, client.AddNoteBody{Body: "started"})).want(t, http.StatusCreated)
+		got(h.admin.AddNoteWithResponse(ctx, other.Task.Key, &client.AddNoteParams{}, client.AddNoteBody{Body: "elsewhere"})).want(t, http.StatusCreated)
+
+		subjects := func(p client.ListActivityParams) map[string][]string {
+			t.Helper()
+			out := map[string][]string{}
+			for _, a := range got(h.admin.ListActivityWithResponse(ctx, &p)).want(t, http.StatusOK).JSON200.Items {
+				out[a.SubjectID] = append(out[a.SubjectID], string(a.Kind))
+			}
+			return out
+		}
+		// The Parent's: its own entries, its Breakdown's and its Subtask's; nothing of the other Task.
+		byParent := subjects(client.ListActivityParams{Task: &parent.Task.Key})
+		if len(byParent[parent.Task.ID]) == 0 || len(byParent[parent.Subtasks[0].ID]) == 0 || len(byParent[sub.Task.ID]) != 2 ||
+			len(byParent[other.Task.ID]) != 0 || len(byParent) != 3 {
+			t.Fatalf("a Parent's Activity: %v", byParent)
+		}
+		// A Subtask's, by id: its own alone; with kind, only the Note.
+		if bySub := subjects(client.ListActivityParams{Task: &sub.Task.ID}); len(bySub) != 1 || len(bySub[sub.Task.ID]) != 2 {
+			t.Fatalf("a Subtask's Activity: %v", bySub)
+		}
+		kinds := []client.ActivityKind{client.ActivityKindTaskNoteAdded}
+		if notes := subjects(client.ListActivityParams{Task: &parent.Task.Key, Kind: &kinds, Project: &web}); len(notes) != 1 ||
+			len(notes[sub.Task.ID]) != 1 || notes[sub.Task.ID][0] != "task.note_added" {
+			t.Fatalf("a Parent's Notes: %v", notes)
+		}
+		missing := "WEB-99"
+		got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{Task: &missing})).want(t, http.StatusNotFound)
+	})
+}

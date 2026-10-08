@@ -13,23 +13,17 @@ import (
 
 var adminCommands = []command{
 	{path: "health", short: "check that the Install is up, and its version (needs no token)", run: cmdHealth},
-	{path: "me", short: "show who you are: your Member, Teams, Skills and Session", run: cmdMe},
+	{path: "me", short: "show who you are: your Member, Projects, Skills and Session", run: cmdMe},
 	{path: "member create", args: "<name> --kind human|agent [--email e] [--admin]", short: "create a Member (admin)", run: cmdMemberCreate},
-	{path: "member list", args: "[--team t] [--kind k]", short: "list Members", run: cmdMemberList},
-	{path: "member show", args: "<member>", short: "show a Member with their Teams, Skills and reports", run: cmdMemberShow},
+	{path: "member list", args: "[--project p] [--kind k]", short: "list Members", run: cmdMemberList},
+	{path: "member show", args: "<member>", short: "show a Member with their Projects, Skills and reports", run: cmdMemberShow},
 	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false]", short: "change a Member (admin)", run: cmdMemberUpdate},
 	{path: "member deactivate", args: "<member>", short: "revoke a Member's tokens, close their Sessions, end their Claims, refuse them from now on (admin)", run: cmdMemberDeactivate},
 	{path: "member reactivate", args: "<member>", short: "let a deactivated Member sign in and be issued tokens again (admin)", run: cmdMemberReactivate},
-	{path: "team create", args: "<KEY> <name>", short: "create a Team (admin)", run: cmdTeamCreate},
-	{path: "team list", short: "list Teams", run: cmdTeamList},
-	{path: "team show", args: "<team>", short: "show a Team and its Members", run: cmdTeamShow},
-	{path: "team add", args: "<team> <member>", short: "add a Member to a Team (admin)", run: cmdTeamAdd},
-	{path: "team remove", args: "<team> <member>", short: "remove a Member from a Team (admin)", run: cmdTeamRemove},
 	{path: "skill create", args: "<name> --kind generic|company [--base skill] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
 	{path: "skill list", args: "[--kind k]", short: "list Skills", run: cmdSkillList},
 	{path: "skill show", args: "<skill>", short: "show a Skill and its current version's text", run: cmdSkillShow},
 	{path: "skill versions", args: "<skill>", short: "list a Skill's published versions", run: cmdSkillVersions},
-	{path: "workflow set", args: "--file path|-", short: "replace the Organisation's Statuses with a list, as workflow --json prints it (admin)", run: cmdWorkflowSet},
 	{path: "grant", args: "<member> <skill>", short: "grant a Skill to a Member (admin)", run: cmdGrant},
 	{path: "ungrant", args: "<member> <skill>", short: "take a Skill away from a Member (admin)", run: cmdUngrant},
 	{path: "report-to", args: "<member> <manager> | <member> --none", short: "set or clear a Member's Reporting line (admin)", run: cmdReportTo},
@@ -57,7 +51,7 @@ func cmdMe(c *call) error {
 	return c.show(res.Body, func(w io.Writer) {
 		me := res.JSON200
 		fmt.Fprintf(w, "%s (%s%s) in %s\n", me.Member.Name, me.Member.Kind, map[bool]string{true: ", admin"}[me.Member.Admin], me.Organisation.Name)
-		fmt.Fprintf(w, "  Teams    %s\n", names(me.Teams, func(t client.Team) string { return t.Key }))
+		fmt.Fprintf(w, "  Projects %s\n", names(me.Projects, func(p client.Project) string { return p.Key }))
 		fmt.Fprintf(w, "  Skills   %s\n", names(me.Skills, func(s client.Skill) string { return s.Name }))
 		session := me.Session.ID
 		if conn.Settings.OneOff {
@@ -101,7 +95,7 @@ func cmdMemberCreate(c *call) error {
 }
 
 func cmdMemberList(c *call) error {
-	team := c.fs.String("team", "", "only Members of this Team")
+	project := c.fs.String("project", "", "only Members of this Project")
 	kind := c.fs.String("kind", "", "only human or agent Members")
 	if _, err := c.args(0, 0); err != nil {
 		return err
@@ -110,7 +104,7 @@ func cmdMemberList(c *call) error {
 	if err != nil {
 		return err
 	}
-	params := &client.ListMembersParams{Team: opt(*team)}
+	params := &client.ListMembersParams{Project: opt(*project)}
 	if *kind != "" {
 		params.Kind = ptr(client.MemberKind(*kind))
 	}
@@ -141,7 +135,7 @@ func cmdMemberShow(c *call) error {
 	return c.show(res.Body, func(w io.Writer) {
 		d := res.JSON200
 		c.printMemberLine(w, d.Member)
-		fmt.Fprintf(w, "  Teams    %s\n", names(d.Teams, func(t client.Team) string { return t.Key }))
+		fmt.Fprintf(w, "  Projects %s\n", names(d.Projects, func(p client.Project) string { return p.Key }))
 		fmt.Fprintf(w, "  Skills   %s\n", names(d.Skills, func(s client.Skill) string { return s.Name }))
 		fmt.Fprintf(w, "  Reports  %s\n", names(d.Reports, func(m client.Member) string { return m.Name }))
 	})
@@ -201,95 +195,6 @@ func cmdMemberReactivate(c *call) error {
 		return err
 	}
 	return c.show(res.Body, func(w io.Writer) { c.printMemberLine(w, *res.JSON200) })
-}
-
-func cmdTeamCreate(c *call) error {
-	args, err := c.args(2, 2)
-	if err != nil {
-		return err
-	}
-	conn, err := c.dial(oneOff)
-	if err != nil {
-		return err
-	}
-	res, err := conn.CreateTeamWithResponse(c.ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: args[0], Name: args[1]})
-	if err := check(res, err, http.StatusCreated); err != nil {
-		return err
-	}
-	return c.show(res.Body, func(w io.Writer) { c.printTeamLine(w, *res.JSON201) })
-}
-
-func cmdTeamList(c *call) error {
-	if _, err := c.args(0, 0); err != nil {
-		return err
-	}
-	conn, err := c.dial(oneOff)
-	if err != nil {
-		return err
-	}
-	res, err := conn.ListTeamsWithResponse(c.ctx)
-	if err := check(res, err, http.StatusOK); err != nil {
-		return err
-	}
-	return c.show(res.Body, func(w io.Writer) {
-		for _, t := range res.JSON200.Items {
-			c.printTeamLine(w, t)
-		}
-	})
-}
-
-func cmdTeamShow(c *call) error {
-	args, err := c.args(1, 1)
-	if err != nil {
-		return err
-	}
-	conn, err := c.dial(oneOff)
-	if err != nil {
-		return err
-	}
-	res, err := conn.GetTeamWithResponse(c.ctx, args[0])
-	if err := check(res, err, http.StatusOK); err != nil {
-		return err
-	}
-	return c.show(res.Body, func(w io.Writer) {
-		c.printTeamLine(w, res.JSON200.Team)
-		for _, m := range res.JSON200.Members {
-			fmt.Fprint(w, "  ")
-			c.printMemberLine(w, m)
-		}
-	})
-}
-
-func cmdTeamAdd(c *call) error {
-	args, err := c.args(2, 2)
-	if err != nil {
-		return err
-	}
-	conn, err := c.dial(oneOff)
-	if err != nil {
-		return err
-	}
-	res, err := conn.AddTeamMemberWithResponse(c.ctx, args[0], args[1], &client.AddTeamMemberParams{})
-	if err := check(res, err, http.StatusNoContent); err != nil {
-		return err
-	}
-	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s is in %s.\n", args[1], args[0]) })
-}
-
-func cmdTeamRemove(c *call) error {
-	args, err := c.args(2, 2)
-	if err != nil {
-		return err
-	}
-	conn, err := c.dial(oneOff)
-	if err != nil {
-		return err
-	}
-	res, err := conn.RemoveTeamMemberWithResponse(c.ctx, args[0], args[1], &client.RemoveTeamMemberParams{})
-	if err := check(res, err, http.StatusNoContent); err != nil {
-		return err
-	}
-	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "%s is no longer in %s.\n", args[1], args[0]) })
 }
 
 func cmdSkillCreate(c *call) error {

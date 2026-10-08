@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-// A Workspace in pull_request mode lands through GitHub: Ship opens the Feature branch's pull
-// request, and a merged pull request carrying a Task's key completes its review (D14). The runner
+// A Workspace in pull_request mode lands through GitHub: a Parent's Complete opens its branch's
+// pull request, and a merged pull request carrying a Task's key completes its review (D14). The runner
 // talks to GitHub through the gh CLI, behind GitHub so tests stand in for it.
 
 // PullRequest is a pull request as gh lists it.
@@ -64,13 +64,13 @@ func (g ghCLI) MergedPRs(ctx context.Context, repo string) ([]PullRequest, error
 	return prs, nil
 }
 
-var keyPattern = regexp.MustCompile(`^([A-Z][A-Z0-9]*-[0-9]+)(?:[/:\s]|$)`)
+var keyPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*-[0-9]+)(?:[-/:\s]|$)`)
 
-// KeyOf is the Task key a branch or pull request title starts with, as WEB-12/cart-page or
-// "WEB-12: Cart page"; empty when it carries none.
+// KeyOf is the Task key a branch or pull request title starts with, in upper case, as
+// web-12-cart-page, web-12 (a Parent's branch) or "WEB-12: Cart page"; empty when it carries none.
 func KeyOf(s string) string {
 	if m := keyPattern.FindStringSubmatch(s); m != nil {
-		return m[1]
+		return strings.ToUpper(m[1])
 	}
 	return ""
 }

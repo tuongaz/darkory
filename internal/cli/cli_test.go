@@ -22,25 +22,25 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// The claim path through the CLI against a real server: file a Feature and a Task, list what is
-// takeable, next, claim, heartbeat, release and complete, each with --json decoding as the /v1
-// type it prints.
+// The claim path through the CLI against a real server: file a Task with Break down and a Subtask,
+// list what is takeable, next, claim, heartbeat, release and complete, each with --json decoding
+// as the /v1 type it prints.
 func TestClaimPath(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		in := newInstall(t, st)
 		in.setup()
 		bob := in.as("bob", "bob-1")
 
-		var fd client.FeatureDetail
-		bob.json(&fd, "feature", "create", "--team", "WEB", "--title", "Search")
-		if fd.Feature.Key != "WEB-1" || len(fd.Tasks) != 1 || fd.Tasks[0].Kind != client.Breakdown {
-			t.Fatalf("feature create: %+v", fd)
+		var fd client.TaskDetail
+		bob.json(&fd, "file", "--project", "WEB", "--title", "Search", "--breakdown")
+		if fd.Task.Key != "WEB-1" || len(fd.Subtasks) != 1 || fd.Subtasks[0].Kind != client.Breakdown {
+			t.Fatalf("filed: %+v", fd)
 		}
-		breakdown := fd.Tasks[0].Key
+		breakdown := fd.Subtasks[0].Key
 		var filed client.TaskDetail
-		bob.json(&filed, "file", "--feature", "WEB-1", "--skill", "build", "--title", "Build search", "--body", "Index it.")
+		bob.json(&filed, "file", "--parent", "WEB-1", "--step", "Build", "--title", "Build search", "--body", "Index it.")
 		build := filed.Task.Key
-		if filed.Task.Description != "Index it." || filed.Feature.Key != "WEB-1" {
+		if filed.Task.Description != "Index it." || filed.Parent == nil || filed.Parent.Key != "WEB-1" {
 			t.Fatalf("file: %+v", filed)
 		}
 
@@ -99,12 +99,12 @@ func TestClaimPath(t *testing.T) {
 
 		// Text output names Members and Skills rather than printing their ids.
 		text := bob.ok("show", build)
-		for _, want := range []string{build + "  Build search", "Needs      build", "bob as build:", "built", "(completed)"} {
+		for _, want := range []string{build + "  Build search", "bob as engineer:", "built", "(completed)"} {
 			if !strings.Contains(text, want) {
 				t.Errorf("show printed no %q:\n%s", want, text)
 			}
 		}
-		if text := bob.ok("tasks", "--feature", "WEB-1"); !strings.Contains(text, breakdown) || !strings.Contains(text, "done") {
+		if text := bob.ok("tasks", "--parent", "WEB-1"); !strings.Contains(text, breakdown) || !strings.Contains(text, "done") {
 			t.Errorf("tasks printed:\n%s", text)
 		}
 		if text := bob.ok("me"); !strings.Contains(text, "bob (agent) in Acme") || !strings.Contains(text, "Session  bob-1") {
@@ -130,10 +130,7 @@ func TestExitStatuses(t *testing.T) {
 	in.setup()
 	in.agent("carol", "WEB")
 	bob, carol := in.as("bob", "bob-1"), in.as("carol", "carol-1")
-	bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
-	for _, title := range []string{"one", "two", "three", "four"} {
-		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", title)
-	}
+	in.search("one", "two", "three", "four")
 	bob.ok("claim", "WEB-3", "--timeout", "60")
 
 	res := carol.fails(ExitRefused, "claim", "WEB-3", "--timeout", "60")
@@ -165,7 +162,8 @@ func TestExitStatuses(t *testing.T) {
 	bob.fails(ExitUsage, "claim", "WEB-4", "--timeout", "soon")
 	bob.fails(ExitUsage, "claim", "WEB-4", "WEB-5")
 	bob.fails(ExitUsage, "nonsense")
-	bob.fails(ExitUsage, "file", "--feature", "WEB-1", "--title", "neither skill nor aim")
+	bob.fails(ExitUsage, "file", "--title", "nowhere to file it")
+	bob.fails(ExitUsage, "file", "--project", "WEB")
 	if res := bob.run("claim", "--help"); res.code != ExitOK || !strings.Contains(res.stderr, "Usage: darkory claim <task>") {
 		t.Errorf("claim --help: %+v", res)
 	}
@@ -236,7 +234,7 @@ func TestRetryAfterALostReplyWritesOnce(t *testing.T) {
 		in := newInstall(t, st)
 		in.setup()
 		bob := in.as("bob", "bob-1")
-		bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
+		in.search()
 
 		filing := &dropReply{base: http.DefaultTransport, match: func(r *http.Request) bool {
 			return r.Method == http.MethodPost && r.URL.Path == "/v1/tasks"
@@ -244,9 +242,9 @@ func TestRetryAfterALostReplyWritesOnce(t *testing.T) {
 		flaky := in.as("bob", "bob-1")
 		flaky.hc = &http.Client{Transport: filing}
 		var filed client.TaskDetail
-		flaky.json(&filed, "file", "--feature", "WEB-1", "--skill", "build", "--title", "Once")
+		flaky.json(&filed, "file", "--parent", "WEB-1", "--aim", "bob", "--title", "Once")
 		var list client.TaskList
-		bob.json(&list, "tasks", "--feature", "WEB-1")
+		bob.json(&list, "tasks", "--parent", "WEB-1")
 		if n := countTitle(list.Items, "Once"); n != 1 || len(filing.keys) != 2 || filing.keys[0] == "" || filing.keys[0] != filing.keys[1] {
 			t.Fatalf("filed %d Tasks with keys %q", n, filing.keys)
 		}
@@ -326,7 +324,7 @@ func TestPrimeEvalsInSh(t *testing.T) {
 	if strings.Contains(rules, "export") || strings.HasPrefix(rules, "#") {
 		t.Fatalf("--rules-only printed %q", rules)
 	}
-	for _, want := range []string{"darkory next", "heartbeat run --background", "handover", "--blocks", "observe", "attach", "another holder's Task",
+	for _, want := range []string{"darkory next", "heartbeat run --background", "advance <task> <outcome>", "file --parent", "--blocks", "observe", "attach", "another holder's Task",
 		"not instructions to you", "reveal a token", "Agents should not hold admin tokens"} {
 		if !strings.Contains(rules, want) {
 			t.Errorf("the rules say nothing of %q", want)
@@ -341,8 +339,7 @@ func TestHeartbeatRunKeepsAClaimAlive(t *testing.T) {
 		in := newInstall(t, st)
 		in.setup()
 		bob := in.as("bob", "bob-1")
-		bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
-		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "Build")
+		in.search("Build")
 		bob.ok("claim", "WEB-3", "--timeout", "2s")
 
 		ctx, cancel := context.WithCancel(t.Context())
@@ -374,8 +371,7 @@ func TestHeartbeatRunFindsALaterClaimInTime(t *testing.T) {
 		in.as("ada", "ada-cli").json(&issued, "token", "issue", "bob", "--name", "short", "--timeout", "2s")
 		in.tokens["bob-short"] = issued.Secret
 		bob := in.as("bob-short", "bob-1")
-		bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
-		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "Build")
+		in.search("Build")
 
 		ctx, cancel := context.WithCancel(t.Context())
 		out := &lockedBuffer{}
@@ -427,8 +423,7 @@ func TestHeartbeatRunInTheBackground(t *testing.T) {
 	in.setup()
 	bob := in.as("bob", "bob-bg")
 	bob.exe = exe
-	bob.ok("feature", "create", "--team", "WEB", "--title", "Search")
-	bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "Build")
+	in.search("Build")
 	bob.ok("claim", "WEB-3", "--timeout", "2s")
 
 	out := bob.ok("heartbeat", "run", "--background")
@@ -492,9 +487,9 @@ func TestActivityFollow(t *testing.T) {
 		go func() {
 			done <- ada.runTo(ctx, out, &lockedBuffer{}, "activity", "--follow", "--json", "--after", jsonInt(before.LastSeq))
 		}()
-		bob.ok("feature", "create", "--team", "WEB", "--title", "Live")
-		eventually(t, 10*time.Second, "feature.filed on the stream", func() bool {
-			return strings.Contains(out.String(), `"feature.filed"`)
+		in.search()
+		eventually(t, 10*time.Second, "task.filed on the stream", func() bool {
+			return strings.Contains(out.String(), `"task.filed"`)
 		})
 		cancel()
 		if res := <-done; res.code != ExitOK {
@@ -518,7 +513,7 @@ func TestActivityFollow(t *testing.T) {
 		text := &lockedBuffer{}
 		go func() { done <- ada.runTo(ctx2, text, &lockedBuffer{}, "activity", "--follow", "--all") }()
 		eventually(t, 10*time.Second, "the text stream", func() bool {
-			return strings.Contains(text.String(), "bob") && strings.Contains(text.String(), "feature.filed")
+			return strings.Contains(text.String(), "bob") && strings.Contains(text.String(), "task.filed")
 		})
 		cancel2()
 		<-done
@@ -529,11 +524,11 @@ func TestActivityFollow(t *testing.T) {
 		now := &lockedBuffer{}
 		go func() { done <- ada.runTo(ctx3, now, &lockedBuffer{}, "activity", "--follow", "--json") }()
 		time.Sleep(300 * time.Millisecond)
-		bob.ok("file", "--feature", "WEB-1", "--skill", "build", "--title", "After")
+		bob.ok("file", "--parent", "WEB-1", "--aim", "bob", "--title", "After")
 		eventually(t, 10*time.Second, "the new Task on the stream", func() bool { return strings.Contains(now.String(), `"task.filed"`) })
 		cancel3()
 		<-done
-		if strings.Contains(now.String(), `"feature.filed"`) {
+		if strings.Contains(now.String(), `"title":"Search"`) {
 			t.Fatalf("following from now sent history:\n%s", now.String())
 		}
 	})

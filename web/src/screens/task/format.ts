@@ -1,14 +1,4 @@
-import type { Task } from "@/api/client";
 import { useDirectory } from "@/api/queries";
-import { glyphFor, type Glyph, type StatusKind } from "@/lib/status";
-
-export type StatusLike = { id: string; name: string; kind: StatusKind };
-
-/** The glyph for a Status: the first In-progress Status draws half full, later ones (In review) three quarters. */
-export function statusGlyph(status: StatusLike, statuses: StatusLike[] | undefined): Glyph {
-  const nth = (statuses ?? []).filter((s) => s.kind === status.kind).findIndex((s) => s.id === status.id);
-  return glyphFor(status.kind, Math.max(0, nth));
-}
 
 /** A Member's name for a sentence, by id. */
 export function useMemberName(): (id: string | undefined) => string {
@@ -20,10 +10,6 @@ export function useMemberName(): (id: string | undefined) => string {
 export function useSkillName(): (id: string | undefined) => string | undefined {
   const { skills } = useDirectory();
   return (id) => (id ? skills.get(id)?.name : undefined);
-}
-
-export function featurePath(key: string): string {
-  return `/features/${encodeURIComponent(key)}`;
 }
 
 export function taskPath(key: string): string {
@@ -45,14 +31,9 @@ export function dayText(at: string, now: number): string {
   return d.toDateString() === new Date(now).toDateString() ? "Today" : day.format(d);
 }
 
-const byState = { open: 0, done: 1, dropped: 2 };
-
-/**
- * Tasks by Status, in the Organisation's order of Statuses, then by how long each has waited.
- * Until the Statuses load, open Tasks come before ended ones.
- */
-export function orderTasks(tasks: Task[], statuses: StatusLike[] | undefined): Task[] {
-  const position = new Map((statuses ?? []).map((s, i) => [s.id, i]));
-  const rank = (t: Task) => position.get(t.status_id) ?? byState[t.state];
-  return [...tasks].sort((a, b) => rank(a) - rank(b) || new Date(a.waiting_since).getTime() - new Date(b.waiting_since).getTime());
+/** "2 s", "15 min", "2 h": a Heartbeat timeout as it reads in a sentence. */
+export function durationText(seconds: number): string {
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 7200) return `${Math.round(seconds / 60)} min`;
+  return `${Math.round(seconds / 3600)} h`;
 }

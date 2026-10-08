@@ -70,16 +70,16 @@ func TestCookieWritesMustComeFromThisOrigin(t *testing.T) {
 		}
 		for i, tc := range cases {
 			key := "T" + string(rune('A'+i))
-			res := h.browserRequest(t, cookie, http.MethodPost, "/v1/teams", `{"key":"`+key+`","name":"`+key+`"}`, tc.headers)
+			res := h.browserRequest(t, cookie, http.MethodPost, "/v1/projects", `{"key":"`+key+`","name":"`+key+`"}`, tc.headers)
 			res.Body.Close()
 			if res.StatusCode != tc.want {
 				t.Errorf("%s: status %d, want %d", tc.name, res.StatusCode, tc.want)
 			}
 		}
 		// A refused write wrote nothing.
-		teams := got(h.admin.ListTeamsWithResponse(t.Context())).want(t, http.StatusOK).JSON200
-		if len(teams.Items) != 3 {
-			t.Fatalf("%d Teams after three allowed writes", len(teams.Items))
+		projects := got(h.admin.ListProjectsWithResponse(t.Context())).want(t, http.StatusOK).JSON200
+		if len(projects.Items) != 3 {
+			t.Fatalf("%d Projects after three allowed writes", len(projects.Items))
 		}
 		// Reads are not writes: a page elsewhere still cannot read the reply, and reading changes nothing.
 		res := h.browserRequest(t, cookie, http.MethodGet, "/v1/me", "", map[string]string{"Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site"})
@@ -90,7 +90,7 @@ func TestCookieWritesMustComeFromThisOrigin(t *testing.T) {
 		// The refusal is 403 forbidden with the Error body.
 		assertError(t, h.browserRequest(t, cookie, http.MethodPost, "/v1/logout", "", nil), http.StatusForbidden, "forbidden")
 		// A bearer write sends no Origin, and needs none.
-		got(h.admin.CreateTeamWithResponse(t.Context(), &client.CreateTeamParams{}, client.CreateTeamBody{Key: "BEAR", Name: "Bearer"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(t.Context(), &client.CreateProjectParams{}, client.CreateProjectBody{Key: "BEAR", Name: "Bearer"})).want(t, http.StatusCreated)
 	})
 }
 
@@ -100,7 +100,7 @@ func TestJSONBodiesNeedTheJSONContentType(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		post := func(contentType, key string) *http.Response {
-			req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/v1/teams", strings.NewReader(`{"key":"`+key+`","name":"`+key+`"}`))
+			req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/v1/projects", strings.NewReader(`{"key":"`+key+`","name":"`+key+`"}`))
 			req.Header.Set("Authorization", "Bearer "+h.adminSecret)
 			req.Header.Set("Darkory-Session", "ada-cli")
 			if contentType != "" {
@@ -129,7 +129,7 @@ func TestStreamEndsWhenItsCredentialEnds(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		ctx := t.Context()
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		for _, end := range []string{"revoke the token", "close the Session", "keep-alive after a close"} {
 			name := "watcher" + strings.ReplaceAll(strings.Fields(end)[0], "-", "")
 			_, _ = h.agent(name, nil)
@@ -143,10 +143,10 @@ func TestStreamEndsWhenItsCredentialEnds(t *testing.T) {
 			switch end {
 			case "revoke the token":
 				got(h.admin.RevokeTokenWithResponse(ctx, tokens.Items[0].ID, &client.RevokeTokenParams{})).want(t, http.StatusOK)
-				got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "AFTER", Name: "After"})).want(t, http.StatusCreated)
+				got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "AFTER", Name: "After"})).want(t, http.StatusCreated)
 			case "close the Session":
 				got(h.admin.CloseSessionWithResponse(ctx, name+"-1", &client.CloseSessionParams{Member: &name})).want(t, http.StatusOK)
-				got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "LATER", Name: "Later"})).want(t, http.StatusCreated)
+				got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "LATER", Name: "Later"})).want(t, http.StatusCreated)
 			case "keep-alive after a close":
 				// Closed behind the stream's back, with no write to wake it: the keep-alive tick checks too.
 				if err := st.WriteBatchNoSeq(ctx, store.Stmt{SQL: `UPDATE sessions SET closed_at = 1 WHERE chosen_id = $1`, Args: []any{name + "-1"}}); err != nil {

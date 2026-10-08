@@ -230,9 +230,13 @@ var statusOf = map[core.Code]int{
 	core.CodeCycle:                http.StatusConflict,
 	core.CodeTasksOpen:            http.StatusConflict,
 	core.CodeProposalStale:        http.StatusConflict,
-	core.CodeStatusInUse:          http.StatusConflict,
-	core.CodeUseComplete:          http.StatusConflict,
-	core.CodeUseDrop:              http.StatusConflict,
+	core.CodeNoConnector:          http.StatusConflict,
+	core.CodeUseAdvance:           http.StatusConflict,
+	core.CodeNoStep:               http.StatusConflict,
+	core.CodeOneLevel:             http.StatusConflict,
+	core.CodeHeld:                 http.StatusConflict,
+	core.CodeStepInUse:            http.StatusConflict,
+	core.CodeUseParent:            http.StatusConflict,
 	core.CodeNoRunner:             http.StatusConflict,
 	core.CodeTooLarge:             http.StatusRequestEntityTooLarge,
 	core.CodeIdempotencyKeyReused: http.StatusUnprocessableEntity,
@@ -246,7 +250,12 @@ func refusalOut(refusal *core.Error) (int, []byte, error) {
 	if !ok {
 		status = http.StatusConflict
 	}
-	b, err := json.Marshal(gen.Error{Code: gen.ErrorCode(refusal.Code), Message: refusal.Message})
+	out := gen.Error{Code: gen.ErrorCode(refusal.Code), Message: refusal.Message}
+	if len(refusal.Details) > 0 {
+		d := refusal.Details
+		out.Details = &d
+	}
+	b, err := json.Marshal(out)
 	return status, b, err
 }
 

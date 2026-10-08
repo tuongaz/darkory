@@ -31,9 +31,9 @@ func (n Notice) String() string {
 	case client.HeartbeatStatusLapsed:
 		return fmt.Sprintf("your Claim on %s lapsed: no Heartbeat arrived in time. It is no longer yours; stop working it, and claim it again if it is still takeable.", name)
 	case client.HeartbeatStatusTakenBack:
-		return fmt.Sprintf("your Claim on %s was taken back by someone on your Reporting line or the Feature owner. Stop working it.", name)
+		return fmt.Sprintf("your Claim on %s was taken back by someone on your Reporting line or the Task's Owner, or the Task was moved to another Step. Stop working it.", name)
 	case client.HeartbeatStatusEnded:
-		return fmt.Sprintf("your Claim on %s has ended (released, handed over, completed, dropped or revoked). Stop working it.", name)
+		return fmt.Sprintf("your Claim on %s has ended (released, advanced, completed, dropped, split into Subtasks or revoked). Stop working it.", name)
 	}
 	return fmt.Sprintf("the Heartbeat for %s was refused (%v). Stop working it.", name, n.Err)
 }

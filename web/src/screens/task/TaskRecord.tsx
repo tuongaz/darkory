@@ -1,33 +1,34 @@
-import { BanIcon, ClockIcon, PaperclipIcon } from "lucide-react";
+import { ArrowRightIcon, BanIcon, CheckIcon, ClockIcon, PaperclipIcon, SplitIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
-import { evidenceURL, type Claim, type TaskDetail } from "@/api/client";
+import { evidenceURL, type Activity, type Claim, type TaskDetail, type WorkflowStep } from "@/api/client";
 import { useNow } from "@/clock";
 import { SessionId } from "@/components/CopyValue";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { ClockTime } from "@/components/Time";
 import { SystemMark, Timeline, TimelineDay, TimelineRow } from "@/components/Timeline";
-import { dayText, sizeText, useMemberName, useSkillName } from "./format";
-import { Avatar, SkillPill, TaskLink } from "./parts";
-import { durationText, taskRecord, type RecordEntry } from "./record";
+import { dayText, durationText, sizeText, useMemberName, useSkillName } from "./format";
+import { Avatar, TaskLink } from "./parts";
+import { taskRecord, type RecordEntry } from "./record";
 
 /** A Task's record, oldest first, grouped by day when it spans more than today. */
-export function TaskRecord({ detail }: { detail: TaskDetail }) {
+export function TaskRecord({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
   const now = useNow();
-  const entries = taskRecord(detail);
+  const entries = taskRecord(detail, path);
   const days = new Map<string, RecordEntry[]>();
   for (const e of entries) {
     const d = dayText(e.at, now);
     days.set(d, [...(days.get(d) ?? []), e]);
   }
   const headed = days.size > 1 || !days.has("Today");
+  const stepName = (id: string | undefined) => steps.find((s) => s.id === id)?.name ?? "a Step";
   return (
     <Timeline aria-label="Record">
       {[...days].map(([d, rows]) => (
         <Fragment key={d}>
           {headed && <TimelineDay>{d}</TimelineDay>}
           {rows.map((e, i) => (
-            <Entry key={i} entry={e} detail={detail} />
+            <Entry key={i} entry={e} detail={detail} stepName={stepName} />
           ))}
         </Fragment>
       ))}
@@ -35,33 +36,33 @@ export function TaskRecord({ detail }: { detail: TaskDetail }) {
   );
 }
 
-function Entry({ entry, detail }: { entry: RecordEntry; detail: TaskDetail }) {
+const kinds = { breakdown: "Breakdown", acceptance: "Acceptance", retrospective: "Retrospective" } as const;
+
+function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDetail; stepName: (id: string | undefined) => string }) {
   const name = useMemberName();
   const skill = useSkillName();
   const when = <ClockTime at={entry.at} />;
   const row = (who: string | undefined, children: ReactNode, sub?: ReactNode) => (
-    <TimelineRow who={<Avatar id={who} />} when={when}>
+    <TimelineRow who={who ? <Avatar id={who} /> : <SystemMark />} when={when}>
       {children}
       {sub && <div className="text-xs text-muted-foreground">{sub}</div>}
     </TimelineRow>
   );
-  const { task, feature } = detail;
+  const { task, parent } = detail;
 
   switch (entry.kind) {
     case "filed":
-      if (task.kind === "retrospective") {
+      if (task.kind !== "work" && !entry.by) {
         return row(
-          entry.by,
+          undefined,
           <>
-            Filed when <b>{name(entry.by)}</b> {feature.state === "dropped" ? "dropped" : "shipped"} <Key>{feature.key}</Key>
-          </>,
-        );
-      }
-      if (task.kind === "breakdown") {
-        return row(
-          entry.by,
-          <>
-            Filed when <b>{name(entry.by)}</b> filed <Key>{feature.key}</Key>
+            Darkory filed this {kinds[task.kind]}
+            {parent && (
+              <>
+                {" "}
+                under <Key>{parent.key}</Key>
+              </>
+            )}
           </>,
         );
       }
@@ -87,13 +88,34 @@ function Entry({ entry, detail }: { entry: RecordEntry; detail: TaskDetail }) {
       );
     }
     case "claim-ended":
-      return <ClaimEnded claim={entry.claim} nextSkillId={entry.nextSkillId} when={when} />;
+      return <ClaimEnded entry={entry} when={when} stepName={stepName} />;
+    case "moved":
+      return row(
+        entry.by,
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <b>{name(entry.by)}</b> moved it{entry.from && <> from {stepName(entry.from)}</>} to <Pill tone="outline">{stepName(entry.to)}</Pill>
+        </span>,
+      );
+    case "became-parent":
+      return (
+        <TimelineRow
+          who={
+            <SystemMark>
+              <SplitIcon aria-hidden />
+            </SystemMark>
+          }
+          when={when}
+        >
+          Became a Parent with its first Subtask
+        </TimelineRow>
+      );
     case "note":
       return (
         <TimelineRow who={<Avatar id={entry.note.author_id} />} when={when}>
           <article className="flex flex-col gap-1.5 rounded-md border bg-card px-3 py-2.5" aria-label={`Note by ${name(entry.note.author_id)}`}>
             <header className="flex items-center gap-2 text-xs text-muted-foreground">
               <b className="text-foreground">{name(entry.note.author_id)}</b> Note
+              {skill(entry.note.skill_id) && <span>under {skill(entry.note.skill_id)}</span>}
             </header>
             <p className="whitespace-pre-wrap">{entry.note.body}</p>
           </article>
@@ -136,7 +158,7 @@ function Entry({ entry, detail }: { entry: RecordEntry; detail: TaskDetail }) {
           <b className="whitespace-nowrap">{name(q.filed_by)}</b> filed <TaskLink task={q} />
         </span>,
         <>
-          {q.aimed_at_id ? `aimed at ${name(q.aimed_at_id)}` : skill(q.skill_id) && `needs ${skill(q.skill_id)}`} · blocks {task.key}
+          {q.aimed_at_id ? `aimed at ${name(q.aimed_at_id)}` : q.step_id ? `at ${stepName(q.step_id)}` : ""} · blocks {task.key}
           {q.state !== "open" && ` · ${q.state === "done" ? "Done" : "Dropped"}`}
         </>,
       );
@@ -150,13 +172,26 @@ function Entry({ entry, detail }: { entry: RecordEntry; detail: TaskDetail }) {
       );
     case "ended":
       return (
-        <TimelineRow who={<SystemMark>{<BanIcon aria-hidden />}</SystemMark>} when={when}>
-          Dropped
-          {feature.state === "dropped" && feature.ended_at === task.ended_at && (
+        <TimelineRow
+          who={
+            entry.by ? (
+              <Avatar id={entry.by} />
+            ) : (
+              <SystemMark>{entry.state === "done" ? <CheckIcon aria-hidden /> : <BanIcon aria-hidden />}</SystemMark>
+            )
+          }
+          when={when}
+        >
+          {entry.by ? (
             <>
-              {" "}
-              with <Key>{feature.key}</Key>
+              <b>{name(entry.by)}</b> {entry.state === "done" ? "completed it" : "dropped it"}
             </>
+          ) : entry.auto ? (
+            `Completed itself (Auto-complete)${entry.after ? ` when ${entry.after} ended` : ""}`
+          ) : entry.state === "done" ? (
+            "Completed"
+          ) : (
+            "Dropped"
           )}
         </TimelineRow>
       );
@@ -169,8 +204,9 @@ const endings: Record<string, string> = {
   member_deactivated: "deactivated",
 };
 
-function ClaimEnded({ claim, nextSkillId, when }: { claim: Claim; nextSkillId?: string; when: ReactNode }) {
+function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { kind: "claim-ended" }>; when: ReactNode; stepName: (id: string | undefined) => string }) {
   const name = useMemberName();
+  const claim: Claim = entry.claim;
   const holder = <b>{name(claim.holder_id)}</b>;
   if (claim.how_ended === "lapsed") {
     return (
@@ -192,12 +228,19 @@ function ClaimEnded({ claim, nextSkillId, when }: { claim: Claim; nextSkillId?: 
     case "released":
       what = <>{holder} released it</>;
       break;
-    case "handed_over":
-      what = (
+    case "advanced":
+      what = entry.advanced ? (
         <span className="inline-flex flex-wrap items-center gap-1.5">
-          {holder} handed over to <SkillPill id={nextSkillId} />
+          {holder} advanced it <Pill tone="secondary">{entry.advanced.outcome}</Pill>
+          <ArrowRightIcon className="size-3 text-muted-foreground" aria-hidden />
+          <Pill tone="outline">{stepName(entry.advanced.to)}</Pill>
         </span>
+      ) : (
+        <>{holder} advanced it</>
       );
+      break;
+    case "split":
+      what = <>{holder} split it into Subtasks; their Claim ended</>;
       break;
     case "completed":
       what = <>{holder} completed it</>;

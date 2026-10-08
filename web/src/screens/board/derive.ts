@@ -1,484 +1,392 @@
-// What the Board screens compute from /v1 records: Status glyphs, the order and grouping of Tasks,
-// the marks a row or card carries, what a refused drag says, and the Features' Task bars. Pure, so
+// What the Tasks screens compute from /v1 records: the Workflow's order, where each Task stands
+// (a Step, with a Member, or ended), the order and grouping of the list, the board's columns, the
+// marks a row or card carries, who may move a Task by hand and what a refused move says. Pure, so
 // Vitest checks them without rendering.
-import type { Activity, Feature, Task, TaskBrief, TaskCounts } from "@/api/client";
-import type { components } from "@/api/schema.gen";
-import { passesDate } from "@/components/filters/dates";
-import type { FilterPill } from "@/components/filters/filterState";
-import { glyphFor, type Glyph } from "@/lib/status";
+import type { Connector, Label, Member, Project, Task, TaskBrief, WorkflowStep } from "@/api/client";
+import type { ClaimTrail } from "@/components/filters/taskAxes";
+import { isOnReportingLine } from "@/me";
 import { kindLabel, liveClaim } from "@/work";
 
-export type Status = components["schemas"]["Status"];
-export type StatusKind = Status["kind"];
+/** The builtin Skills Darkory files its own Subtasks at: never where a Task lands by default. */
+export const ownSubtaskSkills = ["breakdown", "acceptance", "retro", "skill-review"] as const;
 
-/** The kinds a Task can be moved between by hand; done and dropped are reached by Complete and Drop. */
-export const openKinds: readonly StatusKind[] = ["backlog", "todo", "in_progress"];
-
-export function isOpenKind(kind: StatusKind): boolean {
-  return openKinds.includes(kind);
-}
-
-/** The Organisation's Statuses in their order, position 1 first. */
-export function inOrder(statuses: Status[]): Status[] {
-  return [...statuses].sort((a, b) => a.position - b.position);
+export function stepsInOrder<S extends Pick<WorkflowStep, "position">>(steps: readonly S[]): S[] {
+  return [...steps].sort((a, b) => a.position - b.position);
 }
 
 /**
- * The glyph of every Status, by id: the first In-progress-kind Status draws half full, any later
- * one (In review) three quarters.
+ * The Step a Task filed without one starts at, as `/v1` chooses it: the first Step carrying a
+ * Skill other than those Darkory files its own Subtasks at (Build in the default Workflow); else
+ * the first Step carrying any Skill; else the first Step. None in a Workflow with no Steps.
  */
-export function statusGlyphs(statuses: Status[]): Map<string, Glyph> {
-  const seen = new Map<StatusKind, number>();
-  const out = new Map<string, Glyph>();
-  for (const s of inOrder(statuses)) {
-    const nth = seen.get(s.kind) ?? 0;
-    seen.set(s.kind, nth + 1);
-    out.set(s.id, glyphFor(s.kind, nth));
+export function defaultFileStep<S extends Pick<WorkflowStep, "position" | "skill_id">>(
+  steps: readonly S[],
+  skillName: (id: string) => string | undefined,
+): S | undefined {
+  const ordered = stepsInOrder(steps);
+  const own: readonly string[] = ownSubtaskSkills;
+  return (
+    ordered.find((s) => s.skill_id && !own.includes(skillName(s.skill_id) ?? "")) ??
+    ordered.find((s) => s.skill_id) ??
+    ordered[0]
+  );
+}
+
+/** The Step carrying the builtin Skill `name` (breakdown, acceptance, retro), if the Workflow has one. */
+export function stepWithSkill<S extends Pick<WorkflowStep, "position" | "skill_id">>(
+  steps: readonly S[],
+  name: string,
+  skillName: (id: string) => string | undefined,
+): S | undefined {
+  return stepsInOrder(steps).find((s) => s.skill_id && skillName(s.skill_id) === name);
+}
+
+/** Whether the Task has Subtasks: a Parent, at no Step, never claimed. */
+export function isParent(task: Pick<Task, "subtask_counts">): boolean {
+  return !!task.subtask_counts;
+}
+
+/** "3/5": a Parent's Subtasks done out of those not dropped. */
+export function progressText(counts: NonNullable<Task["subtask_counts"]>): string {
+  return `${counts.done}/${counts.open + counts.done}`;
+}
+
+/**
+ * Where a Task stands, as the list's groups and the board's columns read it:
+ *
+ * - `step`: an open Task at a Step;
+ * - `with`: an open Task aimed at a Member by name, waiting with them at no Step;
+ * - `done` and `dropped`: ended;
+ * - an open Parent stands where its least advanced open Subtask does, in the Workflow's order (a
+ *   Subtask aimed at a Member counting after every Step); with none open, it waits with its
+ *   Owner, whose Complete ends it.
+ */
+export type Place = { kind: "step"; stepId: string } | { kind: "with"; memberId: string } | { kind: "done" } | { kind: "dropped" };
+
+export function placeOf(task: Task, ctx: { children: Map<string, Task[]>; position: Map<string, number> }): Place {
+  if (task.state !== "open") return { kind: task.state };
+  if (isParent(task)) {
+    const open = (ctx.children.get(task.id) ?? []).filter((s) => s.state === "open");
+    const atSteps = open.filter((s) => s.step_id && ctx.position.has(s.step_id));
+    if (atSteps.length > 0) {
+      const first = atSteps.reduce((a, b) => (ctx.position.get(b.step_id!)! < ctx.position.get(a.step_id!)! ? b : a));
+      return { kind: "step", stepId: first.step_id! };
+    }
+    const aimed = open.find((s) => s.aimed_at_id);
+    if (aimed) return { kind: "with", memberId: aimed.aimed_at_id! };
+    return { kind: "with", memberId: task.owner_id };
+  }
+  if (task.step_id) return { kind: "step", stepId: task.step_id };
+  if (task.aimed_at_id) return { kind: "with", memberId: task.aimed_at_id };
+  // An open Task at no Step and aimed at no one does not arise; it waits with its Owner.
+  return { kind: "with", memberId: task.owner_id };
+}
+
+export function placeKey(p: Place): string {
+  return p.kind === "step" ? `step:${p.stepId}` : p.kind === "with" ? `with:${p.memberId}` : p.kind;
+}
+
+/** Each Parent's Subtasks, by the Parent's id, in the order given. */
+export function childrenOf(tasks: readonly Task[]): Map<string, Task[]> {
+  const out = new Map<string, Task[]>();
+  for (const t of tasks) {
+    if (!t.parent_id) continue;
+    const list = out.get(t.parent_id);
+    if (list) list.push(t);
+    else out.set(t.parent_id, [t]);
   }
   return out;
 }
 
-/** The Status a Task is filed in unless another is chosen: the first of kind todo. */
-export function defaultFileStatus(statuses: Status[]): Status | undefined {
-  return inOrder(statuses).find((s) => s.kind === "todo");
+export type Order = "rank" | "updated" | "filed";
+
+const time = (at: string | undefined) => (at ? Date.parse(at) : 0);
+const keyNumber = (key: string) => Number(key.slice(key.lastIndexOf("-") + 1)) || 0;
+
+/** When the Task last changed as the list can tell: it ended, reached its Step, or was filed. */
+export function updatedAt(task: Pick<Task, "ended_at" | "step_since" | "waiting_since" | "created_at">): string {
+  const times = [task.ended_at, task.step_since, task.waiting_since, task.created_at].filter((t): t is string => !!t);
+  return times.reduce((a, b) => (time(b) > time(a) ? b : a));
 }
 
-export type Order = "rank" | "waiting";
-
-const keyNumber = (key: string) => Number(key.slice(key.lastIndexOf("-") + 1)) || 0;
-const time = (at: string | undefined) => (at ? new Date(at).getTime() : 0);
-
 /**
- * Orders Tasks as `next` offers them: by their Feature's Rank, then the one that has waited
- * longest; or, for "waiting", by waiting time alone. Ties go to the older key.
+ * Orders Tasks for a list or a column: by Rank (a Subtask by its Parent's, then after its Parent,
+ * then by how long it has waited), by when it last changed (newest first), or by when it was filed
+ * (newest first). Ties go to the older key.
  */
-export function compareTasks(order: Order, features: Map<string, Pick<Feature, "rank">>) {
-  const rank = (t: Task) => features.get(t.feature_id)?.rank ?? Number.MAX_SAFE_INTEGER;
+export function compareTasks(order: Order, rankOf: (task: Task) => number) {
   return (a: Task, b: Task): number => {
-    const byRank = rank(a) - rank(b);
-    const byWait = time(a.waiting_since) - time(b.waiting_since);
-    const first = order === "rank" ? byRank || byWait : byWait || byRank;
+    let first: number;
+    if (order === "rank") {
+      first = rankOf(a) - rankOf(b) || Number(!!a.parent_id) - Number(!!b.parent_id) || time(a.waiting_since) - time(b.waiting_since);
+    } else if (order === "updated") first = time(updatedAt(b)) - time(updatedAt(a));
+    else first = time(b.created_at) - time(a.created_at);
     return first || keyNumber(a.key) - keyNumber(b.key);
   };
 }
 
-export type GroupBy = "status" | "feature" | "holder";
-
-export type Group =
-  | { by: "status"; id: string; status: Status; tasks: Task[] }
-  | { by: "feature"; id: string; feature: Feature | undefined; tasks: Task[] }
-  | { by: "holder"; id: string; holderId: string | undefined; tasks: Task[] };
-
-/**
- * Groups Tasks already in order, keeping that order inside each group. Statuses come in the
- * Organisation's order and Features in Rank order; holders by name, then the Tasks nobody holds.
- * Empty groups are left out.
- */
-export function groupTasks(
-  tasks: Task[],
-  by: GroupBy,
-  ctx: { statuses: Status[]; features: Feature[]; holderName: (id: string) => string; now: number },
-): Group[] {
-  const buckets = new Map<string, Task[]>();
-  const keyOf = (t: Task): string => {
-    if (by === "status") return t.status_id;
-    if (by === "feature") return t.feature_id;
-    return liveClaim(t, ctx.now)?.holder_id ?? "";
-  };
-  for (const t of tasks) {
-    const k = keyOf(t);
-    const list = buckets.get(k);
-    if (list) list.push(t);
-    else buckets.set(k, [t]);
-  }
-  if (by === "status") {
-    return inOrder(ctx.statuses)
-      .filter((s) => buckets.has(s.id))
-      .map((s) => ({ by, id: s.id, status: s, tasks: buckets.get(s.id)! }));
-  }
-  if (by === "feature") {
-    const ranked = [...ctx.features].sort((a, b) => a.rank - b.rank);
-    const known = new Set(ranked.map((f) => f.id));
-    const groups: Group[] = ranked.filter((f) => buckets.has(f.id)).map((f) => ({ by, id: f.id, feature: f, tasks: buckets.get(f.id)! }));
-    for (const [id, list] of buckets) if (!known.has(id)) groups.push({ by, id, feature: undefined, tasks: list });
-    return groups;
-  }
-  const holders = [...buckets.keys()].filter((id) => id !== "").sort((a, b) => ctx.holderName(a).localeCompare(ctx.holderName(b)));
-  const groups: Group[] = holders.map((id) => ({ by, id, holderId: id, tasks: buckets.get(id)! }));
-  if (buckets.has("")) groups.push({ by, id: "", holderId: undefined, tasks: buckets.get("")! });
-  return groups;
+/** A Task's place in its Project's Rank: its own, or for a Subtask its Parent's. */
+export function rankFinder(byId: Map<string, Task>): (task: Task) => number {
+  return (t) => (t.parent_id ? byId.get(t.parent_id)?.rank : t.rank) ?? Number.MAX_SAFE_INTEGER;
 }
+
+export type GroupBy = "step" | "parent" | "owner" | "label" | "none";
 
 export type Display = {
   group: GroupBy;
   order: Order;
   showDone: boolean;
   showDropped: boolean;
-  /** The Tasks of shipped and dropped Features. */
-  showEndedFeatures: boolean;
+  /** The list: a Parent's row opens to its Subtasks. */
+  showSubtasks: boolean;
+  /** The board: Parents as cards, where their least advanced open Subtask stands. */
+  showParents: boolean;
 };
 
-export const defaultDisplay: Display = { group: "status", order: "rank", showDone: true, showDropped: false, showEndedFeatures: true };
+export const defaultDisplay: Display = { group: "step", order: "rank", showDone: true, showDropped: false, showSubtasks: true, showParents: false };
 
-/** The Held by value of a Task nobody holds. */
-export const nobody = "none";
+export type Group =
+  | { by: "step"; id: string; step: WorkflowStep; tasks: Task[] }
+  | { by: "with"; id: string; member: Member | undefined; memberId: string; tasks: Task[] }
+  | { by: "ended"; id: "done" | "dropped"; state: "done" | "dropped"; tasks: Task[] }
+  | { by: "parent"; id: string; parent: Task | undefined; tasks: Task[] }
+  | { by: "owner"; id: string; owner: Member | undefined; tasks: Task[] }
+  | { by: "label"; id: string; label: Label | undefined; tasks: Task[] }
+  | { by: "none"; id: "all"; tasks: Task[] };
 
-/** The Kind axis' values: a Task's kind, with a work Task aimed at a Member by name as a question. */
-export type KindValue = Task["kind"] | "question";
-
-/** A Task's Kind, as `GET /v1/tasks?filter=` reads it: a work Task aimed at a Member is a question. */
-export function kindValue(task: Pick<Task, "kind" | "aimed_at_id">): KindValue {
-  return task.kind === "work" && task.aimed_at_id ? "question" : task.kind;
-}
-
-/**
- * What `matches` reads beyond the Task: the clock, the Team's Features, and for the Claim axis the
- * Claim trails (recorded lapses) and the Tasks the Runner runs a session for now.
- */
-export type FilterContext = {
-  now: number;
-  features: Map<string, Pick<Feature, "owner_id">>;
-  trails?: Map<string, ClaimTrail>;
-  sessions?: ReadonlySet<string>;
+export type GroupContext = {
+  steps: readonly WorkflowStep[];
+  children: Map<string, Task[]>;
+  members: Map<string, Member>;
+  labels: Map<string, Label>;
+  byId: Map<string, Task>;
 };
 
-/** The time the list's Updated column shows: when the Task ended, else when it began waiting. */
-export function updatedAt(task: Pick<Task, "state" | "ended_at" | "waiting_since">): string {
-  return task.state !== "open" ? (task.ended_at ?? task.waiting_since) : task.waiting_since;
-}
-
-/**
- * A Task's time on each date axis: Filed, and Completed for a Task that ended done. Updated is the
- * list's column only, not an axis: the record has no updated time the server and the list share.
- */
-const taskTimes: Record<string, (t: Task) => string | undefined> = {
-  filed_at: (t) => t.created_at,
-  completed_at: (t) => (t.state === "done" ? t.ended_at : undefined),
-};
-
-/** How long a lapse counts as recent on the Claim axis. */
-const lapseWindowMs = 24 * 60 * 60 * 1000;
-
-/**
- * The Claim axis' values of a Task, as many as hold, as the server's `filter` reads them: `held`, a
- * live Claim; `unheld`, none, in any state; `lapsed`, a Claim of the Task lapsed within the last
- * 24 hours, recorded or only past its expiry, whether or not it was claimed again since;
- * `session`, the Runner beside the server runs a session for it now.
- */
-export function claimValues(task: Task, ctx: FilterContext): string[] {
-  const out = [liveClaim(task, ctx.now) ? "held" : "unheld"];
-  const claim = task.claim;
-  // A Claim past its expiry that the sweep has not ended yet lapsed at its expiry.
-  const expired = claim && !claim.ended_at && claim.expires_at && Date.parse(claim.expires_at) <= ctx.now ? claim.expires_at : undefined;
-  const lapses = [expired, ctx.trails?.get(task.id)?.lastLapseAt].filter((at): at is string => !!at);
-  if (lapses.some((at) => ctx.now - Date.parse(at) <= lapseWindowMs)) out.push("lapsed");
-  if (ctx.sessions?.has(task.id)) out.push("session");
+function bucket<K>(tasks: readonly Task[], keyOf: (t: Task) => K): Map<K, Task[]> {
+  const out = new Map<K, Task[]>();
+  for (const t of tasks) {
+    const k = keyOf(t);
+    const list = out.get(k);
+    if (list) list.push(t);
+    else out.set(k, [t]);
+  }
   return out;
 }
 
-/**
- * A Task's values on an axis of the Filter: one for most, as many as it names for its Workspaces,
- * none when it has none (a Task aimed at a Member needs no Skill). Undefined for an axis the
- * Tasks do not have.
- */
-export function taskValues(task: Task, field: string, ctx: FilterContext): string[] | undefined {
-  const one = (v: string | undefined) => (v ? [v] : []);
-  switch (field) {
-    case "status":
-      return [task.status_id];
-    case "skill":
-      return one(task.skill_id);
-    case "holder":
-      return [liveClaim(task, ctx.now)?.holder_id ?? nobody];
-    case "aimed_at":
-      return one(task.aimed_at_id);
-    case "feature":
-      return [task.feature_id];
-    case "owner":
-      return one(ctx.features.get(task.feature_id)?.owner_id);
-    case "filed_by":
-      return [task.filed_by];
-    case "blocked":
-      return [String(task.blocked)];
-    case "kind":
-      return [kindValue(task)];
-    case "workspace":
-      return task.workspace_ids ?? [];
-    case "claim":
-      return claimValues(task, ctx);
-    default:
-      return undefined;
-  }
-}
+const byName = (m: Map<string, { name: string }>, id: string) => m.get(id)?.name ?? "";
 
 /**
- * Whether values pass a pill: `is` and `in` when any value is one of the pill's, `not` and `nin`
- * when none is. So on an axis with several values (Workspaces) "is not X" means none of them is X,
- * and on an axis with none, every "not" passes and every "is" fails.
+ * Groups the rows of the list, already in order, keeping that order inside each group; empty
+ * groups are left out.
+ *
+ * - `step` (the rows: Tasks with no Parent): the Steps in the Workflow's order, then "With
+ *   <Member>" by name, then Done and Dropped, each Task where `placeOf` says it stands;
+ * - `parent` (the rows: Subtasks and Tasks with no Parent and no Subtasks): a group per Parent in
+ *   Rank order, its Subtasks under it, then the Tasks with none;
+ * - `owner`: by the Owner's name; `label`: by the first Label a Task carries, by name, then those
+ *   carrying none; `none`: one group.
  */
-export function passes(values: string[], pill: FilterPill): boolean {
-  const hit = values.some((v) => pill.values.includes(v));
-  switch (pill.op) {
-    case "is":
-    case "in":
-      return hit;
-    case "not":
-    case "nin":
-      return !hit;
-    default:
-      return true;
-  }
-}
-
-/** Whether a key or a title holds a Search pill's words, ignoring case. */
-function searchMatches(record: { key: string; title: string }, pill: FilterPill): boolean {
-  const words = (pill.values[0] ?? "").toLowerCase();
-  return [record.key, record.title].some((text) => text.toLowerCase().includes(words));
-}
-
-/**
- * Whether a Task passes every pill of the Filter, as `GET /v1/tasks?filter=` would answer: the
- * axes are ANDed, the values of one axis ORed. Search (`q`) matches the key or the title, ignoring
- * case, as the server's does. A pill for an axis the Tasks do not have narrows nothing.
- */
-export function matches(task: Task, pills: readonly FilterPill[], ctx: FilterContext): boolean {
-  return pills.every((pill) => {
-    if (pill.field === "q") return searchMatches(task, pill);
-    const time = taskTimes[pill.field];
-    if (time) return passesDate(time(task), pill, ctx.now);
-    const values = taskValues(task, pill.field, ctx);
-    return values === undefined || passes(values, pill);
-  });
-}
-
-/**
- * The Tasks a view shows: the Filter's pills, then the Display's: the Tasks of ended Features,
- * and (when `byKind` is set, as the list does) those in a Done or Dropped Status. A Status the
- * Filter asks for by name ("Status is Done") is shown whatever the Display says.
- */
-export function visibleTasks(
-  tasks: Task[],
-  ctx: Omit<FilterContext, "features"> & {
-    display: Display;
-    pills: readonly FilterPill[];
-    features: Map<string, Feature>;
-    statuses: Map<string, Status>;
-    byKind: boolean;
-  },
-): Task[] {
-  const { display } = ctx;
-  const status = ctx.pills.find((p) => p.field === "status" && (p.op === "is" || p.op === "in"));
-  const asked = new Set(status?.values ?? []);
-  return tasks.filter((t) => {
-    if (!matches(t, ctx.pills, ctx)) return false;
-    const f = ctx.features.get(t.feature_id);
-    if (!display.showEndedFeatures && f && f.state !== "open") return false;
-    if (ctx.byKind && !asked.has(t.status_id)) {
-      const kind = ctx.statuses.get(t.status_id)?.kind;
-      if (kind === "done" && !display.showDone) return false;
-      if (kind === "dropped" && !display.showDropped) return false;
+export function groupTasks(rows: readonly Task[], by: GroupBy, ctx: GroupContext): Group[] {
+  if (by === "none") return rows.length ? [{ by, id: "all", tasks: [...rows] }] : [];
+  if (by === "step") {
+    const position = new Map(ctx.steps.map((s) => [s.id, s.position]));
+    const places = bucket(rows, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
+    const groups: Group[] = [];
+    for (const s of stepsInOrder(ctx.steps)) {
+      const tasks = places.get(`step:${s.id}`);
+      if (tasks) groups.push({ by: "step", id: s.id, step: s, tasks });
     }
-    return true;
-  });
-}
-
-/** A Feature's values on an axis of Team › Features' Filter; undefined for an axis it lacks. */
-export function featureValues(feature: Feature, field: string): string[] | undefined {
-  switch (field) {
-    case "owner":
-      return [feature.owner_id];
-    case "state":
-      return [feature.state];
-    case "quick":
-      return [String(feature.quick)];
-    case "ship_when_done":
-      return [String(feature.ship_when_done)];
-    default:
-      return undefined;
+    const withIds = [...places.keys()].filter((k) => k.startsWith("with:")).map((k) => k.slice(5));
+    withIds.sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
+    for (const id of withIds) groups.push({ by: "with", id, memberId: id, member: ctx.members.get(id), tasks: places.get(`with:${id}`)! });
+    for (const state of ["done", "dropped"] as const) {
+      const tasks = places.get(state);
+      if (tasks) groups.push({ by: "ended", id: state, state, tasks });
+    }
+    return groups;
   }
-}
-
-/** A Feature's time on each date axis; an open Feature has no Ended time. */
-const featureTimes: Record<string, (f: Feature) => string | undefined> = {
-  filed_at: (f) => f.created_at,
-  ended_at: (f) => f.ended_at,
-};
-
-/** Whether a Feature passes every pill, as `matches` reads them for a Task. */
-export function matchesFeature(feature: Feature, pills: readonly FilterPill[], now: number): boolean {
-  return pills.every((pill) => {
-    if (pill.field === "q") return searchMatches(feature, pill);
-    const time = featureTimes[pill.field];
-    if (time) return passesDate(time(feature), pill, now);
-    const values = featureValues(feature, pill.field);
-    return values === undefined || passes(values, pill);
-  });
+  if (by === "parent") {
+    const parents = bucket(rows, (t) => t.parent_id ?? "");
+    const ids = [...parents.keys()].filter((k) => k !== "");
+    ids.sort((a, b) => (ctx.byId.get(a)?.rank ?? Infinity) - (ctx.byId.get(b)?.rank ?? Infinity));
+    const groups: Group[] = ids.map((id) => ({ by: "parent", id, parent: ctx.byId.get(id), tasks: parents.get(id)! }));
+    if (parents.has("")) groups.push({ by: "parent", id: "", parent: undefined, tasks: parents.get("")! });
+    return groups;
+  }
+  if (by === "owner") {
+    const owners = bucket(rows, (t) => t.owner_id);
+    const ids = [...owners.keys()].sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
+    return ids.map((id) => ({ by: "owner", id, owner: ctx.members.get(id), tasks: owners.get(id)! }));
+  }
+  const firstLabel = (t: Task) =>
+    (t.labels ?? []).filter((id) => ctx.labels.has(id)).sort((a, b) => byName(ctx.labels, a).localeCompare(byName(ctx.labels, b)))[0] ?? "";
+  const labelled = bucket(rows, firstLabel);
+  const ids = [...labelled.keys()].filter((k) => k !== "").sort((a, b) => byName(ctx.labels, a).localeCompare(byName(ctx.labels, b)));
+  const groups: Group[] = ids.map((id) => ({ by: "label", id, label: ctx.labels.get(id), tasks: labelled.get(id)! }));
+  if (labelled.has("")) groups.push({ by: "label", id: "", label: undefined, tasks: labelled.get("")! });
+  return groups;
 }
 
 /**
- * The Features a list shows, in Rank order: the Filter's pills, then the Display's "Shipped and
- * dropped", unless the Filter asks for the ended state by name.
+ * The rows of the list for a grouping: by Parent, the Tasks that are worked (Subtasks, and Tasks
+ * with neither Parent nor Subtasks), each under its Parent's group; otherwise the Tasks with no
+ * Parent, a Parent's Subtasks opening under its row. Done and Dropped as the Display says.
  */
-export function visibleFeatures(ranked: Feature[], ctx: { pills: readonly FilterPill[]; showEnded: boolean; now: number }): Feature[] {
-  const state = ctx.pills.find((p) => p.field === "state" && (p.op === "is" || p.op === "in"));
-  const asked = new Set(state?.values ?? []);
-  return ranked.filter((f) => matchesFeature(f, ctx.pills, ctx.now) && (ctx.showEnded || f.state === "open" || asked.has(f.state)));
+export function listRows(tasks: readonly Task[], display: Pick<Display, "group" | "showDone" | "showDropped">): Task[] {
+  return tasks.filter((t) => {
+    if (t.state === "done" && !display.showDone) return false;
+    if (t.state === "dropped" && !display.showDropped) return false;
+    return display.group === "parent" ? !isParent(t) : !t.parent_id;
+  });
 }
 
-/** What the Activity says about a Task's Claims that a Task in a list does not carry. */
-export type ClaimTrail = {
-  /** When its last Claim lapsed, if the last Claim it had ended by a lapse. */
-  lapsedAt?: string;
-  /** When a Claim of it last lapsed, though it was claimed again since. */
-  lastLapseAt?: string;
-  /** Who completed it. */
-  completedBy?: string;
-};
-
-/** The Activity kinds `claimTrails` reads. */
-export const trailKinds = ["task.claimed", "task.lapsed", "task.completed"] as const;
+/** A column of the board: a Step (a drop target), a Member some Tasks are aimed at, Done or Dropped. */
+export type Column =
+  | { kind: "step"; id: string; step: WorkflowStep; tasks: Task[] }
+  | { kind: "with"; id: string; memberId: string; member: Member | undefined; tasks: Task[] }
+  | { kind: "done" | "dropped"; id: "done" | "dropped"; tasks: Task[]; collapsed: boolean };
 
 /**
- * Reads a Task's Claim history from the Activity, since /v1/tasks gives a Task's Claim only while
- * it is live: a Task whose latest Claim entry is a lapse lapsed at that entry's time; a later
- * claim clears it. `entries` may come in any order and may repeat.
+ * The board's columns: every Step in the Workflow's order (empty ones too, so a card can be
+ * dragged there), then "With <Member>" for each Member an open card is aimed at, then Done, then
+ * Dropped, each collapsed to its header unless the Display shows it. The cards are the Tasks with
+ * no Subtasks; Parents, when the Display shows them, stand where `placeOf` says.
  */
-export function claimTrails(entries: Activity[]): Map<string, ClaimTrail> {
-  const seen = new Set<number>();
-  const sorted = entries.filter((e) => !seen.has(e.seq) && seen.add(e.seq)).sort((a, b) => a.seq - b.seq);
-  const out = new Map<string, ClaimTrail>();
-  for (const e of sorted) {
-    const t = out.get(e.subject_id) ?? {};
-    if (e.kind === "task.claimed") t.lapsedAt = undefined;
-    else if (e.kind === "task.lapsed") t.lapsedAt = t.lastLapseAt = e.at;
-    else if (e.kind === "task.completed") t.completedBy = e.actor_id;
-    else continue;
-    out.set(e.subject_id, t);
-  }
-  return out;
-}
-
-/** When the Task's last Claim lapsed, for an open Task nobody holds now. */
-export function lapsedAt(task: Task, trail: ClaimTrail | undefined, now: number): string | undefined {
-  if (task.state !== "open" || liveClaim(task, now)) return undefined;
-  return trail?.lapsedAt;
+export function boardColumns(
+  tasks: readonly Task[],
+  ctx: Pick<GroupContext, "steps" | "children" | "members"> & { display: Pick<Display, "showDone" | "showDropped" | "showParents"> },
+): Column[] {
+  const position = new Map(ctx.steps.map((s) => [s.id, s.position]));
+  const cards = tasks.filter((t) => !isParent(t) || ctx.display.showParents);
+  const places = bucket(cards, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
+  const columns: Column[] = stepsInOrder(ctx.steps).map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
+  const withIds = [...places.keys()].filter((k) => k.startsWith("with:")).map((k) => k.slice(5));
+  withIds.sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
+  for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: places.get(`with:${id}`)! });
+  columns.push({ kind: "done", id: "done", tasks: places.get("done") ?? [], collapsed: !ctx.display.showDone });
+  columns.push({ kind: "dropped", id: "dropped", tasks: places.get("dropped") ?? [], collapsed: !ctx.display.showDropped });
+  return columns;
 }
 
 /** The open Tasks each Task blocks, read off the `open_blockers` of the Tasks in view. */
-export function blocking(tasks: Task[]): Map<string, TaskBrief[]> {
+export function blocking(tasks: readonly Task[]): Map<string, TaskBrief[]> {
   const out = new Map<string, TaskBrief[]>();
   for (const t of tasks) {
     if (t.state !== "open") continue;
     for (const b of t.open_blockers ?? []) {
       const list = out.get(b.id);
-      if (list) list.push({ id: t.id, key: t.key });
-      else out.set(b.id, [{ id: t.id, key: t.key }]);
+      const brief = { id: t.id, key: t.key, title: t.title };
+      if (list) list.push(brief);
+      else out.set(b.id, [brief]);
     }
   }
   return out;
 }
 
-export type Mark =
-  | { kind: "blocked"; by: string }
-  | { kind: "lapsed"; at: string }
-  | { kind: "task-kind"; label: "Break down" | "Retrospective" };
+export type Mark = { kind: "blocked"; by: string } | { kind: "lapsed"; at: string } | { kind: "task-kind"; label: string };
 
-/** The marks a Task carries, most pressing first; a card shows the first, a row all of them. */
+/** The marks a Task carries, most pressing first: a card shows the first, a row all of them. */
 export function marksOf(task: Task, trail: ClaimTrail | undefined, now: number): Mark[] {
   const marks: Mark[] = [];
   if (task.state === "open" && task.blocked) marks.push({ kind: "blocked", by: task.open_blockers?.[0]?.key ?? "" });
-  const lapsed = lapsedAt(task, trail, now);
-  if (lapsed) marks.push({ kind: "lapsed", at: lapsed });
-  // The kind, unless the title already says it ("Break down: Checkout").
+  if (task.state === "open" && !liveClaim(task, now) && trail?.lapsedAt) marks.push({ kind: "lapsed", at: trail.lapsedAt });
   const label = kindLabel(task);
   if (label) marks.push({ kind: "task-kind", label });
   return marks;
 }
 
-/** What a toast says when a drag is refused, and the action that resolves it. */
-export type RefusalNote = {
-  title: string;
-  body: string;
-  action?: { kind: "claim" | "open"; label: string };
+/**
+ * Who may take back a Claim: the Task's Owner, or a Member above the holder on the holder's
+ * Reporting line, at any distance. The holder releases instead.
+ */
+export function canTakeBack(members: Map<string, Member>, me: string, holder: string, owner: string): boolean {
+  if (me === holder) return false;
+  return me === owner || isOnReportingLine(members, me, holder);
+}
+
+export type MoveContext = {
+  me: string;
+  /** The Projects the signed-in Member is in. */
+  projects: readonly Pick<Project, "id">[];
+  members: Map<string, Member>;
+  now: number;
 };
 
 /**
- * Words for a refused move of `task` to `target`, from the refusal's stable code. Claim is offered
- * when the Task is takeable by the mover; the holder is sent to the Task to Complete it, the
- * Feature owner to Drop it.
+ * Why `me` may not move the Task to a Step by hand, in words, before anything is sent; undefined
+ * when `/v1` would take the move. A Member of the Project or the Owner moves an open Task that is
+ * not a Parent; a held one only whoever may take it back, which ends the Claim.
  */
-export function refusalNote(
-  code: string,
-  ctx: {
-    task: Pick<Task, "key">;
-    target: Pick<Status, "name">;
-    takeable: boolean;
-    holds: boolean;
-    owns: boolean;
-    ownerName?: string;
-    teamName: string;
-    message: string;
-  },
-): RefusalNote {
+export function moveProblem(task: Task, ctx: MoveContext & { projectName: string }): string | undefined {
+  if (task.state !== "open") return `${task.key} has ended and stays where it is.`;
+  if (isParent(task)) return `${task.key} is a Parent: it stands at no Step, its Subtasks do.`;
+  const inProject = ctx.projects.some((p) => p.id === task.project_id);
+  if (!inProject && task.owner_id !== ctx.me) return `Only Members of ${ctx.projectName} or the Owner move ${task.key}.`;
+  const claim = liveClaim(task, ctx.now);
+  if (claim && !canTakeBack(ctx.members, ctx.me, claim.holder_id, task.owner_id)) {
+    const holder = ctx.members.get(claim.holder_id)?.name ?? "its holder";
+    const owner = ctx.members.get(task.owner_id)?.name;
+    return `${holder} holds ${task.key}: only the Owner${owner ? `, ${owner},` : ""} or someone above ${holder} moves it.`;
+  }
+  return undefined;
+}
+
+/** Whether moving the Task ends someone's Claim: it is held, and the mover may take it back. */
+export function moveEndsClaim(task: Task, now: number): string | undefined {
+  return liveClaim(task, now)?.holder_id;
+}
+
+/** What a board says when a card is dropped where `/v1` will not put it, before anything is sent. */
+export function dropProblem(task: Pick<Task, "key">, column: Column, holds: boolean): string | undefined {
+  if (column.kind === "done") {
+    return holds
+      ? `Advance ${task.key} into Done from its page, or complete it.`
+      : `Done is reached by its holder advancing ${task.key}, or by its Owner completing a Parent.`;
+  }
+  if (column.kind === "dropped") return `Only the Owner drops ${task.key}, from its page.`;
+  if (column.kind === "with") return `${task.key} is aimed at a Member when it is filed as a question, not by a drag.`;
+  return undefined;
+}
+
+/** Words for a move `/v1` refused, by its stable code. */
+export function refusalText(code: string, ctx: { task: Pick<Task, "key">; to: string; projectName: string; message: string }): string {
   const key = ctx.task.key;
-  const title = `Not moved to ${ctx.target.name}`;
   switch (code) {
-    case "use_complete":
-      if (ctx.holds) return { title, body: `Complete ${key} to move it to ${ctx.target.name}.`, action: { kind: "open", label: `Open ${key}` } };
-      return {
-        title,
-        body: `${ctx.target.name} is reached by completing a Task you hold.`,
-        action: ctx.takeable ? { kind: "claim", label: `Claim ${key}` } : undefined,
-      };
-    case "use_drop":
-      if (ctx.owns) return { title, body: `Drop ${key} to move it to ${ctx.target.name}.`, action: { kind: "open", label: `Open ${key}` } };
-      return { title, body: `Only the Feature owner${ctx.ownerName ? `, ${ctx.ownerName},` : ""} can drop ${key}.` };
-    case "forbidden":
-      return { title, body: `Only Members of ${ctx.teamName}, the Feature owner or its holder move ${key}.` };
-    case "ended":
+    case "held":
+      return `Someone else holds ${key} now: only the Owner or someone above its holder moves it.`;
     case "conflict":
-      return { title, body: `${key} has ended and stays where it is.` };
+      return `${key} became a Parent: its Subtasks stand at Steps, it does not.`;
+    case "ended":
+      return `${key} has ended and stays where it is.`;
+    case "forbidden":
+      return `Only Members of ${ctx.projectName} or the Owner move ${key}.`;
+    case "not_found":
+      return `${ctx.to} is no longer a Step of this Workflow.`;
     default:
-      return { title, body: ctx.message };
+      return ctx.message;
   }
 }
 
-/**
- * Whether `member` may move the Task between open Statuses, as setTaskStatus allows: an open Task,
- * moved by a Member of its Feature's Team, the Feature's owner, or the Member holding it.
- */
-export function mayMove(task: Task, ctx: { member: string; inTeam: boolean; feature: Pick<Feature, "owner_id"> | undefined; now: number }): boolean {
-  if (task.state !== "open") return false;
-  return ctx.inTeam || ctx.feature?.owner_id === ctx.member || liveClaim(task, ctx.now)?.holder_id === ctx.member;
+/** The Connectors out of a Step, in their order. */
+export function connectorsFrom(connectors: readonly Connector[], stepId: string | undefined): Connector[] {
+  return connectors.filter((c) => c.from_step_id === stepId).sort((a, b) => a.position - b.position);
 }
 
-/** The 1-based position a Feature dropped onto `overId` takes in the Team's whole Rank, ended Features counted. */
-export function rankPosition(ranked: Pick<Feature, "id">[], overId: string): number {
-  const i = ranked.findIndex((f) => f.id === overId);
-  return i < 0 ? ranked.length : i + 1;
+/** A group's id among the list's folded groups: Done and Dropped are the same group under any Step grouping. */
+export function groupKey(g: Group): string {
+  return g.by === "ended" ? g.id : `${g.by}:${g.id}`;
 }
 
-/** The Team's Features after moving `activeId` to `position`, renumbered as the server ranks them. */
-export function moveFeature<T extends Pick<Feature, "id" | "rank">>(ranked: T[], activeId: string, position: number): T[] {
-  const list = [...ranked].sort((a, b) => a.rank - b.rank);
-  const from = list.findIndex((f) => f.id === activeId);
-  if (from < 0) return list;
-  const [moved] = list.splice(from, 1);
-  list.splice(Math.min(Math.max(position - 1, 0), list.length), 0, moved);
-  return list.map((f, i) => ({ ...f, rank: i + 1 }));
-}
-
-/** A Feature's Task bar: the share of its Tasks done, held, and open but not held, in percent. */
-export function taskBar(counts: TaskCounts): { done: number; held: number; waiting: number } {
-  const total = counts.open + counts.done + counts.dropped;
-  if (total === 0) return { done: 0, held: 0, waiting: 0 };
-  const pct = (n: number) => (n / total) * 100;
-  return { done: pct(counts.done), held: pct(counts.claimed), waiting: pct(counts.open - counts.claimed) };
-}
-
-/** "1 done · 2 open · 1 dropped": dropped only when there are any. */
-export function countsText(counts: TaskCounts): string {
-  const parts = [`${counts.done} done`, `${counts.open} open`];
-  if (counts.dropped > 0) parts.push(`${counts.dropped} dropped`);
-  return parts.join(" · ");
+/** A board column's name: its Step's, "With <Member>", Done or Dropped. */
+export function columnName(c: Column, model: { members: Map<string, Member> }): string {
+  switch (c.kind) {
+    case "step":
+      return c.step.name;
+    case "with":
+      return `With ${c.member?.name ?? model.members.get(c.memberId)?.name ?? "a Member"}`;
+    case "done":
+      return "Done";
+    case "dropped":
+      return "Dropped";
+  }
 }

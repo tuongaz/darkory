@@ -26,10 +26,11 @@ const (
 	maxViewDisplay = 16 << 10
 )
 
-// NewView is a View to save. Team names the Team whose list it is, nil for a list across Teams.
+// NewView is a View to save. Project names the Project whose list it is, nil for a list across
+// Projects.
 type NewView struct {
 	Entity  string
-	Team    *string
+	Project *string
 	Name    string
 	Filters []string
 	Sort    *string
@@ -45,17 +46,17 @@ type ViewChange struct {
 	Display map[string]any
 }
 
-const viewCols = `v.id, v.entity, v.team_id, v.name, v.filters, v.sort, v.display, v.created_at, v.updated_at`
+const viewCols = `v.id, v.entity, v.project_id, v.name, v.filters, v.sort, v.display, v.created_at, v.updated_at`
 
 func scanView(row interface{ Scan(...any) error }) (View, error) {
 	var v View
-	var team, sort, display sql.NullString
+	var project, sort, display sql.NullString
 	var filters string
 	var created, updated int64
-	if err := row.Scan(&v.ID, &v.Entity, &team, &v.Name, &filters, &sort, &display, &created, &updated); err != nil {
+	if err := row.Scan(&v.ID, &v.Entity, &project, &v.Name, &filters, &sort, &display, &created, &updated); err != nil {
 		return v, err
 	}
-	v.TeamID, v.Sort, v.CreatedAt, v.UpdatedAt = nullString(team), nullString(sort), fromMS(created), fromMS(updated)
+	v.ProjectID, v.Sort, v.CreatedAt, v.UpdatedAt = nullString(project), nullString(sort), fromMS(created), fromMS(updated)
 	if err := json.Unmarshal([]byte(filters), &v.Filters); err != nil {
 		return v, fmt.Errorf("core: the filters of View %s: %w", v.ID, err)
 	}
@@ -77,8 +78,8 @@ func getView(ctx context.Context, r store.Reader, c *auth.Caller, id string) (Vi
 	return v, err
 }
 
-// ListViews lists the caller's Views, oldest first, of entity's list and of team's when given.
-func (s *Service) ListViews(ctx context.Context, c *auth.Caller, entity, team *string) ([]View, error) {
+// ListViews lists the caller's Views, oldest first, of entity's list and of project's when given.
+func (s *Service) ListViews(ctx context.Context, c *auth.Caller, entity, project *string) ([]View, error) {
 	q := &sqlQuery{}
 	q.and("v.org_id = " + q.arg(c.OrgID))
 	q.and("v.member_id = " + q.arg(c.MemberID))
@@ -88,12 +89,12 @@ func (s *Service) ListViews(ctx context.Context, c *auth.Caller, entity, team *s
 		}
 		q.and("v.entity = " + q.arg(*entity))
 	}
-	if team != nil {
-		id, err := resolveTeam(ctx, s.store, c.OrgID, *team)
+	if project != nil {
+		id, err := resolveProject(ctx, s.store, c.OrgID, *project)
 		if err != nil {
 			return nil, err
 		}
-		q.and("v.team_id = " + q.arg(id))
+		q.and("v.project_id = " + q.arg(id))
 	}
 	return collect(ctx, s.store, scanView, `SELECT `+viewCols+` FROM views v WHERE `+q.sql()+` ORDER BY v.created_at, v.id`, q.args...)
 }
@@ -111,20 +112,20 @@ func (s *Service) CreateView(ctx context.Context, c *auth.Caller, nv NewView, id
 		return View{}, err
 	}
 	res, err := s.writeOwn(ctx, c, idem, func(t *tx) (any, error) {
-		var team *string
-		if nv.Team != nil {
-			id, err := resolveTeam(ctx, t, c.OrgID, *nv.Team)
+		var project *string
+		if nv.Project != nil {
+			id, err := resolveProject(ctx, t, c.OrgID, *nv.Project)
 			if err != nil {
 				return nil, err
 			}
-			team = &id
+			project = &id
 		}
-		if err := viewNameFree(t, "", nv.Entity, team, nv.Name); err != nil {
+		if err := viewNameFree(t, "", nv.Entity, project, nv.Name); err != nil {
 			return nil, err
 		}
 		id := newID()
-		if _, err := t.Exec(ctx, `INSERT INTO views (id, org_id, member_id, entity, team_id, name, filters, sort, display, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`, id, c.OrgID, c.MemberID, nv.Entity, team, nv.Name,
+		if _, err := t.Exec(ctx, `INSERT INTO views (id, org_id, member_id, entity, project_id, name, filters, sort, display, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`, id, c.OrgID, c.MemberID, nv.Entity, project, nv.Name,
 			cols["filters"], cols["sort"], cols["display"], ms(t.now)); err != nil {
 			return nil, err
 		}
@@ -148,7 +149,7 @@ func (s *Service) UpdateView(ctx context.Context, c *auth.Caller, id string, ch 
 			return nil, err
 		}
 		if ch.Name != nil {
-			if err := viewNameFree(t, v.ID, v.Entity, v.TeamID, *ch.Name); err != nil {
+			if err := viewNameFree(t, v.ID, v.Entity, v.ProjectID, *ch.Name); err != nil {
 				return nil, err
 			}
 		}
@@ -184,8 +185,8 @@ func (s *Service) DeleteView(ctx context.Context, c *auth.Caller, id string, ide
 }
 
 func validEntity(entity string) error {
-	if entity != EntityTasks && entity != EntityFeatures {
-		return refuse(CodeInvalid, "a View is of the tasks or the features list, not %q", entity)
+	if entity != EntityTasks {
+		return refuse(CodeInvalid, "a View is of the tasks list, not %q", entity)
 	}
 	return nil
 }
@@ -231,15 +232,15 @@ func viewColumns(entity string, name *string, filters *[]string, sort *string, d
 
 // viewNameFree refuses a name another of the caller's Views (not except) of the same list has,
 // ignoring case.
-func viewNameFree(t *tx, except, entity string, team *string, name string) error {
-	teamID := ""
-	if team != nil {
-		teamID = *team
+func viewNameFree(t *tx, except, entity string, project *string, name string) error {
+	projectID := ""
+	if project != nil {
+		projectID = *project
 	}
 	var n int
 	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM views WHERE org_id = $1 AND member_id = $2 AND entity = $3
-AND COALESCE(team_id, '') = $4 AND lower(name) = lower($5) AND id <> $6`,
-		t.caller.OrgID, t.caller.MemberID, entity, teamID, name, except).Scan(&n); err != nil {
+AND COALESCE(project_id, '') = $4 AND lower(name) = lower($5) AND id <> $6`,
+		t.caller.OrgID, t.caller.MemberID, entity, projectID, name, except).Scan(&n); err != nil {
 		return err
 	}
 	if n > 0 {

@@ -2,9 +2,11 @@ import { expect, request, test, type APIRequestContext, type Page } from "@playw
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-// The Inbox, Agents and Activity against the real binary e2e/server.ts started, after whatever
-// the specs before this one filed. It seeds its own Team, Skill and agent through /v1 with the
-// admin token init printed, and plays the agent with that agent's token and a Session of its own.
+// The Inbox, My work, a Project's Agents and Activity, and the marks (scenario 9), against the
+// real binary e2e/server.ts started, after whatever the specs before this one filed. It seeds its
+// own Project, Skill and agent through /v1 with the admin token init printed, and plays the agent
+// with that agent's token and a Session of its own. The Install runs no Runner, so the marks'
+// session colours are drawn from GET /v1/runner/sessions answered by the page's route.
 test.describe.configure({ mode: "serial" });
 
 const base = () => process.env.DARKORY_E2E_BASE_URL!;
@@ -50,38 +52,40 @@ async function notReloaded(page: Page) {
   expect(await page.evaluate(() => (window as unknown as { notReloaded?: boolean }).notReloaded)).toBe(true);
 }
 
+/** The Runner's sessions as GET /v1/runner/sessions would list them, for an Install with no Runner. */
+async function runnerSays(page: Page, items: unknown[]) {
+  await page.unroute("**/v1/runner/sessions");
+  await page.route("**/v1/runner/sessions", (route) => route.fulfill({ json: { items, runner: true } }));
+}
+
 /** The Activity page's rows. */
 function activityRows(page: Page) {
   return page.getByRole("list", { name: "Activity" }).locator("li[data-seq]");
 }
 
-type Detail = { feature: { key: string }; tasks: { key: string }[] };
-type TaskDetail = { task: { key: string; claim?: unknown }; status: { kind: string; name: string } };
+type Task = { id: string; key: string; parent_id?: string; claim?: { id: string } };
+type TaskDetail = { task: Task };
 
 let admin: APIRequestContext;
 let agent: APIRequestContext;
-let feature: string;
-let discount: string;
-let cart: string;
+let cart: Task;
+let discount: Task;
+let checkout: Task;
 
 test.beforeAll(async () => {
   admin = await as(process.env.DARKORY_E2E_ADMIN_TOKEN!, "e2e-inbox-ada");
-  await v1(admin, "POST", "/v1/teams", { key: "INB", name: "Inbox" });
-  await v1(admin, "PUT", "/v1/teams/INB/members/ada");
-  await v1(admin, "POST", "/v1/skills", { name: "inbox-engineer", kind: "generic", body: "Build what the Task asks for." });
   await v1(admin, "POST", "/v1/members", { name: "inbox-builder", kind: "agent" });
-  await v1(admin, "PUT", "/v1/teams/INB/members/inbox-builder");
-  await v1(admin, "PUT", "/v1/members/inbox-builder/skills/inbox-engineer");
   await v1(admin, "PUT", "/v1/members/inbox-builder/manager", { manager: "ada" });
-  // ada has the Skill too, so a Task the agent lets go shows in her My work.
-  await v1(admin, "PUT", "/v1/members/ada/skills/inbox-engineer");
+  // INB has init's default Workflow: Build carries engineer, which inbox-builder and ada hold.
+  await v1(admin, "POST", "/v1/projects", { key: "INB", name: "Inbox", members: ["ada", "inbox-builder"] });
+  await v1(admin, "PUT", "/v1/members/inbox-builder/skills/engineer");
+  await v1(admin, "PUT", "/v1/members/ada/skills/engineer");
   const issued = await v1<{ secret: string }>(admin, "POST", "/v1/members/inbox-builder/tokens", { name: "seed" });
   agent = await as(issued.secret, "sess-inbox-builder");
 
-  const filed = await v1<Detail>(admin, "POST", "/v1/features", { team: "INB", title: "Checkout flow" });
-  feature = filed.feature.key;
-  discount = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { feature, title: "Discount codes", skill: "inbox-engineer" })).task.key;
-  cart = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { feature, title: "Build the cart page", skill: "inbox-engineer" })).task.key;
+  checkout = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { project: "INB", title: "Checkout flow" })).task;
+  cart = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { parent: checkout.key, title: "Build the cart page" })).task;
+  discount = (await v1<TaskDetail>(admin, "POST", "/v1/tasks", { parent: checkout.key, title: "Discount codes" })).task;
 });
 
 test.afterAll(async () => {
@@ -89,158 +93,180 @@ test.afterAll(async () => {
   await admin?.dispose();
 });
 
-test("a 2 s Claim lapses: Agents shows Lapsed, the Task returns to Todo, Darkory recorded it", async ({ page }) => {
+test("a question the agent aims at the human lands in the Inbox, live, with its Project", async ({ page }) => {
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
-  await page.goto(`${base()}/agents`);
-  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
-  await expect(row).toContainText("Nothing held");
+  await v1(agent, "POST", `/v1/tasks/${cart.key}/claim`, { heartbeat_timeout_seconds: 900, model_label: "claude-opus-5-5" });
+  await expect(page.getByRole("heading", { name: "Inbox" })).toBeAttached();
   await markLoaded(page);
 
-  await v1(agent, "POST", `/v1/tasks/${discount}/claim`, { heartbeat_timeout_seconds: 2, model_label: "claude-opus-5-5" });
-  // No Heartbeat comes; the server records the lapse within a second of the expiry.
-  await expect(row.getByText("Lapsed")).toBeVisible({ timeout: 15_000 });
-  await expect(row).toContainText("Nothing held");
-  await expect(row.getByRole("cell").nth(6)).toContainText(`1${discount}`);
-  await notReloaded(page);
-  await shot(page, "agents-lapsed");
-
-  const after = await v1<TaskDetail>(admin, "GET", `/v1/tasks/${discount}`);
-  expect(after.task.claim).toBeUndefined();
-  expect(after.status.kind).toBe("todo");
-  await page.goto(`${base()}/my-work`);
-  const queued = page.getByRole("table", { name: "Takeable now" }).getByRole("row").filter({ hasText: "Discount codes" });
-  await expect(queued.getByRole("img", { name: "Todo" })).toBeVisible();
-  await shot(page, "my-work");
-
-  await page.goto(`${base()}/activity?kind=task.lapsed`);
-  const lapse = activityRows(page).filter({ hasText: discount });
-  await expect(lapse).toHaveCount(1);
-  await expect(lapse.getByRole("img", { name: "Darkory" })).toBeVisible();
-  await expect(lapse).toContainText("Darkory Lapsed");
-  await expect(lapse).toContainText("held by inbox-builder");
-  await shot(page, "activity-lapse");
-  expect(errors).toEqual([]);
-});
-
-test("a question the agent aims at the human lands in Aimed at me, live", async ({ page }) => {
-  const errors = consoleErrors(page);
-  await signIn(page, admin, "ada");
-  await v1(agent, "POST", `/v1/tasks/${cart}/claim`, { heartbeat_timeout_seconds: 900, model_label: "claude-opus-5-5" });
-  await expect(page.getByRole("heading", { name: "Inbox" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Aimed at me" })).toHaveCount(0);
-  await markLoaded(page);
-
-  const question = await v1<TaskDetail>(agent, "POST", "/v1/tasks", {
-    title: "Stripe keys for staging?",
-    description: "Staging has no STRIPE_SECRET_KEY. Which account do we use?",
-    aimed_at: "ada",
-    blocks: cart,
-  });
+  const question = await v1<TaskDetail>(agent, "POST", "/v1/tasks", { title: "Stripe keys for staging?", aim: "ada", blocks: cart.key });
   const key = question.task.key;
-  const aimed = page.getByRole("region", { name: "Aimed at me" });
-  await expect(aimed.getByText("Stripe keys for staging?")).toBeVisible();
-  // One line per row: the question's text is in its peek.
-  await expect(aimed.getByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).toHaveCount(0);
-  await expect(aimed.getByText(`blocks ${cart}`)).toBeVisible();
-  await expect(aimed.getByText("inbox-builder")).toBeVisible();
-  await expect(aimed.getByRole("button", { name: `Answer ${key}` })).toBeVisible();
-  const questionRow = aimed.getByRole("button", { name: `Answer ${key}` }).locator("xpath=ancestor::div[contains(@class, 'grid')][1]");
-  expect((await questionRow.boundingBox())!.height).toBe(36);
+  const aimed = page.getByRole("region", { name: "Aimed at you" });
+  const row = aimed.locator(`[data-task="${key}"]`);
+  await expect(row).toContainText("Stripe keys for staging?");
+  await expect(row).toContainText(`blocks ${cart.key}`);
+  await expect(row).toContainText("inbox-builder");
+  await expect(row).toContainText("With you");
+  await expect(row.getByTitle("Inbox", { exact: true })).toBeVisible();
+  expect((await row.boundingBox())!.height).toBe(36);
   await notReloaded(page);
   await shot(page, "inbox-aimed");
 
-  // On Agents, inbox-builder holds the cart page and is stuck on the question.
-  await page.goto(`${base()}/agents`);
-  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
-  await expect(row).toContainText("Build the cart page");
-  await expect(row.getByText(`Blocked by ${key}`)).toBeVisible();
-  await expect(row.getByRole("meter")).toBeVisible();
-  // The Session id by its last 8 characters; the whole id is its hover and what a click copies.
-  await expect(row.getByRole("button", { name: "Copy the Session id sess-inbox-builder" })).toHaveText("…-builder");
-  await expect(row).toContainText("claude-opus-5-5");
-  await shot(page, "agents");
+  // Opening it is its peek over the Inbox, and the app follows it into its Project.
+  await row.getByRole("link", { name: "Stripe keys for staging?" }).click();
+  await expect(page).toHaveURL(`${base()}/inbox?task=${key}`);
+  await expect(page.getByRole("dialog", { name: new RegExp(key) })).toBeVisible();
 
-  await row.getByRole("link", { name: "inbox-builder", exact: true }).click();
+  // Answer claims it; it moves to My work, held by me.
+  await page.goto(`${base()}/inbox`);
+  await page.getByRole("button", { name: `Answer ${key}` }).click();
+  await page.goto(`${base()}/my-work`);
+  await expect(page.getByRole("region", { name: "Held by you" }).locator(`[data-task="${key}"]`)).toBeVisible();
+  // The question joined the Parent beside the Task it blocks (scenario 5), so it owns three.
+  await expect(page.getByRole("region", { name: "You own" }).locator(`[data-task="${checkout.key}"]`)).toContainText("0 of 3 done");
+  await shot(page, "my-work");
+
+  // Scenario 5, from a Subtask: the question is a Subtask of the same Parent, and blocks the cart page.
+  expect(question.task.parent_id).toBe(checkout.id);
+  await page.goto(`${base()}/tasks/${checkout.key}`);
+  const subtasks = page.getByRole("region", { name: "Subtasks" });
+  await expect(subtasks.getByRole("link", { name: /Stripe keys for staging\?/ })).toBeVisible();
+  await expect(subtasks.getByRole("link", { name: /Build the cart page/ })).toContainText("Blocked");
+  await shot(page, "question-beside-its-task");
+  expect(errors).toEqual([]);
+});
+
+test("marks: an agent's gradient ring turns while its session runs, stops in its colour, and a human's is plain (scenario 9)", async ({ page }) => {
+  const errors = consoleErrors(page);
+  await signIn(page, admin, "ada");
+  const session = { task_id: cart.id, member_id: "", session_id: "sess-inbox-builder", host: "e2e-host", tmux: `dk-${cart.key}`, started_at: new Date().toISOString(), log_path: "/tmp/x" };
+  const members = await v1<{ items: { id: string; name: string }[] }>(admin, "GET", "/v1/members");
+  session.member_id = members.items.find((m) => m.name === "inbox-builder")!.id;
+  await runnerSays(page, [{ ...session, state: "running" }]);
+  await page.goto(`${base()}/projects/INB/agents`);
+
+  const row = page.getByRole("row").filter({ has: page.getByRole("link", { name: "inbox-builder", exact: true }) });
+  const mark = row.getByRole("img", { name: "inbox-builder (agent), working" });
+  await expect(mark).toHaveAttribute("data-working", "running");
+  await expect(row).toContainText("Build the cart page");
+  await expect(row).toContainText("Build");
+  await expect(row).toContainText("e2e-host");
+  const spin = () => mark.evaluate((el) => getComputedStyle(el).getPropertyValue("--spin"));
+  const first = await spin();
+  await page.waitForTimeout(300);
+  expect(await spin()).not.toBe(first);
+  await shot(page, "agents-running");
+
+  // Stalled: the ring stops, in the session's colour.
+  await runnerSays(page, [{ ...session, state: "stalled" }]);
+  await expect(row.getByRole("img", { name: "inbox-builder (agent), working, its session stalled" })).toHaveAttribute("data-working", "stalled", { timeout: 10_000 });
+  const still = await row.getByRole("img", { name: /inbox-builder \(agent\)/ }).evaluate((el) => getComputedStyle(el).getPropertyValue("--spin"));
+  await page.waitForTimeout(300);
+  expect(await row.getByRole("img", { name: /inbox-builder \(agent\)/ }).evaluate((el) => getComputedStyle(el).getPropertyValue("--spin"))).toBe(still);
+  await shot(page, "agents-stalled");
+
+  await runnerSays(page, [{ ...session, state: "waiting" }]);
+  await expect(row.getByRole("img", { name: /inbox-builder \(agent\), working, its session waiting/ })).toHaveAttribute("data-working", "waiting", { timeout: 10_000 });
+
+  // A human's mark: a plain round border, no gradient.
+  await page.goto(`${base()}/projects/INB/activity`);
+  const human = activityRows(page).getByRole("img", { name: "ada", exact: true }).first();
+  await expect(human).toHaveAttribute("data-kind", "human");
+  // Round: a radius of at least half its size (Tailwind's rounded-full computes to an infinite one).
+  expect(await human.evaluate((el) => parseFloat(getComputedStyle(el).borderRadius) >= el.getBoundingClientRect().width / 2)).toBe(true);
+  expect(await human.evaluate((el) => getComputedStyle(el).backgroundImage)).not.toContain("conic-gradient");
+  // The agent's, the AI gradient, once its session no longer colours it.
+  await runnerSays(page, []);
+  await page.goto(`${base()}/projects/INB/agents`);
+  const agentMark = page.getByRole("img", { name: /^inbox-builder \(agent\)/ }).first();
+  await expect(agentMark).toHaveAttribute("data-kind", "agent");
+  expect(await agentMark.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain("conic-gradient");
+  await shot(page, "marks");
+  expect(errors).toEqual([]);
+});
+
+test("the agent's peek: its session, the Steps it takes, and Pause from the ⋯ menu", async ({ page }) => {
+  const errors = consoleErrors(page);
+  await signIn(page, admin, "ada");
+  await page.goto(`${base()}/projects/INB/agents?agent=inbox-builder`);
   const peek = page.getByRole("dialog", { name: "Agent inbox-builder" });
   await expect(peek).toBeVisible();
-  const claims = peek.getByRole("region", { name: "Claims today" });
-  await expect(claims).toContainText("Claims today · 2");
-  await expect(claims.getByRole("listitem").filter({ hasText: "Discount codes" })).toContainText("after 2 sLapsed");
-  await expect(claims.getByRole("listitem").filter({ hasText: "Build the cart page" }).getByRole("meter")).toBeVisible();
-  await expect(peek.getByRole("region", { name: "Tokens" })).toContainText("seed");
+  await expect(peek.getByRole("region", { name: "Claims today" })).toContainText(cart.key);
+  await expect(peek).toContainText("Steps in Inbox");
+  await expect(peek.getByRole("link", { name: "Inbox" })).toHaveAttribute("href", "/projects/INB/agents");
   await shot(page, "agent-peek");
-  await peek.getByRole("link", { name: /^Activity · \d+ entries/ }).click();
-  await expect(page).toHaveURL(`${base()}/activity?member=inbox-builder`);
-
-  // Answer claims the question and opens it to write the Note, with Complete as the primary.
-  await page.goto(`${base()}/inbox`);
-  await page.getByRole("region", { name: "Aimed at me" }).getByRole("button", { name: `Answer ${key}` }).click();
-  const answer = page.getByRole("dialog", { name: `Task ${key}` });
-  await expect(answer.getByRole("textbox", { name: "Note" })).toBeFocused();
-  await expect(answer.getByRole("button", { name: "Complete" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Held by me" }).getByText("Stripe keys for staging?")).toBeVisible();
-  await expect(page.getByRole("region", { name: "Aimed at me" })).toHaveCount(0);
-  await shot(page, "inbox-answer");
+  await peek.getByRole("link", { name: /^Activity · / }).click();
+  await expect(page).toHaveURL(`${base()}/projects/INB/activity?member=inbox-builder`);
+  await expect(activityRows(page).first()).toContainText("inbox-builder");
   expect(errors).toEqual([]);
 });
 
-test("Activity narrows to a Member and to a Kind", async ({ page }) => {
+test("a lapse on my Task shows in the Inbox; Activity words it and an advance, and narrows by Kind and Task", async ({ page }) => {
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
-  await page.goto(`${base()}/activity`);
-  await expect(activityRows(page).first()).toBeVisible();
+  // The agent advances the cart page along pass to Review, then lets a 2 s Claim on Discount codes lapse.
+  await v1(agent, "POST", `/v1/tasks/${cart.key}/advance`, { outcome: "pass" });
+  await v1(agent, "POST", `/v1/tasks/${discount.key}/claim`, { heartbeat_timeout_seconds: 2 });
+  await page.goto(`${base()}/inbox`);
+  const lapsed = page.getByRole("region", { name: "Lapsed on your Tasks" }).locator(`[data-task="${discount.key}"]`);
+  await expect(lapsed).toContainText("Lapsed", { timeout: 15_000 });
+  await expect(lapsed).toContainText("inbox-builder");
+  await shot(page, "inbox-lapsed");
+
+  await page.goto(`${base()}/projects/INB/activity`);
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
+  const advanced = activityRows(page).filter({ hasText: "advanced" });
+  await expect(advanced.first()).toContainText(`inbox-builder advanced ${cart.key} Build the cart page along pass to Review`);
+  await expect(advanced.first().getByRole("link", { name: "Review" })).toHaveAttribute("href", /\/projects\/INB\/tasks\?filter\.tasks=step%3Ais%3A/);
+  await expect(activityRows(page).filter({ hasText: "Darkory" }).first()).toContainText(`held by inbox-builder`);
   await shot(page, "activity");
 
-  await page.getByRole("button", { name: "Member" }).click();
-  await page.getByRole("menuitemradio", { name: "inbox-builder" }).click();
-  await expect(page).toHaveURL(`${base()}/activity?member=inbox-builder`);
-  await expect(page.getByText("Member is")).toBeVisible();
-  const rows = activityRows(page);
-  await expect(rows.first()).toBeVisible();
-  // Its own entries, and the lapse Darkory recorded on its Claim.
-  for (const text of await rows.allTextContents()) expect(text).toMatch(/^(IBinbox-builder|DDarkory Lapsed)/);
-  // The Claim's own entry is on this page, so the lapse says how long it waited.
-  await expect(rows.filter({ hasText: "Darkory Lapsed" })).toContainText("held by inbox-builder · no Heartbeat in 2 s");
-  await expect(rows.filter({ hasText: "inbox-builder filed" })).toHaveCount(1);
-  await shot(page, "activity-member");
-
-  await page.getByRole("button", { name: "Clear Member" }).click();
-  await expect(page).toHaveURL(`${base()}/activity`);
   await page.getByRole("button", { name: "Kind" }).click();
-  await page.getByRole("menuitemradio", { name: "Lapsed" }).click();
-  await expect(page).toHaveURL(`${base()}/activity?kind=task.lapsed`);
-  await expect(page.getByText("Kind is")).toBeVisible();
-  await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText("Darkory Lapsed");
-  await expect(page.getByText("1 entry loaded", { exact: true })).toBeVisible();
-  await shot(page, "activity-kind");
+  await page.getByRole("menuitemradio", { name: "Advanced" }).click();
+  await expect(page).toHaveURL(`${base()}/projects/INB/activity?kind=task.advanced`);
+  await expect(activityRows(page)).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Clear Kind" }).click();
+  await expect(page).toHaveURL(`${base()}/projects/INB/activity`);
+  await page.getByRole("button", { name: "Task", exact: true }).click();
+  await page.getByRole("option", { name: new RegExp(discount.key) }).click();
+  await expect(page).toHaveURL(`${base()}/projects/INB/activity?about=${discount.key}`);
+  await expect(activityRows(page).filter({ hasNotText: discount.key })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test("at phone width the four pages do not scroll sideways", async ({ page }) => {
+test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
-  await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ["/inbox", "/my-work", "/agents", "/activity"]) {
+  const screens = [
+    { path: "/inbox", ready: () => page.getByRole("region", { name: "Lapsed on your Tasks" }) },
+    { path: "/my-work", ready: () => page.getByRole("region", { name: "You own" }) },
+    { path: "/projects/INB/agents", ready: () => page.getByRole("link", { name: "inbox-builder", exact: true }) },
+    { path: "/projects/INB/activity", ready: () => page.getByRole("list", { name: "Activity" }) },
+  ];
+  for (const { path, ready } of screens) {
     await page.goto(`${base()}${path}`);
-    await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
-    const [scroll, client] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
-    expect(scroll, path).toBe(client);
+    await expect(ready()).toBeVisible();
+    const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+    expect(widths.scroll, path).toBe(widths.client);
+    await shot(page, `phone${path.replaceAll("/", "-")}`);
   }
-  await shot(page, "phone-activity");
-
-  // Agents fits the phone: the table does not scroll inside its frame, and the Heartbeat is whole.
-  await page.goto(`${base()}/agents`);
-  const table = page.getByRole("table");
-  await expect(table.getByRole("columnheader", { name: "Heartbeat" })).toBeVisible();
-  expect(await table.evaluate((el) => el.scrollWidth <= el.parentElement!.clientWidth)).toBe(true);
-  // inbox-builder still holds the cart page, so its row draws the meter.
-  const meter = (await table.getByRole("meter").first().boundingBox())!;
-  expect(meter.x + meter.width).toBeLessThanOrEqual(390);
-  const head = (await table.getByRole("columnheader", { name: "Heartbeat" }).boundingBox())!;
-  expect(head.x + head.width).toBeLessThanOrEqual(390);
-  await shot(page, "phone-agents");
   expect(errors).toEqual([]);
+  await context.close();
+});
+
+test("a Project's Agents table fits a 1280px laptop beside the sidebar, with no sideways scroll", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage();
+  await signIn(page, admin, "ada");
+  await page.goto(`${base()}/projects/INB/agents`);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("link", { name: "inbox-builder", exact: true })).toBeVisible();
+  const scroller = table.locator("xpath=ancestor::div[contains(@class,'overflow-auto')][1]");
+  expect(await scroller.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+  await shot(page, "agents-laptop");
+  await context.close();
 });

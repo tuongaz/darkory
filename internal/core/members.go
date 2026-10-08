@@ -170,17 +170,17 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 	return res.(Member), nil
 }
 
-// ListMembers lists the Members, by name, optionally of one Team or one kind.
-func (s *Service) ListMembers(ctx context.Context, c *auth.Caller, team, kind *string) ([]Member, error) {
+// ListMembers lists the Members, by name, optionally of one Project or one kind.
+func (s *Service) ListMembers(ctx context.Context, c *auth.Caller, project, kind *string) ([]Member, error) {
 	q := `SELECT ` + memberCols + ` FROM ` + memberFrom + ` WHERE m.org_id = $1`
 	args := []any{c.OrgID}
-	if team != nil {
-		id, err := resolveTeam(ctx, s.store, c.OrgID, *team)
+	if project != nil {
+		id, err := resolveProject(ctx, s.store, c.OrgID, *project)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, id)
-		q += ` AND m.id IN (SELECT member_id FROM team_members WHERE org_id = $1 AND team_id = $2)`
+		q += ` AND m.id IN (SELECT member_id FROM project_members WHERE org_id = $1 AND project_id = $2)`
 	}
 	if kind != nil {
 		args = append(args, *kind)
@@ -189,7 +189,7 @@ func (s *Service) ListMembers(ctx context.Context, c *auth.Caller, team, kind *s
 	return collect(ctx, s.store, scanMember, q+` ORDER BY m.name`, args...)
 }
 
-// GetMember returns a Member with their Teams, Skills and the Members they direct.
+// GetMember returns a Member with their Projects, Skills and the Members they direct.
 func (s *Service) GetMember(ctx context.Context, c *auth.Caller, ref string) (MemberDetail, error) {
 	id, err := resolveMember(ctx, s.store, c.OrgID, ref)
 	if err != nil {

@@ -38,15 +38,32 @@ func deref[T any](p *T) T {
 	return *p
 }
 
-// needsOf says what a Task needs: a Skill, or the Member it is aimed at.
-func (c *call) needsOf(t client.Task) string {
+// whereOf says where a Task is: at a Step, with the Member it is aimed at, or, for a Parent,
+// how far its Subtasks have got.
+func (c *call) whereOf(t client.Task) string {
 	switch {
+	case t.SubtaskCounts != nil:
+		n := t.SubtaskCounts
+		return fmt.Sprintf("parent %d/%d", n.Done, n.Open+n.Done+n.Dropped)
 	case t.AimedAtID != nil:
 		return "@" + c.member(*t.AimedAtID)
-	case t.SkillID != nil:
+	case t.StepID != nil:
+		return c.step(t.ProjectID, *t.StepID)
+	}
+	return "-"
+}
+
+// skillOf names the Skill that takes a Task at its Step; "-" for none.
+func (c *call) skillOf(t client.Task) string {
+	if t.SkillID != nil {
 		return c.skill(*t.SkillID)
 	}
 	return "-"
+}
+
+// labelsOf names the Labels a Task carries.
+func (c *call) labelNames(t client.Task) string {
+	return names(deref(t.Labels), func(id string) string { return c.label(t.ProjectID, id) })
 }
 
 func stateOf(t client.Task) string {
@@ -82,7 +99,13 @@ func (c *call) printTasks(w io.Writer, ts []client.Task, next *string) {
 }
 
 func (c *call) printTaskLine(w io.Writer, t client.Task) {
-	line := fmt.Sprintf("%-9s %-13s %-12s %-14s %s", one(t.Key), stateOf(t), c.status(t.StatusID), c.needsOf(t), one(t.Title))
+	line := fmt.Sprintf("%-9s %-13s %-14s %-14s %s", one(t.Key), stateOf(t), c.whereOf(t), c.skillOf(t), one(t.Title))
+	if t.ParentID != nil {
+		line += "  [in " + c.taskKey(*t.ParentID) + "]"
+	}
+	if ls := deref(t.Labels); len(ls) > 0 {
+		line += "  [" + c.labelNames(t) + "]"
+	}
 	if h := c.claimOf(t.Claim); h != "" {
 		line += "  [" + h + "]"
 	}
@@ -95,15 +118,54 @@ func (c *call) printTaskLine(w io.Writer, t client.Task) {
 func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 	t := d.Task
 	fmt.Fprintf(w, "%s  %s\n", one(t.Key), one(t.Title))
-	fmt.Fprintf(w, "  Feature    %s %s\n", one(d.Feature.Key), one(d.Feature.Title))
-	fmt.Fprintf(w, "  State      %s (%s)\n", stateOf(t), one(string(t.Kind)))
-	if d.Status.ID != "" {
-		fmt.Fprintf(w, "  Status     %s (%s)\n", one(d.Status.Name), one(string(d.Status.Kind)))
+	fmt.Fprintf(w, "  Project    %s\n", c.project(t.ProjectID))
+	if d.Parent != nil {
+		fmt.Fprintf(w, "  Parent     %s %s\n", one(d.Parent.Key), one(d.Parent.Title))
 	}
-	if t.AimedAtID != nil {
+	fmt.Fprintf(w, "  State      %s (%s)\n", stateOf(t), one(string(t.Kind)))
+	switch {
+	case t.SubtaskCounts != nil:
+		n := t.SubtaskCounts
+		fmt.Fprintf(w, "  Subtasks   %d open (%d working), %d done, %d dropped\n", n.Open, n.Working, n.Done, n.Dropped)
+		how := "by its Owner (darkory complete " + one(t.Key) + ")"
+		if t.AutoComplete {
+			how = "by itself when its last Subtask ends Done"
+		}
+		if t.Acceptance {
+			how += ", after an Acceptance"
+		}
+		fmt.Fprintf(w, "  Completes  %s\n", how)
+	case t.AimedAtID != nil:
 		fmt.Fprintf(w, "  Aimed at   %s\n", c.member(*t.AimedAtID))
-	} else if t.SkillID != nil {
-		fmt.Fprintf(w, "  Needs      %s\n", c.skill(*t.SkillID))
+	case d.Step != nil:
+		skill := "a hold: a person moves it on (darkory move)"
+		if d.Step.SkillID != nil {
+			skill = c.skill(*d.Step.SkillID)
+		}
+		fmt.Fprintf(w, "  Step       %s (%s)", one(d.Step.Name), skill)
+		if t.StepSince != nil {
+			fmt.Fprintf(w, " since %s", stamp(*t.StepSince))
+		}
+		fmt.Fprintln(w)
+	}
+	if len(d.Connectors) > 0 {
+		var outs []string
+		for _, k := range d.Connectors {
+			to := "Done"
+			if k.ToStepID != nil {
+				to = c.step(t.ProjectID, *k.ToStepID)
+			}
+			outs = append(outs, one(k.Name)+" → "+to)
+		}
+		fmt.Fprintf(w, "  Advance    %s\n", strings.Join(outs, " · "))
+	}
+	owner := "  Owner      " + c.member(t.OwnerID)
+	if t.Rank != nil {
+		owner += fmt.Sprintf(", Rank %d", *t.Rank)
+	}
+	fmt.Fprintln(w, owner)
+	if len(d.Labels) > 0 {
+		fmt.Fprintf(w, "  Labels     %s\n", names(d.Labels, func(l client.Label) string { return l.Name }))
 	}
 	for i, ws := range d.Workspaces {
 		label := "Workspace "
@@ -127,7 +189,11 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 		}
 		fmt.Fprintln(w)
 	}
-	fmt.Fprintf(w, "  Filed      by %s at %s, waiting since %s\n", c.member(t.FiledBy), stamp(t.CreatedAt), stamp(t.WaitingSince))
+	filer := "Darkory"
+	if t.FiledBy != nil {
+		filer = c.member(*t.FiledBy)
+	}
+	fmt.Fprintf(w, "  Filed      by %s at %s, waiting since %s\n", filer, stamp(t.CreatedAt), stamp(t.WaitingSince))
 	if t.EndedAt != nil {
 		fmt.Fprintf(w, "  Ended      %s\n", stamp(*t.EndedAt))
 	}
@@ -140,6 +206,12 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 		}
 		fmt.Fprintf(w, "\n%s:\n", title)
 		return true
+	}
+	if section("Subtasks", len(d.Subtasks)) {
+		for _, st := range d.Subtasks {
+			fmt.Fprint(w, "  ")
+			c.printTaskLine(w, st)
+		}
 	}
 	if section("Blocked by", len(d.Blockers)) {
 		for _, b := range d.Blockers {
@@ -172,9 +244,9 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 			c.printEvidence(w, e)
 		}
 	}
-	if p := d.Proposal; p != nil {
+	for _, p := range d.Proposals {
 		fmt.Fprintln(w)
-		c.printProposal(w, *p, "")
+		c.printProposal(w, p, t.Key)
 	}
 	if section("Claims", len(d.Claims)) {
 		for _, cl := range d.Claims {
@@ -211,22 +283,6 @@ func (c *call) printEvidence(w io.Writer, e client.Evidence) {
 	fmt.Fprintf(w, "  %s  %s  %s  %d bytes  by %s at %s\n", one(e.ID), one(e.Filename), one(e.ContentType), e.Size, c.member(e.AttachedBy), stamp(e.CreatedAt))
 }
 
-func (c *call) printFeatureLine(w io.Writer, f client.Feature) {
-	fmt.Fprintf(w, "%-9s #%-3d %-8s owner %-12s %s  [%s]%s\n", one(f.Key), f.Rank, one(string(f.State)), c.member(f.OwnerID), one(f.Title),
-		counts(f.TaskCounts), flags(f))
-}
-
-// flags names a Feature's quick and ship-when-done marks.
-func flags(f client.Feature) string {
-	switch {
-	case f.Quick:
-		return " quick"
-	case f.ShipWhenDone:
-		return " ships when done"
-	}
-	return ""
-}
-
 func sortedKeys(m map[string]string) []string {
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -234,33 +290,6 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
-}
-
-func (c *call) printFeatureDetail(w io.Writer, d client.FeatureDetail) {
-	f := d.Feature
-	fmt.Fprintf(w, "%s  %s\n", one(f.Key), one(f.Title))
-	fmt.Fprintf(w, "  Team       %s, Rank %d\n", c.team(f.TeamID), f.Rank)
-	fmt.Fprintf(w, "  State      %s%s\n", one(string(f.State)), flags(f))
-	fmt.Fprintf(w, "  Owner      %s\n", c.member(f.OwnerID))
-	fmt.Fprintf(w, "  Tasks      %s, %d dropped\n", counts(f.TaskCounts), f.TaskCounts.Dropped)
-	fmt.Fprintf(w, "  Filed      by %s at %s\n", c.member(f.FiledBy), stamp(f.CreatedAt))
-	if f.EndedAt != nil {
-		fmt.Fprintf(w, "  Ended      %s\n", stamp(*f.EndedAt))
-	}
-	if f.Description != "" {
-		fmt.Fprintf(w, "\n%s\n", indent(f.Description))
-	}
-	fmt.Fprintln(w, "\nTasks:")
-	for _, t := range d.Tasks {
-		fmt.Fprint(w, "  ")
-		c.printTaskLine(w, t)
-	}
-	if len(d.Evidence) > 0 {
-		fmt.Fprintln(w, "\nEvidence:")
-		for _, e := range d.Evidence {
-			c.printEvidence(w, e)
-		}
-	}
 }
 
 func (c *call) printMemberLine(w io.Writer, m client.Member) {
@@ -337,11 +366,6 @@ func (c *call) printActivity(w io.Writer, a client.Activity) {
 		payload = " " + string(b)
 	}
 	fmt.Fprintf(w, "%6d %s %-12s %-22s %s%s\n", a.Seq, stamp(a.At), actor, one(string(a.Kind)), one(a.SubjectID), one(payload))
-}
-
-// counts says how far a Feature's Tasks have got.
-func counts(n client.TaskCounts) string {
-	return fmt.Sprintf("%d open (%d claimed), %d done", n.Open, n.Claimed, n.Done)
 }
 
 // printProposal prints a Skill proposal; task names its Task when known.

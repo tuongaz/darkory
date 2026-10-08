@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +6,6 @@ import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { initials, shortSessionId, tintOf } from "@/lib/members";
-import { glyphFor } from "@/lib/status";
 import { untilText } from "@/lib/time";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
@@ -18,29 +17,44 @@ import { Peek } from "./Peek";
 import { Pill } from "./Pill";
 import { PropertiesRail, Property } from "./PropertiesRail";
 import { RunnerSessionBadge } from "./RunnerSessionBadge";
-import { StatusGlyph } from "./StatusGlyph";
-import { StatusSelect } from "./StatusSelect";
+import { ProjectMark } from "./ProjectMark";
 import { Timeline, TimelineDay, TimelineRow } from "./Timeline";
+import { WorkGlyph } from "./WorkGlyph";
 
 const inMinutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
 
-describe("StatusGlyph", () => {
-  it("names each of the six glyphs", () => {
+describe("WorkGlyph", () => {
+  it("names each glyph, and marks a working one by its holder's kind and session", () => {
     render(
       <>
-        {(["backlog", "todo", "inprogress", "inreview", "done", "dropped"] as const).map((g) => (
-          <StatusGlyph key={g} glyph={g} />
-        ))}
+        <WorkGlyph glyph={{ glyph: "waiting" }} />
+        <WorkGlyph glyph={{ glyph: "working", holderKind: "agent" }} />
+        <WorkGlyph glyph={{ glyph: "working", holderKind: "agent", session: "waiting" }} />
+        <WorkGlyph glyph={{ glyph: "working", holderKind: "human" }} />
+        <WorkGlyph glyph={{ glyph: "blocked" }} />
+        <WorkGlyph glyph={{ glyph: "hold" }} />
+        <WorkGlyph glyph={{ glyph: "done" }} />
+        <WorkGlyph glyph={{ glyph: "dropped" }} />
+        <WorkGlyph glyph={{ glyph: "parent", done: 3, dropped: 1, total: 5 }} />
       </>,
     );
-    const names = screen.getAllByRole("img").map((el) => el.getAttribute("aria-label"));
-    expect(names).toEqual(["Backlog", "Todo", "In progress", "In review", "Done", "Dropped"]);
-  });
-
-  it("draws a later In-progress Status as In review", () => {
-    expect(glyphFor("in_progress")).toBe("inprogress");
-    expect(glyphFor("in_progress", 1)).toBe("inreview");
-    expect(glyphFor("backlog")).toBe("backlog");
+    const glyphs = screen.getAllByRole("img");
+    expect(glyphs.map((el) => el.getAttribute("aria-label"))).toEqual([
+      "Waiting",
+      "Working",
+      "Working, its session waiting",
+      "Working",
+      "Blocked",
+      "At a hold",
+      "Done",
+      "Dropped",
+      "3 of 5 Subtasks done, 1 dropped",
+    ]);
+    // An agent with no session named turns, as running; a human's ring has no session.
+    expect(glyphs[1].dataset.session).toBe("running");
+    expect(glyphs[2].dataset.session).toBe("waiting");
+    expect(glyphs[3].dataset.holder).toBe("human");
+    expect(glyphs[3]).not.toHaveAttribute("data-session");
   });
 });
 
@@ -54,7 +68,7 @@ describe("MemberAvatar", () => {
     expect(initials({ name: "reviewer", kind: "agent" })).toBe("RV");
   });
 
-  it("marks an agent apart from a human", () => {
+  it("draws every Member round, an agent apart by its kind (the gradient ring in globals.css)", () => {
     render(
       <>
         <MemberAvatar member={{ name: "Mai Tran", kind: "human" }} />
@@ -63,9 +77,24 @@ describe("MemberAvatar", () => {
     );
     const human = screen.getByRole("img", { name: "Mai Tran" });
     const agent = screen.getByRole("img", { name: "builder-1 (agent)" });
-    expect(human).toHaveClass("rounded-full");
-    expect(agent).not.toHaveClass("rounded-full");
-    expect(agent).toHaveClass("border-agent-border", "size-10");
+    expect(human).toHaveClass("avatar-tint", "rounded-full");
+    expect(agent).toHaveClass("avatar-tint", "rounded-full", "size-10");
+    expect(human.dataset.kind).toBe("human");
+    expect(agent.dataset.kind).toBe("agent");
+    expect(agent).not.toHaveAttribute("data-working");
+  });
+
+  it("says that a standalone mark's Member works, and how", () => {
+    render(
+      <>
+        <MemberAvatar member={{ name: "builder-1", kind: "agent" }} working="running" />
+        <MemberAvatar member={{ name: "qa-bot", kind: "agent" }} working="stalled" />
+        <MemberAvatar member={{ name: "Mai Tran", kind: "human" }} working="held" />
+      </>,
+    );
+    expect(screen.getByRole("img", { name: "builder-1 (agent), working" }).dataset.working).toBe("running");
+    expect(screen.getByRole("img", { name: "qa-bot (agent), working, its session stalled" }).dataset.working).toBe("stalled");
+    expect(screen.getByRole("img", { name: "Mai Tran, working" }).dataset.working).toBe("held");
   });
 
   it("tints each avatar by its Member's name, so the same initials still differ", () => {
@@ -208,38 +237,28 @@ describe("FormDialog", () => {
   });
 });
 
-describe("StatusSelect", () => {
-  const statuses = [
-    { id: "st-done", name: "Done", kind: "done" as const, position: 5 },
-    { id: "st-review", name: "In review", kind: "in_progress" as const, position: 4 },
-    { id: "st-backlog", name: "Backlog", kind: "backlog" as const, position: 1 },
-    { id: "st-progress", name: "In progress", kind: "in_progress" as const, position: 3 },
-    { id: "st-todo", name: "Todo", kind: "todo" as const, position: 2 },
-    { id: "st-dropped", name: "Dropped", kind: "dropped" as const, position: 6 },
-  ];
-
-  it("is one control for a form and for a Task's properties: the open-kind Statuses in board order, with their glyphs", async () => {
-    const lists: string[][] = [];
-    for (const variant of ["field", "property"] as const) {
-      const { unmount } = render(<StatusSelect variant={variant} id="s" statuses={statuses} value="st-todo" onValueChange={() => {}} />);
-      const trigger = screen.getByRole("combobox");
-      expect(trigger).toHaveTextContent("Todo");
-      if (variant === "property") expect(trigger).toHaveAccessibleName("Status: Todo");
-      await userEvent.click(trigger);
-      const list = await screen.findByRole("listbox");
-      lists.push(within(list).getAllByRole("option").map((o) => `${o.querySelector("[data-glyph]")?.getAttribute("data-glyph")} ${o.textContent}`));
-      unmount();
-    }
-    expect(lists[0]).toEqual(["backlog Backlog", "todo Todo", "inprogress In progress", "inreview In review"]);
-    expect(lists[1]).toEqual(lists[0]);
+describe("ProjectMark", () => {
+  it("letters a Project by its name, coloured by its key so it keeps its colour", () => {
+    render(
+      <>
+        <ProjectMark project={{ key: "WEB", name: "web app" }} />
+        <ProjectMark project={{ key: "WEB", name: "Storefront" }} size="lg" />
+      </>,
+    );
+    const [a, b] = document.querySelectorAll("[aria-hidden]");
+    expect(a).toHaveTextContent("W");
+    expect(b).toHaveTextContent("S");
+    const fill = (el: Element) => [...el.classList].find((c) => c.startsWith("bg-chart-"));
+    expect(fill(a)).toBeDefined();
+    expect(fill(a)).toBe(fill(b));
   });
 });
 
 describe("InfoPopover", () => {
   it("opens its explanation from the ⓘ", async () => {
-    render(<InfoPopover label="About Statuses">A Task in a Backlog Status is not takeable.</InfoPopover>);
+    render(<InfoPopover label="About holds">A Task at a hold is not takeable.</InfoPopover>);
     expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "About Statuses" }));
+    await userEvent.click(screen.getByRole("button", { name: "About holds" }));
     expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
   });
 });

@@ -11,7 +11,7 @@ export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: bo
  * screen's actions and its one primary on the right. Every page renders one as its first child;
  * on a phone it carries the button that opens the sidebar.
  *
- * The first crumb is the area (a Team, Admin, Inbox) and reads strong; the rest are muted.
+ * The first crumb is the area (a Project, Settings, Inbox) and reads strong; the rest are muted.
  */
 export function TopBar({
   crumbs,

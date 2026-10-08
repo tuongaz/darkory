@@ -7,50 +7,79 @@ import (
 	"github.com/tuongaz/darkory/client"
 )
 
-// Preset is a ready-made Organisation for the bots to work: the Teams, Skills, Statuses and
-// Workspaces Setup makes, the agent Members and human personas who work in it, and the Features
-// its owner files, each with the Tasks the planner files for it.
+// Preset is a ready-made Organisation for the bots to work: the Projects, Skills, Workflow and
+// Workspaces Setup makes, the agent Members and human personas who work in it, and the Tasks its
+// owner files, each with the Subtasks filed for it.
 type Preset struct {
 	Name string
-	// Teams are the Teams Setup makes; the first is where the bots' Features go unless a
+	// Projects are the Projects Setup makes; the first is where the bots' Tasks go unless a
 	// template names another.
-	Teams []TeamSpec
+	Projects []ProjectSpec
 	// Skills are made when missing, a generic Skill before a company Skill built on it. Darkory
-	// has breakdown, retro and skill-review built in.
+	// has breakdown, acceptance, retro and skill-review built in, and init makes engineer and
+	// review.
 	Skills []client.CreateSkillBody
-	// Statuses is the Organisation's whole list as Setup leaves it, in order, kinds included;
-	// nil keeps the list the Organisation has.
-	Statuses []client.StatusInput
+	// Workflow is the Workflow Setup gives each of the preset's Projects.
+	Workflow WorkflowSpec
 	// Workspaces are made when missing, each a throwaway git repository.
 	Workspaces []WorkspaceSpec
 	// Agents are the bots, as agent Members.
 	Agents []Spec
 	// Humans are the human personas Setup makes and runs when asked to (Options.Personas).
 	Humans []Persona
-	// Manager is the persona every agent reports to, and the one who owns the Features the bots'
-	// owner files; Ask is the one their questions are aimed at, unless a Step names another.
+	// Manager is the persona every agent reports to, and the one who owns the Tasks the bots'
+	// owner files; Ask is the one questions are aimed at, unless an Item names another.
 	Manager, Ask string
-	// Answer is what Ask answers a question no Step carries.
+	// Answer is what Ask answers a question no Item carries.
 	Answer string
-	// Features are what the owner files, in turn.
-	Features []FeatureTemplate
-	// Plan is the plan the planner files for a Feature no template with Tasks matches.
-	Plan func(f client.Feature, ask string) []Step
-	// Evidence is the file a worker attaches to a Task whose Step names no workpaper, by the
-	// Skill it holds the Task under.
+	// Tasks are what the owner files, in turn.
+	Tasks []TaskTemplate
+	// Plan is the plan the planner files under a Parent no template with Items matches.
+	Plan func(parent, ask string) []Item
+	// Evidence is the file a worker attaches to a Task whose Item names no workpaper, by the
+	// Skill of the Step it works the Task at.
 	Evidence func(d *client.TaskDetail, skill string) (name, content string)
-	// Chores are Tasks the owner keeps open in a Chores Feature of their Team, for the bots that
-	// take them alone.
+	// Chores are Tasks the owner keeps open, each alone at its Step, for the bots that take them.
 	Chores []Chore
 }
 
-// TeamSpec is a Team a preset makes, with the defaults Setup gives it: the Workspace a Task filed
-// in it names when it names none, and whether its Features ship when done. An empty
-// DefaultWorkspace, or a false ShipWhenDone, leaves the Team's own setting as it is.
-type TeamSpec struct {
+// ProjectSpec is a Project a preset makes, with the defaults Setup gives it: the Workspace a Task
+// filed in it names when it names none, and whether its Parents complete themselves when their
+// last Subtask ends Done. An empty DefaultWorkspace, or a false AutoComplete, leaves the
+// Project's own setting as it is.
+type ProjectSpec struct {
 	Key, Name        string
 	DefaultWorkspace string
-	ShipWhenDone     bool
+	AutoComplete     bool
+}
+
+// WorkflowSpec is a Workflow by names: its Steps in order, and the Connectors out of them, each
+// Step's in the order its holder is offered them.
+type WorkflowSpec struct {
+	Steps      []StepSpec
+	Connectors []ConnectorSpec
+}
+
+// StepSpec is a Step: its name and the Skill it carries; no Skill makes it a hold.
+type StepSpec struct {
+	Name, Skill string
+}
+
+// ConnectorSpec is a named way out of the Step From, into the Step To, or into Done when To is
+// empty.
+type ConnectorSpec struct {
+	From, To, Name string
+}
+
+// Hold is the Workflow's first hold, where work is filed ahead until a person moves it on; ""
+// when it has none.
+func (w WorkflowSpec) Hold() string {
+	for _, s := range w.Steps {
+		if s.Skill == "" {
+			return s.Name
+		}
+	}
+	return ""
 }
 
 // WorkspaceSpec is a git Workspace a preset makes: a repository whose first commit holds Files,
@@ -61,55 +90,54 @@ type WorkspaceSpec struct {
 }
 
 // Persona is a human Member the bots act as, through a token of their own. One who Answers takes
-// the questions aimed at them and answers each after a while; one who Works a Skill takes its
-// Tasks from their takeable list and does them; one who Owns ships the Features they own once
-// every Task has ended, and moves one Task a round from the first backlog Status, the intake, to
-// Todo.
+// the questions aimed at them and answers each after a while; one who Works a Skill takes the
+// Tasks at its Steps from their takeable list and does them, as an agent would; one who Owns
+// completes the Parents they own once every Subtask has ended, and moves one Task a round out of
+// the hold, the intake, to the Step it is for.
 type Persona struct {
-	Name    string
-	Answers bool
-	// Awaiting is the backlog Status, by name, that one who Answers moves the Tasks a question
-	// blocks into when they first see it, as they put it to someone outside, and back to Todo
-	// from once they have the answer; empty leaves those Tasks where they are.
-	Awaiting string
+	Name     string
+	Answers  bool
 	Owns     bool
 	Works    []string
 	Skills   []string
-	Teams    []string
+	Projects []string
 }
 
-// FeatureTemplate is a Feature the owner files: its Team, title and description, whether it is a
-// quick Feature and whether it ships when done, and the Tasks the planner files for it. A quick
-// Feature has one Task, which Darkory files with it under the Feature's title, needing the
-// Skill of Tasks[0], in its Workspaces.
-type FeatureTemplate struct {
-	Team         string
+// TaskTemplate is a Task the owner files: its Project, title and description, and what comes
+// with it. With Breakdown, it is filed with Break down on and the planner files its Subtasks from
+// Items (or the preset's Plan); with Alone, it is one Task, worked as Items[0] says from the
+// Step Items[0] names; otherwise it is a Parent whose Items File files as its Subtasks.
+// AutoComplete has a Parent complete itself when its last Subtask ends Done.
+type TaskTemplate struct {
+	Project      string
 	Title        string
 	Description  string
-	Quick        bool
-	ShipWhenDone bool
-	Tasks        []Step
+	Breakdown    bool
+	Alone        bool
+	AutoComplete bool
+	Items        []Item
 }
 
-// Chore is a Task the owner keeps open, needing Skill, in the Team's Chores Feature.
+// Chore is a Task the owner keeps open, alone at the Step named Step, in the Project Project.
 type Chore struct {
-	Team, Skill, Title string
+	Project, Step, Title string
 }
 
-// Question is what a worker asks while working a Step, aimed at a Member by name (the preset's
-// Ask when empty), blocking its own Task until it is answered.
+// Question is what a worker asks while working an Item, aimed at a Member by name (the preset's
+// Ask when empty), blocking its own Task until it is answered. Step, when set, is the Step at
+// which it is asked; otherwise the first at which the Item is worked.
 type Question struct {
-	AimedAt, Title, Answer string
+	AimedAt, Title, Answer, Step string
 }
 
-// Template returns the template a Feature was filed from, by its title: the template's own, or
-// with a number after it, as the owner files a template again. It returns nil for any other.
-func (p *Preset) Template(title string) *FeatureTemplate {
+// Template returns the template a Task was filed from, by its title: the template's own, or with
+// a number after it, as the owner files a template again. It returns nil for any other.
+func (p *Preset) Template(title string) *TaskTemplate {
 	if p == nil {
 		return nil
 	}
-	for i := range p.Features {
-		t := &p.Features[i]
+	for i := range p.Tasks {
+		t := &p.Tasks[i]
 		if title == t.Title {
 			return t
 		}
@@ -122,19 +150,20 @@ func (p *Preset) Template(title string) *FeatureTemplate {
 	return nil
 }
 
-// step returns the Step of f's plan whose title is task, or the one Task of a quick Feature; nil
-// when there is none, as for a Break down or a question.
-func (p *Preset) step(f client.Feature, task, ask string) *Step {
-	if t := p.Template(f.Title); t != nil && t.Quick {
-		if len(t.Tasks) == 0 {
-			return nil
+// item returns the Item a Task asks of whoever works it: the one Item of a Task filed alone, or
+// the Item of its Parent's plan with its title; nil when there is none, as for a Breakdown or a
+// question.
+func (p *Preset) item(parent, task, ask string) *Item {
+	if parent == "" {
+		if t := p.Template(task); t != nil && t.Alone && len(t.Items) > 0 {
+			return &t.Items[0]
 		}
-		return &t.Tasks[0]
+		return nil
 	}
-	steps := p.plan(f, ask)
-	for i := range steps {
-		if steps[i].Title == task {
-			return &steps[i]
+	items := p.plan(parent, ask)
+	for i := range items {
+		if items[i].Title == task {
+			return &items[i]
 		}
 	}
 	return nil
@@ -142,8 +171,8 @@ func (p *Preset) step(f client.Feature, task, ask string) *Step {
 
 // answer is what the Member a question titled title is aimed at answers.
 func (p *Preset) answer(title string) string {
-	for _, t := range p.Features {
-		for _, s := range t.Tasks {
+	for _, t := range p.Tasks {
+		for _, s := range t.Items {
 			if s.Question != nil && s.Question.Title == title && s.Question.Answer != "" {
 				return s.Question.Answer
 			}
@@ -152,47 +181,82 @@ func (p *Preset) answer(title string) string {
 	return or(p.Answer, "Go ahead as you suggest.")
 }
 
-// plan is the plan the planner files for f: its template's Tasks, else the preset's Plan.
-func (p *Preset) plan(f client.Feature, ask string) []Step {
+// plan is the plan filed under the Parent titled parent: its template's Items, else the preset's
+// Plan.
+func (p *Preset) plan(parent, ask string) []Item {
 	if p == nil {
-		return DefaultPlan(f, ask)
+		return DefaultPlan(parent, ask)
 	}
-	if t := p.Template(f.Title); t != nil && !t.Quick && len(t.Tasks) > 0 {
-		return t.Tasks
+	if t := p.Template(parent); t != nil && !t.Alone && len(t.Items) > 0 {
+		return t.Items
 	}
 	if p.Plan != nil {
-		return p.Plan(f, ask)
+		return p.Plan(parent, ask)
 	}
-	return DefaultPlan(f, ask)
+	return DefaultPlan(parent, ask)
 }
 
 // Presets are the presets tools/bots runs, by name.
 var Presets = map[string]*Preset{"software": &Software, "accounting": &Accounting}
 
-// Software is the software team: Teams WEB and OPS; a planner, two builders, a reviewer, a retro,
-// a lapser, a stuck agent and a backlog prober; kai, who owns the work and directs the agents,
-// and mai, who answers their questions. Its Features are broken down by DefaultPlan.
+// The software preset's Steps.
+const (
+	StepBacklog     = "Backlog"
+	StepPlan        = "Plan"
+	StepBuild       = "Build"
+	StepDocs        = "Docs"
+	StepQA          = "QA"
+	StepReview      = "Review"
+	StepTriage      = "Triage"
+	StepDeploy      = "Deploy"
+	StepRetro       = "Retro"
+	StepSkillReview = "Skill review"
+)
+
+// SoftwareWorkflow is the software preset's Workflow, for both its Projects: Backlog, a hold, then
+// a Step for each kind of work. A build goes to review; review passes it into Done or sends it
+// back; a Retrospective proposes a Skill version for Skill review, which publishes it.
+var SoftwareWorkflow = WorkflowSpec{
+	Steps: []StepSpec{{StepBacklog, ""}, {StepPlan, SkillBreakdown}, {StepBuild, SkillCompany}, {StepDocs, SkillDocs}, {StepQA, SkillQA},
+		{StepReview, SkillReview}, {StepTriage, SkillTriage}, {StepDeploy, SkillDeploy}, {StepRetro, SkillRetro}, {StepSkillReview, SkillSkillReview}},
+	Connectors: []ConnectorSpec{
+		{StepPlan, "", "done"},
+		{StepBuild, StepReview, "pass"},
+		{StepDocs, "", "done"},
+		{StepQA, "", "done"},
+		{StepReview, "", "pass"}, {StepReview, StepBuild, "needs changes"},
+		{StepTriage, "", "done"},
+		{StepDeploy, "", "done"},
+		{StepRetro, StepSkillReview, "propose"}, {StepRetro, "", "done"},
+		{StepSkillReview, "", "publish"}, {StepSkillReview, StepRetro, "needs changes"},
+	},
+}
+
+// Software is the software crew: Projects WEB and OPS; a planner, two builders, a reviewer, a
+// retro, a lapser, a stuck agent and a backlog prober; kai, who owns the work and directs the
+// agents, and mai, who answers their questions. Its Tasks are broken down by DefaultPlan.
 var Software = Preset{
 	Name:     "software",
-	Teams:    []TeamSpec{{Key: "WEB", Name: "Web"}, {Key: "OPS", Name: "Ops"}},
+	Projects: []ProjectSpec{{Key: "WEB", Name: "Web"}, {Key: "OPS", Name: "Ops"}},
 	Skills:   skills,
+	Workflow: SoftwareWorkflow,
 	Agents:   Roster,
-	Humans:   []Persona{{Name: "kai", Owns: true, Teams: []string{"WEB"}}, {Name: "mai", Answers: true, Teams: []string{"WEB"}}},
+	Humans:   []Persona{{Name: "kai", Owns: true, Projects: []string{"WEB"}}, {Name: "mai", Answers: true, Projects: []string{"WEB"}}},
 	Manager:  "kai",
 	Ask:      "mai",
 	Answer:   "Yes, as long as nothing is saved to their account.",
-	Features: softwareFeatures(),
+	Tasks:    softwareTasks(),
 	Plan:     DefaultPlan,
 	Evidence: evidence,
-	Chores:   []Chore{{Team: "OPS", Skill: SkillTriage, Title: "Rotate the logs"}, {Team: "OPS", Skill: SkillDeploy, Title: "Deploy to staging"}},
+	Chores:   []Chore{{Project: "OPS", Step: StepTriage, Title: "Rotate the logs"}, {Project: "OPS", Step: StepDeploy, Title: "Deploy to staging"}},
 }
 
-// softwareFeatures are the Features the software owner files, in turn.
-func softwareFeatures() []FeatureTemplate {
-	var out []FeatureTemplate
+// softwareTasks are the Tasks the software owner files, in turn, each broken down by the planner.
+func softwareTasks() []TaskTemplate {
+	var out []TaskTemplate
 	for _, t := range []string{"Checkout", "Search", "Saved baskets", "Order history", "Gift cards", "Returns", "Wishlists",
 		"Store pickup", "Coupons", "Product reviews"} {
-		out = append(out, FeatureTemplate{Team: "WEB", Title: t, Description: "Customers can use " + strings.ToLower(t) + "."})
+		out = append(out, TaskTemplate{Project: "WEB", Title: t, Description: "Customers can use " + strings.ToLower(t) + ".", Breakdown: true})
 	}
 	return out
 }

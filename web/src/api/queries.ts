@@ -1,74 +1,98 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Feature, type Member, type RunnerSession, type Skill, type SubjectType, type Task, type Team } from "./client";
+import { api, call, type Member, type Project, type RunnerSession, type Skill, type SubjectType, type Task, type ViewEntity } from "./client";
 import { allPages } from "./pages";
+import type { paths } from "./schema.gen";
+
+/**
+ * What `GET /v1/tasks` narrows by, as `useTasks` takes it: `project` (id or key), `parent`,
+ * `state`, `step`, `aimed_at`, `holder`, and `filter` (the bar's tokens). Every page is read.
+ */
+export type TaskQuery = Omit<NonNullable<paths["/v1/tasks"]["get"]["parameters"]["query"]>, "limit" | "cursor">;
+
+/** What `GET /v1/activity` narrows by, as `useActivity` takes it. */
+export type ActivityQuery = Omit<NonNullable<paths["/v1/activity"]["get"]["parameters"]["query"]>, "after" | "before">;
+
+/** A `before` past every entry: reads the newest page of Activity. */
+export const newestActivity = Number.MAX_SAFE_INTEGER;
 
 // The first element of every query key names what it reads; live updates invalidate by it.
+// Projects are named by key in keys (the route's), Members and Skills by id.
 export const keys = {
   health: ["health"] as const,
   me: ["me"] as const,
   members: ["members"] as const,
   member: (ref: string) => ["member", ref] as const,
+  memberSessions: (member: string) => ["member", member, "sessions"] as const,
   tokens: (member: string) => ["tokens", member] as const,
-  teams: ["teams"] as const,
-  team: (ref: string) => ["team", ref] as const,
+  projects: ["projects"] as const,
+  project: (ref: string) => ["project", ref] as const,
+  workflow: (project: string) => ["workflow", project] as const,
+  /** The Organisation's own Labels. */
+  labels: ["labels"] as const,
+  /** A Project's own Labels. */
+  projectLabels: (project: string) => ["labels", { project }] as const,
+  /** Every Label a Task of the Project can carry: its own, then the Organisation's. */
+  carriedLabels: (project: string) => ["labels", { project, carried: true }] as const,
   skills: ["skills"] as const,
   skill: (ref: string) => ["skill", ref] as const,
   skillVersions: (ref: string) => ["skill-versions", ref] as const,
-  features: (team: string) => ["features", team] as const,
-  feature: (ref: string) => ["feature", ref] as const,
-  featureObservations: (ref: string) => ["feature-observations", ref] as const,
-  heldTasks: (member: string) => ["tasks", { holder: member }] as const,
+  tasks: (query: TaskQuery) => ["tasks", query] as const,
   openTasks: ["tasks", { state: "open" }] as const,
   allTasks: ["tasks", { all: true }] as const,
-  allFeatures: ["features", { all: true }] as const,
+  anyTask: ["tasks", { any: true }] as const,
   task: (ref: string) => ["task", ref] as const,
   takeable: ["takeable"] as const,
   runnerSessions: ["runner", "sessions"] as const,
-  activity: ["activity"] as const,
+  activity: (query: ActivityQuery) => ["activity", query] as const,
   workspaces: ["workspaces"] as const,
+  views: (entity: ViewEntity, project?: string) => ["views", { entity, project }] as const,
 };
 
-type Root =
+export type Root =
   | "health"
   | "me"
   | "members"
   | "member"
   | "tokens"
-  | "teams"
-  | "team"
+  | "projects"
+  | "project"
+  | "workflow"
+  | "labels"
   | "skills"
   | "skill"
   | "skill-versions"
-  | "features"
-  | "feature"
-  | "feature-observations"
   | "tasks"
   | "task"
   | "takeable"
-  | "statuses"
   | "runner"
   | "workspaces"
-  | "activity";
+  | "activity"
+  | "views";
 
-const work: Root[] = ["features", "feature", "feature-observations", "tasks", "task", "takeable"];
-const organisation: Root[] = ["me", "members", "member", "tokens", "teams", "team", "skills", "skill", "skill-versions", "takeable"];
+// The work: Task lists and records, what the caller can take, and each Workflow's live facts
+// (the open and worked Tasks at every Step).
+const work: Root[] = ["tasks", "task", "takeable", "workflow"];
+// The Organisation: who is in it, in which Projects, with which Skills. A Workflow lists its
+// Steps' takers, so it follows Members, Projects and Skills too.
+const organisation: Root[] = ["me", "members", "member", "tokens", "projects", "project", "skills", "skill", "skill-versions", "takeable", "workflow"];
 
 // Which queries an Activity entry can change, by its subject type: the part of its kind before
 // the dot (`task.claimed` is about a Task). A kind added later with a new subject type refreshes
 // everything.
 // The Runner's sessions start and end with Claims (Task entries), and with its agents' settings
-// and Sessions.
+// and Sessions. A Workflow's change renames, adds or removes the Steps Tasks stand at; a Label's
+// renames or removes it on every Task carrying it.
 const affected: Record<SubjectType, Root[]> = {
   task: [...work, "runner"],
-  feature: work,
-  member: [...organisation, "task", "feature", "runner"],
-  team: organisation,
+  workflow: work,
+  label: ["labels", "tasks", "task"],
   skill: [...organisation, "task"],
+  member: [...organisation, "task", "runner"],
+  project: organisation,
   token: [...organisation, ...work],
   session: [...organisation, ...work, "runner"],
   login_link: [],
-  statuses: [...work, "statuses"],
   workspace: [...organisation, ...work, "workspaces"],
 };
 
@@ -108,12 +132,89 @@ export function useMe() {
   return useQuery({ queryKey: keys.me, queryFn: () => call(api.GET("/v1/me")) });
 }
 
+/** The Organisation's Members, deactivated ones included, by name. */
 export function useMembers() {
   return useQuery({ queryKey: keys.members, queryFn: () => call(api.GET("/v1/members")).then((r) => r.items) });
 }
 
-export function useTeams() {
-  return useQuery({ queryKey: keys.teams, queryFn: () => call(api.GET("/v1/teams")).then((r) => r.items) });
+/** A Member with their Projects, Skills and reports, by id or name. */
+export function useMember(ref: string | undefined) {
+  return useQuery({
+    queryKey: keys.member(ref ?? ""),
+    queryFn: () => call(api.GET("/v1/members/{member}", { params: { path: { member: ref! } } })),
+    enabled: !!ref,
+  });
+}
+
+/** A Member's tokens, revoked ones included: theirs, or any Member's for an admin. */
+export function useTokens(member: string) {
+  return useQuery({
+    queryKey: keys.tokens(member),
+    queryFn: () => call(api.GET("/v1/members/{member}/tokens", { params: { path: { member } } })).then((r) => r.items),
+  });
+}
+
+/** A Member's open Sessions, most recently seen first: theirs, or any Member's for an admin. */
+export function useMemberSessions(member: string) {
+  return useQuery({
+    queryKey: keys.memberSessions(member),
+    queryFn: () =>
+      allPages((cursor) => call(api.GET("/v1/members/{member}/sessions", { params: { path: { member }, query: { limit: 500, cursor } } }))),
+  });
+}
+
+/** Every Project of the Organisation, by name, whether or not the caller is in it. */
+export function useProjects() {
+  return useQuery({ queryKey: keys.projects, queryFn: () => call(api.GET("/v1/projects")).then((r) => r.items) });
+}
+
+/** A Project with its Members, by key or id. */
+export function useProject(ref: string | undefined) {
+  return useQuery({
+    queryKey: keys.project(ref ?? ""),
+    queryFn: () => call(api.GET("/v1/projects/{project}", { params: { path: { project: ref! } } })),
+    enabled: !!ref,
+  });
+}
+
+/**
+ * A Project's Workflow, by key or id: its Steps in order with what is happening at each (open
+ * Tasks, those worked, the takers, the median time there) and the Connectors. Refetched on Task,
+ * Workflow, Member, Project and Skill Activity, so the counts and takers stay live.
+ */
+export function useWorkflow(project: string | undefined) {
+  return useQuery({
+    queryKey: keys.workflow(project ?? ""),
+    queryFn: () => call(api.GET("/v1/projects/{project}/workflow", { params: { path: { project: project! } } })),
+    enabled: !!project,
+  });
+}
+
+/**
+ * Labels by name. With no Project, the Organisation's own; with one (key or id), every Label a
+ * Task of it can carry: the Project's own, then the Organisation's. A Label's `project_id` says
+ * whose it is.
+ */
+export function useLabels(project?: string) {
+  return useQuery({
+    queryKey: project ? keys.carriedLabels(project) : keys.labels,
+    queryFn: async () => {
+      const org = call(api.GET("/v1/labels")).then((r) => r.items);
+      if (!project) return org;
+      const own = call(api.GET("/v1/projects/{project}/labels", { params: { path: { project } } })).then((r) => r.items);
+      const [a, b] = await Promise.all([own, org]);
+      return [...a, ...b];
+    },
+  });
+}
+
+/** A Project's own Labels, by name: what Settings › the Project › Labels edits. */
+export function useProjectLabels(project: string | undefined) {
+  return useQuery({
+    queryKey: keys.projectLabels(project ?? ""),
+    queryFn: () => call(api.GET("/v1/projects/{project}/labels", { params: { path: { project: project! } } })).then((r) => r.items),
+    enabled: !!project,
+  });
 }
 
 export function useSkills() {
@@ -124,21 +225,21 @@ function byId<T extends { id: string }>(items: T[] | undefined): Map<string, T> 
   return new Map((items ?? []).map((x) => [x.id, x]));
 }
 
-/** Members, Teams and Skills by id, for showing names where the API gives ids. */
+/** Members, Projects and Skills by id, for showing names where the API gives ids. */
 export function useDirectory() {
   const members = useMembers();
-  const teams = useTeams();
+  const projects = useProjects();
   const skills = useSkills();
   return useMemo(
     () => ({
       members: byId<Member>(members.data),
-      teams: byId<Team>(teams.data),
+      projects: byId<Project>(projects.data),
       skills: byId<Skill>(skills.data),
       memberList: members.data ?? [],
-      teamList: teams.data ?? [],
+      projectList: projects.data ?? [],
       skillList: skills.data ?? [],
     }),
-    [members.data, teams.data, skills.data],
+    [members.data, projects.data, skills.data],
   );
 }
 
@@ -147,31 +248,73 @@ export function useWorkspaces() {
   return useQuery({ queryKey: keys.workspaces, queryFn: () => call(api.GET("/v1/workspaces")).then((r) => r.items) });
 }
 
-/** Every open Task in the Organisation, in `next` order: what the sidebar's live count reads. */
-export function useOpenTasks() {
+function listTasks(query: TaskQuery): Promise<Task[]> {
+  return allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { ...query, limit: 500, cursor } } })));
+}
+
+/**
+ * The Tasks `query` narrows to, every page, in `/v1`'s order: by Project, then Rank, each Subtask
+ * after its Parent. `{ project: "MAIN" }` is a Project's whole list, open and ended.
+ */
+export function useTasks(query: TaskQuery, options: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: keys.tasks(query), queryFn: () => listTasks(query), enabled: options.enabled });
+}
+
+/** A Task with its record (`TaskDetail`), by display key or id. */
+export function useTask(ref: string | undefined) {
   return useQuery({
-    queryKey: keys.openTasks,
-    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { state: "open", limit: 500, cursor } } }))),
+    queryKey: keys.task(ref ?? ""),
+    queryFn: () => call(api.GET("/v1/tasks/{task}", { params: { path: { task: ref! } } })),
+    enabled: !!ref,
+  });
+}
+
+/** Every open Task in the Organisation: what the sidebar's live count reads. */
+export function useOpenTasks() {
+  return useTasks({ state: "open" });
+}
+
+/** Every Task in the Organisation, read when ⌘K opens: /v1 has no search, so the palette matches keys and words in the browser. */
+export function useAllTasks(enabled = true) {
+  return useQuery({ queryKey: keys.allTasks, queryFn: () => listTasks({}), enabled });
+}
+
+/** Whether the Organisation has any Task yet: until it does, /inbox shows the Install checklist. */
+export function useAnyTask() {
+  return useQuery({
+    queryKey: keys.anyTask,
+    queryFn: () => call(api.GET("/v1/tasks", { params: { query: { limit: 1 } } })).then((r) => r.items.length > 0),
+  });
+}
+
+/** The Tasks the signed-in Member can take now, in the order `next` would offer them. */
+export function useTakeable() {
+  return useQuery({
+    queryKey: keys.takeable,
+    queryFn: () => call(api.GET("/v1/tasks/takeable", { params: { query: { limit: 500 } } })).then((r) => r.items),
   });
 }
 
 /**
- * Every Task and every Feature in the Organisation, read when ⌘K opens: /v1 has no search, so the
- * palette matches keys and words in the browser.
+ * The newest page of Activity `query` narrows to (`project`, `member`, `kind`, `limit`), in
+ * sequence order. Not refetched by the stream, which brings what is new (`useLiveEntries`).
  */
-export function useAllTasks(enabled = true) {
+export function useActivity(query: ActivityQuery = {}) {
   return useQuery({
-    queryKey: keys.allTasks,
-    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { limit: 500, cursor } } }))),
-    enabled,
+    queryKey: keys.activity(query),
+    queryFn: () => call(api.GET("/v1/activity", { params: { query: { ...query, before: newestActivity } } })),
   });
 }
 
-export function useAllFeatures(enabled = true) {
+/**
+ * The signed-in Member's Views of a list, oldest first: of one Project's list (key or id), or
+ * across Projects with none. Views write no Activity, so another tab's change shows on the next
+ * refetch; this tab's own writes refetch every query.
+ */
+export function useViews(entity: ViewEntity, project?: string) {
   return useQuery({
-    queryKey: keys.allFeatures,
-    queryFn: () => allPages<Feature>((cursor) => call(api.GET("/v1/features", { params: { query: { limit: 500, cursor } } }))),
-    enabled,
+    queryKey: keys.views(entity, project),
+    queryFn: () => call(api.GET("/v1/views", { params: { query: { entity, project } } })).then((r) => r.items),
   });
 }
 

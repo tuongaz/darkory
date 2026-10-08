@@ -4,50 +4,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
-
-func (s *Server) FileFeature(w http.ResponseWriter, r *http.Request, params gen.FileFeatureParams) {
-	var body gen.FileFeatureBody
-	out := as(http.StatusCreated, func(d core.FeatureDetail) any { return featureDetailOut(d) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	nf := core.NewFeature{Team: body.Team, Title: body.Title, Owner: body.Owner, FromRetrospective: body.FromRetrospective,
-		Skill: body.Skill, Workspaces: body.Workspaces, ShipWhenDone: body.ShipWhenDone}
-	if body.Description != nil {
-		nf.Description = *body.Description
-	}
-	if body.Quick != nil {
-		nf.Quick = *body.Quick
-	}
-	d, err := s.core.FileFeature(r.Context(), c, nf, idem)
-	s.respond(w, r, out, d, err)
-}
-
-func (s *Server) ListFeatures(w http.ResponseWriter, r *http.Request, params gen.ListFeaturesParams) {
-	ff := core.FeatureFilter{Team: params.Team, State: (*string)(params.State), Owner: params.Owner}
-	if params.Filter != nil {
-		ff.Filters = *params.Filter
-	}
-	if params.Limit != nil {
-		ff.Limit = *params.Limit
-	}
-	if params.Cursor != nil {
-		ff.Cursor = *params.Cursor
-	}
-	p, err := s.core.ListFeatures(r.Context(), caller(r), ff)
-	s.respond(w, r, as(http.StatusOK, func(p core.Page[core.Feature]) any {
-		return gen.FeatureList{Items: each(p.Items, featureOut), NextCursor: pageCursor(p.NextCursor)}
-	}), p, err)
-}
-
-func (s *Server) GetFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef) {
-	d, err := s.core.GetFeature(r.Context(), caller(r), feature)
-	s.respond(w, r, as(http.StatusOK, func(d core.FeatureDetail) any { return featureDetailOut(d) }), d, err)
-}
 
 func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.FileTaskParams) {
 	var body gen.FileTaskBody
@@ -56,18 +16,27 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 	if !ok {
 		return
 	}
-	nt := core.NewTask{Feature: body.Feature, Title: body.Title, Skill: body.Skill, AimedAt: body.AimedAt, Blocks: body.Blocks,
-		Status: body.Status, Workspaces: body.Workspaces}
+	nt := core.NewTask{Project: body.Project, Parent: body.Parent, Title: body.Title, Owner: body.Owner, Step: body.Step,
+		AutoComplete: body.AutoComplete, Acceptance: body.Acceptance, Workspaces: body.Workspaces, AimedAt: body.Aim,
+		Blocks: body.Blocks, Note: body.Note, FromRetrospective: body.FromRetrospective}
 	if body.Description != nil {
 		nt.Description = *body.Description
+	}
+	if body.Breakdown != nil {
+		nt.Breakdown = *body.Breakdown
+	}
+	if body.Labels != nil {
+		nt.Labels = *body.Labels
 	}
 	d, err := s.core.FileTask(r.Context(), c, nt, idem)
 	s.respond(w, r, out, d, err)
 }
 
+// ListTasks lists Tasks by Project and Rank. `claim:is:session` reads the sessions the Runner
+// beside this server runs now.
 func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.ListTasksParams) {
-	tf := core.TaskFilter{Feature: params.Feature, Team: params.Team, State: (*string)(params.State), Skill: params.Skill,
-		AimedAt: params.AimedAt, Holder: params.Holder, Status: params.Status}
+	tf := core.TaskFilter{Project: params.Project, Parent: params.Parent, State: (*string)(params.State), Step: params.Step,
+		AimedAt: params.AimedAt, Holder: params.Holder}
 	if params.Filter != nil {
 		tf.Filters = *params.Filter
 		if run := s.theRunner(); run != nil {
@@ -200,4 +169,47 @@ func (s *Server) CompleteTask(w http.ResponseWriter, r *http.Request, task gen.T
 	}
 	t, err := s.core.Complete(r.Context(), c, task, body.Note, idem)
 	s.respond(w, r, out, t, err)
+}
+
+// taskWrite runs a write on one Task that answers with the Task: decode the body, set up the
+// Idempotency-Key, call op, respond.
+func taskWrite[B any](s *Server, w http.ResponseWriter, r *http.Request, key *string, op func(c *auth.Caller, body B, idem core.Idem) (core.Task, error)) {
+	var body B
+	out := as(http.StatusOK, func(t core.Task) any { return taskOut(t) })
+	c, idem, ok := s.begin(w, r, key, &body, out)
+	if !ok {
+		return
+	}
+	t, err := op(c, body, idem)
+	s.respond(w, r, out, t, err)
+}
+
+func (s *Server) AdvanceTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AdvanceTaskParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.AdvanceTaskBody, idem core.Idem) (core.Task, error) {
+		return s.core.Advance(r.Context(), c, task, deref(body.Outcome), body.Note, idem)
+	})
+}
+
+func (s *Server) MoveTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.MoveTaskParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.MoveTaskBody, idem core.Idem) (core.Task, error) {
+		return s.core.MoveTask(r.Context(), c, task, body.Step, body.Note, idem)
+	})
+}
+
+func (s *Server) RankTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.RankTaskParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.RankTaskBody, idem core.Idem) (core.Task, error) {
+		return s.core.RankTask(r.Context(), c, task, body.Position, idem)
+	})
+}
+
+func (s *Server) PassOwnership(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.PassOwnershipParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.PassOwnershipBody, idem core.Idem) (core.Task, error) {
+		return s.core.PassOwnership(r.Context(), c, task, body.Owner, idem)
+	})
+}
+
+func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskLabelsParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskLabelsBody, idem core.Idem) (core.Task, error) {
+		return s.core.SetTaskLabels(r.Context(), c, task, body.Labels, idem)
+	})
 }

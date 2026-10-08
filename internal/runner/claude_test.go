@@ -135,6 +135,16 @@ func (f *fixture) fakeClaude(name, scenario, prompt string) {
 		"--env", "FAKEAGENT_SCENARIO="+scenario, "--env", asDarkory+"=1", "--env", "FAKEAGENT_PROMPT="+prompt)
 }
 
+// waitingForAPerson waits until task's session shows a dialog the runner leaves to a person: the
+// session waiting, and the Note saying so.
+func waitingForAPerson(t *testing.T, f *fixture, r *Runner, task, note string) {
+	t.Helper()
+	eventually(t, 30*time.Second, task+"'s session waiting for a person", func() bool {
+		return slices.ContainsFunc(r.Running(), func(s RunnerSession) bool { return s.Task == task && s.State == StateWaiting }) &&
+			strings.Contains(notesOf(f.task(task)), note)
+	})
+}
+
 // Claude Code runs with the person's own configuration: their ~/.claude.json, which trusts the
 // Workspace's repository they opened Claude Code in, covers the Task's worktree, and their
 // settings accepted the permission skip, so the fake one, asking as Claude Code does, asks
@@ -150,15 +160,15 @@ func TestRunnerUsesThePersonsClaudeCodeConfiguration(t *testing.T) {
 		settings := `{"skipDangerousModePermissionPrompt": true}`
 		writeTestFile(t, filepath.Join(home, ".claude.json"), global)
 		writeTestFile(t, filepath.Join(home, ".claude", "settings.json"), settings)
-		f.agent("builder", "complete", "build")
+		f.workflow(buildOnly)
+		f.agent("builder", "complete", "engineer")
 		f.fakeClaude("builder", "complete", "claude")
-		f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-		f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+		f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
 		r := f.run("builder")
 
-		eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
+		eventually(t, 30*time.Second, "WEB-1 done", func() bool { return f.task("WEB-1").Task.State == client.TaskStateDone })
 		eventually(t, 10*time.Second, "the session to end", func() bool { return len(r.Running()) == 0 })
-		if notes := notesOf(f.task("WEB-3")); strings.Contains(notes, "first-run") {
+		if notes := notesOf(f.task("WEB-1")); strings.Contains(notes, "first-run") {
 			t.Fatalf("the session met a first-run prompt:\n%s", notes)
 		}
 		for path, want := range map[string]string{filepath.Join(home, ".claude.json"): global, filepath.Join(home, ".claude", "settings.json"): settings} {
@@ -182,31 +192,31 @@ func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
 	}
 	f := newFixture(t, storetest.Open(t, store.SQLite))
 	f.timings.Stale = time.Minute
-	f.agent("builder", "complete", "build")
+	f.workflow(buildOnly)
+	f.agent("builder", "complete", "engineer")
 	f.fakeClaude("builder", "complete", "trust")
-	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
 	r := f.runWith("on", "builder")
 	t.Cleanup(func() { killTmux(r.Socket()) })
 
-	eventually(t, 30*time.Second, "WEB-3 done", func() bool { return f.task("WEB-3").Task.State == client.TaskStateDone })
-	if notes := notesOf(f.task("WEB-3")); !strings.Contains(notes, "The runner accepted Claude Code's first-run prompt: the folder-trust dialog.") {
-		t.Fatalf("WEB-3's Notes:\n%s", notes)
+	eventually(t, 30*time.Second, "WEB-1 done", func() bool { return f.task("WEB-1").Task.State == client.TaskStateDone })
+	if notes := notesOf(f.task("WEB-1")); !strings.Contains(notes, "The runner accepted Claude Code's first-run prompt: the folder-trust dialog.") {
+		t.Fatalf("WEB-1's Notes:\n%s", notes)
 	}
 
 	// The next session's Claude Code asks twice: the second time is a person's to answer.
 	f.fakeClaude("builder", "complete", "again")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Totals")
-	waitingForAPerson(t, f, r, "WEB-4", "Claude Code shows the folder-trust dialog, and the runner accepts one first-run dialog "+
-		"a session; a person can answer it with darkory join WEB-4.")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
+	waitingForAPerson(t, f, r, "WEB-2", "Claude Code shows the folder-trust dialog, and the runner accepts one first-run dialog "+
+		"a session; a person can answer it with darkory join WEB-2.")
 	n := 0
 	for l := range strings.Lines(f.log.String()) {
-		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-4 ") {
+		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-2 ") {
 			n++
 		}
 	}
 	if n != 1 {
-		t.Fatalf("the runner accepted %d dialogs on WEB-4, not the first alone", n)
+		t.Fatalf("the runner accepted %d dialogs on WEB-2, not the first alone", n)
 	}
 }
 
@@ -218,32 +228,22 @@ func TestRunnerNeverAnswersAfterTheFirstTurn(t *testing.T) {
 	}
 	f := newFixture(t, storetest.Open(t, store.SQLite))
 	f.timings.Stale = time.Minute
-	f.agent("builder", "complete", "build")
+	f.workflow(buildOnly)
+	f.agent("builder", "complete", "engineer")
 	f.fakeClaude("builder", "complete", "late")
-	f.ok("ada", "feature", "create", "--team", "WEB", "--title", "Checkout")
-	f.ok("ada", "file", "--feature", "WEB-1", "--skill", "build", "--title", "Cart page")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
 	r := f.runWith("on", "builder")
 	t.Cleanup(func() { killTmux(r.Socket()) })
 
-	waitingForAPerson(t, f, r, "WEB-3", "Claude Code shows a first-run dialog after the agent's first turn; "+
-		"a person can answer it with darkory join WEB-3.")
+	waitingForAPerson(t, f, r, "WEB-1", "Claude Code shows a first-run dialog after the agent's first turn; "+
+		"a person can answer it with darkory join WEB-1.")
 	// Ten more checks, and still no key.
 	time.Sleep(10 * f.timings.Tick)
-	if strings.Contains(f.log.String(), "accepting it") || strings.Contains(notesOf(f.task("WEB-3")), "accepted Claude Code's first-run prompt") {
-		t.Fatalf("the runner answered a dialog after the first turn:\n%s", notesOf(f.task("WEB-3")))
+	if strings.Contains(f.log.String(), "accepting it") || strings.Contains(notesOf(f.task("WEB-1")), "accepted Claude Code's first-run prompt") {
+		t.Fatalf("the runner answered a dialog after the first turn:\n%s", notesOf(f.task("WEB-1")))
 	}
-	if b, _ := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-3", "pane.log")); strings.Contains(string(b), "the dialog was answered") ||
+	if b, _ := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-1", "pane.log")); strings.Contains(string(b), "the dialog was answered") ||
 		!strings.Contains(string(b), "Yes, I trust this folder") {
 		t.Fatalf("the session's pane:\n%s", tail(string(b), 30))
 	}
-}
-
-// waitingForAPerson waits until task's session shows a dialog the runner leaves to a person: the
-// session waiting, and the Note saying so.
-func waitingForAPerson(t *testing.T, f *fixture, r *Runner, task, note string) {
-	t.Helper()
-	eventually(t, 30*time.Second, task+"'s session waiting for a person", func() bool {
-		return slices.ContainsFunc(r.Running(), func(s RunnerSession) bool { return s.Task == task && s.State == StateWaiting }) &&
-			strings.Contains(notesOf(f.task(task)), note)
-	})
 }

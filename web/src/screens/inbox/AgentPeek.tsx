@@ -1,10 +1,22 @@
-import { useMutation } from "@tanstack/react-query";
-import { ActivityIcon, ArrowRightIcon, HandIcon, HeartPulseIcon, KeyRoundIcon, LogInIcon, PauseIcon, PlayIcon, RotateCcwIcon } from "lucide-react";
+import {
+  ActivityIcon,
+  ArrowRightIcon,
+  BellRingIcon,
+  HeartPulseIcon,
+  LogInIcon,
+  PauseIcon,
+  PlayIcon,
+  RotateCcwIcon,
+  RouteIcon,
+  SettingsIcon,
+  SplitIcon,
+  SquareIcon,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { toast } from "sonner";
-import { api, call, type Activity, type Member, type RunnerSession, type Task } from "@/api/client";
-import { useDirectory, useOpenTasks, useRunnerSessions } from "@/api/queries";
+import type { Activity, Member, Project, RunnerSession, Task } from "@/api/client";
+import { useDirectory, useMember, useOpenTasks, useRunnerSessions, useWorkflow } from "@/api/queries";
+import { projectPath } from "@/app/currentProject";
 import { useNow } from "@/clock";
 import { SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
@@ -12,32 +24,35 @@ import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Peek } from "@/components/Peek";
 import { Pill } from "@/components/Pill";
+import { ProjectMark } from "@/components/ProjectMark";
 import { PropertiesRail, Property } from "@/components/PropertiesRail";
 import { Refusal } from "@/components/Refusal";
 import { SessionFacts } from "@/components/RunnerSessionBadge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { untilText } from "@/lib/time";
+import { workingOf } from "@/lib/work";
 import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
-import { agentActions, sessionOverAgents, taskOverAgents, type AgentAction } from "./agentActions";
+import { agentActions, agentSettingsPath, sessionOverAgents, taskOverAgents, type AgentAction } from "./agentActions";
+import { useAgentActions } from "./useAgentActions";
 import { agentRows, claimHolder, claimsSince, count, startOfDay, type ClaimRecord } from "./derive";
 import { ShortTime } from "./parts";
-import { activityLimit, useFeatureMap, useMemberDetails, useRecentActivity, useSessions, useTaskMap, useTokens } from "./queries";
-import { refusalToast } from "./toast";
-import { timeoutText } from "./wording";
+import { activityLimit, useRecentActivity, useSessions, useStepNames, useTaskMap } from "./queries";
 
-/** The ⋯ menu's items for an agent's `actions`: each opens its page, or pauses or resumes the agent. */
-export function AgentMenuItems({ agent, actions }: { agent: Member; actions: AgentAction[] }) {
-  const navigate = useNavigate();
-  const pause = useMutation({
-    mutationFn: (paused: boolean) => call(api.PATCH("/v1/members/{member}/agent", { params: { path: { member: agent.id } }, body: { paused } })),
-    onSuccess: (m) => toast.success(m.agent?.paused ? `${agent.name} paused: it starts no new session` : `${agent.name} resumed`),
-    onError: refusalToast,
-  });
+const actionIcons: Record<string, ReactNode> = {
+  Nudge: <BellRingIcon />,
+  "Stop session": <SquareIcon />,
+  Pause: <PauseIcon />,
+  Resume: <PlayIcon />,
+  "Open in Settings": <SettingsIcon />,
+};
+
+/** The ⋯ menu's items for an agent's `actions`. */
+export function AgentMenuItems({ actions, run }: { actions: AgentAction[]; run: (a: AgentAction) => void }) {
   return actions.map((a) => (
-    <DropdownMenuItem key={a.label} onSelect={() => ("to" in a ? void navigate(a.to) : pause.mutate(a.paused))}>
-      {"paused" in a && (a.paused ? <PauseIcon /> : <PlayIcon />)}
+    <DropdownMenuItem key={a.label} onSelect={() => run(a)} variant={"session" in a && a.session === "stop" ? "destructive" : undefined}>
+      {actionIcons[a.label] ?? <RotateCcwIcon />}
       {a.label}
     </DropdownMenuItem>
   ));
@@ -52,13 +67,22 @@ const claimEndWords: Record<string, string> = {
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 /**
- * How a Claim ended, as a pill: Completed, Lapsed, Handed over, Released, Taken back, Dropped.
- * `when` adds the time of a lapse ("Lapsed 22:18"), where the row gives no other time.
+ * How a Claim ended, as a pill: Completed, Advanced (with its outcome), Released, Split, Lapsed,
+ * Taken back, Dropped. `when` adds the time of a lapse ("Lapsed 22:18"), where the row gives no
+ * other time.
  */
 export function EndPill({ end, when }: { end: Activity; when?: boolean }) {
+  const outcome = typeof end.payload.outcome === "string" ? end.payload.outcome : undefined;
   switch (end.kind) {
     case "task.completed":
       return <Pill tone="done">Completed</Pill>;
+    case "task.advanced":
+      return (
+        <Pill tone="waiting">
+          <RouteIcon className="size-3" aria-hidden />
+          Advanced{outcome && ` · ${outcome}`}
+        </Pill>
+      );
     case "task.lapsed":
       return (
         <Pill tone="dropped">
@@ -66,18 +90,18 @@ export function EndPill({ end, when }: { end: Activity; when?: boolean }) {
           Lapsed{when && <time dateTime={end.at}> {clock.format(new Date(end.at))}</time>}
         </Pill>
       );
-    case "task.handed_over":
-      return (
-        <Pill tone="waiting">
-          <HandIcon className="size-3" aria-hidden />
-          Handed over
-        </Pill>
-      );
     case "task.taken_back":
       return (
         <Pill tone="claimed">
           <RotateCcwIcon className="size-3" aria-hidden />
           Taken back
+        </Pill>
+      );
+    case "task.split":
+      return (
+        <Pill tone="secondary">
+          <SplitIcon className="size-3" aria-hidden />
+          Split
         </Pill>
       );
     case "task.released":
@@ -91,32 +115,27 @@ export function EndPill({ end, when }: { end: Activity; when?: boolean }) {
   }
 }
 
-/** The "Live" mark: a green dot while the agent holds a live Claim. */
-export function LiveDot({ children = "Live" }: { children?: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 text-2xs font-normal text-muted-foreground">
-      <span aria-hidden className="size-1.5 rounded-full bg-state-done" />
-      {children}
-    </span>
-  );
-}
-
-/** ?agent=<name> over the Agents page: what this agent has done today, and what holds it now. */
-export function AgentPeek({ name, onClose }: { name: string; onClose: () => void }) {
+/**
+ * ?agent=<name> over a Project's Agents page: what holds the agent now, the session the Runner
+ * runs for it, its Sessions, its Projects and Skills and the Steps it can take here, and its
+ * Claims today. Nudge, Stop, Pause and its page in Settings are in the ⋯ menu for an admin.
+ */
+export function AgentPeek({ name, project, onClose }: { name: string; project: Project; onClose: () => void }) {
   const me = useCurrentMe();
   const admin = me.member.admin;
   const now = useNow();
-  const { memberList, members, skills } = useDirectory();
+  const { memberList, members, skills, projects } = useDirectory();
   const open = useOpenTasks();
-  const features = useFeatureMap();
   const tasks = useTaskMap();
+  const steps = useStepNames();
+  const workflow = useWorkflow(project.key).data;
   const agent = memberList.find((m) => m.name === name || m.id === name);
   const id = agent?.id ?? "";
-  const [detail] = useMemberDetails(agent ? [id] : []);
+  const detail = useMember(agent ? id : undefined);
   const [sessionsQ] = useSessions(agent ? [id] : [], admin);
-  const tokens = useTokens(id, !!agent && (admin || me.member.id === id));
   const history = useRecentActivity({ member: id }, (e) => e.actor_id === id || claimHolder(e) === id, !!agent);
   const runnerSession = useRunnerSessions().data?.items.find((s) => s.member_id === id);
+  const { run, dialog } = useAgentActions(agent);
 
   if (!agent) {
     return (
@@ -133,8 +152,11 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
   const set = agent.agent?.model;
   const model = live?.model_label ?? set;
   const manager = agent.manager_id ? members.get(agent.manager_id) : undefined;
-  const actions = agentActions({ agent, held, me: me.member, members, features, sessions });
+  const sessionTask = runnerSession && (tasks.get(runnerSession.task_id) ?? held.find((t) => t.id === runnerSession.task_id));
+  const actions = agentActions({ agent, held, me: me.member, members, session: runnerSession, sessionKey: sessionTask?.key, project });
   const entries = history.complete ? count(history.entries.length, "entry", "entries") : `${activityLimit}+ entries`;
+  const takes = (workflow?.steps ?? []).filter((s) => s.takers.some((t) => t.id === id));
+  const working = live ? workingOf("agent", runnerSession?.state) : runnerSession?.state === "ending" ? "ending" : undefined;
 
   return (
     <Peek
@@ -143,17 +165,33 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
       label={`Agent ${agent.name}`}
       heading={
         <>
-          <MemberAvatar member={agent} size="md" />
+          <MemberAvatar member={agent} size="md" working={working} />
           <b className="truncate font-semibold">{agent.name}</b>
-          {live && <LiveDot />}
           {agent.agent?.paused && <Pill tone="secondary">Paused</Pill>}
           {agent.deactivated_at && <Pill tone="dropped">Deactivated</Pill>}
         </>
       }
-      menu={actions.length > 0 ? <AgentMenuItems agent={agent} actions={actions} /> : undefined}
+      menu={actions.length > 0 ? <AgentMenuItems actions={actions} run={run} /> : undefined}
     >
       <PropertiesRail className="grid-cols-[120px_minmax(0,1fr)]">
-        <Property label="Session" stack={(sessions?.length ?? 0) > 1}>
+        <Property label="Holds" stack={held.length > 1}>
+          {held.length === 0 ? (
+            <span className="text-muted-foreground">Nothing</span>
+          ) : (
+            held.map((t) => {
+              const claim = liveClaim(t, now);
+              return (
+                <span key={t.id} className="flex min-w-0 items-center gap-1.5">
+                  <Key to={taskOverAgents(project, t.key)}>{t.key}</Key>
+                  <span className="truncate">{t.title}</span>
+                  {t.step_id && <span className="whitespace-nowrap text-muted-foreground">· {steps.get(t.step_id)?.name ?? "a Step"}</span>}
+                  {claim?.expires_at && <HeartbeatMeter claim={claim} variant="compact" className="ml-auto text-xs" />}
+                </span>
+              );
+            })
+          )}
+        </Property>
+        <Property label="Sessions" stack={(sessions?.length ?? 0) > 1}>
           {admin && sessions ? (
             sessions.length === 0 ? (
               <Pill tone="dropped">No Session</Pill>
@@ -170,7 +208,7 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
           ) : live ? (
             <SessionId id={live.session_id} />
           ) : (
-            <Pill tone="dropped">No Session</Pill>
+            <span className="text-muted-foreground">None holding a Claim</span>
           )}
         </Property>
         {model && (
@@ -188,26 +226,29 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
         )}
         <Property label="Skills">
           <span className="flex flex-wrap gap-1">
-            {detail?.data?.skills.map((s) => (
+            {detail.data?.skills.map((s) => (
               <Pill key={s.id} tone="outline">
                 {s.name}
               </Pill>
             ))}
           </span>
         </Property>
-        <Property label="Teams">
-          <span className="truncate">{detail?.data?.teams.map((t) => t.name).join(" · ")}</span>
+        <Property label={`Steps in ${project.name}`}>
+          {takes.length === 0 ? <span className="text-muted-foreground">None</span> : <span className="truncate">{takes.map((s) => s.name).join(" · ")}</span>}
+        </Property>
+        <Property label="Projects">
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+            {(detail.data?.projects ?? []).map((p) => (
+              <Link key={p.id} to={projectPath(projects.get(p.id) ?? p, "agents")} className="inline-flex items-center gap-1.5 hover:underline">
+                <ProjectMark project={p} />
+                {p.name}
+              </Link>
+            ))}
+          </span>
         </Property>
       </PropertiesRail>
 
-      {runnerSession && (
-        <RunnerSessionSection
-          agent={agent}
-          session={runnerSession}
-          task={tasks.get(runnerSession.task_id) ?? held.find((t) => t.id === runnerSession.task_id)}
-          admin={admin}
-        />
-      )}
+      {runnerSession && <RunnerSessionSection agent={agent} session={runnerSession} task={sessionTask} admin={admin} project={project} run={run} />}
 
       <section aria-label="Claims today">
         <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Claims today · {claims.length}</h3>
@@ -218,8 +259,8 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
               const task = tasks.get(c.taskId) ?? held.find((t) => t.id === c.taskId);
               const holding = held.find((t) => t.claim?.id === c.claimId);
               return (
-                <li key={c.claimId} className="grid h-[52px] grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-2.5 border-t px-2.5 first:border-t-0">
-                  {task ? <Key to={taskOverAgents(task.key)}>{task.key}</Key> : <span />}
+                <li key={c.claimId} className="grid h-[52px] grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-2.5 border-t px-2.5 first:border-t-0">
+                  {task ? <Key to={taskOverAgents(project, task.key)}>{task.key}</Key> : <span />}
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate font-medium">{task?.title ?? "a Task"}</span>
                     <small className="truncate text-xs text-muted-foreground">
@@ -231,7 +272,7 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
                     {c.end ? (
                       <>
                         {c.end.kind === "task.lapsed" && c.timeoutSeconds && (
-                          <span className="text-xs text-muted-foreground">after {timeoutText(c.timeoutSeconds)}</span>
+                          <span className="text-xs text-muted-foreground">after {untilText(c.timeoutSeconds * 1000)}</span>
                         )}
                         <EndPill end={c.end} />
                       </>
@@ -246,59 +287,47 @@ export function AgentPeek({ name, onClose }: { name: string; onClose: () => void
         )}
       </section>
 
-      {(admin || me.member.id === id) && (
-        <section aria-label="Tokens">
-          <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Tokens · {tokens.data?.length ?? 0}</h3>
-          <Refusal error={tokens.error} />
-          {(tokens.data?.length ?? 0) > 0 && (
-            <ul className="flex flex-col rounded-md border">
-              {tokens.data!.map((t) => (
-                <li
-                  key={t.id}
-                  className={cn("flex h-[38px] items-center gap-1.5 border-t px-2.5 whitespace-nowrap first:border-t-0", t.revoked_at && "text-muted-foreground")}
-                >
-                  <KeyRoundIcon className="size-3.5 text-muted-foreground" aria-hidden />
-                  <b className="font-medium">{t.name}</b>
-                  <span className="font-mono text-xs text-muted-foreground">{t.prefix}…</span>
-                  <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-                    {t.revoked_at ? (
-                      <Pill tone="dropped">Revoked</Pill>
-                    ) : (
-                      <>
-                        issued <ShortTime at={t.created_at} />
-                        {t.last_used_at && (
-                          <>
-                            {" "}
-                            · used <ShortTime at={t.last_used_at} />
-                          </>
-                        )}
-                      </>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      <Link
-        to={`/activity?member=${encodeURIComponent(agent.name)}`}
-        className="inline-flex items-center gap-1.5 self-start font-medium hover:underline [&_svg]:size-3.5"
-      >
-        <ActivityIcon aria-hidden />
-        Activity · {entries}
-        <ArrowRightIcon aria-hidden />
-      </Link>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <Link
+          to={`${projectPath(project, "activity")}?member=${encodeURIComponent(agent.name)}`}
+          className="inline-flex items-center gap-1.5 font-medium hover:underline [&_svg]:size-3.5"
+        >
+          <ActivityIcon aria-hidden />
+          Activity · {entries}
+          <ArrowRightIcon aria-hidden />
+        </Link>
+        {admin && (
+          <Link to={agentSettingsPath(agent)} className="inline-flex items-center gap-1.5 font-medium hover:underline [&_svg]:size-3.5">
+            <SettingsIcon aria-hidden />
+            Settings
+            <ArrowRightIcon aria-hidden />
+          </Link>
+        )}
+      </div>
+      {dialog}
     </Peek>
   );
 }
 
 /**
  * The session the Runner runs for the agent now: its facts, View (the Task's peek at its Session
- * panel) and, for an admin, Join, which opens the same panel joined.
+ * panel) and, for an admin, Join, Nudge and Stop.
  */
-function RunnerSessionSection({ agent, session, task, admin }: { agent: Member; session: RunnerSession; task: Task | undefined; admin: boolean }) {
+function RunnerSessionSection({
+  agent,
+  session,
+  task,
+  admin,
+  project,
+  run,
+}: {
+  agent: Member;
+  session: RunnerSession;
+  task: Task | undefined;
+  admin: boolean;
+  project: Project;
+  run: (a: AgentAction) => void;
+}) {
   const navigate = useNavigate();
   return (
     <section aria-label="Runner session">
@@ -306,15 +335,27 @@ function RunnerSessionSection({ agent, session, task, admin }: { agent: Member; 
       <div className="flex flex-col rounded-md border">
         <SessionFacts session={session} agent={agent} className="min-h-9 border-b px-2.5 py-1.5" />
         {task && (
-          <div className="flex h-9 min-w-0 items-center gap-1.5 px-2.5">
-            <Key to={taskOverAgents(task.key)}>{task.key}</Key>
-            <span className="truncate">{task.title}</span>
+          <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-1.5 px-2.5 py-1">
+            <Key to={taskOverAgents(project, task.key)}>{task.key}</Key>
+            <span className="min-w-0 flex-1 truncate">{task.title}</span>
             <span className="ml-auto flex flex-none items-center gap-1.5">
               <Button asChild variant="ghost" size="xs">
-                <Link to={sessionOverAgents(task.key)}>View</Link>
+                <Link to={sessionOverAgents(project, task.key)}>View</Link>
               </Button>
+              {admin && session.state !== "ending" && (
+                <>
+                  <Button variant="ghost" size="xs" onClick={() => run({ label: "Nudge", session: "nudge", taskKey: task.key })}>
+                    <BellRingIcon />
+                    Nudge
+                  </Button>
+                  <Button variant="ghost" size="xs" onClick={() => run({ label: "Stop session", session: "stop", taskKey: task.key })}>
+                    <SquareIcon />
+                    Stop
+                  </Button>
+                </>
+              )}
               {admin && session.tmux && (
-                <Button variant="outline" size="xs" onClick={() => void navigate(sessionOverAgents(task.key), { state: { join: true } })}>
+                <Button variant="outline" size="xs" onClick={() => void navigate(sessionOverAgents(project, task.key), { state: { join: true } })}>
                   <LogInIcon />
                   Join
                 </Button>

@@ -18,21 +18,18 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// Workspaces, Team defaults, quick and ship-when-done Features and agent settings through the
+// Workspaces, a Project's defaults, the Workspaces a Task names and agent settings through the
 // generated client on both engines, with the codes and statuses of their refusals.
 func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
-		got(ada.AddTeamMemberWithResponse(ctx, "WEB", "ada", &client.AddTeamMemberParams{})).want(t, http.StatusNoContent)
-		for _, s := range []string{"build", "review"} {
-			got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: s, Kind: client.Generic, Body: s})).
-				want(t, http.StatusCreated)
-		}
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
+		got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "b"})).
+			want(t, http.StatusCreated)
 		bob, _ := h.member("bob", client.Agent, "WEB", "build")
-		rev, _ := h.member("rev", client.Agent, "WEB", "review")
 
 		res := got(bob.CreateWorkspaceWithResponse(ctx, &client.CreateWorkspaceParams{}, client.CreateWorkspaceBody{Name: "web", Path: "/src/web"})).
 			want(t, http.StatusForbidden)
@@ -68,27 +65,28 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 			t.Fatalf("listed %+v", list)
 		}
 
-		team := got(ada.UpdateTeamWithResponse(ctx, "WEB", &client.UpdateTeamParams{}, client.UpdateTeamBody{DefaultWorkspace: ptrStr("web"),
-			ShipWhenDone: ptrBool(true)})).want(t, http.StatusOK).JSON200
-		if team.DefaultWorkspaceID == nil || *team.DefaultWorkspaceID != web.ID || !team.ShipWhenDone {
-			t.Fatalf("WEB %+v", team)
+		project := got(ada.UpdateProjectWithResponse(ctx, "WEB", &client.UpdateProjectParams{}, client.UpdateProjectBody{DefaultWorkspace: ptrStr("web"),
+			AutoComplete: ptrBool(true)})).want(t, http.StatusOK).JSON200
+		if project.DefaultWorkspaceID == nil || *project.DefaultWorkspaceID != web.ID || !project.AutoComplete || project.Acceptance {
+			t.Fatalf("WEB %+v", project)
 		}
-		got(bob.UpdateTeamWithResponse(ctx, "WEB", &client.UpdateTeamParams{}, client.UpdateTeamBody{ShipWhenDone: ptrBool(false)})).
+		got(bob.UpdateProjectWithResponse(ctx, "WEB", &client.UpdateProjectParams{}, client.UpdateProjectBody{AutoComplete: ptrBool(false)})).
 			want(t, http.StatusForbidden)
 
-		// A Feature takes the Team's ship_when_done; its Tasks the Team's Workspace.
-		f := got(ada.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Checkout"})).
-			want(t, http.StatusCreated).JSON201
-		if !f.Feature.ShipWhenDone || f.Feature.Quick || f.Tasks[0].WorkspaceIds == nil || (*f.Tasks[0].WorkspaceIds)[0] != web.ID {
-			t.Fatalf("filed %+v with %+v", f.Feature, f.Tasks[0])
+		// A Task filed with Break down takes the Project's auto_complete, and it and its Breakdown
+		// the Project's Workspace.
+		f := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Breakdown: ptrBool(true)})).want(t, http.StatusCreated).JSON201
+		if !f.Task.AutoComplete || len(f.Subtasks) != 1 || f.Subtasks[0].WorkspaceIds == nil || (*f.Subtasks[0].WorkspaceIds)[0] != web.ID {
+			t.Fatalf("filed %+v with %+v", f.Task, f.Subtasks)
 		}
-		task := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key, Title: "Pay",
-			Skill: ptrStr("build"), Workspaces: &[]string{"WEB"}})).want(t, http.StatusCreated).JSON201
+		task := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key, Title: "Pay",
+			Workspaces: &[]string{"WEB"}})).want(t, http.StatusCreated).JSON201
 		if len(task.Workspaces) != 1 || task.Workspaces[0].Name != "web" || task.Workspaces[0].Path != "/src/web" {
 			t.Fatalf("the Task's Workspaces %+v", task.Workspaces)
 		}
-		none := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key, Title: "Ask",
-			AimedAt: ptrStr("ada"), Workspaces: &[]string{}})).want(t, http.StatusCreated).JSON201
+		none := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key, Title: "Ask",
+			Aim: ptrStr("ada"), Workspaces: &[]string{}})).want(t, http.StatusCreated).JSON201
 		if none.Task.WorkspaceIds != nil || len(none.Workspaces) != 0 {
 			t.Fatalf("named none, got %v %+v", none.Task.WorkspaceIds, none.Workspaces)
 		}
@@ -96,35 +94,12 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 			strings.Contains(raw, "workspace_ids") {
 			t.Fatalf("a Task naming none reads %s", raw)
 		}
-		missing := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key, Title: "Lost",
-			Skill: ptrStr("build"), Workspaces: &[]string{"nowhere"}})).want(t, http.StatusNotFound)
+		missing := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key, Title: "Lost",
+			Workspaces: &[]string{"nowhere"}})).want(t, http.StatusNotFound)
 		if missing.JSONDefault.Code != client.ErrorCodeNotFound {
 			t.Fatalf("refused with %s", missing.Body)
 		}
 		got(ada.RemoveWorkspaceWithResponse(ctx, "web", &client.RemoveWorkspaceParams{})).want(t, http.StatusConflict)
-
-		// A quick Feature: one Task, built and reviewed, ships with no Retrospective.
-		got(ada.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Fix", Quick: ptrBool(true)})).
-			want(t, http.StatusBadRequest)
-		q := got(ada.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Fix the footer",
-			Quick: ptrBool(true), Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201
-		if !q.Feature.Quick || !q.Feature.ShipWhenDone || len(q.Tasks) != 1 || q.Tasks[0].Kind != client.Work || q.Tasks[0].Title != "Fix the footer" {
-			t.Fatalf("quick: %+v %+v", q.Feature, q.Tasks)
-		}
-		key := q.Tasks[0].Key
-		got(bob.ClaimTaskWithResponse(ctx, key, &client.ClaimTaskParams{}, client.ClaimTaskBody{HeartbeatTimeoutSeconds: ptrInt(0)})).want(t, http.StatusOK)
-		got(bob.HandoverTaskWithResponse(ctx, key, &client.HandoverTaskParams{}, client.HandoverTaskBody{Skill: "review"})).want(t, http.StatusOK)
-		got(rev.ClaimTaskWithResponse(ctx, key, &client.ClaimTaskParams{}, client.ClaimTaskBody{HeartbeatTimeoutSeconds: ptrInt(0)})).want(t, http.StatusOK)
-		got(rev.CompleteTaskWithResponse(ctx, key, &client.CompleteTaskParams{}, client.CompleteTaskBody{})).want(t, http.StatusOK)
-		shipped := got(ada.GetFeatureWithResponse(ctx, q.Feature.Key)).want(t, http.StatusOK).JSON200
-		if shipped.Feature.State != client.FeatureStateShipped || len(shipped.Tasks) != 1 {
-			t.Fatalf("after the review: %+v with %d Tasks", shipped.Feature, len(shipped.Tasks))
-		}
-		kinds := []client.ActivityKind{client.ActivityKindFeatureShipped}
-		page := got(ada.ListActivityWithResponse(ctx, &client.ListActivityParams{Kind: &kinds})).want(t, http.StatusOK).JSON200
-		if len(page.Items) != 1 || page.Items[0].Payload["ship_when_done"] != true || page.Items[0].SubjectType != client.SubjectTypeFeature {
-			t.Fatalf("feature.shipped %+v", page.Items)
-		}
 
 		// Agent settings: admins only, agents only.
 		got(ada.SetAgentSettingsWithResponse(ctx, "ada", &client.SetAgentSettingsParams{}, client.SetAgentSettingsBody{Paused: ptrBool(true)})).
@@ -137,19 +112,20 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 			!m.Agent.Unattended || m.Agent.Paused || m.Agent.ProgressFile != nil || !slices.Contains(m.Agent.Args, "{prompt_file}") {
 			t.Fatalf("settings %+v", m.Agent)
 		}
-		members := got(rev.ListMembersWithResponse(ctx, &client.ListMembersParams{})).want(t, http.StatusOK).JSON200.Items
+		members := got(bob.ListMembersWithResponse(ctx, &client.ListMembersParams{})).want(t, http.StatusOK).JSON200.Items
 		for _, mm := range members {
 			if (mm.Name == "bob") != (mm.Agent != nil) {
 				t.Fatalf("%s listed with settings %+v", mm.Name, mm.Agent)
 			}
 		}
-		kinds = []client.ActivityKind{client.ActivityKindMemberAgentChanged, client.ActivityKindWorkspaceAdded, client.ActivityKindWorkspaceChanged, client.ActivityKindTeamChanged}
-		page = got(ada.ListActivityWithResponse(ctx, &client.ListActivityParams{Kind: &kinds})).want(t, http.StatusOK).JSON200
+		kinds := []client.ActivityKind{client.ActivityKindMemberAgentChanged, client.ActivityKindWorkspaceAdded, client.ActivityKindWorkspaceChanged,
+			client.ActivityKindProjectChanged}
+		page := got(ada.ListActivityWithResponse(ctx, &client.ListActivityParams{Kind: &kinds})).want(t, http.StatusOK).JSON200
 		var seen []string
 		for _, a := range page.Items {
 			seen = append(seen, string(a.Kind)+":"+string(a.SubjectType))
 		}
-		if want := []string{"workspace.added:workspace", "workspace.changed:workspace", "team.changed:team", "member.agent_changed:member"}; !slices.Equal(seen, want) {
+		if want := []string{"workspace.added:workspace", "workspace.changed:workspace", "project.changed:project", "member.agent_changed:member"}; !slices.Equal(seen, want) {
 			t.Fatalf("Activity %v, want %v", seen, want)
 		}
 		got(bob.ClearAgentSettingsWithResponse(ctx, "bob", &client.ClearAgentSettingsParams{})).want(t, http.StatusForbidden)
@@ -223,13 +199,13 @@ func TestRunnerSessions(t *testing.T) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
-		got(ada.AddTeamMemberWithResponse(ctx, "WEB", "ada", &client.AddTeamMemberParams{})).want(t, http.StatusNoContent)
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
 		bob, bobID := h.member("bob", client.Agent, "WEB")
-		f := got(ada.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Checkout"})).
-			want(t, http.StatusCreated).JSON201
-		held, other := f.Tasks[0], got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key,
-			Title: "Other", AimedAt: ptrStr("bob")})).want(t, http.StatusCreated).JSON201.Task
+		f := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Breakdown: ptrBool(true)})).want(t, http.StatusCreated).JSON201
+		held, other := f.Subtasks[0], got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key,
+			Title: "Other", Aim: ptrStr("bob")})).want(t, http.StatusCreated).JSON201.Task
 
 		// No Runner attached.
 		got(ada.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusConflict)
@@ -261,7 +237,7 @@ func TestRunnerSessions(t *testing.T) {
 		got(bob.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusForbidden)
 		got(ada.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusNoContent)
 		got(ada.StopRunnerSessionWithResponse(ctx, held.ID, &client.StopRunnerSessionParams{})).want(t, http.StatusNoContent)
-		got(ada.StopRunnerSessionWithResponse(ctx, f.Feature.Key, &client.StopRunnerSessionParams{})).want(t, http.StatusNotFound)
+		got(ada.StopRunnerSessionWithResponse(ctx, f.Task.Key, &client.StopRunnerSessionParams{})).want(t, http.StatusNotFound)
 		if !slices.Equal(fake.nudged, []string{held.ID}) || !slices.Equal(fake.stopped, []string{held.ID}) {
 			t.Fatalf("nudged %v, stopped %v", fake.nudged, fake.stopped)
 		}

@@ -31,8 +31,15 @@ func initIn(t *testing.T, dir, data string, args ...string) string {
 	return out.String()
 }
 
-// agentsOf reads the Install in data back as ada: the agents' names and the Workspaces.
+// agentsOf reads the Install in data back as ada: the agents and the Workspaces.
 func agentsOf(t *testing.T, data, adaToken string) ([]core.Member, []core.Workspace) {
+	t.Helper()
+	agents, ws, _ := installOf(t, data, adaToken)
+	return agents, ws
+}
+
+// installOf reads the Install in data back as ada: the agents, the Workspaces and Project MAIN.
+func installOf(t *testing.T, data, adaToken string) ([]core.Member, []core.Workspace, core.ProjectDetail) {
 	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(data, "darkory.db"))
@@ -53,14 +60,18 @@ func agentsOf(t *testing.T, data, adaToken string) ([]core.Member, []core.Worksp
 	if err != nil {
 		t.Fatal(err)
 	}
-	return agents, ws
+	main, err := svc.GetProject(ctx, c, "MAIN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return agents, ws, main
 }
 
 func ptr[T any](v T) *T { return &v }
 
 var firstToken = regexp.MustCompile(`(?m)^\s+(dk_\S+)$`)
 
-// Inside a git repository, init seeds Team MAIN, the repository as its default Workspace and the
+// Inside a git repository, init seeds Project MAIN, the repository as its default Workspace and the
 // four agents, writes each agent's token to <data>/agents/<name>.token readable by its user
 // alone, and lists them; the first token it prints is still the first Member's.
 func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
@@ -82,8 +93,8 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 	root, _ := filepath.EvalSymlinks(repo)
 	for _, want := range []string{
 		"First Member: ada (human, admin)",
-		"\nTeam MAIN (Main) holds ada and the agents below.\n",
-		"Workspace shop: " + root + " (git, default branch trunk), Team MAIN's default.\n",
+		"\nProject MAIN (Main), on the default Workflow, holds ada and the agents below.\n",
+		"Workspace shop: " + root + " (git, default branch trunk), Project MAIN's default.\n",
 		"Agents, reporting to ada, each with a token in " + filepath.Join(data, "agents", "<name>.token") + ":\n",
 		"  planner   breakdown              claude-opus-5-5\n",
 		"  builder   engineer               claude-sonnet-5-5\n",
@@ -134,15 +145,23 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 	if len(ws) != 1 || ws[0].Name != "shop" || ws[0].DefaultBranch != "trunk" {
 		t.Fatalf("Workspaces %+v", ws)
 	}
+
+	// --no-agents in the same repository: Project MAIN, but no Workspace for it.
+	bare := t.TempDir()
+	out = initIn(t, sub, bare, "--no-agents")
+	agents, ws, main := installOf(t, bare, firstToken.FindStringSubmatch(out)[1])
+	if len(agents) != 0 || len(ws) != 0 || main.Project.DefaultWorkspaceID != nil || strings.Contains(out, "Workspace shop") {
+		t.Fatalf("init --no-agents in a repository made %d agents, Workspaces %+v, MAIN %+v:\n%s", len(agents), ws, main.Project, out)
+	}
 }
 
 // Outside a git repository the roster is seeded with no Workspace, and init says how to add one;
-// --no-agents seeds nothing but the Organisation and its first Member.
+// --no-agents seeds Project MAIN on the default Workflow with the first Member, and no agents.
 func TestInitOutsideAGitRepository(t *testing.T) {
 	data := t.TempDir()
 	out := initIn(t, t.TempDir(), data)
 	if !strings.Contains(out, "No Workspace: init ran outside a git repository. Add one with darkory workspace add --path <repository>,\n"+
-		"then make it the Team's default with darkory team set MAIN --default-workspace <name>.\n") || !strings.Contains(out, "  planner ") {
+		"then make it the Project's default with darkory project set MAIN --workspace <name>.\n") || !strings.Contains(out, "  planner ") {
 		t.Fatalf("init outside a repository printed:\n%s", out)
 	}
 	agents, ws := agentsOf(t, data, firstToken.FindStringSubmatch(out)[1])
@@ -152,14 +171,18 @@ func TestInitOutsideAGitRepository(t *testing.T) {
 
 	data = t.TempDir()
 	out = initIn(t, t.TempDir(), data, "--no-agents")
-	if strings.Contains(out, "Team MAIN") || strings.Contains(out, "Workspace") {
+	if !strings.Contains(out, "\nProject MAIN (Main), on the default Workflow, holds ada. No agents and no Workspace: init ran with --no-agents.\n") ||
+		strings.Contains(out, "Agents") {
 		t.Fatalf("init --no-agents printed:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(data, "agents")); !os.IsNotExist(err) {
 		t.Fatalf("init --no-agents made %s: %v", filepath.Join(data, "agents"), err)
 	}
-	agents, _ = agentsOf(t, data, firstToken.FindStringSubmatch(out)[1])
-	if len(agents) != 0 {
-		t.Fatalf("init --no-agents made %d agents", len(agents))
+	agents, ws, main := installOf(t, data, firstToken.FindStringSubmatch(out)[1])
+	if len(agents) != 0 || len(ws) != 0 {
+		t.Fatalf("init --no-agents made %d agents, Workspaces %+v", len(agents), ws)
+	}
+	if main.Project.Name != "Main" || len(main.Members) != 1 || main.Members[0].Name != "ada" || main.Project.DefaultWorkspaceID != nil {
+		t.Fatalf("init --no-agents made MAIN %+v holding %+v", main.Project, main.Members)
 	}
 }

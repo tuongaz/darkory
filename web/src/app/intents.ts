@@ -1,17 +1,24 @@
 import { useEffect, useRef } from "react";
 
 /**
- * What the shell asks a screen to open, wherever the screen's dialogs live. The shell sends
- * `file-task` for the C key and ⌘K's "File a Task"; `file-feature` for ⌘K and the Install
- * checklist. `team` is the current Team's key when there is one. A `file-task` may also name the
- * Status (`status`, a Status id: a column's +) and the Feature (`feature`, a key or id) to start
- * in; either may carry a `title` to start with (⌘K's words when nothing matched them). The Board
- * screen's dialogs, mounted once by the shell (BoardDialogs), handle both. `filter` (the F key)
- * opens the Filters menu of a page that has one.
+ * What the shell asks of whoever answers it, wherever their dialogs live:
+ *
+ * - `file-task`: the C key, ⌘K's "File a Task" and the Install checklist. `project` is the
+ *   Project's key: the current one when the sender knows no other. It may also name the Step to
+ *   start at (`step`, a Step id: a board column's +), the Task to file a Subtask under (`parent`,
+ *   a key), and the `title` to start with (⌘K's words when nothing matched them). The Tasks
+ *   screen's dialogs answer it (`BoardDialogs`, mounted once by the shell).
+ * - `new-project`: "+ New Project" in the switcher, ⌘K, Settings and the Install checklist; the
+ *   shell's New Project dialog answers it.
+ * - `switch-project`: G then P; the sidebar opens its Project switcher.
+ * - `search`: the sidebar's Search; the shell opens ⌘K.
+ * - `filter`: the F key; a page with Filters opens its menu.
  */
 export type Intent =
-  | { kind: "file-task"; team?: string; status?: string; feature?: string; title?: string }
-  | { kind: "file-feature"; team?: string; title?: string }
+  | { kind: "file-task"; project?: string; step?: string; parent?: string; title?: string }
+  | { kind: "new-project" }
+  | { kind: "switch-project" }
+  | { kind: "search" }
   | { kind: "filter" };
 
 export const intentEvent = "darkory:intent";

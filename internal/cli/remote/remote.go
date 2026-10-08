@@ -193,7 +193,8 @@ func (e *Error) Refused() bool {
 	case client.ErrorCodeForbidden, client.ErrorCodeConflict, client.ErrorCodeAlreadyClaimed,
 		client.ErrorCodeNotTakeable, client.ErrorCodeNotHolder, client.ErrorCodeEnded,
 		client.ErrorCodeTasksOpen, client.ErrorCodeCycle, client.ErrorCodeProposalStale,
-		client.ErrorCodeStatusInUse, client.ErrorCodeUseComplete, client.ErrorCodeUseDrop:
+		client.ErrorCodeNoConnector, client.ErrorCodeUseAdvance, client.ErrorCodeNoStep, client.ErrorCodeOneLevel,
+		client.ErrorCodeHeld, client.ErrorCodeStepInUse, client.ErrorCodeUseParent:
 		return true
 	}
 	return false

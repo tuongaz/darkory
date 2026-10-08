@@ -30,7 +30,7 @@ export function Property({ label, children, stack }: { label: ReactNode; childre
   );
 }
 
-/** A value that opens a menu or a picker in place (kit `.prop-btn`): a Status, a Feature. */
+/** A value that opens a menu or a picker in place (kit `.prop-btn`): a step, an Owner. */
 export function PropertyButton({ className, ...props }: ComponentProps<"button">) {
   return (
     <button
