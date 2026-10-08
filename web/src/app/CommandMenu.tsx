@@ -125,7 +125,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
           id: `member ${m.id}`,
           content: (
             <>
-              <MemberAvatar member={m} /> <span className="truncate">{m.name}</span>{" "}
+              <MemberAvatar member={m} card={false} /> <span className="truncate">{m.name}</span>{" "}
               <span className="ml-auto text-xs text-muted-foreground">{m.kind === "agent" ? "Agent" : "Human"}</span>
             </>
           ),

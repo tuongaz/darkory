@@ -177,7 +177,7 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
             {ordered.map((m) => (
               <label key={m.id} className="flex h-8 cursor-pointer items-center gap-2 rounded-sm px-1.5 hover:bg-accent">
                 <Checkbox checked={chosen.has(m.id)} onCheckedChange={(c) => toggle(m, c === true)} aria-label={m.name} />
-                <MemberAvatar member={m} />
+                <MemberAvatar member={m} card={false} />
                 <span className="min-w-0 flex-1 truncate">
                   {m.name}
                   {m.id === me.member.id && <span className="text-muted-foreground"> (you)</span>}

@@ -275,7 +275,7 @@ function ProjectMembers({ project, members }: { project: Project; members: Membe
             items={outside.map((m) => ({
               id: m.id,
               label: m.name,
-              icon: <MemberAvatar member={m} />,
+              icon: <MemberAvatar member={m} card={false} />,
               hint: m.kind === "agent" ? "Agent" : "Human",
             }))}
             empty="Every Member is in it"

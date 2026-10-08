@@ -30,7 +30,7 @@ export function AccountPage() {
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" />}
+          mark={<MemberAvatar member={m} size="lg" card={false} />}
           meta={
             <>
               <span>{me.organisation.name}</span>
