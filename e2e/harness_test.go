@@ -154,7 +154,8 @@ type serveProc struct {
 }
 
 // newInstall runs darkory init --no-agents on a fresh database and starts one server: the
-// Organisation and ada, without the roster init seeds by default.
+// Organisation, ada and Project MAIN holding her, without the agents and Workspace init seeds by
+// default.
 func newInstall(t *testing.T) *install {
 	t.Helper()
 	return newInstallWith(t, "--no-agents")
