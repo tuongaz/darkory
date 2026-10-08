@@ -100,9 +100,18 @@ function EditingPage() {
       <TopBar
         crumbs={settingsCrumbs(project.name)}
         view={
-          <Pill tone={n > 0 ? "claimed" : "outline"} className="font-normal">
-            Editing{n > 0 && ` · ${n} ${n === 1 ? "change" : "changes"}`}
-          </Pill>
+          <span role="status" aria-label="Editing">
+            <Pill tone={n > 0 ? "claimed" : "outline"} className="font-normal">
+              {n > 0 ? (
+                <>
+                  <span className="max-sm:sr-only">Editing · </span>
+                  {n} {n === 1 ? "change" : "changes"}
+                </>
+              ) : (
+                "Editing"
+              )}
+            </Pill>
+          </span>
         }
         actions={
           <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(live))}>

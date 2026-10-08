@@ -134,7 +134,7 @@ async function openList(path = "/settings/projects/WEB/workflow") {
   return within(screen.getByRole("list", { name: "Steps" }));
 }
 const save = () => userEvent.click(screen.getByRole("button", { name: "Save" }));
-const header = () => screen.getByText(/^Editing/);
+const header = () => screen.getByRole("status", { name: "Editing" });
 
 describe("Settings › Workflow", () => {
   it("shows a Member who is not an admin the list read-only, saying only an admin changes it", async () => {

@@ -56,7 +56,8 @@ export function Outcome({
 }) {
   const fresh = !base.connectors.some((x) => x.id === c.id);
   const was = wasTarget(base, c);
-  const nameOf = (id: string | undefined) => (id ? (wf.steps.find((s) => s.id === id) ?? base.steps.find((s) => s.id === id))?.name.trim() || "New Step" : "Done");
+  const nameOf = (id: string | undefined) =>
+    id ? (wf.steps.find((s) => s.id === id) ?? base.steps.find((s) => s.id === id))?.name.trim() || "New Step" : "Done";
   const stepName = step.name.trim() || "the new Step";
   if (readOnly) {
     return (

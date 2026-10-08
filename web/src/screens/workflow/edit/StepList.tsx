@@ -123,9 +123,17 @@ export function StepList({
   };
 
   const holders = new Map<string, string[]>();
-  for (const s of base.steps) if (s.skill_id && s.takers.length) holders.set(s.skill_id, s.takers.map((t) => t.name));
+  for (const s of base.steps)
+    if (s.skill_id && s.takers.length)
+      holders.set(
+        s.skill_id,
+        s.takers.map((t) => t.name),
+      );
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const a = wf.steps.find((s) => s.id === active.id);
@@ -181,7 +189,7 @@ export function StepList({
         )}
         {after.length > 0 && (
           <>
-            <div role="presentation" className={cn(grid, "mt-3 mb-1 text-xs text-muted-foreground")}>
+            <div role="presentation" className={cn(grid, "mt-1 mb-1 text-xs text-muted-foreground max-md:mt-4 max-md:px-3")}>
               <span />
               <span>After a Parent</span>
             </div>
@@ -213,17 +221,13 @@ const addStepClass =
 /** The gap after a Step: "+ Add Step" shows on hover or focus, and inserts a Step there. */
 function InsertGap({ after, last, onInsert }: { after: RecordStep; last: boolean; onInsert: () => void }) {
   return (
-    <div className={cn("group/gap relative flex h-2 items-center md:pl-8", last && "h-7 md:h-7")}>
+    <div className={cn("group/gap relative flex h-8 items-center px-3 md:h-2 md:pl-8", last && "md:h-7")}>
       <span aria-hidden className="absolute inset-x-8 top-1/2 h-px bg-border opacity-0 group-hover/gap:opacity-100" />
       <button
         type="button"
         onClick={onInsert}
         aria-label={`Add a Step after ${after.name.trim() || "the new Step"}`}
-        className={cn(
-          addStepClass,
-          "relative z-10 opacity-0 group-hover/gap:opacity-100 focus-visible:opacity-100",
-          last ? "opacity-100 md:opacity-0 md:group-hover/gap:opacity-100" : "max-md:hidden",
-        )}
+        className={cn(addStepClass, "relative z-10 opacity-0 group-hover/gap:opacity-100 focus-visible:opacity-100", "max-md:opacity-100")}
       >
         <PlusIcon aria-hidden className="size-3" /> Add Step
       </button>
@@ -280,7 +284,10 @@ function StepRow({
   };
 
   const line = (cells: ReactNode, sub?: boolean, amber?: boolean, key?: string) => (
-    <div key={key} className={cn(grid, "group/out flex min-w-0 flex-col gap-1.5 md:min-h-[34px]", sub && "md:min-h-[28px]", amber && "rounded-md bg-state-claimed-bg")}>
+    <div
+      key={key}
+      className={cn(grid, "group/out flex min-w-0 flex-col gap-1.5 md:min-h-[34px]", sub && "md:min-h-[28px]", amber && "rounded-md bg-state-claimed-bg")}
+    >
       {cells}
     </div>
   );

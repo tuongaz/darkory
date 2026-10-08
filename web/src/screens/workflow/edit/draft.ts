@@ -136,9 +136,7 @@ export function removeOutcome(d: Draft, id: string): Draft {
   const rest = d.wf.connectors.filter((c) => c.id !== id);
   // The outcomes left keep their order, numbered from 1, so the next one becomes the row's first.
   let n = 0;
-  const connectors = rest
-    .sort((a, b) => a.position - b.position)
-    .map((c) => (c.from_step_id === gone.from_step_id ? { ...c, position: ++n } : c));
+  const connectors = rest.sort((a, b) => a.position - b.position).map((c) => (c.from_step_id === gone.from_step_id ? { ...c, position: ++n } : c));
   return withWf(d, { ...d.wf, connectors });
 }
 
@@ -275,8 +273,14 @@ export function countChanges(server: WorkflowRecord, draft: WorkflowRecord): num
 /** The fewest Steps moved that turn the old order of the Steps kept into the new: those off the longest run kept in order. */
 function reordered(server: WorkflowRecord, draft: WorkflowRecord): number {
   const ids = new Set(draft.steps.map((s) => s.id));
-  const old = new Map(inOrder(server.steps).filter((s) => ids.has(s.id)).map((s, i) => [s.id, i]));
-  const seq = inOrder(draft.steps).filter((s) => old.has(s.id)).map((s) => old.get(s.id)!);
+  const old = new Map(
+    inOrder(server.steps)
+      .filter((s) => ids.has(s.id))
+      .map((s, i) => [s.id, i]),
+  );
+  const seq = inOrder(draft.steps)
+    .filter((s) => old.has(s.id))
+    .map((s) => old.get(s.id)!);
   const tails: number[] = [];
   for (const x of seq) {
     let lo = 0;

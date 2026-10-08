@@ -64,88 +64,83 @@ export function Preview({
 
   return (
     <figure aria-label="Preview of the line" className={cn("min-w-0", className)}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={describe(main, segments)}>
-        {main.map((s, i) => (
-          <line
-            key={`seg-${s.id}`}
-            x1={xAt(i)}
-            x2={xAt(i + 1)}
-            y1={LINE_Y}
-            y2={LINE_Y}
-            strokeWidth={segments.has(i) ? 2.5 : 1.2}
-            strokeDasharray={segments.has(i) ? (segments.get(i)!.changed ? "6 4" : undefined) : "3 4"}
-            className={segments.get(i)?.changed ? "stroke-state-claimed" : segments.has(i) ? "stroke-foreground" : "stroke-muted-foreground"}
-          />
-        ))}
-        {[...segments].map(([i, seg]) =>
-          seg.name ? (
-            <Label key={`segl-${i}`} x={(xAt(i) + xAt(i + 1)) / 2} y={LINE_Y} text={seg.name} changed={seg.changed} />
-          ) : null,
-        )}
-        {under.map((a) => {
-          const y = LINE_Y + 18 + a.level * TRACK;
-          const x1 = xAt(a.from) - 4 - a.level * 2;
-          const x2 = xAt(a.to) + 6 + a.level * 3;
-          return (
-            <g key={a.id} className={a.changed ? "stroke-state-claimed" : "stroke-foreground"}>
-              <path
-                d={`M${x1} ${LINE_Y + 8} V${y} H${x2} V${LINE_Y + 10}`}
-                fill="none"
-                strokeWidth={1.4}
-                strokeDasharray={a.changed ? "5 3" : undefined}
-              />
-              <path d={`M${x2 - 3.5} ${LINE_Y + 15} L${x2} ${LINE_Y + 9} L${x2 + 3.5} ${LINE_Y + 15}`} fill="none" strokeWidth={1.4} />
-              {a.name && <Label x={(x1 + x2) / 2} y={y} text={a.name} changed={a.changed} />}
-            </g>
-          );
-        })}
-        {over.map((a) => {
-          const y = 16 + (Math.max(0, ...over.map((o) => o.level)) - a.level) * 14;
-          const x1 = xAt(a.from);
-          const x2 = xAt(a.to);
-          return (
-            <g key={a.id} className={a.changed ? "stroke-state-claimed" : "stroke-muted-foreground"}>
-              <path d={`M${x1} 48 V${y} H${x2} V48`} fill="none" strokeWidth={1.1} strokeDasharray="4 3" />
-              <path d={`M${x2 - 3.5} 43 L${x2} 49 L${x2 + 3.5} 43`} fill="none" strokeWidth={1.1} />
-              {a.name && <Label x={(x1 + x2) / 2} y={y} text={a.name} changed={a.changed} small />}
-            </g>
-          );
-        })}
-        {main.map((s, i) => {
-          const fresh = !baseIds.has(s.id);
-          const hold = !s.skill_id;
-          const skill = s.skill_id ? (skills.get(s.skill_id)?.name ?? s.skill_id.replace(/^new-skill:/, "")) : undefined;
-          return (
-            <g key={s.id}>
-              <text
-                x={xAt(i)}
-                y={60}
-                textAnchor="middle"
-                className={cn("text-[13px] font-semibold", fresh ? "fill-state-claimed" : "fill-foreground", !s.name.trim() && "italic")}
-              >
-                {s.name.trim() || "New Step"}
-              </text>
-              {skill && (
-                <text x={xAt(i)} y={74} textAnchor="middle" className="fill-muted-foreground font-mono text-[11px]">
-                  {skill}
+      <div className="overflow-x-auto">
+        <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full max-md:min-w-[760px]" role="img" aria-label={describe(main, segments)}>
+          {main.map((s, i) => (
+            <line
+              key={`seg-${s.id}`}
+              x1={xAt(i)}
+              x2={xAt(i + 1)}
+              y1={LINE_Y}
+              y2={LINE_Y}
+              strokeWidth={segments.has(i) ? 2.5 : 1.2}
+              strokeDasharray={segments.has(i) ? (segments.get(i)!.changed ? "6 4" : undefined) : "3 4"}
+              className={segments.get(i)?.changed ? "stroke-state-claimed" : segments.has(i) ? "stroke-foreground" : "stroke-muted-foreground"}
+            />
+          ))}
+          {[...segments].map(([i, seg]) =>
+            seg.name ? <Label key={`segl-${i}`} x={(xAt(i) + xAt(i + 1)) / 2} y={LINE_Y} text={seg.name} changed={seg.changed} /> : null,
+          )}
+          {under.map((a) => {
+            const y = LINE_Y + 18 + a.level * TRACK;
+            const x1 = xAt(a.from) - 4 - a.level * 7;
+            const x2 = xAt(a.to) + 6 + a.level * 7;
+            return (
+              <g key={a.id} className={a.changed ? "stroke-state-claimed" : "stroke-foreground"}>
+                <path d={`M${x1} ${LINE_Y + 8} V${y} H${x2} V${LINE_Y + 10}`} fill="none" strokeWidth={1.4} strokeDasharray={a.changed ? "5 3" : undefined} />
+                <path d={`M${x2 - 3.5} ${LINE_Y + 15} L${x2} ${LINE_Y + 9} L${x2 + 3.5} ${LINE_Y + 15}`} fill="none" strokeWidth={1.4} />
+                {a.name && <Label x={(x1 + x2) / 2} y={y} text={a.name} changed={a.changed} />}
+              </g>
+            );
+          })}
+          {over.map((a) => {
+            const y = 16 + (Math.max(0, ...over.map((o) => o.level)) - a.level) * 14;
+            const x1 = xAt(a.from);
+            const x2 = xAt(a.to);
+            return (
+              <g key={a.id} className={a.changed ? "stroke-state-claimed" : "stroke-muted-foreground"}>
+                <path d={`M${x1} 48 V${y} H${x2} V48`} fill="none" strokeWidth={1.1} strokeDasharray="4 3" />
+                <path d={`M${x2 - 3.5} 43 L${x2} 49 L${x2 + 3.5} 43`} fill="none" strokeWidth={1.1} />
+                {a.name && <Label x={(x1 + x2) / 2} y={y} text={a.name} changed={a.changed} small />}
+              </g>
+            );
+          })}
+          {main.map((s, i) => {
+            const fresh = !baseIds.has(s.id);
+            const hold = !s.skill_id;
+            const skill = s.skill_id ? (skills.get(s.skill_id)?.name ?? s.skill_id.replace(/^new-skill:/, "")) : undefined;
+            return (
+              <g key={s.id}>
+                <text
+                  x={xAt(i)}
+                  y={60}
+                  textAnchor="middle"
+                  className={cn("text-[13px] font-semibold", fresh ? "fill-state-claimed" : "fill-foreground", !s.name.trim() && "italic")}
+                >
+                  {s.name.trim() || "New Step"}
                 </text>
-              )}
-              <circle
-                cx={xAt(i)}
-                cy={LINE_Y}
-                r={7}
-                strokeWidth={2}
-                strokeDasharray={hold || fresh ? "2.5 2.5" : undefined}
-                className={cn("fill-background", fresh ? "stroke-state-claimed" : "stroke-foreground")}
-              />
-            </g>
-          );
-        })}
-        <text x={xAt(main.length)} y={60} textAnchor="middle" className="fill-foreground text-[13px] font-semibold">
-          Done
-        </text>
-        <circle cx={xAt(main.length)} cy={LINE_Y} r={8} className="fill-state-done" />
-      </svg>
+                {skill && (
+                  <text x={xAt(i)} y={74} textAnchor="middle" className="fill-muted-foreground font-mono text-[11px]">
+                    {skill}
+                  </text>
+                )}
+                <circle
+                  cx={xAt(i)}
+                  cy={LINE_Y}
+                  r={7}
+                  strokeWidth={2}
+                  strokeDasharray={hold || fresh ? "2.5 2.5" : undefined}
+                  className={cn("fill-background", fresh ? "stroke-state-claimed" : "stroke-foreground")}
+                />
+              </g>
+            );
+          })}
+          <text x={xAt(main.length)} y={60} textAnchor="middle" className="fill-foreground text-[13px] font-semibold">
+            Done
+          </text>
+          <circle cx={xAt(main.length)} cy={LINE_Y} r={8} className="fill-state-done" />
+        </svg>
+      </div>
       {after.length > 0 && (
         <figcaption className="px-5 pb-2.5 text-xs text-muted-foreground">
           After a Parent ·{" "}

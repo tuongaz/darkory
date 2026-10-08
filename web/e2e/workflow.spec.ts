@@ -4,9 +4,8 @@ import { startInstall } from "./server";
 
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
 // their own (init's MAIN with the default Workflow and the roster's agents):
-//   6. Workflow editing: rename a Step while the board is open (its columns follow); delete a Step
-//      with Tasks (asked where they go); add a Step with a new Skill and a new agent; a Step nobody
-//      holds shows the warning on the canvas and in the list.
+//   6. Workflow editing in the list: rename a Step, add one with a new Skill, delete one with Tasks
+//      (asked where they go), all saved in one go; the open board's columns follow.
 //   9. Marks: an agent's gradient border, turning while its Claim is live; a human's plain border.
 // And, first, the live canvas as things happen: a Task filed, picked up, advanced and completed.
 test.describe.configure({ mode: "serial" });
@@ -151,7 +150,7 @@ test("live: a Task filed shows at Build, its pickup is called out, it travels to
   await ctx.close();
 });
 
-test("scenario 6: rename a Step while the board is open, delete one with Tasks, add one with a new Skill and agent", async ({ browser }) => {
+test("scenario 6: rename a Step while the board is open, delete one with Tasks, add one with a new Skill, all saved in one go", async ({ browser }) => {
   // Two Tasks at Review, to be moved when it is deleted.
   for (const title of ["Check the ledger", "Check the totals"]) await v1("POST", "/v1/tasks", { project: "MAIN", title, step: "Review" });
 
@@ -160,72 +159,58 @@ test("scenario 6: rename a Step while the board is open, delete one with Tasks, 
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
   const { page, errors, ctx } = await open(browser, "/settings/projects/MAIN/workflow");
-  await expect(page.getByRole("region", { name: "Workflow, editing" }).locator(".react-flow__edge").first()).toBeVisible();
+  const list = page.getByRole("list", { name: "Steps" });
+  await expect(list.getByRole("listitem", { name: "3. Build" })).toBeVisible();
   await page.screenshot({ path: `${shots}6-02-editing.png`, animations: "disabled" });
 
-  // Rename Build to Make: the board's column follows without a reload.
-  await node(page, "Build").click();
-  const name = page.getByRole("textbox", { name: "Name of Build" });
-  await name.fill("Make");
-  await name.press("Enter");
-  await expect(page.getByRole("status", { name: /^(Saving…|Saved)$/ })).toHaveText(/Saved/);
-  await expect(board.page.getByText("Make", { exact: true }).first()).toBeVisible();
-  await expect(board.page.getByText("Build", { exact: true })).toHaveCount(0);
+  // Rename Build to Make: nothing is sent yet, the board keeps Build.
+  await page.getByRole("textbox", { name: "Name of Step 3" }).fill("Make");
+  await expect(page.getByText("Editing · 1 change")).toBeVisible();
   await page.screenshot({ path: `${shots}6-03-renamed.png`, animations: "disabled" });
-  await board.page.screenshot({ path: `${shots}6-04-board-renamed-live.png`, animations: "disabled" });
 
-  // Delete Review: its two Tasks must go somewhere.
-  await node(page, "Review").click();
-  await page.getByRole("button", { name: "Delete Review" }).click();
+  // Add QA after Make with a new Skill: Make's pass now leads into QA, which leads on to Review.
+  await list.getByRole("button", { name: "Add a Step after Make" }).click();
+  await page.getByRole("textbox", { name: "Name of Step 4" }).fill("QA");
+  await page.getByRole("combobox", { name: "Skill of QA" }).click();
+  await page.getByPlaceholder("Find or name a Skill").fill("qa");
+  await page.getByRole("option", { name: /New Skill “qa”/ }).click();
+  const skillDialog = page.getByRole("dialog", { name: "New Skill “qa”" });
+  await skillDialog.getByRole("textbox", { name: "Text" }).fill("Try it as a user would.");
+  await page.screenshot({ path: `${shots}6-04-new-skill.png`, animations: "disabled" });
+  await skillDialog.getByRole("button", { name: "Use this Skill" }).click();
+  await expect(list.getByRole("listitem", { name: "3. Make" }).getByRole("combobox", { name: "Where pass out of Make leads" })).toHaveText("QA");
+
+  // Delete Review: its two Tasks must go somewhere; QA's pass, which led into it, now leads into Done.
+  await list.getByRole("button", { name: "Delete Review" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete Review" });
   await expect(dialog).toContainText("2 Tasks are at Review");
   await expect(dialog.getByRole("button", { name: "Delete Review" })).toBeDisabled();
-  // Make's only way out led into Review: the dialog says so, and does not refuse.
-  await expect(dialog.getByRole("note")).toContainText("Make leads out only into Review");
   await page.screenshot({ path: `${shots}6-05-delete-asks-where.png`, animations: "disabled" });
   await dialog.getByRole("combobox").click();
   await page.getByRole("option", { name: "Make" }).click();
   await dialog.getByRole("button", { name: "Delete Review" }).click();
-  await expect(node(page, "Review")).toHaveCount(0);
-  await expect(node(page, "Make")).toContainText("No way out");
-  await page.screenshot({ path: `${shots}6-06-deleted.png`, animations: "disabled" });
+  await expect(list.getByRole("listitem", { name: /Review$/ })).toHaveCount(0);
+  await expect(list.getByRole("listitem", { name: "4. QA" }).getByRole("combobox", { name: "Where pass out of QA leads" })).toHaveText("Done");
+  await page.screenshot({ path: `${shots}6-06-before-save.png`, animations: "disabled" });
+
+  // Save: the Skill, then the Workflow; the live Workflow, and the board's columns follow without a reload.
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page).toHaveURL(`${base}/projects/MAIN/workflow`);
+  await expect(board.page.getByText("Make", { exact: true }).first()).toBeVisible();
+  await expect(board.page.getByText("Build", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: `${shots}6-07-saved.png`, animations: "disabled" });
+  await board.page.screenshot({ path: `${shots}6-08-board-after-live.png`, animations: "disabled" });
   const moved = (await v1("GET", "/v1/tasks?project=MAIN&state=open")) as { items: { title: string; step_id?: string }[] };
-  const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { steps: { id: string; name: string }[] };
+  const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { steps: { id: string; name: string; skill_id?: string }[] };
   const make = wf.steps.find((s) => s.name === "Make")!;
   expect(moved.items.filter((t) => t.title.startsWith("Check the")).every((t) => t.step_id === make.id)).toBe(true);
+  const { items: skillList } = (await v1("GET", "/v1/skills")) as { items: { id: string; name: string }[] };
+  expect(wf.steps.find((s) => s.name === "QA")!.skill_id).toBe(skillList.find((s) => s.name === "qa")!.id);
 
-  // Add a Step after Make with a new Skill: nobody holds it, so the canvas and the list warn.
-  await node(page, "Make").hover();
-  await page.getByRole("button", { name: "Add a Step after Make" }).click();
-  const added = page.getByRole("region", { name: "Step New Step" });
-  await added.getByRole("textbox", { name: "Name of New Step" }).fill("QA");
-  await added.getByRole("textbox", { name: "Name of New Step" }).press("Enter");
-  const qa = page.getByRole("region", { name: "Step QA" });
-  await qa.getByRole("combobox", { name: "Skill of QA" }).click();
-  await page.getByRole("option", { name: "Create a Skill…" }).click();
-  const skillDialog = page.getByRole("dialog", { name: "Create a Skill" });
-  await skillDialog.getByRole("textbox", { name: "Name" }).fill("qa");
-  await page.screenshot({ path: `${shots}6-07-create-skill.png`, animations: "disabled" });
-  await skillDialog.getByRole("button", { name: "Create Skill" }).click();
-  await expect(node(page, "QA")).toContainText("No Member has it");
-  await page.screenshot({ path: `${shots}6-08-unstaffed-canvas.png`, animations: "disabled" });
-  await page.getByRole("button", { name: "Text" }).click();
-  await expect(page.getByRole("list", { name: "Steps" })).toContainText("No Member has qa");
-  await page.screenshot({ path: `${shots}6-09-unstaffed-text.png`, animations: "disabled" });
-  await page.getByRole("button", { name: "Canvas" }).click();
-
-  // A new agent for it: its token shows once, and the warning goes.
-  await node(page, "QA").click();
-  await page.getByRole("region", { name: "Step QA" }).getByRole("button", { name: "Create an agent" }).click();
-  const agentDialog = page.getByRole("dialog", { name: "Create an agent" });
-  await agentDialog.getByRole("textbox", { name: "Name" }).fill("qa-bot");
-  await page.screenshot({ path: `${shots}6-10-create-agent.png`, animations: "disabled" });
-  await agentDialog.getByRole("button", { name: "Create agent" }).click();
-  await expect(page.getByRole("textbox", { name: "Secret of qa-bot's token" })).toHaveValue(/^dk_/);
-  await page.screenshot({ path: `${shots}6-11-agent-token-once.png`, animations: "disabled" });
-  await page.getByRole("button", { name: "Done" }).click();
-  await expect(node(page, "QA")).not.toContainText("No Member has it");
-  await page.screenshot({ path: `${shots}6-12-edited.png`, animations: "disabled" });
+  // An agent for QA, for scenario 9.
+  const bot = (await v1("POST", "/v1/members", { name: "qa-bot", kind: "agent" })) as { id: string };
+  await v1("PUT", `/v1/projects/MAIN/members/${bot.id}`);
+  await v1("PUT", `/v1/members/${bot.id}/skills/qa`);
 
   expect(errors).toEqual([]);
   expect(board.errors).toEqual([]);

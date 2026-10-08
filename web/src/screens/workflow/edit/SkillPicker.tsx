@@ -44,7 +44,11 @@ export function SkillPicker({
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [creating, setCreating] = useState<string | undefined>();
-  const current = value ? (isNewSkill(value) ? { name: pending[value]?.name ?? value.slice(10), fresh: true } : { name: skills.find((s) => s.id === value)?.name ?? "…", fresh: false }) : undefined;
+  const current = value
+    ? isNewSkill(value)
+      ? { name: pending[value]?.name ?? value.slice(10), fresh: true }
+      : { name: skills.find((s) => s.id === value)?.name ?? "…", fresh: false }
+    : undefined;
   // The generic Skills, and the Step's own when it is a company Skill.
   const offered = skills.filter((s) => s.kind === "generic" || s.id === value);
   const name = typed.trim().toLowerCase();

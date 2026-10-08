@@ -259,6 +259,7 @@ export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): R
 /** Answers every /v1 read the shell and the Workflow screens make, as `who`; returns the Tasks it serves, to change. */
 export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
   let wf = initialWorkflow();
+  const skillList = skills.map((x) => ({ ...x }));
   // This page's own Tasks, which a lab may change before it delivers the entry that says so.
   const list: Record<string, unknown>[] = tasks.map((t) => ({ ...t }));
   await page.addInitScript(fakeStream);
@@ -285,7 +286,7 @@ export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
       if (path === "/v1/projects/WEB" || path === "/v1/projects/p-web") return json(route, { project, members: members.filter((x) => x.id !== "m-mai") });
       if (path.endsWith("/workflow")) return json(route, wf);
       if (path.endsWith("/labels") || path === "/v1/labels") return json(route, { items: [] });
-      if (path === "/v1/skills") return json(route, { items: skills });
+      if (path === "/v1/skills") return json(route, { items: skillList });
       if (path === "/v1/tasks") {
         const step = url.searchParams.get("step");
         const state = url.searchParams.get("state");
@@ -296,6 +297,12 @@ export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
       if (path === "/v1/workspaces" || path === "/v1/views") return json(route, { items: [] });
       if (path === "/v1/tasks/takeable") return json(route, { items: [] });
       if (path === "/v1/activity") return json(route, { items: activity, last_seq: 50, first_seq: 41 });
+    }
+    if (method === "POST" && path === "/v1/skills") {
+      const body = req.postDataJSON() as { name: string; body: string };
+      const made = { ...skill(body.name), id: `s-${body.name}` };
+      skillList.push(made);
+      return json(route, { skill: made, current: { skill_id: made.id, version: 1, body: body.body, published_by: "m-ada", published_at: at } }, 201);
     }
     if (method === "PUT" && path.endsWith("/workflow")) {
       wf = applyBody(wf, req.postDataJSON() as Body);
