@@ -89,8 +89,9 @@ export function VerticalLine({
   const chipsAt = (id: string) => [
     ...t.over.filter((a) => !a.back && a.connector.from === id).map((a) => `${a.connector.name} → ${name(a.connector.to)}`),
     ...t.chips.filter((c) => c.stepId === id).map((c) => c.text),
-    // Neighbours no Connector joins: a human moves a Task on.
-    ...t.segments.filter((s) => s.from === id && !s.connector).map((s) => `${HAND_LABEL} → ${name(s.to === DONE_STATION ? null : s.to)}`),
+    // Neighbours no Connector joins, where the first has no outcome on: a human moves a Task on.
+    // Where its outcomes lead elsewhere nothing moves between them, and nothing is said.
+    ...t.segments.filter((s) => s.from === id && s.hand).map((s) => `${HAND_LABEL} → ${name(s.to === DONE_STATION ? null : s.to)}`),
   ];
   const entry = t.start !== undefined && t.main[0] === t.start;
   const stays = new Map((trace?.stays ?? []).filter((s) => s.until !== undefined).map((s) => [s.stepId, s]));
@@ -197,7 +198,8 @@ export function VerticalLine({
         y1={a}
         x2={RAIL}
         y2={b}
-        stroke={!s.connector ? "var(--muted-foreground)" : tone === "plain" ? "var(--foreground)" : "var(--state-claimed)"}
+        data-gap={!s.connector && !s.hand ? "true" : undefined}
+        stroke={!s.connector ? (s.hand ? "var(--muted-foreground)" : "var(--border)") : tone === "plain" ? "var(--foreground)" : "var(--state-claimed)"}
         strokeWidth={!s.connector ? 1.5 : tone === "trace" ? 4 : 3}
         strokeDasharray={!s.connector ? "2 5" : tone === "next" ? "5 4" : undefined}
       />

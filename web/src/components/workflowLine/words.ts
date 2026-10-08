@@ -35,6 +35,11 @@ export function handHint(from: string, to: string): string {
   return `${from} → ${to}: no Connector joins them, so nothing moves along here on its own; a human moves a Task on by hand`;
 }
 
+/** Two neighbours no Connector joins, where the first Step's outcomes all lead elsewhere: nothing moves along here. */
+export function gapHint(from: string, to: string): string {
+  return `${from} → ${to}: no outcome of ${from} leads to ${to}, so nothing moves along here; a Task reaches ${to} when it is filed there, or moved there by hand`;
+}
+
 /** The entry arrow, or the mark on the start Step. */
 export function entryHint(start: string): string {
   return `New Tasks start at ${start}, unless the filer names another Step`;
@@ -56,6 +61,9 @@ export function breakdownOutcomeHint(c: LineConnector, name: Name, start: string
   const end = `${name(c.from)}'s Breakdown Subtask ends ${c.to === null ? "Done" : `at ${name(c.to)}`} when its holder says ${c.name}`;
   return start ? `${end}; the Subtasks it filed start at ${start}` : end;
 }
+
+/** The branch where Darkory files a Parent's own Subtasks. */
+export const AFTER_BRANCH = "After a Parent";
 
 /** The branch "After a Parent". */
 export const AFTER_HINT = "After a Parent: once a Parent's Subtasks end, Darkory files its own Subtasks about the Parent as a whole at these Steps";
