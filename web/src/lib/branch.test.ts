@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { featureBranch, slug, taskBranch } from "./branch";
+import { slug, taskBranch } from "./branch";
 
 describe("branch names", () => {
   // The cases of TestSlug in internal/runner/workspace_test.go: the web names the branch the Runner makes.
@@ -23,8 +23,7 @@ describe("branch names", () => {
     expect(slug(`${"a".repeat(10)} ${"b".repeat(40)}`)).toBe(`${"a".repeat(10)}-${"b".repeat(29)}`);
   });
 
-  it("names a Task's branch by its key and a Feature's by feature/<key>", () => {
-    expect(taskBranch("WEB-12", "Cart page")).toBe("WEB-12/cart-page");
-    expect(featureBranch("WEB-1")).toBe("feature/WEB-1");
+  it("names a Task's branch by its key in lower case, then its slug", () => {
+    expect(taskBranch("MAIN-7", "Support emoji")).toBe("main-7-support-emoji");
   });
 });

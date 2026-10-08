@@ -11,7 +11,7 @@ import { SubtaskGraph } from "./SubtaskGraph";
 import { WorkflowCanvas } from "./WorkflowCanvas";
 
 // What the canvas hands React Flow, so a test can play the drags jsdom cannot: a connection
-// drawn, an end dragged, a step dropped.
+// drawn, an end dragged, a Step dropped.
 const flow = vi.hoisted(() => ({ props: undefined as unknown as ReactFlowProps<CanvasNode, ConnectorFlowEdge> }));
 vi.mock("@xyflow/react", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@xyflow/react")>();
@@ -47,14 +47,14 @@ const stepNode = (name: string) => screen.getAllByRole("group", { hidden: true }
 const connection = (source: string, target: string): Connection => ({ source, target, sourceHandle: "out", targetHandle: "in" });
 
 describe("WorkflowCanvas, editing", () => {
-  it("names each step for a screen reader, in the Workflow's order", () => {
+  it("names each Step for a screen reader, in the Workflow's order", () => {
     renderCanvas();
     const names = screen.getAllByRole("group", { hidden: true }).map((n) => n.getAttribute("aria-label")?.split(":")[0]);
     expect(names.slice(0, 3)).toEqual(["Backlog", "Plan", "Build"]);
     expect(stepNode("Docs")).toHaveAttribute("aria-label", "Docs: Skill docs; 0 waiting, 0 working; no Member has docs");
   });
 
-  it("selects a step on Enter, says so, and opens its panel with the Connectors out", async () => {
+  it("selects a Step on Enter, says so, and opens its panel with the Connectors out", async () => {
     const calls = renderCanvas();
     act(() => stepNode("Review").focus());
     fireEvent.keyDown(stepNode("Review"), { key: "Enter" });
@@ -71,7 +71,7 @@ describe("WorkflowCanvas, editing", () => {
     expect(calls.onSelect).toHaveBeenLastCalledWith(null);
   });
 
-  it("deletes a step without Tasks at once, and asks where a step's Tasks go before deleting it", async () => {
+  it("deletes a Step without Tasks at once, and asks where a Step's Tasks go before deleting it", async () => {
     const calls = renderCanvas();
     act(() => stepNode("Retro").focus());
     fireEvent.keyDown(stepNode("Retro"), { key: "Enter" });
@@ -81,13 +81,13 @@ describe("WorkflowCanvas, editing", () => {
     act(() => stepNode("Build").focus());
     fireEvent.keyDown(stepNode("Build"), { key: "Enter" });
     await userEvent.click(await screen.findByRole("button", { name: "Delete Build", hidden: true }));
-    expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("4 Tasks are at Build: say which step they move to.");
+    expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("4 Tasks are at Build: say which Step they move to.");
     expect(calls.onDeleteStep).toHaveBeenCalledTimes(1);
   });
 
-  it("adds a step after one from its +", async () => {
+  it("adds a Step after one from its +", async () => {
     const calls = renderCanvas();
-    await userEvent.click(screen.getByRole("button", { name: "Add a step after QA", hidden: true }));
+    await userEvent.click(screen.getByRole("button", { name: "Add a Step after QA", hidden: true }));
     expect(calls.onAddStep).toHaveBeenCalledWith("s-qa");
   });
 
@@ -97,7 +97,7 @@ describe("WorkflowCanvas, editing", () => {
     expect(calls.onLayout).toHaveBeenCalledWith(tidy(workflow));
   });
 
-  it("turns a connection drawn into a step or Done into a Connector, and refuses the rest in words", () => {
+  it("turns a connection drawn into a Step or Done into a Connector, and refuses the rest in words", () => {
     const calls = renderCanvas();
     act(() => flow.props.onConnect!(connection("s-docs", DONE_NODE)));
     expect(calls.onAddConnector).toHaveBeenLastCalledWith({ from: "s-docs", to: null });
@@ -105,13 +105,13 @@ describe("WorkflowCanvas, editing", () => {
     expect(calls.onAddConnector).toHaveBeenLastCalledWith({ from: "s-docs", to: "s-review" });
 
     act(() => flow.props.onConnect!(connection("s-docs", "s-docs")));
-    expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("A Connector leads out of Docs into another step or Done.");
+    expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("A Connector leads out of Docs into another Step or Done.");
     act(() => flow.props.onConnect!(connection("s-docs", DROPPED_NODE)));
     expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("Dropped needs no Connector");
     expect(calls.onAddConnector).toHaveBeenCalledTimes(2);
   });
 
-  it("moves a Connector's end when it is dragged onto another step", () => {
+  it("moves a Connector's end when it is dragged onto another Step", () => {
     const calls = renderCanvas();
     const edge = flow.props.edges!.find((e) => e.id === "c-qa-build")!;
     act(() => flow.props.onReconnect!(edge, connection("s-qa", "s-review")));
@@ -121,7 +121,7 @@ describe("WorkflowCanvas, editing", () => {
     expect(calls.onConnectorChange).toHaveBeenCalledTimes(1);
   });
 
-  it("says where a step was dropped, once, when the drag ends", () => {
+  it("says where a Step was dropped, once, when the drag ends", () => {
     const calls = renderCanvas();
     const move = (dragging: boolean): NodeChange<CanvasNode>[] => [{ type: "position", id: "s-plan", position: { x: 101.4, y: 202.6 }, dragging }];
     act(() => flow.props.onNodesChange!(move(true)));
@@ -130,7 +130,7 @@ describe("WorkflowCanvas, editing", () => {
     expect(calls.onMove).toHaveBeenCalledWith(workflow.steps.find((s) => s.id === "s-plan"), 101, 203);
   });
 
-  it("adds a step where a connection is let go over empty canvas", () => {
+  it("adds a Step where a connection is let go over empty canvas", () => {
     const calls = renderCanvas();
     const fromNode = { id: "s-docs" } as never;
     act(() =>
@@ -148,7 +148,7 @@ describe("WorkflowCanvas, editing", () => {
 describe("WorkflowCanvas, live", () => {
   it("offers no editing: no +, no Tidy up, nothing to drag or connect", () => {
     renderCanvas("live");
-    expect(screen.queryByRole("button", { name: /Add a step after/, hidden: true })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Add a Step after/, hidden: true })).toBeNull();
     expect(screen.queryByRole("button", { name: "Tidy up", hidden: true })).toBeNull();
     expect(screen.getByRole("region", { name: "Workflow" })).toHaveAttribute("data-mode", "live");
   });

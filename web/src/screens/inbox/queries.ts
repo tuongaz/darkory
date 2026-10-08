@@ -1,27 +1,19 @@
 import { useQueries, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
-import { api, call, type Activity, type ActivityKind, type Feature, type Task } from "@/api/client";
+import { api, call, type Activity, type ActivityKind, type ActivityPage, type Project, type Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
-import { allPages } from "@/api/pages";
-import { keys } from "@/api/queries";
-import type { components } from "@/api/schema.gen";
-import { glyphFor, type Glyph, type StatusKind } from "@/lib/status";
+import { keys, newestActivity, useDirectory, useTasks } from "@/api/queries";
+import { useWorkflows } from "@/components/filters/useTaskFilter";
 
 // The reads of the Inbox, My work, Agents and Activity. Each key sits under the root that names
 // what it reads, so an Activity entry about it marks it stale (src/api/queries.ts).
-
-/** A Member's open Session, as `GET /v1/members/{member}/sessions` lists it. */
-export type Session = components["schemas"]["Session"];
-
-/** A `before` past every entry: reads the newest page of Activity. */
-export const newest = Number.MAX_SAFE_INTEGER;
 
 /** The most entries one Activity read returns. */
 export const activityLimit = 500;
 
 /**
  * Marks `queryKey` stale whenever an entry matching `when` arrives on the stream: for reads under
- * a root the shell does not refresh on that kind (Statuses, Sessions).
+ * a root the shell does not refresh on that kind (a Member's Sessions on a Claim).
  */
 export function useStaleOn(queryKey: QueryKey, when: (e: Activity) => boolean) {
   const qc = useQueryClient();
@@ -40,74 +32,28 @@ export function useStaleOn(queryKey: QueryKey, when: (e: Activity) => boolean) {
   }, [live, qc, hash]);
 }
 
-export type StatusView = { name: string; kind: StatusKind; glyph: Glyph };
-
-/** The Organisation's Statuses by id, each with the glyph it draws. */
-export function useStatuses() {
-  useStaleOn(["statuses"], (e) => e.kind === "statuses.changed");
-  const q = useQuery({ queryKey: ["statuses"], queryFn: () => call(api.GET("/v1/statuses")).then((r) => r.items) });
-  return useMemo(() => {
-    const byId = new Map<string, StatusView>();
-    const nth = new Map<StatusKind, number>();
-    for (const s of q.data ?? []) {
-      const n = nth.get(s.kind) ?? 0;
-      nth.set(s.kind, n + 1);
-      byId.set(s.id, { name: s.name, kind: s.kind, glyph: glyphFor(s.kind, n) });
-    }
-    return byId;
-  }, [q.data]);
+/** The open Tasks aimed at a Member by name, across Projects. */
+export function useAimedAt(member: string) {
+  return useTasks({ aimed_at: member, state: "open" });
 }
 
-/** Every Feature by id: Feature names and Ranks on rows. */
-export function useFeatureMap(): Map<string, Feature> {
-  const q = useQuery({
-    queryKey: keys.allFeatures,
-    queryFn: () => allPages<Feature>((cursor) => call(api.GET("/v1/features", { params: { query: { limit: 500, cursor } } }))),
-  });
-  return useMemo(() => new Map((q.data ?? []).map((f) => [f.id, f])), [q.data]);
+/** The Tasks a Member holds a live Claim on, across Projects. */
+export function useHeldBy(member: string) {
+  return useTasks({ holder: member, state: "open" });
 }
 
-/** Every Task by id: the subjects of Activity entries, whose payloads rarely name them. */
-export function useTaskMap(): Map<string, Task> {
-  const q = useQuery({
-    queryKey: keys.allTasks,
-    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { limit: 500, cursor } } }))),
-  });
+/** The open Tasks a Member owns, Parents and Subtasks included, across Projects. */
+export function useOwnedOpen(member: string) {
+  return useTasks({ state: "open", filter: [`owner:is:${member}`] });
+}
+
+/** Every Task of a Project, or of the Organisation with none: the subjects of Activity entries. */
+export function useTaskMap(project?: string): Map<string, Task> {
+  const q = useTasks(project ? { project } : {});
   return useMemo(() => new Map((q.data ?? []).map((t) => [t.id, t])), [q.data]);
 }
 
-export function useAimedAt(member: string) {
-  return useQuery({
-    queryKey: ["tasks", { aimed_at: member, state: "open" }],
-    queryFn: () =>
-      allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { aimed_at: member, state: "open", limit: 500, cursor } } }))),
-  });
-}
-
-export function useHeldBy(member: string) {
-  return useQuery({
-    queryKey: keys.heldTasks(member),
-    queryFn: () => allPages<Task>((cursor) => call(api.GET("/v1/tasks", { params: { query: { holder: member, limit: 500, cursor } } }))),
-  });
-}
-
-/** What the caller can take now, in `next` order: the first 100, as `next` would offer them. */
-export function useTakeable() {
-  return useQuery({
-    queryKey: keys.takeable,
-    queryFn: () => call(api.GET("/v1/tasks/takeable", { params: { query: { limit: 100 } } })).then((r) => r.items),
-  });
-}
-
-export function useOwnedFeatures(member: string) {
-  return useQuery({
-    queryKey: ["features", { owner: member }],
-    queryFn: () =>
-      allPages<Feature>((cursor) => call(api.GET("/v1/features", { params: { query: { owner: member, limit: 500, cursor } } }))),
-  });
-}
-
-/** The full records of these Tasks, by key: a Retrospective's proposal. */
+/** The full records of these Tasks, by key: a Parent's Subtasks, a Retrospective's proposals. */
 export function useTaskDetails(refs: string[]) {
   return useQueries({
     queries: refs.map((ref) => ({
@@ -117,7 +63,7 @@ export function useTaskDetails(refs: string[]) {
   });
 }
 
-/** Each Member's Teams, Skills and reports. */
+/** Each Member's Projects, Skills and reports. */
 export function useMemberDetails(ids: string[]) {
   return useQueries({
     queries: ids.map((id) => ({
@@ -127,30 +73,19 @@ export function useMemberDetails(ids: string[]) {
   });
 }
 
-const sessionsKey = (member: string) => ["member", "sessions", member] as const;
-
 /**
  * Each Member's open Sessions. Only an admin may read another Member's, so `enabled` is the
  * caller's admin mark. A Session opens without Activity, but a Claim names the Session that made
  * it, so Task entries mark these stale too.
  */
 export function useSessions(ids: string[], enabled: boolean) {
-  useStaleOn(["member", "sessions"], (e) => enabled && e.subject_type === "task");
+  useStaleOn(["member"], (e) => enabled && e.subject_type === "task");
   return useQueries({
     queries: ids.map((id) => ({
-      queryKey: sessionsKey(id),
-      queryFn: () => allPages((cursor) => call(api.GET("/v1/members/{member}/sessions", { params: { path: { member: id }, query: { cursor } } }))),
+      queryKey: keys.memberSessions(id),
+      queryFn: () => call(api.GET("/v1/members/{member}/sessions", { params: { path: { member: id }, query: { limit: 500 } } })).then((r) => r.items),
       enabled,
     })),
-  });
-}
-
-/** A Member's tokens, newest first: the Member's own, or anyone's for an admin. */
-export function useTokens(member: string, enabled: boolean) {
-  return useQuery({
-    queryKey: keys.tokens(member),
-    queryFn: () => call(api.GET("/v1/members/{member}/tokens", { params: { path: { member } } })).then((r) => r.items),
-    enabled,
   });
 }
 
@@ -159,11 +94,16 @@ export function useTokens(member: string, enabled: boolean) {
  * the stream has brought since that matches `keep`, newest first. `complete` says the read held
  * every matching entry.
  */
-export function useRecentActivity(filter: { member?: string; kind?: ActivityKind[] }, keep: (e: Activity) => boolean, enabled = true) {
+export function useRecentActivity(
+  filter: { member?: string; kind?: ActivityKind[]; project?: string },
+  keep: (e: Activity) => boolean,
+  enabled = true,
+) {
   const live = useLiveEntries();
+  const query = { ...filter, limit: activityLimit };
   const q = useQuery({
-    queryKey: ["activity", "recent", filter],
-    queryFn: () => call(api.GET("/v1/activity", { params: { query: { ...filter, before: newest, limit: activityLimit } } })),
+    queryKey: keys.activity(query),
+    queryFn: () => call(api.GET("/v1/activity", { params: { query: { ...query, before: newestActivity } } })),
     enabled,
   });
   const bySeq = new Map<number, Activity>();
@@ -171,4 +111,39 @@ export function useRecentActivity(filter: { member?: string; kind?: ActivityKind
   for (const e of live) if (keep(e)) bySeq.set(e.seq, e);
   const entries = [...bySeq.values()].sort((a, b) => b.seq - a.seq);
   return { query: q, entries, complete: q.isSuccess && q.data.items.length < activityLimit };
+}
+
+export type StepName = { name: string; projectId: string; skillId?: string };
+
+/** Every Project's Steps by id, with their names: where a row says what Step a Task is at. */
+export function useStepNames(projects?: Project[]): Map<string, StepName> {
+  const dir = useDirectory();
+  const list = projects ?? dir.projectList;
+  const { workflows } = useWorkflows(list);
+  return useMemo(() => {
+    const out = new Map<string, StepName>();
+    for (const [projectId, wf] of workflows) for (const s of wf?.steps ?? []) out.set(s.id, { name: s.name, projectId, skillId: s.skill_id });
+    return out;
+  }, [workflows]);
+}
+
+/** A page of the Activity page's history: its entries that pass the filters, and whether more are before it. */
+export type HistoryPage = ActivityPage & { more: boolean; scanned: number };
+
+/**
+ * One page of a Project's Activity before `before`, narrowed by the Activity page's filters:
+ * `member` and `kind` by /v1, `task` (an id) here, from the `limit` entries read, so a page may
+ * hold none of the Task's entries and still not be the last. This is the one place that knows
+ * /v1/activity has no `task`: when it does, `task` goes into the query and the narrowing goes.
+ */
+export async function activityHistoryPage(
+  filter: { project: string; member?: string; kind?: ActivityKind; task?: string },
+  before: number,
+  limit: number,
+): Promise<HistoryPage> {
+  const { task, kind, ...rest } = filter;
+  const page = await call(api.GET("/v1/activity", { params: { query: { ...rest, kind: kind ? [kind] : undefined, before, limit } } }));
+  const more = page.items.length >= limit && page.first_seq !== undefined && page.first_seq > 1;
+  const items = task ? page.items.filter((e) => e.subject_type === "task" && e.subject_id === task) : page.items;
+  return { ...page, items, more, scanned: page.items.length };
 }

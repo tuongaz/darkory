@@ -4,7 +4,7 @@ import type { Terminal } from "@xterm/xterm";
 import { describe, expect, it, vi } from "vitest";
 import type { Claim, Member, RunnerSession, TaskDetail } from "@/api/client";
 import { mockApi } from "@/test/api";
-import { ada, bob, build, builder, feature, signedIn, task, web } from "@/test/fixtures";
+import { ada, bob, builder, detail, engineer, signedIn, task } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { FakeWebSocket } from "@/test/webSocket";
 
@@ -24,15 +24,10 @@ vi.mock("@xterm/addon-fit", () => ({
 }));
 
 const minutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
-const statuses = [
-  { id: "st-todo", name: "Todo", kind: "todo", position: 1 },
-  { id: "st-ip", name: "In progress", kind: "in_progress", position: 2 },
-  { id: "st-done", name: "Done", kind: "done", position: 3 },
-] as const;
 
 // The Runner starts sessions only for agents with agent settings.
 const agent: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false } };
-const claim: Claim = { id: "c-1", task_id: "k-3", holder_id: agent.id, session_id: "sess-builder", skill_id: build.id, started_at: minutes(-5), expires_at: minutes(5), heartbeat_timeout_seconds: 300 };
+const claim: Claim = { id: "c-1", task_id: "k-3", holder_id: agent.id, session_id: "sess-builder", skill_id: engineer.id, started_at: minutes(-5), expires_at: minutes(5), heartbeat_timeout_seconds: 300 };
 const session: RunnerSession = {
   task_id: "k-3",
   member_id: agent.id,
@@ -44,19 +39,8 @@ const session: RunnerSession = {
   log_path: "/data/sessions/WEB-3/pane.log",
 };
 
-function detail(): TaskDetail {
-  return {
-    task: task(3, "f-1", { title: "Build the cart page", status_id: "st-ip", claim }),
-    status: statuses[1],
-    feature: feature(1, 1, { title: "Checkout flow" }),
-    workspaces: [],
-    claims: [claim],
-    notes: [],
-    evidence: [],
-    blockers: [],
-    blocking: [],
-    observations: [],
-  };
+function record(): TaskDetail {
+  return detail(task(3, { title: "Build the cart page", claim }), { claims: [claim] });
 }
 
 function runnerApi(caller: Member, sessions: () => object = () => ({ items: [session], runner: true })) {
@@ -64,9 +48,7 @@ function runnerApi(caller: Member, sessions: () => object = () => ({ items: [ses
     ...signedIn(caller),
     "GET /v1/members": { items: [ada, bob, agent] },
     "GET /v1/tasks/takeable": { items: [] },
-    "GET /v1/tasks/:task": detail(),
-    "GET /v1/statuses": { items: statuses },
-    "GET /v1/teams/:team": { team: web, members: [ada, bob, agent] },
+    "GET /v1/tasks/:task": record(),
     "GET /v1/runner/sessions": sessions,
     "POST /v1/runner/sessions/:task/nudge": undefined,
     "POST /v1/runner/sessions/:task/stop": undefined,
@@ -224,7 +206,7 @@ describe("the Session panel", () => {
 describe("the peek's keys beside a terminal", () => {
   it("work while the terminal is not focused and stop while it is; Esc in a joined terminal is the session's", async () => {
     runnerApi(ada);
-    renderApp("/account?task=WEB-3");
+    renderApp("/inbox?task=WEB-3");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
     const panel = await within(peek).findByRole("region", { name: "Session" });
     await connected();
@@ -255,7 +237,7 @@ describe("the peek's keys beside a terminal", () => {
 
   it("offers an admin Nudge and Stop session in the ⋯ menu; Stop asks first and says it releases the Claim", async () => {
     const api = runnerApi(ada);
-    renderApp("/account?task=WEB-3");
+    renderApp("/inbox?task=WEB-3");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
     await within(peek).findByRole("region", { name: "Session" });
 
@@ -269,7 +251,7 @@ describe("the peek's keys beside a terminal", () => {
     const confirm = await screen.findByRole("dialog", { name: "Stop the session on WEB-3?" });
     expect(confirm).toHaveTextContent("builder's session ends now");
     expect(confirm).toHaveTextContent("Its Claim is released, with a Note saying so");
-    expect(confirm).toHaveTextContent("Status → Todo");
+    expect(confirm).toHaveTextContent("It stays at Build");
     expect(confirm).toHaveTextContent("The session's log is attached as Evidence");
     expect(api.calls.some((c) => c.path.endsWith("/stop"))).toBe(false);
     await userEvent.click(within(confirm).getByRole("button", { name: "Stop session" }));
@@ -279,7 +261,7 @@ describe("the peek's keys beside a terminal", () => {
 
   it("offers no Nudge or Stop to a Member who is not an admin", async () => {
     runnerApi(bob);
-    renderApp("/account?task=WEB-3");
+    renderApp("/inbox?task=WEB-3");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
     await within(peek).findByRole("region", { name: "Session" });
     await userEvent.click(within(peek).getByRole("button", { name: "More" }));

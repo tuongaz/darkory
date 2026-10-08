@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * The head of a record page (a Feature, a Member, a Skill), under the top bar: an optional mark,
+ * The head of a record page (a Task, a Member, a Skill), under the top bar: an optional mark,
  * the title, a line of facts, and the page's actions on the right. The screen's one primary
  * action goes in the top bar, not here.
  */

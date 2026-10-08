@@ -9,7 +9,7 @@ import { durationText, isHold, unstaffed, waitingAt, type Taker } from "./model"
 
 const shownTakers = 4;
 
-/** The Members holding a step's Skill, overlapping; past four, "+N" naming the rest on hover. */
+/** The Members holding a Step's Skill, overlapping; past four, "+N" naming the rest on hover. */
 function Takers({ takers, live }: { takers: Taker[]; live: boolean }) {
   const shown = takers.slice(0, takers.length > shownTakers ? shownTakers - 1 : shownTakers);
   const rest = takers.slice(shown.length);
@@ -31,13 +31,13 @@ function Takers({ takers, live }: { takers: Taker[]; live: boolean }) {
 }
 
 /**
- * A step: its name, its Skill (or that it is a hold, drawn dashed), the Members who take its
- * Tasks, and how many Tasks wait at it and are worked. A step whose Skill no Member of the
- * Project holds says so in amber. Editing, "+" on its corner adds a step after it, clear of the
+ * A Step: its name, its Skill (or that it is a hold, drawn dashed), the Members who take its
+ * Tasks, and how many Tasks wait at it and are worked. A Step whose Skill no Member of the
+ * Project holds says so in amber. Editing, "+" on its corner adds a Step after it, clear of the
  * outcomes' names beside its right side.
  */
 export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) {
-  const { mode, onAdd } = useCanvas();
+  const { mode, onAdd, opens } = useCanvas();
   const edit = mode === "edit";
   const hold = isHold(step);
   const warn = unstaffed(step);
@@ -48,6 +48,7 @@ export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) 
         hold && "border-dashed border-muted-foreground/50 bg-muted/40",
         warn && "border-warn-border",
         selected && "border-ring ring-2 ring-ring/40",
+        opens && "cursor-pointer hover:border-ring/60",
       )}
     >
       <span className="flex min-w-0 items-center gap-1.5">
@@ -92,8 +93,8 @@ export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) 
       {edit && onAdd && (
         <button
           type="button"
-          aria-label={`Add a step after ${step.name}`}
-          title="Add a step after this one"
+          aria-label={`Add a Step after ${step.name}`}
+          title="Add a Step after this one"
           onClick={(e) => {
             e.stopPropagation();
             onAdd(step.id);
@@ -108,8 +109,8 @@ export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) 
 }
 
 /**
- * Done and Dropped, fixed right of the steps. A Connector leads into Done; Dropped needs none, so
- * a dashed arrow "from any step" leads into it, which is Darkory's and cannot be edited.
+ * Done and Dropped, fixed right of the Steps. A Connector leads into Done; Dropped needs none, so
+ * a dashed arrow "from any Step" leads into it, which is Darkory's and cannot be edited.
  */
 export function TerminalNode({ data: { terminal } }: NodeProps<TerminalFlowNode>) {
   const { mode } = useCanvas();
@@ -128,7 +129,7 @@ export function TerminalNode({ data: { terminal } }: NodeProps<TerminalFlowNode>
     <div className="relative flex size-full items-center justify-center gap-1.5 rounded-full border border-dashed border-muted-foreground/60 font-medium text-muted-foreground">
       <svg aria-hidden className="pointer-events-none absolute top-0 right-full h-full w-[132px] overflow-visible" viewBox="0 0 132 40">
         <text x="4" y="13" className="fill-muted-foreground text-[11px]">
-          from any step
+          from any Step
         </text>
         <path d="M 0 20 L 124 20" className="stroke-muted-foreground" strokeWidth={1.25} strokeDasharray="4 4" fill="none" />
         <path d="M 118 15 L 126 20 L 118 25" className="stroke-muted-foreground" strokeWidth={1.25} fill="none" strokeLinejoin="round" />

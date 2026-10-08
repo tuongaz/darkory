@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { ownsKeys } from "@/lib/keys";
-import { teamTasksPath, useCurrentTeam } from "./currentTeam";
+import { projectPath, useCurrentProject } from "./currentProject";
 import { sendIntent } from "./intents";
 import { peekParam, usePeek } from "./peek";
 import { taskRow, taskRows } from "./selection";
@@ -21,10 +21,13 @@ export const shortcutList: { section: string; keys: { label: string; ways: strin
     keys: [
       { label: "Search", ways: [[searchKeys]] },
       { label: "File a Task", ways: [["C"]] },
+      { label: "Switch Project", ways: [["G", "P"]] },
       { label: "Go to Inbox", ways: [["G", "I"]] },
       { label: "Go to My work", ways: [["G", "M"]] },
-      { label: "Go to Agents", ways: [["G", "A"]] },
+      { label: "Go to Tasks", ways: [["G", "T"]] },
       { label: "Go to the board", ways: [["G", "B"]] },
+      { label: "Go to Workflow", ways: [["G", "W"]] },
+      { label: "Go to Agents", ways: [["G", "A"]] },
       { label: "Shortcuts", ways: [["?"]] },
     ],
   },
@@ -68,9 +71,11 @@ function inPeek(target: EventTarget | null): boolean {
 
 /**
  * The keys of `shortcutList`, none of them while a terminal has the focus. ⌘K (Ctrl K) toggles
- * search; the rest do nothing while typing or while a dialog or a menu is open. J, K, ↓ and ↑ walk the Tasks the page lists (its
- * `[data-task]` rows), and with the peek open move the peek along them; Enter opens the selected
- * Task's peek. Esc, which closes the peek, is the peek's own.
+ * search; the rest do nothing while typing or while a dialog or a menu is open. C files a Task in
+ * the current Project; G then T, B, W or A goes to the current Project's Tasks, board, Workflow or
+ * Agents, and G then P opens the Project switcher. J, K, ↓ and ↑ walk the Tasks the page lists
+ * (its `[data-task]` rows), and with the peek open move the peek along them; Enter opens the
+ * selected Task's peek. Esc, which closes the peek, is the peek's own.
  */
 export function useShortcuts({
   setSearchOpen,
@@ -85,11 +90,11 @@ export function useShortcuts({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const team = useCurrentTeam();
+  const project = useCurrentProject();
   const { taskKey } = usePeek();
-  const latest = useRef({ navigate, location, team, taskKey, selected, select, setSearchOpen, setShortcutsOpen });
+  const latest = useRef({ navigate, location, project, taskKey, selected, select, setSearchOpen, setShortcutsOpen });
   useEffect(() => {
-    latest.current = { navigate, location, team, taskKey, selected, select, setSearchOpen, setShortcutsOpen };
+    latest.current = { navigate, location, project, taskKey, selected, select, setSearchOpen, setShortcutsOpen };
   });
 
   useEffect(() => {
@@ -121,7 +126,7 @@ export function useShortcuts({
     const onKey = (e: KeyboardEvent) => {
       // A focused terminal takes every key, ⌘K and Ctrl K too (Ctrl K is the shell's).
       if (e.defaultPrevented || e.isComposing || ownsKeys(e.target)) return;
-      const { navigate, team, taskKey, selected, setSearchOpen, setShortcutsOpen } = latest.current;
+      const { navigate, project, taskKey, selected, setSearchOpen, setShortcutsOpen } = latest.current;
       const key = e.key.toLowerCase();
       if (key === "k" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
         e.preventDefault();
@@ -136,7 +141,19 @@ export function useShortcuts({
       const chord = gAt > 0 && Date.now() - gAt <= chordMs;
       gAt = 0;
       if (chord) {
-        const to = { i: "/inbox", m: "/my-work", a: "/agents", b: team && teamTasksPath(team, "board") }[key];
+        if (key === "p") {
+          e.preventDefault();
+          sendIntent({ kind: "switch-project" });
+          return;
+        }
+        const to = {
+          i: "/inbox",
+          m: "/my-work",
+          t: project && projectPath(project, "tasks"),
+          b: project && projectPath(project, "tasks", "board"),
+          w: project && projectPath(project, "workflow"),
+          a: project && projectPath(project, "agents"),
+        }[key];
         if (to) {
           e.preventDefault();
           navigate(to);
@@ -150,7 +167,7 @@ export function useShortcuts({
       }
       if (key === "c") {
         e.preventDefault();
-        sendIntent({ kind: "file-task", team: team?.key });
+        sendIntent({ kind: "file-task", project: project?.key });
         return;
       }
       if (key === "f" && !e.shiftKey) {

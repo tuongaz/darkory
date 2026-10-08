@@ -3,7 +3,7 @@ import { STEP_H, STEP_W, TERMINAL_H, TERMINAL_W, terminals } from "./layout";
 import { stepsInOrder, targetName, unstaffed, waitingAt, type Connector, type Ends, type Step, type Workflow } from "./model";
 import { routeConnectors, type Rect, type Route } from "./route";
 
-/** The terminal nodes' ids; a step's id is a UUID, so these never meet one. */
+/** The terminal nodes' ids; a Step's id is a UUID, so these never meet one. */
 export const DONE_NODE = "@done";
 export const DROPPED_NODE = "@dropped";
 
@@ -14,7 +14,7 @@ export type TerminalFlowNode = Node<{ terminal: "done" | "dropped" }, "terminal"
 export type CanvasNode = StepFlowNode | TerminalFlowNode;
 export type ConnectorFlowEdge = Edge<{ connector: Connector; route: Route }, "connector">;
 
-// A step's handles, where a Connector's route leaves and enters it (route.ts): out on the right
+// A Step's handles, where a Connector's route leaves and enters it (route.ts): out on the right
 // and in on the left, which a drag connects; and, for a route back, out on the left and in from
 // below, above or the right. Given here so the edges draw before the nodes are measured; once
 // they are, React Flow reads the real ones.
@@ -38,7 +38,7 @@ const stepHandles = [
 const exitHandles = { right: "out", left: "out-left" } as const;
 const entryHandles = { left: "in", right: "in-right", bottom: "in-bottom", top: "in-top" } as const;
 
-/** A step in words, for its node's `aria-label`. */
+/** A Step in words, for its node's `aria-label`. */
 export function stepLabel(step: Step): string {
   const what = step.skill ? `Skill ${step.skill.name}` : "a hold, moved on by hand";
   const counts = `${waitingAt(step)} waiting, ${step.working} working`;
@@ -51,8 +51,8 @@ export function stepLabel(step: Step): string {
 }
 
 /**
- * The canvas's nodes: the steps in the Workflow's order (the order Tab walks them in), then Done
- * and Dropped, fixed right of them. Editing, a step can be dragged, selected and connected.
+ * The canvas's nodes: the Steps in the Workflow's order (the order Tab walks them in), then Done
+ * and Dropped, fixed right of them. Editing, a Step can be dragged, selected and connected.
  */
 export function toNodes(workflow: Workflow, mode: Mode): CanvasNode[] {
   const edit = mode === "edit";
@@ -91,7 +91,7 @@ export function toNodes(workflow: Workflow, mode: Mode): CanvasNode[] {
   return [
     ...steps,
     terminal(DONE_NODE, "done", done, "Done"),
-    terminal(DROPPED_NODE, "dropped", dropped, "Dropped: a Task's Owner drops it from any step"),
+    terminal(DROPPED_NODE, "dropped", dropped, "Dropped: a Task's Owner drops it from any Step"),
   ];
 }
 
@@ -107,7 +107,7 @@ export function boxesOf(nodes: CanvasNode[]): { boxes: Map<string, Rect>; extra:
   return { boxes, extra };
 }
 
-/** How far left of Dropped its dashed "from any step" arrow reaches (nodes.tsx draws it). */
+/** How far left of Dropped its dashed "from any Step" arrow reaches (nodes.tsx draws it). */
 export const DROPPED_ARROW = 132;
 
 /** Every Connector's route round the nodes where they stand. */

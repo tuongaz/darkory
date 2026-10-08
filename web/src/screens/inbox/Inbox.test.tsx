@@ -1,245 +1,128 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { Claim, Feature, Task, TaskDetail } from "@/api/client";
-import { mockApi, type Handler } from "@/test/api";
-import { ada, bob, builder, build, feature, me, review, signedIn, task, web } from "@/test/fixtures";
+import type { TaskDetail } from "@/api/client";
+import { ada, bob, builder, engineer, ops, parentTask, step, subtask, task } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { featureBar, featuresIOwn, myProposals, takeableNow } from "./derive";
-import { statuses } from "./testing";
+import { awaitingComplete, lapsesOn, staleProposals, takeableNow } from "./derive";
+import { claim, entry, minutes, recordApi } from "./testing";
 
-const minutes = (m: number) => new Date(Date.now() + m * 60_000).toISOString();
-
-
-function claim(taskId: string, holder: string, extra: Partial<Claim> = {}): Claim {
-  return { id: `c-${taskId}`, task_id: taskId, holder_id: holder, session_id: "sess-1", started_at: minutes(-2), ...extra };
-}
+const done = { open: 0, working: 0, done: 3, dropped: 0 };
 
 describe("the Inbox's rules", () => {
-  it("shows at most three Takeable Tasks, and none already aimed at me", () => {
-    const aimed = task(8, "f-1", { aimed_at_id: ada.id, skill_id: undefined });
-    const takeable = [aimed, task(2, "f-1"), task(3, "f-1"), task(4, "f-1"), task(5, "f-1")];
-    const { shown, total } = takeableNow(takeable, [aimed]);
-    expect(shown.map((t) => t.key)).toEqual(["WEB-2", "WEB-3", "WEB-4"]);
-    expect(total).toBe(4);
-    expect(takeableNow(takeable.slice(0, 2), []).shown).toHaveLength(2);
+  it("leaves out of Takeable what is already aimed at me", () => {
+    const aimed = task(8, { aimed_at_id: ada.id, step_id: undefined });
+    expect(takeableNow([aimed, task(2), task(3)], [aimed]).map((t) => t.key)).toEqual(["WEB-2", "WEB-3"]);
   });
 
-  it("gives a Feature I own its blocked count, its waiting Break down, or its open Retrospective", () => {
-    const checkout = feature(1, 2);
-    const billing = feature(16, 4);
-    const shipped = feature(18, 5, { state: "shipped" });
-    const done = feature(30, 7, { state: "dropped" });
-    const open = [
-      task(3, checkout.id, { blocked: true }),
-      task(6, checkout.id, { blocked: true }),
-      task(7, checkout.id),
-      task(17, billing.id, { kind: "breakdown" }),
-      task(21, shipped.id, { kind: "retrospective" }),
-    ];
-    const rows = featuresIOwn([checkout, billing, shipped, done], open);
-    expect(rows.map((r) => [r.feature.key, r.blocked, r.breakdown?.key, r.retrospective?.key])).toEqual([
-      ["WEB-1", 2, undefined, undefined],
-      ["WEB-16", 0, "WEB-17", undefined],
-      ["WEB-18", 0, undefined, "WEB-21"],
+  it("finds the Parents waiting on their Owner's Complete, and how their Acceptance ended", () => {
+    const passed = parentTask(1, done);
+    const failed = parentTask(2, done);
+    const plain = parentTask(3, done);
+    const going = parentTask(4, { open: 1, working: 1, done: 2, dropped: 0 });
+    const details = new Map<string, TaskDetail>([
+      [passed.id, { subtasks: [subtask(5, passed, { kind: "acceptance", state: "done" })] } as TaskDetail],
+      [failed.id, { subtasks: [subtask(6, failed, { kind: "acceptance", state: "done" }), subtask(7, failed, { kind: "acceptance", state: "dropped" })] } as TaskDetail],
+    ]);
+    const out = awaitingComplete([passed, failed, plain, going, task(9)], details);
+    expect(out.map((d) => [d.task.key, d.kind === "complete" && d.acceptance])).toEqual([
+      ["WEB-1", "done"],
+      ["WEB-2", "dropped"],
+      ["WEB-3", undefined],
     ]);
   });
 
-  it("draws a Feature's bar as done, held and waiting out of all its Tasks", () => {
-    const f = feature(1, 1, { task_counts: { open: 5, claimed: 1, done: 2, dropped: 1 } });
-    const bar = featureBar(f);
-    expect([bar.done, bar.held, bar.waiting]).toEqual([2 / 8, 1 / 8, 4 / 8]);
+  it("finds pending proposals written against a version no longer current", () => {
+    const retro = task(21, { kind: "retrospective", step_id: step.retro });
+    const proposal = (id: string, based: number, state: "pending" | "superseded" = "pending") => ({
+      id,
+      skill_id: engineer.id,
+      task_id: retro.id,
+      based_on_version: based,
+      body: "",
+      author_id: builder.id,
+      state,
+      created_at: minutes(-5),
+    });
+    const d = { task: retro, proposals: [proposal("p-1", 1), proposal("p-2", 2), proposal("p-3", 1, "superseded")] } as TaskDetail;
+    const out = staleProposals([d], new Map([[engineer.id, { ...engineer, current_version: 2 }]]));
+    expect(out).toEqual([{ kind: "stale", task: retro, skill: "engineer", basedOn: 1, current: 2 }]);
   });
 
-  it("keeps the pending proposals I wrote", () => {
-    const detail = (n: number, author: string, state: "pending" | "published"): TaskDetail =>
-      ({
-        task: task(n, "f-1", { kind: "retrospective" }),
-        proposal: { id: `p-${n}`, skill_id: build.id, task_id: `k-${n}`, based_on_version: 1, body: "", author_id: author, state, created_at: minutes(-1) },
-      }) as TaskDetail;
-    const kept = myProposals([detail(21, ada.id, "pending"), detail(22, bob.id, "pending"), detail(23, ada.id, "published")], ada.id);
-    expect(kept.map((d) => d.task.key)).toEqual(["WEB-21"]);
+  it("keeps a lapse on my Task from the last day that nobody has taken up again", () => {
+    const lapsed = task(3);
+    const retaken = task(4, { claim: claim("k-4", bob.id) });
+    const old = task(5);
+    const entries = [
+      entry(1, "task.lapsed", lapsed.id, { payload: { holder_id: builder.id }, at: minutes(-30) }),
+      entry(2, "task.lapsed", retaken.id, { at: minutes(-20) }),
+      entry(3, "task.lapsed", old.id, { at: minutes(-25 * 60) }),
+      entry(4, "task.lapsed", "k-elsewhere", { at: minutes(-5) }),
+    ];
+    expect(lapsesOn([lapsed, retaken, old], entries, Date.now()).map((l) => [l.task.key, l.holderId])).toEqual([["WEB-3", builder.id]]);
   });
 });
-
-/** The reads the Inbox makes, answered from one record of Tasks and Features. */
-function inboxApi({ tasks, features, takeable = [], details = {} }: { tasks: Task[]; features: Feature[]; takeable?: Task[]; details?: Record<string, Partial<TaskDetail>> }) {
-  const routes: Record<string, Handler> = {
-    ...signedIn(),
-    "GET /v1/statuses": statuses,
-    "GET /v1/tasks/takeable": { items: takeable },
-    "GET /v1/tasks": ({ query }) => {
-      if (query.get("aimed_at")) return { items: tasks.filter((t) => t.state === "open" && t.aimed_at_id === query.get("aimed_at")) };
-      if (query.get("holder")) return { items: tasks.filter((t) => t.claim?.holder_id === query.get("holder")) };
-      if (query.get("state") === "open") return { items: tasks.filter((t) => t.state === "open") };
-      return { items: tasks };
-    },
-    "GET /v1/features": ({ query }) => ({ items: query.get("owner") ? features.filter((f) => f.owner_id === query.get("owner")) : features }),
-    "GET /v1/tasks/:task": ({ params }) => ({ task: tasks.find((t) => t.key === params.task), ...details[params.task] }),
-  };
-  return mockApi(routes);
-}
 
 const section = (name: string) => screen.findByRole("region", { name });
+const row = (region: HTMLElement, key: string) => region.querySelector<HTMLElement>(`[data-task="${key}"]`)!;
 
 describe("the Inbox", () => {
-  it("lists what needs me, section by section, in order", async () => {
-    const checkout = feature(1, 2, { task_counts: { open: 5, claimed: 1, done: 2, dropped: 0 } });
-    const billing = feature(16, 4);
-    const onboarding = feature(18, 5, { state: "shipped", owner_id: bob.id });
-    const cart = task(3, checkout.id, { blocked: true, claim: claim("k-3", builder.id, { expires_at: minutes(15), heartbeat_timeout_seconds: 900 }), status_id: "st-progress" });
-    const question = task(8, checkout.id, {
-      title: "Stripe keys for staging?",
-      description: "Staging has no STRIPE_SECRET_KEY. Which account do we use?",
-      skill_id: undefined,
-      aimed_at_id: ada.id,
-      filed_by: builder.id,
-    });
-    cart.open_blockers = [{ id: question.id, key: question.key }];
-    const mine = task(14, checkout.id, { title: "Session expiry", claim: claim("k-14", ada.id), status_id: "st-progress" });
-    const breakdown = task(17, billing.id, { kind: "breakdown", title: "Break down: Billing export" });
-    const retro = task(21, onboarding.id, { kind: "retrospective", title: "Retrospective: Onboarding emails", skill_id: review.id, status_id: "st-review" });
-    const takeable = [question, task(24, checkout.id, { title: "Retrospective: Dark mode", kind: "retrospective" })];
-    inboxApi({
-      tasks: [cart, question, mine, breakdown, retro, ...takeable.slice(1)],
-      features: [checkout, billing, onboarding],
-      takeable,
-      details: {
-        "WEB-21": {
-          proposal: { id: "p-1", skill_id: build.id, task_id: retro.id, based_on_version: 1, body: "", author_id: ada.id, state: "pending", created_at: minutes(-1) },
-        },
-      },
+  it("lists what needs me across Projects, section by section, each row with its Project", async () => {
+    const blocked = task(3, { blocked: true, open_blockers: [{ id: "k-8", key: "WEB-8", title: "Which currency?" }] });
+    const question = task(8, { aimed_at_id: ada.id, step_id: undefined, filed_by: builder.id, title: "Which currency?" });
+    const parent = parentTask(1, done, { title: "Checkout" });
+    const lapsed = task(12, { title: "Payment form", owner_id: ada.id });
+    const opsTask = task(30, { id: "k-ops-30", key: "OPS-30", project_id: ops.id, step_id: `ops-${step.build}`, title: "Rotate keys", owner_id: bob.id });
+    const { calls } = recordApi({
+      tasks: [blocked, question, parent, lapsed, opsTask],
+      takeable: [question, opsTask, lapsed],
+      details: { "WEB-1": { subtasks: [subtask(2, parent, { kind: "acceptance", state: "done" })] } },
+      activity: [entry(1, "task.lapsed", lapsed.id, { payload: { holder_id: builder.id }, at: minutes(-10) })],
     });
     renderApp("/inbox");
 
-    const aimed = await section("Aimed at me");
-    expect(within(aimed).getByText("Stripe keys for staging?")).toBeInTheDocument();
-    // One line per row: the question's text is in its peek; the row keeps what it blocks and who asked.
-    expect(within(aimed).queryByText("Staging has no STRIPE_SECRET_KEY. Which account do we use?")).not.toBeInTheDocument();
-    expect(within(aimed).getByText(/blocks WEB-3/)).toBeInTheDocument();
-    expect(within(aimed).getByRole("img", { name: "builder (agent)" })).toBeInTheDocument();
-    expect(within(aimed).getByRole("button", { name: "Answer WEB-8" })).toBeInTheDocument();
+    const aimed = await section("Aimed at you");
+    const q = row(aimed, "WEB-8");
+    expect(q).toHaveTextContent("Which currency?");
+    expect(q).toHaveTextContent("blocks WEB-3");
+    expect(q).toHaveTextContent(/from .*builder/);
+    expect(within(q).getByRole("button", { name: "Answer WEB-8" })).toBeInTheDocument();
 
-    const held = await section("Held by me");
-    expect(within(held).getByText("Session expiry")).toBeInTheDocument();
-    expect(within(held).getByText("No expiry")).toBeInTheDocument();
+    const decide = await section("Your decision");
+    expect(row(decide, "WEB-1")).toHaveTextContent("Acceptance passed");
+    expect(row(decide, "WEB-1")).toHaveTextContent("3/3");
 
-    // WEB-8 is takeable too, but is shown once, under Aimed at me.
-    const take = await section("Takeable now");
-    expect(within(take).queryByText("Stripe keys for staging?")).not.toBeInTheDocument();
-    expect(within(take).getByRole("button", { name: "Claim WEB-24" })).toHaveAttribute("data-variant", "outline");
+    const lapses = await section("Lapsed on your Tasks");
+    expect(row(lapses, "WEB-12")).toHaveTextContent(/Lapsed \d\d:\d\d/);
+    expect(row(lapses, "WEB-12")).toHaveTextContent(/held by .*builder/);
+    // Takeable again, it is Claimed from its lapse and not listed twice.
+    expect(within(row(lapses, "WEB-12")).getByRole("button", { name: "Claim WEB-12" })).toBeInTheDocument();
 
-    const owned = await section("Features I own");
-    expect(within(owned).getByRole("link", { name: "Feature 1" })).toHaveAttribute("href", "/features/WEB-1");
-    // Rank names the Team: two Teams each have a #1.
-    expect(within(owned).getByText("Web #2")).toBeInTheDocument();
-    expect(within(owned).getByText("1 blocked")).toBeInTheDocument();
-    expect(within(owned).getByText("2 done · 5 open")).toBeInTheDocument();
-    expect(within(owned).getByText("WEB-17")).toBeInTheDocument();
-    expect(within(owned).getByText("Waiting")).toBeInTheDocument();
+    // The question and the lapsed Task are listed once each; OPS-30 carries its own Project and Step.
+    const take = await section("Takeable by you");
+    expect(take.querySelectorAll("[data-task]")).toHaveLength(1);
+    expect(row(take, "OPS-30")).toHaveTextContent("Build");
+    expect(row(take, "OPS-30").getAttribute("data-task")).toBe("OPS-30");
+    expect(within(row(take, "OPS-30")).getByTitle("Ops")).toBeInTheDocument();
 
-    const proposals = await section("My proposals");
-    expect(within(proposals).getByText(/Proposal · build v2/)).toBeInTheDocument();
-
-    const order = within(screen.getByRole("main")).getAllByRole("region").map((r) => r.getAttribute("aria-label"));
-    expect(order).toEqual(["Aimed at me", "Held by me", "Takeable now", "Features I own", "My proposals"]);
-    // Answer is the page's one primary.
-    expect(screen.getAllByRole("button", { name: /^Answer/ })[0]).toHaveAttribute("data-variant", "default");
+    // A decision made from the row: the Owner completes the Parent.
+    await userEvent.click(within(row(decide, "WEB-1")).getByRole("button", { name: "Complete WEB-1" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-1/complete")).toBe(true));
+    // Reading what I own asks /v1 with my own token.
+    expect(calls.some((c) => c.query.getAll("filter").includes(`owner:is:${ada.id}`))).toBe(true);
   });
 
-  it("says in one line that nothing is aimed at me and I hold nothing, and leads with what I can take", async () => {
-    const search = feature(9, 3);
-    const takeable = [2, 3, 4, 5].map((n) => task(n, search.id));
-    inboxApi({ tasks: takeable, features: [search], takeable });
+  it("opens a row's peek over the Inbox", async () => {
+    const t = task(4, { title: "Build the cart" });
+    recordApi({ tasks: [t], takeable: [t], extra: { "GET /v1/tasks/:task": { task: t, subtasks: [], connectors: [], labels: [], workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [], proposals: [] } } });
     renderApp("/inbox");
-
-    expect(await screen.findByText("No questions for you · You hold nothing")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Aimed at me" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Held by me" })).not.toBeInTheDocument();
-    const take = await section("Takeable now");
-    expect(within(take).getAllByRole("button", { name: /^Claim/ })).toHaveLength(3);
-    expect(within(take).getByRole("button", { name: "Claim WEB-2" })).toHaveAttribute("data-variant", "default");
-    expect(within(take).getByRole("link", { name: "1 more in My work" })).toHaveAttribute("href", "/my-work");
-    expect(screen.queryByRole("region", { name: "My proposals" })).not.toBeInTheDocument();
+    const take = await section("Takeable by you");
+    expect(within(take).getByRole("link", { name: "Build the cart" })).toHaveAttribute("href", "/inbox?task=WEB-4");
   });
 
-  it("claims a Task from its row", async () => {
-    const search = feature(9, 3);
-    const t = task(2, search.id);
-    const api = inboxApi({ tasks: [t], features: [search], takeable: [t] });
-    api.routes["POST /v1/tasks/:task/claim"] = ({ params }) => ({ task: { ...t, claim: claim(t.id, ada.id) }, key: params.task });
+  it("says so when nothing needs me", async () => {
+    recordApi({ tasks: [task(1, { owner_id: bob.id })] });
     renderApp("/inbox");
-    await userEvent.click(await screen.findByRole("button", { name: "Claim WEB-2" }));
-    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-2/claim")).toBe(true));
-  });
-
-  it("Answer claims the question and opens it to write the Note, Complete first; the row moves to Held by me", async () => {
-    const checkout = feature(1, 2);
-    const question = task(8, checkout.id, { title: "Stripe keys for staging?", skill_id: undefined, aimed_at_id: ada.id, filed_by: builder.id });
-    const api = inboxApi({
-      tasks: [question],
-      features: [checkout],
-      takeable: [question],
-      details: { "WEB-8": { feature: checkout, status: { id: "st-todo", name: "Todo", kind: "todo", position: 2 }, workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [] } },
-    });
-    api.routes["POST /v1/tasks/:task/claim"] = () => {
-      question.claim = claim(question.id, ada.id);
-      return question;
-    };
-    renderApp("/inbox");
-
-    await userEvent.click(await screen.findByRole("button", { name: "Answer WEB-8" }));
-    expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-8/claim")).toBe(true);
-    const peek = await screen.findByRole("dialog", { name: "Task WEB-8" });
-    await waitFor(() => expect(within(peek).getByRole("textbox", { name: "Note" })).toHaveFocus());
-    expect(within(peek).getByRole("button", { name: "Complete" })).toBeInTheDocument();
-    expect(within(peek).queryByRole("button", { name: "Claim" })).not.toBeInTheDocument();
-
-    const held = await section("Held by me");
-    expect(within(held).getByText("Stripe keys for staging?")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Aimed at me" })).not.toBeInTheDocument();
-  });
-
-  it("keeps the Inbox heading for a Member with nothing at all", async () => {
-    mockApi({ ...signedIn(), "GET /v1/me": me(ada), "GET /v1/statuses": statuses, "GET /v1/tasks/takeable": { items: [] }, "GET /v1/features": ({ query }) => ({ items: query.get("owner") ? [] : [feature(1, 1, { owner_id: bob.id, team_id: web.id })] }) });
-    renderApp("/inbox");
-    expect(await screen.findByText("No questions for you · You hold nothing")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Inbox" })).toBeInTheDocument();
-  });
-});
-
-describe("My work", () => {
-  it("lists every takeable Task in next order with its Rank, Skill and how long it has waited", async () => {
-    const login = feature(11, 1);
-    const billing = feature(16, 4);
-    const takeable = [
-      task(13, login.id, { title: "Magic link email", skill_id: review.id, waiting_since: minutes(-4), status_id: "st-review" }),
-      task(17, billing.id, { title: "Break down: Billing export", kind: "breakdown", waiting_since: minutes(-0.2) }),
-    ];
-    inboxApi({ tasks: takeable, features: [login, billing], takeable });
-    renderApp("/my-work");
-
-    const held = await section("Held by me");
-    expect(within(held).getByText("You hold nothing")).toBeInTheDocument();
-    const table = await screen.findByRole("table", { name: "Takeable now" });
-    const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows.map((r) => within(r).getAllByRole("cell")[2].textContent)).toEqual(["Magic link email", "Break down: Billing export"]);
-    expect(within(rows[0]).getByText("Web #1")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("review")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("4 min")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("< 1 min")).toBeInTheDocument();
-    expect(await within(rows[0]).findByRole("img", { name: "In review" })).toBeInTheDocument();
-    expect(within(rows[0]).getByRole("button", { name: "Claim WEB-13" })).toHaveAttribute("data-variant", "default");
-  });
-
-  it("says why nothing is takeable: no Skills, or nothing to take now", async () => {
-    inboxApi({ tasks: [], features: [] }).routes["GET /v1/me"] = { ...me(ada), skills: [] };
-    const { unmount } = renderApp("/my-work");
-    expect(within(await section("Takeable now")).getByText("You have no Skills yet — an Admin adds them under Admin › Members")).toBeInTheDocument();
-    unmount();
-
-    inboxApi({ tasks: [], features: [] });
-    renderApp("/my-work");
-    expect(within(await section("Takeable now")).getByText("Nothing you can take right now")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Nothing needs you" })).toBeInTheDocument();
   });
 });

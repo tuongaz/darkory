@@ -31,8 +31,8 @@ export function matchRecords<T extends Searchable>(query: string, records: T[], 
 }
 
 /**
- * The order of ⌘K's groups: the group holding the best hit first (typing a Feature's key puts the
- * Feature above the Tasks whose keys merely start with it), else the order given.
+ * The order of ⌘K's groups: the group holding the best hit first (typing a Project's key puts the
+ * Project above the Tasks whose keys merely start with it), else the order given.
  */
 export function orderGroups<G extends { best: number }>(groups: G[]): G[] {
   return groups.map((g, i) => ({ g, i })).sort((a, b) => a.g.best - b.g.best || a.i - b.i).map(({ g }) => g);

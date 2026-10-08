@@ -1,5 +1,6 @@
-// The branches the Runner works on in a git Workspace (ADR 0014), named here the way
-// internal/runner/workspace.go names them, so a record can say which branch holds its work.
+// The branches the Runner works on in a git Workspace, named here the way the Runner names them
+// (model-v2-plan.md, Runner: the lower-cased key, then the slug), so a record can say which
+// branch holds its work. A Subtask's branch starts from its Parent's and merges back into it.
 
 const maxSlug = 40;
 
@@ -31,12 +32,10 @@ export function slug(title: string): string {
   return s || "task";
 }
 
-/** The branch a Task's session works on: its key, then its title made short, as in WEB-12/cart-page. */
+/**
+ * The branch a Task's session works on, a Parent's included: its key in lower case, then its title
+ * made short, as in main-7-support-emoji.
+ */
 export function taskBranch(key: string, title: string): string {
-  return `${key}/${slug(title)}`;
-}
-
-/** The branch a Feature's Tasks merge into, made at Break down; a quick Feature has none. */
-export function featureBranch(key: string): string {
-  return `feature/${key}`;
+  return `${key.toLowerCase()}-${slug(title)}`;
 }

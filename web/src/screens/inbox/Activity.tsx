@@ -1,22 +1,26 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { ChevronDownIcon, HandIcon, HeartPulseIcon, HistoryIcon, PaperclipIcon, RotateCcwIcon, XIcon } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { ChevronDownIcon, HeartPulseIcon, HistoryIcon, PaperclipIcon, RotateCcwIcon, XIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, call, evidenceURL, type Activity, type ActivityKind } from "@/api/client";
+import { evidenceURL, type Activity, type ActivityKind, type Project } from "@/api/client";
 import { useLiveEntries, useStreamState, type StreamState } from "@/api/live";
-import { useDirectory } from "@/api/queries";
+import { newestActivity, useDirectory, useLabels, useTasks } from "@/api/queries";
+import { projectPath, useRouteProject } from "@/app/currentProject";
+import { projectCrumb } from "@/app/crumbs";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
+import { serializeFilter } from "@/components/filters/filterState";
 import { EmptyState } from "@/components/EmptyState";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
+import { SystemMark } from "@/components/Timeline";
 import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -25,82 +29,92 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { count, groupByDay, isSignIn, matchesFilter, sizeText, type ActivityFilter } from "./derive";
-import { newest, useFeatureMap, useStatuses, useTaskMap } from "./queries";
-import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Sentence } from "./wording";
+import { aboutProject, count, groupByDay, matchesFilter, sizeText, type ActivityFilter } from "./derive";
+import { activityHistoryPage, useStepNames, useTaskMap } from "./queries";
+import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Part, type Sentence } from "./wording";
 
 const pageSize = 100;
+/** With the Task filter, which /v1 does not have, pages are read larger and narrowed here. */
+const taskPageSize = 500;
+
+/** The search parameter of the Task filter: `?task=` opens a peek, so the filter is `?about=`. */
+const aboutParam = "about";
 
 /**
- * /activity: the trail, newest first, by day. ?member=, ?kind= and ?team= (a name, a kind, a Team
- * key) narrow it through /v1's filters; the stream's new entries that pass the same filter arrive
- * at the top. Sign-ins (login links issued and redeemed) are left out unless ?signins=1 or the
- * Kind filter names one.
+ * /projects/:key/activity: the Project's trail, newest first, by day. ?member= and ?kind= (a name,
+ * a kind) narrow it through /v1's filters; ?about=<key> keeps one Task's entries, read page by page
+ * here since /v1 has no such filter. The stream's new entries that pass the same filters arrive at
+ * the top. Each entry links its Task (its peek), its Workflow, and the Steps it names (the Tasks
+ * at that Step).
  */
 export function ActivityPage() {
+  const project = useRouteProject();
   const [params, setParams] = useSearchParams();
   const now = useNow();
   const dir = useDirectory();
-  const tasks = useTaskMap();
-  const features = useFeatureMap();
-  const statuses = useStatuses();
+  const tasks = useTaskMap(project.key);
+  const steps = useStepNames([project]);
+  const labels = useLabels(project.key).data;
   const live = useLiveEntries();
 
   const memberRef = params.get("member") ?? undefined;
   const kindRef = params.get("kind") ?? undefined;
-  const teamRef = params.get("team") ?? undefined;
+  const taskRef = params.get(aboutParam) ?? undefined;
   const member = memberRef ? dir.memberList.find((m) => m.name === memberRef || m.id === memberRef) : undefined;
-  const team = teamRef ? dir.teamList.find((t) => t.key === teamRef || t.id === teamRef) : undefined;
   const kind = kindRef && isKnown(kindRef) ? kindRef : undefined;
-  const filtered = !!(memberRef || kindRef || teamRef);
-  const signIns = params.get("signins") === "1" || (!!kind && isSignIn(kind));
+  const task = taskRef ? [...tasks.values()].find((t) => t.key.toUpperCase() === taskRef.toUpperCase() || t.id === taskRef) : undefined;
+  const filtered = !!(memberRef || kindRef || taskRef);
+  const limit = taskRef ? taskPageSize : pageSize;
 
+  // The Task the address names, by id once the Project's Tasks are read; a key that names none
+  // stands as an id that matches nothing, as /v1 reads one.
+  const tasksRead = useTasks({ project: project.key }).isSuccess;
+  const taskId = taskRef ? (task?.id ?? `none:${taskRef}`) : undefined;
   const history = useInfiniteQuery({
-    queryKey: ["activity", "page", { member: memberRef, kind: kindRef, team: teamRef }],
+    queryKey: ["activity", "page", { project: project.key, member: memberRef, kind: kindRef, task: taskId, limit }],
     queryFn: ({ pageParam }) =>
-      call(
-        api.GET("/v1/activity", {
-          params: {
-            query: { before: pageParam, limit: pageSize, member: memberRef, kind: kindRef ? [kindRef as ActivityKind] : undefined, team: teamRef },
-          },
-        }),
-      ),
-    initialPageParam: newest,
-    getNextPageParam: (page) => (page.items.length < pageSize || page.first_seq === undefined || page.first_seq <= 1 ? undefined : page.first_seq),
+      activityHistoryPage({ project: project.key, member: memberRef, kind: kindRef ? (kindRef as ActivityKind) : undefined, task: taskId }, pageParam, limit),
+    initialPageParam: newestActivity,
+    enabled: !taskRef || tasksRead,
+    getNextPageParam: (page) => (page.more ? page.first_seq : undefined),
   });
 
-  // The stream's entries that pass the filter, matched by id as /v1 matches them.
-  const want: ActivityFilter = { member: member?.id, kind, team: team?.id };
-  const resolved = (!memberRef || member) && (!kindRef || kind) && (!teamRef || team);
-  const where = { taskFeature: (id: string) => tasks.get(id)?.feature_id, featureTeam: (id: string) => features.get(id)?.team_id };
+  // The stream's entries that pass the filters, matched by id as /v1 matches them.
+  const want: ActivityFilter = { member: member?.id, kind, task: task?.id };
+  const resolved = (!memberRef || member) && (!kindRef || kind) && (!taskRef || task);
+  const where = { taskProject: (id: string) => tasks.get(id)?.project_id };
   const bySeq = new Map<number, Activity>();
   for (const page of history.data?.pages ?? []) for (const e of page.items) bySeq.set(e.seq, e);
-  if (resolved) for (const e of live) if (matchesFilter(e, want, where)) bySeq.set(e.seq, e);
-  const known = [...bySeq.values()].filter((e) => isKnown(e.kind)).sort((a, b) => b.seq - a.seq);
-  const entries = signIns ? known : known.filter((e) => !isSignIn(e.kind));
-  const hidden = known.length - entries.length;
+  if (resolved) for (const e of live) if (aboutProject(e, project.id, where) && matchesFilter(e, want)) bySeq.set(e.seq, e);
+  const entries = [...bySeq.values()].filter((e) => isKnown(e.kind)).sort((a, b) => b.seq - a.seq);
+  const read = (history.data?.pages ?? []).reduce((n, p) => n + p.scanned, 0);
 
-  // Entries are numbered without gaps, so an unfiltered stream entry more than one past the newest
-  // one read means some arrived between the read and the stream opening; the history is read again.
-  const newestRead = history.data?.pages[0]?.items.at(-1)?.seq ?? 0;
-  const oldestLive = live.at(-1)?.seq;
-  const missed = !filtered && history.isSuccess && oldestLive !== undefined && oldestLive > newestRead + 1;
-  const { refetch, isFetching } = history;
+  // Entries are numbered per Organisation with gaps under a Project, so a missed entry cannot be
+  // told by its number; after a stream that was refused, the shell refreshes the reads it can, and
+  // this page's history is read again when the stream comes back.
+  const state = useStreamState();
+  const { refetch } = history;
+  const lastState = useRef(state);
   useEffect(() => {
-    if (missed && !isFetching) void refetch();
-  }, [missed, isFetching, refetch]);
+    if (lastState.current === "closed" && state === "live") void refetch();
+    lastState.current = state;
+  }, [state, refetch]);
 
-  const lookup: Lookup = {
-    members: dir.members,
-    teams: dir.teams,
-    skills: dir.skills,
-    tasks,
-    features,
-    statuses,
-    claims: new Map(entries.filter((e) => e.kind === "task.claimed").map((e) => [String(e.payload.claim_id), e])),
-  };
+  const lookup: Lookup = useMemo(
+    () => ({
+      members: dir.members,
+      skills: dir.skills,
+      projects: dir.projects,
+      tasks,
+      stepName: (id) => steps.get(id)?.name,
+      labels: new Map((labels ?? []).map((l) => [l.id, l])),
+      claims: new Map(entries.filter((e) => e.kind === "task.claimed").map((e) => [String(e.payload.claim_id), e])),
+    }),
+    [dir.members, dir.skills, dir.projects, tasks, steps, labels, entries],
+  );
 
   const set = (key: string, value: string | undefined) =>
     setParams((p) => {
@@ -109,48 +123,46 @@ export function ActivityPage() {
       else next.delete(key);
       return next;
     });
+  const clearAll = () =>
+    setParams((p) => {
+      const next = new URLSearchParams(p);
+      for (const k of ["member", "kind", aboutParam]) next.delete(k);
+      return next;
+    });
+
+  const taskList = useMemo(() => [...tasks.values()].sort((a, b) => b.created_at.localeCompare(a.created_at)), [tasks]);
 
   return (
     <>
-      <TopBar crumbs={[{ label: "Activity" }]} actions={<StreamMark />} />
+      <TopBar crumbs={[projectCrumb(project), { label: "Activity" }]} actions={<StreamMark />} />
       <div className="flex h-10 flex-none items-center gap-1.5 overflow-x-auto border-b px-4" role="toolbar" aria-label="Filters">
         <FilterChip label="Member" value={memberRef && (member?.name ?? memberRef)} onClear={() => set("member", undefined)}>
           <DropdownMenuRadioGroup value={member?.name ?? ""} onValueChange={(v) => set("member", v)}>
-            {dir.memberList.map((m) => (
-              <DropdownMenuRadioItem key={m.id} value={m.name}>
-                <MemberAvatar member={m} />
-                {m.name}
-              </DropdownMenuRadioItem>
-            ))}
+            {dir.memberList
+              .filter((m) => !m.deactivated_at)
+              .map((m) => (
+                <DropdownMenuRadioItem key={m.id} value={m.name}>
+                  <MemberAvatar member={m} />
+                  {m.name}
+                </DropdownMenuRadioItem>
+              ))}
           </DropdownMenuRadioGroup>
         </FilterChip>
         <FilterChip label="Kind" value={kindRef && kindName(kindRef)} onClear={() => set("kind", undefined)}>
-          <DropdownMenuCheckboxItem checked={signIns} disabled={!!kind && isSignIn(kind)} onCheckedChange={(on) => set("signins", on ? "1" : undefined)}>
-            Show sign-ins
-          </DropdownMenuCheckboxItem>
-          <DropdownMenuSeparator />
           <DropdownMenuRadioGroup value={kind ?? ""} onValueChange={(v) => set("kind", v)}>
             {kindChoices.map((k, i) => (
               <KindItem key={k.kind} choice={k} first={i === 0 || kindChoices[i - 1].group !== k.group} />
             ))}
           </DropdownMenuRadioGroup>
         </FilterChip>
-        <FilterChip label="Team" value={teamRef && (team?.name ?? teamRef)} onClear={() => set("team", undefined)}>
-          <DropdownMenuRadioGroup value={team?.key ?? ""} onValueChange={(v) => set("team", v)}>
-            {dir.teamList.map((t) => (
-              <DropdownMenuRadioItem key={t.id} value={t.key}>
-                {t.name}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </FilterChip>
+        <TaskChip value={taskRef && (task?.key ?? taskRef)} tasks={taskList} onPick={(key) => set(aboutParam, key)} onClear={() => set(aboutParam, undefined)} />
       </div>
       <Content>
         <h1 className="sr-only">Activity</h1>
         {history.isError ? (
           <Refusal error={history.error} className="px-6 py-5" />
         ) : history.isPending ? (
-          <div className="flex flex-col gap-2 px-6 py-5">
+          <div className="flex flex-col gap-2 px-6 py-5" aria-busy>
             <Skeleton className="h-6 w-full" />
             <Skeleton className="h-6 w-full" />
             <Skeleton className="h-6 w-2/3" />
@@ -161,26 +173,29 @@ export function ActivityPage() {
             title={filtered ? "No entries" : "No Activity"}
             action={
               filtered ? (
-                <Button variant="outline" onClick={() => setParams(new URLSearchParams())}>
-                  Clear filters
-                </Button>
-              ) : (
-                hidden > 0 && (
-                  <Button variant="outline" onClick={() => set("signins", "1")}>
-                    Show {count(hidden, "sign-in")}
+                <div className="flex gap-2">
+                  {history.hasNextPage && (
+                    <Button variant="outline" disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>
+                      Load older
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={clearAll}>
+                    Clear filters
                   </Button>
-                )
-              )
+                </div>
+              ) : undefined
             }
-          />
+          >
+            {filtered ? (history.hasNextPage ? "None among the latest entries read." : undefined) : `Nothing has happened in ${project.name} yet.`}
+          </EmptyState>
         ) : (
           <ol aria-label="Activity" aria-live="polite" aria-relevant="additions">
             {groupByDay(entries, now).map((g) => (
               <li key={g.key}>
-                <h2 className="flex h-[34px] items-center border-b bg-muted pr-4 pl-6 font-medium">{g.label}</h2>
+                <h2 className="sticky top-0 z-10 flex h-[34px] items-center border-b bg-muted pr-4 pl-4 font-medium md:pl-6">{g.label}</h2>
                 <ol>
                   {g.entries.map((e) => (
-                    <EntryRow key={e.seq} entry={e} lookup={lookup} />
+                    <EntryRow key={e.seq} entry={e} lookup={lookup} project={project} />
                   ))}
                 </ol>
               </li>
@@ -189,18 +204,10 @@ export function ActivityPage() {
         )}
       </Content>
       {history.isSuccess && entries.length > 0 && (
-        // The same words whether or not there is more: "100 entries loaded · 7 sign-ins hidden · Show · Load older".
-        <footer className="flex h-10 flex-none items-center gap-1.5 border-t pr-4 pl-6 text-xs text-muted-foreground">
-          <span>{count(entries.length, "entry", "entries")} loaded</span>
-          {hidden > 0 && (
-            <>
-              <span aria-hidden>·</span>
-              <span>{count(hidden, "sign-in")} hidden</span>
-              <Button size="xs" variant="link" className="h-auto px-0 text-xs text-foreground" onClick={() => set("signins", "1")}>
-                Show
-              </Button>
-            </>
-          )}
+        // The same words whether or not there is more: "100 entries · Load older".
+        <footer className="flex h-10 flex-none items-center gap-1.5 border-t pr-4 pl-4 text-xs text-muted-foreground md:pl-6">
+          <span>{count(entries.length, "entry", "entries")}</span>
+          {task && <span>of {count(read, "entry", "entries")} read</span>}
           {history.hasNextPage && (
             <>
               <span aria-hidden>·</span>
@@ -237,23 +244,37 @@ function KindItem({ choice, first }: { choice: (typeof kindChoices)[number]; fir
 
 const chip = "inline-flex h-6 flex-none items-center gap-1.5 rounded-md border bg-background px-2 text-xs whitespace-nowrap";
 
-/** A filter (kit `.chip`): "Member" with a one-select menu; once set, "Member is builder-2" and × to clear it. */
+/** The chip's face: "Member" ▾ unset; "Member is builder" once set. */
+function ChipFace({ label, value }: { label: string; value: string | undefined }) {
+  return value ? (
+    <>
+      {label} is <b className="font-medium">{value}</b>
+    </>
+  ) : (
+    <>
+      {label}
+      <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />
+    </>
+  );
+}
+
+/** The × beside a set chip. */
+function ClearChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <button type="button" aria-label={`Clear ${label}`} onClick={onClear} className={cn(chip, "cursor-pointer rounded-l-none border-l-0 bg-accent px-1.5")}>
+      <XIcon className="size-3 text-muted-foreground" aria-hidden />
+    </button>
+  );
+}
+
+/** A filter (kit `.chip`): "Member" with a one-select menu; once set, "Member is builder" and × to clear it. */
 function FilterChip({ label, value, onClear, children }: { label: string; value: string | undefined; onClear: () => void; children: ReactNode }) {
   return (
     <span className={cn("inline-flex flex-none items-center", value && "rounded-md bg-accent")}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button type="button" className={cn(chip, "cursor-pointer hover:bg-accent", value && "rounded-r-none border-r-0 bg-accent")}>
-            {value ? (
-              <>
-                {label} is <b className="font-medium">{value}</b>
-              </>
-            ) : (
-              <>
-                {label}
-                <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />
-              </>
-            )}
+            <ChipFace label={label} value={value} />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] min-w-48">
@@ -266,11 +287,57 @@ function FilterChip({ label, value, onClear, children }: { label: string; value:
           {children}
         </DropdownMenuContent>
       </DropdownMenu>
-      {value && (
-        <button type="button" aria-label={`Clear ${label}`} onClick={onClear} className={cn(chip, "cursor-pointer rounded-l-none border-l-0 bg-accent px-1.5")}>
-          <XIcon className="size-3 text-muted-foreground" aria-hidden />
-        </button>
-      )}
+      {value && <ClearChip label={label} onClear={onClear} />}
+    </span>
+  );
+}
+
+/** The Task filter: the Project's Tasks, searched by key or title. */
+function TaskChip({
+  value,
+  tasks,
+  onPick,
+  onClear,
+}: {
+  value: string | undefined;
+  tasks: { id: string; key: string; title: string }[];
+  onPick: (key: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className={cn("inline-flex flex-none items-center", value && "rounded-md bg-accent")}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button type="button" className={cn(chip, "cursor-pointer hover:bg-accent", value && "rounded-r-none border-r-0 bg-accent")}>
+            <ChipFace label="Task" value={value} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" aria-label="Task" className="w-80 p-0">
+          <Command>
+            <CommandInput placeholder="Search keys and titles" />
+            <CommandList className="max-h-[min(360px,60vh)]">
+              <CommandEmpty>No matches</CommandEmpty>
+              <CommandGroup>
+                {tasks.map((t) => (
+                  <CommandItem
+                    key={t.id}
+                    value={`${t.key} ${t.title}`}
+                    onSelect={() => {
+                      onPick(t.key);
+                      setOpen(false);
+                    }}
+                  >
+                    <Key>{t.key}</Key>
+                    <span className="truncate">{t.title}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && <ClearChip label="Task" onClear={onClear} />}
     </span>
   );
 }
@@ -288,32 +355,19 @@ function StreamMark() {
   );
 }
 
-/** The mark for an entry no Member made, as when Darkory records a lapse: a square D. */
-export function DarkoryMark() {
-  return (
-    <span
-      role="img"
-      aria-label="Darkory"
-      className="inline-grid size-5 flex-none place-items-center rounded-[6px] border border-primary bg-primary text-[9px] leading-none font-semibold text-primary-foreground select-none"
-    >
-      D
-    </span>
-  );
-}
-
 const seconds = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
 const full = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "medium" });
 
 /** One entry: who, what in words, when. */
-export function EntryRow({ entry, lookup }: { entry: Activity; lookup: Lookup }) {
+function EntryRow({ entry, lookup, project }: { entry: Activity; lookup: Lookup; project: Project }) {
   const s = describe(entry, lookup);
   if (!s) return null;
   const actor = s.actorId ? lookup.members.get(s.actorId) : undefined;
   const at = new Date(entry.at);
   return (
-    <li className="grid h-[34px] grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 hover:bg-accent" data-seq={entry.seq}>
-      {actor ? <MemberAvatar member={actor} /> : s.actorId ? <span /> : <DarkoryMark />}
-      <Words s={s} />
+    <li className="grid min-h-[34px] grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 border-b py-1 pr-4 pl-4 hover:bg-accent md:pl-6" data-seq={entry.seq}>
+      {actor ? <MemberAvatar member={actor} /> : s.actorId ? <span /> : <SystemMark />}
+      <Words s={s} project={project} />
       <time dateTime={entry.at} title={full.format(at)} className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
         {seconds.format(at)}
       </time>
@@ -321,14 +375,39 @@ export function EntryRow({ entry, lookup }: { entry: Activity; lookup: Lookup })
   );
 }
 
-const markIcons = { lapsed: HeartPulseIcon, taken_back: RotateCcwIcon, handed_over: HandIcon } as const;
-const markTones = { lapsed: "dropped", taken_back: "claimed", handed_over: "waiting" } as const;
+const markIcons = { lapsed: HeartPulseIcon, taken_back: RotateCcwIcon } as const;
+const markTones = { lapsed: "dropped", taken_back: "claimed" } as const;
 
-function Words({ s }: { s: Sentence }) {
+/** The Tasks at a Step: the Project's list filtered by it. */
+function stepLink(project: Project, step: string): string {
+  return `${projectPath(project, "tasks")}?filter.tasks=${encodeURIComponent(serializeFilter({ field: "step", op: "is", values: [step] }))}`;
+}
+
+function AfterPart({ part, project }: { part: Part; project: Project }) {
+  if (typeof part === "string") return <>{part} </>;
+  if ("step" in part) {
+    return (
+      <>
+        <Link to={stepLink(project, part.step)} className="font-medium hover:underline">
+          {part.name}
+        </Link>{" "}
+      </>
+    );
+  }
+  return (
+    <>
+      <Pill tone="outline" className="align-[1px]">
+        {part.outcome}
+      </Pill>{" "}
+    </>
+  );
+}
+
+function Words({ s, project }: { s: Sentence; project: Project }) {
   const peek = usePeekLink();
   const Icon = s.mark && markIcons[s.mark];
   return (
-    <span className="min-w-0 truncate">
+    <span className="min-w-0 truncate md:whitespace-nowrap">
       <b className="font-medium">{s.actorName}</b>{" "}
       {s.mark && Icon && (
         <>
@@ -340,17 +419,23 @@ function Words({ s }: { s: Sentence }) {
       )}
       {s.verb && <>{s.verb} </>}
       {s.subject?.type === "text" && <>{s.subject.text} </>}
-      {s.subject && s.subject.type !== "text" && (
+      {s.subject?.type === "workflow" && (
         <>
-          <Link
-            to={s.subject.type === "task" ? peek(s.subject.key) : `/features/${encodeURIComponent(s.subject.key)}`}
-            className="group/subject hover:underline"
-          >
+          <Link to={projectPath(project, "workflow")} className="font-medium hover:underline">
+            the Workflow
+          </Link>{" "}
+        </>
+      )}
+      {s.subject?.type === "task" && (
+        <>
+          <Link to={peek(s.subject.key)} className="group/subject hover:underline">
             <Key className="group-hover/subject:text-foreground">{s.subject.key}</Key> <span className="font-medium">{s.subject.title}</span>
           </Link>{" "}
         </>
       )}
-      {s.after && <>{s.after} </>}
+      {s.after.map((part, i) => (
+        <AfterPart key={i} part={part} project={project} />
+      ))}
       {s.outcome && (
         <>
           <Pill tone={s.outcome === "worked" ? "done" : "blocked"} className="align-[1px]">

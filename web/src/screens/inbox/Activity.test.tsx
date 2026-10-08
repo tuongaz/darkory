@@ -1,219 +1,153 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { act } from "react";
 import { describe, expect, it } from "vitest";
 import type { Activity } from "@/api/client";
-import { mockApi } from "@/test/api";
+import { ada, bob, builder, bug, engineer, ops, parentTask, step, task, web } from "@/test/fixtures";
 import { FakeEventSource } from "@/test/eventSource";
-import { ada, build, builder, feature, ops, review, signedIn, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { dayLabel, groupByDay, matchesFilter } from "./derive";
-import { statuses } from "./testing";
+import { aboutProject, groupByDay, matchesFilter } from "./derive";
+import { entry, minutes, recordApi } from "./testing";
 import { describe as say, sentenceText, type Lookup } from "./wording";
 
-function at(h: number, m: number, s = 0, dayOffset = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + dayOffset);
-  d.setHours(h, m, s, 0);
-  return d.toISOString();
-}
-
-function entry(seq: number, kind: Activity["kind"], payload: Record<string, unknown> = {}, extra: Partial<Activity> = {}): Activity {
-  return { seq, at: at(9, 0), kind, actor_id: builder.id, subject_type: kind.split(".")[0] as Activity["subject_type"], subject_id: "k-4", payload, ...extra };
-}
+const cart = task(3, { title: "Build the cart" });
+const checkout = parentTask(1, { open: 1, working: 0, done: 0, dropped: 0 }, { title: "Checkout" });
 
 const lookup: Lookup = {
-  members: new Map([ada, builder].map((m) => [m.id, m])),
-  teams: new Map([[web.id, web]]),
-  skills: new Map([build, review].map((s) => [s.id, s])),
-  tasks: new Map([
-    ["k-4", { key: "WEB-4", title: "Payment form" }],
-    ["k-8", { key: "WEB-8", title: "Stripe keys?" }],
-  ]),
-  features: new Map([["f-11", { key: "WEB-11", title: "Login page" }]]),
-  statuses: new Map(statuses.items.map((s) => [s.id, s])),
-  claims: new Map([["c-5", entry(1, "task.claimed", { claim_id: "c-5", heartbeat_timeout_seconds: 2 })]]),
+  members: new Map([ada, bob, builder].map((m) => [m.id, m])),
+  skills: new Map([[engineer.id, engineer]]),
+  tasks: new Map([cart, checkout].map((t) => [t.id, t])),
+  stepName: (id) => ({ [step.build]: "Build", [step.review]: "Review", [step.backlog]: "Backlog" })[id],
+  projects: new Map([[web.id, web]]),
+  labels: new Map([[bug.id, bug]]),
+  claims: new Map(),
 };
+const words = (e: Activity) => sentenceText(say(e, lookup)!);
 
-const text = (e: Activity) => sentenceText(say(e, lookup)!);
-
-describe("the Activity wording", () => {
-  it("says who did what to which record, and the one detail worth a glance", () => {
-    expect(text(entry(2, "task.claimed", { skill_id: build.id, model_label: "claude-sonnet-5-5" }))).toBe(
-      "builder claimed WEB-4 Payment form · build · claude-sonnet-5-5",
+describe("what an entry says", () => {
+  it("words the v2 kinds in the glossary's voice", () => {
+    expect(words(entry(1, "task.advanced", cart.id, { actor_id: builder.id, payload: { from: step.build, to: step.review, outcome: "pass" } }))).toBe(
+      "builder advanced WEB-3 Build the cart along pass to Review · from Build",
     );
-    expect(text(entry(3, "task.claimed", { skill_id: build.id, heartbeat_timeout_seconds: 2 }))).toBe(
-      "builder claimed WEB-4 Payment form · build · Heartbeat every 2 s",
+    expect(words(entry(1, "task.moved", cart.id, { actor_id: ada.id, payload: { from: step.backlog, to: step.build } }))).toBe(
+      "ada moved WEB-3 Build the cart to Build · from Backlog",
     );
-    expect(text(entry(4, "task.status_set", { from: "st-todo", to: "st-review" }))).toBe("builder set the Status of WEB-4 Payment form · Todo → In review");
-    expect(text(entry(5, "feature.ranked", { from: 3, to: 1 }, { subject_id: "f-11", actor_id: ada.id }))).toBe("ada ranked WEB-11 Login page · Rank #3 → #1");
-    expect(text(entry(6, "feature.filed", { owner_id: builder.id, key: "WEB-11", title: "Login page" }, { subject_id: "f-11", actor_id: ada.id }))).toBe(
-      "ada filed the Feature WEB-11 Login page · owner builder",
+    expect(words(entry(1, "task.completed", cart.id, { actor_id: builder.id, payload: { from: step.review, outcome: "pass" } }))).toBe(
+      "builder completed WEB-3 Build the cart along pass · from Review",
     );
-    expect(text(entry(7, "task.filed", { aimed_at_id: ada.id, blocks: "k-4" }, { subject_id: "k-8" }))).toBe(
-      "builder filed WEB-8 Stripe keys? · aimed at ada · blocks WEB-4",
+    expect(words(entry(1, "task.split", checkout.id, { actor_id: builder.id, payload: { holder_id: builder.id } }))).toBe(
+      "builder split WEB-1 Checkout into Subtasks · its Claim ended",
     );
-    expect(text(entry(8, "task.skill_proposed", { skill_id: build.id, based_on_version: 1 }))).toBe("builder proposed build v2 on WEB-4 Payment form");
-    expect(text(entry(9, "login_link.issued", { member_id: ada.id }, { actor_id: ada.id, subject_id: "l-1" }))).toBe("ada issued a login link for ada");
-    expect(text(entry(10, "team.member_added", { member_id: builder.id }, { actor_id: ada.id, subject_id: web.id }))).toBe("ada added builder to Web");
-    expect(text(entry(11, "task.observed", { outcome: "didnt_work" }))).toBe("builder added an Observation to WEB-4 Payment form Didn't work");
+    expect(words(entry(1, "task.became_parent", checkout.id, { actor_id: ada.id, payload: { from: step.build } }))).toBe(
+      "ada made WEB-1 Checkout a Parent · off Build",
+    );
+    expect(words(entry(1, "task.labels_set", cart.id, { actor_id: ada.id, payload: { added: [bug.id], removed: [] } }))).toBe(
+      "ada set the Labels of WEB-3 Build the cart · +bug",
+    );
+    expect(words(entry(1, "workflow.changed", web.id, { actor_id: ada.id, payload: { steps: [1, 2, 3], tasks_moved: 2 } }))).toBe(
+      "ada changed the Workflow · 3 Steps · 2 Tasks moved",
+    );
+    expect(words(entry(1, "label.created", bug.id, { actor_id: ada.id, payload: { name: "bug", color: "#d1453b" } }))).toBe(
+      "ada created the Label bug · for every Project",
+    );
+    expect(words(entry(1, "project.changed", web.id, { actor_id: ada.id, payload: { auto_complete: true } }))).toBe("ada changed the Project Web · Auto-complete");
+    expect(words(entry(1, "project.member_added", web.id, { actor_id: ada.id, payload: { member_id: bob.id } }))).toBe("ada added bob to Web");
   });
 
-  it("marks lapses, take-backs and hand-overs instead of saying them, and names Darkory when no Member acted", () => {
-    const lapse = entry(12, "task.lapsed", { claim_id: "c-5", holder_id: builder.id }, { actor_id: undefined });
-    const s = say(lapse, lookup)!;
-    expect(s.mark).toBe("lapsed");
-    expect(s.actorId).toBeUndefined();
-    expect(sentenceText(s)).toBe("Darkory Lapsed WEB-4 Payment form · held by builder · no Heartbeat in 2 s");
-    expect(text(entry(13, "task.taken_back", { holder_id: builder.id }, { actor_id: ada.id }))).toBe("ada Taken back WEB-4 Payment form · held by builder");
-    expect(text(entry(14, "task.handed_over", { from_skill_id: build.id, skill_id: review.id }))).toBe("builder Handed over WEB-4 Payment form · build → review");
-  });
-
-  it("skips a kind it does not know", () => {
-    expect(say(entry(15, "task.renamed" as Activity["kind"]), lookup)).toBeNull();
-  });
-
-  it("groups entries by day", () => {
-    const now = new Date(at(22, 19)).getTime();
-    const entries = [
-      entry(133, "task.claimed", {}, { at: at(22, 19, 2) }),
-      entry(132, "task.filed", {}, { at: at(22, 19, 2) }),
-      entry(131, "task.completed", {}, { at: at(8, 18, 29) }),
-      entry(30, "task.claimed", {}, { at: at(9, 5, 0, -1) }),
-    ];
-    const groups = groupByDay(entries, now);
-    expect(groups.map((g) => [g.label, g.entries.map((e) => e.seq)])).toEqual([
-      ["Today", [133, 132, 131]],
-      ["Yesterday", [30]],
-    ]);
-    expect(dayLabel(new Date(at(9, 0, 0, -3)), now)).not.toMatch(/Today|Yesterday/);
-  });
-
-  it("keeps a live entry on a filtered page by /v1's rule", () => {
-    const where = { taskFeature: (id: string) => (id === "k-4" ? "f-1" : undefined), featureTeam: (id: string) => (id === "f-1" ? web.id : ops.id) };
-    const lapse = entry(16, "task.lapsed", { holder_id: builder.id }, { actor_id: undefined });
-    expect(matchesFilter(lapse, { member: builder.id }, where)).toBe(true);
-    expect(matchesFilter(entry(17, "task.claimed", {}, { actor_id: ada.id }), { member: builder.id }, where)).toBe(false);
-    expect(matchesFilter(lapse, { kind: "task.lapsed" }, where)).toBe(true);
-    expect(matchesFilter(lapse, { kind: "task.claimed" }, where)).toBe(false);
-    expect(matchesFilter(lapse, { team: web.id }, where)).toBe(true);
-    expect(matchesFilter(lapse, { team: ops.id }, where)).toBe(false);
-    // A Task filed after the page loaded is placed by the Feature its filing names.
-    expect(matchesFilter(entry(18, "task.filed", { feature_id: "f-2" }, { subject_id: "k-99" }), { team: ops.id }, where)).toBe(true);
+  it("says Darkory filed its own Subtasks, at their Step, and names a deleted Step plainly", () => {
+    expect(words(entry(1, "task.filed", cart.id, { payload: { step_id: "st-gone", parent_id: checkout.id } }))).toBe(
+      "Darkory filed WEB-3 Build the cart at a Step · under WEB-1",
+    );
+    expect(words(entry(1, "task.lapsed", cart.id, { payload: { holder_id: builder.id } }))).toBe("Darkory Lapsed WEB-3 Build the cart · held by builder");
   });
 });
 
-describe("the Activity page", () => {
-  const payment = task(4, "f-1", { title: "Payment form" });
+describe("the Activity page's rules", () => {
+  const where = { taskProject: (id: string) => (id === "k-ops" ? ops.id : web.id) };
+
+  it("keeps a stream entry about the Project: itself, its Workflow, its own Labels, its Tasks", () => {
+    expect(aboutProject(entry(1, "task.claimed", cart.id), web.id, where)).toBe(true);
+    expect(aboutProject(entry(1, "task.claimed", "k-ops"), web.id, where)).toBe(false);
+    expect(aboutProject(entry(1, "workflow.changed", web.id), web.id, where)).toBe(true);
+    expect(aboutProject(entry(1, "label.created", "l-x", { payload: { project_id: web.id } }), web.id, where)).toBe(true);
+    expect(aboutProject(entry(1, "label.created", "l-x", { payload: {} }), web.id, where)).toBe(false);
+    expect(aboutProject(entry(1, "member.created", ada.id), web.id, where)).toBe(false);
+  });
+
+  it("filters by Member as /v1 does, by Kind and by Task", () => {
+    const lapse = entry(1, "task.lapsed", cart.id, { payload: { holder_id: builder.id } });
+    expect(matchesFilter(lapse, { member: builder.id })).toBe(true);
+    expect(matchesFilter(lapse, { member: ada.id })).toBe(false);
+    expect(matchesFilter(lapse, { kind: "task.lapsed", task: cart.id })).toBe(true);
+    expect(matchesFilter(lapse, { task: checkout.id })).toBe(false);
+  });
+
+  it("groups by day, newest first", () => {
+    const now = Date.parse("2026-10-08T12:00:00");
+    const at = (s: string) => new Date(s).toISOString();
+    const groups = groupByDay([entry(3, "task.claimed", "x", { at: at("2026-10-08T09:00:00") }), entry(2, "task.claimed", "x", { at: at("2026-10-07T09:00:00") })], now);
+    expect(groups.map((g) => g.label)).toEqual(["Today", "Yesterday"]);
+  });
+});
+
+const rows = () => within(screen.getByRole("list", { name: "Activity" })).getAllByRole("listitem").filter((li) => li.hasAttribute("data-seq"));
+
+describe("a Project's Activity", () => {
   const history = [
-    entry(1, "feature.filed", { key: "WEB-1", title: "Checkout", owner_id: ada.id }, { actor_id: ada.id, subject_id: "f-1", at: at(9, 0) }),
-    entry(2, "task.claimed", { claim_id: "c-5", skill_id: build.id, heartbeat_timeout_seconds: 2 }, { at: at(9, 1, 10) }),
-    entry(3, "task.lapsed", { claim_id: "c-5", holder_id: builder.id }, { actor_id: undefined, at: at(9, 1, 12) }),
+    entry(5, "task.advanced", cart.id, { actor_id: builder.id, payload: { from: step.build, to: step.review, outcome: "pass", claim_id: "c" } }),
+    entry(4, "task.claimed", cart.id, { actor_id: builder.id, payload: { claim_id: "c", skill_id: engineer.id } }),
+    entry(3, "workflow.changed", web.id, { actor_id: ada.id, payload: { steps: [] } }),
   ];
 
-  function activityApi() {
-    return mockApi({
-      ...signedIn(),
-      "GET /v1/statuses": statuses,
-      "GET /v1/tasks": { items: [payment] },
-      "GET /v1/features": { items: [feature(1, 1)] },
-      "GET /v1/activity": ({ query }) => {
-        const kind = query.get("kind");
-        const member = query.get("member");
-        const items = history.filter((e) => (!kind || e.kind === kind) && (!member || e.actor_id === builder.id || e.payload.holder_id === builder.id));
-        return { items, last_seq: 3, first_seq: items[0]?.seq };
+  it("reads the Project's entries, links each to its Task, Workflow and Steps, and adds the stream's", async () => {
+    const { calls } = recordApi({ tasks: [cart, checkout], activity: history });
+    renderApp("/projects/WEB/activity");
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(calls.find((c) => c.path === "/v1/activity" && c.query.get("before"))?.query.get("project")).toBe("WEB");
+    const advanced = rows()[0];
+    expect(advanced).toHaveTextContent(/builder advanced WEB-3 Build the cart along pass to Review/);
+    expect(within(advanced).getByRole("link", { name: /WEB-3/ })).toHaveAttribute("href", "/projects/WEB/activity?task=WEB-3");
+    expect(within(advanced).getByRole("link", { name: "Review" })).toHaveAttribute("href", `/projects/WEB/tasks?filter.tasks=${encodeURIComponent(`step:is:${step.review}`)}`);
+    expect(within(rows()[2]).getByRole("link", { name: "the Workflow" })).toHaveAttribute("href", "/projects/WEB/workflow");
+
+    act(() => FakeEventSource.latest().emit("activity", entry(6, "task.moved", cart.id, { actor_id: ada.id, payload: { from: step.review, to: step.build }, at: minutes(0) }), 6));
+    act(() => FakeEventSource.latest().emit("activity", entry(7, "task.moved", "k-ops", { actor_id: ada.id, payload: { to: "x" }, at: minutes(0) }), 7));
+    await waitFor(() => expect(rows()).toHaveLength(4));
+    expect(rows()[0]).toHaveTextContent("ada moved WEB-3");
+  });
+
+  it("narrows by Kind through /v1, and by Task here", async () => {
+    const { calls } = recordApi({ tasks: [cart, checkout], activity: [...history, entry(2, "task.claimed", checkout.id, { actor_id: bob.id, payload: { claim_id: "d" } })] });
+    renderApp("/projects/WEB/activity?kind=task.claimed");
+    await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(calls.some((c) => c.path === "/v1/activity" && c.query.getAll("kind").includes("task.claimed") && c.query.get("project") === "WEB")).toBe(true);
+    expect(screen.getByRole("toolbar", { name: "Filters" })).toHaveTextContent("Kind is Task claimed");
+
+    await userEvent.click(screen.getByRole("button", { name: /^Task/ }));
+    await userEvent.click(await screen.findByRole("option", { name: /WEB-1/ }));
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]).toHaveTextContent("bob claimed WEB-1");
+    await userEvent.click(screen.getByRole("button", { name: "Clear Task" }));
+    await waitFor(() => expect(rows()).toHaveLength(2));
+  });
+
+  it("loads older pages", async () => {
+    const many = Array.from({ length: 130 }, (_, i) => entry(i + 1, "task.claimed", cart.id, { actor_id: builder.id, payload: { claim_id: `c${i}` }, at: minutes(-i) }));
+    recordApi({
+      tasks: [cart],
+      extra: {
+        "GET /v1/activity": ({ query }) => {
+          const before = Number(query.get("before"));
+          const limit = Number(query.get("limit"));
+          const items = many.filter((e) => e.seq < before).slice(-limit);
+          return { items, last_seq: items.at(-1)?.seq ?? 0, first_seq: items[0]?.seq };
+        },
       },
     });
-  }
-
-  it("lists the trail newest first, with Darkory for the lapse, and prepends what the stream brings", async () => {
-    const api = activityApi();
-    renderApp("/activity");
-    const list = await screen.findByRole("list", { name: "Activity" });
-    const rows = () => within(list).getAllByRole("listitem").filter((li) => li.dataset.seq);
-    await waitFor(() => expect(rows().map((r) => r.dataset.seq)).toEqual(["3", "2", "1"]));
-    expect(within(rows()[0]).getByRole("img", { name: "Darkory" })).toBeInTheDocument();
-    expect(rows()[0]).toHaveTextContent("Darkory Lapsed WEB-4 Payment form · held by builder · no Heartbeat in 2 s");
-    expect(within(rows()[0]).getByRole("link", { name: /WEB-4/ })).toHaveAttribute("href", "/activity?task=WEB-4");
-    expect(screen.getByText("3 entries loaded")).toBeInTheDocument();
-    // Nothing older: no Load older.
+    renderApp("/projects/WEB/activity");
+    await waitFor(() => expect(rows()).toHaveLength(100));
+    await userEvent.click(screen.getByRole("button", { name: "Load older" }));
+    await waitFor(() => expect(rows()).toHaveLength(130));
     expect(screen.queryByRole("button", { name: "Load older" })).not.toBeInTheDocument();
-    expect(api.calls.find((c) => c.path === "/v1/activity")?.query.get("limit")).toBe("100");
-
-    act(() => {
-      FakeEventSource.latest().open();
-      FakeEventSource.latest().emit("activity", entry(4, "task.completed", { claim_id: "c-6" }, { at: at(9, 2) }), 4);
-    });
-    await waitFor(() => expect(rows()[0].dataset.seq).toBe("4"));
-    expect(screen.getAllByRole("status").map((s) => s.textContent)).toContain("Live");
-  });
-
-  it("narrows to a Member through /v1, and keeps only the stream's entries that match", async () => {
-    const api = activityApi();
-    renderApp("/activity?member=builder");
-    await screen.findByText("Member is");
-    await waitFor(() => expect(api.calls.some((c) => c.path === "/v1/activity" && c.query.get("member") === "builder")).toBe(true));
-    act(() => {
-      FakeEventSource.latest().emit("activity", entry(5, "task.claimed", {}, { actor_id: ada.id, at: at(9, 3) }), 5);
-      FakeEventSource.latest().emit("activity", entry(6, "task.claimed", {}, { at: at(9, 3) }), 6);
-    });
-    const list = await screen.findByRole("list", { name: "Activity" });
-    await waitFor(() => expect(within(list).getAllByRole("listitem").filter((li) => li.dataset.seq).map((r) => r.dataset.seq)).toEqual(["6", "3", "2"]));
-
-    // × on the chip clears it.
-    await userEvent.click(screen.getByRole("button", { name: "Clear Member" }));
-    await waitFor(() => expect(screen.queryByText("Member is")).not.toBeInTheDocument());
-  });
-
-  it("says how many entries are loaded the same way when there are older ones, and offers them", async () => {
-    const page = Array.from({ length: 100 }, (_, i) => entry(200 - i, "task.claimed", { claim_id: `c-${i}` }, { at: at(9, 0) }));
-    mockApi({
-      ...signedIn(),
-      "GET /v1/statuses": statuses,
-      "GET /v1/tasks": { items: [payment] },
-      "GET /v1/features": { items: [feature(1, 1)] },
-      "GET /v1/activity": { items: page, last_seq: 200, first_seq: 101 },
-    });
-    renderApp("/activity");
-    const footer = await screen.findByText("100 entries loaded");
-    expect(footer.parentElement).toHaveTextContent(/^100 entries loaded·Load older$/);
-    expect(screen.getByRole("button", { name: "Load older" })).toBeInTheDocument();
-  });
-
-  it("leaves sign-ins out until the Kind menu or the footer shows them", async () => {
-    const signIns = [
-      entry(5, "login_link.redeemed", {}, { actor_id: ada.id, subject_type: "member", subject_id: ada.id, at: at(9, 4) }),
-      entry(4, "login_link.issued", { member_id: ada.id }, { actor_id: ada.id, subject_type: "member", subject_id: ada.id, at: at(9, 4) }),
-    ];
-    mockApi({
-      ...signedIn(),
-      "GET /v1/statuses": statuses,
-      "GET /v1/tasks": { items: [payment] },
-      "GET /v1/features": { items: [feature(1, 1)] },
-      "GET /v1/activity": { items: [...history, ...signIns], last_seq: 5, first_seq: 1 },
-    });
-    renderApp("/activity");
-    const list = await screen.findByRole("list", { name: "Activity" });
-    const seqs = () => within(list).getAllByRole("listitem").filter((li) => li.dataset.seq).map((r) => r.dataset.seq);
-    await waitFor(() => expect(seqs()).toEqual(["3", "2", "1"]));
-    // One group for the day, and no #ids.
-    expect(within(list).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toHaveLength(1);
-    expect(list).not.toHaveTextContent("#3");
-    expect(screen.getByText("2 sign-ins hidden")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: "Kind" }));
-    await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Show sign-ins" }));
-    await waitFor(() => expect(seqs()).toEqual(["5", "4", "3", "2", "1"]));
-    expect(screen.queryByText(/sign-ins hidden/)).not.toBeInTheDocument();
-  });
-
-  it("filters by Kind from its menu", async () => {
-    const api = activityApi();
-    renderApp("/activity");
-    await screen.findByRole("list", { name: "Activity" });
-    await userEvent.click(screen.getByRole("button", { name: "Kind" }));
-    await userEvent.click(await screen.findByRole("menuitemradio", { name: "Lapsed" }));
-    await waitFor(() => expect(api.calls.some((c) => c.path === "/v1/activity" && c.query.get("kind") === "task.lapsed")).toBe(true));
-    expect(await screen.findByText("Task lapsed")).toBeInTheDocument();
-    expect(await screen.findByText("1 entry loaded")).toBeInTheDocument();
   });
 });

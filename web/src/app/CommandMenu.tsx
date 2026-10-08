@@ -1,34 +1,29 @@
 import {
   ActivityIcon,
+  BuildingIcon,
   CircleUserIcon,
   InboxIcon,
   KanbanIcon,
-  LayersIcon,
   ListIcon,
   PlusIcon,
-  ShieldIcon,
+  SettingsIcon,
   UserIcon,
+  WorkflowIcon,
   ZapIcon,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { useAllFeatures, useAllTasks, useDirectory } from "@/api/queries";
+import { useAllTasks, useDirectory, useRunnerSessions } from "@/api/queries";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
+import { ProjectMark } from "@/components/ProjectMark";
 import { WorkGlyph } from "@/components/WorkGlyph";
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Kbd } from "@/components/ui/kbd";
 import { useCurrentMe } from "@/me";
 import { taskWorkGlyph } from "@/work";
-import { teamFeaturesPath, teamTasksPath, useCurrentTeam } from "./currentTeam";
+import { projectPath, projectSettingsPath, useCurrentProject, useProjectArea } from "./currentProject";
 import { sendIntent } from "./intents";
 import { orderGroups, rankRecords, type Hit } from "./search";
 
@@ -41,82 +36,91 @@ function group<T>(heading: string, hits: Hit<T>[], entry: (record: T) => Entry):
   return { heading, best: hits[0]?.score ?? Infinity, entries: hits.map((h) => entry(h.record)) };
 }
 
+const organisationPages = ["Members", "Agents", "Skills", "Labels", "Install"] as const;
+
 /**
- * ⌘K (F-B6): Tasks, Features and Members by key, name or words, the places to go to, and the
- * actions. The group holding the best hit comes first, so a key typed whole is the first choice.
+ * ⌘K: Tasks by key or words, the Projects to switch to, Members, the places to go to (the current
+ * Project's, and Settings), and the actions. The group holding the best hit comes first, so a key
+ * typed whole is the first choice.
  */
 export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const me = useCurrentMe();
-  const team = useCurrentTeam();
+  const project = useCurrentProject();
+  const area = useProjectArea();
   const tasks = useAllTasks(open);
-  const features = useAllFeatures(open);
-  const { teams, teamList, memberList, members: byId } = useDirectory();
+  const sessions = useRunnerSessions().data?.items;
+  const { projects: projectsById, projectList, memberList, members: byId } = useDirectory();
   const now = useNow();
   const admin = me.member.admin;
 
-  const featureTitles = useMemo(() => new Map((features.data ?? []).map((f) => [f.id, f.title])), [features.data]);
-  // An agent opens its peek on Agents; a human their Member page, which only admins have.
+  // An admin opens a Member's settings; another Member finds the agents on the Project's Agents.
   const members = useMemo(
-    () => memberList.filter((m) => m.kind === "agent" || admin).map((m) => ({ ...m, key: m.name, title: m.name })),
+    () => memberList.filter((m) => admin || m.kind === "agent").map((m) => ({ ...m, key: m.name, title: m.name })),
     [memberList, admin],
   );
+  const projects = useMemo(() => projectList.map((p) => ({ ...p, title: p.name })), [projectList]);
 
   const go = (to: string) => () => navigate(to);
   const places: Named[] = [
     { id: "inbox", title: "Inbox", icon: <InboxIcon />, keys: ["G", "I"], run: go("/inbox") },
     { id: "my-work", title: "My work", icon: <UserIcon />, keys: ["G", "M"], run: go("/my-work") },
-    { id: "agents", title: "Agents", icon: <ZapIcon />, keys: ["G", "A"], run: go("/agents") },
-    { id: "activity", title: "Activity", icon: <ActivityIcon />, run: go("/activity") },
-    ...teamList.flatMap((t) => [
-      { id: `tasks-${t.id}`, title: `${t.name} › Tasks`, icon: <ListIcon />, run: go(teamTasksPath(t)) },
-      ...(t.id === team?.id
-        ? [{ id: `board-${t.id}`, title: `${t.name} › Tasks board`, icon: <KanbanIcon />, keys: ["G", "B"], run: go(teamTasksPath(t, "board")) }]
-        : []),
-      { id: `features-${t.id}`, title: `${t.name} › Features`, icon: <LayersIcon />, run: go(teamFeaturesPath(t)) },
-    ]),
+    ...(project
+      ? [
+          { id: "tasks", title: `${project.name} › Tasks`, icon: <ListIcon />, keys: ["G", "T"], run: go(projectPath(project, "tasks")) },
+          { id: "board", title: `${project.name} › Tasks board`, icon: <KanbanIcon />, keys: ["G", "B"], run: go(projectPath(project, "tasks", "board")) },
+          { id: "workflow", title: `${project.name} › Workflow`, icon: <WorkflowIcon />, keys: ["G", "W"], run: go(projectPath(project, "workflow")) },
+          { id: "agents", title: `${project.name} › Agents`, icon: <ZapIcon />, keys: ["G", "A"], run: go(projectPath(project, "agents")) },
+          { id: "activity", title: `${project.name} › Activity`, icon: <ActivityIcon />, run: go(projectPath(project, "activity")) },
+        ]
+      : []),
+    { id: "account", title: "Settings › Account", icon: <CircleUserIcon />, run: go("/settings/account") },
     ...(admin
-      ? (["Members", "Teams", "Skills", "Workflow"] as const).map((tab) => ({
-          id: `admin-${tab}`,
-          title: `Admin › ${tab}`,
-          icon: <ShieldIcon />,
-          run: go(`/admin/${tab.toLowerCase()}`),
+      ? organisationPages.map((page) => ({
+          id: `organisation-${page}`,
+          title: `Settings › ${page}`,
+          icon: <BuildingIcon />,
+          run: go(`/settings/organisation/${page.toLowerCase()}`),
         }))
       : []),
-    { id: "account", title: "Account", icon: <CircleUserIcon />, run: go("/account") },
+    ...(project ? [{ id: "project-settings", title: `Settings › ${project.name}`, icon: <SettingsIcon />, run: go(projectSettingsPath(project)) }] : []),
   ].map((p) => ({ ...p, key: "" }));
   const actions: Named[] = [
-    { id: "file-task", key: "", title: "File a Task", icon: <PlusIcon />, keys: ["C"], run: () => sendIntent({ kind: "file-task", team: team?.key }) },
-    { id: "file-feature", key: "", title: "File a Feature", icon: <LayersIcon />, run: () => sendIntent({ kind: "file-feature", team: team?.key }) },
+    { id: "file-task", key: "", title: "File a Task", icon: <PlusIcon />, keys: ["C"], run: () => sendIntent({ kind: "file-task", project: project?.key }) },
+    ...(admin ? [{ id: "new-project", key: "", title: "New Project", icon: <PlusIcon />, run: () => sendIntent({ kind: "new-project" }) }] : []),
   ];
 
   const named = (n: Named): Entry => ({ id: n.id, content: <>{n.icon}{n.title}</>, keys: n.keys, run: n.run });
+  const projectEntry = (p: (typeof projects)[number]): Entry => ({
+    id: `project ${p.key}`,
+    content: (
+      <>
+        <ProjectMark project={p} />
+        <span className="truncate">{p.name}</span>
+        <span className="font-mono text-2xs text-muted-foreground">{p.key}</span>
+        {p.id === project?.id && <span className="ml-auto text-xs text-muted-foreground">Current</span>}
+      </>
+    ),
+    // To the same place in the other Project, or its Tasks.
+    run: go(projectPath(p, area ?? "tasks")),
+  });
   const words = query.trim();
-  // With nothing typed, the actions and the places; else what matches, best group first.
+  // With nothing typed, the actions, the Projects and the places; else what matches, best group first.
   const found: Group[] = words
     ? orderGroups([
         group("Tasks", rankRecords(query, tasks.data ?? []), (t) => ({
           id: `task ${t.key}`,
           content: (
             <>
-              <WorkGlyph glyph={taskWorkGlyph(t, now, (id) => byId.get(id)?.kind)} /> <Key>{t.key}</Key> <span className="truncate">{t.title}</span>{" "}
-              <span className="ml-auto truncate text-xs text-muted-foreground">{featureTitles.get(t.feature_id)}</span>
+              <WorkGlyph glyph={taskWorkGlyph(t, now, (id) => byId.get(id)?.kind, sessions?.find((s) => s.task_id === t.id)?.state)} />{" "}
+              <Key>{t.key}</Key> <span className="truncate">{t.title}</span>{" "}
+              <span className="ml-auto truncate text-xs text-muted-foreground">{projectsById.get(t.project_id)?.name}</span>
             </>
           ),
           run: go(`/tasks/${t.key}`),
         })),
-        group("Features", rankRecords(query, features.data ?? []), (f) => ({
-          id: `feature ${f.key}`,
-          content: (
-            <>
-              <LayersIcon className="text-muted-foreground" />
-              <Key>{f.key}</Key> <span className="truncate">{f.title}</span>{" "}
-              <span className="ml-auto truncate text-xs text-muted-foreground">{teams.get(f.team_id)?.name}</span>
-            </>
-          ),
-          run: go(`/features/${f.key}`),
-        })),
+        group("Projects", rankRecords(query, projects), projectEntry),
         group("Members", rankRecords(query, members, 5), (m) => ({
           id: `member ${m.id}`,
           content: (
@@ -125,16 +129,19 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
               <span className="ml-auto text-xs text-muted-foreground">{m.kind === "agent" ? "Agent" : "Human"}</span>
             </>
           ),
-          run: go(m.kind === "agent" ? `/agents?agent=${encodeURIComponent(m.name)}` : `/admin/members/${m.id}`),
+          run: admin
+            ? go(`/settings/organisation/${m.kind === "agent" ? "agents" : "members"}/${m.id}`)
+            : go(project ? `${projectPath(project, "agents")}?agent=${encodeURIComponent(m.name)}` : "/inbox"),
         })),
         group("Go to", rankRecords(query, places, places.length), named),
         group("Actions", rankRecords(query, actions), named),
       ]).filter((g) => g.entries.length > 0)
     : [
         { heading: "Actions", best: 0, entries: actions.map(named) },
+        { heading: "Projects", best: 0, entries: projects.map(projectEntry) },
         { heading: "Go to", best: 0, entries: places.map(named) },
-      ];
-  // Words that match nothing can still be filed: as a Task's title, or a Feature's.
+      ].filter((g) => g.entries.length > 0);
+  // Words that match nothing can still be filed, as a Task's title.
   const groups: Group[] =
     words && found.length === 0
       ? [
@@ -145,12 +152,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
               {
                 id: "file-task-titled",
                 content: <><PlusIcon />File a Task “{words}”</>,
-                run: () => sendIntent({ kind: "file-task", team: team?.key, title: words }),
-              },
-              {
-                id: "file-feature-titled",
-                content: <><LayersIcon />File a Feature “{words}”</>,
-                run: () => sendIntent({ kind: "file-feature", team: team?.key, title: words }),
+                run: () => sendIntent({ kind: "file-task", project: project?.key, title: words }),
               },
             ],
           },
@@ -171,12 +173,12 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
         if (!o) setQuery("");
       }}
       title="Search"
-      description="Find a Task, a Feature or a Member by key, name or words, go to a page, or run an action."
+      description="Find a Task, a Project or a Member by key, name or words, go to a page, or run an action."
       showCloseButton={false}
       className="top-[120px] translate-y-0 sm:max-w-[640px]"
       shouldFilter={false}
     >
-      <CommandInput placeholder="Search Tasks, Features, Members and pages" value={query} onValueChange={setQuery} />
+      <CommandInput placeholder="Search Tasks, Projects, Members and pages" value={query} onValueChange={setQuery} />
       <CommandList>
         <CommandEmpty>No match</CommandEmpty>
         {groups.map((g) => (

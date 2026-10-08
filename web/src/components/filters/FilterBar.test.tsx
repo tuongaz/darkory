@@ -9,7 +9,7 @@ import type { FilterPill } from "./filterState";
 import type { FilterField, FilterOption } from "./operators";
 
 const polarity = ["is", "not", "in", "nin"];
-const status: FilterField = { key: "status", type: "enum", ops: polarity, label: "Status" };
+const stepField: FilterField = { key: "step", type: "enum", ops: polarity, label: "Step" };
 const holder: FilterField = { key: "holder", type: "ref", ops: polarity, label: "Held by" };
 const aimed: FilterField = { key: "aimed_at", type: "ref", ops: ["is", "not", "in"], label: "Aimed at" };
 const blocked: FilterField = { key: "blocked", type: "boolean", ops: ["is"], label: "Blocked" };
@@ -17,9 +17,9 @@ const search: FilterField = { key: "q", type: "text", ops: ["contains"], label: 
 const filed: FilterField = { key: "filed_at", type: "date", ops: ["btw", "after", "before", "gte", "lte", "last"], label: "Filed" };
 
 const options: Record<string, FilterOption[]> = {
-  status: [
-    { value: "st-todo", label: "Todo", group: "todo" },
-    { value: "st-progress", label: "In progress", group: "in_progress", groupLabel: "Being worked" },
+  step: [
+    { value: "st-build", label: "Build", group: "hold" },
+    { value: "st-review", label: "Review", group: "work", groupLabel: "Work steps" },
     { value: "st-done", label: "Done", group: "done" },
   ],
   holder: [
@@ -42,7 +42,7 @@ function setup(props: Partial<FilterBarProps & { stacked: boolean }> = {}) {
   const onRemoveFilter = vi.fn();
   const onClearAll = vi.fn();
   const bar: FilterBarProps = {
-    fields: [status, holder, aimed, blocked, search],
+    fields: [stepField, holder, aimed, blocked, search],
     pills: [],
     optionsFor: (field) => options[field],
     onSetFilter,
@@ -74,11 +74,11 @@ describe("the Filter", () => {
   });
 
   it("shows a set axis as a chip, counts it on the button, and folds it out of the menu", async () => {
-    setup({ pills: [set("status", "is", "st-todo")] });
-    expect(valueSegment("Status")).toHaveAccessibleName("Status: Todo");
+    setup({ pills: [set("step", "is", "st-build")] });
+    expect(valueSegment("Step")).toHaveAccessibleName("Step: Build");
     expect(screen.getByRole("button", { name: "Filter, 1 set" })).toHaveTextContent("1");
     await openMenu();
-    expect(screen.queryByRole("option", { name: "Status" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Step" })).not.toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Held by" })).toBeInTheDocument();
   });
 
@@ -91,39 +91,39 @@ describe("the Filter", () => {
   it("commits is from the menu's axis page, and stays open for a second value", async () => {
     const { onSetFilter } = setup();
     await openMenu();
-    await userEvent.click(screen.getByRole("option", { name: "Status" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Todo" }));
-    expect(onSetFilter).toHaveBeenCalledWith(set("status", "is", "st-todo"));
+    await userEvent.click(screen.getByRole("option", { name: "Step" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Build" }));
+    expect(onSetFilter).toHaveBeenCalledWith(set("step", "is", "st-build"));
     expect(screen.getByRole("option", { name: "Done" })).toBeInTheDocument();
   });
 
   it("promotes a second value to is one of", async () => {
-    const { onSetFilter } = setup({ pills: [set("status", "is", "st-todo")] });
-    await userEvent.click(valueSegment("Status"));
+    const { onSetFilter } = setup({ pills: [set("step", "is", "st-build")] });
+    await userEvent.click(valueSegment("Step"));
     await userEvent.click(await screen.findByRole("option", { name: "Done" }));
-    expect(onSetFilter).toHaveBeenCalledWith(set("status", "in", "st-todo", "st-done"));
+    expect(onSetFilter).toHaveBeenCalledWith(set("step", "in", "st-build", "st-done"));
   });
 
   it("goes back to is when one value is left", async () => {
-    const { onSetFilter } = setup({ pills: [set("status", "in", "st-todo", "st-done")] });
-    await userEvent.click(valueSegment("Status"));
+    const { onSetFilter } = setup({ pills: [set("step", "in", "st-build", "st-done")] });
+    await userEvent.click(valueSegment("Step"));
     await userEvent.click(await screen.findByRole("option", { name: "Done" }));
-    expect(onSetFilter).toHaveBeenCalledWith(set("status", "is", "st-todo"));
+    expect(onSetFilter).toHaveBeenCalledWith(set("step", "is", "st-build"));
   });
 
   it("clears the axis when its last value is unticked, rather than writing an empty one", async () => {
-    const { onSetFilter, onRemoveFilter } = setup({ pills: [set("status", "is", "st-todo")] });
-    await userEvent.click(valueSegment("Status"));
-    await userEvent.click(await screen.findByRole("option", { name: "Todo" }));
-    expect(onRemoveFilter).toHaveBeenCalledWith("status");
+    const { onSetFilter, onRemoveFilter } = setup({ pills: [set("step", "is", "st-build")] });
+    await userEvent.click(valueSegment("Step"));
+    await userEvent.click(await screen.findByRole("option", { name: "Build" }));
+    expect(onRemoveFilter).toHaveBeenCalledWith("step");
     expect(onSetFilter).not.toHaveBeenCalled();
   });
 
   it("clears the axis from All", async () => {
-    const { onRemoveFilter } = setup({ pills: [set("status", "is", "st-todo")] });
-    await userEvent.click(valueSegment("Status"));
+    const { onRemoveFilter } = setup({ pills: [set("step", "is", "st-build")] });
+    await userEvent.click(valueSegment("Step"));
     await userEvent.click(await screen.findByRole("option", { name: "All" }));
-    expect(onRemoveFilter).toHaveBeenCalledWith("status");
+    expect(onRemoveFilter).toHaveBeenCalledWith("step");
   });
 
   it("commits and closes an axis that takes one value", async () => {
@@ -136,8 +136,8 @@ describe("the Filter", () => {
   });
 
   it("reads several values as the first and +N", () => {
-    setup({ pills: [set("status", "in", "st-todo", "st-progress", "st-done")] });
-    expect(valueSegment("Status")).toHaveAccessibleName("Status: Todo +2");
+    setup({ pills: [set("step", "in", "st-build", "st-review", "st-done")] });
+    expect(valueSegment("Step")).toHaveAccessibleName("Step: Build +2");
   });
 
   it("keeps a value no option names as a row, so it can be unticked", async () => {
@@ -151,16 +151,16 @@ describe("the Filter", () => {
   it("sets the values of each group apart, headed where the group has a name", async () => {
     setup();
     await openMenu();
-    await userEvent.click(screen.getByRole("option", { name: "Status" }));
-    expect(await screen.findByText("Being worked", { selector: "[cmdk-group-heading]" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: "Step" }));
+    expect(await screen.findByText("Work steps", { selector: "[cmdk-group-heading]" })).toBeInTheDocument();
     expect(document.querySelectorAll("[cmdk-group-heading]")).toHaveLength(1);
     expect(document.querySelectorAll("[cmdk-separator]")).toHaveLength(2);
   });
 
   it("clears one axis from its chip's ×, and every axis from Reset", async () => {
-    const { onRemoveFilter, onClearAll } = setup({ pills: [set("status", "is", "st-todo"), set("holder", "is", "none")] });
-    await userEvent.click(screen.getByRole("button", { name: "Clear Status" }));
-    expect(onRemoveFilter).toHaveBeenCalledWith("status");
+    const { onRemoveFilter, onClearAll } = setup({ pills: [set("step", "is", "st-build"), set("holder", "is", "none")] });
+    await userEvent.click(screen.getByRole("button", { name: "Clear Step" }));
+    expect(onRemoveFilter).toHaveBeenCalledWith("step");
     await userEvent.click(within(screen.getByRole("toolbar", { name: "Filters" })).getByRole("button", { name: "Reset" }));
     expect(onClearAll).toHaveBeenCalled();
   });
@@ -212,15 +212,15 @@ describe("Search", () => {
 
 describe("choosing the operator", () => {
   it("offers the four operators the axis takes", async () => {
-    setup({ pills: [set("status", "is", "st-todo")] });
-    await userEvent.click(operatorSegment("Status"));
+    setup({ pills: [set("step", "is", "st-build")] });
+    await userEvent.click(operatorSegment("Step"));
     expect(screen.getAllByRole("option").map((o) => o.querySelector("span")?.textContent)).toEqual(["is", "is not", "is one of", "is none of"]);
   });
 
   it("disables the singular operators while several values are set, and says why", async () => {
-    setup({ pills: [set("status", "in", "st-todo", "st-done")] });
-    expect(operatorSegment("Status")).toHaveAccessibleName("Status — is one of");
-    await userEvent.click(operatorSegment("Status"));
+    setup({ pills: [set("step", "in", "st-build", "st-done")] });
+    expect(operatorSegment("Step")).toHaveAccessibleName("Step — is one of");
+    await userEvent.click(operatorSegment("Step"));
     for (const name of ["is", "is not"]) {
       const row = screen.getByRole("option", { name });
       expect(row).toHaveAttribute("aria-disabled", "true");
@@ -229,10 +229,10 @@ describe("choosing the operator", () => {
   });
 
   it("flips the sign and keeps the values", async () => {
-    const { onSetFilter } = setup({ pills: [set("status", "in", "st-todo", "st-done")] });
-    await userEvent.click(operatorSegment("Status"));
+    const { onSetFilter } = setup({ pills: [set("step", "in", "st-build", "st-done")] });
+    await userEvent.click(operatorSegment("Step"));
     await userEvent.click(screen.getByRole("option", { name: "is none of" }));
-    expect(onSetFilter).toHaveBeenCalledWith(set("status", "nin", "st-todo", "st-done"));
+    expect(onSetFilter).toHaveBeenCalledWith(set("step", "nin", "st-build", "st-done"));
   });
 
   it("writes an unset axis as is not in one gesture, with one write", async () => {
@@ -261,10 +261,10 @@ describe("choosing the operator", () => {
 
 describe("on a phone", () => {
   it("gives each chip a line of its own, each with its ×", async () => {
-    const { onRemoveFilter } = setup({ stacked: true, pills: [set("status", "is", "st-todo"), set("holder", "is", "none")] });
+    const { onRemoveFilter } = setup({ stacked: true, pills: [set("step", "is", "st-build"), set("holder", "is", "none")] });
     const row = screen.getByRole("toolbar", { name: "Filters" });
     expect(row).toHaveClass("flex-col");
-    expect(valueSegment("Status").closest("div")).toHaveClass("w-full");
+    expect(valueSegment("Step").closest("div")).toHaveClass("w-full");
     await userEvent.click(screen.getByRole("button", { name: "Clear Held by" }));
     expect(onRemoveFilter).toHaveBeenCalledWith("holder");
   });

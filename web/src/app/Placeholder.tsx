@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Content, TopBar, type Crumb } from "./TopBar";
 
-/** A screen not built yet: its name and the phase that builds it. Each screens/ folder replaces its own. */
+/** A screen not built yet: its name and the agent that builds it. Each screens/ folder replaces its own. */
 export function PlaceholderPage({
   title,
   owner,

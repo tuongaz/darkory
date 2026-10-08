@@ -1,36 +1,40 @@
-import type { Activity, ActivityKind, Member, Skill, Team } from "@/api/client";
+import type { Activity, ActivityKind, Label, Member, Project, Skill } from "@/api/client";
 import { untilText } from "@/lib/time";
 import { count } from "./derive";
 
-// What an Activity entry says, in CONTEXT.md's words: the actor, the verb (or, for a lapse, a
-// take-back or a hand-over, a mark), the record it is about, and the one detail worth a glance.
-// Ported from the old ActivityView; kept free of React so the tests read it as text.
+// What an Activity entry says, in CONTEXT.md's words: the actor, the verb (or, for a lapse or a
+// take-back, a mark), the record it is about, the Steps it went between, and the one detail worth
+// a glance. Kept free of React so the tests read it as text.
 
 /** Where an entry's ids become names. */
 export type Lookup = {
   members: Map<string, Pick<Member, "name" | "kind">>;
-  teams: Map<string, Pick<Team, "key" | "name">>;
   skills: Map<string, Pick<Skill, "name">>;
   tasks: Map<string, { key: string; title: string }>;
-  features: Map<string, { key: string; title: string }>;
-  statuses: Map<string, { name: string }>;
+  /** A Step's name by id; a Step the Workflow no longer has has none. */
+  stepName: (id: string) => string | undefined;
+  projects: Map<string, Pick<Project, "key" | "name">>;
+  labels?: Map<string, Pick<Label, "name">>;
   /** The `task.claimed` entries read so far, by claim id: how long a lapsed Claim waited. */
   claims: Map<string, Activity>;
 };
 
-export type Mark = "lapsed" | "taken_back" | "handed_over";
+export type Mark = "lapsed" | "taken_back";
 
-export type Subject = { type: "task" | "feature"; key: string; title: string } | { type: "text"; text: string };
+export type Subject = { type: "task"; key: string; title: string } | { type: "workflow"; projectId: string } | { type: "text"; text: string };
+
+/** A piece of the words after the subject: plain words, a Step (a link to the Tasks at it), or an outcome. */
+export type Part = string | { step: string; name: string } | { outcome: string };
 
 export type Sentence = {
-  /** The Member who acted; absent when Darkory did, as on a lapse. */
+  /** The Member who acted; absent when Darkory did, as on a lapse or its own filings. */
   actorId?: string;
   actorName: string;
   verb?: string;
   mark?: Mark;
   subject?: Subject;
-  /** Words after the subject that belong to the sentence ("for builder-2"). */
-  after?: string;
+  /** Words after the subject that belong to the sentence ("along pass to Review"). */
+  after: Part[];
   /** The muted facts after a "·". */
   details: string[];
   outcome?: "worked" | "didnt_work";
@@ -43,27 +47,33 @@ type KindWords = { group: string; label: string; verb: string };
 const kinds: Record<ActivityKind, KindWords> = {
   "task.filed": { group: "Task", label: "Filed", verb: "filed" },
   "task.claimed": { group: "Task", label: "Claimed", verb: "claimed" },
-  "task.lapsed": { group: "Task", label: "Lapsed", verb: "" },
-  "task.released": { group: "Task", label: "Released", verb: "released" },
-  "task.handed_over": { group: "Task", label: "Handed over", verb: "" },
+  "task.advanced": { group: "Task", label: "Advanced", verb: "advanced" },
+  "task.moved": { group: "Task", label: "Moved", verb: "moved" },
   "task.completed": { group: "Task", label: "Completed", verb: "completed" },
   "task.dropped": { group: "Task", label: "Dropped", verb: "dropped" },
+  "task.released": { group: "Task", label: "Released", verb: "released" },
+  "task.lapsed": { group: "Task", label: "Lapsed", verb: "" },
   "task.taken_back": { group: "Task", label: "Taken back", verb: "" },
   "task.claim_ended": { group: "Task", label: "Claim ended", verb: "ended a Claim on" },
+  "task.split": { group: "Task", label: "Split", verb: "split" },
+  "task.became_parent": { group: "Task", label: "Became a Parent", verb: "made" },
   "task.note_added": { group: "Task", label: "Note added", verb: "added a Note to" },
   "task.observed": { group: "Task", label: "Observation added", verb: "added an Observation to" },
   "task.blocker_added": { group: "Task", label: "Blocker added", verb: "added a blocker to" },
   "task.blocker_removed": { group: "Task", label: "Blocker removed", verb: "removed a blocker from" },
   "task.evidence_attached": { group: "Task", label: "Evidence attached", verb: "attached Evidence to" },
   "task.skill_proposed": { group: "Task", label: "Proposal", verb: "proposed" },
-  "task.status_set": { group: "Task", label: "Status set", verb: "set the Status of" },
-  "feature.filed": { group: "Feature", label: "Filed", verb: "filed the Feature" },
-  "feature.ranked": { group: "Feature", label: "Ranked", verb: "ranked" },
-  "feature.shipped": { group: "Feature", label: "Shipped", verb: "shipped the Feature" },
-  "feature.dropped": { group: "Feature", label: "Dropped", verb: "dropped the Feature" },
-  "feature.owner_passed": { group: "Feature", label: "Owner passed", verb: "passed the ownership of" },
-  "feature.evidence_attached": { group: "Feature", label: "Evidence attached", verb: "attached Evidence to" },
-  "statuses.changed": { group: "Statuses", label: "Changed", verb: "changed the Statuses" },
+  "task.ranked": { group: "Task", label: "Ranked", verb: "ranked" },
+  "task.owner_passed": { group: "Task", label: "Ownership passed", verb: "passed the ownership of" },
+  "task.labels_set": { group: "Task", label: "Labels set", verb: "set the Labels of" },
+  "workflow.changed": { group: "Workflow", label: "Changed", verb: "changed" },
+  "label.created": { group: "Label", label: "Created", verb: "created the Label" },
+  "label.changed": { group: "Label", label: "Changed", verb: "changed the Label" },
+  "label.deleted": { group: "Label", label: "Deleted", verb: "deleted the Label" },
+  "project.created": { group: "Project", label: "Created", verb: "created the Project" },
+  "project.changed": { group: "Project", label: "Changed", verb: "changed the Project" },
+  "project.member_added": { group: "Project", label: "Member added", verb: "added" },
+  "project.member_removed": { group: "Project", label: "Member removed", verb: "removed" },
   "skill.created": { group: "Skill", label: "Created", verb: "created the Skill" },
   "skill.version_published": { group: "Skill", label: "Version published", verb: "published" },
   "member.created": { group: "Member", label: "Created", verb: "created the Member" },
@@ -75,10 +85,6 @@ const kinds: Record<ActivityKind, KindWords> = {
   "member.deactivated": { group: "Member", label: "Deactivated", verb: "deactivated the Member" },
   "member.reactivated": { group: "Member", label: "Reactivated", verb: "reactivated the Member" },
   "member.agent_changed": { group: "Member", label: "Agent settings changed", verb: "changed the agent settings of" },
-  "team.created": { group: "Team", label: "Created", verb: "created the Team" },
-  "team.changed": { group: "Team", label: "Changed", verb: "changed the Team" },
-  "team.member_added": { group: "Team", label: "Member added", verb: "added" },
-  "team.member_removed": { group: "Team", label: "Member removed", verb: "removed" },
   "workspace.added": { group: "Workspace", label: "Added", verb: "added the Workspace" },
   "workspace.changed": { group: "Workspace", label: "Changed", verb: "changed the Workspace" },
   "workspace.removed": { group: "Workspace", label: "Removed", verb: "removed the Workspace" },
@@ -89,10 +95,15 @@ const kinds: Record<ActivityKind, KindWords> = {
   "login_link.redeemed": { group: "Login link", label: "Redeemed", verb: "signed in with a login link" },
 };
 
-/** The kinds the Kind filter offers, in menu order, with their group and label. */
-export const kindChoices = Object.entries(kinds).map(([kind, w]) => ({ kind: kind as ActivityKind, group: w.group, label: w.label }));
+/** The groups a Project's Activity holds: what `/v1/activity?project=` returns. */
+const projectGroups = new Set(["Task", "Workflow", "Label", "Project"]);
 
-/** A kind as the Kind chip names it: "Task lapsed". */
+/** The kinds a Project's Kind filter offers, in menu order, with their group and label. */
+export const kindChoices = Object.entries(kinds)
+  .filter(([, w]) => projectGroups.has(w.group))
+  .map(([kind, w]) => ({ kind: kind as ActivityKind, group: w.group, label: w.label }));
+
+/** A kind as the Kind chip names it: "Task lapsed", "Workflow changed". */
 export function kindName(kind: string): string {
   const w = isKnown(kind) ? kinds[kind] : undefined;
   return w ? `${w.group} ${w.label.toLowerCase()}` : kind;
@@ -105,7 +116,8 @@ export function isKnown(kind: string): kind is ActivityKind {
 
 const claimEnds: Record<string, string> = {
   released: "released",
-  handed_over: "handed over",
+  advanced: "advanced",
+  split: "split",
   completed: "completed",
   lapsed: "lapsed",
   taken_back: "taken back",
@@ -113,6 +125,13 @@ const claimEnds: Record<string, string> = {
   token_revoked: "token revoked",
   session_closed: "Session closed",
   member_deactivated: "Member deactivated",
+};
+
+const projectFields: Record<string, string> = {
+  name: "name",
+  default_workspace_id: "default Workspace",
+  auto_complete: "Auto-complete",
+  acceptance: "Acceptance",
 };
 
 function text(p: Record<string, unknown>, key: string): string | undefined {
@@ -123,6 +142,11 @@ function text(p: Record<string, unknown>, key: string): string | undefined {
 function number(p: Record<string, unknown>, key: string): number | undefined {
   const v = p[key];
   return typeof v === "number" ? v : undefined;
+}
+
+function list(p: Record<string, unknown>, key: string): string[] {
+  const v = p[key];
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
 /** "2 s", "15 min": a Heartbeat timeout in seconds. */
@@ -136,10 +160,14 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
   const p = e.payload;
   const member = (id: string | undefined) => (id ? (l.members.get(id)?.name ?? "a Member") : "a Member");
   const skill = (id: string | undefined) => (id ? (l.skills.get(id)?.name ?? "a Skill") : undefined);
+  const step = (id: string | undefined): Part => (id ? { step: id, name: l.stepName(id) ?? "a Step" } : "a Step");
+  const stepWord = (id: string | undefined) => (id ? (l.stepName(id) ?? "a Step") : undefined);
+  const task = (id: string | undefined) => (id ? l.tasks.get(id)?.key : undefined);
   const s: Sentence = {
     actorId: e.actor_id,
     actorName: e.actor_id ? member(e.actor_id) : "Darkory",
     verb: kinds[e.kind].verb || undefined,
+    after: [],
     details: [],
   };
 
@@ -150,16 +178,17 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
       s.subject = t ? { type: "task", ...t } : { type: "text", text: "a Task" };
       break;
     }
-    case "feature": {
-      const f = l.features.get(e.subject_id) ?? named(p);
-      s.subject = f ? { type: "feature", ...f } : { type: "text", text: "a Feature" };
-      break;
-    }
     case "member":
       s.subject = { type: "text", text: member(e.subject_id) };
       break;
-    case "team":
-      s.subject = { type: "text", text: l.teams.get(e.subject_id)?.name ?? text(p, "name") ?? "a Team" };
+    case "project":
+      s.subject = { type: "text", text: l.projects.get(e.subject_id)?.name ?? text(p, "name") ?? "a Project" };
+      break;
+    case "workflow":
+      s.subject = { type: "workflow", projectId: e.subject_id };
+      break;
+    case "label":
+      s.subject = { type: "text", text: text(p, "name") ?? l.labels?.get(e.subject_id)?.name ?? "a Label" };
       break;
     case "skill":
       s.subject = { type: "text", text: l.skills.get(e.subject_id)?.name ?? text(p, "name") ?? "a Skill" };
@@ -167,11 +196,15 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
   }
 
   switch (e.kind) {
-    case "task.filed":
-      if (p.aimed_at_id) s.details.push(`aimed at ${member(text(p, "aimed_at_id"))}`);
-      else if (skill(text(p, "skill_id"))) s.details.push(skill(text(p, "skill_id"))!);
-      if (text(p, "blocks")) s.details.push(`blocks ${l.tasks.get(text(p, "blocks")!)?.key ?? "a Task"}`);
+    case "task.filed": {
+      // Darkory's own filings (a Breakdown, an Acceptance, a Retrospective) have no actor.
+      if (text(p, "step_id")) s.after.push("at", step(text(p, "step_id")));
+      if (p.aimed_at_id) s.after.push(`aimed at ${member(text(p, "aimed_at_id"))}`);
+      if (text(p, "parent_id")) s.details.push(`under ${task(text(p, "parent_id")) ?? "a Parent"}`);
+      if (text(p, "blocks")) s.details.push(`blocks ${task(text(p, "blocks")) ?? "a Task"}`);
+      if (p.breakdown) s.details.push("with Break down");
       break;
+    }
     case "task.claimed": {
       const sk = skill(text(p, "skill_id"));
       if (sk) s.details.push(sk);
@@ -180,6 +213,22 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
       else if (timeout) s.details.push(`Heartbeat every ${timeoutText(timeout)}`);
       break;
     }
+    case "task.advanced":
+      s.after.push("along", { outcome: text(p, "outcome") ?? "" }, "to", step(text(p, "to")));
+      if (stepWord(text(p, "from"))) s.details.push(`from ${stepWord(text(p, "from"))}`);
+      break;
+    case "task.moved":
+      s.after.push("to", step(text(p, "to")));
+      if (stepWord(text(p, "from"))) s.details.push(`from ${stepWord(text(p, "from"))}`);
+      if (p.workflow_changed) s.details.push("its Step was deleted");
+      break;
+    case "task.completed":
+      if (text(p, "outcome")) s.after.push("along", { outcome: text(p, "outcome")! });
+      if (stepWord(text(p, "from"))) s.details.push(`from ${stepWord(text(p, "from"))}`);
+      break;
+    case "task.dropped":
+      if (text(p, "holder_id")) s.details.push(`held by ${member(text(p, "holder_id"))}`);
+      break;
     case "task.lapsed": {
       s.mark = "lapsed";
       s.details.push(`held by ${member(text(p, "holder_id"))}`);
@@ -191,20 +240,19 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     case "task.taken_back":
       s.mark = "taken_back";
       s.details.push(`held by ${member(text(p, "holder_id"))}`);
+      if (text(p, "reason")) s.details.push(text(p, "reason")!);
       break;
-    case "task.handed_over": {
-      s.mark = "handed_over";
-      const from = skill(text(p, "from_skill_id"));
-      const to = skill(text(p, "skill_id")) ?? "a Skill";
-      s.details.push(from ? `${from} → ${to}` : `to ${to}`);
-      break;
-    }
     case "task.claim_ended":
       s.details.push(`held by ${member(text(p, "holder_id"))}`);
       if (text(p, "how_ended")) s.details.push(claimEnds[text(p, "how_ended")!] ?? text(p, "how_ended")!);
       break;
-    case "task.dropped":
-      if (p.feature_dropped) s.details.push("with its Feature");
+    case "task.split":
+      s.after.push("into Subtasks");
+      s.details.push("its Claim ended");
+      break;
+    case "task.became_parent":
+      s.after.push("a Parent");
+      if (stepWord(text(p, "from"))) s.details.push(`off ${stepWord(text(p, "from"))}`);
       break;
     case "task.observed":
       s.outcome = text(p, "outcome") === "worked" ? "worked" : "didnt_work";
@@ -212,40 +260,62 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     case "task.blocker_added":
     case "task.blocker_removed":
       if (text(p, "blocker_key")) s.details.push(`blocked by ${text(p, "blocker_key")}`);
+      else if (task(text(p, "blocker_id"))) s.details.push(`blocked by ${task(text(p, "blocker_id"))}`);
       break;
     case "task.evidence_attached":
-    case "feature.evidence_attached":
       if (text(p, "filename")) s.evidence = { id: text(p, "evidence_id") ?? "", filename: text(p, "filename")!, size: number(p, "size") };
       break;
     case "task.skill_proposed":
       s.verb = `proposed ${skill(text(p, "skill_id")) ?? "a Skill"} v${(number(p, "based_on_version") ?? 0) + 1} on`;
       break;
-    case "task.status_set": {
-      const from = l.statuses.get(text(p, "from") ?? "")?.name;
-      const to = l.statuses.get(text(p, "to") ?? "")?.name;
-      if (from && to) s.details.push(`${from} → ${to}`);
-      else if (to) s.details.push(`to ${to}`);
+    case "task.ranked":
+      s.details.push(`Rank #${text(p, "from")} → #${text(p, "to")}`);
+      break;
+    case "task.owner_passed":
+      s.after.push(`to ${member(text(p, "to"))}`);
+      break;
+    case "task.labels_set": {
+      const name = (id: string) => l.labels?.get(id)?.name ?? "a Label";
+      const added = list(p, "added").map((id) => `+${name(id)}`);
+      const removed = list(p, "removed").map((id) => `−${name(id)}`);
+      if (added.length + removed.length > 0) s.details.push([...added, ...removed].join(" "));
+      else if (list(p, "labels").length === 0) s.details.push("none");
       break;
     }
-    case "statuses.changed": {
+    case "workflow.changed": {
+      const steps = Array.isArray(p.steps) ? p.steps.length : undefined;
+      if (steps !== undefined) s.details.push(count(steps, "Step"));
       const moved = number(p, "tasks_moved");
       if (moved) s.details.push(`${count(moved, "Task")} moved`);
       break;
     }
-    case "feature.filed":
-      if (text(p, "owner_id")) s.details.push(`owner ${member(text(p, "owner_id"))}`);
+    case "label.created":
+      if (!text(p, "project_id")) s.details.push("for every Project");
       break;
-    case "feature.ranked":
-      s.details.push(`Rank #${text(p, "from")} → #${text(p, "to")}`);
+    case "label.changed":
+      if (text(p, "name")) s.details.push(`renamed ${text(p, "name")}`);
+      if (text(p, "color") && !text(p, "name")) s.details.push("colour");
       break;
-    case "feature.dropped": {
-      const n = number(p, "open_tasks_dropped");
-      if (n) s.details.push(`${count(n, "open Task")} dropped`);
+    case "label.deleted": {
+      const n = number(p, "tasks");
+      if (n) s.details.push(`taken off ${count(n, "Task")}`);
       break;
     }
-    case "feature.owner_passed":
-      s.details.push(`to ${member(text(p, "to"))}`);
+    case "project.created":
+      if (text(p, "key")) s.details.push(text(p, "key")!);
       break;
+    case "project.changed": {
+      const changed = Object.keys(p).map((k) => projectFields[k] ?? k);
+      if (changed.length > 0) s.details.push(changed.join(", "));
+      break;
+    }
+    case "project.member_added":
+    case "project.member_removed": {
+      const project = s.subject?.type === "text" ? s.subject.text : "a Project";
+      s.subject = { type: "text", text: member(text(p, "member_id")) };
+      s.after.push(`${e.kind === "project.member_added" ? "to" : "from"} ${project}`);
+      break;
+    }
     case "skill.version_published":
       s.subject = { type: "text", text: `${l.skills.get(e.subject_id)?.name ?? "a Skill"} v${text(p, "version")}` };
       break;
@@ -256,19 +326,12 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     case "member.skill_revoked":
       s.details.push(skill(text(p, "skill_id")) ?? "a Skill");
       break;
-    case "team.member_added":
-    case "team.member_removed": {
-      const team = s.subject?.type === "text" ? s.subject.text : "a Team";
-      s.subject = { type: "text", text: member(text(p, "member_id")) };
-      s.after = `${e.kind === "team.member_added" ? "to" : "from"} ${team}`;
-      break;
-    }
     case "token.issued":
       s.subject = { type: "text", text: text(p, "name") ?? "" };
-      s.after = `for ${member(text(p, "member_id"))}`;
+      s.after.push(`for ${member(text(p, "member_id"))}`);
       break;
     case "token.revoked":
-      s.after = `for ${member(text(p, "member_id"))}`;
+      s.after.push(`for ${member(text(p, "member_id"))}`);
       break;
     case "session.closed": {
       const n = number(p, "claims_ended");
@@ -282,23 +345,31 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
   return s;
 }
 
-/** A Task's or Feature's key and title from the entry that filed it. */
+/** A Task's key and title from the entry that filed it. */
 function named(p: Record<string, unknown>): { key: string; title: string } | undefined {
   const key = text(p, "key");
   return key ? { key, title: text(p, "title") ?? "" } : undefined;
 }
 
-export const markWords: Record<Mark, string> = { lapsed: "Lapsed", taken_back: "Taken back", handed_over: "Handed over" };
+export const markWords: Record<Mark, string> = { lapsed: "Lapsed", taken_back: "Taken back" };
 
-/** The sentence as plain text, as a screen reader reads the row: "builder-2 claimed WEB-4 Payment form · web-engineer". */
-export function sentenceText(s: Sentence): string {
+function partText(part: Part): string {
+  if (typeof part === "string") return part;
+  if ("step" in part) return part.name;
+  return part.outcome;
+}
+
+/**
+ * The sentence as plain text, as a screen reader reads the row: "builder advanced WEB-4 Payment
+ * form along pass to Review · from Build".
+ */
+export function sentenceText(s: Sentence, workflowName = "the Workflow"): string {
   const words: string[] = [s.actorName];
   if (s.mark) words.push(markWords[s.mark]);
   if (s.verb) words.push(s.verb);
-  if (s.subject) words.push(s.subject.type === "text" ? s.subject.text : `${s.subject.key} ${s.subject.title}`.trim());
-  if (s.after) words.push(s.after);
+  if (s.subject) words.push(s.subject.type === "text" ? s.subject.text : s.subject.type === "workflow" ? workflowName : `${s.subject.key} ${s.subject.title}`.trim());
+  words.push(...s.after.map(partText));
   if (s.outcome) words.push(s.outcome === "worked" ? "Worked" : "Didn't work");
   if (s.evidence) words.push(s.evidence.filename);
   return [words.filter(Boolean).join(" "), ...s.details].join(" · ");
 }
-

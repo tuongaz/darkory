@@ -35,7 +35,7 @@ describe("no <style> at run time", () => {
   it("from an open Select", async () => {
     render(
       <Select defaultOpen defaultValue="todo">
-        <SelectTrigger aria-label="Status">
+        <SelectTrigger aria-label="Step">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

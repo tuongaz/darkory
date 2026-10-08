@@ -1,70 +1,79 @@
-import { useMutation } from "@tanstack/react-query";
 import { FolderGit2Icon, GitBranchIcon } from "lucide-react";
 import { Fragment, type ReactNode } from "react";
-import { Link } from "react-router";
-import { toast } from "sonner";
-import { api, call, type TaskDetail } from "@/api/client";
+import type { TaskDetail, WorkflowStep } from "@/api/client";
 import { useNow } from "@/clock";
-import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { CopyValue, SessionId } from "@/components/CopyValue";
+import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { Property, PropertiesRail } from "@/components/PropertiesRail";
-import { StatusSelect } from "@/components/StatusSelect";
-import { taskBranch } from "@/lib/branch";
 import { ClockTime } from "@/components/Time";
-import { Skeleton } from "@/components/ui/skeleton";
+import { WorkGlyph } from "@/components/WorkGlyph";
+import { taskBranch } from "@/lib/branch";
 import { liveClaim } from "@/work";
-import type { TaskActions } from "./actions";
-import { featurePath } from "./format";
-import { MemberName, Needs, StatusLabel, TaskLink } from "./parts";
-import { useStatuses, useTakers } from "./queries";
+import { progressText } from "../board/derive";
+import { useMemberName, useSkillName } from "./format";
+import { MemberName, SkillPill, TaskLink } from "./parts";
 import { lapsedClaim } from "./record";
+import { takersOf } from "./takers";
 
 type Row = { label: string; value: ReactNode; stack?: boolean };
 
+/** Where a Task stands, in words: its Step and Skill, the Member it waits with, its Subtasks, or how it ended. */
+export function Standing({ detail, steps }: { detail: TaskDetail; steps: readonly WorkflowStep[] }) {
+  const { task } = detail;
+  const name = useMemberName();
+  if (task.state !== "open") {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <WorkGlyph glyph={{ glyph: task.state }} />
+        {task.state === "done" ? "Done" : "Dropped"}
+      </span>
+    );
+  }
+  if (task.subtask_counts) return <span>Its Subtasks: {progressText(task.subtask_counts)} done</span>;
+  if (task.aimed_at_id && !task.step_id) return <span>With {name(task.aimed_at_id)}</span>;
+  const step = detail.step ?? steps.find((s) => s.id === task.step_id);
+  if (!step) return <span className="text-muted-foreground">No Step</span>;
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
+      <span className="font-medium text-foreground">{step.name}</span>
+      {step.skill_id ? <SkillPill id={step.skill_id} /> : <Pill tone="secondary">hold</Pill>}
+    </span>
+  );
+}
+
+/** The branch a Task's session works on, in mono, cut short in a narrow rail: the whole name on hover, copied on click. */
+export function Branch({ name }: { name: string }) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <GitBranchIcon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
+      <CopyValue value={name} what="branch" />
+    </span>
+  );
+}
+
 /**
- * A Task's facts. The peek lists them in one run; the page's rail groups them Task · Claim ·
- * Blocking. The Status is a menu for a Member of the Feature's Team and a fact otherwise.
+ * A Task's Claim and Blocking, and where its session works: the peek lists them in one run, the
+ * page's rail groups them.
  */
-export function TaskProperties({ detail, actions, grouped }: { detail: TaskDetail; actions: TaskActions; grouped?: boolean }) {
+export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail; steps: readonly WorkflowStep[]; grouped?: boolean }) {
   const now = useNow();
-  const { task, feature } = detail;
+  const skill = useSkillName();
+  const { task } = detail;
   const claim = liveClaim(task, now);
   const lapsed = claim ? undefined : lapsedClaim(detail);
   const open = task.state === "open";
-
-  const work: Row[] = [
-    { label: "Status", value: actions.status === "menu" ? <StatusMenu detail={detail} /> : <StatusFact detail={detail} /> },
-    {
-      label: "Feature",
-      value: (
-        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <Link to={featurePath(feature.key)} className="inline-flex min-w-0 items-baseline gap-1.5 hover:underline">
-            <Key>{feature.key}</Key>
-            <span className="truncate">{feature.title}</span>
-          </Link>
-          {feature.state === "shipped" && <Pill tone="done">Shipped</Pill>}
-          {feature.state === "dropped" && <Pill tone="dropped">Dropped</Pill>}
-        </span>
-      ),
-    },
-  ];
-  // Once the Task is Done or Dropped it needs nothing more.
-  if (open) work.push({ label: "Needs", value: <Needs task={task} /> });
-  // Where a session works it: the Workspaces it names, and the branch the Runner makes in each.
-  if (detail.workspaces.length > 0) {
-    work.push({ label: "Workspaces", value: <Workspaces detail={detail} /> });
-    work.push({ label: "Branch", value: <Branch name={taskBranch(task.key, task.title)} /> });
-  }
+  const parent = !!task.subtask_counts;
 
   const hold: Row[] = [];
   if (claim) {
     hold.push({ label: "Held by", value: <MemberName id={claim.holder_id} /> });
+    if (claim.skill_id) hold.push({ label: "Under", value: <span>{skill(claim.skill_id)}{claim.skill_version !== undefined && ` version ${claim.skill_version}`}</span> });
     hold.push({ label: "Heartbeat", value: <HeartbeatMeter claim={claim} /> });
     hold.push({ label: "Session", value: <SessionId id={claim.session_id} /> });
     if (claim.model_label) hold.push({ label: "Model", value: <span className="truncate font-mono text-xs">{claim.model_label}</span> });
-  } else if (open) {
+  } else if (open && !parent) {
     hold.push({
       label: "Held by",
       value: (
@@ -78,14 +87,50 @@ export function TaskProperties({ detail, actions, grouped }: { detail: TaskDetai
         </>
       ),
     });
-    hold.push({ label: "Waiting", value: <span>since <ClockTime at={task.waiting_since} /></span> });
-    // Who could take it, unless Needs already names the one Member it is aimed at. A Task in a
-    // Backlog Status is not takeable, whoever has its Skill.
-    if (!task.aimed_at_id) hold.push({
-      label: "Takeable by",
-      value: detail.status.kind === "backlog" ? <span className="text-muted-foreground">Nobody while in {detail.status.name}</span> : <Takers detail={detail} />,
-      stack: true,
+    hold.push({
+      label: "Waiting",
+      value: (
+        <span>
+          since <ClockTime at={task.step_since ?? task.waiting_since} />
+        </span>
+      ),
     });
+    const step = steps.find((s) => s.id === task.step_id);
+    if (!task.aimed_at_id) {
+      const takers = takersOf(detail, step);
+      hold.push({
+        label: "Takeable by",
+        stack: true,
+        value:
+          step && !step.skill_id ? (
+            <span className="text-muted-foreground">Nobody while at {step.name}, a hold: move it on</span>
+          ) : takers.length ? (
+            takers.map((id) => <MemberName key={id} id={id} />)
+          ) : (
+            <span className="text-muted-foreground">Nobody</span>
+          ),
+      });
+    }
+  }
+
+  const work: Row[] = [];
+  // Where a session works it: the Workspaces it names, and the branch the Runner makes in each.
+  if (detail.workspaces.length > 0) {
+    work.push({
+      label: "Workspaces",
+      value: (
+        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {detail.workspaces.map((w) => (
+            <span key={w.id} className="inline-flex min-w-0 items-center gap-1.5" title={w.path}>
+              <FolderGit2Icon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
+              <span className="truncate">{w.name}</span>
+            </span>
+          ))}
+        </span>
+      ),
+    });
+    work.push({ label: "Branch", value: <Branch name={taskBranch(task.key, task.title)} /> });
+    if (detail.parent) work.push({ label: "Merges into", value: <Branch name={taskBranch(detail.parent.key, detail.parent.title)} /> });
   }
 
   const openBlockers = detail.blockers.filter((b) => b.state === "open");
@@ -103,16 +148,17 @@ export function TaskProperties({ detail, actions, grouped }: { detail: TaskDetai
       )),
     });
   }
-  if (openBlocking.length) {
-    blocking.push({ label: "Blocks", stack: true, value: openBlocking.map((b) => <TaskLink key={b.id} task={b} wrap />) });
-  }
+  if (openBlocking.length) blocking.push({ label: "Blocks", stack: true, value: openBlocking.map((b) => <TaskLink key={b.id} task={b} wrap />) });
 
   const groups: [string, Row[]][] = [
-    ["Task", work],
     ["Claim", hold],
     ["Blocking", blocking],
+    ["Workspace", work],
   ];
-  if (!grouped) return <Rows rows={groups.flatMap(([, rows]) => rows)} />;
+  if (!grouped) {
+    const rows = groups.flatMap(([, rows]) => rows);
+    return rows.length ? <Rows rows={rows} /> : null;
+  }
   return (
     <div className="flex flex-col gap-5">
       {groups
@@ -141,62 +187,13 @@ function Rows({ rows, compact }: { rows: Row[]; compact?: boolean }) {
   );
 }
 
-function StatusFact({ detail }: { detail: TaskDetail }) {
-  const statuses = useStatuses().data;
-  return <StatusLabel status={detail.status} statuses={statuses} />;
-}
-
-/** The Status as a select of the open-kind Statuses; Done and Dropped come only by Complete and Drop. */
-function StatusMenu({ detail }: { detail: TaskDetail }) {
-  const statuses = useStatuses().data;
-  const { task, status } = detail;
-  const move = useMutation({
-    mutationFn: (to: string) => call(api.POST("/v1/tasks/{task}/status", { params: { path: { task: task.id } }, body: { status: to } })),
-    onError: (err) => toast.error(`${task.key} not moved`, { description: err.message }),
-  });
+/** "WEB-3 Checkout": a Parent, linked to its page. */
+export function ParentLink({ parent }: { parent: NonNullable<TaskDetail["parent"]> }) {
   return (
-    <StatusSelect
-      variant="property"
-      statuses={statuses ?? [status]}
-      value={status.id}
-      onValueChange={(to) => to !== status.id && move.mutate(to)}
-    />
-  );
-}
-
-function Workspaces({ detail }: { detail: TaskDetail }) {
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-      {detail.workspaces.map((w) => (
-        <span key={w.id} className="inline-flex min-w-0 items-center gap-1.5" title={w.path}>
-          <FolderGit2Icon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
-          <span className="truncate">{w.name}</span>
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/** A branch name in mono on one line, cut short in a narrow rail: the whole name on hover, copied on click. */
-export function Branch({ name }: { name: string }) {
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
-      <GitBranchIcon className="size-3.5 flex-none text-muted-foreground" aria-hidden />
-      <CopyValue value={name} what="branch" />
-    </span>
-  );
-}
-
-/** Who could take the Task now, by its Skill or aim: a fact, not a button. */
-function Takers({ detail }: { detail: TaskDetail }) {
-  const ids = useTakers(detail);
-  if (!ids) return <Skeleton className="h-4 w-24" />;
-  if (!ids.length) return <span className="text-muted-foreground">Nobody</span>;
-  return (
-    <>
-      {ids.map((id) => (
-        <MemberName key={id} id={id} />
-      ))}
-    </>
+    <TaskLink task={parent}>
+      <span className="text-muted-foreground">Parent</span>
+      <Key>{parent.key}</Key>
+      <span className="truncate">{parent.title}</span>
+    </TaskLink>
   );
 }

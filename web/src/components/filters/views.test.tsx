@@ -7,34 +7,34 @@ import { sameFilters, viewPills, viewTokens } from "./views";
 import { ViewsMenu, type ViewsMenuProps } from "./ViewsMenu";
 
 const fields: FilterField[] = [
-  { key: "status", type: "enum", ops: ["is", "not", "in", "nin"], label: "Status" },
+  { key: "step", type: "enum", ops: ["is", "not", "in", "nin"], label: "Step" },
   { key: "q", type: "text", ops: ["contains"], label: "Search" },
 ];
 
 describe("a View's tokens and the pills", () => {
   it("saves the address's own tokens, each value encoded", () => {
-    expect(viewTokens([{ field: "status", op: "in", values: ["st-a", "st-b"] }, { field: "q", op: "contains", values: ["a,b"] }])).toEqual([
-      "status:in:st-a,st-b",
+    expect(viewTokens([{ field: "step", op: "in", values: ["st-a", "st-b"] }, { field: "q", op: "contains", values: ["a,b"] }])).toEqual([
+      "step:in:st-a,st-b",
       "q:contains:a%2Cb",
     ]);
   });
 
   it("reads tokens back as pills, dropping what the list cannot apply", () => {
-    expect(viewPills(["status:nin:st-a,st-b", "q:contains:cart%20page", "colour:is:red", "status:btw:x,y", "nonsense"], fields)).toEqual([
-      { field: "status", op: "nin", values: ["st-a", "st-b"] },
+    expect(viewPills(["step:nin:st-a,st-b", "q:contains:cart%20page", "colour:is:red", "step:btw:x,y", "nonsense"], fields)).toEqual([
+      { field: "step", op: "nin", values: ["st-a", "st-b"] },
       { field: "q", op: "contains", values: ["cart page"] },
     ]);
   });
 
   it("round-trips the pills", () => {
-    const pills = [{ field: "status", op: "is", values: ["st-a"] }];
+    const pills = [{ field: "step", op: "is", values: ["st-a"] }];
     expect(viewPills(viewTokens(pills), fields)).toEqual(pills);
   });
 
   it("compares tokens whatever their order, or the order of a token's values", () => {
-    expect(sameFilters(["status:in:a,b", "q:contains:x"], ["q:contains:x", "status:in:b,a"])).toBe(true);
-    expect(sameFilters(["status:in:a,b"], ["status:nin:a,b"])).toBe(false);
-    expect(sameFilters(["status:is:a"], ["status:is:a", "q:contains:x"])).toBe(false);
+    expect(sameFilters(["step:in:a,b", "q:contains:x"], ["q:contains:x", "step:in:b,a"])).toBe(true);
+    expect(sameFilters(["step:in:a,b"], ["step:nin:a,b"])).toBe(false);
+    expect(sameFilters(["step:is:a"], ["step:is:a", "q:contains:x"])).toBe(false);
     expect(sameFilters([], [])).toBe(true);
   });
 });

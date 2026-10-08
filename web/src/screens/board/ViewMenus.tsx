@@ -1,25 +1,26 @@
-// The top bar's controls on the Board screens: the List | Board switch and Display. The Filter is
-// components/filters.
-import { CheckIcon, KanbanIcon, LayersIcon, ListIcon, SlidersHorizontalIcon, UserIcon } from "lucide-react";
-import type { ReactNode } from "react";
+// The top bar's controls on a Project's Tasks: the List | Board switch and Display. Filters come
+// from components/filters.
+import { CheckIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
+import type { ComponentProps, ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import { StatusGlyph } from "@/components/StatusGlyph";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { Display, GroupBy, Order } from "./derive";
 
+export type Layout = "list" | "board";
+
 /** The segmented List | Board switch (kit `.seg`); the other search parameters stay. */
-export function ViewSwitch({ view }: { view: "list" | "board" }) {
+export function ViewSwitch({ view }: { view: Layout }) {
   const [params] = useSearchParams();
-  const to = (v: "list" | "board") => {
+  const to = (v: Layout) => {
     const next = new URLSearchParams(params);
     next.set("view", v);
     next.delete("task");
     return { search: `?${next}` };
   };
-  const item = (v: "list" | "board", icon: ReactNode, label: string) => (
+  const item = (v: Layout, icon: ReactNode, label: string) => (
     <Link
       to={to(v)}
       aria-current={view === v ? "page" : undefined}
@@ -42,7 +43,7 @@ export function ViewSwitch({ view }: { view: "list" | "board" }) {
 }
 
 /** An outline top-bar button whose label hides on a phone. */
-function BarButton({ icon, label, ...props }: { icon: ReactNode; label: string } & React.ComponentProps<typeof Button>) {
+function BarButton({ icon, label, ...props }: { icon: ReactNode; label: string } & ComponentProps<typeof Button>) {
   return (
     <Button variant="outline" aria-label={label} {...props}>
       {icon}
@@ -78,31 +79,28 @@ function SectionLabel({ children }: { children: ReactNode }) {
   return <div className="px-2 pt-1.5 pb-1 text-2xs font-medium text-muted-foreground">{children}</div>;
 }
 
-/** Display (F-B2): grouping (the list only), the order within a group, and what to show. */
-export function DisplayMenu({ display, change, view }: { display: Display; change: (c: Partial<Display>) => void; view: "list" | "board" }) {
-  const groups: { by: GroupBy; label: string; icon: ReactNode }[] = [
-    {
-      by: "status",
-      label: "Status",
-      icon: (
-        <span aria-hidden className="inline-flex">
-          <StatusGlyph glyph="todo" className="size-3" />
-        </span>
-      ),
-    },
-    { by: "feature", label: "Feature", icon: <LayersIcon aria-hidden /> },
-    { by: "holder", label: "Holder", icon: <UserIcon aria-hidden /> },
-  ];
-  const orders: { order: Order; label: string }[] = [
-    { order: "rank", label: "Rank, then waiting time" },
-    { order: "waiting", label: "Waiting time" },
-  ];
+const groups: { by: GroupBy; label: string; icon: ReactNode }[] = [
+  { by: "step", label: "Step", icon: <WorkflowIcon aria-hidden /> },
+  { by: "parent", label: "Parent", icon: <FolderTreeIcon aria-hidden /> },
+  { by: "owner", label: "Owner", icon: <UserIcon aria-hidden /> },
+  { by: "label", label: "Label", icon: <TagIcon aria-hidden /> },
+  { by: "none", label: "No grouping", icon: <RowsIcon aria-hidden /> },
+];
+
+const orders: { order: Order; label: string }[] = [
+  { order: "rank", label: "Rank" },
+  { order: "updated", label: "Updated" },
+  { order: "filed", label: "Filed" },
+];
+
+/** Display: the layout's grouping (the list), the order within a group or column, and what to show. */
+export function DisplayMenu({ display, change, view }: { display: Display; change: (c: Partial<Display>) => void; view: Layout }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <BarButton icon={<SlidersHorizontalIcon />} label="Display" className="data-[state=open]:bg-accent" />
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="Display" className="w-[300px] p-1">
+      <PopoverContent align="end" aria-label="Display" className="w-[280px] p-1">
         {view === "list" && (
           <div role="group" aria-label="Group by">
             <SectionLabel>Group by</SectionLabel>
@@ -115,8 +113,8 @@ export function DisplayMenu({ display, change, view }: { display: Display; chang
             <div className="-mx-1 my-1 h-px bg-border" />
           </div>
         )}
-        <div role="group" aria-label={view === "list" ? "Order within a group" : "Order within a column"}>
-          <SectionLabel>{view === "list" ? "Order within a group" : "Order within a column"}</SectionLabel>
+        <div role="group" aria-label="Order by">
+          <SectionLabel>Order by</SectionLabel>
           {orders.map((o) => (
             <Choice key={o.order} on={display.order === o.order} onClick={() => change({ order: o.order })}>
               {o.label}
@@ -128,7 +126,11 @@ export function DisplayMenu({ display, change, view }: { display: Display; chang
           <SectionLabel>Show</SectionLabel>
           <Toggle label="Done" on={display.showDone} onChange={(on) => change({ showDone: on })} />
           <Toggle label="Dropped" on={display.showDropped} onChange={(on) => change({ showDropped: on })} />
-          <Toggle label="Shipped and dropped Features' Tasks" on={display.showEndedFeatures} onChange={(on) => change({ showEndedFeatures: on })} />
+          {view === "list" ? (
+            <Toggle label="Subtasks" on={display.showSubtasks} onChange={(on) => change({ showSubtasks: on })} />
+          ) : (
+            <Toggle label="Parents" on={display.showParents} onChange={(on) => change({ showParents: on })} />
+          )}
         </div>
       </PopoverContent>
     </Popover>

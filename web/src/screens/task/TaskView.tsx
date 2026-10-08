@@ -2,9 +2,10 @@ import { useMutation } from "@tanstack/react-query";
 import { EllipsisIcon, ExternalLinkIcon, MessageSquareIcon, SearchXIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "react-router";
-import { api, call, isUnauthenticated, ApiError, type RunnerSession, type TaskDetail } from "@/api/client";
-import { useDirectory, useRunnerSession } from "@/api/queries";
-import { teamTasksPath, useReportTeam } from "@/app/currentTeam";
+import { api, ApiError, call, isUnauthenticated, type RunnerSession, type TaskDetail } from "@/api/client";
+import { useRunnerSession, useTask } from "@/api/queries";
+import { projectPath, useReportProject } from "@/app/currentProject";
+import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
 import { Key } from "@/components/Key";
@@ -12,45 +13,43 @@ import { SectionHeader } from "@/components/PageHeader";
 import { Peek } from "@/components/Peek";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
-import { TeamMark } from "@/components/TeamMark";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { taskBranch } from "@/lib/branch";
+import { kindLabel } from "@/work";
 import type { TaskActions } from "./actions";
-import { featurePath, taskPath, useMemberName } from "./format";
+import { taskPath as pagePath, useMemberName } from "./format";
+import { LabelsEditor } from "./LabelsEditor";
+import { MemberName } from "./parts";
 import { ProposalCard, RetrospectiveObservations } from "./Proposal";
-import { useTask } from "./queries";
+import { useTaskPath, useTaskWorkflow } from "./queries";
 import { useSessionActions } from "./SessionActions";
 import { SessionPanel } from "./SessionPanel";
-import { useTaskActionsUI } from "./TaskActions";
-import { TaskProperties } from "./TaskProperties";
+import { Stepper } from "./Stepper";
+import { Subtasks } from "./Subtasks";
+import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
+import { Branch, ParentLink, Standing, TaskProperties } from "./TaskProperties";
 import { TaskRecord } from "./TaskRecord";
 
-const kinds = { work: undefined, breakdown: "Break down", retrospective: "Retrospective" } as const;
-
-/** /tasks/:task: the Task's record in the main column, its facts in the 300px rail (F-T2). */
+/** /tasks/:task: the Task's record in the main column, its Claim and Blocking in the 300px rail. */
 export function TaskPage() {
   const { task: ref = "" } = useParams();
   const q = useTask(ref);
-  const ui = useTaskActionsUI(q.data, "default");
-  const { teams } = useDirectory();
   const d = q.data;
+  useReportProject(d?.task.project_id);
+  const ui = useTaskActionsUI(d, "default");
   const session = useRunnerSession(d?.task.id);
   const runner = useSessionActions(d, session);
+  const { project, steps } = useTaskWorkflow(d?.task.project_id);
   const menu = [...ui.menu, ...(ui.menu.length > 0 && runner.menu.length > 0 ? [<DropdownMenuSeparator key="session-sep" />] : []), ...runner.menu];
-  const team = d ? teams.get(d.feature.team_id) : undefined;
-  useReportTeam(team?.key, "tasks");
   return (
     <>
       <TopBar
         crumbs={
-          d
-            ? [
-                { label: team?.name ?? "Team", icon: team && <TeamMark team={team} />, to: team && teamTasksPath(team) },
-                { label: d.feature.title, to: featurePath(d.feature.key) },
-                { label: d.task.key },
-              ]
+          project
+            ? [projectCrumb(project), { label: "Tasks", to: projectPath(project, "tasks"), wide: true }, { label: d?.task.key ?? ref }]
             : [{ label: "Task" }, { label: ref }]
         }
         actions={menu.length > 0 && <MoreMenu items={menu} />}
@@ -58,11 +57,11 @@ export function TaskPage() {
       />
       {d ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:flex-row lg:overflow-hidden">
-          <div className="min-w-0 flex-1 px-6 py-7 lg:overflow-auto lg:px-12">
-            <TaskBody detail={d} actions={ui.actions} heading="h1" session={session} />
+          <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:overflow-auto lg:px-12 lg:py-7">
+            <TaskBody detail={d} ui={ui} heading="h1" session={session} steps={steps} />
           </div>
           <aside aria-label="Properties" className="w-full flex-none border-t p-4 lg:w-[300px] lg:overflow-auto lg:border-t-0 lg:border-l">
-            <TaskProperties detail={d} actions={ui.actions} grouped />
+            <TaskProperties detail={d} steps={steps} grouped />
           </aside>
         </div>
       ) : (
@@ -78,27 +77,29 @@ export function TaskPage() {
 
 /**
  * The Task opened over any page by ?task=<key>; the shell mounts it and closes it by dropping the
- * parameter (F-T1). The same sheet shows the next Task when the key changes.
+ * parameter. The same sheet shows the next Task when the key changes.
  */
 export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () => void }) {
   const q = useTask(taskKey);
+  const d = q.data;
+  useReportProject(d?.task.project_id);
   // Opened to answer it (the Inbox's Answer claims it first): the Note composer takes the focus.
   const answering = (useLocation().state as { note?: boolean } | null)?.note === true;
-  const ui = useTaskActionsUI(q.data, "xs");
-  const d = q.data;
+  const ui = useTaskActionsUI(d, "xs");
   const session = useRunnerSession(d?.task.id);
   const runner = useSessionActions(d, session);
+  const { steps } = useTaskWorkflow(d?.task.project_id);
   return (
     <>
       <Peek
         open
         onOpenChange={(o) => !o && onClose()}
         label={`Task ${taskKey}`}
-        heading={<Key className="text-xs">{taskKey}</Key>}
-        // The header is key · primary · ⋯ · ×; the page is the ⋯ menu's first item (F-T4).
+        heading={<Key to={pagePath(taskKey)} className="text-xs">{taskKey}</Key>}
+        // The header is key · primary · ⋯ · ×; the page is the ⋯ menu's first item.
         menu={[
           <DropdownMenuItem key="page" asChild>
-            <Link to={taskPath(taskKey)}>
+            <Link to={pagePath(taskKey)}>
               <ExternalLinkIcon />
               Open as page
             </Link>
@@ -113,11 +114,12 @@ export function TaskPeek({ taskKey, onClose }: { taskKey: string; onClose: () =>
           <TaskBody
             key={d.task.id}
             detail={d}
-            actions={ui.actions}
+            ui={ui}
             heading="h2"
-            properties={<TaskProperties detail={d} actions={ui.actions} />}
+            properties={<TaskProperties detail={d} steps={steps} />}
             focusNote={answering}
             session={session}
+            steps={steps}
           />
         ) : (
           <TaskMissing query={q} />
@@ -162,47 +164,113 @@ function TaskMissing({ query }: { query: ReturnType<typeof useTask> }) {
   return isUnauthenticated(query.error) ? null : <Refusal error={query.error} />;
 }
 
+const stateTone = { open: undefined, done: "done", dropped: "dropped" } as const;
+
+/** A dot between the facts of the header's line. */
+function Sep() {
+  return <span aria-hidden className="h-3.5 w-px bg-border" />;
+}
+
 /**
- * What the peek and the page both show: the title, the facts (in the peek), the Runner's session
- * while it runs one, the proposal, the record.
+ * The head of a Task: its kind, title and description; a line of facts (where it stands, its
+ * Parent, Owner, Rank, Auto-complete and Acceptance, branch); its Labels; its path through the Steps.
+ */
+function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; ui: TaskActionsUI; heading: "h1" | "h2"; steps: Parameters<typeof Stepper>[0]["steps"]; path: Parameters<typeof Stepper>[0]["path"] }) {
+  const { task, parent } = detail;
+  const H = heading;
+  const kind = task.kind !== "work" ? (kindLabel(task) ?? { breakdown: "Breakdown", acceptance: "Acceptance", retrospective: "Retrospective" }[task.kind]) : undefined;
+  const tone = stateTone[task.state];
+  const topLevel = !task.parent_id;
+  return (
+    <header className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {heading === "h1" && <Key>{task.key}</Key>}
+        {kind && <Pill tone="secondary">{kind}</Pill>}
+        {task.aimed_at_id && task.state === "open" && <Pill tone="waiting">Question</Pill>}
+      </div>
+      <H className="text-xl leading-tight font-semibold tracking-[-0.01em] [overflow-wrap:anywhere]">{task.title}</H>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-muted-foreground">
+        {tone && <Pill tone={tone}>{task.state === "done" ? "Done" : "Dropped"}</Pill>}
+        {task.state === "open" && <Standing detail={detail} steps={steps} />}
+        {parent && (
+          <>
+            <Sep />
+            <ParentLink parent={parent} />
+          </>
+        )}
+        <Sep />
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          Owner <MemberName id={task.owner_id} className="text-foreground" />
+        </span>
+        {topLevel && task.rank !== undefined && (
+          <>
+            <Sep />
+            <span>
+              Rank <b className="font-medium text-foreground">#{task.rank}</b>
+            </span>
+          </>
+        )}
+        {topLevel && (task.auto_complete || task.acceptance) && (
+          <>
+            <Sep />
+            {task.auto_complete && <Pill tone="secondary">Auto-complete</Pill>}
+            {task.acceptance && <Pill tone="secondary">Acceptance</Pill>}
+          </>
+        )}
+        {detail.workspaces.length > 0 && (
+          <>
+            <Sep />
+            <span className="inline-flex min-w-0 items-center text-foreground">
+              <Branch name={taskBranch(task.key, task.title)} />
+            </span>
+          </>
+        )}
+      </div>
+      <LabelsEditor detail={detail} editable={ui.actions.labels} />
+      <Stepper detail={detail} path={path} steps={steps} />
+      {task.description && <p className="mt-1 whitespace-pre-wrap">{task.description}</p>}
+    </header>
+  );
+}
+
+/**
+ * What the peek and the page both show: the head, the facts (in the peek), the Runner's session
+ * while it runs one, a Parent's Subtasks, the proposals, the record and the Note composer.
  */
 function TaskBody({
   detail,
-  actions,
+  ui,
   heading,
   properties,
   focusNote,
   session,
+  steps,
 }: {
   detail: TaskDetail;
-  actions: TaskActions;
+  ui: TaskActionsUI;
   heading: "h1" | "h2";
   properties?: ReactNode;
   focusNote?: boolean;
   session: RunnerSession | undefined;
+  steps: Parameters<typeof Stepper>[0]["steps"];
 }) {
-  const { task, proposal } = detail;
-  const H = heading;
-  const kind = kinds[task.kind];
+  const { task } = detail;
+  const path = useTaskPath(task.project_id, task.id);
+  const actions: TaskActions = ui.actions;
   return (
     <div className="flex flex-col gap-7">
-      <header className="flex flex-col gap-1.5">
-        {kind && (
-          <Pill tone="secondary" className="w-fit">
-            {kind}
-          </Pill>
-        )}
-        <H className="text-xl leading-tight font-semibold tracking-[-0.01em] [overflow-wrap:anywhere]">{task.title}</H>
-        {task.description && <p className="whitespace-pre-wrap">{task.description}</p>}
-      </header>
+      <TaskHeader detail={detail} ui={ui} heading={heading} steps={steps} path={path} />
       {properties}
       {/* Keyed: another Task's page starts watching, whatever this one was joined to. */}
       {session && <SessionPanel key={task.id} detail={detail} session={session} tall={heading === "h1"} />}
-      {proposal && <ProposalCard detail={detail} proposal={proposal} />}
+      {(task.subtask_counts || detail.subtasks.length > 0) && <Subtasks detail={detail} onAdd={ui.addSubtask} page={heading === "h1"} />}
+      {detail.proposals.map((p) => (
+        <ProposalCard key={p.id} detail={detail} proposal={p} />
+      ))}
       {task.kind === "retrospective" && <RetrospectiveObservations detail={detail} />}
-      <section aria-label="Activity" className="flex flex-col gap-2">
-        <SectionHeader title="Activity" />
-        <TaskRecord detail={detail} />
+      <section aria-label="Record" className="flex flex-col gap-2">
+        <SectionHeader title="Record" />
+        <TaskRecord detail={detail} path={path} steps={steps} />
         {actions.notes && "composer" in actions.notes && <NoteComposer detail={detail} autoFocus={focusNote} />}
         {actions.notes && "onlyHolder" in actions.notes && <OnlyHolder holder={actions.notes.onlyHolder} />}
       </section>
@@ -210,7 +278,7 @@ function TaskBody({
   );
 }
 
-/** The holder's Note: the running log a Handover carries to the next Member. */
+/** A Note: the holder's running log a Handover carries on, or a Project Member's on a Task nobody holds. */
 function NoteComposer({ detail, autoFocus }: { detail: TaskDetail; autoFocus?: boolean }) {
   const [body, setBody] = useState("");
   const add = useMutation({
@@ -249,7 +317,7 @@ function NoteComposer({ detail, autoFocus }: { detail: TaskDetail; autoFocus?: b
   );
 }
 
-/** Only the holder may add a Note: anyone else sees that rule in the composer's place. */
+/** Only the holder may add a Note to a held Task: anyone else sees that rule in the composer's place. */
 function OnlyHolder({ holder }: { holder: string }) {
   const name = useMemberName();
   return (

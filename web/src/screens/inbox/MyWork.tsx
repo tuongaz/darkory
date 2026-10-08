@@ -1,34 +1,37 @@
-import type { Feature, Task } from "@/api/client";
+import type { Task } from "@/api/client";
 import { useDirectory } from "@/api/queries";
-import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
-import { Key } from "@/components/Key";
+import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentMe } from "@/me";
-import { sinceText, skillOf } from "./derive";
-import { HeldRow } from "./Inbox";
-import { ClaimButton, FeatureCell, GroupHeader, NoneLine, RowLink, StatusCell } from "./parts";
-import { useFeatureMap, useHeldBy, useStatuses, useTakeable, type StatusView } from "./queries";
+import { liveClaim } from "@/work";
+import { ownedParents, progressText } from "./derive";
+import { AnswerButton, GroupHeader, KindPill, NoneLine, StandsAt, TaskRow } from "./parts";
+import { useAimedAt, useHeldBy, useOwnedOpen, useStepNames } from "./queries";
 
-// Kit `.mrow`: Status · key · title · Feature · Rank · Skill · Waiting · Claim.
-const queueGrid =
-  "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 border-b pr-4 pl-6 md:grid-cols-[128px_52px_minmax(0,1fr)_200px_56px_110px_72px_72px]";
-const wide = "hidden md:block";
-
-/** /my-work: what I hold, then everything I can take now, in the order `next` would offer it. */
+/**
+ * /my-work, across Projects: what the signed-in Member holds, what is aimed at them, and the
+ * Parents they own with how far along each is. Every row carries its Project's mark.
+ */
 export function MyWorkPage() {
   const me = useCurrentMe();
-  const held = useHeldBy(me.member.id);
-  const takeable = useTakeable();
-  const features = useFeatureMap();
-  const statuses = useStatuses();
-  const { skills } = useDirectory();
-  const failed = [held, takeable].find((q) => q.isError);
-  const holding = held.data ?? [];
-  const queue = takeable.data ?? [];
+  const id = me.member.id;
+  const now = useNow();
+  const dir = useDirectory();
+  const steps = useStepNames();
+  const held = useHeldBy(id);
+  const aimed = useAimedAt(id);
+  const owned = useOwnedOpen(id);
+  const reads = [held, aimed, owned];
+  const failed = reads.find((q) => q.isError);
+  const holding = (held.data ?? []).filter((t) => liveClaim(t, now)?.holder_id === id);
+  const heldIds = new Set(holding.map((t) => t.id));
+  const aimedAtMe = (aimed.data ?? []).filter((t) => !heldIds.has(t.id));
+  const parents = ownedParents(owned.data ?? []);
+  const project = (t: Task) => dir.projects.get(t.project_id);
 
   return (
     <>
@@ -37,57 +40,68 @@ export function MyWorkPage() {
         <h1 className="sr-only">My work</h1>
         {failed ? (
           <Refusal error={failed.error} className="px-6 py-5" />
-        ) : held.isPending || takeable.isPending ? (
-          <div className="flex flex-col gap-2 px-6 py-5">
+        ) : reads.some((q) => q.isPending) ? (
+          <div className="flex flex-col gap-2 px-6 py-5" aria-busy>
             <Skeleton className="h-8 w-full" />
             <Skeleton className="h-8 w-2/3" />
           </div>
         ) : (
           <>
-            <section aria-label="Held by me">
-              <GroupHeader title="Held by me" count={holding.length} />
+            <section aria-label="Held by you">
+              <GroupHeader title="Held by you" count={holding.length} />
               {holding.length === 0 && <NoneLine>You hold nothing</NoneLine>}
-              {holding.map((t) => (
-                <HeldRow key={t.id} task={t} status={statuses.get(t.status_id)} feature={features.get(t.feature_id)} skill={skillOf(t, skills)} />
+              {holding.map((t) => {
+                const claim = liveClaim(t, now);
+                const skill = claim?.skill_id ? dir.skills.get(claim.skill_id)?.name : undefined;
+                return (
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    project={project(t)}
+                    stands={<StandsAt task={t} steps={steps} me={id} />}
+                    marks={
+                      claim &&
+                      (claim.expires_at ? <HeartbeatMeter claim={claim} variant="compact" className="text-xs" /> : <Pill tone="outline">No expiry</Pill>)
+                    }
+                    by={skill && <Pill tone="outline">{skill}</Pill>}
+                    when={claim?.started_at}
+                    whenWhat="Claimed"
+                  />
+                );
+              })}
+            </section>
+            <section aria-label="Aimed at you">
+              <GroupHeader title="Aimed at you" count={aimedAtMe.length} />
+              {aimedAtMe.length === 0 && <NoneLine>No questions for you</NoneLine>}
+              {aimedAtMe.map((t, i) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  project={project(t)}
+                  stands={<StandsAt task={t} steps={steps} me={id} />}
+                  marks={<KindPill task={t} />}
+                  by={t.filed_by && <span className="truncate">from {dir.members.get(t.filed_by)?.name ?? "a Member"}</span>}
+                  when={t.created_at}
+                  whenWhat="Asked"
+                  action={<AnswerButton task={t} primary={holding.length === 0 && i === 0} />}
+                />
               ))}
             </section>
-            <section aria-label="Takeable now">
-              <GroupHeader title="Takeable now" count={queue.length} />
-              {queue.length === 0 ? (
-                // Why nothing is offered: with no Skills, only Tasks aimed at me or my own Features' could be.
-                <NoneLine>{me.skills.length === 0 ? "You have no Skills yet — an Admin adds them under Admin › Members" : "Nothing you can take right now"}</NoneLine>
-              ) : (
-                <div role="table" aria-label="Takeable now">
-                  <div role="row" className={`${queueGrid} h-8 bg-muted text-xs font-medium text-muted-foreground`}>
-                    <span role="columnheader">Status</span>
-                    <span role="columnheader">Task</span>
-                    <span role="columnheader" className={wide} aria-hidden />
-                    <span role="columnheader" className={wide}>
-                      Feature
-                    </span>
-                    <span role="columnheader" className={wide}>
-                      Rank
-                    </span>
-                    <span role="columnheader" className={wide}>
-                      Skill
-                    </span>
-                    <span role="columnheader" className={`${wide} text-right`}>
-                      Waiting
-                    </span>
-                    <span role="columnheader" aria-hidden />
-                  </div>
-                  {queue.map((t, i) => (
-                    <QueueRow
-                      key={t.id}
-                      task={t}
-                      status={statuses.get(t.status_id)}
-                      feature={features.get(t.feature_id)}
-                      skill={skillOf(t, skills)}
-                      primary={i === 0}
-                    />
-                  ))}
-                </div>
-              )}
+            <section aria-label="You own">
+              <GroupHeader title="You own" count={parents.length} />
+              {parents.length === 0 && <NoneLine>You own no open Parent</NoneLine>}
+              {parents.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  task={t}
+                  project={project(t)}
+                  stands={<ProgressBar task={t} />}
+                  marks={t.subtask_counts && t.subtask_counts.working > 0 && <Pill tone="claimed">{t.subtask_counts.working} working</Pill>}
+                  by={t.subtask_counts && <span className="truncate tabular-nums">{progressText(t.subtask_counts)}</span>}
+                  when={t.created_at}
+                  whenWhat="Filed"
+                />
+              ))}
             </section>
           </>
         )}
@@ -96,49 +110,20 @@ export function MyWorkPage() {
   );
 }
 
-function QueueRow({
-  task,
-  status,
-  feature,
-  skill,
-  primary,
-}: {
-  task: Task;
-  status: StatusView | undefined;
-  feature: Feature | undefined;
-  skill?: string;
-  primary: boolean;
-}) {
-  const peek = usePeekLink();
-  const now = useNow();
-  const { teams } = useDirectory();
+/** A Parent's Subtasks as a bar: done, worked, open and not worked, out of all of them. */
+function ProgressBar({ task }: { task: Task }) {
+  const c = task.subtask_counts;
+  if (!c) return null;
+  const total = c.open + c.done + c.dropped;
+  const share = (n: number) => `${total === 0 ? 0 : (n / total) * 100}%`;
   return (
-    <div role="row" className={`${queueGrid} relative min-h-10 hover:bg-accent`}>
-      <span role="cell" className="flex">
-        <StatusCell status={status} className="[&>span:last-child]:hidden md:[&>span:last-child]:inline" />
+    <span className="flex items-center gap-2">
+      <span role="img" aria-label={progressText(c)} className="flex h-1.5 w-[72px] overflow-hidden rounded-[3px] bg-muted [&>i]:block [&>i]:h-full">
+        <i className="bg-state-done" style={{ width: share(c.done) }} />
+        <i className="bg-state-claimed" style={{ width: share(c.working) }} />
+        <i className="bg-muted-foreground/35" style={{ width: share(c.open - c.working) }} />
       </span>
-      <span role="cell" className={wide}>
-        <Key>{task.key}</Key>
-      </span>
-      <span role="cell" className="flex min-w-0">
-        <RowLink to={peek(task.key)}>{task.title}</RowLink>
-      </span>
-      <span role="cell" className={wide}>
-        <FeatureCell feature={feature} />
-      </span>
-      <span role="cell" className={`${wide} text-muted-foreground tabular-nums`}>
-        {/* With the Team: two Teams each have a #1. */}
-        {feature && `${teams.get(feature.team_id)?.name ?? ""} #${feature.rank}`.trim()}
-      </span>
-      <span role="cell" className={wide}>
-        {skill && <Pill tone="outline">{skill}</Pill>}
-      </span>
-      <span role="cell" className={`${wide} text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums`}>
-        {sinceText(now - new Date(task.waiting_since).getTime())}
-      </span>
-      <span role="cell" className="flex justify-end">
-        <ClaimButton task={task} primary={primary} />
-      </span>
-    </div>
+      <span className="tabular-nums">{`${c.done}/${total}`}</span>
+    </span>
   );
 }

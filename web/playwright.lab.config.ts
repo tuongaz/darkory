@@ -1,8 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// `npm run lab`: the design lab (/dev/design) under `vite dev`, which alone serves it, with no
+// `npm run lab` (LAB_PORT to move it off 5199): the design lab (/dev/design) and settings.lab.ts
+// under `vite dev`, which alone serves the lab, with no
 // Darkory server: the lab draws sample records. Screenshots go to e2e/screenshots/ (gitignored).
-const port = 5199;
+const port = Number(process.env.LAB_PORT ?? 5199);
 
 export default defineConfig({
   testDir: "e2e",
