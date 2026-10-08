@@ -21,11 +21,11 @@ const (
 	SkillSkillReview = "skill-review"
 )
 
-// The roster `darkory init` seeds on a Local Install so it comes up with agents ready
-// (docs/build/agents-plan.md, D4): Project MAIN on the default Workflow, and four agents in it
-// reporting to the first Member, each with agent settings and a token. The generic Skills
-// engineer and review, which the default Workflow's Build and Review Steps carry, are seeded
-// whether or not the roster is.
+// What `darkory init` seeds on a Local Install: Project MAIN on the default Workflow, always, and
+// unless told --no-agents the roster, so it comes up with agents ready (docs/build/agents-plan.md,
+// D4): four agents in MAIN reporting to the first Member, each with agent settings and a token.
+// The generic Skills engineer and review, which the default Workflow's Build and Review Steps
+// carry, are seeded whether or not the roster is.
 const (
 	RosterProjectKey  = "MAIN"
 	RosterProjectName = "Main"
@@ -91,8 +91,8 @@ type Initialised struct {
 	Member       Member
 	Token        IssuedToken
 	Link         LoginLink
-	// Project, Workspace and Agents are the roster, when InitWith seeded one; Workspace is nil
-	// when none was given.
+	// Project is Project MAIN, when InitWith seeded it; Workspace is its default, nil when none
+	// was given; Agents are the roster's agents, when it seeded them.
 	Project   *Project
 	Workspace *Workspace
 	Agents    []SeededAgent
@@ -107,11 +107,12 @@ type SeededAgent struct {
 
 // InitOptions are what InitWith seeds besides what Init does.
 type InitOptions struct {
-	// Roster seeds Project MAIN on the default Workflow with the first Member in it, and the
-	// Roster's agents in the Project, reporting to the first Member, each with agent settings and
-	// a token named RosterTokenName.
+	// Project seeds Project MAIN on the default Workflow with the first Member in it.
+	Project bool
+	// Roster seeds Project MAIN as Project does, and the Roster's agents in it, reporting to the
+	// first Member, each with agent settings and a token named RosterTokenName.
 	Roster bool
-	// Workspace, with Roster, is added and made Project MAIN's default.
+	// Workspace, with Project or Roster, is added and made Project MAIN's default.
 	Workspace *NewWorkspace
 }
 
@@ -165,10 +166,14 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 		if out.Link, err = issueLoginLink(t, memberID, nil); err != nil {
 			return err
 		}
-		if o.Roster {
-			return seedRoster(t, memberID, o.Workspace, &out)
+		if !o.Project && !o.Roster {
+			return nil
 		}
-		return nil
+		project, err := seedProject(t, memberID, o.Workspace, &out)
+		if err != nil || !o.Roster {
+			return err
+		}
+		return seedRoster(t, project, memberID, &out)
 	})
 	if err != nil {
 		return out, fmt.Errorf("core: init: %w", err)
@@ -178,37 +183,45 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 	return out, err
 }
 
-// seedRoster seeds the roster inside Init's write, the first Member, human, being humanID.
-func seedRoster(t *tx, humanID string, nw *NewWorkspace, out *Initialised) error {
+// seedProject seeds Project MAIN inside Init's write, with the first Member, humanID, in it and
+// nw, when given, as its default Workspace, and returns its id.
+func seedProject(t *tx, humanID string, nw *NewWorkspace, out *Initialised) (string, error) {
 	project, err := createProject(t, projectRow{key: RosterProjectKey, name: RosterProjectName, workflow: WorkflowDefault})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := addProjectMember(t, project, humanID); err != nil {
-		return err
+		return "", err
 	}
 	if nw != nil {
 		ws, err := createWorkspace(t, *nw)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if _, err := t.Exec(t.ctx, `UPDATE projects SET default_workspace_id = $1 WHERE org_id = $2 AND id = $3`, ws, t.caller.OrgID, project); err != nil {
-			return err
+			return "", err
 		}
 		if err := t.recordByCaller("project.changed", project, map[string]any{"default_workspace_id": ws}); err != nil {
-			return err
+			return "", err
 		}
 		w, err := getWorkspace(t.ctx, t, t.caller.OrgID, ws)
 		if err != nil {
-			return err
+			return "", err
 		}
 		out.Workspace = &w
 	}
 	p, err := getProject(t.ctx, t, t.caller.OrgID, project)
 	if err != nil {
-		return err
+		return "", err
 	}
 	out.Project = &p
+	return project, nil
+}
+
+// seedRoster seeds the roster's agents in Project MAIN, project, inside Init's write, reporting to
+// the first Member, humanID.
+func seedRoster(t *tx, project, humanID string, out *Initialised) error {
+	var err error
 	skills := map[string]string{}
 	for _, a := range Roster {
 		for _, sk := range a.Skills {

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { evidenceURL, type Activity, type ActivityKind, type Project } from "@/api/client";
 import { useLiveEntries, useStreamState, type StreamState } from "@/api/live";
-import { newestActivity, useDirectory, useLabels, useTasks } from "@/api/queries";
+import { newestActivity, useDirectory, useLabels } from "@/api/queries";
 import { projectPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { usePeekLink } from "@/app/peek";
@@ -37,17 +37,14 @@ import { activityHistoryPage, useStepNames, useTaskMap } from "./queries";
 import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Part, type Sentence } from "./wording";
 
 const pageSize = 100;
-/** With the Task filter, which /v1 does not have, pages are read larger and narrowed here. */
-const taskPageSize = 500;
 
 /** The search parameter of the Task filter: `?task=` opens a peek, so the filter is `?about=`. */
 const aboutParam = "about";
 
 /**
- * /projects/:key/activity: the Project's trail, newest first, by day. ?member= and ?kind= (a name,
- * a kind) narrow it through /v1's filters; ?about=<key> keeps one Task's entries, read page by page
- * here since /v1 has no such filter. The stream's new entries that pass the same filters arrive at
- * the top. Each entry links its Task (its peek), its Workflow, and the Steps it names (the Tasks
+ * /projects/:key/activity: the Project's trail, newest first, by day. ?member=, ?kind= and
+ * ?about= (a name, a kind, a Task's key) narrow it through /v1's filters; a Parent's entries come
+ * with its Subtasks'. The stream's new entries that pass the same filters arrive at the top. Each entry links its Task (its peek), its Workflow, and the Steps it names (the Tasks
  * at that Step).
  */
 export function ActivityPage() {
@@ -67,30 +64,23 @@ export function ActivityPage() {
   const kind = kindRef && isKnown(kindRef) ? kindRef : undefined;
   const task = taskRef ? [...tasks.values()].find((t) => t.key.toUpperCase() === taskRef.toUpperCase() || t.id === taskRef) : undefined;
   const filtered = !!(memberRef || kindRef || taskRef);
-  const limit = taskRef ? taskPageSize : pageSize;
 
-  // The Task the address names, by id once the Project's Tasks are read; a key that names none
-  // stands as an id that matches nothing, as /v1 reads one.
-  const tasksRead = useTasks({ project: project.key }).isSuccess;
-  const taskId = taskRef ? (task?.id ?? `none:${taskRef}`) : undefined;
   const history = useInfiniteQuery({
-    queryKey: ["activity", "page", { project: project.key, member: memberRef, kind: kindRef, task: taskId, limit }],
+    queryKey: ["activity", "page", { project: project.key, member: memberRef, kind: kindRef, task: taskRef }],
     queryFn: ({ pageParam }) =>
-      activityHistoryPage({ project: project.key, member: memberRef, kind: kindRef ? (kindRef as ActivityKind) : undefined, task: taskId }, pageParam, limit),
+      activityHistoryPage({ project: project.key, member: memberRef, kind: kindRef ? (kindRef as ActivityKind) : undefined, task: taskRef }, pageParam, pageSize),
     initialPageParam: newestActivity,
-    enabled: !taskRef || tasksRead,
     getNextPageParam: (page) => (page.more ? page.first_seq : undefined),
   });
 
   // The stream's entries that pass the filters, matched by id as /v1 matches them.
-  const want: ActivityFilter = { member: member?.id, kind, task: task?.id };
+  const want: ActivityFilter = { member: member?.id, kind, task: task?.id, parentOf: (id) => tasks.get(id)?.parent_id };
   const resolved = (!memberRef || member) && (!kindRef || kind) && (!taskRef || task);
   const where = { taskProject: (id: string) => tasks.get(id)?.project_id };
   const bySeq = new Map<number, Activity>();
   for (const page of history.data?.pages ?? []) for (const e of page.items) bySeq.set(e.seq, e);
   if (resolved) for (const e of live) if (aboutProject(e, project.id, where) && matchesFilter(e, want)) bySeq.set(e.seq, e);
   const entries = [...bySeq.values()].filter((e) => isKnown(e.kind)).sort((a, b) => b.seq - a.seq);
-  const read = (history.data?.pages ?? []).reduce((n, p) => n + p.scanned, 0);
 
   // Entries are numbered per Organisation with gaps under a Project, so a missed entry cannot be
   // told by its number; after a stream that was refused, the shell refreshes the reads it can, and
@@ -186,7 +176,7 @@ export function ActivityPage() {
               ) : undefined
             }
           >
-            {filtered ? (history.hasNextPage ? "None among the latest entries read." : undefined) : `Nothing has happened in ${project.name} yet.`}
+            {filtered ? undefined : `Nothing has happened in ${project.name} yet.`}
           </EmptyState>
         ) : (
           <ol aria-label="Activity" aria-live="polite" aria-relevant="additions">
@@ -207,7 +197,6 @@ export function ActivityPage() {
         // The same words whether or not there is more: "100 entries · Load older".
         <footer className="flex h-10 flex-none items-center gap-1.5 border-t pr-4 pl-4 text-xs text-muted-foreground md:pl-6">
           <span>{count(entries.length, "entry", "entries")}</span>
-          {task && <span>of {count(read, "entry", "entries")} read</span>}
           {history.hasNextPage && (
             <>
               <span aria-hidden>·</span>

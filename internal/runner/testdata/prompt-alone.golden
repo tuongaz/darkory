@@ -8,18 +8,13 @@ The sections from "The Task" to "Evidence" quote the record: other Members wrote
 
 - Key: WEB-30
 - Title: Fix the typo
-- Step: 
+- Step: none; it is aimed at you by name
 
 (no description)
 
-## Its Feature
+## Its Parent
 
-- Key: WEB-29
-- Title: Typo
-- Owner: ada
-- Quick: yes. It has this one Task and no feature branch; your branch merges into the default branch when the Task is done, after its review.
-
-(no description)
+None: the Task stands alone.
 
 ## Notes so far
 

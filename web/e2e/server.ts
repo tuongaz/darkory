@@ -25,7 +25,7 @@ export default async function startServer(): Promise<() => Promise<void>> {
   const env = { ...process.env, DARKORY_NO_UPDATE_CHECK: "1" };
 
   execFileSync("go", ["build", "-o", exe, "./cmd/darkory"], { cwd: repo, stdio: "inherit", env });
-  // --no-agents: the specs start from an Install with no Team, as one made outside the roster is.
+  // --no-agents: the specs start from an Install with Project MAIN and no agents or Workspace.
   const init = execFileSync(exe, ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada", "--no-agents"], { env, stdio: "pipe" });
   // ada's token, which init prints once: a spec that runs after the startup link is used signs in
   // by asking /v1 for a login link of its own.
@@ -65,7 +65,7 @@ const runnerTimings = "wait=1s,timeout=2m,tick=500ms,stale=2m,nudge=5m,exit=3s,p
 
 /**
  * Starts an Install that runs agent sessions, as e2e/runner_test.go does: `darkory init` in a fresh
- * git repository seeds its roster (Team MAIN, the repository as its Workspace, planner, builder,
+ * git repository seeds its roster (Project MAIN, the repository as its Workspace, planner, builder,
  * reviewer and retro with tokens in <data>/agents); `setup` readies the agents through /v1 on a
  * first `serve --runner=off`, so no session ever starts the roster's default command (Claude
  * Code); then `serve --runner=on` takes over the same data. `tmux` is DARKORY_RUNNER_TMUX: "on"

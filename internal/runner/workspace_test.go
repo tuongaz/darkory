@@ -25,27 +25,46 @@ func TestSlug(t *testing.T) {
 	}
 }
 
+func TestBranchNames(t *testing.T) {
+	if got := TaskBranch("MAIN-7", "Support emoji"); got != "main-7-support-emoji" {
+		t.Errorf("TaskBranch = %q", got)
+	}
+	if got := ParentBranch("MAIN-7"); got != "main-7" {
+		t.Errorf("ParentBranch = %q", got)
+	}
+	// No Parent's branch is a Task's, and no Task's branch is another Task's.
+	if strings.HasPrefix(ParentBranch("MAIN-7"), taskPrefix("MAIN-7")) || strings.HasPrefix(TaskBranch("MAIN-70", "x"), taskPrefix("MAIN-7")) {
+		t.Error("branch names overlap")
+	}
+	for in, want := range map[string]string{"main-7-support-emoji": "MAIN-7", "main-7": "MAIN-7", "MAIN-3: Cart page": "MAIN-3",
+		"WEB-12/cart-page": "WEB-12", "chore/lint": "", "main": "", "Bump the linter": ""} {
+		if got := KeyOf(in); got != want {
+			t.Errorf("KeyOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestPlanCheckouts(t *testing.T) {
 	web := Workspace{ID: "w1", Name: "web", Kind: "git", Path: "/src/web", Mode: ModePlain, DefaultBranch: "trunk"}
 	api := Workspace{ID: "w2", Name: "api server", Kind: "git", Path: "/src/api", Mode: ModePullRequest}
 	ledger := Workspace{ID: "w3", Name: "books", Kind: "ledger", Path: "/books"}
 	twin := Workspace{ID: "w4", Name: "web", Kind: "git", Path: "/src/web2"}
 
-	got := PlanCheckouts("/d", "WEB-12", "Cart page", "WEB-1", false, []Workspace{web, api, ledger, twin})
+	got := PlanCheckouts("/d", "WEB-12", "Cart page", "WEB-1", []Workspace{web, api, ledger, twin})
 	want := []Checkout{
-		{Workspace: web, Dir: "/d/workspaces/WEB-12/web", Branch: "WEB-12/cart-page", Base: "feature/WEB-1"},
-		{Workspace: api, Dir: "/d/workspaces/WEB-12/api-server", Branch: "WEB-12/cart-page", Base: "feature/WEB-1"},
-		{Workspace: twin, Dir: "/d/workspaces/WEB-12/web-2", Branch: "WEB-12/cart-page", Base: "feature/WEB-1"},
+		{Workspace: web, Dir: "/d/workspaces/WEB-12/web", Branch: "web-12-cart-page", Base: "web-1"},
+		{Workspace: api, Dir: "/d/workspaces/WEB-12/api-server", Branch: "web-12-cart-page", Base: "web-1"},
+		{Workspace: twin, Dir: "/d/workspaces/WEB-12/web-2", Branch: "web-12-cart-page", Base: "web-1"},
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got  %+v\nwant %+v", got, want)
 	}
-	// A quick Feature's Task branches from the default branch.
-	got = PlanCheckouts("/d", "WEB-30", "Fix the typo", "WEB-29", true, []Workspace{web, api})
-	if got[0].Base != "trunk" || got[1].Base != "main" || got[0].Branch != "WEB-30/fix-the-typo" {
-		t.Fatalf("quick: %+v", got)
+	// A Task with no Parent branches from the default branch.
+	got = PlanCheckouts("/d", "WEB-30", "Fix the typo", "", []Workspace{web, api})
+	if got[0].Base != "trunk" || got[1].Base != "main" || got[0].Branch != "web-30-fix-the-typo" {
+		t.Fatalf("no Parent: %+v", got)
 	}
-	if got := PlanCheckouts("/d", "WEB-12", "x", "WEB-1", false, nil); got != nil {
+	if got := PlanCheckouts("/d", "WEB-12", "x", "WEB-1", nil); got != nil {
 		t.Fatalf("no Workspaces: %+v", got)
 	}
 }
@@ -106,29 +125,30 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
 	ctx := t.Context()
 
-	// The Break down makes the Feature's branch from the default branch.
-	plan := PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", false, []Workspace{ws})
+	// A Parent's first Subtask, its Breakdown, makes the Parent's branch from the default branch.
+	plan := PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws})
 	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", plan)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !branchExists(ctx, repo, "feature/WEB-1") || got[0].Branch != "WEB-2/break-down-checkout" {
+	if !branchExists(ctx, repo, "web-1") || got[0].Branch != "web-2-break-down-checkout" || got[0].Base != "web-1" {
 		t.Fatalf("prepared %+v", got)
 	}
-	if head := mustGit(t, got[0].Dir, "symbolic-ref", "--short", "HEAD"); head != "WEB-2/break-down-checkout" {
+	if head := mustGit(t, got[0].Dir, "symbolic-ref", "--short", "HEAD"); head != "web-2-break-down-checkout" {
 		t.Fatalf("the worktree is on %s", head)
 	}
 	if b, err := os.ReadFile(filepath.Join(got[0].Dir, "a.txt")); err != nil || string(b) != "one\ntwo\nthree\n" {
 		t.Fatalf("the worktree holds %q, %v", b, err)
 	}
 	made, _ := r.ledger.find(repo, func(Made) bool { return true })
-	if len(made) != 2 || made[0].Branch != "feature/WEB-1" || made[0].Feature != "WEB-1" || made[1].Task != "WEB-2" {
+	if len(made) != 2 || made[0].Branch != "web-1" || made[0].Parent != "WEB-1" || made[0].Base != "main" || made[1].Task != "WEB-2" ||
+		made[1].Base != "web-1" {
 		t.Fatalf("the ledger: %+v", made)
 	}
 
-	// A build Task works on its own branch from the Feature's.
-	commitFile(t, got[0].Dir, "plan.txt", "plan\n", "plan") // on WEB-2's branch, not the Feature's
-	plan = PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page", "WEB-1", false, []Workspace{ws})
+	// Another Subtask works on its own branch from the Parent's.
+	commitFile(t, got[0].Dir, "plan.txt", "plan\n", "plan") // on WEB-2's branch, not the Parent's
+	plan = PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page", "WEB-1", []Workspace{ws})
 	got, err = r.Prepare(ctx, "WEB-3", "WEB-1", plan)
 	if err != nil {
 		t.Fatal(err)
@@ -139,8 +159,8 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	commitFile(t, got[0].Dir, "cart.txt", "cart\n", "cart")
 
 	// The review's session finds the worktree its builder left.
-	again, err := r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page, renamed", "WEB-1", false, []Workspace{ws}))
-	if err != nil || again[0].Branch != "WEB-3/cart-page" || again[0].Dir != got[0].Dir {
+	again, err := r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page, renamed", "WEB-1", []Workspace{ws}))
+	if err != nil || again[0].Branch != "web-3-cart-page" || again[0].Dir != got[0].Dir {
 		t.Fatalf("again: %+v, %v", again, err)
 	}
 	// Removed, the worktree comes back on the same branch, whatever the title says now.
@@ -148,11 +168,11 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	if _, err := os.Stat(TaskDir(r.cfg.Data, "WEB-3")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the Task's directory is still there: %v", err)
 	}
-	if !branchExists(ctx, repo, "WEB-3/cart-page") {
+	if !branchExists(ctx, repo, "web-3-cart-page") {
 		t.Fatal("removing the worktree removed the branch")
 	}
-	again, err = r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page, renamed", "WEB-1", false, []Workspace{ws}))
-	if err != nil || again[0].Branch != "WEB-3/cart-page" {
+	again, err = r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page, renamed", "WEB-1", []Workspace{ws}))
+	if err != nil || again[0].Branch != "web-3-cart-page" {
 		t.Fatalf("after removal: %+v, %v", again, err)
 	}
 	if _, err := os.Stat(filepath.Join(again[0].Dir, "cart.txt")); err != nil {
@@ -167,16 +187,58 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	}
 
 	// A branch with a Task's key that the runner did not make is left alone.
-	mustGit(t, repo, "branch", "WEB-4/mine", "main")
-	_, err = r.Prepare(ctx, "WEB-4", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-4", "Theirs", "WEB-1", false, []Workspace{ws}))
-	if err == nil || !strings.Contains(err.Error(), "WEB-4/mine") || !strings.Contains(err.Error(), "not made by the runner") {
+	mustGit(t, repo, "branch", "web-4-mine", "main")
+	_, err = r.Prepare(ctx, "WEB-4", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-4", "Theirs", "WEB-1", []Workspace{ws}))
+	if err == nil || !strings.Contains(err.Error(), "web-4-mine") || !strings.Contains(err.Error(), "not made by the runner") {
 		t.Fatalf("a person's branch: %v", err)
 	}
 
-	// A quick Feature's Task branches from main, and no Feature branch is made.
-	got, err = r.Prepare(ctx, "WEB-6", "WEB-5", PlanCheckouts(r.cfg.Data, "WEB-6", "Typo", "WEB-5", true, []Workspace{ws}))
-	if err != nil || got[0].Base != "main" || branchExists(ctx, repo, "feature/WEB-5") {
-		t.Fatalf("quick: %+v, %v", got, err)
+	// A Task with no Parent branches from main, and no Parent's branch is made.
+	got, err = r.Prepare(ctx, "WEB-6", "", PlanCheckouts(r.cfg.Data, "WEB-6", "Typo", "", []Workspace{ws}))
+	if err != nil || got[0].Base != "main" || got[0].Branch != "web-6-typo" || branchExists(ctx, repo, "web-6") {
+		t.Fatalf("no Parent: %+v, %v", got, err)
+	}
+
+	// A Task worked, then split by its holder: its Subtasks' Parent branch starts from its own
+	// branch, so what it did before the split is kept.
+	commitFile(t, got[0].Dir, "typo.txt", "fixed half\n", "half the typo")
+	r.RemoveCheckouts(ctx, "WEB-6")
+	sub, err := r.Prepare(ctx, "WEB-7", "WEB-6", PlanCheckouts(r.cfg.Data, "WEB-7", "The other half", "WEB-6", []Workspace{ws}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, err := os.ReadFile(filepath.Join(sub[0].Dir, "typo.txt")); err != nil || string(b) != "fixed half\n" {
+		t.Fatalf("the split Task's work is not on its Parent's branch: %q, %v", b, err)
+	}
+}
+
+// A ledger written before model v2 names a Feature's branch feature/<KEY> under "Feature": it
+// reads, it is kept as written when the ledger grows, and no branch of model v2 matches it.
+func TestLedgerReadsEntriesFromBeforeModelV2(t *testing.T) {
+	repo := gitRepo(t)
+	r := newTestRunner(t)
+	old := `{"Branches": [
+  {"Repo": "` + repo + `", "Branch": "feature/MAIN-1", "Base": "main", "Feature": "MAIN-1", "At": "2026-10-07T03:00:00Z"},
+  {"Repo": "` + repo + `", "Branch": "MAIN-2/cart-page", "Base": "feature/MAIN-1", "Task": "MAIN-2", "At": "2026-10-07T03:01:00Z"}
+]}`
+	if err := os.MkdirAll(filepath.Dir(r.ledger.path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(r.ledger.path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, repo, "branch", "feature/MAIN-1", "main")
+	got, err := r.Prepare(t.Context(), "MAIN-3", "MAIN-1", PlanCheckouts(r.cfg.Data, "MAIN-3", "Totals", "MAIN-1", []Workspace{{Name: "web", Kind: "git", Path: repo}}))
+	if err != nil || got[0].Base != "main-1" || got[0].Branch != "main-3-totals" {
+		t.Fatalf("prepared %+v, %v", got, err)
+	}
+	all, err := r.ledger.find("", func(Made) bool { return true })
+	if err != nil || len(all) != 4 || all[0].Legacy != "MAIN-1" || all[0].Parent != "" || all[2].Parent != "MAIN-1" || all[2].Branch != "main-1" {
+		t.Fatalf("the ledger: %+v, %v", all, err)
+	}
+	b, _ := os.ReadFile(r.ledger.path)
+	if !strings.Contains(string(b), `"Feature": "MAIN-1"`) {
+		t.Fatalf("the old entry was not kept as written:\n%s", b)
 	}
 }
 
@@ -202,7 +264,7 @@ func TestPrepareGivesAWorktreeTheRepositorysFilterKeys(t *testing.T) {
 
 	r := newTestRunner(t)
 	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
-	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", false, []Workspace{ws}))
+	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +283,7 @@ func TestPrepareGivesAWorktreeTheRepositorysFilterKeys(t *testing.T) {
 
 	// The worktree of an existing branch of the Task takes the same path.
 	r.RemoveCheckouts(ctx, "WEB-2")
-	again, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", false, []Workspace{ws}))
+	again, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,19 +295,19 @@ func TestPrepareGivesAWorktreeTheRepositorysFilterKeys(t *testing.T) {
 func TestMergeBranch(t *testing.T) {
 	repo := gitRepo(t)
 	ctx := t.Context()
-	mustGit(t, repo, "branch", "feature/WEB-1", "main")
+	mustGit(t, repo, "branch", "web-1", "main")
 	wt := filepath.Join(t.TempDir(), "wt")
-	mustGit(t, repo, "worktree", "add", "-q", "-b", "WEB-3/cart", wt, "feature/WEB-1")
+	mustGit(t, repo, "worktree", "add", "-q", "-b", "web-3-cart", wt, "web-1")
 	commitFile(t, wt, "cart.txt", "cart\n", "cart")
 
 	// Into a branch checked out nowhere: no checkout is touched, and the merge has two parents.
 	head := mustGit(t, repo, "rev-parse", "HEAD")
-	res, err := mergeBranch(ctx, repo, "WEB-3/cart", "feature/WEB-1", "Merge WEB-3/cart into feature/WEB-1")
+	res, err := mergeBranch(ctx, repo, "web-3-cart", "web-1", "Merge web-3-cart into web-1")
 	if err != nil || res.Conflict != "" || res.Already {
 		t.Fatalf("got %+v, %v", res, err)
 	}
-	if tip := mustGit(t, repo, "rev-parse", "feature/WEB-1"); tip != res.Commit {
-		t.Fatalf("feature/WEB-1 is at %s, the merge %s", tip, res.Commit)
+	if tip := mustGit(t, repo, "rev-parse", "web-1"); tip != res.Commit {
+		t.Fatalf("web-1 is at %s, the merge %s", tip, res.Commit)
 	}
 	if parents := strings.Fields(mustGit(t, repo, "rev-list", "--parents", "-n1", res.Commit)); len(parents) != 3 {
 		t.Fatalf("the merge has parents %v; want two (--no-ff)", parents[1:])
@@ -254,31 +316,31 @@ func TestMergeBranch(t *testing.T) {
 		t.Fatal("the merge touched the repository's checkout")
 	}
 	// Again: nothing to do.
-	if res, err := mergeBranch(ctx, repo, "WEB-3/cart", "feature/WEB-1", "again"); err != nil || !res.Already {
+	if res, err := mergeBranch(ctx, repo, "web-3-cart", "web-1", "again"); err != nil || !res.Already {
 		t.Fatalf("again: %+v, %v", res, err)
 	}
 
 	// A conflict leaves both branches where they were.
 	wt2 := filepath.Join(t.TempDir(), "wt2")
-	mustGit(t, repo, "worktree", "add", "-q", "-b", "WEB-4/edit", wt2, "main")
+	mustGit(t, repo, "worktree", "add", "-q", "-b", "web-4-edit", wt2, "main")
 	commitFile(t, wt2, "a.txt", "one\nTWO\nthree\n", "edit two")
 	wt3 := filepath.Join(t.TempDir(), "wt3")
-	mustGit(t, repo, "worktree", "add", "-q", "-b", "WEB-5/edit", wt3, "feature/WEB-1")
+	mustGit(t, repo, "worktree", "add", "-q", "-b", "web-5-edit", wt3, "web-1")
 	commitFile(t, wt3, "a.txt", "one\n2\nthree\n", "edit two too")
-	if _, err := mergeBranch(ctx, repo, "WEB-5/edit", "feature/WEB-1", "WEB-5"); err != nil {
+	if _, err := mergeBranch(ctx, repo, "web-5-edit", "web-1", "WEB-5"); err != nil {
 		t.Fatal(err)
 	}
-	before := mustGit(t, repo, "rev-parse", "feature/WEB-1")
-	res, err = mergeBranch(ctx, repo, "WEB-4/edit", "feature/WEB-1", "WEB-4")
+	before := mustGit(t, repo, "rev-parse", "web-1")
+	res, err = mergeBranch(ctx, repo, "web-4-edit", "web-1", "WEB-4")
 	if err != nil || res.Conflict == "" || !strings.Contains(res.Conflict, "a.txt") || !strings.Contains(res.Conflict, "CONFLICT") {
 		t.Fatalf("a conflict: %+v, %v", res, err)
 	}
-	if after := mustGit(t, repo, "rev-parse", "feature/WEB-1"); after != before {
+	if after := mustGit(t, repo, "rev-parse", "web-1"); after != before {
 		t.Fatal("a conflicting merge moved the target")
 	}
 
 	// Into the branch the repository has checked out: merged there, while it is clean.
-	res, err = mergeBranch(ctx, repo, "feature/WEB-1", "main", "Ship WEB-1")
+	res, err = mergeBranch(ctx, repo, "web-1", "main", "Complete WEB-1")
 	if err != nil || res.Conflict != "" {
 		t.Fatalf("into main: %+v, %v", res, err)
 	}
@@ -289,14 +351,14 @@ func TestMergeBranch(t *testing.T) {
 		t.Fatal("main's checkout is not clean after the merge")
 	}
 	// A conflict there is aborted; uncommitted changes refuse the merge.
-	res, err = mergeBranch(ctx, repo, "WEB-4/edit", "main", "WEB-4 into main")
+	res, err = mergeBranch(ctx, repo, "web-4-edit", "main", "WEB-4 into main")
 	if err != nil || res.Conflict == "" || mustGit(t, repo, "status", "--porcelain") != "" {
 		t.Fatalf("a conflict into main: %+v, %v, status %q", res, err, mustGit(t, repo, "status", "--porcelain"))
 	}
 	commitFile(t, wt, "more.txt", "more\n", "more")
 	os.WriteFile(filepath.Join(repo, "a.txt"), []byte("work in progress\n"), 0o600)
 	tip := mustGit(t, repo, "rev-parse", "main")
-	_, err = mergeBranch(ctx, repo, "WEB-3/cart", "main", "x")
+	_, err = mergeBranch(ctx, repo, "web-3-cart", "main", "x")
 	var dirty ErrDirty
 	if !errors.As(err, &dirty) || dirty.Branch != "main" || mustGit(t, repo, "rev-parse", "main") != tip {
 		t.Fatalf("a dirty checkout: %v", err)

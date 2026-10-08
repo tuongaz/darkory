@@ -16,11 +16,14 @@ Build what the Task asks, with tests.
 
 - Key: WEB-12
 - Title: Cart page
-- Step: Build
+- Step: Acceptance
 - Needs the Skill: engineer
+- Kind: acceptance
 
 Show the cart.
 Totals at the bottom.
+
+This is WEB-1's Acceptance: every other Subtask of it has ended, and you confirm the whole, against what the Parent asks below, before it is called done. Your checkout starts from WEB-1's branch with every Subtask's work merged into it.
 
 ## Its Parent
 

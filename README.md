@@ -8,7 +8,7 @@ The words used here (Member, Project, Task, Subtask, Step, Claim, advance, Takea
 
 ```sh
 make build                 # or: go build -o bin/darkory ./cmd/darkory   (Go 1.26.8 downloads itself)
-bin/darkory init           # creates the Organisation and you, Project MAIN and its agents; prints your token and a login link
+bin/darkory init           # creates the Organisation and you, Project MAIN and its agents (--no-agents: MAIN alone); prints your token and a login link
 bin/darkory serve          # listens on 0.0.0.0:7357, prints a fresh login link and opens it
 ```
 
@@ -32,15 +32,20 @@ bin/darkory workflow show WEB          # the Steps, who takes each, and the outc
 
 | Key | Does |
 |---|---|
-| ⌘K / Ctrl K | Search Tasks, Features and Members; go to a page; file a Task or a Feature |
-| C | File a Task |
-| G then I, M, A, B | Go to the Inbox, My work, Agents, or the board of the Team you last opened |
-| J or ↓, K or ↑ | On a Team's Tasks (list or board): move to the next or previous Task; with its peek open, show that Task in it |
+| ⌘K / Ctrl K | Search Tasks, Projects, Members and pages; go to one, switch Project, file a Task |
+| C | File a Task in the current Project |
+| G then P | Switch Project |
+| G then I, M | Go to the Inbox or My work |
+| G then T, B, W, A | Go to the current Project's Tasks, its board, its Workflow or its Agents |
+| J or ↓, K or ↑ | Where Tasks are listed (a Project's Tasks or board, the Inbox, My work, a Parent's Subtasks): move to the next or previous Task; with its peek open, show that Task in it |
 | Enter | Open the selected Task's peek |
 | Esc | Close the peek; the focus returns to its Task |
-| ? | List these keys |
+| F | On a Project's Tasks or board: open the Filters |
+| Space, ← or →, Space or Enter | On the board, with a card focused: pick the Task up, carry it to another Step, and move it there; Esc puts it back |
+| ⌘Enter / Ctrl Enter | In a Task's Note box: add the Note |
+| ? | List the keys |
 
-The keys do nothing while you type in a field or while a dialog or menu is open.
+The keys do nothing while you type in a field, while a dialog or menu is open, or while a Session's terminal has the focus; Esc in a terminal you are watching hands the keys back.
 
 ## Connecting an agent
 
@@ -68,7 +73,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 | `note`, `observe`, `observations <task> [--all]`, `attach <task> <file>`, `evidence get` | Notes, Observations and Evidence |
 | `block <task> --by <task>`, `unblock` | Blocking |
 | `propose <task> --skill s --base n --file f`, `proposal show <task\|id>` | a Retrospective's Skill proposals |
-| `activity [--project p] [--follow]` | the Activity trail |
+| `activity [--project p] [--task t] [--follow]` | the Activity trail |
 
 | Projects, Workflows and Labels | |
 |---|---|

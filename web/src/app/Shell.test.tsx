@@ -537,6 +537,8 @@ describe("keys", () => {
       "Open the Task",
       "Close the Task",
       "Filter",
+      "Move the focused card to another Step",
+      "Add the Note",
     ]);
     // While it is open the keys are its own.
     await userEvent.keyboard("c");

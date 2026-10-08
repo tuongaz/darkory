@@ -51,6 +51,9 @@ type Proc interface {
 	Tmux() bool
 	// Screen is the last lines the session showed.
 	Screen(lines int) string
+	// PID is the process the command runs under, whose descendants are the agent's work; 0 when
+	// it is not known.
+	PID() int
 }
 
 // Answerer is a Proc whose screen can be read as it shows now and whose Claude Code first-run
@@ -157,6 +160,8 @@ func (p *child) Kill() error {
 }
 
 func (p *child) Tmux() bool { return false }
+
+func (p *child) PID() int { return p.cmd.Process.Pid }
 
 func (p *child) Screen(lines int) string { return lastLines(p.log, lines) }
 
@@ -295,6 +300,15 @@ func (p *tmuxProc) Kill() error {
 }
 
 func (p *tmuxProc) Tmux() bool { return true }
+
+func (p *tmuxProc) PID() int {
+	out, err := p.h.tmux(context.Background(), "display-message", "-p", "-t", pane(p.name), "#{pane_pid}")
+	if err != nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(strings.TrimSpace(out))
+	return n
+}
 
 func (p *tmuxProc) Shown() string {
 	out, _ := p.h.tmux(context.Background(), "capture-pane", "-p", "-J", "-t", pane(p.name))

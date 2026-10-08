@@ -11,6 +11,10 @@
 //	silent    end the turn without a decision (TURN_ENDED), and answer every nudge the same way
 //	hang      stop writing progress and sleep, deaf to /exit
 //	busy      keep working, writing progress every 200 ms, until /exit
+//	longcall  make one tool call that writes nothing for FAKEAGENT_CALL (a duration, 6m by
+//	          default), as a long make verify does, then advance as advance does: the call runs
+//	          sleep as a child process, or with FAKEAGENT_CALL_IN=agent sleeps in the agent itself,
+//	          as a call waiting on a server would
 //	crash     exit 1
 //
 // The commit is of fakeagent-<KEY>.txt, or of the file FAKEAGENT_FILE names, so two Tasks can
@@ -47,7 +51,7 @@ type agent struct {
 	darkory  string
 	key      string
 	kind     string
-	feature  string
+	parent   string
 	manager  string
 	skill    string
 	dirs     []string
@@ -108,6 +112,12 @@ func run() error {
 		return lateDialog()
 	}
 
+	if scenario == "longcall" {
+		if err := a.longCall(); err != nil {
+			return err
+		}
+		scenario = "advance"
+	}
 	switch scenario {
 	case "advance":
 		if a.kind == "breakdown" {
@@ -289,13 +299,12 @@ func lateDialog() error {
 }
 
 var (
-	titleLine = regexp.MustCompile(`(?m)^# ([A-Z][A-Z0-9]*-[0-9]+): `)
-	kindLine  = regexp.MustCompile(`(?m)^- Kind: (\S+)$`)
-	// model v2: the prompt names the Task's Parent under "Its Feature" until M3.
-	featureLine = regexp.MustCompile(`(?m)^## Its Feature\n\n- Key: (\S+)$`)
-	skillLine   = regexp.MustCompile(`(?m)^- Needs the Skill: (\S+)$`)
-	aimLine     = regexp.MustCompile("--aim (\\S+) --title")
-	checkout    = regexp.MustCompile(`(?m)^- [^:\n]+: (/\S+), on branch `)
+	titleLine  = regexp.MustCompile(`(?m)^# ([A-Z][A-Z0-9]*-[0-9]+): `)
+	kindLine   = regexp.MustCompile(`(?m)^- Kind: (\S+)$`)
+	parentLine = regexp.MustCompile(`(?m)^## Its Parent\n\n- Key: (\S+)$`)
+	skillLine  = regexp.MustCompile(`(?m)^- Needs the Skill: (\S+)$`)
+	aimLine    = regexp.MustCompile("--aim (\\S+) --title")
+	checkout   = regexp.MustCompile(`(?m)^- [^:\n]+: (/\S+), on branch `)
 )
 
 // read finds in the prompt what the fake agent needs, and fails when the prompt lacks it.
@@ -309,8 +318,8 @@ func (a *agent) read() error {
 	if m := kindLine.FindStringSubmatch(a.prompt); m != nil {
 		a.kind = m[1]
 	}
-	if m := featureLine.FindStringSubmatch(a.prompt); m != nil {
-		a.feature = m[1]
+	if m := parentLine.FindStringSubmatch(a.prompt); m != nil {
+		a.parent = m[1]
 	}
 	if m := skillLine.FindStringSubmatch(a.prompt); m != nil {
 		a.skill = m[1]
@@ -345,7 +354,7 @@ func (a *agent) breakDown() error {
 		if !ok {
 			return fmt.Errorf("FAKEAGENT_BREAKDOWN: %q is not step:title", item)
 		}
-		args := []string{"file", "--parent", a.feature, "--title", title}
+		args := []string{"file", "--parent", a.parent, "--title", title}
 		if step != "" {
 			args = append(args, "--step", step)
 		}
@@ -358,6 +367,28 @@ func (a *agent) breakDown() error {
 			return err
 		}
 	}
+	return nil
+}
+
+// longCall makes one tool call that writes nothing to the progress file until it returns.
+func (a *agent) longCall() error {
+	d := 6 * time.Minute
+	if v := os.Getenv("FAKEAGENT_CALL"); v != "" {
+		var err error
+		if d, err = time.ParseDuration(v); err != nil {
+			return fmt.Errorf("FAKEAGENT_CALL: %w", err)
+		}
+	}
+	secs := fmt.Sprintf("%.1f", d.Seconds())
+	fmt.Printf("fakeagent: a long call of %s\n", d)
+	a.tool("sleep " + secs)
+	if os.Getenv("FAKEAGENT_CALL_IN") == "agent" {
+		time.Sleep(d)
+	} else if out, err := exec.Command("sleep", secs).CombinedOutput(); err != nil {
+		return fmt.Errorf("sleep %s: %w: %s", secs, err, out)
+	}
+	a.result("")
+	fmt.Println("fakeagent: the long call returned")
 	return nil
 }
 

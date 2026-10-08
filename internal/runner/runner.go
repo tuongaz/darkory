@@ -2,9 +2,9 @@
 // token for, it pulls Tasks through `next`, prepares the Workspaces, starts the agent's command
 // with a prompt from the record, keeps the Claim's Heartbeats while the session shows progress,
 // nudges a session that stops without a decision, and ends the session when the Claim ends,
-// attaching its log as Evidence. model v2: it still thinks in Features, a Task's Parent standing in
-// for one (M3). It merges Task branches as review completes and Feature branches
-// at Ship (ADR 0014). It is a client of the record (plan invariant 9), never a second scheduler.
+// attaching its log as Evidence. It merges a Task's branch into its Parent's, or the default
+// branch, when the Task ends Done, and a Parent's into the default branch when it completes
+// (ADR 0015). It is a client of the record (plan invariant 9), never a second scheduler.
 package runner
 
 import (
@@ -155,6 +155,8 @@ type Runner struct {
 	agents   []*agent
 	// merges is the queue of Activity the merger works through, in order.
 	merges chan client.Activity
+	// kept wakes attachKept, as a Claim ends.
+	kept chan struct{}
 	// reader is the Record the runner reads Activity and merges with.
 	reader Record
 	// skills names Skills by id.
@@ -181,7 +183,7 @@ func New(cfg Config) (*Runner, error) {
 	cfg.Data = data
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
-		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), skills: map[string]client.Skill{},
+		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), kept: make(chan struct{}, 1), skills: map[string]client.Skill{},
 		repos: map[string]*sync.Mutex{}}
 	if r.host == nil {
 		switch cfg.Tmux {
@@ -265,6 +267,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	wg.Go(func() { r.follow(ctx, after) })
 	wg.Go(func() { r.merger(ctx) })
 	wg.Go(func() { r.pollPullRequests(ctx) })
+	wg.Go(func() { r.attachKept(ctx) })
 	for _, a := range r.agents {
 		wg.Go(func() { a.run(ctx) })
 	}
@@ -345,6 +348,7 @@ func (r *Runner) dispatch(a client.Activity) {
 			}
 		}
 		r.mu.Unlock()
+		r.wakeKept()
 	}
 	switch a.Kind {
 	case client.ActivityKindTaskCompleted, client.ActivityKindTaskDropped:
@@ -390,7 +394,7 @@ func (r *Runner) Running() []RunnerSession {
 }
 
 // session finds the latest session of a Task, by id or key. Two can run for a moment: one ending
-// after a Handover, the next starting.
+// after its agent advanced the Task, the next starting.
 func (r *Runner) session(task string) *session {
 	r.mu.Lock()
 	defer r.mu.Unlock()

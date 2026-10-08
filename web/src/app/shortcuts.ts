@@ -9,7 +9,8 @@ import { taskRow, taskRows } from "./selection";
 const chordMs = 1000;
 
 /** "⌘K" on a Mac, "Ctrl K" elsewhere. */
-export const searchKeys = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
+const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+export const searchKeys = mac ? "⌘K" : "Ctrl K";
 
 /**
  * Every key the app answers, as the shortcuts sheet (?) lists them: each entry is one or more
@@ -39,7 +40,12 @@ export const shortcutList: { section: string; keys: { label: string; ways: strin
       { label: "Open the Task", ways: [["Enter"]] },
       { label: "Close the Task", ways: [["Esc"]] },
       { label: "Filter", ways: [["F"]] },
+      { label: "Move the focused card to another Step", ways: [["Space", "←", "Space"], ["Space", "→", "Space"]] },
     ],
+  },
+  {
+    section: "A Task",
+    keys: [{ label: "Add the Note", ways: [[mac ? "⌘Enter" : "Ctrl Enter"]] }],
   },
 ];
 

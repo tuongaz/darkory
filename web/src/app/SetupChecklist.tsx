@@ -11,7 +11,8 @@ import { Content, TopBar } from "./TopBar";
 
 /**
  * The three steps that set up an Install, shown in the Inbox until the Organisation has a Task:
- * with none, the Inbox would be empty. A fresh `init` makes MAIN, so step 1 is usually done.
+ * with none, the Inbox would be empty. `darkory init` always makes MAIN, with or without agents, so
+ * on a fresh Install step 1 is done.
  */
 export function SetupChecklist() {
   const me = useCurrentMe();
