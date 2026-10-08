@@ -4,10 +4,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { api, call, type TaskDetail } from "@/api/client";
 import { useLabels } from "@/api/queries";
+import { LabelDot, LabelPill } from "@/components/LabelPill";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { LabelPill } from "../board/bits";
 import { useTaskWorkflow } from "./queries";
 
 /**
@@ -55,7 +55,7 @@ export function LabelsEditor({ detail, editable }: { detail: TaskDetail; editabl
                 return (
                   <CommandItem key={l.id} value={l.id} keywords={[l.name]} onSelect={() => toggle(l.id)} data-checked={on}>
                     <CheckIcon className={cn(!on && "invisible")} aria-hidden />
-                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: l.color }} />
+                    <LabelDot label={l} />
                     <span className="truncate">{l.name}</span>
                     <span className="ml-auto text-xs text-muted-foreground">{l.project_id ? project?.name : "Organisation"}</span>
                   </CommandItem>

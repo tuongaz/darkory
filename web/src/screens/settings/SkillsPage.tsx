@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { Skill, SkillDetail, SkillVersion } from "@/api/client";
 import { useDirectory, useSkills } from "@/api/queries";
+import { createSkill } from "@/api/writes";
 import { FormDialog, FormRow, FormRows } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -22,7 +23,6 @@ import { holdersBySkill, humansFirst, lineDiff, pendingProposals, skillNamePatte
 import { Avatars, Segmented } from "./parts";
 import { skillPath, skillsPath } from "./paths";
 import { useMemberDetails, useRetrospectives, useSkillDetail, useSkillTasks, useSkillVersions } from "./queries";
-import { createSkill } from "./writes";
 
 // Skill · Kind · Builds on · Built in · Current · Held by. A phone keeps Skill and Held by.
 const cols = "grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_90px_120px_80px_90px_220px]";

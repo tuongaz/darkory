@@ -2,7 +2,7 @@
 // about the record refetches it; Activity history is joined with what the stream has brought.
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Activity } from "@/api/client";
+import { api, call, type Activity, type ActivityKind } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { keys, newestActivity, useProjects, useWorkflow } from "@/api/queries";
 import { findProject } from "@/app/currentProject";
@@ -20,28 +20,32 @@ export function useTakeableIds() {
   });
 }
 
-// How far back a Task's path is read: pages of its Project's path entries until its filing.
-const pathPages = 6;
+// How far back a Task's Activity is read: pages of its Project's until the Task's filing.
+const taskPages = 6;
 
 /**
- * The entries that trace a Task through its Workflow (`pathKinds`), with what the stream has
- * brought since. `/v1/activity` reads by Project, not by Task, so the Project's pages are read
- * back from the newest until the Task's filing is found, at most six pages of 500.
+ * A Task's Activity of `kinds`, oldest page last. This is the one place that knows
+ * /v1/activity reads by Project and not by Task: it reads the Project's pages back from the newest
+ * until the Task's filing is among them, at most six pages of 500, and keeps the Task's entries.
+ * When /v1 takes `task`, this becomes one call with it.
  */
+export async function taskActivity(project: string, task: string, kinds: readonly ActivityKind[]): Promise<Activity[]> {
+  const out: Activity[] = [];
+  let before = newestActivity;
+  for (let i = 0; i < taskPages; i++) {
+    const page = await call(api.GET("/v1/activity", { params: { query: { project, kind: [...kinds], before, limit: 500 } } }));
+    out.push(...page.items.filter((e) => e.subject_type === "task" && e.subject_id === task));
+    if (out.some((e) => e.kind === "task.filed") || page.first_seq === undefined || page.items.length < 500) break;
+    before = page.first_seq;
+  }
+  return out;
+}
+
+/** The entries that trace a Task through its Workflow (`pathKinds`), with what the stream has brought since. */
 export function useTaskPath(projectId: string | undefined, taskId: string | undefined) {
   const history = useQuery({
     queryKey: ["activity", { project: projectId, kind: pathKinds, task: taskId }],
-    queryFn: async () => {
-      const out: Activity[] = [];
-      let before = newestActivity;
-      for (let i = 0; i < pathPages; i++) {
-        const page = await call(api.GET("/v1/activity", { params: { query: { project: projectId, kind: [...pathKinds], before, limit: 500 } } }));
-        out.push(...page.items.filter((e) => e.subject_id === taskId));
-        if (out.some((e) => e.kind === "task.filed") || page.first_seq === undefined || page.items.length < 500) break;
-        before = page.first_seq;
-      }
-      return out;
-    },
+    queryFn: () => taskActivity(projectId!, taskId!, pathKinds),
     enabled: !!projectId && !!taskId,
   });
   const live = useLiveEntries();

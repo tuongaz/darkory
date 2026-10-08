@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BanIcon, KeyRoundIcon, LogOutIcon, MonitorIcon, XIcon, ZapIcon } from "lucide-react";
 import { useState } from "react";
 import type { Member, Token } from "@/api/client";
+import { logout } from "@/api/writes";
 import { SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
@@ -12,8 +13,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { shortSessionId } from "@/lib/members";
 import { boundToSession, count, madeThrough, revokeSummary, type Held, type Session } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, RecordRow } from "./parts";
-import { logout } from "@/api/writes";
-import { closeSession, revokeToken } from "./writes";
+import { closeSession, revokeToken } from "@/api/writes";
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });

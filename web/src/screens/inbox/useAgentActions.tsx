@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { api, call, type Member } from "@/api/client";
+import { setAgentSettings } from "@/api/writes";
 import { FormDialog } from "@/components/FormDialog";
 import type { AgentAction } from "./agentActions";
 import { refusalToast } from "./toast";
@@ -15,7 +16,7 @@ export function useAgentActions(agent: Member | undefined) {
   const navigate = useNavigate();
   const [stopping, setStopping] = useState<string | null>(null);
   const pause = useMutation({
-    mutationFn: (paused: boolean) => call(api.PATCH("/v1/members/{member}/agent", { params: { path: { member: agent!.id } }, body: { paused } })),
+    mutationFn: (paused: boolean) => setAgentSettings(agent!.id, { paused }),
     onSuccess: (m) => toast.success(m.agent?.paused ? `${agent!.name} paused: it starts no new session` : `${agent!.name} resumed`),
     onError: refusalToast,
   });

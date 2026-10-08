@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link, useNavigate, type To } from "react-router";
 import { api, call, type Project, type Task } from "@/api/client";
-import { useDirectory, useRunnerSessions } from "@/api/queries";
+import { useDirectory, useLabels, useRunnerSessions } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
+import { LabelPills } from "@/components/LabelPill";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Button } from "@/components/ui/button";
@@ -125,6 +126,9 @@ export function TaskRow({
 }) {
   const peek = usePeekLink();
   const selected = useSelectedTask() === task.key;
+  // The Labels its Project's Tasks can carry, read once per Project and shared with its pages.
+  const carried = useLabels(project?.key).data;
+  const labels = useMemo(() => new Map((carried ?? []).map((l) => [l.id, l])), [carried]);
   return (
     <div data-task={task.key} tabIndex={-1} className={cn(rowGrid, "outline-none", selected && "ring-2 ring-ring ring-inset")}>
       <TaskGlyph task={task} />
@@ -134,6 +138,7 @@ export function TaskRow({
       </span>
       <span className="flex min-w-0 flex-col md:flex-row md:items-center md:gap-2">
         <RowLink to={peek(task.key)}>{task.title}</RowLink>
+        {project && <LabelPills ids={task.labels} labels={labels} className="hidden md:flex" />}
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground md:hidden">
           {project && <ProjectMark project={project} />}
           {task.key}

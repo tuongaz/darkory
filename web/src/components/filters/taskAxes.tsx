@@ -27,7 +27,7 @@ import { ProjectMark } from "@/components/ProjectMark";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { liveClaim } from "@/work";
 import { passesDate } from "./dates";
-import { LabelDot } from "./LabelDot";
+import { LabelDot } from "@/components/LabelPill";
 import type { FilterPill } from "./filterState";
 import type { FilterField, FilterOption } from "./operators";
 

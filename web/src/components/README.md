@@ -128,8 +128,7 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
   `useViews(entity, project?)` (`["views", { entity, project }]`), `useWorkspaces` (`["workspaces"]`),
   `useRunnerSessions` (`["runner", "sessions"]`: `{ runner, items }`) and `useRunnerSession(taskId)`.
   Name Projects by key in keys (the route's), Members and Skills by id.
-- **Writes** in `@/api/writes`: `createProject`, `updateProject`, `addProjectMember`,
-  `removeProjectMember`, `createMember`, `fileTask`, `logout`. `ApiError.detailList("outcomes")`
+- **Writes** in `@/api/writes`, one per /v1 operation, for every screen: Projects (`createProject`, `updateProject`, `addProjectMember`, `removeProjectMember`), `setWorkflow`, Members (`createMember`, `updateMember`, `deactivateMember`, `reactivateMember`, `grantSkill`, `revokeSkill`, `setManager`, `clearManager`), `createSkill`, agents (`setAgentSettings`, `clearAgentSettings`), credentials (`issueToken`, `revokeToken`, `issueLoginLink`, `closeSession`), Workspaces (`createWorkspace`, `updateWorkspace`, `removeWorkspace`), Labels (`createLabel`, `updateLabel`, `deleteLabel`), `fileTask`, `logout`. A Task's own actions stay with its screens. `ApiError.detailList("outcomes")`
   reads the outcomes `no_connector` and `use_advance` carry; `isRefusal(err, ...codes)`.
 - `@/work`: `liveClaim`, `boundTo`, `atHold` (a Task at a Step with no Skill), `liveAgents`,
   `taskWorkGlyph(task, now, kindOf, session?)` (a Task record's WorkGlyph: ended, a Parent's
@@ -169,6 +168,7 @@ Skill with its version 1 included.
 | `Refusal error`, `Loaded query` | | A refusal with its stable code; a query's data, skeleton or refusal. |
 | `Time`, `ClockTime`, `DayTime what`, `RelativeTime` | | "6 Oct 2026, 22:18"; "22:18"; a table's time column, "22:18" today and "6 Oct" before, its hover naming the field ("Waiting since …"); "in 4 minutes". |
 | `CopyValue value what`, `SessionId id` | | A value in mono that copies itself on click, whole on hover (a branch). `SessionId` shows a Session id as "…" and its last 8 characters, where UUIDv7 ids differ. |
+| `LabelPill label`, `LabelPills ids labels`, `LabelDot label` | | A Label: its colour as a dot (the record's own colour, through the CSSOM), then its name in a round outline; `LabelPills` draws a Task's by name, those that still exist. Rows, cards, a Task's head, Settings › Labels, the Filter. |
 | `PillsFit names` | `.badge` | Skill pills on one line: as many whole ones as fit, then "+N" naming the rest on hover. |
 | `RunnerSessionBadge session bare state` | | The Runner's session on a Task as one line: "Session [Running] started 04:25 · mac-mini"; `bare` leaves out "Session" under a Session column, `state={false}` the pill beside a State column (Agents). |
 | `SessionFacts session agent` | | A runner session's facts in one line: the agent, started, its state, the host, `tmux dk-WEB-12` or "no tmux". |

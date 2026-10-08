@@ -2,9 +2,9 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { ChevronDownIcon, HeartPulseIcon, HistoryIcon, PaperclipIcon, RotateCcwIcon, XIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import { api, call, evidenceURL, type Activity, type ActivityKind, type Project } from "@/api/client";
+import { evidenceURL, type Activity, type ActivityKind, type Project } from "@/api/client";
 import { useLiveEntries, useStreamState, type StreamState } from "@/api/live";
-import { newestActivity, useDirectory, useLabels } from "@/api/queries";
+import { newestActivity, useDirectory, useLabels, useTasks } from "@/api/queries";
 import { projectPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { usePeekLink } from "@/app/peek";
@@ -33,7 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { aboutProject, count, groupByDay, matchesFilter, sizeText, type ActivityFilter } from "./derive";
-import { useStepNames, useTaskMap } from "./queries";
+import { activityHistoryPage, useStepNames, useTaskMap } from "./queries";
 import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Part, type Sentence } from "./wording";
 
 const pageSize = 100;
@@ -69,16 +69,17 @@ export function ActivityPage() {
   const filtered = !!(memberRef || kindRef || taskRef);
   const limit = taskRef ? taskPageSize : pageSize;
 
+  // The Task the address names, by id once the Project's Tasks are read; a key that names none
+  // stands as an id that matches nothing, as /v1 reads one.
+  const tasksRead = useTasks({ project: project.key }).isSuccess;
+  const taskId = taskRef ? (task?.id ?? `none:${taskRef}`) : undefined;
   const history = useInfiniteQuery({
-    queryKey: ["activity", "page", { project: project.key, member: memberRef, kind: kindRef, limit }],
+    queryKey: ["activity", "page", { project: project.key, member: memberRef, kind: kindRef, task: taskId, limit }],
     queryFn: ({ pageParam }) =>
-      call(
-        api.GET("/v1/activity", {
-          params: { query: { project: project.key, before: pageParam, limit, member: memberRef, kind: kindRef ? [kindRef as ActivityKind] : undefined } },
-        }),
-      ),
+      activityHistoryPage({ project: project.key, member: memberRef, kind: kindRef ? (kindRef as ActivityKind) : undefined, task: taskId }, pageParam, limit),
     initialPageParam: newestActivity,
-    getNextPageParam: (page) => (page.items.length < limit || page.first_seq === undefined || page.first_seq <= 1 ? undefined : page.first_seq),
+    enabled: !taskRef || tasksRead,
+    getNextPageParam: (page) => (page.more ? page.first_seq : undefined),
   });
 
   // The stream's entries that pass the filters, matched by id as /v1 matches them.
@@ -86,10 +87,10 @@ export function ActivityPage() {
   const resolved = (!memberRef || member) && (!kindRef || kind) && (!taskRef || task);
   const where = { taskProject: (id: string) => tasks.get(id)?.project_id };
   const bySeq = new Map<number, Activity>();
-  for (const page of history.data?.pages ?? []) for (const e of page.items) if (!task || matchesFilter(e, { task: task.id })) bySeq.set(e.seq, e);
+  for (const page of history.data?.pages ?? []) for (const e of page.items) bySeq.set(e.seq, e);
   if (resolved) for (const e of live) if (aboutProject(e, project.id, where) && matchesFilter(e, want)) bySeq.set(e.seq, e);
   const entries = [...bySeq.values()].filter((e) => isKnown(e.kind)).sort((a, b) => b.seq - a.seq);
-  const read = (history.data?.pages ?? []).reduce((n, p) => n + p.items.length, 0);
+  const read = (history.data?.pages ?? []).reduce((n, p) => n + p.scanned, 0);
 
   // Entries are numbered per Organisation with gaps under a Project, so a missed entry cannot be
   // told by its number; after a stream that was refused, the shell refreshes the reads it can, and

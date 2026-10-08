@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { useLabels, useProject, useProjectLabels } from "@/api/queries";
 import { useRouteProject } from "@/app/currentProject";
+import { LabelPill } from "@/components/LabelPill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { useCurrentMe } from "@/me";
@@ -84,9 +85,8 @@ export function ProjectLabelsPage() {
           </h2>
           <ul className="flex flex-wrap gap-1.5">
             {org.data.map((l) => (
-              <li key={l.id} className="inline-flex h-6 items-center gap-1.5 rounded-md border px-2 text-xs">
-                <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: l.color }} />
-                {l.name}
+              <li key={l.id}>
+                <LabelPill label={l} className="h-6 text-xs" />
               </li>
             ))}
           </ul>

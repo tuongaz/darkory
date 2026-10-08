@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { ApiError, type AgentSettings, type Member } from "@/api/client";
 import type { components } from "@/api/schema.gen";
+import { clearAgentSettings, setAgentSettings } from "@/api/writes";
 import { InfoPopover } from "@/components/InfoPopover";
 import { SectionHeader } from "@/components/PageHeader";
 import { Refusal } from "@/components/Refusal";
@@ -14,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { argsOf, argsText, envOf, envText, knownModels, placeholders } from "./agent";
 import { count } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, SettingsForm, SettingsRow, w320 } from "./parts";
-import { clearAgentSettings, setAgentSettings } from "./writes";
 
 type Body = components["schemas"]["SetAgentSettingsBody"];
 

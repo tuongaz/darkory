@@ -8,6 +8,7 @@ import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
+import { LabelPill, LabelPills } from "@/components/LabelPill";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { DayTime } from "@/components/Time";
@@ -15,7 +16,7 @@ import { WorkGlyph } from "@/components/WorkGlyph";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
-import { BlocksPill, EvidenceCount, LabelPills, LabelPill, MarkPill, People } from "./bits";
+import { BlocksPill, EvidenceCount, MarkPill, People } from "./bits";
 import { groupKey, isParent, marksOf, progressText, updatedAt, type Group } from "./derive";
 import { aimedAt, holderOf, type TasksModel } from "./model";
 

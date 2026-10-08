@@ -1,6 +1,6 @@
 import { useQueries, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
-import { api, call, type Activity, type ActivityKind, type Project, type Task } from "@/api/client";
+import { api, call, type Activity, type ActivityKind, type ActivityPage, type Project, type Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { keys, newestActivity, useDirectory, useTasks } from "@/api/queries";
 import { useWorkflows } from "@/components/filters/useTaskFilter";
@@ -125,4 +125,25 @@ export function useStepNames(projects?: Project[]): Map<string, StepName> {
     for (const [projectId, wf] of workflows) for (const s of wf?.steps ?? []) out.set(s.id, { name: s.name, projectId, skillId: s.skill_id });
     return out;
   }, [workflows]);
+}
+
+/** A page of the Activity page's history: its entries that pass the filters, and whether more are before it. */
+export type HistoryPage = ActivityPage & { more: boolean; scanned: number };
+
+/**
+ * One page of a Project's Activity before `before`, narrowed by the Activity page's filters:
+ * `member` and `kind` by /v1, `task` (an id) here, from the `limit` entries read, so a page may
+ * hold none of the Task's entries and still not be the last. This is the one place that knows
+ * /v1/activity has no `task`: when it does, `task` goes into the query and the narrowing goes.
+ */
+export async function activityHistoryPage(
+  filter: { project: string; member?: string; kind?: ActivityKind; task?: string },
+  before: number,
+  limit: number,
+): Promise<HistoryPage> {
+  const { task, kind, ...rest } = filter;
+  const page = await call(api.GET("/v1/activity", { params: { query: { ...rest, kind: kind ? [kind] : undefined, before, limit } } }));
+  const more = page.items.length >= limit && page.first_seq !== undefined && page.first_seq > 1;
+  const items = task ? page.items.filter((e) => e.subject_type === "task" && e.subject_id === task) : page.items;
+  return { ...page, items, more, scanned: page.items.length };
 }

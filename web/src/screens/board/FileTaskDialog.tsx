@@ -13,6 +13,7 @@ import { findProject } from "@/app/currentProject";
 import { usePeekLink } from "@/app/peek";
 import { FormDialog } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
+import { LabelDot } from "@/components/LabelPill";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Input } from "@/components/ui/input";
@@ -349,7 +350,7 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
             options={(labels.data ?? []).map((l) => ({
               value: l.id,
               label: l.name,
-              icon: <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: l.color }} />,
+              icon: <LabelDot label={l} />,
               detail: <span className="text-xs text-muted-foreground">{l.project_id ? projectName : "Organisation"}</span>,
             }))}
             placeholder="None"

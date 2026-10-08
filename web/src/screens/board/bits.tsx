@@ -1,7 +1,7 @@
-// The pieces a Task row, a Task card and a Task's page share: its Labels, its marks, its Parent,
+// The pieces a Task row, a Task card and a Task's page share: its marks, its Parent,
 // what it blocks, its Evidence count, its Owner and holder.
 import { LinkIcon, PaperclipIcon } from "lucide-react";
-import type { Label, Member, Task, TaskBrief } from "@/api/client";
+import type { Member, Task, TaskBrief } from "@/api/client";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -10,32 +10,6 @@ import { shortWhen } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import type { Mark } from "./derive";
-
-/** A Label: its colour as a dot, then its name. The colour is the record's, drawn through the CSSOM. */
-export function LabelPill({ label, className }: { label: Pick<Label, "name" | "color">; className?: string }) {
-  return (
-    <span
-      data-label={label.name}
-      className={cn("inline-flex h-5 max-w-36 min-w-0 flex-none items-center gap-1.5 rounded-full border px-2 text-2xs whitespace-nowrap text-foreground", className)}
-    >
-      <span aria-hidden className="size-2 flex-none rounded-full" style={{ backgroundColor: label.color }} />
-      <span className="truncate">{label.name}</span>
-    </span>
-  );
-}
-
-/** A Task's Labels, by name, those it names that still exist. */
-export function LabelPills({ ids, labels, className }: { ids: string[] | undefined; labels: Map<string, Label>; className?: string }) {
-  const shown = (ids ?? []).flatMap((id) => labels.get(id) ?? []).sort((a, b) => a.name.localeCompare(b.name));
-  if (shown.length === 0) return null;
-  return (
-    <span className={cn("flex min-w-0 items-center gap-1 overflow-hidden", className)} aria-label={`Labels: ${shown.map((l) => l.name).join(", ")}`}>
-      {shown.map((l) => (
-        <LabelPill key={l.id} label={l} />
-      ))}
-    </span>
-  );
-}
 
 export function MarkPill({ mark, now }: { mark: Mark; now: number }) {
   switch (mark.kind) {

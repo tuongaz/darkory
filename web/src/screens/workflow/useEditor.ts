@@ -3,9 +3,9 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { invalidateAll, keys, useWorkflow } from "@/api/queries";
+import { setWorkflow } from "@/api/writes";
 import { adoptIds, newIds, toBody, type WorkflowRecord } from "./bind";
 import { problem, restore, type Change } from "./edits";
-import { setWorkflow } from "./writes";
 
 /** The toast every change shows, replaced by the next: the last change, with its Undo. */
 export const changeToast = "workflow-change";

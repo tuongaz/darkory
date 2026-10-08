@@ -22,7 +22,7 @@ import { useCurrentMe } from "@/me";
 import { SettingsFrame, tableHead } from "./frame";
 import { count, defaultOf, modeNames, naming, workspaceNamePattern } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, Segmented } from "./parts";
-import { createWorkspace, removeWorkspace, updateWorkspace } from "./writes";
+import { createWorkspace, removeWorkspace, updateWorkspace } from "@/api/writes";
 
 // Name · Kind · Path · Mode · Default branch · Default of · Open Tasks · ⋯. A phone keeps Name,
 // Mode and ⋯; the rest come at the width of a laptop.

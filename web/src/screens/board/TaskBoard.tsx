@@ -27,6 +27,7 @@ import type { Task } from "@/api/client";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { Key } from "@/components/Key";
+import { LabelPills } from "@/components/LabelPill";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { WorkGlyph } from "@/components/WorkGlyph";
@@ -35,7 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
-import { BlocksPill, EvidenceCount, HeartbeatLine, LabelPills, MarkPill, ParentRef, People } from "./bits";
+import { BlocksPill, EvidenceCount, HeartbeatLine, MarkPill, ParentRef, People } from "./bits";
 import { columnName, isParent, marksOf, progressText, type Column } from "./derive";
 import { aimedAt, holderOf, type TasksModel } from "./model";
 

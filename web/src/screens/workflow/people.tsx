@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { createSkill, grantSkill, issueToken, setAgentSettings } from "./writes";
+import { createSkill, grantSkill, issueToken, setAgentSettings } from "@/api/writes";
 
 /*
  * Who takes a Step's Tasks, changed from its panel: a Member of the Organisation given the Step's

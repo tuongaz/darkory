@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import type { IssuedToken, LoginLink, Member } from "@/api/client";
+import { issueLoginLink, issueToken } from "@/api/writes";
 import { FormDialog, FormRow, FormRows } from "@/components/FormDialog";
 import { Refusal } from "@/components/Refusal";
 import { ClockTime } from "@/components/Time";
@@ -8,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ShownOnce } from "./parts";
-import { issueLoginLink, issueToken } from "./writes";
 
 /**
  * A dialog that shows what /v1 returns once (a token's secret, a login link) and closes with Done
@@ -76,7 +76,7 @@ export function IssueTokenDialog({ member, onClose }: { member: Member; onClose:
   const [name, setName] = useState("");
   const [timeout, setTimeoutSeconds] = useState("");
   const issue = useMutation({
-    mutationFn: () => issueToken(member.id, name.trim(), timeout ? Number(timeout) : undefined),
+    mutationFn: () => issueToken(member.id, { name: name.trim(), default_heartbeat_timeout_seconds: timeout ? Number(timeout) : undefined }),
   });
   if (issue.data) {
     return (

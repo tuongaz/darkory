@@ -2,7 +2,9 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckIcon, PlusIcon, TagIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { Label } from "@/api/client";
+import { createLabel, deleteLabel, updateLabel } from "@/api/writes";
 import { EmptyState } from "@/components/EmptyState";
+import { LabelDot, LabelPill } from "@/components/LabelPill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -14,7 +16,6 @@ import { tableHead, tableRow } from "./frame";
 import { colorPattern, count, labelColors, labelNameProblem as nameProblem, nextColor } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu } from "./parts";
 import { useLabelUse } from "./queries";
-import { createLabel, deleteLabel, updateLabel } from "./writes";
 
 // Label · ⋯. The name takes the width; the colour sits beside it.
 const cols = "grid-cols-[minmax(0,1fr)_26px]";
@@ -81,11 +82,6 @@ export function LabelsEditor({
   );
 }
 
-function Swatch({ color, className }: { color: string; className?: string }) {
-  // The colour is the record's own, so it is drawn from its value; everything else uses tokens.
-  return <span aria-hidden className={cn("inline-block size-3 flex-none rounded-full", className)} style={{ backgroundColor: color }} />;
-}
-
 /** The colour button: the dot, opening the set and a field for any other `#rrggbb`. */
 function ColorPicker({ color, onChange, label, disabled }: { color: string; onChange: (c: string) => void; label: string; disabled?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -109,7 +105,7 @@ function ColorPicker({ color, onChange, label, disabled }: { color: string; onCh
           disabled={disabled}
           className="grid size-6 flex-none cursor-pointer place-items-center rounded-md hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-default disabled:hover:bg-transparent"
         >
-          <Swatch color={color} />
+          <LabelDot label={{ color }} className="size-3" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[212px] p-2">
@@ -124,7 +120,7 @@ function ColorPicker({ color, onChange, label, disabled }: { color: string; onCh
               onClick={() => pick(c)}
               className="grid size-[21px] cursor-pointer place-items-center rounded-sm hover:bg-accent"
             >
-              <Swatch color={c} />
+              <LabelDot label={{ color: c }} className="size-3" />
             </button>
           ))}
         </div>
@@ -135,7 +131,7 @@ function ColorPicker({ color, onChange, label, disabled }: { color: string; onCh
             if (colorPattern.test(typed.trim())) pick(typed.trim());
           }}
         >
-          <Swatch color={colorPattern.test(typed.trim()) ? typed.trim() : color} />
+          <LabelDot label={{ color: colorPattern.test(typed.trim()) ? typed.trim() : color }} className="size-3" />
           <Input
             aria-label="Colour as #rrggbb"
             value={typed}
@@ -217,7 +213,7 @@ function LabelRow({ label: l, editable, taken, onDelete }: { label: Label; edita
           <ColorPicker color={shown.color} onChange={(color) => save.mutate({ color })} label={`Colour of ${l.name}`} disabled={save.isPending} />
         ) : (
           <span className="grid size-6 flex-none place-items-center">
-            <Swatch color={l.color} />
+            <LabelDot label={{ color: l.color }} className="size-3" />
           </span>
         )}
         {editing ? (
@@ -299,10 +295,7 @@ function DeleteLabelDialog({ label: l, onClose }: { label: Label; onClose: () =>
       ) : (
         <Facts>
           <Fact label="Removes">
-            <span className="inline-flex items-center gap-1.5">
-              <Swatch color={l.color} />
-              {l.name}
-            </span>
+            <LabelPill label={l} />
             <span className="font-normal text-muted-foreground">
               {n === 0 ? "No Task carries it." : `from ${count(n, "Task")}, open and ended`}
             </span>

@@ -30,7 +30,7 @@ import { Chip, ConfirmDialog, Fact, Facts, MemberName, MoreMenu, Picker, Setting
 import { agentsPath, membersPath } from "./paths";
 import { useHeldTasks } from "./queries";
 import { IssueTokenDialog, SignInLinkDialog } from "./secrets";
-import { clearManager, deactivateMember, grantSkill, reactivateMember, revokeSkill, setManager, updateMember } from "./writes";
+import { clearManager, deactivateMember, grantSkill, reactivateMember, revokeSkill, setManager, updateMember } from "@/api/writes";
 
 /**
  * Settings › Organisation › Members › a Member, and Agents › an agent: one Member's settings,

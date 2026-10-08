@@ -17,7 +17,7 @@ import { firstTokenName } from "./model";
 import { Segmented } from "./parts";
 import { memberPath } from "./paths";
 import { OnceDialog, SignInLinkDialog, TokenShown } from "./secrets";
-import { issueToken, setAgentSettings } from "./writes";
+import { issueToken, setAgentSettings } from "@/api/writes";
 
 type Created = { member: Member; token?: IssuedToken; problems: unknown[] };
 
@@ -74,7 +74,7 @@ export function NewMemberDialog({
         }
       };
       if (member.kind === "agent") {
-        await attempt(async () => (out.token = await issueToken(member.id, firstTokenName)));
+        await attempt(async () => (out.token = await issueToken(member.id, { name: firstTokenName })));
         if (runner) await attempt(async () => (out.member = await setAgentSettings(member.id, { model: model.trim() || defaultModel })));
       }
       for (const key of chosen) await attempt(() => addProjectMember(key, member.id));
