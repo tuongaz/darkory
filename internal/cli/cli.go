@@ -121,8 +121,11 @@ func Handles(args []string) bool {
 		return slices.Contains([]string{"--url", "-url", "--token", "-token", "--session", "-session", "--json", "-json",
 			"--no-update-check", "-no-update-check", "--insecure", "-insecure"}, strings.SplitN(args[0], "=", 2)[0])
 	}
-	_, _, ok := find(args)
-	return ok
+	if _, _, ok := find(args); ok {
+		return true
+	}
+	_, group := groupOf(args)
+	return len(group) > 0
 }
 
 // find returns the command args name, preferring the longest path, and the arguments after it.
@@ -138,6 +141,23 @@ func find(args []string) (command, []string, bool) {
 		best, rest, n = c, args[len(words):], len(words)
 	}
 	return best, rest, n > 0
+}
+
+// groupOf returns the longest leading words of args that begin commands without being one, and
+// those commands: `label` for `label`, `label --help` or `label sett`.
+func groupOf(args []string) ([]string, []command) {
+	for n := len(args); n > 0; n-- {
+		var out []command
+		for _, c := range commands {
+			if words := strings.Fields(c.path); len(words) > n && slices.Equal(words[:n], args[:n]) {
+				out = append(out, c)
+			}
+		}
+		if len(out) > 0 {
+			return args[:n], out
+		}
+	}
+	return nil, nil
 }
 
 // globals are the flags every command takes.
@@ -174,6 +194,20 @@ func Run(ctx context.Context, args []string, env Env) error {
 	}
 	cmd, rest, ok := find(lead.Args())
 	if !ok {
+		// A group's name alone, or with --help, such as `darkory label`: its commands, not "unknown".
+		if words, group := groupOf(lead.Args()); len(group) > 0 {
+			help := slices.ContainsFunc(lead.Args(), func(a string) bool { return a == "--help" || a == "-help" || a == "-h" })
+			if !help {
+				fmt.Fprintf(env.Stderr, "darkory: %q needs one of its commands:\n", strings.Join(words, " "))
+			}
+			for _, c := range group {
+				fmt.Fprintf(env.Stderr, "  darkory %s %s\n      %s\n", c.path, c.args, c.short)
+			}
+			if help {
+				return nil
+			}
+			return &ExitError{ExitUsage}
+		}
 		fmt.Fprintf(env.Stderr, "darkory: unknown command %q\n%s", strings.Join(lead.Args(), " "), Usage())
 		return &ExitError{ExitUsage}
 	}

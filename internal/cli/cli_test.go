@@ -167,6 +167,17 @@ func TestExitStatuses(t *testing.T) {
 	if res := bob.run("claim", "--help"); res.code != ExitOK || !strings.Contains(res.stderr, "Usage: darkory claim <task>") {
 		t.Errorf("claim --help: %+v", res)
 	}
+	// A group's name alone names its commands, so an agent never reads it as a command that is not there.
+	if res := bob.fails(ExitUsage, "label"); !strings.Contains(res.stderr, `darkory: "label" needs one of its commands:`) ||
+		!strings.Contains(res.stderr, "darkory label set <task>") || strings.Contains(res.stderr, "unknown command") {
+		t.Errorf("label alone: %q", res.stderr)
+	}
+	if res := bob.run("workflow", "--help"); res.code != ExitOK || !strings.Contains(res.stderr, "darkory workflow show <project>") {
+		t.Errorf("workflow --help: %+v", res)
+	}
+	if res := bob.fails(ExitUsage, "label", "sett", "WEB-1"); !strings.Contains(res.stderr, "darkory label set <task>") {
+		t.Errorf("label with a misspelt command: %q", res.stderr)
+	}
 	tokenless := &runner{t: t, env: map[string]string{"DARKORY_URL": in.ts.URL}}
 	if res := tokenless.fails(ExitUsage, "me"); !strings.Contains(res.stderr, "DARKORY_TOKEN") {
 		t.Errorf("no token: %q", res.stderr)
