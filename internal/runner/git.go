@@ -104,16 +104,23 @@ func branchExists(ctx context.Context, repo, name string) bool {
 	return err == nil
 }
 
+// isAncestor says whether commit a is in b's history.
+func isAncestor(ctx context.Context, repo, a, b string) bool {
+	_, err := runGit(ctx, repo, "merge-base", "--is-ancestor", a, b)
+	return err == nil
+}
+
 // branchesWithPrefix lists repo's local branches whose names start with prefix.
 func branchesWithPrefix(ctx context.Context, repo, prefix string) ([]string, error) {
-	out, err := runGit(ctx, repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/"+prefix)
+	// A pattern matches up to a slash literally, else as a glob: the * reaches past the prefix.
+	out, err := runGit(ctx, repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/"+prefix+"*")
 	if err != nil || out == "" {
 		return nil, err
 	}
 	return strings.Split(out, "\n"), nil
 }
 
-// defaultBranch is the branch Ship lands on in repo when the Workspace does not say: the remote's
+// defaultBranch is the branch a Task with no Parent, and a Parent, land on in repo when the Workspace does not say: the remote's
 // HEAD, else main or master, else the branch checked out.
 func defaultBranch(ctx context.Context, repo string) string {
 	if ref, err := runGit(ctx, repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"); err == nil {

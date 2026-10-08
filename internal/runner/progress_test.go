@@ -76,6 +76,29 @@ func TestTurnHasEnded(t *testing.T) {
 	}
 }
 
+// A tool call is in flight from the record asking for it until its result: a long call writes
+// nothing in between, which is not the agent stalling.
+func TestToolCallInFlight(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		lines []string
+		want  bool
+	}{
+		{"empty", nil, false},
+		{"the first prompt", []string{userPrompt}, false},
+		{"thinking before a tool", []string{userPrompt, thinking}, false},
+		{"waiting for a tool", []string{userPrompt, thinking, toolUse}, true},
+		{"bookkeeping while a tool runs", []string{userPrompt, toolUse, cost, title, sidechain}, true},
+		{"a tool's result", []string{userPrompt, toolUse, toolResult}, false},
+		{"an answer", []string{userPrompt, toolUse, toolResult, endTurn}, false},
+		{"a generic file's marker", []string{toolUse, "TURN_ENDED"}, false},
+	} {
+		if _, got := lastTurn([]byte(strings.Join(c.lines, "\n") + "\n")); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestReadProgress(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "p.jsonl")
 	r, err := ReadProgress(path)
@@ -94,7 +117,7 @@ func TestReadProgress(t *testing.T) {
 	if err := os.WriteFile(path, []byte(big+toolUse+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if r, _ = ReadProgress(path); r.Ended {
+	if r, _ = ReadProgress(path); r.Ended || !r.InFlight {
 		t.Fatalf("a tool use after the answer: %+v", r)
 	}
 }

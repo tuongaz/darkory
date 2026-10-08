@@ -59,18 +59,13 @@ type AgentSettings struct {
 	ProgressFile string
 }
 
-// FeatureInfo is what the runner reads of the whole a Task belongs to. model v2: the Runner still
-// thinks in Features: a Task's Parent stands in for its Feature, and a Task with no Parent for a
-// quick Feature of one Task; M3 reworks branches, merges and the prompt on Parents.
-type FeatureInfo struct {
-	// Key is the Parent's display key, or the Task's own when it has no Parent (Quick).
-	Key, Title, Description, OwnerID string
-	// Quick: the Task has no Parent.
-	Quick bool
-	// Open: the Parent, or the Task with no Parent, has not ended.
-	Open bool
-	// Owner is the owner's name.
+// ParentInfo is what the runner reads of a Subtask's Parent: the whole the Subtask is part of.
+type ParentInfo struct {
+	ID, Key, Title, Description, OwnerID string
+	// Owner is the Owner's name.
 	Owner string
+	// Open: the Parent has not ended.
+	Open bool
 }
 
 // Record is the part of /v1 the runner uses, as one Member in one Session.
@@ -84,11 +79,9 @@ type Record interface {
 	// Claim claims a named Task.
 	Claim(ctx context.Context, task string, timeout time.Duration, model string) (*client.TaskDetail, error)
 	Task(ctx context.Context, ref string) (*client.TaskDetail, error)
-	// Feature reads the Task ref names as the whole it is part of: its Parent, else itself (a
-	// Parent, or a Task standing alone, Quick).
-	// model v2: a Parent stands in for a Feature (M3).
-	Feature(ctx context.Context, ref string) (*FeatureInfo, error)
-	// Workspaces are the Workspaces task names, or its Team's default when it names none.
+	// Parent reads the Parent of the Task d; nil when it has none.
+	Parent(ctx context.Context, d *client.TaskDetail) (*ParentInfo, error)
+	// Workspaces are the Workspaces task names, or its Project's default when it names none.
 	Workspaces(ctx context.Context, task *client.TaskDetail) ([]Workspace, error)
 	// AllWorkspaces are the Install's Workspaces.
 	AllWorkspaces(ctx context.Context) ([]Workspace, error)
@@ -97,14 +90,12 @@ type Record interface {
 	Members(ctx context.Context) ([]client.Member, error)
 	Heartbeat(ctx context.Context, task string) (client.HeartbeatStatus, error)
 	Release(ctx context.Context, task, note string) error
-	Complete(ctx context.Context, task, note string) error
+	// Advance ends the Claim on task along the Connector named outcome out of its Step.
+	Advance(ctx context.Context, task, outcome, note string) error
 	Note(ctx context.Context, task, body string) error
 	File(ctx context.Context, body client.FileTaskBody) (*client.Task, error)
-	// Attach attaches content as Evidence to task, or to its Parent (feature) when the Task is held
-	// by someone else; onFeature says which.
-	Attach(ctx context.Context, task, feature, filename string, content []byte) (onFeature bool, err error)
-	// AttachFeature attaches content as Evidence to a Parent, or a Task with none.
-	AttachFeature(ctx context.Context, feature, filename string, content []byte) error
+	// Attach attaches content as Evidence to task: refused not_holder while another Member holds it.
+	Attach(ctx context.Context, task, filename string, content []byte) error
 	// Activity reads one connection of the Activity stream from after, calling each for every
 	// entry, and returns the last sequence number seen.
 	Activity(ctx context.Context, after int64, each func(client.Activity)) (int64, error)
@@ -194,27 +185,22 @@ func (r *conn) Task(ctx context.Context, ref string) (*client.TaskDetail, error)
 	return res.JSON200, nil
 }
 
-func (r *conn) Feature(ctx context.Context, ref string) (*FeatureInfo, error) {
-	res, err := r.c.GetTaskWithResponse(ctx, ref)
+func (r *conn) Parent(ctx context.Context, d *client.TaskDetail) (*ParentInfo, error) {
+	if d.Parent == nil {
+		return nil, nil
+	}
+	res, err := r.c.GetTaskWithResponse(ctx, d.Parent.ID)
 	if err := remote.Check(res, err, http.StatusOK); err != nil {
 		return nil, err
 	}
-	d := res.JSON200
-	if d.Parent != nil {
-		if res, err = r.c.GetTaskWithResponse(ctx, d.Parent.ID); remote.Check(res, err, http.StatusOK) != nil {
-			return nil, remote.Check(res, err, http.StatusOK)
-		}
-	}
 	t := res.JSON200.Task
-	// A Task with neither Parent nor Subtasks stands alone, as a quick Feature's one Task did.
-	f := &FeatureInfo{Key: t.Key, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID,
-		Quick: d.Parent == nil && len(d.Subtasks) == 0, Open: t.State == client.TaskStateOpen}
-	m, err := r.c.GetMemberWithResponse(ctx, f.OwnerID)
+	p := &ParentInfo{ID: t.ID, Key: t.Key, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID, Open: t.State == client.TaskStateOpen}
+	m, err := r.c.GetMemberWithResponse(ctx, p.OwnerID)
 	if err := remote.Check(m, err, http.StatusOK); err != nil {
 		return nil, err
 	}
-	f.Owner = m.JSON200.Member.Name
-	return f, nil
+	p.Owner = m.JSON200.Member.Name
+	return p, nil
 }
 
 func workspace(w client.Workspace) Workspace {
@@ -278,8 +264,8 @@ func (r *conn) Release(ctx context.Context, task, note string) error {
 	return remote.Check(res, err, http.StatusOK)
 }
 
-func (r *conn) Complete(ctx context.Context, task, note string) error {
-	res, err := r.c.CompleteTaskWithResponse(ctx, task, &client.CompleteTaskParams{}, client.CompleteTaskBody{Note: opt(note)})
+func (r *conn) Advance(ctx context.Context, task, outcome, note string) error {
+	res, err := r.c.AdvanceTaskWithResponse(ctx, task, &client.AdvanceTaskParams{}, client.AdvanceTaskBody{Outcome: opt(outcome), Note: opt(note)})
 	return remote.Check(res, err, http.StatusOK)
 }
 
@@ -296,20 +282,8 @@ func (r *conn) File(ctx context.Context, body client.FileTaskBody) (*client.Task
 	return &res.JSON201.Task, nil
 }
 
-func (r *conn) Attach(ctx context.Context, task, feature, filename string, content []byte) (bool, error) {
+func (r *conn) Attach(ctx context.Context, task, filename string, content []byte) error {
 	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), content)
-	if err == nil {
-		return false, nil
-	}
-	// The next holder may have claimed the Task already; the log goes on its Parent then.
-	if remote.CodeOf(err) != client.ErrorCodeNotHolder || feature == "" || feature == task {
-		return false, err
-	}
-	return true, r.AttachFeature(ctx, feature, filename, content)
-}
-
-func (r *conn) AttachFeature(ctx context.Context, feature, filename string, content []byte) error {
-	_, _, err := r.c.Attach(ctx, feature, filename, contentType(filename, content), content)
 	return err
 }
 

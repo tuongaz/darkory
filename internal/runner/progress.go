@@ -74,6 +74,9 @@ type Reading struct {
 	Modified time.Time
 	// Ended says the agent's last turn ended: it is waiting for input.
 	Ended bool
+	// InFlight says a tool call is running: the last record is the agent asking for a tool, with
+	// no result yet. A long call writes nothing until it returns.
+	InFlight bool
 }
 
 // tailBytes is how much of the end of a progress file is read for its last record.
@@ -104,7 +107,8 @@ func ReadProgress(path string) (Reading, error) {
 			buf = buf[i+1:]
 		}
 	}
-	return Reading{Exists: true, Modified: st.ModTime(), Ended: TurnHasEnded(buf)}, nil
+	ended, inFlight := lastTurn(buf)
+	return Reading{Exists: true, Modified: st.ModTime(), Ended: ended, InFlight: inFlight}, nil
 }
 
 // headBytes is how much of the start of a transcript is read for an assistant message.
@@ -160,9 +164,17 @@ type transcriptRecord struct {
 // message that asks for no tool. Other records Claude Code appends (titles, costs, attachments,
 // subagents' messages) are passed over.
 func TurnHasEnded(tail []byte) bool {
+	ended, _ := lastTurn(tail)
+	return ended
+}
+
+// lastTurn reads the end of a progress file as TurnHasEnded does, and says too whether a tool
+// call is in flight: the last message of the main conversation is an assistant message asking for
+// a tool, which its result has not followed yet.
+func lastTurn(tail []byte) (ended, inFlight bool) {
 	lines := bytes.Split(bytes.TrimRight(tail, "\n"), []byte("\n"))
 	if n := len(lines); n > 0 && strings.TrimSpace(string(lines[n-1])) == TurnEnded {
-		return true
+		return true, false
 	}
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := bytes.TrimSpace(lines[i])
@@ -175,23 +187,32 @@ func TurnHasEnded(tail []byte) bool {
 		}
 		switch r.Type {
 		case "user":
-			return false
+			return false, false
 		case "assistant":
-			if r.Message.StopReason != nil && *r.Message.StopReason == "tool_use" {
-				return false
-			}
 			var blocks []struct {
 				Type string `json:"type"`
 			}
 			if json.Unmarshal(r.Message.Content, &blocks) == nil {
 				for _, b := range blocks {
 					if b.Type == "tool_use" {
-						return false
+						return false, true
 					}
 				}
 			}
-			return true
+			if r.Message.StopReason != nil && *r.Message.StopReason == "tool_use" {
+				// Claude Code writes a turn's blocks as records of their own: thinking first, the
+				// tool_use after it.
+				return false, false
+			}
+			return true, false
 		}
 	}
-	return false
+	return false, false
+}
+
+// proc is a process running under a session.
+type proc struct {
+	PID     int
+	Started time.Time
+	Command string
 }
