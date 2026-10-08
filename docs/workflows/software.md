@@ -147,7 +147,7 @@ The preset ran on a scratch Install, with the Runner starting real Claude Code s
 - **Design path.** LS-1 ("only callers with an API key can create short links, with rate limiting, a health check, and shipped as a container with CI") was filed with Break down.
   - Plan wrote the acceptance criteria.
   - A `Design: …` Subtask went Design → Threat model → Design review. It produced a design document, three ADRs, and a STRIDE threat model with 19 security requirements.
-  - Four slices followed: health check, API keys, rate limit, and container + CI + deploy notes. The keys, rate-limit and container slices went through Security review; the health-check slice was taken before it was blocked and skipped it.
+  - Four slices followed: health check, API keys, rate limit, and container + CI + deploy notes. The keys, rate-limit and container slices went through Security review. The health-check slice was taken the second it was filed, before it was blocked. Code review passed it before the threat model gave it its `security` Label, so it skipped Security review.
   - Two questions went to the architect.
   - The container slice went back to Build five times, four of them from Code review, each round finding one more flaw in the operator procedures.
   - Then Acceptance → Release, Auto-complete, the Retrospective, and a Skill review that sent one proposal back before publishing four new Skill versions.
