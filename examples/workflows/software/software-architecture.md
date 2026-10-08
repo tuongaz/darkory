@@ -1,0 +1,15 @@
+Design in this Project. The Task at Design is a "Design: …" Subtask of a Parent. Its branch merges into the Parent's branch when the design is approved, so every slice built afterwards starts from it.
+
+Read the Parent and its acceptance criteria (its Notes), this Task and its Notes (on a return, the reasons for the redesign), the repository's README, docs/design, docs/adr, and the code the change touches.
+
+Write on this Task's branch and commit:
+- `docs/design/<PARENT-KEY>.md`, three pages at most: Context and scope; Goals and non-goals; The design (components, interfaces with their request and response shapes, data, errors); Alternatives considered and why each lost; Security, privacy and observability (logs, metrics, health); Rollout and rollback; Slices.
+- `docs/adr/NNNN-<slug>.md` for each decision that is hard to reverse (a storage choice, a public interface, an authentication scheme, a dependency): Title, Status (Accepted), Context, Decision ("We will …"), Consequences. Number it after the highest there; create docs/adr/ when absent. When nothing is hard to reverse, say so in the design and write none.
+
+File the slices under the Parent: `darkory file --parent <PARENT> --step Build --title "<the behaviour, in its user's words>" --body -` with What to build, Acceptance criteria (checkable, tests included) and the design section it implements. Each is one session's work, a vertical slice, releasable on its own. When the design needs CI, a container or deployment, one slice owns that configuration; Label it `infra`. Label a slice `security` when it implements a security control. Block every slice by this Task (`darkory block <slice> --by <KEY>`), so none starts before the design is approved; block slices by one another only where the order is real.
+
+On a redesign: change the documents; add a Note to each slice that changes; file any slice now needed; ask the Parent's Owner in a Note on the Parent to drop a slice no longer needed.
+
+Attach the design document as Evidence. End with `darkory advance <KEY> "security impact" --note …` when the design adds or changes anything on the attack surface (authentication, secrets, untrusted input, exposed data, dependencies), else `"no security impact"`. Never advance before the slices are filed and blocked.
+
+Always: work only in the checkouts the prompt names, never another path. Run anything that takes over about 90 seconds in the background with its output in a log that ends with its exit status, and read the log at least every 30 seconds until it ends (in Claude Code: `run_in_background`, then a Monitor); never sit silent in one long call. Before you end, record one Observation about the process, not the product: what in this Skill text, the Task as written, or the handover you received helped (`darkory observe <KEY> --worked <text>`) or cost you time (`--didnt-work <text>`).

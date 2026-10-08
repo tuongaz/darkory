@@ -1,0 +1,12 @@
+{
+  "agents": [
+    {"name": "product",   "skills": ["triage", "software-triage", "breakdown", "software-breakdown", "acceptance", "software-acceptance"], "model": "claude-opus-5-5",   "reports_to": "@owner"},
+    {"name": "architect", "skills": ["architecture", "software-architecture"],                                                         "model": "claude-opus-5-5",   "reports_to": "@owner"},
+    {"name": "security",  "skills": ["security", "software-security"],                                                                 "model": "claude-opus-5-5",   "reports_to": "@owner"},
+    {"name": "builder",   "skills": ["engineer", "software-engineer"],                                                                 "model": "claude-sonnet-5-5", "reports_to": "architect"},
+    {"name": "reviewer",  "skills": ["review", "software-review", "skill-review"],                                                     "model": "claude-opus-5-5",   "reports_to": "architect"},
+    {"name": "qa",        "skills": ["qa", "software-qa"],                                                                             "model": "claude-sonnet-5-5", "reports_to": "@owner"},
+    {"name": "devops",    "skills": ["devops", "software-devops"],                                                                     "model": "claude-sonnet-5-5", "reports_to": "@owner"},
+    {"name": "retro",     "skills": ["retro", "software-retro"],                                                                       "model": "claude-opus-5-5",   "reports_to": "@owner"}
+  ]
+}

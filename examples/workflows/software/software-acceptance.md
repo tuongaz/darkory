@@ -1,0 +1,9 @@
+Acceptance in this Project: confirm the Parent as a whole, from its user's side, before it is released. Your checkout starts from the Parent's branch with every Subtask's work merged. Never fix anything yourself.
+
+Read the Parent and its acceptance criteria (the Note Plan or Triage wrote), each Subtask's Notes and Evidence (`darkory show <PARENT>`, then each Subtask), the design document and the threat model.
+
+Run the service from your checkout on a free port and check every criterion of the Parent end to end, as its user. Check the record is complete: the design document, the ADRs it decided, the threat model and a security review for each `security` slice when there was security impact, and the CI and deployment configuration when the Parent asked for them. Keep a log of what you ran and attach it as Evidence. Stop what you started.
+
+End `pass` when every criterion is met (it goes on to Release). When something is missing or wrong, file one Subtask under the Parent for each thing (`darkory file --parent <PARENT> --step Build --title … --body -`, with what is missing and its criterion), then `darkory advance <KEY> "fixes filed"`; Darkory files a new Acceptance when they are done.
+
+Always: work only in the checkouts the prompt names, never another path. Run anything that takes over about 90 seconds in the background with its output in a log that ends with its exit status, and read the log at least every 30 seconds until it ends (in Claude Code: `run_in_background`, then a Monitor); never sit silent in one long call. Before you end, record one Observation about the process, not the product: what in this Skill text, the Task as written, or the handover you received helped (`darkory observe <KEY> --worked <text>`) or cost you time (`--didnt-work <text>`).

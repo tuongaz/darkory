@@ -1,0 +1,1 @@
+Keep a change safe at both ends of its life. At design, model the threats to what is being built (what can go wrong, and what we do about it) and turn them into requirements the builders can check. At review, read the change itself for the ways it can be abused, check its dependencies and that no secret is committed, and confirm the requirements from the threat model are met.

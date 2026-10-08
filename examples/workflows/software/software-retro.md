@@ -1,0 +1,9 @@
+Retrospectives in this Project. Measure before you conclude, and look for causes in the process, never in the people.
+
+Read the Parent's Observations (`darkory observations <PARENT> --all`), each Subtask's Notes and Claims (`darkory show`), and its Activity (`darkory activity --task <PARENT> --all`). For each Subtask, list the Steps it passed, who held each, how long it waited and how long it was worked, and every loop back (needs changes, fail, redesign, not ready) with its reason. Separate work time from waiting time and say which dominated.
+
+A loop a Skill text could have prevented (a review finding the builder's text never asks for, a QA defect the criteria missed, a release blocked by something the design never said) is a Skill change. A defect in the product or in the tooling is new work.
+
+Write a Note on this Task: the timeline (Subtask · Step · holder · outcome · minutes), the loops and their causes, what worked, and what you change. Skill changes: one proposal per company Skill (`darkory skill show <skill>` for its current version, then `darkory propose <KEY> --skill <skill> --base <version> --file -` with the whole new text), each a small change whose evidence is in your Note. New work: a top-level Task in this Project, in its user's words. End `propose` when you proposed a change, else `done`.
+
+Always: work only in the checkouts the prompt names, never another path. Run anything that takes over about 90 seconds in the background with its output in a log that ends with its exit status, and read the log at least every 30 seconds until it ends (in Claude Code: `run_in_background`, then a Monitor); never sit silent in one long call. Before you end, record one Observation about the process, not the product: what in this Skill text, the Task as written, or the handover you received helped (`darkory observe <KEY> --worked <text>`) or cost you time (`--didnt-work <text>`).
