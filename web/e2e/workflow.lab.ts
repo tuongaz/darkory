@@ -44,7 +44,7 @@ for (const scheme of ["light", "dark"] as const) {
       await shot(page, `live-${tag}`);
 
       // A Step's peek.
-      await live.locator(".react-flow__node").filter({ hasText: "Build" }).first().click();
+      await live.locator(".react-flow__node").filter({ hasText: "Build" }).first().getByText("Build", { exact: true }).click();
       const peek = page.getByRole("dialog", { name: "Step Build" });
       await expect(peek.getByRole("list", { name: "Tasks at Build" })).toBeVisible();
       await page.waitForTimeout(800);

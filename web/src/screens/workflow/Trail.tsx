@@ -14,10 +14,10 @@ import type { TrailFocus, useTrail } from "./useTrail";
 const streamWords: Record<StreamState, string> = { live: "Live", connecting: "Connecting", reconnecting: "Reconnecting", closed: "Offline" };
 
 /** The trail's head: how many Tasks are worked now, and whether the stream is live. */
-function Head({ working, onCollapse }: { working: number; onCollapse?: () => void }) {
+function Head({ working, onCollapse, className }: { working: number; onCollapse?: () => void; className?: string }) {
   const state = useStreamState();
   return (
-    <div className="flex h-10 flex-none items-center gap-2 border-b px-3">
+    <div className={cn("flex h-10 flex-none items-center gap-2 border-b px-3", className)}>
       <span className="font-semibold">Live</span>
       <span className="text-xs text-muted-foreground tabular-nums">{working} working now</span>
       <span role="status" className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -217,7 +217,8 @@ export function Trail({
               <SheetTitle>Live</SheetTitle>
               <SheetDescription>This Project's Tasks moving through its Workflow, newest first.</SheetDescription>
             </SheetHeader>
-            <Head working={working} />
+            {/* Clear of the sheet's close button. */}
+            <Head working={working} className="h-12 pr-12" />
             <Lines
               trail={trail}
               onFocus={onFocus}

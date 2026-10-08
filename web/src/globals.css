@@ -493,6 +493,11 @@
     border-color: var(--moment, var(--border));
     animation: callout-life 6s ease-out forwards;
   }
+  /* Behind the newest, an older callout says only that more happened: the trail has its words. */
+  .flow-callout[data-depth="1"] > *,
+  .flow-callout[data-depth="2"] > * {
+    opacity: 0.35;
+  }
   .flow-callout[data-tone="agent"] {
     border: 1px solid transparent;
     background:
