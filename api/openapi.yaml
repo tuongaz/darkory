@@ -645,6 +645,51 @@ paths:
           description: The Member is not in the Project.
         default: {$ref: "#/components/responses/Error"}
 
+  /v1/projects/{project}/seen:
+    get:
+      operationId: getProjectSeen
+      tags: [projects]
+      summary: Read how far the caller has seen a Project's Activity
+      description: |
+        The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+        show what happened there since they looked, and when they set it. Both are null until the
+        caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+        Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+      parameters:
+        - {$ref: "#/components/parameters/ProjectRef"}
+      responses:
+        "200":
+          description: The caller's mark.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProjectSeen"}
+        default: {$ref: "#/components/responses/Error"}
+    put:
+      operationId: setProjectSeen
+      tags: [projects]
+      summary: Say how far the caller has seen a Project's Activity
+      description: |
+        By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+        below the one kept changes nothing, and the response is the mark as kept, so a client
+        learns when its `seq` was behind. It is the caller's preference, not the record: setting
+        it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+        `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+      parameters:
+        - {$ref: "#/components/parameters/ProjectRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SetProjectSeenBody"}
+      responses:
+        "200":
+          description: The caller's mark as kept.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProjectSeen"}
+        default: {$ref: "#/components/responses/Error"}
+
   /v1/projects/{project}/workflow:
     get:
       operationId: getWorkflow
@@ -1235,6 +1280,30 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/Task"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/tasks/{task}/nudged:
+    post:
+      operationId: recordNudge
+      tags: [runner]
+      summary: Record that the Runner nudged the agent holding a Task
+      description: |
+        Called by the Runner, through the Session that holds the Task's Claim, after it typed
+        its nudge into a session whose turn ended with the Task still held and no decision. It
+        nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+        as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+        Claim), `invalid`.
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RecordNudgeBody"}
+      responses:
+        "204":
+          description: The nudge is recorded.
         default: {$ref: "#/components/responses/Error"}
 
   /v1/tasks/{task}/advance:
@@ -3474,10 +3543,13 @@ components:
         `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
         when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
         itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+        `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+        had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
       enum:
         - task.filed
         - task.claimed
         - task.lapsed
+        - task.nudged
         - task.released
         - task.advanced
         - task.moved
@@ -3551,7 +3623,7 @@ components:
       description: |
         An agent session the Runner runs for a Task it claimed as that agent. Not part of the
         record: it lives as long as the session.
-      required: [task_id, member_id, session_id, host, started_at, state, log_path]
+      required: [task_id, member_id, session_id, host, started_at, state, state_since, log_path]
       properties:
         task_id: {type: string}
         member_id:
@@ -3568,6 +3640,10 @@ components:
           description: The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
         started_at: {type: string, format: date-time}
         state: {$ref: "#/components/schemas/RunnerSessionState"}
+        state_since:
+          type: string
+          format: date-time
+          description: When the session entered its current state; `started_at` until it first changed.
         log_path:
           type: string
           description: Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends.
@@ -3583,6 +3659,15 @@ components:
         the session is closing.
       enum: [running, waiting, stalled, ending]
       x-enum-varnames: [RunnerSessionRunning, RunnerSessionWaiting, RunnerSessionStalled, RunnerSessionEnding]
+    RecordNudgeBody:
+      type: object
+      required: [nudge]
+      properties:
+        nudge:
+          type: integer
+          minimum: 1
+          maximum: 2
+          description: Which of the Runner's two nudges it was.
     RunnerSessionList:
       type: object
       required: [items, runner]
@@ -3602,6 +3687,34 @@ components:
         more may be added within `/v1`.
       enum: [tasks]
       x-enum-varnames: [ViewEntityTasks]
+    ProjectSeen:
+      type: object
+      description: |
+        How far a Member has seen a Project's Activity. Both fields are null until the Member
+        first sets it.
+      required: [seq, at]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          nullable: true
+          description: The `seq` of the newest Activity entry the Member has seen in the Project.
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the Member last moved it forward.
+    SetProjectSeenBody:
+      type: object
+      required: [seq]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+            there is none yet.
     View:
       type: object
       description: |

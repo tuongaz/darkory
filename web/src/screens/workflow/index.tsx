@@ -1,43 +1,75 @@
-import { CheckIcon, LoaderIcon, PencilIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { LoaderIcon, PencilIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { toast } from "sonner";
+import { useSkills, useTasks, useWorkflow } from "@/api/queries";
 import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
+import { FormDialog } from "@/components/FormDialog";
+import { Pill } from "@/components/Pill";
+import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
-import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { useCurrentMe } from "@/me";
+import { FilterChipRow, FilterMenuButton } from "@/components/filters/FilterBar";
+import { useTaskFilter } from "@/components/filters/useTaskFilter";
+import { useBlockingCount } from "@/components/workflow/blocking";
+import { useLineData } from "@/components/workflowLine";
+import { taskPath as taskPagePath } from "@/screens/task/format";
+import { fromRecord } from "./edit/draft";
+import { useDraftEditor } from "./edit/useDraft";
 import { EditingWorkflow } from "./Editing";
-import { addStep } from "./edits";
 import { LiveWorkflow } from "./Live";
+import { useLineView, useScopeParam } from "./lineView";
+import { LineViewSwitch } from "./LineViewSwitch";
+import { ScopeChip } from "./ScopeChip";
 import { stepParam } from "./StepPeek";
-import { useWorkflowEditor } from "./useEditor";
-import { useWorkflowView, type WorkflowView } from "./view";
-import { ViewSwitch } from "./ViewSwitch";
 
-/** /projects/:key/workflow: the Project's Workflow, live and read-only; a Step opens its peek. */
+/**
+ * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; `?scope=`
+ * narrows it to the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the
+ * line for the Blocking among its Tasks or a list.
+ */
 export function WorkflowPage() {
   const project = useRouteProject();
   const admin = useCurrentMe().member.admin;
-  const [view, setView] = useWorkflowView();
+  const [view, setView] = useLineView();
+  const [scope, setScope] = useScopeParam();
+  const tasks = useTasks({ project: project.key, state: "open" }).data;
+  const filter = useTaskFilter({ projects: [project], tasks });
+  const { data } = useLineData(project.key, scope, filter.matches);
+  const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined);
+  const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
       <TopBar
-        crumbs={[projectCrumb(project), { label: "Workflow" }]}
-        view={<ViewSwitch view={view} onChange={setView} />}
+        crumbs={[projectCrumb(project), { label: "Workflow" }, ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : [])]}
+        view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
         actions={
-          admin && (
-            <Button asChild variant="outline">
-              <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
-                <PencilIcon />
-                <span className="hidden sm:inline">Edit</span>
-              </Link>
-            </Button>
-          )
+          <>
+            {data && data.scoped.hiddenTotal > 0 && (
+              <span className="hidden text-xs text-muted-foreground tabular-nums lg:inline">{data.scoped.hiddenTotal} hidden</span>
+            )}
+            {named && named.key !== "…" && (
+              <Button asChild variant="outline" className="hidden sm:inline-flex">
+                <Link to={taskPagePath(named.key)}>Open {named.key}</Link>
+              </Button>
+            )}
+            {view === "line" && <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />}
+            {admin && (
+              <Button asChild variant="outline">
+                <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
+                  <PencilIcon />
+                  <span className="hidden sm:inline">Edit</span>
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <LiveWorkflow project={project} view={view} />
+        {view === "line" && <FilterChipRow {...filter.bar} />}
+        <LiveWorkflow project={project} view={view} scope={scope} onView={setView} filter={filter.matches} />
       </Content>
     </>
   );
@@ -46,73 +78,97 @@ export function WorkflowPage() {
 const settingsCrumbs = (name: string) => [{ label: "Settings" }, { label: name, wide: true }, { label: "Workflow" }];
 
 /**
- * /settings/projects/:key/workflow: the same Workflow, editing, for an admin. Anyone else sees it
- * live, with a line saying only an admin changes it.
+ * /settings/projects/:key/workflow: the Workflow as a plain list, editing, for an admin; saved
+ * whole on Save. Anyone else reads the same list, with a line saying only an admin changes it.
  */
 export function WorkflowSettingsPage() {
-  const project = useRouteProject();
   const admin = useCurrentMe().member.admin;
-  const [view, setView] = useWorkflowView();
-  if (!admin) {
-    return (
-      <>
-        <TopBar crumbs={settingsCrumbs(project.name)} view={<ViewSwitch view={view} onChange={setView} />} />
-        <p className="border-b bg-muted/50 px-4 py-2 text-muted-foreground sm:px-6">
-          Only an admin changes {project.name}'s Workflow; this is how it stands.{" "}
-          <Link to={projectPath(project, "workflow")} className="text-foreground underline-offset-2 hover:underline">
-            Open it in {project.name}
-          </Link>
-        </p>
-        <Content className="flex flex-col overflow-hidden">
-          <LiveWorkflow project={project} view={view} />
-        </Content>
-      </>
-    );
-  }
-  return <EditingPage view={view} setView={setView} />;
+  return admin ? <EditingPage /> : <ReadingPage />;
 }
 
-function EditingPage({ view, setView }: { view: WorkflowView; setView: (v: WorkflowView) => void }) {
+function ReadingPage() {
   const project = useRouteProject();
-  const editor = useWorkflowEditor(project.key);
-  // `?step=<id>` opens with that Step selected: Edit in Settings from the live canvas.
+  const query = useWorkflow(project.key);
+  const skills = useSkills();
+  const draft = useMemo(() => query.data && fromRecord(query.data), [query.data]);
+  return (
+    <>
+      <TopBar crumbs={settingsCrumbs(project.name)} />
+      <p className="border-b bg-muted/50 px-4 py-2 text-muted-foreground sm:px-6">
+        Only an admin changes {project.name}'s Workflow; this is how it stands.{" "}
+        <Link to={projectPath(project, "workflow")} className="text-foreground underline-offset-2 hover:underline">
+          Open it in {project.name}
+        </Link>
+      </p>
+      <Content className="flex flex-col overflow-hidden">
+        {query.isError ? <Refusal error={query.error} className="m-6" /> : <EditingWorkflow project={project} draft={draft} base={query.data} skills={skills.data} />}
+      </Content>
+    </>
+  );
+}
+
+function EditingPage() {
+  const project = useRouteProject();
+  const editor = useDraftEditor(project.key);
+  const navigate = useNavigate();
+  // `?step=<id>` opens with that Step's name in focus: Edit from the live page.
   const [params] = useSearchParams();
-  const [picked, setPicked] = useState<CanvasSelection>(() => {
-    const id = params.get(stepParam);
-    return id ? { kind: "step", id } : null;
-  });
-  const add = () => {
-    let made: string | undefined;
-    editor.apply((wf) => {
-      const change = addStep(wf);
-      made = change.select;
-      return change;
-    });
-    if (made) setPicked({ kind: "step", id: made });
+  const [focusStep] = useState(() => params.get(stepParam) ?? undefined);
+  const [discarding, setDiscarding] = useState(false);
+  const live = projectPath(project, "workflow");
+  const save = async () => {
+    if (await editor.save()) {
+      toast(`Saved ${project.name}'s Workflow`);
+      navigate(live);
+    }
   };
+  const n = editor.changes;
   return (
     <>
       <TopBar
         crumbs={settingsCrumbs(project.name)}
-        view={<ViewSwitch view={view} onChange={setView} />}
+        view={
+          <span role="status" aria-label="Editing">
+            <Pill tone={n > 0 ? "claimed" : "outline"} className="font-normal">
+              {n > 0 ? (
+                <>
+                  <span className="max-sm:sr-only">Editing · </span>
+                  {n} {n === 1 ? "change" : "changes"}
+                </>
+              ) : (
+                "Editing"
+              )}
+            </Pill>
+          </span>
+        }
         actions={
-          (editor.saving || editor.touched) && (
-            <span role="status" aria-label={editor.saving ? "Saving…" : "Saved"} className="flex items-center gap-1 text-xs text-muted-foreground">
-              {editor.saving ? <LoaderIcon aria-hidden className="size-3.5 animate-spin" /> : <CheckIcon aria-hidden className="size-3.5" />}
-              <span className="sr-only sm:not-sr-only">{editor.saving ? "Saving…" : "Saved"}</span>
-            </span>
-          )
+          <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(live))}>
+            Cancel
+          </Button>
         }
         primary={
-          <Button aria-label="Add Step" disabled={!editor.workflow} onClick={add}>
-            <PlusIcon />
-            <span className="hidden sm:inline">Add Step</span>
+          <Button disabled={!editor.draft || editor.saving || n === 0} onClick={() => void save()}>
+            {editor.saving && <LoaderIcon aria-hidden className="animate-spin" />}
+            {editor.saving ? "Saving…" : "Save"}
           </Button>
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <EditingWorkflow project={project} view={view} editor={editor} picked={picked} setPicked={setPicked} />
+        <EditingWorkflow project={project} editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} />
       </Content>
+      {discarding && (
+        <FormDialog
+          open
+          onOpenChange={(o) => !o && setDiscarding(false)}
+          title={`Discard ${n} ${n === 1 ? "change" : "changes"}?`}
+          description={`${project.name}'s Workflow stays as it was saved.`}
+          submitLabel="Discard"
+          destructive
+          onSubmit={() => navigate(live)}
+        >
+          {null}
+        </FormDialog>
+      )}
     </>
   );
 }

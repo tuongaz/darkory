@@ -47,7 +47,7 @@ describe("the Tasks at each Step, as chips", () => {
     task(7, { step_id: "st-build", claim: { ...claim("m-qa"), ended_at: "2026-10-08T09:30:00Z" } }),
   ];
   const sessions: RunnerSession[] = [
-    { task_id: "k-2", member_id: "m-builder", session_id: "s", host: "h", tmux: "t", started_at: "2026-10-08T09:00:00Z", state: "stalled", log_path: "/l" },
+    { task_id: "k-2", member_id: "m-builder", session_id: "s", host: "h", tmux: "t", started_at: "2026-10-08T09:00:00Z", state: "stalled", state_since: "2026-10-08T09:00:00Z", log_path: "/l" },
   ];
   const at = chipsAt(list, sessions, (id) => members.get(id), now);
 

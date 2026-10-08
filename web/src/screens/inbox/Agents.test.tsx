@@ -13,7 +13,7 @@ const planner: Member = { id: "m-planner", name: "planner", kind: "agent", admin
 const agentBuilder: Member = { ...builder, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: [], unattended: true, paused: false } as unknown as Member["agent"] };
 
 function session(state: RunnerSession["state"], extra: Partial<RunnerSession> = {}): RunnerSession {
-  return { task_id: "k-3", member_id: builder.id, session_id: "sess-1", host: "mac-mini", tmux: "dk-WEB-3", started_at: minutes(-20), state, log_path: "/tmp/log", ...extra };
+  return { task_id: "k-3", member_id: builder.id, session_id: "sess-1", host: "mac-mini", tmux: "dk-WEB-3", started_at: minutes(-20), state, state_since: minutes(-20), log_path: "/tmp/log", ...extra };
 }
 
 function agentsApi({ sessions = [], member = ada }: { sessions?: RunnerSession[]; member?: Member } = {}) {

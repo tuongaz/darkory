@@ -64,8 +64,9 @@ type session struct {
 	cmds  chan sessionCmd
 	over  chan struct{}
 
-	mu    sync.Mutex
-	state string
+	mu         sync.Mutex
+	state      string
+	stateSince time.Time
 
 	lastProgress time.Time
 	stale        bool
@@ -93,16 +94,18 @@ func newSession(a *agent, rec Record, d *client.TaskDetail, set AgentSettings) *
 		claimID = d.Task.Claim.ID
 	}
 	dir := filepath.Join(a.r.cfg.Data, "sessions", d.Task.Key)
-	return &session{r: a.r, a: a, rec: rec, d: d, set: set, key: d.Task.Key, taskID: d.Task.ID, claimID: claimID,
+	s := &session{r: a.r, a: a, rec: rec, d: d, set: set, key: d.Task.Key, taskID: d.Task.ID, claimID: claimID,
 		started: time.Now(), log: a.r.log.With("agent", a.name(), "task", d.Task.Key), dir: dir, logPath: filepath.Join(dir, "pane.log"),
 		ended: make(chan string, 1), cmds: make(chan sessionCmd), over: make(chan struct{}), state: StateRunning}
+	s.stateSince = s.started
+	return s
 }
 
 func (s *session) snapshot() RunnerSession {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rs := RunnerSession{TaskID: s.taskID, Task: s.key, MemberID: s.a.me.Member.ID, Member: s.a.name(), SessionID: s.rec.Session(),
-		Host: s.r.machine, StartedAt: s.started, State: s.state, LogPath: s.logPath}
+		Host: s.r.machine, StartedAt: s.started, State: s.state, StateSince: s.stateSince, LogPath: s.logPath}
 	// A session being prepared on a tmux host is shown in tmux already: that is where it starts.
 	if s.r.host.Tmux() && (s.proc == nil || s.proc.Tmux()) {
 		rs.Tmux, rs.TmuxSession, rs.TmuxSocket = true, TmuxName(s.key), s.r.Socket()
@@ -110,11 +113,11 @@ func (s *session) snapshot() RunnerSession {
 	return rs
 }
 
-// setState says what the session is doing; an ending session stays ending.
+// setState says what the session is doing, and since when it has; an ending session stays ending.
 func (s *session) setState(st string) {
 	s.mu.Lock()
-	if s.state != StateEnding {
-		s.state = st
+	if s.state != StateEnding && s.state != st {
+		s.state, s.stateSince = st, time.Now()
 	}
 	s.mu.Unlock()
 }
@@ -635,6 +638,8 @@ func (s *session) turnEnded(ctx context.Context) bool {
 		s.log.Info("the agent stopped without ending the Task; nudged it", "nudge", s.nudges)
 		if err := s.proc.Type(Nudge); err != nil {
 			s.log.Warn("nudging", "err", err)
+		} else if err := s.rec.Nudged(ctx, s.key, s.nudges); err != nil && ctx.Err() == nil {
+			s.log.Warn("recording the nudge", "err", err)
 		}
 	case s.nudges >= 2 && since >= s.r.t.Nudge:
 		return s.giveUp(ctx, "")

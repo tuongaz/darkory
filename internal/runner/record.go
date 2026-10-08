@@ -93,6 +93,8 @@ type Record interface {
 	// Advance ends the Claim on task along the Connector named outcome out of its Step.
 	Advance(ctx context.Context, task, outcome, note string) error
 	Note(ctx context.Context, task, body string) error
+	// Nudged records that the Runner nudged the agent holding task, nudge 1 or 2.
+	Nudged(ctx context.Context, task string, nudge int) error
 	File(ctx context.Context, body client.FileTaskBody) (*client.Task, error)
 	// Attach attaches content as Evidence to task: refused not_holder while another Member holds it.
 	Attach(ctx context.Context, task, filename string, content []byte) error
@@ -272,6 +274,11 @@ func (r *conn) Advance(ctx context.Context, task, outcome, note string) error {
 func (r *conn) Note(ctx context.Context, task, body string) error {
 	res, err := r.c.AddNoteWithResponse(ctx, task, &client.AddNoteParams{}, client.AddNoteBody{Body: body})
 	return remote.Check(res, err, http.StatusCreated)
+}
+
+func (r *conn) Nudged(ctx context.Context, task string, nudge int) error {
+	res, err := r.c.RecordNudgeWithResponse(ctx, task, &client.RecordNudgeParams{}, client.RecordNudgeBody{Nudge: nudge})
+	return remote.Check(res, err, http.StatusNoContent)
 }
 
 func (r *conn) File(ctx context.Context, body client.FileTaskBody) (*client.Task, error) {

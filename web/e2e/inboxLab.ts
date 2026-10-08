@@ -127,8 +127,8 @@ const activity = [
 ];
 
 const sessions = [
-  { task_id: "k-3", member_id: builder.id, session_id: "sess-m-builder", host: "mac-mini", tmux: "dk-WEB-3", started_at: ago(12), state: "running", log_path: "/tmp/a" },
-  { task_id: "k-4", member_id: reviewer.id, session_id: "sess-m-reviewer", host: "mac-mini", tmux: "dk-WEB-4", started_at: ago(40), state: "stalled", log_path: "/tmp/b" },
+  { task_id: "k-3", member_id: builder.id, session_id: "sess-m-builder", host: "mac-mini", tmux: "dk-WEB-3", started_at: ago(12), state: "running", state_since: ago(12), log_path: "/tmp/a" },
+  { task_id: "k-4", member_id: reviewer.id, session_id: "sess-m-reviewer", host: "mac-mini", tmux: "dk-WEB-4", started_at: ago(40), state: "stalled", state_since: ago(40), log_path: "/tmp/b" },
 ];
 
 const detail = (t: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({

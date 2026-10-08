@@ -44,14 +44,14 @@ export function OnceDialog({
 }
 
 /** The token and its secret, as issuing it returned them. */
-export function TokenShown({ issued }: { issued: IssuedToken }) {
+export function TokenShown({ issued, label }: { issued: IssuedToken; label?: string }) {
   return (
     <FormRows>
       <FormRow label="Token">
         <span>{issued.token.name}</span>
       </FormRow>
       <FormRow label="Secret">
-        <ShownOnce value={issued.secret} label={`Secret of ${issued.token.name}`} />
+        <ShownOnce value={issued.secret} label={label ?? `Secret of ${issued.token.name}`} />
       </FormRow>
     </FormRows>
   );

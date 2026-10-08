@@ -111,7 +111,7 @@ test("4 · the holder splits a held Task: the Claim ends split, it becomes a Par
   // The builder's split, as the agent files it; the page then shows it.
   await v1(as.builder, "POST", "/v1/tasks", { parent: held.task.key, title: "Card vault client", note: "Two parts" });
   const { page, errors } = await open(browser);
-  await page.goto(`${base()}/tasks/${held.task.key}`);
+  await page.goto(`${base()}/tasks/${held.task.key}?view=list`);
   await expect(page.getByText("split it into Subtasks; their Claim ended")).toBeVisible();
   const subtasks = page.getByRole("region", { name: "Subtasks" });
   await expect(subtasks.getByRole("link", { name: /Card vault client/ })).toContainText("Build");
@@ -166,7 +166,7 @@ test("7 · the board: drag between Steps; a held card is refused for bob and mov
   expect(other.errors).toEqual([]);
 });
 
-test("8 · the Subtask graph: columns, a Blocking arrow, the next one highlighted, a ring on the worked node", async ({ browser }) => {
+test("8 · the Subtasks on the line: each at its Step, a Blocking mark, the chain on selection, a ring on the worked token", async ({ browser }) => {
   const parent = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "Refunds" });
   const a = await v1<Detail>(as.ada, "POST", "/v1/tasks", { parent: parent.task.key, title: "Refund API" });
   const b = await v1<Detail>(as.ada, "POST", "/v1/tasks", { parent: parent.task.key, title: "Refund button" });
@@ -174,19 +174,23 @@ test("8 · the Subtask graph: columns, a Blocking arrow, the next one highlighte
   await v1(as.ada, "PUT", `/v1/tasks/${b.task.id}/blockers/${a.task.id}`);
   await v1(as.builder, "POST", `/v1/tasks/${a.task.id}/claim`, {});
   const { page, errors } = await open(browser);
-  await page.goto(`${base()}/tasks/${parent.task.key}?view=graph`);
-  const graph = page.getByRole("region", { name: "Subtasks, graph" });
-  await expect(graph.getByText("Build", { exact: true })).toBeVisible();
-  await expect(graph.getByText("Review", { exact: true })).toBeVisible();
-  await expect(graph.locator(".react-flow__edge")).toHaveCount(1);
-  await expect(graph.getByRole("button", { name: new RegExp(`^${a.task.key} Refund API, .*held by tsk-builder`) })).toBeVisible();
-  await expect(graph.getByRole("img", { name: /tsk-builder \(agent\), working/ })).toBeVisible();
-  await expect(graph.getByRole("button", { name: new RegExp(`^${c.task.key} Refund email, .*takeable now`) })).toHaveAttribute("data-takeable", "true");
-  await expect(graph.getByRole("button", { name: new RegExp(`^${b.task.key} Refund button, Blocked`) })).not.toHaveAttribute("data-takeable");
-  await shot(page, "8-graph");
-  await graph.getByRole("button", { name: new RegExp(`^${c.task.key} `) }).click();
-  await expect(page.getByRole("dialog", { name: `Task ${c.task.key}` })).toBeVisible();
-  await shot(page, "8-graph-peek");
+  await page.goto(`${base()}/tasks/${parent.task.key}`);
+  const line = page.getByRole("region", { name: "Subtask line" });
+  await expect(line.locator('[data-head="Build"]')).toBeVisible();
+  await expect(line.locator('[data-head="Review"]')).toBeVisible();
+  const token = (key: string) => line.locator(`button[data-task="${key}"]`);
+  await expect(token(a.task.key)).toHaveAttribute("aria-label", `${a.task.key} Refund API, held by tsk-builder (agent)`);
+  await expect(token(a.task.key).getByRole("img", { name: /tsk-builder \(agent\), working/ })).toBeVisible();
+  await expect(token(b.task.key)).toContainText(`by ${a.task.key}`);
+  await expect(token(c.task.key)).toHaveAttribute("aria-label", `${c.task.key} Refund email, waiting`);
+  await shot(page, "8-line");
+  await token(b.task.key).click();
+  const callout = page.getByRole("dialog", { name: `${b.task.key} Blocking` });
+  await expect(callout).toContainText(`Unblocks when ${a.task.key} ends`);
+  await shot(page, "8-line-chain");
+  await callout.getByRole("button", { name: new RegExp(`Open ${b.task.key}`) }).click();
+  await expect(page.getByRole("dialog", { name: `Task ${b.task.key}` })).toBeVisible();
+  await shot(page, "8-line-peek");
   expect(errors).toEqual([]);
 });
 
@@ -216,7 +220,7 @@ test("5 · a question from a standalone Task stands alone in the Project and blo
   // bob sees it aimed at him.
   const bob = await open(browser, bobState);
   await bob.page.goto(`${base()}/inbox`);
-  await expect(bob.page.getByRole("region", { name: "Aimed at you" }).locator(`[data-task="${question.key}"]`)).toContainText(`blocks ${standalone.task.key}`);
+  await expect(bob.page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${question.key}"]`)).toContainText(`unblocks ${standalone.task.key}`);
   await shot(bob.page, "5-bob-inbox");
   expect(errors).toEqual([]);
   expect(bob.errors).toEqual([]);

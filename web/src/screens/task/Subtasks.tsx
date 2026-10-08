@@ -1,10 +1,12 @@
-// A Parent's Subtasks on its page and peek: as a list, or as a graph over its Project's Steps
-// with Blocking arrows (`?view=graph` on the page; the choice is remembered by this browser).
-import { ListIcon, ListPlusIcon, WorkflowIcon } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+// A Parent's Subtasks on its page and peek: on the Workflow line (where each stands, and what is
+// still to come for the Parent), as a list, or as the Blocking among them (`?view=line|list|blocking`
+// on the page; the choice is remembered by this browser; the line first).
+import { GitForkIcon, ListIcon, ListPlusIcon, WorkflowIcon } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Task, TaskDetail } from "@/api/client";
-import { useDirectory, useRunnerSessions } from "@/api/queries";
+import { useDirectory, useProjects, useRunnerSessions } from "@/api/queries";
+import { findProject } from "@/app/currentProject";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -13,22 +15,25 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { SectionHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { WorkGlyph } from "@/components/WorkGlyph";
-import { SubtaskGraph } from "@/components/workflow/SubtaskGraph";
+import { BlockingView } from "@/components/workflow/blocking";
+import { useLineData, WorkflowLine } from "@/components/workflowLine";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { kindLabel, liveClaim, taskWorkGlyph } from "@/work";
 import { progressText } from "../board/derive";
-import { graphSteps, graphSubtasks } from "./graph";
 import { useTaskWorkflow } from "./queries";
 
-type SubtaskView = "list" | "graph";
+type SubtaskView = "list" | "line" | "blocking";
 const viewKey = "darkory.task.subtasks";
+const views: readonly string[] = ["list", "line", "blocking"];
+/** `?view=graph`, the address the Subtask graph had, opens the Blocking that took its place. */
+const asView = (v: string | null): SubtaskView | undefined => (v === "graph" ? "blocking" : v && views.includes(v) ? (v as SubtaskView) : undefined);
 
 function remembered(): SubtaskView {
   try {
-    return localStorage.getItem(viewKey) === "graph" ? "graph" : "list";
+    return asView(localStorage.getItem(viewKey)) ?? "line";
   } catch {
-    return "list";
+    return "line";
   }
 }
 
@@ -47,8 +52,8 @@ function remember(v: SubtaskView) {
 function useSubtaskView(inAddress: boolean): [SubtaskView, (v: SubtaskView) => void] {
   const [params, setParams] = useSearchParams();
   const [local, setLocal] = useState<SubtaskView>(remembered);
-  const asked = params.get("view");
-  const view: SubtaskView = inAddress && (asked === "graph" || asked === "list") ? asked : local;
+  const asked = asView(params.get("view"));
+  const view: SubtaskView = inAddress && asked ? asked : local;
   const set = (v: SubtaskView) => {
     remember(v);
     setLocal(v);
@@ -100,7 +105,8 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
           <>
             <div role="group" aria-label="Subtasks as" className="inline-flex rounded-md bg-muted p-0.5">
               {seg("list", <ListIcon aria-hidden />, "List")}
-              {seg("graph", <WorkflowIcon aria-hidden />, "Graph")}
+              {seg("line", <WorkflowIcon aria-hidden />, "Line")}
+              {seg("blocking", <GitForkIcon aria-hidden />, "Blocking")}
             </div>
             {onAdd && (
               <Button variant="ghost" size="xs" onClick={onAdd}>
@@ -111,24 +117,58 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
           </>
         }
       />
-      {view === "graph" ? <Graph detail={detail} /> : <List subtasks={subtasks} />}
+      {view === "line" ? (
+        <ParentLine detail={detail} />
+      ) : view === "blocking" ? (
+        <ParentBlocking detail={detail} onShowOnLine={() => setView("line")} />
+      ) : (
+        <List subtasks={subtasks} />
+      )}
     </section>
   );
 }
 
-function Graph({ detail }: { detail: TaskDetail }) {
-  const { members, skills } = useDirectory();
+/** The Blocking among the Parent's Subtasks, and what crosses into or out of it. */
+function ParentBlocking({ detail, onShowOnLine }: { detail: TaskDetail; onShowOnLine: () => void }) {
+  const project = findProject(useProjects().data ?? [], detail.task.project_id);
+  if (!project) return null;
+  return <BlockingView project={project} scope={detail.task.id} onShowOnLine={onShowOnLine} />;
+}
+
+/**
+ * The Parent's Subtasks on its Project's line (r2-scope F2): each open one at its Step, those
+ * ended Done green at Done, the rest of the Project a faint "+N" per Step, and on the branch what
+ * is still to come for the Parent ("when 4 open end Done", "when MAIN-7 ends"). A Parent with
+ * nothing on the main line any more folds it to a strip of names. A token opens its peek.
+ */
+function ParentLine({ detail }: { detail: TaskDetail }) {
+  const { data } = useLineData(detail.task.project_id, detail.task.key);
   const now = useNow();
-  const { steps } = useTaskWorkflow(detail.task.project_id);
-  const runner = useRunnerSessions().data?.items;
   const navigate = useNavigate();
   const peek = usePeekLink();
-  const sessions = useMemo(() => new Map((runner ?? []).map((s) => [s.task_id, s])), [runner]);
-  const columns = useMemo(() => graphSteps(steps, skills), [steps, skills]);
-  // Live: the clock moves a lapse, the Runner a session's state.
-  const nodes = useMemo(() => graphSubtasks(detail.subtasks, { members, now, sessions }), [detail.subtasks, members, now, sessions]);
-  const keyOf = new Map(detail.subtasks.map((s) => [s.id, s.key]));
-  return <SubtaskGraph steps={columns} subtasks={nodes} onOpen={(id) => keyOf.get(id) && navigate(peek(keyOf.get(id)!))} className="rounded-md border" />;
+  const [selected, setSelected] = useState<string | null>(null);
+  if (!data) return <div aria-busy className="h-[320px] rounded-md border" />;
+  const s = data.scoped;
+  return (
+    <WorkflowLine
+      label="Subtask line"
+      className="rounded-md border px-2 pt-2 pb-1"
+      workflow={data.facts}
+      tasks={s.drawn}
+      all={data.all}
+      hidden={s.hidden}
+      done={s.done}
+      ghosts={s.ghosts}
+      branchLabel={s.branchLabel}
+      fold={s.fold}
+      noLoops
+      now={now}
+      selected={selected}
+      onSelect={setSelected}
+      onOpenTask={(key) => navigate(peek(key))}
+      me={data.me}
+    />
+  );
 }
 
 function List({ subtasks }: { subtasks: Task[] }) {
