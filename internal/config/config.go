@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/blob"
 )
 
@@ -92,8 +93,8 @@ type Serve struct {
 const (
 	DefaultSessionIdle     = 30 * 24 * time.Hour
 	DefaultSessionLifetime = 90 * 24 * time.Hour
-	// DefaultTokenSessionIdle is auth.DefaultTokenIdle: three times the Runner's Heartbeat timeout.
-	DefaultTokenSessionIdle = 15 * time.Minute
+	// DefaultTokenSessionIdle is three times the Runner's Heartbeat timeout (auth.DefaultTokenIdle).
+	DefaultTokenSessionIdle = auth.DefaultTokenIdle
 	DefaultMaxWaiting       = 16
 )
 
