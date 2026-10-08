@@ -20,6 +20,8 @@ import { ConnectorEdge } from "./ConnectorEdge";
 import { CanvasContext, type CanvasActions } from "./context";
 import { endsOf, routesOf, toEdges, toNodes, type CanvasNode, type ConnectorFlowEdge, type Mode } from "./flow";
 import { STEP_H, tidy } from "./layout";
+import type { LiveCanvas } from "./live";
+import { LiveLayer } from "./LiveLayer";
 import { connectProblem, type Connector, type Point, type Step, type Workflow } from "./model";
 import { StepNode, TerminalNode } from "./nodes";
 import { ConnectorPanel, Problem, StepPanel } from "./StepPanel";
@@ -54,6 +56,11 @@ export type WorkflowCanvasProps = {
   onSelectionChange?: (selection: CanvasSelection) => void;
   /** Live, a Step was clicked, or Enter or Space pressed on it: open what it holds. */
   onOpenStep?: (step: Step) => void;
+  /**
+   * Live, what is happening as it happens (live.ts): callouts above the Steps, chips pulsing,
+   * tokens travelling the Connectors; and where a chip leads.
+   */
+  live?: LiveCanvas;
   /** A Step was dropped where it now stands (a drag ended, or an arrow key moved it). */
   onMove?: (step: Step, x: number, y: number) => void;
   /** "+" on a Step, or a connection dropped on empty canvas: a new step after `from`, at `at` if dropped. */
@@ -94,6 +101,7 @@ function Canvas({
   selection,
   onSelectionChange,
   onOpenStep,
+  live,
   onMove,
   onAddStep,
   onAddConnector,
@@ -204,20 +212,28 @@ function Canvas({
     onAddStep(state.fromNode.id, { x: Math.round(at.x), y: Math.round(at.y - STEP_H / 2) });
   };
 
-  const actions = useMemo<CanvasActions>(
-    () => ({ mode, onAdd: onAddStep, onSelectConnector: (id) => choose({ kind: "connector", id }), opens: !edit && !!onOpenStep }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- choose reads the current selection through a ref
-    [mode, onAddStep, workflow, onOpenStep],
-  );
-
   const openStep = (id: string) => {
     const step = workflow.steps.find((s) => s.id === id);
     if (step && !edit) onOpenStep?.(step);
   };
+  const actions = useMemo<CanvasActions>(
+    () => ({
+      mode,
+      onAdd: onAddStep,
+      onSelectConnector: (id) => choose({ kind: "connector", id }),
+      opens: !edit && !!onOpenStep,
+      onOpenStep: openStep,
+      live: edit ? undefined : live,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- choose reads the current selection through a ref
+    [mode, onAddStep, workflow, onOpenStep, live],
+  );
+
   // Live, a focused step opens on Enter or Space as a click opens it (React Flow selects on
-  // those, and nothing is selectable live).
+  // those, and nothing is selectable live). A chip in it is a button of its own.
   const onKeyDown = (e: KeyboardEvent) => {
     if (edit || !onOpenStep || (e.key !== "Enter" && e.key !== " ")) return;
+    if (!(e.target as HTMLElement).classList.contains("react-flow__node")) return;
     const id = (e.target as HTMLElement).closest<HTMLElement>(".react-flow__node")?.dataset.id;
     if (!id) return;
     e.preventDefault();
@@ -258,6 +274,7 @@ function Canvas({
           maxZoom={1.5}
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          {!edit && live && <LiveLayer live={live} nodes={nodes} routes={routes} />}
           <Panel position="top-left" className="flex gap-1.5">
             {edit && onLayout && (
               <Button variant="outline" size="xs" onClick={() => onLayout(tidy(workflow))}>

@@ -5,7 +5,9 @@ import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { useCanvas } from "./context";
 import type { StepFlowNode, TerminalFlowNode } from "./flow";
-import { durationText, isHold, noWayOut, unstaffed, waitingAt, type Taker } from "./model";
+import { SHOWN_CHIPS } from "./layout";
+import type { LiveCanvas } from "./live";
+import { durationText, isHold, noWayOut, unstaffed, waitingAt, type Step, type Taker, type TaskChip } from "./model";
 
 const shownTakers = 4;
 
@@ -30,25 +32,95 @@ function Takers({ takers, live }: { takers: Taker[]; live: boolean }) {
   );
 }
 
+/** A chip's words for a screen reader: its key, title and Parent, and who holds it or that it waits. */
+function chipLabel(chip: TaskChip): string {
+  const under = chip.parentKey ? `, under ${chip.parentKey}` : "";
+  const who = chip.holder ? `held by ${chip.holder.kind === "agent" ? `${chip.holder.name} (agent)` : chip.holder.name}` : "waiting";
+  return `${chip.key} ${chip.title}${under}, ${who}`;
+}
+
+/**
+ * Live, the open Tasks at a Step as chips, one row each: the holder's mark ringed by how they
+ * work there (an empty dashed ring while it waits), the Parent's key muted on a Subtask, the key
+ * and a short title. A chip that has just been picked up, let go of or arrived comes first and
+ * pulses; past three, "+N more" opens the Step. A chip opens its Task's peek.
+ */
+function Chips({ step, live, onOpenStep }: { step: Step; live?: LiveCanvas; onOpenStep?: (id: string) => void }) {
+  const chips = step.chips ?? [];
+  if (chips.length === 0) return null;
+  const fresh = (c: TaskChip) => (live?.pulses.has(c.id) || live?.arrived.has(c.id) ? 0 : 1);
+  const ordered = [...chips].sort((a, b) => fresh(a) - fresh(b));
+  const shown = ordered.slice(0, SHOWN_CHIPS);
+  const more = chips.length - shown.length;
+  return (
+    <ul aria-label={`Tasks at ${step.name}`} className="flex flex-col">
+      {shown.map((c) => (
+        <li key={c.id} className="flex h-6 min-w-0 items-center">
+          <button
+            type="button"
+            aria-label={chipLabel(c)}
+            title={chipLabel(c)}
+            data-live={live?.pulses.get(c.id)}
+            data-arrived={live?.arrived.has(c.id) || undefined}
+            data-focus={live?.focus?.taskId === c.id || undefined}
+            onClick={(e) => {
+              e.stopPropagation();
+              live?.onOpenTask?.(c.key);
+            }}
+            className="flow-chip nodrag nopan flex h-[22px] w-full min-w-0 items-center gap-1.5 rounded-md border bg-background pr-1.5 pl-0.5 text-left text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            {c.holder ? (
+              <MemberAvatar member={c.holder} working={c.holder.working} className="size-[18px] text-[8px]" />
+            ) : (
+              <span aria-hidden className="size-[18px] flex-none rounded-full border border-dashed border-muted-foreground/60" />
+            )}
+            {c.parentKey && <span className="flex-none font-mono text-[10px] text-muted-foreground/80">{c.parentKey} ›</span>}
+            <span className="flex-none font-mono text-[11px] font-medium">{c.key}</span>
+            <span className="min-w-0 truncate text-muted-foreground">{c.title}</span>
+          </button>
+        </li>
+      ))}
+      {more > 0 && (
+        <li className="flex h-6 items-center">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenStep?.(step.id);
+            }}
+            className="nodrag nopan rounded-sm px-1 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          >
+            +{more} more
+          </button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
 /**
  * A Step: its name, its Skill (or that it is a hold, drawn dashed), the Members who take its
  * Tasks, and how many Tasks wait at it and are worked. A Step whose Skill no Member of the
  * Project holds says so in amber, as one with a Skill and no Connector out does ("No way out").
- * Editing, "+" on its corner adds a Step after it, clear of the outcomes' names beside its right
- * side.
+ * Live, its Tasks show as chips under its Skill, and it is outlined for a moment when one is
+ * picked up there. Editing, "+" on its corner adds a Step after it, clear of the outcomes' names
+ * beside its right side.
  */
 export function StepNode({ data: { step, deadEnd }, selected }: NodeProps<StepFlowNode>) {
-  const { mode, onAdd, opens } = useCanvas();
+  const { mode, onAdd, opens, onOpenStep, live } = useCanvas();
   const edit = mode === "edit";
   const hold = isHold(step);
   const warn = unstaffed(step);
+  const focused = live?.focus?.steps.includes(step.id);
   return (
     <div
+      data-glow={live?.glows.get(step.id)}
       className={cn(
-        "group/step relative flex size-full flex-col justify-between rounded-lg border bg-card px-3 pt-2 pb-2.5 text-card-foreground shadow-soft",
+        "flow-step group/step relative flex size-full flex-col justify-between rounded-lg border bg-card px-3 pt-2 pb-2.5 text-card-foreground shadow-soft",
         hold && "border-dashed border-muted-foreground/50 bg-muted/40",
         (warn || deadEnd) && "border-warn-border",
         selected && "border-ring ring-2 ring-ring/40",
+        focused && "border-foreground/60 ring-2 ring-ring/40",
         opens && "cursor-pointer hover:border-ring/60",
       )}
     >
@@ -62,6 +134,7 @@ export function StepNode({ data: { step, deadEnd }, selected }: NodeProps<StepFl
         )}
       </span>
       <span className="truncate text-xs text-muted-foreground">{step.skill ? step.skill.name : "Hold · moved on by hand"}</span>
+      {!edit && <Chips step={step} live={live} onOpenStep={onOpenStep} />}
       <span className="flex min-w-0 items-center gap-2">
         {warn ? (
           <span

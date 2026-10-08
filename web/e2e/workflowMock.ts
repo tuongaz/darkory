@@ -142,6 +142,7 @@ export const tasks = [
   task(10, "Review the CSV export", "st-review"),
   task(11, "Review the sidebar", "st-review"),
   task(12, "Acceptance: Support emoji", "st-acceptance", { kind: "acceptance" }),
+  task(13, "Export the ledger totals", "st-review", { state: "done", step_id: undefined }),
 ];
 
 const session = (n: number, member: string, state: string) => ({
@@ -155,6 +156,68 @@ const session = (n: number, member: string, state: string) => ({
   log_path: `/tmp/WEB-${n}.log`,
 });
 export const sessions = [session(4, "m-planner", "running"), session(5, "m-builder-1", "running"), session(6, "m-builder-2", "stalled"), session(9, "m-qa", "waiting")];
+
+/** WEB's recent moves, in sequence order, as `GET /v1/activity?project=WEB` answers: what the trail opens on. */
+const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+const moved = (seq: number, kind: string, subject: string, actor: string | undefined, payload: Record<string, unknown>, ago: number) => ({
+  seq,
+  at: minutesAgo(ago),
+  kind,
+  subject_type: "task",
+  subject_id: subject,
+  ...(actor ? { actor_id: actor } : {}),
+  payload,
+});
+export const activity = [
+  moved(41, "task.filed", "k-7", "m-ada", { key: "WEB-7", title: "Store names as NFC", project_id: project.id, step_id: "st-backlog" }, 52),
+  moved(42, "task.moved", "k-7", "m-ada", { from: "st-backlog", to: "st-build" }, 48),
+  moved(43, "task.claimed", "k-5", "m-builder-1", { step_id: "st-build", skill_id: "s-engineer" }, 40),
+  moved(44, "task.advanced", "k-11", "m-builder-2", { from: "st-build", to: "st-qa", outcome: "pass" }, 36),
+  moved(45, "task.advanced", "k-11", "m-qa", { from: "st-qa", to: "st-review", outcome: "pass" }, 31),
+  moved(46, "task.claimed", "k-6", "m-builder-2", { step_id: "st-build", skill_id: "s-engineer" }, 24),
+  moved(47, "task.lapsed", "k-8", undefined, { holder_id: "m-builder-1", claim_id: "cl-x" }, 19),
+  moved(48, "task.claimed", "k-9", "m-qa", { step_id: "st-qa", skill_id: "s-qa" }, 12),
+  moved(49, "task.completed", "k-13", "m-reviewer", { from: "st-review", outcome: "pass" }, 6),
+  moved(50, "task.claimed", "k-4", "m-planner", { step_id: "st-plan", skill_id: "s-breakdown" }, 3),
+];
+
+/**
+ * Stands in for the browser's EventSource on the page, so a lab can deliver Activity as the
+ * stream would: `window.__darkoryEmit(entry)` sends one entry to every open stream.
+ */
+function fakeStream() {
+  type Listener = (e: MessageEvent) => void;
+  const open: FakeSource[] = [];
+  class FakeSource extends EventTarget {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSED = 2;
+    readyState = 0;
+    onopen: ((e: Event) => void) | null = null;
+    onerror: ((e: Event) => void) | null = null;
+    onmessage: Listener | null = null;
+    constructor(readonly url: string) {
+      super();
+      open.push(this);
+      setTimeout(() => {
+        this.readyState = 1;
+        this.onopen?.(new Event("open"));
+      }, 0);
+    }
+    close() {
+      this.readyState = 2;
+    }
+  }
+  (window as unknown as { EventSource: unknown }).EventSource = FakeSource;
+  (window as unknown as { __darkoryEmit: (entry: unknown) => void }).__darkoryEmit = (entry) => {
+    for (const s of open) if (s.readyState === 1) s.dispatchEvent(new MessageEvent("activity", { data: JSON.stringify(entry) }));
+  };
+}
+
+/** Delivers `entry` over the page's fake stream (`mockV1`), as the server would. */
+export async function emit(page: Page, entry: Record<string, unknown>) {
+  await page.evaluate((e) => (window as unknown as { __darkoryEmit: (entry: unknown) => void }).__darkoryEmit(e), entry);
+}
 
 type Body = {
   steps: { id?: string; name: string; skill?: string; position: number; x?: number; y?: number }[];
@@ -193,9 +256,12 @@ export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): R
   return { project_id: wf.project_id, steps: steps.sort((a, b) => a.position - b.position), connectors };
 }
 
-/** Answers every /v1 read the shell and the Workflow screens make, as `who`. */
+/** Answers every /v1 read the shell and the Workflow screens make, as `who`; returns the Tasks it serves, to change. */
 export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
   let wf = initialWorkflow();
+  // This page's own Tasks, which a lab may change before it delivers the entry that says so.
+  const list: Record<string, unknown>[] = tasks.map((t) => ({ ...t }));
+  await page.addInitScript(fakeStream);
   const me = who === "ada" ? members[0] : { ...human("m-bob", "bob"), admin: false };
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   await page.route("**/v1/**", async (route) => {
@@ -222,13 +288,14 @@ export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
       if (path === "/v1/skills") return json(route, { items: skills });
       if (path === "/v1/tasks") {
         const step = url.searchParams.get("step");
-        const items = tasks.filter((t) => !step || t.step_id === step);
+        const state = url.searchParams.get("state");
+        const items = list.filter((t) => (!step || t.step_id === step) && (!state || t.state === state));
         return json(route, { items });
       }
       if (path === "/v1/runner/sessions") return json(route, { items: sessions, runner: true });
       if (path === "/v1/workspaces" || path === "/v1/views") return json(route, { items: [] });
       if (path === "/v1/tasks/takeable") return json(route, { items: [] });
-      if (path === "/v1/activity") return json(route, { items: [], next_after: 0 });
+      if (path === "/v1/activity") return json(route, { items: activity, last_seq: 50, first_seq: 41 });
     }
     if (method === "PUT" && path.endsWith("/workflow")) {
       wf = applyBody(wf, req.postDataJSON() as Body);
@@ -236,4 +303,5 @@ export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
     }
     return json(route, { code: "not_found", message: `${method} ${path} is not mocked` }, 404);
   });
+  return { tasks: list };
 }

@@ -11,6 +11,11 @@ export const TERMINAL_H = 40;
 export const RANK_GAP = 240;
 /** Between steps stacked in one rank. */
 export const ROW_GAP = 40;
+/** Live, a Task's chip on its Step: one row of the node each, under the gap above the first. */
+export const CHIP_ROW = 24;
+const CHIPS_GAP = 4;
+/** Live, the chips a Step shows; past these, a row says "+N more". */
+export const SHOWN_CHIPS = 3;
 
 const DONE = "\u0000done";
 const START = "\u0000start";
@@ -55,15 +60,50 @@ export function tidy(workflow: Workflow): Record<string, Point> {
 }
 
 /**
+ * A Step node's height, live, with `chips` Tasks at it: the node grows a row for each shown, and
+ * one for "+N more" past three. With none it is the editing canvas's size.
+ */
+export function stepHeight(chips: number): number {
+  if (chips <= 0) return STEP_H;
+  const rows = Math.min(chips, SHOWN_CHIPS) + (chips > SHOWN_CHIPS ? 1 : 0);
+  return STEP_H + CHIPS_GAP + rows * CHIP_ROW;
+}
+
+/** A Step's box: where it stands and how tall it is drawn. */
+export type StepBox = { x: number; y: number; h: number };
+
+/**
+ * Live, where each Step stands once the Steps above it have grown: a Step moves down by the most
+ * any Step above it in its column grew, its own move included, so every gap under a Step stays
+ * what Tidy up (or a hand) made it. Only the canvas draws these; the record keeps its places.
+ */
+export function settle(steps: { id: string; x: number; y: number; h: number }[]): Map<string, StepBox> {
+  const sorted = [...steps].sort((a, b) => a.y - b.y || a.x - b.x);
+  const shift = new Map<string, number>();
+  const out = new Map<string, StepBox>();
+  for (const s of sorted) {
+    let by = 0;
+    for (const a of sorted) {
+      if (a === s) break;
+      if (a.y >= s.y || a.x >= s.x + STEP_W || s.x >= a.x + STEP_W) continue;
+      by = Math.max(by, (shift.get(a.id) ?? 0) + a.h - STEP_H);
+    }
+    shift.set(s.id, by);
+    out.set(s.id, { x: s.x, y: s.y + by, h: s.h });
+  }
+  return out;
+}
+
+/**
  * Where Done and Dropped stand: one rank right of the rightmost Step. Done is level with the
  * steps that lead into it (the middle of them all when none does); Dropped is under it, no
  * higher than the lowest step, so its dashed arrow from any Step has room.
  */
-export function terminals(workflow: Workflow): { done: Point; dropped: Point } {
-  const steps = workflow.steps;
+export function terminals(workflow: Workflow, boxes?: Map<string, StepBox>): { done: Point; dropped: Point } {
+  const steps = workflow.steps.map((s) => ({ id: s.id, ...(boxes?.get(s.id) ?? { x: s.x, y: s.y, h: STEP_H }) }));
   if (steps.length === 0) return { done: { x: 0, y: 0 }, dropped: { x: 0, y: TERMINAL_H + 56 } };
   const x = Math.max(...steps.map((s) => s.x)) + STEP_W + RANK_GAP;
-  const middle = (s: { y: number }) => s.y + STEP_H / 2;
+  const middle = (s: { y: number; h: number }) => s.y + s.h / 2;
   const feeding = steps.filter((s) => workflow.connectors.some((c) => c.from === s.id && c.to === null));
   const level = feeding.length > 0 ? feeding : steps;
   const doneY = Math.round(level.reduce((sum, s) => sum + middle(s), 0) / level.length - TERMINAL_H / 2);
