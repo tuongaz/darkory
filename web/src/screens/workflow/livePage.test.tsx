@@ -65,6 +65,47 @@ describe("the Workflow page", () => {
     expect(within(line()).getByText("After a Parent")).toBeInTheDocument();
   });
 
+  it("says where Tasks enter: the arrow into Build, Plan on Break down, Backlog parked with its Tasks", async () => {
+    serve([task(2), task(3, { step_id: step.backlog, title: "Later" }), task(4, { step_id: step.plan, title: "Break down: Big thing", kind: "breakdown" })]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
+    expect(within(line()).getByText("New Tasks start here")).toBeInTheDocument();
+    expect(within(line()).getByText("Break down")).toBeInTheDocument();
+    expect(within(line()).getByText("files Subtasks")).toBeInTheDocument();
+    expect(within(line()).getByText("hold · moved on by hand")).toBeInTheDocument();
+    expect(tokenOf("WEB-3")).toHaveAttribute("data-state", "hold");
+    expect(tokenOf("WEB-4")).toBeInTheDocument();
+    // Plan's done is words beside it, not a dashed arc over the line.
+    expect(line().querySelector('[data-hint^="Plan\'s Breakdown Subtask ends Done"]')).toHaveTextContent("done → Done");
+  });
+
+  it("explains every line on hover, in words", async () => {
+    serve([task(2)]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
+    const segment = line().querySelector<SVGPathElement>('path[data-hint^="Build → Review"]')!;
+    await userEvent.hover(segment);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Build → Review: when the holder says pass");
+    await userEvent.unhover(segment);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    await userEvent.hover(within(line()).getByText("Backlog"));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step");
+    await userEvent.hover(within(line()).getByText("files Subtasks"));
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Whoever takes it files the Parent's other Subtasks; they start at Build");
+    // No line goes without words.
+    const lines = [...line().querySelectorAll("svg path[stroke='transparent']")];
+    expect(lines.length).toBeGreaterThan(5);
+    for (const l of lines) expect(l.getAttribute("data-hint")).toBeTruthy();
+  });
+
+  it("the Text view says where new Tasks start, what Plan does, and that Backlog's Tasks move by hand", async () => {
+    serve([task(2)]);
+    renderApp("/projects/WEB/workflow?view=text");
+    expect(await screen.findByText("New Tasks start at Build, unless the filer names another Step.")).toBeInTheDocument();
+    expect(screen.getByText(/^Break down: a Task filed with Break down on gets its Breakdown Subtask here; whoever takes it files the other Subtasks, which start at Build\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/^A hold: no one is offered its Tasks/)).toBeInTheDocument();
+  });
+
   it("mounts Needs you and What's happening under the line, and Edit for an admin only", async () => {
     serve([task(2)]);
     renderApp("/projects/WEB/workflow");

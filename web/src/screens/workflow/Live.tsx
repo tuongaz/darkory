@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BlockingView } from "@/components/workflow/blocking";
 import { useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
+import { branchSkills } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
 import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
 import { lineText, trailLine, type FlowContext } from "./flowEvents";
@@ -151,7 +152,7 @@ function LiveLine({
         doneToday={data.doneToday}
         trace={data.trace}
         compactHeads={!!data.trace}
-        noBranch={!!data.trace && !data.trace.stays.some((st) => data.facts.steps.some((x) => x.id === st.stepId && ["acceptance", "retro", "skill-review"].includes(x.skill?.name ?? "")))}
+        noBranch={!!data.trace && !data.trace.stays.some((st) => data.facts.steps.some((x) => x.id === st.stepId && branchSkills.includes(x.skill?.name ?? "")))}
         flow={flow}
         now={now}
         selected={selected}
