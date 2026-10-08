@@ -58,7 +58,7 @@ export function recordApi({
       return t ? detail(t, details[t.key]) : refuse(404, "not_found", `No Task ${params.task}`);
     },
     "GET /v1/members/:member": ({ params }) => memberDetail(params.member) ?? refuse(404, "not_found", "No Member"),
-    "GET /v1/members/:member/sessions": { items: [] },
+    "GET /v1/members/:member/sessions": { items: [], open: 0, ended: 0 },
     "GET /v1/activity": ({ query }) => {
       const kinds = query.getAll("kind");
       const member = query.get("member");

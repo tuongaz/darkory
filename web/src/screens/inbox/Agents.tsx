@@ -139,7 +139,7 @@ export function AgentsPage() {
                   <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 md:[&>th:first-child]:pl-6">
                     <th className="w-[132px] md:w-[168px]">Agent</th>
                     <th>Holds</th>
-                    <th className={cn(wide, "w-[200px]")}>Session</th>
+                    <th className={cn(wide, "w-[200px]")}>Runner</th>
                     <th className={cn(wide, "w-[200px]")}>Skills · Steps</th>
                     <th className={cn(wide, "w-[200px]")}>Last here</th>
                     <th className={cn(wide, "w-12")}>
@@ -292,7 +292,7 @@ function AgentTableRow({
           </span>
         </span>
       </td>
-      {/* Short of room, what it holds is cut at its column's edge, never over the Session beside it. */}
+      {/* Short of room, what it holds is cut at its column's edge, never over the Runner beside it. */}
       <td className="overflow-hidden">
         {claim ? (
           <span className="flex min-w-0 flex-col gap-0.5">
@@ -329,7 +329,7 @@ function AgentTableRow({
             </small>
           </span>
         ) : (
-          <span className="text-xs text-muted-foreground">{agent.agent ? "No session" : "Not run by the Runner"}</span>
+          <span className="text-xs text-muted-foreground">{agent.agent ? "Not running" : "Not run by the Runner"}</span>
         )}
       </td>
       <td className={wide}>

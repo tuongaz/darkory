@@ -164,10 +164,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a Member's open Sessions
-         * @description The Member's Sessions that are open and, for a browser Session, not yet expired, most
-         *     recently seen first. A Member may list their own; an admin anyone's. Close one with
-         *     `closeSession` and `member`, or close them all with `deactivateMember`.
+         * List a Member's Sessions
+         * @description The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+         *     ended instead, most recently ended first. A Session ends when it is closed, when its token
+         *     is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+         *     token Session when no request has come through it for the Install's idle limit (15
+         *     minutes unless set), but never while a Claim bound to it is live. Every page says how
+         *     many of the Member's Sessions are open and how many have ended. A Member may list their
+         *     own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+         *     `deactivateMember`.
          */
         get: operations["listSessions"];
         put?: never;
@@ -1692,16 +1697,35 @@ export interface components {
              * Format: date-time
              * @description When an open browser Session ends unless it is used before: after a time unused, and
              *     at the latest a time after it started. Absent for token Sessions, which end when
-             *     closed or when their token is revoked.
+             *     closed, when their token is revoked, or after the Install's idle limit without a
+             *     request (see `listSessions`).
              */
             expires_at?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the Session was closed. Absent while it is open, and for a browser Session that expired.
+             */
             closed_at?: string;
+            /**
+             * Format: date-time
+             * @description When the Session ended, however it ended: `closed_at`, or the moment a browser
+             *     Session expired or a token Session reached the idle limit. Absent while it is open.
+             */
+            ended_at?: string;
         };
+        /**
+         * @description `open`: the Session can still make requests. `ended`: it cannot; a request with its id starts a new Session.
+         * @enum {string}
+         */
+        SessionState: "open" | "ended";
         SessionList: {
             items: components["schemas"]["Session"][];
             /** @description Pass as `cursor` for the next page. Absent on the last page. */
             next_cursor?: string;
+            /** @description How many of the Member's Sessions are open. */
+            open: number;
+            /** @description How many of the Member's Sessions have ended. */
+            ended: number;
         };
         /** @enum {string} */
         SessionKind: "token" | "browser";
@@ -3053,6 +3077,8 @@ export interface operations {
     listSessions: {
         parameters: {
             query?: {
+                /** @description Which Sessions to list. Defaults to `open`. */
+                state?: components["schemas"]["SessionState"];
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
                 /** @description The `next_cursor` of the previous page. */

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import { toast } from "sonner";
 import type { Member, MemberDetail } from "@/api/client";
-import { useDirectory, useMember, useMemberSessions, useProjects, useSkills, useTokens } from "@/api/queries";
+import { useDirectory, useMember, useMemberSessions, useProjects, useRunnerSessions, useSkills, useTokens } from "@/api/queries";
+import { taskPath } from "@/screens/task/format";
 import { addProjectMember, removeProjectMember } from "@/api/writes";
 import type { Crumb } from "@/app/TopBar";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -23,7 +24,8 @@ import { shortSessionId } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { AgentCard } from "./AgentSettings";
-import { SessionRows, TokenRows } from "./credentials";
+import { TokenRows } from "./credentials";
+import { SessionsTable } from "./SessionsTable";
 import { LoadingFrame, SettingsFrame } from "./frame";
 import { count, deactivateSummary, heldClaims, liveTokens } from "./model";
 import { Chip, ConfirmDialog, Fact, Facts, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
@@ -57,6 +59,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
   const active = !m.deactivated_at;
   const tokens = useTokens(m.id);
   const sessions = useMemberSessions(m.id);
+  const runner = useRunnerSessions().data?.items.find((s) => s.member_id === m.id);
   const held = useHeldTasks(m.id);
   const heldNow = heldClaims(held.data ?? []);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -115,11 +118,22 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
           <ProjectsRow detail={detail} />
           <SkillsRow detail={detail} />
           <SettingsRow label="Tokens" count={tokens.data ? liveTokens(tokens.data).length : undefined}>
-            <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data ?? []} held={heldNow} />}</Loaded>
+            <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data?.items ?? []} held={heldNow} />}</Loaded>
           </SettingsRow>
-          <SettingsRow label="Sessions" count={sessions.data?.length}>
+          <SettingsRow label="Sessions" count={sessions.data?.open}>
             <Loaded query={sessions}>
-              {(list) => <SessionRows member={m} sessions={list} held={heldNow} current={self ? me.session.id : undefined} />}
+              {(list) => (
+                <SessionsTable
+                  member={m}
+                  sessions={list}
+                  held={heldNow}
+                  runner={runner}
+                  taskTo={taskPath}
+                  self={self}
+                  current={self ? me.session.id : undefined}
+                  canClose={me.member.admin || self}
+                />
+              )}
             </Loaded>
           </SettingsRow>
           {m.kind === "human" && active && (
@@ -139,7 +153,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
         <DeactivateDialog
           member={m}
           loaded={!!tokens.data && !!sessions.data && !!held.data}
-          summary={deactivateSummary(tokens.data ?? [], sessions.data ?? [], heldNow)}
+          summary={deactivateSummary(tokens.data ?? [], sessions.data?.items ?? [], heldNow)}
           onClose={() => setDialog(null)}
         />
       )}

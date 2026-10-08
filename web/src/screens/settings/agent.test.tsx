@@ -31,7 +31,7 @@ function routes(members: Member[], extra: Record<string, Handler> = {}): Record<
     "GET /v1/members": () => ({ items: [...byId.values()] }),
     "GET /v1/members/:member": ({ params }) => detail(byId.get(params.member)!),
     "GET /v1/members/:member/tokens": { items: [] },
-    "GET /v1/members/:member/sessions": { items: [] },
+    "GET /v1/members/:member/sessions": { items: [], open: 0, ended: 0 },
     "PATCH /v1/members/:member/agent": ({ params, body }) => {
       const m = byId.get(params.member)!;
       const next = { ...m, agent: { ...(m.agent ?? settings), ...(body as Partial<AgentSettings>) } };
