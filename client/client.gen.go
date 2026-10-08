@@ -2041,9 +2041,9 @@ type ListActivityParams struct {
 	// Labels, or a Task of it.
 	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
-	// Task Only entries about this Task (id or key); for a Parent, its Subtasks' entries as well
-	// as its own. An entry is about the Task it names as its subject: one about another Task
-	// that only mentions it, such as a blocker added to that Task, is not.
+	// Task Only entries about this Task (id or key): those whose subject is the Task, and for a
+	// Parent its Subtasks' too, the ones filed after the request included. Errors:
+	// `not_found` (no such Task).
 	Task *string `form:"task,omitempty" json:"task,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
@@ -2739,8 +2739,8 @@ type ClientInterface interface {
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
 	// 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
-	// the entries that match them all; the page is then the `limit` matching entries after
-	// `after` or just below `before`, and its `first_seq` and `last_seq` are theirs.
+	// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
+	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
 	// Corresponds with GET /v1/activity (the `ListActivity` operationId).
 	ListActivity(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4140,8 +4140,8 @@ type ClientInterface interface {
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
 // 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
-// the entries that match them all; the page is then the `limit` matching entries after
-// `after` or just below `before`, and its `first_seq` and `last_seq` are theirs.
+// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
+// below `before`, and its `first_seq` and `last_seq` are theirs.
 //
 // Corresponds with GET /v1/activity (the `ListActivity` operationId).
 func (c *Client) ListActivity(ctx context.Context, params *ListActivityParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11160,8 +11160,8 @@ type ClientWithResponsesInterface interface {
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
 	// 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
-	// the entries that match them all; the page is then the `limit` matching entries after
-	// `after` or just below `before`, and its `first_seq` and `last_seq` are theirs.
+	// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
+	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -16478,8 +16478,8 @@ func (r UpdateWorkspaceResponse) ContentType() string {
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
 // 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
-// the entries that match them all; the page is then the `limit` matching entries after
-// `after` or just below `before`, and its `first_seq` and `last_seq` are theirs.
+// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
+// below `before`, and its `first_seq` and `last_seq` are theirs.
 //
 // Returns a wrapper object for the known response body format(s).
 //

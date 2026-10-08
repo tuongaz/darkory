@@ -29,7 +29,7 @@ func cmdActivity(c *call) error {
 	member := c.fs.String("member", "", "only entries this Member acted in, or that ended a Claim they held; not with --follow")
 	kinds := c.fs.String("kind", "", "only entries of these kinds, separated by commas, such as task.claimed,task.lapsed; not with --follow")
 	project := c.fs.String("project", "", "only entries about this Project, its Workflow, Labels and Tasks; not with --follow")
-	task := c.fs.String("task", "", "only entries about this Task (id or key) and, for a Parent, its Subtasks; not with --follow")
+	task := c.fs.String("task", "", "only entries about this Task and, for a Parent, its Subtasks; not with --follow")
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}

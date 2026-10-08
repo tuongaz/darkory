@@ -819,9 +819,9 @@ const conflictWorkflow = `{"steps": [{"name": "Write", "skill": "docs", "positio
 // Two Subtasks of one Parent change the same file on branches made before either merged. The
 // second review's merge conflicts and changes nothing; a done Task stays done, so the Note on it
 // says so and a Task resolving it is filed at the Step it was built at, Build, not the Project's
-// first work Step: under the Parent while it is open, whose branch then does not land while that
-// work is missing from it; standing alone, landing the Parent's work too, when the conflicting
-// Subtask's end completed the Parent.
+// first work Step: under the Parent while it is open, its branch merging into the Parent's;
+// standing alone from main when the conflicting Subtask's end completed the Parent, whose own
+// merge into main went without that work, as its Note says.
 func TestRunnerMergeConflict(t *testing.T) {
 	for _, auto := range []bool{false, true} {
 		t.Run(map[bool]string{false: "open Parent", true: "Parent auto-completed"}[auto], func(t *testing.T) {
@@ -883,17 +883,19 @@ func TestRunnerMergeConflict(t *testing.T) {
 					t.Fatalf("the resolving Task is not a Subtask of the open Parent: %+v", resolve)
 				}
 				// The Parent cannot be completed while it is open; dropped, the Owner completes the
-				// Parent, whose branch still lacks the work: it does not land.
+				// Parent, whose branch lands without the work, and its Note says so.
 				f.ok("ada", "drop", resolve.Key, "--reason", "resolved by hand later")
 				f.ok("ada", "complete", "WEB-1")
-			} else if resolve.ParentID != nil || !strings.HasPrefix(resolve.Title, "Land WEB-1: ") || !strings.Contains(resolve.Description, "Merge web-1, then "+conflicted) {
+			} else if resolve.ParentID != nil || resolve.Title != "Resolve the merge of "+conflicted+" into main" ||
+				!strings.Contains(resolve.Description, "this Task stands alone, on a branch from main. Merge "+conflicted) {
 				t.Fatalf("the resolving Task of an ended Parent: %+v\n%s", resolve, resolve.Description)
 			}
 			eventually(t, 10*time.Second, "the Parent's Note", func() bool {
-				return strings.Contains(notesOf(f.task("WEB-1")), "web: did not merge web-1 into main: the work of "+key+" is not in it")
+				n := notesOf(f.task("WEB-1"))
+				return strings.Contains(n, "Merged web-1 into main at ") && strings.Contains(n, "It went without the work of "+key+", whose merge into web-1 conflicted")
 			})
-			if _, err := os.Stat(filepath.Join(f.repo, "shared.txt")); !os.IsNotExist(err) {
-				t.Fatalf("the Parent landed on main without %s's work: %v", key, err)
+			if isAncestor(t.Context(), f.repo, conflicted, "main") {
+				t.Fatalf("%s's work reached main despite the conflict", conflicted)
 			}
 		})
 	}

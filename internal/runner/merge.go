@@ -252,9 +252,11 @@ func (r *Runner) recordMerge(ctx context.Context, rec Record, key, text string) 
 // resolve files the Task that resolves a merge of a done Task's branch the runner could not make,
 // at the Step a session of this runner last committed to that branch at (its builder's), else the
 // Project's first work Step; it says so in the words it returns for the merge's Note. A done Task
-// stays done (CONTEXT.md: a Task ends done or dropped), so its work goes on in the new Task: under
-// the Parent while it is open, whose Complete it then holds back; else standing alone, merging the
-// Parent's branch too when the Parent has ended. unreviewed is as for mergeTask.
+// stays done (CONTEXT.md: a Task ends done or dropped), so its work goes on in the new Task, whose
+// branch merges into the done Task's base while that base is open: the Parent's branch, under the
+// Parent. When the Parent has ended (the conflicting Subtask's end completed it) the new Task
+// stands alone on a branch from the default branch and carries the work there, the Parent's own
+// merge having gone without it (parentCompleted). unreviewed is as for mergeTask.
 func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, parent *ParentInfo, ws Workspace, branch, target, conflict, unreviewed string) string {
 	key := d.Task.Key
 	done := fmt.Sprintf("The review of %s advanced it into Done", key)
@@ -270,14 +272,12 @@ func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, 
 	case parent != nil && parent.Open:
 		nt.Parent = &parent.ID
 	case parent != nil:
-		// The Parent ended (its last Subtask's advance completed it), so it takes no new Subtask, and
-		// its own branch did not land either (parentCompleted): this Task lands both.
 		def := or(ws.DefaultBranch, defaultBranch(ctx, ws.Path))
-		title = fmt.Sprintf("Land %s: resolve the merge of %s into %s", parent.Key, branch, target)
-		nt.Title, nt.Project = title, &d.Task.ProjectID
-		work = fmt.Sprintf("%s has ended, so its branch %s did not merge into %s either. Merge %s, then %s, into this Task's "+
-			"branch, resolve what conflicts, run the tests, commit, and advance it as any work: this Task's branch merges into %s "+
-			"when it is done, landing %s.", parent.Key, target, def, target, branch, def, parent.Key)
+		nt.Title, nt.Project = fmt.Sprintf("Resolve the merge of %s into %s", branch, def), &d.Task.ProjectID
+		work = fmt.Sprintf("%s has ended, so its branch %s merged into %s without %s's work, and this Task stands alone, on a "+
+			"branch from %s. Merge %s into this Task's branch, resolve what conflicts, run the tests, commit, and advance it as any "+
+			"work: this Task's branch merges into %s when it is done, carrying %s's work there.", parent.Key, target, def, key, def,
+			branch, def, key)
 	default:
 		nt.Project = &d.Task.ProjectID
 	}
@@ -308,9 +308,8 @@ func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, 
 }
 
 // parentCompleted merges a completed Parent's branch into the default branch in every Workspace
-// it has one, or opens its pull request, and records it in a Note on the Parent. A branch some
-// done Subtask's work did not merge into is left, since landing it would land the Parent without
-// that work: the Task resolving that merge lands both.
+// it has one, or opens its pull request, and records it in a Note on the Parent, which names any
+// done Subtask whose work the branch lacks (its merge conflicted).
 func (r *Runner) parentCompleted(ctx context.Context, a client.Activity, d *client.TaskDetail) {
 	key := d.Task.Key
 	branch := ParentBranch(key)
@@ -340,11 +339,12 @@ func (r *Runner) parentCompleted(ctx context.Context, a client.Activity, d *clie
 			lines = append(lines, fmt.Sprintf("%s: opened %s, the pull request of %s into %s.", ws.Name, url, branch, def))
 			continue
 		}
+		// A done Subtask whose merge into the branch conflicted is missing from it: the merge goes on
+		// without that work, which the Task resolving the conflict carries into the default branch.
+		without := ""
 		if missing := r.unmerged(ctx, d, m.Repo, branch); len(missing) > 0 {
-			lines = append(lines, fmt.Sprintf("%s: did not merge %s into %s: the work of %s is not in it, since its merge conflicted "+
-				"(its Notes say so), and the Task filed to resolve that lands the Parent's work.", ws.Name, branch, def, strings.Join(missing, ", ")))
-			r.log.Warn("a completed Parent's branch lacks a Subtask's work; not merged", "parent", key, "workspace", ws.Name, "missing", missing)
-			continue
+			without = fmt.Sprintf(" It went without the work of %s, whose merge into %s conflicted; the Task filed to resolve that carries "+
+				"it into %s.", strings.Join(missing, ", "), branch, def)
 		}
 		unlock := r.lockRepo(m.Repo)
 		res, err := mergeBranch(ctx, m.Repo, branch, def, fmt.Sprintf("Merge %s into %s\n\nComplete %s: %s", branch, def, key, d.Task.Title))
@@ -357,9 +357,9 @@ func (r *Runner) parentCompleted(ctx context.Context, a client.Activity, d *clie
 			lines = append(lines, fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged; merge it by hand.\n%s", ws.Name, branch, def, res.Conflict))
 			r.logError(ctx, "a completed Parent's branch conflicts with the default branch; merge it by hand", "parent", key, "workspace", ws.Name)
 		case res.Already:
-			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).", ws.Name, branch, def, short(res.Commit)))
+			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).%s", ws.Name, branch, def, short(res.Commit), without))
 		default:
-			lines = append(lines, fmt.Sprintf("Merged %s into %s at %s (%s).", branch, def, short(res.Commit), ws.Name))
+			lines = append(lines, fmt.Sprintf("Merged %s into %s at %s (%s).%s", branch, def, short(res.Commit), ws.Name, without))
 			r.log.Info("merged a completed Parent's branch", "parent", key, "workspace", ws.Name, "into", def, "commit", short(res.Commit))
 		}
 	}

@@ -2038,9 +2038,9 @@ type ListActivityParams struct {
 	// Labels, or a Task of it.
 	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
-	// Task Only entries about this Task (id or key); for a Parent, its Subtasks' entries as well
-	// as its own. An entry is about the Task it names as its subject: one about another Task
-	// that only mentions it, such as a blocker added to that Task, is not.
+	// Task Only entries about this Task (id or key): those whose subject is the Task, and for a
+	// Parent its Subtasks' too, the ones filed after the request included. Errors:
+	// `not_found` (no such Task).
 	Task *string `form:"task,omitempty" json:"task,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
