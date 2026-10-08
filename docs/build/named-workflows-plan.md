@@ -21,7 +21,7 @@
 5. **An ended Task keeps `last_step_id`, the Step it ended at, set in the same UPDATE that ends it; `moves` re-point it when its Step is deleted, and otherwise the FK sets it null.** Why: a Done card belongs on the board of the Workflow it ended in; the Stepper already says "A Step since removed".
 6. **A Parent shows on the board of the Workflow that owns its least-advanced Subtask's Step.** Why: `placeOf` already puts it there; a Parent is at no Step.
 7. **Step names stay unique per Project; Workflow names are unique per Project, ignoring case, 1–50 characters, never spelled as an id.** Why: a Step name must mean one place in `--step`, `move` and the filters.
-8. **The board and the Workflow page show one Workflow at a time, picked by a chip in the breadcrumb (`?workflow=`, read long or short, remembered per Project in the browser, hidden with one Workflow); the Tasks list stays the whole Project and prefixes each Step group with its Workflow when there are two or more.** Why: the owner wants a flow seen alone; the list is where everything is.
+8. **The board and the Workflow page show one Workflow at a time, picked by a chip in the breadcrumb (`?workflow=`, read long or short, the first by position until one is picked, then remembered per Project in the browser; hidden with one Workflow); the Tasks list stays the whole Project and prefixes each Step group with its Workflow when there are two or more.** Why: the owner wants a flow seen alone; the list is where everything is.
 9. **On the line, a Connector into another Workflow is an exit chip `outcome → Workflow › Step`, and the Step it reaches carries an entry mark `from Workflow · outcome`.** Why: ADR 0019's Consequences; the line must never drop a Connector silently.
 10. **The CLI's `workflow show` prints a heading per Workflow only when the Project has two or more, and a crossing outcome as `bug → Bugs › Investigate`.** Why: one Workflow needs no heading; the target's Workflow is what the reader needs.
 
@@ -40,7 +40,7 @@
 **Step 2:** In `docs/adr/0019-named-workflows.md`, replace the first Consequences bullet ("The Workflow editor, the board, `workflow show`, `workflow set` and `PUT …/workflow` work per Workflow…") and the fourth ("Today 'the first Step' is the first by position across the Project…") with:
 
 ```
-- The write stays the Project's whole graph: `PUT …/workflow` carries the Workflows and every Step with its Workflow, so a crossing Connector and the Step it reaches land in one write. The editor edits one Workflow at a time and saves whole; the board and `workflow show` read one at a time.
+- The write stays the Project's whole graph: `PUT …/workflow` carries the Workflows and every Step with its Workflow, so a crossing Connector and the Step it reaches land in one write. The editor edits one Workflow at a time and saves whole; the board reads one at a time, and `workflow show` reads one, or all under a heading each.
 - A Workflow has a position, and a Project's Steps are ordered by Workflow position, then Step position: "the first Step" (a filed Task's default entry) and the Steps carrying `breakdown`, `acceptance` and `retro` read that order, so they keep their meaning with no new fact.
 - An ended Task keeps the Step it ended at (`last_step_id`), so its card lands on the board of the Workflow it ended in; the Task is still at no Step.
 ```
