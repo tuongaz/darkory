@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { ApiError, type Project, type Task, type Workspace, type WorkflowStep } from "@/api/client";
 import { useDirectory, useLabels, useProjects, useWorkflow, useWorkspaces } from "@/api/queries";
 import { fileTask } from "@/api/writes";
-import { findProject } from "@/app/currentProject";
+import { findProject, useCurrentProject } from "@/app/currentProject";
 import { usePeekLink } from "@/app/peek";
 import { FormDialog } from "@/components/FormDialog";
 import { Key } from "@/components/Key";
@@ -110,7 +110,10 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
   const skillName = (id: string) => skills.get(id)?.name;
 
   const [projectKey, setProjectKey] = useState<string | undefined>(preset.project);
-  const project = findProject(projects, projectKey) ?? findProject(projects, me.projects[0]?.id) ?? projects[0];
+  // Until a Project is named, the current one: a dialog opened before the Projects loaded (C on a
+  // fresh page) files in the Project of the address once they arrive.
+  const current = useCurrentProject();
+  const project = findProject(projects, projectKey) ?? current;
   const key = project?.key ?? "";
   const tasks = useProjectTasks(key);
   const workflow = useWorkflow(key || undefined);
