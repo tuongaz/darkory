@@ -4,13 +4,11 @@ import type { FlowState } from "@/components/workflow/live";
 import { cn } from "@/lib/utils";
 import type { Ghost, Trace } from "./data";
 import { arrowhead } from "./draw";
-import { brackets, type LineTopology } from "./layout";
+import { BRACKET_OFF, bracketX, brackets, railX, type LineTopology } from "./layout";
 import { DONE_STATION, isHoldStep, type LineFacts, type LineTask } from "./model";
 import { spanText } from "@/lib/time";
 import { GhostToken, HiddenCount, Token } from "./Token";
 import { BREAKDOWN_BRANCH, entryHint, ENTRY_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint, HOLD_NOTE } from "./words";
-
-const RAIL = 32;
 
 /**
  * The line turned to run down a phone: stations as rows, a Step's tokens wrapping beside its name,
@@ -58,6 +56,7 @@ export function VerticalLine({
   footer?: ReactNode;
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
+  const rail = useMemo(() => railX(t), [t]);
   const box = useRef<HTMLDivElement>(null);
   const dots = useRef(new Map<string, HTMLElement>());
   const [ys, setYs] = useState<Map<string, number>>(new Map());
@@ -122,14 +121,15 @@ export function VerticalLine({
     const current = trace?.current === id;
     const right = terminal ? (doneToday !== undefined ? `${doneToday} today` : "") : !s ? "" : isHoldStep(s) ? "hold" : s.medianMs !== undefined ? `median ${spanText(s.medianMs)}` : "";
     return (
-      <li key={id} className="relative pr-0.5 pb-3 pl-[42px]">
+      <li key={id} className="relative pr-0.5 pb-3" style={{ paddingLeft: rail + 10 }}>
         <span
           aria-hidden
           ref={(el) => {
             if (el) dots.current.set(id, el);
             else dots.current.delete(id);
           }}
-          className="absolute top-[3px] left-[25px] size-[14px]"
+          className="absolute top-[3px] size-[14px]"
+          style={{ left: rail - 7 }}
         />
         <div className="flex min-w-0 items-baseline gap-1.5">
           <span className="truncate font-semibold">{terminal ? "Done" : s?.name}</span>
@@ -195,9 +195,9 @@ export function VerticalLine({
     return (
       <line
         key={s.from}
-        x1={RAIL}
+        x1={rail}
         y1={a}
-        x2={RAIL}
+        x2={rail}
         y2={b}
         data-gap={!s.connector && !s.hand ? "true" : undefined}
         stroke={!s.connector ? (s.hand ? "var(--muted-foreground)" : "var(--border)") : tone === "plain" ? "var(--foreground)" : "var(--state-claimed)"}
@@ -209,13 +209,13 @@ export function VerticalLine({
   const marks = brackets(t).map((b) => {
     const [lo, hi] = [y(t.main[b.lo]), y(t.main[b.hi])];
     if (lo === undefined || hi === undefined) return null;
-    const x = RAIL - 8 - b.depth * 7;
+    const x = bracketX(rail, b.depth);
     const tone = traversed.has(b.connector.id) ? "trace" : trace?.next.includes(b.connector.id) ? "next" : trace ? "dim" : "plain";
     const col = tone === "trace" || tone === "next" ? "var(--state-claimed)" : "var(--muted-foreground)";
     return (
       <g key={b.connector.id} className={cn(tone === "dim" && "opacity-40")}>
-        <path d={`M${RAIL - 6} ${hi - 3} H${x + 4} Q${x} ${hi - 3} ${x} ${hi - 7} V${lo + 7} Q${x} ${lo + 3} ${x + 4} ${lo + 3} H${RAIL - 8}`} fill="none" stroke={col} strokeWidth={1.4} strokeDasharray={tone === "next" ? "3 3" : undefined} />
-        <path d={arrowhead(RAIL - 8, lo + 3, "right")} fill="none" stroke={col} strokeWidth={1.4} />
+        <path data-track={x} d={`M${rail - 6} ${hi - 3} H${x + 4} Q${x} ${hi - 3} ${x} ${hi - 7} V${lo + 7} Q${x} ${lo + 3} ${x + 4} ${lo + 3} H${rail - BRACKET_OFF}`} fill="none" stroke={col} strokeWidth={1.4} strokeDasharray={tone === "next" ? "3 3" : undefined} />
+        <path d={arrowhead(rail - BRACKET_OFF, lo + 3, "right")} fill="none" stroke={col} strokeWidth={1.4} />
       </g>
     );
   });
@@ -318,7 +318,7 @@ export function VerticalLine({
             return (
               <circle
                 key={id}
-                cx={RAIL}
+                cx={rail}
                 cy={v}
                 r={terminal ? 7 : 6}
                 fill={terminal ? "var(--state-done)" : "var(--background)"}

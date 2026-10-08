@@ -348,3 +348,22 @@ test("the software Workflow at 1440×900: its line and the whole Loops list show
   expect(errors).toEqual([]);
   await ctx.close();
 });
+
+test("the software Workflow down a phone and a 1024 window: every loop back's track keeps the gutter at the line's left edge", async ({ browser }) => {
+  for (const size of [{ width: 390, height: 844 }, { width: 1024, height: 900 }]) {
+    const { page, errors, ctx } = await open(browser, "/projects/SWL/workflow", size);
+    const line = page.getByRole("region", { name: "Workflow" });
+    await expect(line).toHaveAttribute("data-orientation", "vertical");
+    const tracks = line.locator("path[data-track]");
+    await expect(tracks.first()).toBeAttached();
+    // Each track's left edge, from the line's own left edge, in the page as drawn.
+    const gaps = await line.evaluate((el) => {
+      const left = el.getBoundingClientRect().left;
+      return [...el.querySelectorAll("path[data-track]")].map((p) => Math.round(p.getBoundingClientRect().left - left));
+    });
+    expect(Math.min(...gaps), `${size.width}: ${gaps}`).toBeGreaterThanOrEqual(12);
+    await page.screenshot({ path: `${liveShots}software-tracks-${size.width}.png`, animations: "disabled" });
+    expect(errors).toEqual([]);
+    await ctx.close();
+  }
+});

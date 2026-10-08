@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { BIG, MAIN, SOFTWARE } from "./fixtures";
+import { brackets, lineTopology, railX, VERTICAL_GUTTER, bracketX } from "./layout";
 import { WorkflowLine } from "./WorkflowLine";
 
 // The phone says in words what the line draws where Tasks enter.
@@ -34,5 +35,19 @@ describe("the line down a phone", () => {
     const files = within(enter).getByText("files Subtasks", { exact: true });
     expect(within(enter).queryByText(/files Subtasks →/)).toBeNull();
     expect(files.parentElement).toHaveAttribute("title", expect.stringMatching(/files the Parent's other Subtasks, each at the Step its filer names, Triage when they name none$/));
+  });
+
+  it("keeps every loop back's track off the left edge: the rail moves over as returns nest (the software Workflow's four into Build)", () => {
+    for (const workflow of [MAIN, BIG, SOFTWARE]) {
+      const t = lineTopology(workflow);
+      const rail = railX(t);
+      for (const b of brackets(t)) expect(bracketX(rail, b.depth)).toBeGreaterThanOrEqual(VERTICAL_GUTTER);
+    }
+    // Drawn: each track's x, as the phone and a narrow window render it, keeps the gutter.
+    render(<WorkflowLine workflow={SOFTWARE} tasks={[]} now={0} orientation="vertical" />);
+    const xs = [...document.querySelectorAll("[data-track]")].map((el) => Number(el.getAttribute("data-track")));
+    expect(xs.length).toBe(brackets(lineTopology(SOFTWARE)).length);
+    expect(Math.min(...xs)).toBeGreaterThanOrEqual(VERTICAL_GUTTER);
+    expect(railX(lineTopology(SOFTWARE))).toBeGreaterThan(32);
   });
 });

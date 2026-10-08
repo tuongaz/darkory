@@ -1188,3 +1188,25 @@ export function brackets(t: LineTopology): Bracket[] {
   nest(list);
   return list;
 }
+
+/** Where the rail runs when no loop back nests: its x in the line's box. */
+const VERTICAL_RAIL = 32;
+/** The room kept clear at the box's left edge: no bracket of a loop back runs nearer. */
+export const VERTICAL_GUTTER = 12;
+/** How far apart nested brackets run, and how far the innermost stands off the rail. */
+const BRACKET_STEP = 7;
+export const BRACKET_OFF = 8;
+
+/** A loop back's bracket x, for its nesting depth, beside a rail at `rail`. */
+export function bracketX(rail: number, depth: number): number {
+  return rail - BRACKET_OFF - depth * BRACKET_STEP;
+}
+
+/**
+ * The rail's x for a line: far enough right that its most nested bracket keeps the gutter, so a
+ * Workflow with many loops into one Step moves the rail over rather than running into the edge.
+ */
+export function railX(t: LineTopology): number {
+  const deepest = Math.max(0, ...brackets(t).map((b) => b.depth));
+  return Math.max(VERTICAL_RAIL, VERTICAL_GUTTER + BRACKET_OFF + deepest * BRACKET_STEP);
+}
