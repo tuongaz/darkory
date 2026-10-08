@@ -44,7 +44,7 @@ describe("My work", () => {
     expect(owned.querySelectorAll("[data-task]")).toHaveLength(2);
     expect(row(owned, "WEB-1")).toHaveTextContent("3 of 5 done");
     // Said once at a desktop's width, in words; "3/5" is the phone's, where the words do not fit.
-    expect(within(row(owned, "WEB-1")).getByText("3/5")).toHaveClass("md:hidden");
+    expect(within(row(owned, "WEB-1")).getAllByText("3/5").every((el) => el.closest(".md\\:hidden"))).toBe(true);
     expect(row(owned, "WEB-1")).toHaveTextContent("1 working");
     expect(within(row(owned, "WEB-1")).getAllByRole("img", { name: "3 of 5 done" }).length).toBeGreaterThan(0);
     expect(within(row(owned, "OPS-20")).getByTitle("Ops")).toBeInTheDocument();
