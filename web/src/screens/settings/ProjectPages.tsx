@@ -106,7 +106,7 @@ function ProjectColorRow({ project, admin }: { project: Project; admin: boolean 
   const projects = useProjects();
   const save = useMutation({ mutationFn: (color: number) => updateProject(project.key, { color }) });
   const value = save.isPending ? save.variables : project.color;
-  const help = "The colour of its mark beside its name, the same in light and dark.";
+  const help = "The colour of its mark beside its name.";
   if (!admin) {
     return (
       <SettingsRow label="Colour" help={help}>
