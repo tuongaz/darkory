@@ -29,6 +29,8 @@ export type ListProps = {
   /** The ids of the Parents whose rows are open. */
   expanded: Set<string>;
   onExpand: (parentId: string, open: boolean) => void;
+  /** The Subtasks a Parent's row opens to while the Filter narrows them; else all of them. */
+  shownSubtasks?: Map<string, Task[]>;
   /** The ids of the folded groups. */
   folded: Set<string>;
   onFold: (groupId: string, folded: boolean) => void;
@@ -65,7 +67,7 @@ export function TaskList(props: ListProps) {
                   <TaskRow task={t} {...props} />
                   {isParent(t) && props.subtasks && props.expanded.has(t.id) && (
                     <div role="group" aria-label={`Subtasks of ${t.key}`}>
-                      {(model.children.get(t.id) ?? []).map((s) => (
+                      {((props.shownSubtasks ?? model.children).get(t.id) ?? []).map((s) => (
                         <TaskRow key={s.id} task={s} {...props} nested />
                       ))}
                     </div>
