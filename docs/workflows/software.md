@@ -137,7 +137,7 @@ Running it again keeps everything that is already there. Steps keep their ids by
 
 Restart `darkory serve` (or start `darkory runner`) once the tokens exist, so the Runner starts the agents. File work with `darkory file --project WEB --title …`, which starts at Triage, or add `--breakdown` for a Parent, which starts at Plan.
 
-Keep the Install's data directory outside any repository that has a `CLAUDE.md`. Sessions run in `<data>/workspaces/…`, and Claude Code reads every `CLAUDE.md` from there up to the root.
+Sessions run in each Task's directory, and Claude Code reads every `CLAUDE.md` from there up to the root. When the data directory is inside a git checkout or under a `CLAUDE.md`, the Runner puts Task directories under `~/.darkory/workspaces/` instead of `<data>/workspaces`, so agents never read another project's rules; `--workspaces` (or `DARKORY_WORKSPACES`) names the place yourself.
 
 ## The proof run (2026-10-08)
 
