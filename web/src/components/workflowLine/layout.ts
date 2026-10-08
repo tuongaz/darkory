@@ -404,7 +404,9 @@ const STATION_R = 9;
 /** A branch Step's name line over its station: as tall as a token there. */
 const NAME_H = 30;
 /** How far over its station a branch Step's name line begins: its foot clear of the words on its row. */
-export const NAME_TOP = 38;
+export const NAME_TOP = 48;
+/** How far a token's halo reaches past it ("now", selected, ringed: globals.css .wl-token box-shadow). */
+export const TOKEN_HALO = 6;
 
 const chipW = (text: string, measure: Measure) => measure(text, "chip") + CHIP_PAD;
 const labelW = (text: string, measure: Measure) => measure(text, "label") + LABEL_PAD;
@@ -642,7 +644,7 @@ export type HorizontalOptions = {
 /** The step between nested legs at a shared station, and the inset of the outermost. */
 export const LEG = 9;
 const LEG0 = 6;
-const ROW_GAP = 56;
+const ROW_GAP = 66;
 const OVER_STEP = 20;
 const UNDER_STEP = 22;
 /** Where a leg under the line begins, below the station it stands at. */
@@ -823,7 +825,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       const px = zone.px;
       at.set(id, { x: px, y: py });
       const hint = filesHint(name(id), start);
-      entry.before = { id, title: { x: px - 6, y: py - 60, hint }, station: { x: px, y: py } };
+      entry.before = { id, title: { x: px - 6, y: py - NAME_TOP - TOKEN_HALO - 20, hint }, station: { x: px, y: py } };
       board.obstacle("station", { x: px - 7, y: py - 7, w: 14, h: 14 });
       if (zone.entry) {
         const line: Point[] = [[px + 7, py], [zone.joinX, py], [zone.joinX, lineY - 3]];
@@ -835,8 +837,8 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
         const w = labelW(FILES_LABEL, measure);
         board.fix({ id: "files", kind: "label", text: FILES_LABEL, x: label.x - w / 2, y: py - LABEL_H / 2, w, h: LABEL_H }, ["files"]);
       }
-      board.fix({ id: "breakdown", kind: "note", text: BREAKDOWN_BRANCH, x: px - 6, y: py - 60, w: measure(BREAKDOWN_BRANCH, "note"), h: 16 });
-      board.fix({ id: `name:${id}`, kind: "name", text: name(id), x: px - 6, y: py - NAME_TOP, w: opts.labelWidth?.(id) ?? nameLine(t.steps.get(id), measure), h: NAME_H });
+      board.fix({ id: "breakdown", kind: "note", text: BREAKDOWN_BRANCH, x: px - 6, y: py - NAME_TOP - TOKEN_HALO - 20, w: measure(BREAKDOWN_BRANCH, "note"), h: 16 });
+      board.fix({ id: `name:${id}`, kind: "name", text: name(id), x: px - 6, y: py - NAME_TOP - TOKEN_HALO, w: opts.labelWidth?.(id) ?? nameLine(t.steps.get(id), measure), h: NAME_H + 2 * TOKEN_HALO });
       zone.chips.forEach((c, m) => {
         const connector = c.connectorId ? t.connectors.get(c.connectorId) : undefined;
         const w = chipW(c.text, measure);
@@ -966,7 +968,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
     const lines: Polyline[] = [];
     const loops: DrawnArc[] = [];
     const labels: Label[] = [];
-    let y = labelY + 54;
+    let y = labelY + 64;
     let rightEdge = xd - (opts.branchGap ?? 240);
     const rowSp = Math.max(180, Math.min(340, sp * 1.7));
     const rowYs: number[] = [];
@@ -1030,7 +1032,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
     for (const l of lines) board.addRuns(runsOf(l.id, l.points));
     for (const s of stations) board.obstacle("station", { x: s.x - 7, y: s.y - 7, w: 14, h: 14 });
     // The names of the branch's Steps over their stations, the words on its rows: where they stand.
-    for (const s of stations) board.fix({ id: `name:${s.id}`, kind: "name", text: name(s.id), x: s.x - 6, y: s.y - NAME_TOP, w: widthOf(s.id), h: NAME_H });
+    for (const s of stations) board.fix({ id: `name:${s.id}`, kind: "name", text: name(s.id), x: s.x - 6, y: s.y - NAME_TOP - TOKEN_HALO, w: widthOf(s.id), h: NAME_H + 2 * TOKEN_HALO });
     labels.forEach((l, i) => {
       const w = labelW(l.text, measure);
       const row = stations.find((s) => s.y === l.y)?.row ?? 0;

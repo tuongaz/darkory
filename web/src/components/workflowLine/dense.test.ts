@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FIXTURES, SOFTWARE } from "./fixtures";
-import { crossings, densityFor, horizontal, lineTopology, type Density, type Horizontal, type LineTopology } from "./layout";
+import { crossings, densityFor, horizontal, lineTopology, NAME_TOP, TOKEN_HALO, type Density, type Horizontal, type LineTopology } from "./layout";
 import { overlaps } from "./place";
 import { HAND_LABEL, gapHint } from "./words";
 
@@ -62,6 +62,24 @@ describe("between the screens too", () => {
 
 describe("the software Workflow (14 Steps)", () => {
   const t = lineTopology(SOFTWARE);
+
+  it("keeps a Step after a Parent clear of its row's words with a picked-up Task on it: the token's halo counted", () => {
+    // Seen in the proof run at 1440: "propose" and "publish" under the LS-6 token's "now" halo.
+    for (const width of [PAGE[1440], PAGE[1920]]) {
+      const h = drawn(t, width).h;
+      if (!h?.branch) throw new Error(`no branch at ${width}`);
+      for (const s of h.branch.stations) {
+        const name = h.boxes.find((b) => b.id === `name:${s.id}`);
+        expect(name, s.id).toBeDefined();
+        // The name line, its tokens and their halo end above the station and the words on its row.
+        expect(name!.y, s.id).toBe(s.y - NAME_TOP - TOKEN_HALO);
+        expect(name!.y + name!.h, s.id).toBeLessThan(s.y - 8);
+        for (const l of h.boxes.filter((b) => b.kind === "label" && Math.abs(b.y + b.h / 2 - s.y) < 10)) {
+          expect(name!.y + name!.h <= l.y || name!.x + name!.w <= l.x || l.x + l.w <= name!.x, `${s.id} and ${l.text}`).toBe(true);
+        }
+      }
+    }
+  });
 
   it("runs Triage to Release on the line; Plan breaks down, Backlog parks, Acceptance, Retro and Skill review come after a Parent", () => {
     expect(t.main).toEqual(["triage", "design", "threat-model", "design-review", "build", "code-review", "security-review", "qa", "release", "done"]);
