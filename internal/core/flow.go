@@ -11,65 +11,14 @@ import (
 	"github.com/tuongaz/darkory/internal/store"
 )
 
-// How a Task moves between Members: Handover to the next Skill, Notes and Observations written
-// while holding it, take-back up the Reporting line, and the Feature owner's drop.
-
-// Handover ends the caller's Claim and sets the Skill the Task needs next, in one batch (ADR
-// 0001). The Task waits for that Skill from now; it is no longer aimed at a Member. The Claim
-// rows keep who held it under which Skill, which is what keeps a builder from reviewing their own
-// work (the Takeable rule's last clause). The Status stays as it is unless statusRef names one of
-// an open kind, such as In review (ADR 0012).
-func (s *Service) Handover(ctx context.Context, c *auth.Caller, ref, skillRef string, statusRef, note *string, idem Idem) (Task, error) {
-	skillID, err := resolveSkill(ctx, s.store, c.OrgID, skillRef)
-	if err != nil {
-		return Task{}, err
-	}
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, list statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
-		out := pre
-		out.Claim, out.SkillID, out.AimedAtID, out.WaitingSince = nil, &skillID, nil, now
-		if statusRef != nil {
-			st, err := list.openStatus(*statusRef)
-			if err != nil {
-				return nil, nil, err
-			}
-			out.StatusID = st.ID
-		}
-		// A Status deleted since the read leaves the Task where it was, and the guard at the end
-		// refuses the batch, which is then tried again and finds the Status gone. With none named,
-		// the guard refuses a batch that would answer with a Status a Member has just changed.
-		setStatus := ""
-		if statusRef != nil {
-			setStatus = `, status_id = COALESCE((SELECT hs.id FROM statuses hs WHERE hs.org_id = @org AND hs.id = @status
-	AND hs.kind IN ('backlog', 'todo', 'in_progress')), status_id)`
-		}
-		a := with(args, map[string]any{"to": skillID, "status": out.StatusID})
-		stmts := []store.Stmt{
-			store.S(`UPDATE claims SET ended_at = @now, how_ended = 'handed_over', ended_by = @member WHERE org_id = @org AND id = @claim`, a),
-			store.S(clearClaimSQL+`, skill_id = @to, aimed_at_id = NULL, waiting_since = @now`+setStatus+` WHERE org_id = @org AND id = @task`, a),
-		}
-		if note != nil && *note != "" {
-			stmts = append(stmts, noteStmt(pre, args, newID(), *note))
-		}
-		payload := map[string]any{"claim_id": pre.Claim.ID, "skill_id": skillID}
-		if pre.SkillID != nil {
-			payload["from_skill_id"] = *pre.SkillID
-		}
-		if out.StatusID != pre.StatusID {
-			payload["from_status_id"], payload["status_id"] = pre.StatusID, out.StatusID
-		}
-		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.handed_over", pre.ID, payload, now), statusStmt(args, out.StatusID))
-		return out, stmts, nil
-	}})
-	if err != nil {
-		return Task{}, err
-	}
-	return res.(Task), nil
-}
+// How a Task moves between Members besides Advance: Notes and Observations written while holding
+// it, take-back up the Reporting line or by the Owner, a human moving it to another Step by hand,
+// and the Owner's drop.
 
 // AddNote adds a Note to a Task's running log. Notes stay on the Task, so they carry its context
 // across a Handover. A held Task takes Notes from its holder alone, in one batch, under the Skill
-// of their Claim; a Task nobody holds, open or ended, from its Feature's owner or a Member of its
-// Feature's Team, under no Skill, as the Runner notes a merge on a review just completed.
+// of their Claim; a Task nobody holds, open or ended, from its Owner or a Member of its Project,
+// under no Skill, as the Runner notes a merge on a Task just completed.
 func (s *Service) AddNote(ctx context.Context, c *auth.Caller, ref, body string, idem Idem) (Note, error) {
 	if strings.TrimSpace(body) == "" {
 		return Note{}, refuse(CodeInvalid, "a Note has a body")
@@ -85,7 +34,7 @@ func (s *Service) AddNote(ctx context.Context, c *auth.Caller, ref, body string,
 	if t.Claim == nil {
 		return s.addUnheldNote(ctx, c, taskID, body, idem)
 	}
-	res, err := s.heldWrite(ctx, c, taskID, idem, heldOp{build: func(pre Task, _ statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+	res, err := s.heldWrite(ctx, c, taskID, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 		n := Note{ID: newID(), TaskID: pre.ID, AuthorID: c.MemberID, SkillID: pre.Claim.SkillID, Body: body, CreatedAt: now}
 		return n, []store.Stmt{
 			noteStmt(pre, args, n.ID, body),
@@ -112,20 +61,8 @@ func (s *Service) addUnheldNote(ctx context.Context, c *auth.Caller, taskID, bod
 				return nil, err
 			}
 			skill = task.Claim.SkillID
-		} else {
-			f, err := getFeature(ctx, t, c.OrgID, task.FeatureID, t.now)
-			if err != nil {
-				return nil, err
-			}
-			if f.OwnerID != c.MemberID {
-				in, err := inTeam(ctx, t, c.OrgID, f.TeamID, c.MemberID)
-				if err != nil {
-					return nil, err
-				}
-				if !in {
-					return nil, refuse(CodeForbidden, "while nobody holds Task %s, only its Feature's owner or a Member of its Team may add a Note to it", task.Key)
-				}
-			}
+		} else if err := inProjectOrOwner(ctx, t, c, task, "add a Note, while nobody holds it, to"); err != nil {
+			return nil, err
 		}
 		n := Note{ID: newID(), TaskID: taskID, AuthorID: c.MemberID, SkillID: skill, Body: body, CreatedAt: t.now}
 		if _, err := t.Exec(ctx, `INSERT INTO notes (id, org_id, task_id, author_id, skill_id, body, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -140,8 +77,19 @@ func (s *Service) addUnheldNote(ctx context.Context, c *auth.Caller, taskID, bod
 	return res.(Note), nil
 }
 
+// addNote adds a Note by the caller under skill inside a write, recording task.note_added.
+func addNote(t *tx, taskID string, skill *string, body string) error {
+	id := newID()
+	if _, err := t.Exec(t.ctx, `INSERT INTO notes (id, org_id, task_id, author_id, skill_id, body, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		id, t.caller.OrgID, taskID, t.caller.MemberID, skill, body, ms(t.now)); err != nil {
+		return err
+	}
+	return t.recordByCaller("task.note_added", taskID, map[string]any{"note_id": id})
+}
+
 // Observe records an Observation on a Task the caller holds, marked worked or didn't work, with
-// the Skill they hold it under, in one batch (ADR 0010).
+// the Skill they hold it under, in one batch (ADR 0010). It feeds the Retrospective of the Task's
+// Parent.
 func (s *Service) Observe(ctx context.Context, c *auth.Caller, ref, outcome, body string, idem Idem) (Observation, error) {
 	if outcome != "worked" && outcome != "didnt_work" {
 		return Observation{}, refuse(CodeInvalid, "outcome is worked or didnt_work")
@@ -149,13 +97,12 @@ func (s *Service) Observe(ctx context.Context, c *auth.Caller, ref, outcome, bod
 	if strings.TrimSpace(body) == "" {
 		return Observation{}, refuse(CodeInvalid, "an Observation has a body")
 	}
-	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, _ statuses, args map[string]any, now time.Time) (any, []store.Stmt, error) {
-		o := Observation{ID: newID(), TaskID: pre.ID, FeatureID: pre.FeatureID, AuthorID: c.MemberID, SkillID: pre.Claim.SkillID,
-			Outcome: outcome, Body: body, CreatedAt: now}
-		a := with(args, map[string]any{"id": o.ID, "feature": o.FeatureID, "skill": o.SkillID, "outcome": outcome, "body": body})
+	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+		o := Observation{ID: newID(), TaskID: pre.ID, AuthorID: c.MemberID, SkillID: pre.Claim.SkillID, Outcome: outcome, Body: body, CreatedAt: now}
+		a := with(args, map[string]any{"id": o.ID, "skill": o.SkillID, "outcome": outcome, "body": body})
 		return o, []store.Stmt{
-			store.S(`INSERT INTO observations (id, org_id, task_id, feature_id, author_id, skill_id, outcome, body, created_at)
-VALUES (@id, @org, @task, @feature, @member, CAST(@skill AS TEXT), @outcome, @body, @now)`, a),
+			store.S(`INSERT INTO observations (id, org_id, task_id, author_id, skill_id, outcome, body, created_at)
+VALUES (@id, @org, @task, @member, CAST(@skill AS TEXT), @outcome, @body, @now)`, a),
 			activityStmt(c.OrgID, &c.MemberID, "task.observed", pre.ID, map[string]any{"observation_id": o.ID, "outcome": outcome}, now),
 		}, nil
 	}})
@@ -165,52 +112,41 @@ VALUES (@id, @org, @task, @feature, @member, CAST(@skill AS TEXT), @outcome, @bo
 	return res.(Observation), nil
 }
 
-// TakeBack ends another Member's Claim on a Task: by anyone above the holder on their Reporting
-// line, or by the Feature owner (plan invariant 6's exception). The Task becomes takeable again,
-// in the first todo Status if it was in an in_progress one, and the holder's next Heartbeat
-// reports taken_back.
+// mayTakeBack refuses a caller who may not end another Member's Claim on task: only its Owner or
+// someone above the holder on their Reporting line may (plan invariant 6's exception).
+func mayTakeBack(ctx context.Context, r store.Reader, c *auth.Caller, task Task, verb string) error {
+	if task.OwnerID == c.MemberID {
+		return nil
+	}
+	above, err := onReportingLine(ctx, r, c.OrgID, task.Claim.HolderID, c.MemberID)
+	if err != nil {
+		return err
+	}
+	if !above {
+		return refuse(CodeForbidden, "only the Owner of %s or someone above its holder on their Reporting line may %s it while it is held", task.Key, verb)
+	}
+	return nil
+}
+
+// TakeBack ends another Member's Claim on a Task: by its Owner or anyone above the holder on
+// their Reporting line. The Task stays at its Step and is takeable again, and the holder's next
+// Heartbeat reports taken_back.
 func (s *Service) TakeBack(ctx context.Context, c *auth.Caller, ref string, reason *string, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		taskID, err := resolveTask(ctx, t, c.OrgID, ref)
-		if err != nil {
-			return nil, err
-		}
-		task, err := getTask(ctx, t, c.OrgID, taskID, t.now)
+		task, err := taskOf(t, ref)
 		if err != nil {
 			return nil, err
 		}
 		if task.Claim == nil {
 			return nil, refuse(CodeNotHolder, "nobody holds Task %s", task.Key)
 		}
-		f, err := getFeature(ctx, t, c.OrgID, task.FeatureID, t.now)
-		if err != nil {
+		if err := mayTakeBack(ctx, t, c, task, "take back"); err != nil {
 			return nil, err
 		}
-		if f.OwnerID != c.MemberID {
-			above, err := onReportingLine(ctx, t, c.OrgID, task.Claim.HolderID, c.MemberID)
-			if err != nil {
-				return nil, err
-			}
-			if !above {
-				return nil, refuse(CodeForbidden, "only the Feature owner or someone above the holder on their Reporting line may take back Task %s", task.Key)
-			}
-		}
-		claim := task.Claim
-		if _, err := t.Exec(ctx, `UPDATE claims SET ended_at = $1, how_ended = 'taken_back', ended_by = $2 WHERE org_id = $3 AND id = $4`,
-			ms(t.now), c.MemberID, c.OrgID, claim.ID); err != nil {
+		if err := takeBack(t, task, reason); err != nil {
 			return nil, err
 		}
-		if _, err := t.Exec(ctx, clearClaimSQL+releaseStatusSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, c.OrgID, taskID, claim.ID); err != nil {
-			return nil, err
-		}
-		payload := map[string]any{"claim_id": claim.ID, "holder_id": claim.HolderID}
-		if reason != nil && *reason != "" {
-			payload["reason"] = *reason
-		}
-		if err := t.recordByCaller("task.taken_back", taskID, payload); err != nil {
-			return nil, err
-		}
-		return getTask(ctx, t, c.OrgID, taskID, t.now)
+		return getTask(ctx, t, c.OrgID, task.ID, t.now)
 	})
 	if err != nil {
 		return Task{}, err
@@ -218,24 +154,118 @@ func (s *Service) TakeBack(ctx context.Context, c *auth.Caller, ref string, reas
 	return res.(Task), nil
 }
 
-// DropTask ends a Task dropped: by its Feature's owner only, who may do it while another Member
-// holds it (plan invariant 6's exception). Any Claim on it ends.
+// takeBack ends task's live Claim as taken_back by the caller inside a write.
+func takeBack(t *tx, task Task, reason *string) error {
+	claim := task.Claim
+	if _, err := t.Exec(t.ctx, `UPDATE claims SET ended_at = $1, how_ended = 'taken_back', ended_by = $2 WHERE org_id = $3 AND id = $4`,
+		ms(t.now), t.caller.MemberID, t.caller.OrgID, claim.ID); err != nil {
+		return err
+	}
+	if _, err := t.Exec(t.ctx, clearClaimSQL+` WHERE org_id = $1 AND id = $2 AND claim_id = $3`, t.caller.OrgID, task.ID, claim.ID); err != nil {
+		return err
+	}
+	payload := map[string]any{"claim_id": claim.ID, "holder_id": claim.HolderID}
+	if reason != nil && *reason != "" {
+		payload["reason"] = *reason
+	}
+	return t.recordByCaller("task.taken_back", task.ID, payload)
+}
+
+// MoveTask moves an open Task that is not a Parent to a Step of its Project's Workflow by hand
+// (ADR 0016), which is the only way out of a hold: by any Member of the Project or its Owner. A
+// held Task may be moved only by whoever may take it back, and the move ends the Claim
+// taken_back first; anyone else in the Project is refused held, and anyone outside it forbidden.
+// A Task aimed at a Member then waits at the Step instead. A Note, when given, is the mover's,
+// under no Skill. Naming the Step it is at writes nothing.
+func (s *Service) MoveTask(ctx context.Context, c *auth.Caller, ref, stepRef string, note *string, idem Idem) (Task, error) {
+	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
+		task, err := taskOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case task.State != "open":
+			return nil, refuse(CodeEnded, "Task %s is %s, and stays where it ended", task.Key, task.State)
+		case task.SubtaskCounts != nil:
+			return nil, refuse(CodeConflict, "%s is a Parent, at no Step: its Subtasks are moved instead", task.Key)
+		}
+		if task.Claim != nil {
+			if err := mayTakeBack(ctx, t, c, task, "move"); codeOf(err) == CodeForbidden {
+				// Someone who may move it once it is free is told it is held; anyone else, that
+				// they may not move it at all.
+				if err := inProjectOrOwner(ctx, t, c, task, "move"); err != nil {
+					return nil, err
+				}
+				return nil, refuse(CodeHeld, "Task %s is held; only its Owner or someone above its holder on their Reporting line may move it while it is held, and its holder advances it", task.Key)
+			} else if err != nil {
+				return nil, err
+			}
+		} else if err := inProjectOrOwner(ctx, t, c, task, "move"); err != nil {
+			return nil, err
+		}
+		st, err := stepOf(ctx, t, c.OrgID, task.ProjectID, stepRef)
+		if err != nil {
+			return nil, err
+		}
+		if task.StepID != nil && *task.StepID == st.ID {
+			return task, nil
+		}
+		if task.Claim != nil {
+			if err := takeBack(t, task, ptr("moved to "+st.Name)); err != nil {
+				return nil, err
+			}
+		}
+		if note != nil && strings.TrimSpace(*note) != "" {
+			if err := addNote(t, task.ID, nil, *note); err != nil {
+				return nil, err
+			}
+		}
+		if err := moveToStep(t, task.ID, task.StepID, st.ID, nil); err != nil {
+			return nil, err
+		}
+		return getTask(ctx, t, c.OrgID, task.ID, t.now)
+	})
+	if err != nil {
+		return Task{}, err
+	}
+	return res.(Task), nil
+}
+
+// moveToStep puts a Task at the Step to inside a write, aimed at no one and waiting there from
+// now, and records task.moved with the Step it left, extra added to its payload.
+func moveToStep(t *tx, taskID string, from *string, to string, extra map[string]any) error {
+	var since sql.NullInt64
+	if err := t.QueryRow(t.ctx, `SELECT step_since FROM tasks WHERE org_id = $1 AND id = $2`, t.caller.OrgID, taskID).Scan(&since); err != nil {
+		return err
+	}
+	if _, err := t.Exec(t.ctx, `UPDATE tasks SET step_id = $1, step_since = $2, waiting_since = $2, aimed_at_id = NULL WHERE org_id = $3 AND id = $4`,
+		to, ms(t.now), t.caller.OrgID, taskID); err != nil {
+		return err
+	}
+	payload := map[string]any{"to": to}
+	if from != nil {
+		payload["from"] = *from
+		if since.Valid {
+			payload["since"] = since.Int64
+		}
+	}
+	for k, v := range extra {
+		payload[k] = v
+	}
+	return t.recordByCaller("task.moved", taskID, payload)
+}
+
+// DropTask ends a Task dropped: by its Owner only, who may do it while another Member holds it
+// (plan invariant 6's exception). Any Claim on it ends. Dropping a Parent drops its open Subtasks
+// and files its Retrospective in the same write (ADR 0010).
 func (s *Service) DropTask(ctx context.Context, c *auth.Caller, ref string, reason *string, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		taskID, err := resolveTask(ctx, t, c.OrgID, ref)
+		task, err := taskOf(t, ref)
 		if err != nil {
 			return nil, err
 		}
-		task, err := getTask(ctx, t, c.OrgID, taskID, t.now)
-		if err != nil {
-			return nil, err
-		}
-		f, err := getFeature(ctx, t, c.OrgID, task.FeatureID, t.now)
-		if err != nil {
-			return nil, err
-		}
-		if f.OwnerID != c.MemberID {
-			return nil, refuse(CodeForbidden, "only the owner of Feature %s may drop its Tasks", f.Key)
+		if task.OwnerID != c.MemberID {
+			return nil, refuse(CodeForbidden, "only the Owner of %s may drop it", task.Key)
 		}
 		if task.State != "open" {
 			return nil, refuse(CodeEnded, "Task %s is %s", task.Key, task.State)
@@ -244,10 +274,30 @@ func (s *Service) DropTask(ctx context.Context, c *auth.Caller, ref string, reas
 		if reason != nil && *reason != "" {
 			payload["reason"] = *reason
 		}
-		if err := dropTask(t, taskID, payload); err != nil {
+		if task.SubtaskCounts == nil {
+			if err := dropTask(t, task, payload); err != nil {
+				return nil, err
+			}
+			return getTask(ctx, t, c.OrgID, task.ID, t.now)
+		}
+		open, err := tasksWhere(ctx, t, c.OrgID, t.now, `t.org_id = $1 AND t.parent_id = $2 AND t.state = 'open' ORDER BY t.created_at, t.id`,
+			c.OrgID, task.ID)
+		if err != nil {
 			return nil, err
 		}
-		return getTask(ctx, t, c.OrgID, taskID, t.now)
+		payload["open_subtasks_dropped"] = len(open)
+		if err := dropTask(t, task, payload); err != nil {
+			return nil, err
+		}
+		for _, sub := range open {
+			if err := dropTask(t, sub, map[string]any{"parent_dropped": true}); err != nil {
+				return nil, err
+			}
+		}
+		if err := fileRetrospective(t, task); err != nil {
+			return nil, err
+		}
+		return getTask(ctx, t, c.OrgID, task.ID, t.now)
 	})
 	if err != nil {
 		return Task{}, err
@@ -255,26 +305,32 @@ func (s *Service) DropTask(ctx context.Context, c *auth.Caller, ref string, reas
 	return res.(Task), nil
 }
 
-// dropTask ends an open Task dropped, in the first dropped Status, inside a write: it ends the
-// Task's Claim, supersedes a proposal left pending on it and records task.dropped with payload.
-func dropTask(t *tx, taskID string, payload map[string]any) error {
-	claim, holder, live, err := endClaimOf(t, taskID, "dropped")
+// dropTask ends an open Task dropped inside a write: it ends the Task's Claim, takes it off its
+// Step, supersedes a proposal left pending on it and records task.dropped with payload and the
+// Step it left.
+func dropTask(t *tx, task Task, payload map[string]any) error {
+	claim, holder, live, err := endClaimOf(t, task.ID, "dropped")
 	if err != nil {
 		return err
 	}
 	if live {
 		payload["claim_id"], payload["holder_id"] = claim, holder
 	}
-	if _, err := t.Exec(t.ctx, `UPDATE tasks SET state = 'dropped', ended_at = $1,
-status_id = COALESCE(`+firstStatusSQL("$2", KindDropped)+`, status_id) WHERE org_id = $2 AND id = $3`,
-		ms(t.now), t.caller.OrgID, taskID); err != nil {
+	if task.StepID != nil {
+		payload["from"] = *task.StepID
+		if task.StepSince != nil {
+			payload["since"] = ms(*task.StepSince)
+		}
+	}
+	if _, err := t.Exec(t.ctx, `UPDATE tasks SET state = 'dropped', ended_at = $1, step_id = NULL, step_since = NULL WHERE org_id = $2 AND id = $3`,
+		ms(t.now), t.caller.OrgID, task.ID); err != nil {
 		return err
 	}
 	if _, err := t.Exec(t.ctx, `UPDATE skill_proposals SET state = 'superseded', decided_at = $1
-WHERE org_id = $2 AND task_id = $3 AND state = 'pending'`, ms(t.now), t.caller.OrgID, taskID); err != nil {
+WHERE org_id = $2 AND task_id = $3 AND state = 'pending'`, ms(t.now), t.caller.OrgID, task.ID); err != nil {
 		return err
 	}
-	return t.recordByCaller("task.dropped", taskID, payload)
+	return t.recordByCaller("task.dropped", task.ID, payload)
 }
 
 // endClaimOf ends the Task's current Claim, if it has one, as how by the caller and clears the

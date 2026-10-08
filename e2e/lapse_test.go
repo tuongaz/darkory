@@ -21,15 +21,12 @@ import (
 func TestLapseAndRecovery(t *testing.T) {
 	in := newInstall(t)
 	ada := in.ada
-	ada.ok("team", "create", "WEB", "Web")
-	ada.ok("team", "add", "WEB", "ada")
 	ada.ok("skill", "create", "build", "--kind", "generic", "--body", "Build it.")
+	in.project("WEB", "Web", buildFlow)
 	a1 := in.agent("a1", []string{"WEB"}, []string{"build"}, "--timeout", "5s")
 	a2 := in.agent("a2", []string{"WEB"}, []string{"build"})
-	var feature client.FeatureDetail
-	ada.json(&feature, "feature", "create", "--team", "WEB", "--title", "Search")
 	var task client.TaskDetail
-	ada.json(&task, "file", "--feature", feature.Feature.Key, "--title", "Index the catalogue", "--skill", "build")
+	ada.json(&task, "file", "--project", "WEB", "--title", "Index the catalogue")
 	key := task.Task.Key
 
 	// The background heartbeat starts before the Claim it keeps.
@@ -127,14 +124,11 @@ func TestLapseAndRecovery(t *testing.T) {
 func TestMCPKeepsItsClaimsAlive(t *testing.T) {
 	in := newInstall(t)
 	ada := in.ada
-	ada.ok("team", "create", "WEB", "Web")
-	ada.ok("team", "add", "WEB", "ada")
 	ada.ok("skill", "create", "build", "--kind", "generic", "--body", "Build it.")
+	in.project("WEB", "Web", buildFlow)
 	agent := in.agent("agent", []string{"WEB"}, []string{"build"})
-	var feature client.FeatureDetail
-	ada.json(&feature, "feature", "create", "--team", "WEB", "--title", "Search")
 	var task client.TaskDetail
-	ada.json(&task, "file", "--feature", feature.Feature.Key, "--title", "Index the catalogue", "--skill", "build")
+	ada.json(&task, "file", "--project", "WEB", "--title", "Index the catalogue")
 
 	mcp := agent.mcp(t.TempDir())
 	var took struct {

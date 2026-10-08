@@ -25,7 +25,8 @@ func (r *Runner) logError(ctx context.Context, msg string, args ...any) {
 	}
 }
 
-// shipRecord names the Evidence a Ship's merge is recorded in on its Feature, which has no Notes.
+// shipRecord names the Evidence a Parent's merge is recorded in on the Parent. model v2: a Parent
+// has Notes now; M3 decides where its merge is recorded.
 func shipRecord(feature string) string { return "merge-" + feature + ".txt" }
 
 func (r *Runner) merger(ctx context.Context) {
@@ -36,15 +37,24 @@ func (r *Runner) merger(ctx context.Context) {
 		case a := <-r.merges:
 			switch a.Kind {
 			case client.ActivityKindTaskCompleted:
+				// model v2: a Parent's Complete is what Ship was (M3 reworks the merges on Parents).
+				if r.isParent(ctx, a.SubjectID) {
+					r.shipped(ctx, a.SubjectID)
+					continue
+				}
 				r.completed(ctx, a)
 				r.taskEnded(ctx, a.SubjectID)
 			case client.ActivityKindTaskDropped:
 				r.taskEnded(ctx, a.SubjectID)
-			case client.ActivityKindFeatureShipped:
-				r.shipped(ctx, a.SubjectID)
 			}
 		}
 	}
+}
+
+// isParent says whether a Task has Subtasks.
+func (r *Runner) isParent(ctx context.Context, taskID string) bool {
+	d, err := r.reader.Task(ctx, taskID)
+	return err == nil && len(d.Subtasks) > 0
 }
 
 // taskEnded removes the worktrees of a Task that ended while no session of this runner works it;
@@ -159,7 +169,7 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 		how = "; " + unreviewed
 	}
 	key := d.Task.Key
-	f, err := rec.Feature(ctx, d.Feature.Key)
+	f, err := rec.Feature(ctx, key)
 	if err != nil {
 		r.logError(ctx, "reading a done Task's Feature", "task", key, "err", err)
 		return
@@ -216,19 +226,18 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 	if len(lines) == 0 {
 		return
 	}
-	r.recordMerge(ctx, rec, key, d.Feature.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, key, false, strings.Join(lines, "\n"))
 }
 
 // short is a commit's short name.
 func short(sha string) string { return sha[:min(len(sha), 12)] }
 
 // recordMerge records what a merge did: a Note on the done Task key, which a Member of its
-// Feature's Team may write though nobody holds it; or, for a Ship (key the Feature's), Evidence on
-// the Feature.
-func (r *Runner) recordMerge(ctx context.Context, rec Record, key, feature, text string) {
+// Project may write though nobody holds it; or, for a Parent's (onParent), Evidence on the Parent.
+func (r *Runner) recordMerge(ctx context.Context, rec Record, key string, onParent bool, text string) {
 	var err error
-	if key == feature {
-		err = rec.AttachFeature(ctx, feature, shipRecord(feature), []byte(text+"\n"))
+	if onParent {
+		err = rec.AttachFeature(ctx, key, shipRecord(key), []byte(text+"\n"))
 	} else {
 		err = rec.Note(ctx, key, text)
 	}
@@ -249,12 +258,21 @@ func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, 
 		"left both branches as they were.\n\n%s\n\nMerge %s into this Task's branch, resolve what conflicts, run the tests, commit, and hand "+
 		"over to review: this Task's branch merges into %s when its review completes.", done, branch, target, ws.Name, conflict, branch, target)
 	skill := r.buildSkill(ctx, d)
-	if f.State != client.FeatureStateOpen {
+	if !f.Open {
 		r.logError(ctx, "a merge did not go in and its Feature has ended, so no Task can be filed on it; merge it by hand",
 			"task", d.Task.Key, "branch", branch, "into", target, "workspace", ws.Name)
 		return
 	}
-	t, err := rec.File(ctx, client.FileTaskBody{Feature: &f.Key, Skill: &skill, Title: title, Description: &body})
+	// model v2: filed under the Parent, or beside a Task with none, at the first work Step (M3
+	// files it at the Step carrying skill).
+	nt := client.FileTaskBody{Title: title, Description: &body}
+	if f.Quick {
+		nt.Project = &d.Task.ProjectID
+	} else {
+		nt.Parent = &f.Key
+	}
+	_ = skill
+	t, err := rec.File(ctx, nt)
 	if err != nil {
 		r.logError(ctx, "could not file the Task that resolves a merge", "task", d.Task.Key, "err", err)
 		return
@@ -330,7 +348,7 @@ func (r *Runner) shipped(ctx context.Context, featureID string) {
 			r.log.Info("shipped a Feature's branch", "feature", f.Key, "workspace", ws.Name, "into", def, "commit", short(res.Commit))
 		}
 	}
-	r.recordMerge(ctx, rec, f.Key, f.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, f.Key, true, strings.Join(lines, "\n"))
 }
 
 // pollPullRequests completes the review of a Task whose pull request was merged on GitHub, in

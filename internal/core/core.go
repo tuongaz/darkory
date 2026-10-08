@@ -69,9 +69,13 @@ const (
 	CodeCycle                Code = "cycle"
 	CodeTasksOpen            Code = "tasks_open"
 	CodeProposalStale        Code = "proposal_stale"
-	CodeStatusInUse          Code = "status_in_use"
-	CodeUseComplete          Code = "use_complete"
-	CodeUseDrop              Code = "use_drop"
+	CodeNoConnector          Code = "no_connector"
+	CodeUseAdvance           Code = "use_advance"
+	CodeNoStep               Code = "no_step"
+	CodeOneLevel             Code = "one_level"
+	CodeHeld                 Code = "held"
+	CodeStepInUse            Code = "step_in_use"
+	CodeUseParent            Code = "use_parent"
 	CodeNoRunner             Code = "no_runner"
 	CodeTooLarge             Code = "too_large"
 	CodeIdempotencyKeyReused Code = "idempotency_key_reused"
@@ -82,6 +86,9 @@ const (
 type Error struct {
 	Code    Code
 	Message string
+	// Details are extra facts about the refusal, by code: the outcomes a Task's Step offers
+	// (no_connector, use_advance), the stale proposals (proposal_stale). Nil when there are none.
+	Details map[string]any
 }
 
 func (e *Error) Error() string { return string(e.Code) + ": " + e.Message }
@@ -97,7 +104,7 @@ func refuse(code Code, format string, args ...any) *Error {
 func (c Code) kept() bool {
 	switch c {
 	case CodeConflict, CodeAlreadyClaimed, CodeNotTakeable, CodeNotHolder, CodeEnded, CodeCycle, CodeTasksOpen,
-		CodeProposalStale, CodeStatusInUse, CodeUseComplete, CodeUseDrop:
+		CodeProposalStale, CodeNoConnector, CodeUseAdvance, CodeNoStep, CodeOneLevel, CodeHeld, CodeStepInUse, CodeUseParent:
 		return true
 	}
 	return false
@@ -392,4 +399,13 @@ func mustAdmin(c *auth.Caller) error {
 		return refuse(CodeForbidden, "only an admin may do this")
 	}
 	return nil
+}
+
+// with adds a fact to the refusal's Details, for a program to read instead of the message.
+func (e *Error) with(key string, value any) *Error {
+	if e.Details == nil {
+		e.Details = map[string]any{}
+	}
+	e.Details[key] = value
+	return e
 }

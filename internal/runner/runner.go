@@ -2,7 +2,8 @@
 // token for, it pulls Tasks through `next`, prepares the Workspaces, starts the agent's command
 // with a prompt from the record, keeps the Claim's Heartbeats while the session shows progress,
 // nudges a session that stops without a decision, and ends the session when the Claim ends,
-// attaching its log as Evidence. It merges Task branches as review completes and Feature branches
+// attaching its log as Evidence. model v2: it still thinks in Features, a Task's Parent standing in
+// for one (M3). It merges Task branches as review completes and Feature branches
 // at Ship (ADR 0014). It is a client of the record (plan invariant 9), never a second scheduler.
 package runner
 
@@ -329,7 +330,8 @@ func (r *Runner) follow(ctx context.Context, after int64) {
 }
 
 // claimEnds are the Activity kinds that end a Claim; each carries the Claim's id.
-var claimEnds = []client.ActivityKind{client.ActivityKindTaskCompleted, client.ActivityKindTaskHandedOver,
+var claimEnds = []client.ActivityKind{client.ActivityKindTaskCompleted, client.ActivityKindTaskAdvanced, client.ActivityKindTaskMoved,
+	client.ActivityKindTaskSplit,
 	client.ActivityKindTaskReleased, client.ActivityKindTaskTakenBack, client.ActivityKindTaskLapsed,
 	client.ActivityKindTaskClaimEnded, client.ActivityKindTaskDropped}
 
@@ -345,7 +347,7 @@ func (r *Runner) dispatch(a client.Activity) {
 		r.mu.Unlock()
 	}
 	switch a.Kind {
-	case client.ActivityKindTaskCompleted, client.ActivityKindTaskDropped, client.ActivityKindFeatureShipped:
+	case client.ActivityKindTaskCompleted, client.ActivityKindTaskDropped:
 		select {
 		case r.merges <- a:
 		default:

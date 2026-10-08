@@ -32,7 +32,7 @@ type Checkout struct {
 	Base string
 }
 
-// FeatureBranch is the branch a Feature's Tasks merge into.
+// FeatureBranch is the branch a Feature's Tasks merge into. model v2: a Parent's branch is <KEY> (M3).
 func FeatureBranch(feature string) string { return "feature/" + feature }
 
 // TaskBranch is the branch a Task works on: its key, then its title made short and plain.

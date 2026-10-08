@@ -7,15 +7,21 @@ import (
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
-// GetMe returns the caller, their Teams and Skills, and the Session making the request.
+// GetMe returns the caller, their Projects and Skills, and the Session making the request; the
+// Organisations the sign-in reaches only where there can be more than one (never on Local).
 func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 	me, err := s.core.GetMe(r.Context(), caller(r))
 	s.respond(w, r, as(http.StatusOK, func(me core.Me) any {
-		return gen.Me{
+		out := gen.Me{
 			Organisation: gen.Organisation{ID: me.Organisation.ID, Name: me.Organisation.Name, CreatedAt: me.Organisation.CreatedAt},
-			Member:       memberOut(me.Member), Teams: each(me.Teams, teamOut), Skills: each(me.Skills, skillOut),
+			Member:       memberOut(me.Member), Projects: each(me.Projects, projectOut), Skills: each(me.Skills, skillOut),
 			Session: sessionOut(me.Session),
 		}
+		if me.Organisations != nil {
+			orgs := each(me.Organisations, func(o core.Organisation) gen.OrganisationBrief { return gen.OrganisationBrief{ID: o.ID, Name: o.Name} })
+			out.Organisations = &orgs
+		}
+		return out
 	}), me, err)
 }
 
@@ -55,7 +61,7 @@ func (s *Server) ReactivateMember(w http.ResponseWriter, r *http.Request, member
 }
 
 func (s *Server) ListMembers(w http.ResponseWriter, r *http.Request, params gen.ListMembersParams) {
-	ms, err := s.core.ListMembers(r.Context(), caller(r), params.Team, (*string)(params.Kind))
+	ms, err := s.core.ListMembers(r.Context(), caller(r), params.Project, (*string)(params.Kind))
 	s.respond(w, r, as(http.StatusOK, func(ms []core.Member) any { return gen.MemberList{Items: each(ms, memberOut)} }), ms, err)
 }
 
@@ -106,43 +112,6 @@ func (s *Server) ClearManager(w http.ResponseWriter, r *http.Request, member gen
 		return
 	}
 	s.respond(w, r, noContent, nil, s.core.ClearManager(r.Context(), c, member, idem))
-}
-
-func (s *Server) CreateTeam(w http.ResponseWriter, r *http.Request, params gen.CreateTeamParams) {
-	var body gen.CreateTeamBody
-	out := as(http.StatusCreated, func(t core.Team) any { return teamOut(t) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	t, err := s.core.CreateTeam(r.Context(), c, body.Key, body.Name, idem)
-	s.respond(w, r, out, t, err)
-}
-
-func (s *Server) ListTeams(w http.ResponseWriter, r *http.Request) {
-	ts, err := s.core.ListTeams(r.Context(), caller(r))
-	s.respond(w, r, as(http.StatusOK, func(ts []core.Team) any { return gen.TeamList{Items: each(ts, teamOut)} }), ts, err)
-}
-
-func (s *Server) GetTeam(w http.ResponseWriter, r *http.Request, team gen.TeamRef) {
-	d, err := s.core.GetTeam(r.Context(), caller(r), team)
-	s.respond(w, r, as(http.StatusOK, func(d core.TeamDetail) any { return teamDetailOut(d) }), d, err)
-}
-
-func (s *Server) AddTeamMember(w http.ResponseWriter, r *http.Request, team gen.TeamRef, member gen.MemberRef, params gen.AddTeamMemberParams) {
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, noContent)
-	if !ok {
-		return
-	}
-	s.respond(w, r, noContent, nil, s.core.AddTeamMember(r.Context(), c, team, member, idem))
-}
-
-func (s *Server) RemoveTeamMember(w http.ResponseWriter, r *http.Request, team gen.TeamRef, member gen.MemberRef, params gen.RemoveTeamMemberParams) {
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, nil, noContent)
-	if !ok {
-		return
-	}
-	s.respond(w, r, noContent, nil, s.core.RemoveTeamMember(r.Context(), c, team, member, idem))
 }
 
 func (s *Server) CreateSkill(w http.ResponseWriter, r *http.Request, params gen.CreateSkillParams) {

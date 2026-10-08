@@ -16,7 +16,6 @@ var agentCommands = []command{
 	{path: "workspace list", short: "list the Install's Workspaces", run: cmdWorkspaceList},
 	{path: "workspace set", args: "<workspace> [--name n] [--path dir] [--mode m] [--default-branch b]", short: "change a Workspace (admin)", run: cmdWorkspaceSet},
 	{path: "workspace remove", args: "<workspace>", short: "remove a Workspace no Task names (admin)", run: cmdWorkspaceRemove},
-	{path: "team set", args: "<team> [--name n] [--default-workspace ws|\"\"] [--ship-when-done=true|false]", short: "change a Team's name and defaults (admin)", run: cmdTeamSet},
 	{path: "agent set", args: "<member> [--command c] [--arg a]… [--model m] [--env K=V]… [--paused] [--unattended] [--progress-file f]", short: "set how the Runner starts an agent's sessions (admin)", run: cmdAgentSet},
 	{path: "agent clear", args: "<member>", short: "clear an agent's settings, so the Runner starts no session for it (admin)", run: cmdAgentClear},
 	{path: "agent list", short: "list the agents and how the Runner starts them", run: cmdAgentList},
@@ -171,43 +170,6 @@ func cmdWorkspaceRemove(c *call) error {
 	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "Removed Workspace %s.\n", one(args[0])) })
 }
 
-func cmdTeamSet(c *call) error {
-	name := c.fs.String("name", "", "the Team's new name")
-	var ws optString
-	c.fs.Var(&ws, "default-workspace", `the Workspace a Task filed in the Team names when it names none; "" for none`)
-	var ship optBool
-	c.fs.Var(&ship, "ship-when-done", "whether a Feature filed in the Team ships itself when its last Task is completed, unless its filer says")
-	args, err := c.args(1, 1)
-	if err != nil {
-		return err
-	}
-	body := client.UpdateTeamBody{Name: opt(*name), DefaultWorkspace: ws.v, ShipWhenDone: ship.v}
-	if body.Name == nil && body.DefaultWorkspace == nil && body.ShipWhenDone == nil {
-		return usagef("nothing to change: give --name, --default-workspace or --ship-when-done")
-	}
-	conn, err := c.dial(oneOff)
-	if err != nil {
-		return err
-	}
-	res, err := conn.UpdateTeamWithResponse(c.ctx, args[0], &client.UpdateTeamParams{}, body)
-	if err := check(res, err, http.StatusOK); err != nil {
-		return err
-	}
-	return c.show(res.Body, func(w io.Writer) { c.printTeamLine(w, *res.JSON200) })
-}
-
-// printTeamLine prints a Team with its defaults.
-func (c *call) printTeamLine(w io.Writer, t client.Team) {
-	line := fmt.Sprintf("%-8s %s", one(t.Key), one(t.Name))
-	if t.DefaultWorkspaceID != nil {
-		line += "  workspace " + c.workspace(*t.DefaultWorkspaceID)
-	}
-	if t.ShipWhenDone {
-		line += "  ships when done"
-	}
-	fmt.Fprintln(w, line)
-}
-
 // workspace returns a Workspace's name for human output, or the id when it cannot be found.
 func (c *call) workspace(id string) string {
 	if c.workspaces == nil {
@@ -360,15 +322,6 @@ func cmdSessions(c *call) error {
 				stamp(s.StartedAt), one(s.Host), join, one(s.LogPath))
 		}
 	})
-}
-
-// taskKey returns a Task's display key for human output, or its id when it cannot be read.
-func (c *call) taskKey(id string) string {
-	res, err := c.conn.GetTaskWithResponse(c.ctx, id)
-	if check(res, err, http.StatusOK) != nil {
-		return one(id)
-	}
-	return one(res.JSON200.Task.Key)
 }
 
 func cmdSessionsNudge(c *call) error {

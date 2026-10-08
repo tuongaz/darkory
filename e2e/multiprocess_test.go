@@ -24,13 +24,10 @@ func TestTwoServersOnePostgres(t *testing.T) {
 	a := in.servers[0]
 	b := in.serve()
 	ada := in.ada
-	ada.ok("team", "create", "WEB", "Web")
-	ada.ok("team", "add", "WEB", "ada")
 	ada.ok("skill", "create", "build", "--kind", "generic", "--body", "Build it.")
+	in.project("WEB", "Web", buildFlow)
 	agent := in.agent("agent", []string{"WEB"}, []string{"build"}).on(a)
 	adaB := ada.on(b)
-	var feature client.FeatureDetail
-	adaB.json(&feature, "feature", "create", "--team", "WEB", "--title", "Search")
 
 	// Follow Activity on A from the latest entry, read first so nothing filed later is missed.
 	var latest client.ActivityPage
@@ -64,7 +61,7 @@ func TestTwoServersOnePostgres(t *testing.T) {
 		time.Sleep(1500 * time.Millisecond) // the long-poll is waiting by now
 
 		var filed client.TaskDetail
-		adaB.json(&filed, "file", "--feature", feature.Feature.Key, "--title", "Task "+strconv.Itoa(round), "--skill", "build")
+		adaB.json(&filed, "file", "--project", "WEB", "--title", "Task "+strconv.Itoa(round))
 		committed := time.Now()
 		var got outcome
 		select {

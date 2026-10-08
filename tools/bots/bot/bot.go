@@ -1,6 +1,6 @@
 // Package bot runs agent Members against a Darkory Install: programs that work as an agent such as
 // Claude Code does, taking Tasks with next, heartbeating, writing Notes, attaching Evidence,
-// asking questions, handing over and completing. The e2e suite runs them as scenario tests and
+// asking questions, advancing and completing. The e2e suite runs them as scenario tests and
 // tools/bots runs them as a live load. Bots talk to the Install through the generated client, and
 // through the real darkory binary where what they prove is about the CLI (Stuck). The package
 // imports nothing under internal/.
@@ -77,7 +77,7 @@ type Pace struct {
 	// Rest is how long Stuck rests after a take-back before taking work again, or 0 to stop.
 	Rest time.Duration
 	// Answer is how long a human persona leaves a Task they could take before taking it, at
-	// random between the two; Round how often a persona who owns Features looks them over.
+	// random between the two; Round how often a persona who owns Tasks looks them over.
 	Answer [2]time.Duration
 	Round  time.Duration
 }
@@ -89,7 +89,7 @@ var Fast = Pace{Name: "fast", Work: [2]time.Duration{200 * time.Millisecond, 600
 
 // Human is the pace of a live load: a builder takes 30–90 s per Task and heartbeats every 15 s,
 // the lapser lapses once a minute, Stuck holds its Task until someone takes it back, a person
-// answers a question 20–60 s after it is asked, and an owner looks their Features over every 30 s.
+// answers a question 20–60 s after it is asked, and an owner looks their Tasks over every 30 s.
 var Human = Pace{Name: "human", Work: [2]time.Duration{30 * time.Second, 90 * time.Second}, Step: 3 * time.Second,
 	Wait: 30, Poll: 5 * time.Second, Timeout: 45, Heartbeat: 15 * time.Second, LapseTimeout: 20, LapseEvery: time.Minute,
 	Patience: 3 * time.Minute, Rest: 2 * time.Minute, Answer: [2]time.Duration{20 * time.Second, 60 * time.Second}, Round: 30 * time.Second}
@@ -99,8 +99,8 @@ type Event struct {
 	At  time.Time
 	Bot string
 	// What is a short verb phrase: took, nothing, noted, attached, asked, answered, observed,
-	// wrote, handed over, handed back, completed, released, filed, blocked, moved, shipped,
-	// proposed, published, went silent, lapsed, taken back, lost, refused, failed.
+	// wrote, advanced, handed back, completed, released, filed, blocked, moved, proposed,
+	// published, went silent, lapsed, taken back, lost, refused, failed.
 	What string
 	// Task is the display key of the Task it is about, if any.
 	Task string
@@ -202,7 +202,7 @@ type agent struct {
 	ask    string
 
 	mu    sync.Mutex
-	names map[string]string // Status names by id
+	steps map[string]map[string]client.WorkflowStep // each Project's Steps by id, by the Project's id
 }
 
 func newAgent(cfg Config, m Member, model string) agent {
@@ -213,12 +213,16 @@ func newAgent(cfg Config, m Member, model string) agent {
 	return agent{cfg: cfg, m: m, model: model, c: c, rng: rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())), preset: &Software}
 }
 
-// step is what d's plan asks of whoever works its Task, or nil when the plan does not have it.
-func (a *agent) step(d *client.TaskDetail) *Step {
+// item is what d's plan asks of whoever works its Task, or nil when the plan does not have it.
+func (a *agent) item(d *client.TaskDetail) *Item {
 	if d.Task.Kind != client.Work {
 		return nil
 	}
-	return a.preset.step(d.Feature, d.Task.Title, a.ask)
+	parent := ""
+	if d.Parent != nil {
+		parent = d.Parent.Title
+	}
+	return a.preset.item(parent, d.Task.Title, a.ask)
 }
 
 // between is a random duration between the two, as Pace.Work gives them.
@@ -269,7 +273,7 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 // work is how long the next Task takes, at random within the pace's range.
-func (a *agent) work() time.Duration { return a.between(a.cfg.Pace.Work) }
+func (a *agent) busy() time.Duration { return a.between(a.cfg.Pace.Work) }
 
 // next asks for a takeable Task, waiting up to wait seconds, and claims it with a heartbeat
 // timeout of timeout seconds and the bot's model label. It returns nil when nothing came.
@@ -299,7 +303,7 @@ func (a *agent) took(d *client.TaskDetail) {
 	if a.model != "" {
 		model = ", model " + a.model
 	}
-	a.say("took", d.Task.Key, "%q (%s, now %s; %s%s)", d.Task.Title, d.Task.Kind, d.Status.Name, hb, model)
+	a.say("took", d.Task.Key, "%q (%s, at %s; %s%s)", d.Task.Title, d.Task.Kind, where(d), hb, model)
 }
 
 // count says n things, as "1 Note" or "2 Notes".
@@ -367,47 +371,54 @@ func (a *agent) hold(ctx context.Context, d *client.TaskDetail) (context.Context
 	}
 }
 
-// listStatuses reads the Organisation's Statuses, in order, and remembers their names.
-func (a *agent) listStatuses(ctx context.Context) ([]client.Status, error) {
-	res, err := a.c.ListStatusesWithResponse(ctx)
+// where says where a Task is: at its Step, aimed at a Member, or neither.
+func where(d *client.TaskDetail) string {
+	switch {
+	case d.Step != nil:
+		return d.Step.Name
+	case d.Task.AimedAtID != nil:
+		return "no Step, aimed at a Member"
+	}
+	return "no Step"
+}
+
+// workflow reads a Project's Workflow and remembers its Steps.
+func (a *agent) workflow(ctx context.Context, project string) (*client.Workflow, error) {
+	res, err := a.c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return nil, err
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.names = map[string]string{}
-	for _, s := range res.JSON200.Items {
-		a.names[s.ID] = s.Name
+	if a.steps == nil {
+		a.steps = map[string]map[string]client.WorkflowStep{}
 	}
-	return res.JSON200.Items, nil
+	steps := map[string]client.WorkflowStep{}
+	for _, s := range res.JSON200.Steps {
+		steps[s.ID] = s
+	}
+	a.steps[res.JSON200.ProjectID] = steps
+	return res.JSON200, nil
 }
 
-// statusName names a Status by id for the bot's reports.
-func (a *agent) statusName(ctx context.Context, id string) string {
+// stepName names a Step of a Project's Workflow by id for the bot's reports; "no Step" for none.
+func (a *agent) stepName(ctx context.Context, project string, id *string) string {
+	if id == nil {
+		return "no Step"
+	}
 	a.mu.Lock()
-	n, ok := a.names[id]
+	s, ok := a.steps[project][*id]
 	a.mu.Unlock()
 	if !ok {
-		a.listStatuses(ctx)
+		a.workflow(ctx, project)
 		a.mu.Lock()
-		n, ok = a.names[id]
+		s, ok = a.steps[project][*id]
 		a.mu.Unlock()
 	}
 	if !ok {
-		return id
+		return *id
 	}
-	return n
-}
-
-// firstOfKind returns the id and name of the first Status of kind, or empty strings when the
-// Organisation has none.
-func firstOfKind(list []client.Status, kind client.StatusKind) (string, string) {
-	for _, s := range list {
-		if s.Kind == kind {
-			return s.ID, s.Name
-		}
-	}
-	return "", ""
+	return s.Name
 }
 
 // skill reads a Skill by id or name.
@@ -447,25 +458,69 @@ func (a *agent) attach(ctx context.Context, key, filename, content string) error
 	return nil
 }
 
+// at says where a Task is after a write, for the bot's reports.
+func (a *agent) at(ctx context.Context, t *client.Task) string {
+	if t.State != client.TaskStateOpen {
+		return string(t.State)
+	}
+	return "at " + a.stepName(ctx, t.ProjectID, t.StepID)
+}
+
 func (a *agent) complete(ctx context.Context, key, note string) (*client.Task, error) {
-	res, err := a.c.CompleteTaskWithResponse(ctx, key, &client.CompleteTaskParams{}, client.CompleteTaskBody{Note: &note})
+	body := client.CompleteTaskBody{}
+	if note != "" {
+		body.Note = &note
+	}
+	res, err := a.c.CompleteTaskWithResponse(ctx, key, &client.CompleteTaskParams{}, body)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return nil, err
 	}
-	a.say("completed", key, "with the Note %q; now %s", note, a.statusName(ctx, res.JSON200.StatusID))
+	if note == "" {
+		a.say("completed", key, "now %s", a.at(ctx, res.JSON200))
+	} else {
+		a.say("completed", key, "with the Note %q; now %s", note, a.at(ctx, res.JSON200))
+	}
 	return res.JSON200, nil
 }
 
-func (a *agent) handover(ctx context.Context, key, skill, status, note string) error {
-	body := client.HandoverTaskBody{Skill: skill, Note: &note}
-	if status != "" {
-		body.Status = &status
+// advance ends the bot's work on the Task key along outcome (its Step's only way out, when
+// empty), with note. Into Done it is reported as completed.
+func (a *agent) advance(ctx context.Context, key, outcome, note string) (*client.Task, error) {
+	body := client.AdvanceTaskBody{Note: &note}
+	if outcome != "" {
+		body.Outcome = &outcome
 	}
-	res, err := a.c.HandoverTaskWithResponse(ctx, key, &client.HandoverTaskParams{}, body)
+	res, err := a.c.AdvanceTaskWithResponse(ctx, key, &client.AdvanceTaskParams{}, body)
 	if err := check(res, err, http.StatusOK); err != nil {
-		return err
+		return nil, err
 	}
-	a.say("handed over", key, "to %s, now %s, with the Note %q", skill, a.statusName(ctx, res.JSON200.StatusID), note)
+	t := res.JSON200
+	along := fmt.Sprintf("along %q", outcome)
+	if outcome == "" {
+		along = "along its Step's one way out"
+	}
+	if t.State == client.TaskStateDone {
+		a.say("completed", key, "advancing %s, with the Note %q", along, note)
+		return t, nil
+	}
+	a.say("advanced", key, "%s, now %s, with the Note %q", along, a.at(ctx, t), note)
+	return t, nil
+}
+
+// move moves the Task key to the Step step by hand, and reports it with why after; a Task that
+// ended since it was read stays where it is.
+func (a *agent) move(ctx context.Context, key, step, why string) error {
+	res, err := a.c.MoveTaskWithResponse(ctx, key, &client.MoveTaskParams{}, client.MoveTaskBody{Step: step})
+	if err := check(res, err, http.StatusOK); err != nil {
+		if Code(err) == client.ErrorCodeEnded {
+			return nil
+		}
+		return on(key, fmt.Errorf("moving it to %s: %w", step, err))
+	}
+	if why != "" {
+		why = ", " + why
+	}
+	a.say("moved", key, "%q to %s%s", res.JSON200.Title, step, why)
 	return nil
 }
 
@@ -474,8 +529,38 @@ func (a *agent) release(ctx context.Context, key, note string) error {
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
-	a.say("released", key, "with the Note %q; now %s", note, a.statusName(ctx, res.JSON200.StatusID))
+	a.say("released", key, "with the Note %q; now %s", note, a.at(ctx, res.JSON200))
 	return nil
+}
+
+// onward is the outcome a worker advances d's Task along once done: want when set, else the
+// first way out of its Step, which in the presets' Workflows is the way work goes on; "" for a
+// Task at no Step, which advancing completes.
+func onward(d *client.TaskDetail, want string) string {
+	if want != "" || len(d.Connectors) == 0 {
+		return want
+	}
+	return d.Connectors[0].Name
+}
+
+// intoDone is the outcome of d's Step that leads into Done, or "" when none does.
+func intoDone(d *client.TaskDetail) string {
+	for _, k := range d.Connectors {
+		if k.ToStepID == nil {
+			return k.Name
+		}
+	}
+	return ""
+}
+
+// back is the outcome of d's Step that sends work back: "needs changes", or "" when it has none.
+func back(d *client.TaskDetail) string {
+	for _, k := range d.Connectors {
+		if k.ToStepID != nil && strings.EqualFold(k.Name, "needs changes") {
+			return k.Name
+		}
+	}
+	return ""
 }
 
 // taskError is a failure while working a Task.

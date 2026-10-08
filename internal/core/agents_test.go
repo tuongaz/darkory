@@ -25,13 +25,13 @@ func (f *fixture) workspace(name string) core.Workspace {
 	return w
 }
 
-func (f *fixture) teamDefaults(team string, ch core.TeamChange) core.Team {
+func (f *fixture) projectDefaults(project string, ch core.ProjectChange) core.Project {
 	f.t.Helper()
-	tm, err := f.svc.UpdateTeam(f.t.Context(), f.admin, team, ch, core.Idem{})
+	p, err := f.svc.UpdateProject(f.t.Context(), f.admin, project, ch, core.Idem{})
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return tm
+	return p
 }
 
 // activity is the Organisation's entries of kind, oldest first.
@@ -58,12 +58,12 @@ func (f *fixture) done(c *auth.Caller, task string) {
 
 // Workspaces are added, changed and removed by admins only; names are unique ignoring case and
 // never spelled as ids, paths absolute, modes and branches checked; a Workspace a Task names
-// cannot be removed, and removing a Team's default leaves the Team without one.
+// cannot be removed, and removing a Project's default leaves the Project without one.
 func TestWorkspaces(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
+		f.project("WEB")
 		lead := f.member("lead", []string{"WEB"}, nil)
 
 		_, err := f.svc.CreateWorkspace(ctx, lead, core.NewWorkspace{Name: "web", Path: "/src/web"}, core.Idem{})
@@ -121,76 +121,75 @@ func TestWorkspaces(t *testing.T) {
 			t.Fatalf("listed %+v %v", list, err)
 		}
 
-		// A Task names web; web is WEB's default, api is no one's.
-		f.teamDefaults("WEB", core.TeamChange{DefaultWorkspace: ptrStr("web")})
-		feature := f.feature(lead, "WEB", "Cart")
-		if got := feature.Tasks[0].WorkspaceIDs; !slices.Equal(got, []string{w.ID}) {
-			t.Fatalf("the Break down names %v, want the Team's default", got)
+		// A Parent and its Breakdown name web; web is WEB's default, api is no one's.
+		f.projectDefaults("WEB", core.ProjectChange{DefaultWorkspace: ptrStr("web")})
+		pd := f.parent(lead, "WEB", "Cart")
+		if got := pd.Subtasks[0].WorkspaceIDs; !slices.Equal(got, []string{w.ID}) || !slices.Equal(pd.Task.WorkspaceIDs, got) {
+			t.Fatalf("the Parent names %v and its Breakdown %v, want the Project's default", pd.Task.WorkspaceIDs, got)
 		}
 		err = f.svc.RemoveWorkspace(ctx, f.admin, "web", core.Idem{})
 		wantCode(t, err, core.CodeConflict)
-		if !strings.HasPrefix(err.Error(), "conflict: 1 Task names Workspace web;") {
+		if !strings.HasPrefix(err.Error(), "conflict: 2 Tasks name Workspace web;") {
 			t.Fatalf("the refusal reads %q", err)
 		}
 		err = f.svc.RemoveWorkspace(ctx, lead, "api", core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
 
-		f.teamDefaults("WEB", core.TeamChange{DefaultWorkspace: ptrStr("api")})
+		f.projectDefaults("WEB", core.ProjectChange{DefaultWorkspace: ptrStr("api")})
 		if err := f.svc.RemoveWorkspace(ctx, f.admin, "api", core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		tm, err := f.svc.GetTeam(ctx, lead, "WEB")
-		if err != nil || tm.Team.DefaultWorkspaceID != nil {
-			t.Fatalf("WEB after its default was removed: %+v %v", tm.Team, err)
+		proj, err := f.svc.GetProject(ctx, lead, "WEB")
+		if err != nil || proj.Project.DefaultWorkspaceID != nil {
+			t.Fatalf("WEB after its default was removed: %+v %v", proj.Project, err)
 		}
 		if removed := f.activity("workspace.removed"); len(removed) != 1 || removed[0].SubjectID != api.ID {
 			t.Fatalf("workspace.removed: %+v", removed)
 		}
-		teamChanged := f.activity("team.changed")
-		if last := teamChanged[len(teamChanged)-1]; last.Payload["default_workspace_id"] != nil || len(last.Payload) != 1 {
-			t.Fatalf("the last team.changed: %+v", last)
+		projectChanged := f.activity("project.changed")
+		if last := projectChanged[len(projectChanged)-1]; last.Payload["default_workspace_id"] != nil || len(last.Payload) != 1 {
+			t.Fatalf("the last project.changed: %+v", last)
 		}
 		f.checkActivity()
 	})
 }
 
-// A Team's default Workspace and Ship-when-done default are set and cleared by admins; a Task
-// names the Workspaces it is filed with, in order and each once, an empty list naming none, or
-// else its Team's default, or none when the Team has none.
+// A Project's default Workspace and its auto_complete and acceptance defaults are set and cleared
+// by admins; a Task names the Workspaces it is filed with, in order and each once, an empty list
+// naming none, or else its Project's default, or none when the Project has none; a Subtask, its
+// Parent's.
 func TestTaskWorkspaces(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		f.skill("build")
-		lead := f.member("lead", []string{"WEB"}, []string{"build"})
+		f.project("WEB")
+		lead := f.member("lead", []string{"WEB"}, []string{core.SkillEngineer})
 		web, api := f.workspace("web"), f.workspace("api")
-		feature := f.feature(lead, "WEB", "Cart").Feature.ID
 
 		// No default: a Task names none.
-		if task := f.task(lead, feature, "Unplaced", "build"); task.WorkspaceIDs != nil {
+		if task := f.task(lead, "WEB", "Unplaced", "Build"); task.WorkspaceIDs != nil {
 			t.Fatalf("named %v with no default", task.WorkspaceIDs)
 		}
-		_, err := f.svc.UpdateTeam(ctx, lead, "WEB", core.TeamChange{DefaultWorkspace: ptrStr("web")}, core.Idem{})
+		_, err := f.svc.UpdateProject(ctx, lead, "WEB", core.ProjectChange{DefaultWorkspace: ptrStr("web")}, core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
-		_, err = f.svc.UpdateTeam(ctx, f.admin, "WEB", core.TeamChange{DefaultWorkspace: ptrStr("nowhere")}, core.Idem{})
+		_, err = f.svc.UpdateProject(ctx, f.admin, "WEB", core.ProjectChange{DefaultWorkspace: ptrStr("nowhere")}, core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
-		tm := f.teamDefaults("WEB", core.TeamChange{DefaultWorkspace: ptrStr("WEB"), ShipWhenDone: ptrBool(true)})
-		if tm.DefaultWorkspaceID == nil || *tm.DefaultWorkspaceID != web.ID || !tm.ShipWhenDone {
-			t.Fatalf("WEB: %+v", tm)
+		p := f.projectDefaults("WEB", core.ProjectChange{DefaultWorkspace: ptrStr("WEB"), AutoComplete: ptrBool(true), Acceptance: ptrBool(true)})
+		if p.DefaultWorkspaceID == nil || *p.DefaultWorkspaceID != web.ID || !p.AutoComplete || !p.Acceptance {
+			t.Fatalf("WEB: %+v", p)
 		}
-		if changed := f.activity("team.changed"); len(changed) != 1 || changed[0].Payload["default_workspace_id"] != web.ID ||
-			changed[0].Payload["ship_when_done"] != true {
-			t.Fatalf("team.changed: %+v", changed)
+		if changed := f.activity("project.changed"); len(changed) != 1 || changed[0].Payload["default_workspace_id"] != web.ID ||
+			changed[0].Payload["auto_complete"] != true || changed[0].Payload["acceptance"] != true {
+			t.Fatalf("project.changed: %+v", changed)
 		}
 
 		file := func(refs *[]string) (core.TaskDetail, error) {
-			skill := "build"
-			return f.svc.FileTask(ctx, lead, core.NewTask{Feature: &feature, Title: "T", Skill: &skill, Workspaces: refs}, core.Idem{})
+			return f.svc.FileTask(ctx, lead, core.NewTask{Project: ptrStr("WEB"), Title: "T", Step: ptrStr("Build"), Workspaces: refs}, core.Idem{})
 		}
 		d, err := file(nil)
-		if err != nil || !slices.Equal(d.Task.WorkspaceIDs, []string{web.ID}) || len(d.Workspaces) != 1 || d.Workspaces[0].Name != "web" {
-			t.Fatalf("by default: %v %+v %v", d.Task.WorkspaceIDs, d.Workspaces, err)
+		if err != nil || !slices.Equal(d.Task.WorkspaceIDs, []string{web.ID}) || len(d.Workspaces) != 1 || d.Workspaces[0].Name != "web" ||
+			!d.Task.AutoComplete || !d.Task.Acceptance {
+			t.Fatalf("by default: %+v %+v %v", d.Task, d.Workspaces, err)
 		}
 		d, err = file(&[]string{"api", web.ID, "API"})
 		if err != nil || !slices.Equal(d.Task.WorkspaceIDs, []string{api.ID, web.ID}) || d.Workspaces[0].ID != api.ID || d.Workspaces[1].ID != web.ID {
@@ -207,7 +206,7 @@ func TestTaskWorkspaces(t *testing.T) {
 		_, err = file(&[]string{"nowhere"})
 		wantCode(t, err, core.CodeNotFound)
 
-		page, err := f.svc.ListTasks(ctx, lead, core.TaskFilter{Feature: &feature})
+		page, err := f.svc.ListTasks(ctx, lead, core.TaskFilter{Project: ptrStr("WEB")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -215,259 +214,45 @@ func TestTaskWorkspaces(t *testing.T) {
 		for _, task := range page.Items {
 			named = append(named, task.WorkspaceIDs)
 		}
-		if len(named) != 5 || named[2] == nil || !slices.Equal(named[3], []string{api.ID, web.ID}) {
+		if len(named) != 4 || named[1] == nil || !slices.Equal(named[2], []string{api.ID, web.ID}) {
 			t.Fatalf("listed %v", named)
 		}
 
-		// The Team's default changes what later Tasks name, not what earlier ones did.
-		f.teamDefaults("WEB", core.TeamChange{DefaultWorkspace: ptrStr("")})
-		if task := f.task(lead, feature, "Unplaced again", "build"); task.WorkspaceIDs != nil {
+		// A Subtask naming none takes its Parent's, not the Project's default, since its branch
+		// starts from the Parent's; one naming some, or an empty list, names those.
+		sub := func(parent string, refs *[]string) []string {
+			t.Helper()
+			d, err := f.svc.FileTask(ctx, lead, core.NewTask{Parent: &parent, Title: "S", Step: ptrStr("Build"), Workspaces: refs}, core.Idem{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return d.Task.WorkspaceIDs
+		}
+		inAPI, err := file(&[]string{"api"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := sub(inAPI.Task.Key, nil); !slices.Equal(got, []string{api.ID}) {
+			t.Fatalf("a Subtask of a Parent in api names %v", got)
+		}
+		if got := sub(inAPI.Task.Key, &[]string{"web"}); !slices.Equal(got, []string{web.ID}) {
+			t.Fatalf("a Subtask naming web names %v", got)
+		}
+		if got := sub(inAPI.Task.Key, &[]string{}); got != nil {
+			t.Fatalf("a Subtask naming none names %v", got)
+		}
+		nowhere, err := file(&[]string{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := sub(nowhere.Task.Key, nil); got != nil {
+			t.Fatalf("a Subtask of a Parent naming none names %v, not the Project's default", got)
+		}
+
+		// The Project's default changes what later Tasks name, not what earlier ones did.
+		f.projectDefaults("WEB", core.ProjectChange{DefaultWorkspace: ptrStr("")})
+		if task := f.task(lead, "WEB", "Unplaced again", "Build"); task.WorkspaceIDs != nil {
 			t.Fatalf("named %v after the default was cleared", task.WorkspaceIDs)
-		}
-		f.checkActivity()
-	})
-}
-
-// A quick Feature is filed with its one work Task — the Feature's title and description, the
-// Skill named, the Team's default Workspace — and no Break down. It always ships when done, the
-// Task's completion ships it in the same write, and it has no Retrospective.
-func TestQuickFeature(t *testing.T) {
-	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f := newFixture(t, st)
-		ctx := t.Context()
-		f.team("WEB")
-		f.skill("build")
-		f.skill("review")
-		lead := f.member("lead", []string{"WEB"}, nil)
-		builder := f.member("builder", []string{"WEB"}, []string{"build"})
-		reviewer := f.member("reviewer", []string{"WEB"}, []string{"review"})
-
-		quick := func(nf core.NewFeature) (core.FeatureDetail, error) {
-			nf.Team, nf.Quick = "WEB", true
-			if nf.Title == "" {
-				nf.Title = "Fix the footer"
-			}
-			return f.svc.FileFeature(ctx, lead, nf, core.Idem{})
-		}
-		_, err := quick(core.NewFeature{})
-		wantCode(t, err, core.CodeInvalid)
-		_, err = quick(core.NewFeature{Skill: ptrStr("build"), ShipWhenDone: ptrBool(false)})
-		wantCode(t, err, core.CodeInvalid)
-		_, err = quick(core.NewFeature{Skill: ptrStr("build"), FromRetrospective: ptrStr("WEB-1")})
-		wantCode(t, err, core.CodeInvalid)
-		_, err = f.svc.FileFeature(ctx, lead, core.NewFeature{Team: "WEB", Title: "Big", Skill: ptrStr("build")}, core.Idem{})
-		wantCode(t, err, core.CodeInvalid)
-		_, err = f.svc.FileFeature(ctx, lead, core.NewFeature{Team: "WEB", Title: "Big", Workspaces: &[]string{}}, core.Idem{})
-		wantCode(t, err, core.CodeInvalid)
-		// The Team has no default Workspace, and none is named.
-		_, err = quick(core.NewFeature{Skill: ptrStr("build")})
-		wantCode(t, err, core.CodeInvalid)
-		_, err = quick(core.NewFeature{Skill: ptrStr("nothing"), Workspaces: &[]string{}})
-		wantCode(t, err, core.CodeNotFound)
-
-		web := f.workspace("web")
-		other := f.workspace("other")
-		f.teamDefaults("WEB", core.TeamChange{DefaultWorkspace: ptrStr("web")})
-		d, err := quick(core.NewFeature{Description: "It overlaps on phones.", Skill: ptrStr("build")})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !d.Feature.Quick || !d.Feature.ShipWhenDone || len(d.Tasks) != 1 {
-			t.Fatalf("the quick Feature: %+v with %d Tasks", d.Feature, len(d.Tasks))
-		}
-		task := d.Tasks[0]
-		if task.Kind != "work" || task.Title != "Fix the footer" || task.Description != "It overlaps on phones." ||
-			task.SkillID == nil || !slices.Equal(task.WorkspaceIDs, []string{web.ID}) || task.Key != "WEB-2" {
-			t.Fatalf("its Task: %+v", task)
-		}
-		if filed := f.activity("feature.filed"); filed[len(filed)-1].Payload["quick"] != true {
-			t.Fatalf("feature.filed: %+v", filed[len(filed)-1])
-		}
-		named, err := quick(core.NewFeature{Title: "Elsewhere", Skill: ptrStr("build"), Workspaces: &[]string{"other"}})
-		if err != nil || !slices.Equal(named.Tasks[0].WorkspaceIDs, []string{other.ID}) {
-			t.Fatalf("a quick Feature naming its Workspace: %v %v", named.Tasks, err)
-		}
-
-		// Built, handed over to review, reviewed: the review's completion ships it.
-		if _, err := f.svc.Claim(ctx, builder, task.ID, noTimeout, core.Idem{}); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.svc.Handover(ctx, builder, task.ID, "review", nil, nil, core.Idem{}); err != nil {
-			t.Fatal(err)
-		}
-		f.done(reviewer, task.ID)
-		got, err := f.svc.GetFeature(ctx, lead, d.Feature.ID)
-		if err != nil || got.Feature.State != "shipped" || len(got.Tasks) != 1 {
-			t.Fatalf("after the review: %+v with %d Tasks, %v", got.Feature, len(got.Tasks), err)
-		}
-		shipped := f.activity("feature.shipped")
-		if len(shipped) != 1 || *shipped[0].ActorID != reviewer.MemberID || shipped[0].Payload["ship_when_done"] != true ||
-			shipped[0].Payload["quick"] != true {
-			t.Fatalf("feature.shipped: %+v", shipped)
-		}
-		completed := f.activity("task.completed")
-		if shipped[0].Seq != completed[len(completed)-1].Seq+1 {
-			t.Fatalf("shipped at %d, the completion at %d: not the same write", shipped[0].Seq, completed[len(completed)-1].Seq)
-		}
-
-		// Dropping a quick Feature files no Retrospective either.
-		dropped, err := f.svc.DropFeature(ctx, lead, named.Feature.ID, core.Idem{})
-		if err != nil || len(dropped.Tasks) != 1 || dropped.Tasks[0].State != "dropped" {
-			t.Fatalf("dropped: %+v %v", dropped.Tasks, err)
-		}
-		if n := f.count(`SELECT COUNT(*) FROM tasks WHERE kind = 'retrospective'`); n != 0 {
-			t.Fatalf("%d Retrospectives for quick Features", n)
-		}
-		f.checkActivity()
-	})
-}
-
-// A Feature with ship_when_done — its own, or its Team's at filing — ships in the write that
-// completes its last open Task, filing its Retrospective in the same write; one whose last Task
-// is dropped, or that still has open Tasks, waits for its owner.
-func TestShipWhenDone(t *testing.T) {
-	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f := newFixture(t, st)
-		ctx := t.Context()
-		f.team("WEB")
-		f.skill("build")
-		lead := f.member("lead", []string{"WEB"}, []string{"build"})
-		planner := f.member("planner", []string{"WEB"}, []string{core.SkillBreakdown})
-		builder := f.member("builder", []string{"WEB"}, []string{"build"})
-		web := f.workspace("web")
-
-		file := func(title string, ship *bool) core.FeatureDetail {
-			t.Helper()
-			d, err := f.svc.FileFeature(ctx, lead, core.NewFeature{Team: "WEB", Title: title, ShipWhenDone: ship}, core.Idem{})
-			if err != nil {
-				t.Fatal(err)
-			}
-			return d
-		}
-		state := func(id string) string {
-			t.Helper()
-			d, err := f.svc.GetFeature(ctx, lead, id)
-			if err != nil {
-				t.Fatal(err)
-			}
-			return d.Feature.State
-		}
-
-		// The Team's default is off; the Feature says on.
-		cart := file("Cart \"v2\"", ptrBool(true))
-		if !cart.Feature.ShipWhenDone {
-			t.Fatal("ship_when_done not kept")
-		}
-		a := f.task(lead, cart.Feature.ID, "A", "build")
-		b := f.task(lead, cart.Feature.ID, "B", "build")
-		f.done(planner, cart.Tasks[0].ID)
-		f.done(builder, a.ID)
-		if s := state(cart.Feature.ID); s != "open" {
-			t.Fatalf("shipped with B open: %s", s)
-		}
-		f.teamDefaults("WEB", core.TeamChange{DefaultWorkspace: ptrStr("web")})
-		f.done(builder, b.ID)
-		d, err := f.svc.GetFeature(ctx, lead, cart.Feature.ID)
-		if err != nil || d.Feature.State != "shipped" || d.Feature.EndedAt == nil {
-			t.Fatalf("after B: %+v %v", d.Feature, err)
-		}
-		retro := d.Tasks[len(d.Tasks)-1]
-		if retro.Kind != "retrospective" || retro.Title != "Retrospective: Cart \"v2\"" || retro.State != "open" || retro.Key != "WEB-5" ||
-			!slices.Equal(retro.WorkspaceIDs, []string{web.ID}) {
-			t.Fatalf("the Retrospective: %+v", retro)
-		}
-		todo, _ := f.svc.ListStatuses(ctx, lead)
-		if retro.StatusID != todo[1].ID {
-			t.Fatalf("the Retrospective is in %s, want %s", retro.StatusID, todo[1].Name)
-		}
-		// The trail: completed, shipped, Retrospective filed, one after another in one write.
-		p, err := f.svc.ListActivity(ctx, f.admin, core.ActivityQuery{Before: 1 << 53, Limit: 3})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var kinds []string
-		for _, e := range p.Items {
-			kinds = append(kinds, e.Kind)
-		}
-		if !slices.Equal(kinds, []string{"task.completed", "feature.shipped", "task.filed"}) {
-			t.Fatalf("the trail ends %v", kinds)
-		}
-		if p.Items[1].Payload["ship_when_done"] != true || *p.Items[1].ActorID != builder.MemberID {
-			t.Fatalf("feature.shipped: %+v", p.Items[1])
-		}
-		filed := p.Items[2]
-		if filed.SubjectID != retro.ID || filed.Payload["key"] != "WEB-5" || filed.Payload["title"] != retro.Title ||
-			filed.Payload["kind"] != "retrospective" || filed.Payload["feature_id"] != cart.Feature.ID || filed.Payload["status_id"] != retro.StatusID {
-			t.Fatalf("task.filed for the Retrospective: %+v", filed)
-		}
-		// Its Retrospective completing changes nothing more: the Feature has ended.
-		retroer := f.member("retro", []string{"WEB"}, []string{core.SkillRetro})
-		f.done(retroer, retro.ID)
-		if n := len(f.activity("feature.shipped")); n != 1 {
-			t.Fatalf("%d feature.shipped entries", n)
-		}
-
-		// The Team's default on, taken at filing; a Feature saying off keeps off.
-		f.teamDefaults("WEB", core.TeamChange{ShipWhenDone: ptrBool(true)})
-		auto := file("Auto", nil)
-		manual := file("Manual", ptrBool(false))
-		f.teamDefaults("WEB", core.TeamChange{ShipWhenDone: ptrBool(false)})
-		if !auto.Feature.ShipWhenDone || manual.Feature.ShipWhenDone {
-			t.Fatalf("auto %v, manual %v", auto.Feature.ShipWhenDone, manual.Feature.ShipWhenDone)
-		}
-		f.done(planner, manual.Tasks[0].ID)
-		if s := state(manual.Feature.ID); s != "open" {
-			t.Fatalf("Manual %s", s)
-		}
-
-		// The last open Task dropped: it waits for its owner.
-		c := f.task(lead, auto.Feature.ID, "C", "build")
-		f.done(planner, auto.Tasks[0].ID)
-		if _, err := f.svc.DropTask(ctx, lead, c.ID, nil, core.Idem{}); err != nil {
-			t.Fatal(err)
-		}
-		if s := state(auto.Feature.ID); s != "open" {
-			t.Fatalf("Auto shipped on a drop: %s", s)
-		}
-		if _, err := f.svc.ShipFeature(ctx, lead, auto.Feature.ID, core.Idem{}); err != nil {
-			t.Fatal(err)
-		}
-		f.checkActivity()
-	})
-}
-
-// Completing a question on a Feature that has ended ships nothing, though the Feature shipped
-// when done.
-func TestShipWhenDoneOnAnEndedFeature(t *testing.T) {
-	storetest.Each(t, func(t *testing.T, st *store.Store) {
-		f := newFixture(t, st)
-		ctx := t.Context()
-		f.team("WEB")
-		lead := f.member("lead", []string{"WEB"}, []string{core.SkillBreakdown, core.SkillRetro})
-		d, err := f.svc.FileFeature(ctx, lead, core.NewFeature{Team: "WEB", Title: "Cart", ShipWhenDone: ptrBool(true)}, core.Idem{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.done(lead, d.Tasks[0].ID)
-		got, _ := f.svc.GetFeature(ctx, lead, d.Feature.ID)
-		retro := got.Tasks[len(got.Tasks)-1]
-		if got.Feature.State != "shipped" || retro.Kind != "retrospective" {
-			t.Fatalf("after the Break down: %s, %s", got.Feature.State, retro.Kind)
-		}
-		// The Retrospective asks the lead a question, which the lead answers.
-		if _, err := f.svc.Claim(ctx, lead, retro.ID, noTimeout, core.Idem{}); err != nil {
-			t.Fatal(err)
-		}
-		q, err := f.svc.FileTask(ctx, lead, core.NewTask{Blocks: &retro.ID, Title: "Why?", AimedAt: ptrStr("lead")}, core.Idem{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		f.done(lead, q.Task.ID)
-		if n := len(f.activity("feature.shipped")); n != 1 {
-			t.Fatalf("%d feature.shipped entries", n)
-		}
-		if n := f.count(`SELECT COUNT(*) FROM tasks WHERE kind = 'retrospective'`); n != 1 {
-			t.Fatalf("%d Retrospectives", n)
 		}
 		f.checkActivity()
 	})
@@ -570,8 +355,8 @@ func TestAgentSettings(t *testing.T) {
 	})
 }
 
-// InitWith seeds the roster in Init's one write: Team MAIN with the first Member, the Workspace as
-// its default, the Skills engineer and review, and the four agents in MAIN with their Skills,
+// InitWith seeds the roster in Init's one write: Project MAIN on the default Workflow with the
+// first Member, the Workspace as its default, and the four agents in MAIN with their Skills,
 // reporting to the first Member, with agent settings and a token whose Claims lapse after five
 // minutes without a Heartbeat.
 func TestInitSeedsTheRoster(t *testing.T) {
@@ -583,22 +368,22 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if out.Team == nil || out.Team.Key != "MAIN" || out.Team.Name != "Main" || out.Workspace == nil ||
-			out.Workspace.Name != "darkory" || out.Workspace.DefaultBranch != "trunk" || out.Team.DefaultWorkspaceID == nil ||
-			*out.Team.DefaultWorkspaceID != out.Workspace.ID {
-			t.Fatalf("the Team %+v and Workspace %+v", out.Team, out.Workspace)
+		if out.Project == nil || out.Project.Key != "MAIN" || out.Project.Name != "Main" || out.Workspace == nil ||
+			out.Workspace.Name != "darkory" || out.Workspace.DefaultBranch != "trunk" || out.Project.DefaultWorkspaceID == nil ||
+			*out.Project.DefaultWorkspaceID != out.Workspace.ID || out.Project.AutoComplete || out.Project.Acceptance {
+			t.Fatalf("the Project %+v and Workspace %+v", out.Project, out.Workspace)
 		}
 		a := auth.New(st, clockAt(epoch))
 		ada, err := a.Authenticate(ctx, auth.Credentials{Bearer: out.Token.Secret, Session: "ada-1"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		team, err := svc.GetTeam(ctx, ada, "MAIN")
+		project, err := svc.GetProject(ctx, ada, "MAIN")
 		if err != nil {
 			t.Fatal(err)
 		}
 		var names []string
-		for _, m := range team.Members {
+		for _, m := range project.Members {
 			names = append(names, m.Name)
 		}
 		if !slices.Equal(names, []string{"ada", "builder", "planner", "retro", "reviewer"}) {
@@ -645,39 +430,44 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		for _, s := range skills {
 			skillNames = append(skillNames, s.Name)
 		}
-		if !slices.Equal(skillNames, []string{"breakdown", "engineer", "retro", "review", "skill-review"}) {
+		if !slices.Equal(skillNames, []string{"acceptance", "breakdown", "engineer", "retro", "review", "skill-review"}) {
 			t.Fatalf("Skills %v", skillNames)
 		}
-		// Filed in MAIN, the Break down names the Workspace.
-		d, err := svc.FileFeature(ctx, ada, core.NewFeature{Team: "MAIN", Title: "Cart"}, core.Idem{})
-		if err != nil || !slices.Equal(d.Tasks[0].WorkspaceIDs, []string{out.Workspace.ID}) {
-			t.Fatalf("the Break down names %v (%v)", d.Tasks[0].WorkspaceIDs, err)
+		// MAIN is on the default Workflow; filed in it with Break down, the Breakdown is at Plan
+		// and names the Workspace.
+		w, err := svc.GetWorkflow(ctx, ada, "MAIN")
+		if err != nil || workflowText(skills, w.Workflow) != defaultWorkflowText {
+			t.Fatalf("MAIN's Workflow %s (%v)", workflowText(skills, w.Workflow), err)
+		}
+		d, err := svc.FileTask(ctx, ada, core.NewTask{Project: ptrStr("MAIN"), Title: "Cart", Breakdown: true}, core.Idem{})
+		if err != nil || !slices.Equal(d.Subtasks[0].WorkspaceIDs, []string{out.Workspace.ID}) {
+			t.Fatalf("the Breakdown names %v (%v)", d.Subtasks[0].WorkspaceIDs, err)
 		}
 	})
 }
 
 func clockAt(t time.Time) *clock.Fake { return clock.NewFake(t) }
 
-// A Task nobody holds, open or ended, takes Notes from its Feature's owner, wherever they are, and
-// from any Member of its Feature's Team, under no Skill; anyone else is forbidden. A held Task
-// takes them from its holder alone, the owner and the Team included. A retry under its key adds
-// nothing more.
+// A Task nobody holds, open or ended, takes Notes from its Owner, wherever they are, and from any
+// Member of its Project, under no Skill; anyone else is forbidden. A held Task takes them from its
+// holder alone, the Owner and the Project included. A retry under its key adds nothing more.
 func TestNotesOnATaskNobodyHolds(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.team("WEB")
-		f.team("OPS")
+		f.project("WEB")
+		f.project("OPS")
 		f.skill("build")
+		f.chain("WEB", [2]string{"Build", "build"})
 		owner := f.member("owner", []string{"OPS"}, nil)
 		mate := f.member("mate", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB"}, []string{"build"})
 		reviewer := f.member("reviewer", []string{"OPS"}, nil)
-		d, err := f.svc.FileFeature(ctx, mate, core.NewFeature{Team: "WEB", Title: "Cart", Owner: ptrStr("owner")}, core.Idem{})
+		d, err := f.svc.FileTask(ctx, mate, core.NewTask{Project: ptrStr("WEB"), Title: "Cart", Owner: ptrStr("owner"), Step: ptrStr("Build")}, core.Idem{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		task := f.task(mate, d.Feature.ID, "Pay", "build")
+		task := f.subtask(mate, d.Task.ID, "Pay", "Build")
 
 		for _, c := range []*auth.Caller{owner, mate} {
 			n, err := f.svc.AddNote(ctx, c, task.Key, "context for whoever takes it", core.Idem{})
@@ -701,15 +491,15 @@ func TestNotesOnATaskNobodyHolds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// Ended: someone from OPS still may not; the Team and the owner still write.
+		// Ended: someone from OPS still may not; the Project and the Owner still write.
 		_, err = f.svc.AddNote(ctx, reviewer, task.Key, "one more thing", core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
 		key := jsonIdem("merged-"+task.ID, "h")
-		n, err := f.svc.AddNote(ctx, mate, task.Key, "Merged WEB-3/pay into feature/WEB-1 at 1a2b3c", key)
+		n, err := f.svc.AddNote(ctx, mate, task.Key, "Merged web-2-pay into web-1 at 1a2b3c", key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		again, err := f.svc.AddNote(ctx, mate, task.Key, "Merged WEB-3/pay into feature/WEB-1 at 1a2b3c", key)
+		again, err := f.svc.AddNote(ctx, mate, task.Key, "Merged web-2-pay into web-1 at 1a2b3c", key)
 		var replay *core.Replay
 		if err == nil || !errors.As(err, &replay) {
 			t.Fatalf("the retry: %+v %v", again, err)

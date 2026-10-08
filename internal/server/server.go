@@ -183,10 +183,6 @@ func (s *Server) Handler() http.Handler {
 	return s.guard(mux)
 }
 
-func (s *Server) notImplemented(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusNotImplemented, gen.ErrorCodeNotImplemented, r.Method+" "+r.URL.Path+" is not built yet")
-}
-
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

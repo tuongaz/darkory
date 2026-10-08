@@ -18,7 +18,7 @@ import (
 // Stuck works through the real darkory binary (Config.Binary), as an agent in a shell does: it
 // takes a Task with `darkory next`, keeps the Claim alive with `darkory heartbeat run`, and
 // checks it every Pace.Heartbeat with `darkory heartbeat <task>`, never finishing. When someone
-// on its Reporting line or the Feature owner takes the Task back, `darkory heartbeat` exits 3
+// on its Reporting line or the Task's Owner takes the Task back, `darkory heartbeat` exits 3
 // with taken_back; Stuck then stops its heartbeat run, which has logged the take-back too, and
 // reports both. With Pace.Rest zero it is done; otherwise it rests and takes work again.
 type Stuck struct{ agent }

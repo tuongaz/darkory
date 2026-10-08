@@ -15,24 +15,25 @@ import (
 	"github.com/tuongaz/darkory/tools/bots/bot"
 )
 
-// The bots of tools/bots/bot work as the agent Members of a fresh Install with two Teams, while
-// the test acts as its three humans: ada the admin, kai who owns the Feature and directs the
-// agents, and mai who answers their question. As they work, the test checks that:
+// The bots of tools/bots/bot work as the agent Members of a fresh Install with two Projects, while
+// the test acts as its three humans: ada the admin, kai who owns the Task and directs the agents,
+// and mai who answers their question. As they work, the test checks that:
 //
 //   - Setup is idempotent: run again, it changes nothing but the tokens.
-//   - A Claim moves a Todo Task to In progress, and GET /v1/tasks shows the holder and Heartbeat.
-//   - The lapser's Claim lapses, Darkory records it with no actor, and its Task returns to Todo.
-//   - kai takes back the stuck agent's Task: it returns to Todo and the agent's CLI exits 3.
-//   - next never offers a Backlog Task: the prober gets nothing until mai moves one to Todo, then
-//     exactly that one, and no Task ever shows a holder while in a Backlog Status.
-//   - A builder's question aimed at mai blocks its Task and is mai's to take; completing it
-//     unblocks the Task, which the builder held throughout.
-//   - A Handover naming In review lands there, and the reviewer takes it.
-//   - Ship is refused while Tasks are open and succeeds once they have ended.
+//   - A Claim leaves its Task at its Step, and GET /v1/tasks shows the holder and Heartbeat.
+//   - The lapser's Claim lapses, Darkory records it with no actor, and its Task waits at its Step.
+//   - kai takes back the stuck agent's Task: it waits at its Step and the agent's CLI exits 3.
+//   - next never offers a Task in the Backlog hold: the prober gets nothing until mai moves one to
+//     Docs, then exactly that one, and no Task is ever held while at the hold.
+//   - A builder's question aimed at mai lands beside its Task under the same Parent, blocks it and
+//     is mai's to take; completing it unblocks the Task, which the builder held throughout.
+//   - A build is advanced along "pass" to Review, and the reviewer advances it into Done.
+//   - The Parent cannot be completed while Subtasks are open, and is once they have ended.
 //   - The Retrospective's proposal is published as version 2 by the reviewer.
 //
-// Then, with the bots stopped, every Task's Status agrees with its state and last Claim and with
-// a replay of its Activity, and the whole trail is gapless and in the order the scenarios imply.
+// Then, with the bots stopped, every Task is at exactly one Step or none, as its state, its Claims
+// and a replay of its Activity say, and the whole trail is gapless and in the order the scenarios
+// imply.
 func TestBots(t *testing.T) {
 	// On an Install init seeded with its roster: Setup keeps planner, reviewer and retro, which
 	// init made with the same names and Skills.
@@ -46,7 +47,7 @@ func TestBots(t *testing.T) {
 	admin := dialAs(t, url, ada)
 
 	// The Organisation, made by the bots' own Setup, twice.
-	opts := bot.Options{Team: "WEB", TeamName: "Web", Ops: "OPS", OpsName: "Ops", Manager: "kai", Ask: "mai",
+	opts := bot.Options{Project: "WEB", ProjectName: "Web", Ops: "OPS", OpsName: "Ops", Manager: "kai", Ask: "mai",
 		Humans: []string{"kai", "mai"}, Timeout: bot.Fast.Timeout, TokenName: "bots"}
 	first, err := bot.Setup(ctx, admin.c, opts)
 	if err != nil {
@@ -76,18 +77,26 @@ func TestBots(t *testing.T) {
 			t.Fatalf("%s is %+v with Skills %+v", s.Name, m.Member, m.Skills)
 		}
 	}
-	statuses := admin.statuses()
-	status := map[string]client.Status{}
-	for _, s := range statuses {
-		status[s.Name] = s
+	web, ops := admin.workflow("WEB"), admin.workflow("OPS")
+	for _, wf := range []client.Workflow{web, ops} {
+		if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(bot.SoftwareWorkflow)) {
+			t.Fatalf("a Project's Workflow is %v", names)
+		}
 	}
-	todo, inProgress, inReview, backlog := status["Todo"], status["In progress"], status["In review"], status["Backlog"]
-	// The rules name no Status, only a kind; the defaults' first todo-kind Status is Todo.
-	if i := slices.IndexFunc(statuses, func(s client.Status) bool { return s.Kind == client.StatusKindTodo }); i < 0 || statuses[i].ID != todo.ID {
-		t.Fatalf("the first todo-kind Status is not Todo: %+v", statuses)
+	step := func(wf client.Workflow, name string) client.WorkflowStep {
+		for _, s := range wf.Steps {
+			if s.Name == name {
+				return s
+			}
+		}
+		t.Fatalf("no Step %s in %s's Workflow", name, wf.ProjectID)
+		return client.WorkflowStep{}
 	}
+	backlog, build, docs, qaStep, reviewStep := step(web, bot.StepBacklog), step(web, bot.StepBuild), step(web, bot.StepDocs),
+		step(web, bot.StepQA), step(web, bot.StepReview)
+	triage, deployStep := step(ops, bot.StepTriage), step(ops, bot.StepDeploy)
 
-	// The bots start, and a watcher looks for a Backlog Task with a holder, which must never be.
+	// The bots start, and a watcher looks for a Task held at the Backlog hold, which must never be.
 	rec := &botLog{t: t}
 	cfg := bot.Config{URL: url, Pace: bot.Fast, Report: rec.add, Binary: bin, Env: in.env()}
 	runCtx, stopRunning := context.WithCancel(context.Background())
@@ -105,9 +114,8 @@ func TestBots(t *testing.T) {
 	var heldInBacklog []string
 	polls := 0
 	wg.Go(func() {
-		name := backlog.Name
 		for sleepCtx(runCtx, 100*time.Millisecond) {
-			res, err := admin.c.ListTasksWithResponse(runCtx, &client.ListTasksParams{Status: &name, Limit: ptr(500)})
+			res, err := admin.c.ListTasksWithResponse(runCtx, &client.ListTasksParams{Step: &backlog.ID, Limit: ptr(500)})
 			if err != nil || res.JSON200 == nil {
 				continue
 			}
@@ -136,38 +144,36 @@ func TestBots(t *testing.T) {
 		return ok
 	}
 
-	// kai files the Feature; ada files the chores the lapser and stuck take.
-	var checkout client.FeatureDetail
-	kai.json(&checkout, "feature", "create", "--team", "WEB", "--title", "Checkout", "--body", "Customers pay for their basket.")
-	fkey, bdKey := checkout.Feature.Key, checkout.Tasks[0].Key
-	var chores client.FeatureDetail
-	ada.json(&chores, "feature", "create", "--team", "OPS", "--title", "Chores")
+	// kai files Checkout with Break down; ada files the chores the lapser and stuck take.
+	var checkout client.TaskDetail
+	kai.json(&checkout, "file", "--project", "WEB", "--title", "Checkout", "--body", "Customers pay for their basket.", "--breakdown")
+	pkey, bdKey := checkout.Task.Key, checkout.Subtasks[0].Key
 	var logs, deploy client.TaskDetail
-	ada.json(&logs, "file", "--feature", chores.Feature.Key, "--title", "Rotate the logs", "--skill", bot.SkillTriage)
-	ada.json(&deploy, "file", "--feature", chores.Feature.Key, "--title", "Deploy to staging", "--skill", bot.SkillDeploy)
+	ada.json(&logs, "file", "--project", "OPS", "--title", "Rotate the logs", "--step", bot.StepTriage)
+	ada.json(&deploy, "file", "--project", "OPS", "--title", "Deploy to staging", "--step", bot.StepDeploy)
 
 	// The lapser claims with a 2 s timeout and exits; the sweeper records the lapse.
 	rec.wait(20*time.Second, "lapser", "went silent", logs.Task.Key)
 	eventually(t, 15*time.Second, "the lapser exiting", func() bool { return exited("lapser") })
-	// Reads show the Claim ended at its expiry at once; the Task stays In progress until the
-	// sweeper records the lapse, within a second.
-	eventually(t, 15*time.Second, "the lapse recorded", func() bool { return admin.task(logs.Task.Key).Task.StatusID == todo.ID })
-	// GET /v1/tasks/{task} then shows it in the first todo-kind Status, with the lapse recorded.
+	eventually(t, 15*time.Second, "the lapse recorded", func() bool {
+		return len(admin.trailOfKind(client.ActivityKindTaskLapsed, logs.Task.ID)) == 1
+	})
+	// GET /v1/tasks/{task} then shows it waiting at Triage, with the lapse recorded.
 	if d := admin.task(logs.Task.Key); len(d.Claims) != 1 || *d.Claims[0].HowEnded != client.ClaimEndLapsed || d.Claims[0].HolderID != id("lapser") ||
-		d.Task.Claim != nil || d.Status.ID != todo.ID || d.Status.Kind != client.StatusKindTodo || d.Task.StatusID != todo.ID {
-		t.Fatalf("the lapser's Task is in %s with Claims %+v", d.Status.Name, d.Claims)
+		d.Task.Claim != nil || d.Step == nil || d.Step.ID != triage.ID || deref(d.Task.StepID) != triage.ID {
+		t.Fatalf("the lapser's Task is at %s with Claims %+v", where(d), d.Claims)
 	}
 
-	// stuck holds its Task through the real CLI; GET /v1/tasks shows it In progress, held, with
-	// a Heartbeat that keeps moving its expiry.
+	// stuck holds its Task through the real CLI; GET /v1/tasks shows it at Deploy, held, with a
+	// Heartbeat that keeps moving its expiry.
 	rec.wait(20*time.Second, "stuck", "heartbeating", deploy.Task.Key)
-	held := admin.inProgress(deploy.Task.Key)
+	held := admin.held(deployStep.ID, deploy.Task.Key)
 	if c := held.Claim; c.HolderID != id("stuck") || c.HeartbeatTimeoutSeconds == nil || *c.HeartbeatTimeoutSeconds != bot.Fast.Timeout ||
 		c.ModelLabel == nil || !c.ExpiresAt.After(time.Now()) {
 		t.Fatalf("stuck's Claim as listed %+v", c)
 	}
 	time.Sleep(time.Duration(2*bot.Fast.Timeout+1) * time.Second)
-	if later := admin.inProgress(deploy.Task.Key); later.Claim.ID != held.Claim.ID || !later.Claim.ExpiresAt.After(*held.Claim.ExpiresAt) {
+	if later := admin.held(deployStep.ID, deploy.Task.Key); later.Claim.ID != held.Claim.ID || !later.Claim.ExpiresAt.After(*held.Claim.ExpiresAt) {
 		t.Fatalf("stuck's Claim was not kept alive: %+v, then %+v", held.Claim, later.Claim)
 	}
 	// kai, whom stuck reports to, takes it back; stuck's `darkory heartbeat` exits 3.
@@ -177,33 +183,36 @@ func TestBots(t *testing.T) {
 		t.Fatalf("stuck reported %s", tb)
 	}
 	eventually(t, 15*time.Second, "stuck stopping", func() bool { return exited("stuck") })
-	if d := admin.task(deploy.Task.Key); d.Task.Claim != nil || d.Status.ID != todo.ID || len(d.Claims) != 1 ||
+	if d := admin.task(deploy.Task.Key); d.Task.Claim != nil || deref(d.Task.StepID) != deployStep.ID || len(d.Claims) != 1 ||
 		*d.Claims[0].HowEnded != client.ClaimEndTakenBack {
-		t.Fatalf("after the take-back the Task is in %s with Claims %+v", d.Status.Name, d.Claims)
+		t.Fatalf("after the take-back the Task is at %s with Claims %+v", where(d), d.Claims)
 	}
 
-	// The planner breaks Checkout down; it cannot ship while its Tasks are open.
+	// The planner breaks Checkout down; it cannot be completed while its Subtasks are open.
 	planned := rec.wait(30*time.Second, "planner", "completed", bdKey)
-	checkout = admin.feature(fkey)
+	checkout = admin.task(pkey)
 	task := map[string]client.Task{}
-	for _, tk := range checkout.Tasks {
+	for _, tk := range checkout.Subtasks {
 		task[strings.TrimSuffix(tk.Title, " Checkout")] = tk
 	}
-	api, screen, review, qa := task["Build the API for"], task["Build the screen for"], task["Review"], task["QA"]
+	api, screen, qa := task["Build the API for"], task["Build the screen for"], task["QA"]
 	help, demo, polish := task["Write the help page for"], task["Record a demo of"], task["Polish"]
-	for name, tk := range map[string]client.Task{"api": api, "screen": screen, "review": review, "qa": qa, "help": help, "demo": demo, "polish": polish} {
+	for name, tk := range map[string]client.Task{"api": api, "screen": screen, "qa": qa, "help": help, "demo": demo, "polish": polish} {
 		if tk.Key == "" {
-			t.Fatalf("the planner filed no %s Task: %+v", name, checkout.Tasks)
+			t.Fatalf("the planner filed no %s Subtask: %+v", name, checkout.Subtasks)
 		}
 	}
 	if bd := admin.task(bdKey); bd.Task.State != client.TaskStateDone || bd.Claims[0].HolderID != id("planner") ||
-		!strings.HasPrefix(bd.Notes[len(bd.Notes)-1].Body, "Filed 7 Tasks") {
-		t.Fatalf("the Break down %+v with Notes %+v", bd.Task, bd.Notes)
+		!strings.HasPrefix(bd.Notes[len(bd.Notes)-1].Body, "Filed 6 Subtasks") {
+		t.Fatalf("the Breakdown %+v with Notes %+v", bd.Task, bd.Notes)
 	}
-	kai.refused(3, client.ErrorCodeTasksOpen, "feature", "ship", fkey)
+	if checkout.Task.StepID != nil || checkout.Task.SubtaskCounts == nil {
+		t.Fatalf("Checkout is not a Parent: %+v", checkout.Task)
+	}
+	kai.refused(3, client.ErrorCodeTasksOpen, "complete", pkey)
 
-	// The prober asks next again and again and gets nothing while its Tasks wait in the Backlog;
-	// mai moves the help page to Todo, and the prober gets exactly that.
+	// The prober asks next again and again and gets nothing while its Subtasks wait in the
+	// Backlog; mai moves the help page to Docs, and the prober gets exactly that.
 	eventually(t, 10*time.Second, "the prober asking five times after the Backlog was filed", func() bool {
 		n := 0
 		for _, e := range rec.find("prober", "nothing") {
@@ -214,10 +223,10 @@ func TestBots(t *testing.T) {
 		return n >= 5
 	})
 	if took := rec.find("prober", "took"); len(took) > 0 {
-		t.Fatalf("next offered the prober a Backlog Task: %s", took[0])
+		t.Fatalf("next offered the prober a Task in the Backlog: %s", took[0])
 	}
 	moved := time.Now()
-	mai.ok("status", help.Key, "Todo")
+	mai.ok("move", help.Key, bot.StepDocs)
 	rec.wait(10*time.Second, "prober", "took", help.Key)
 	if took := rec.find("prober", "took"); len(took) != 1 || took[0].Task != help.Key || !took[0].At.After(moved) {
 		t.Fatalf("after the move the prober took %v", took)
@@ -234,11 +243,11 @@ func TestBots(t *testing.T) {
 			question = b
 		}
 	}
-	if question.Key == "" || question.FeatureID != checkout.Feature.ID || !sd.Task.Blocked || sd.Task.Claim == nil ||
-		sd.Task.Claim.HolderID != id(asker) || sd.Status.ID != inProgress.ID {
-		t.Fatalf("while %s waits: %+v in %s, blocked by %+v", asker, sd.Task, sd.Status.Name, sd.Blockers)
+	if question.Key == "" || deref(question.ParentID) != checkout.Task.ID || question.StepID != nil || !sd.Task.Blocked || sd.Task.Claim == nil ||
+		sd.Task.Claim.HolderID != id(asker) || deref(sd.Task.StepID) != build.ID {
+		t.Fatalf("while %s waits: %+v at %s, blocked by %+v", asker, sd.Task, where(sd), sd.Blockers)
 	}
-	if listed := admin.inProgress(screen.Key); !listed.Blocked || listed.Claim.HolderID != id(asker) || !listed.Claim.ExpiresAt.After(time.Now()) {
+	if listed := admin.held(build.ID, screen.Key); !listed.Blocked || listed.Claim.HolderID != id(asker) || !listed.Claim.ExpiresAt.After(time.Now()) {
 		t.Fatalf("GET /v1/tasks shows the waiting Task as %+v", listed)
 	}
 	if !slices.Contains(takeableKeys(mai), question.Key) {
@@ -249,57 +258,68 @@ func TestBots(t *testing.T) {
 		t.Fatalf("%s can take the question aimed at mai: %v", asker, keys)
 	}
 	waiting := sd.Task.Claim.ID
-	var answering client.TaskDetail
-	mai.json(&answering, "claim", question.Key, "--timeout", "0")
+	mai.ok("claim", question.Key, "--timeout", "0")
 	mai.ok("complete", question.Key, "--note", "Yes: signed-out customers pay as guests.")
 	answered := rec.wait(15*time.Second, asker, "answered", screen.Key)
 	if !strings.Contains(answered.Text, "pay as guests") {
 		t.Fatalf("%s read the answer as %s", asker, answered)
 	}
-	rec.wait(15*time.Second, asker, "completed", screen.Key)
+	if adv := rec.wait(15*time.Second, asker, "advanced", screen.Key); !strings.Contains(adv.Text, `along "pass", now at `+bot.StepReview) {
+		t.Fatalf("the screen was advanced: %s", adv)
+	}
+	rec.wait(30*time.Second, "reviewer", "completed", screen.Key)
 	sd = admin.task(screen.Key)
-	if len(sd.Claims) != 1 || sd.Claims[0].ID != waiting || *sd.Claims[0].HowEnded != client.ClaimEndCompleted ||
+	if len(sd.Claims) != 2 || sd.Claims[0].ID != waiting || *sd.Claims[0].HowEnded != client.ClaimEndAdvanced ||
+		sd.Claims[1].HolderID != id("reviewer") || *sd.Claims[1].HowEnded != client.ClaimEndCompleted ||
 		len(sd.Observations) != 1 || sd.Observations[0].Outcome != client.DidntWork || sd.Observations[0].AuthorID != id(asker) ||
 		len(sd.Evidence) != 1 || sd.Evidence[0].AttachedBy != id(asker) {
-		t.Fatalf("the screen once built: Claims %+v, Observations %+v, Evidence %+v", sd.Claims, sd.Observations, sd.Evidence)
+		t.Fatalf("the screen once reviewed: Claims %+v, Observations %+v, Evidence %+v", sd.Claims, sd.Observations, sd.Evidence)
 	}
 
-	// The API is handed over to review, landing In review, and the reviewer takes it.
-	handed := rec.wait(30*time.Second, "", "handed over", api.Key)
-	if !strings.Contains(handed.Text, "now "+inReview.Name) {
-		t.Fatalf("the API was handed over: %s", handed)
+	// The API is advanced to Review, and the reviewer advances it into Done.
+	advanced := rec.wait(30*time.Second, "", "advanced", api.Key)
+	if !strings.Contains(advanced.Text, "now at "+bot.StepReview) {
+		t.Fatalf("the API was advanced: %s", advanced)
 	}
 	rec.wait(30*time.Second, "reviewer", "completed", api.Key)
-	if ad := admin.task(api.Key); len(ad.Claims) != 2 || ad.Claims[0].HolderID != id(handed.Bot) || *ad.Claims[0].HowEnded != client.ClaimEndHandedOver ||
-		ad.Claims[1].HolderID != id("reviewer") || *ad.Claims[1].HowEnded != client.ClaimEndCompleted || ad.Status.Name != "Done" {
-		t.Fatalf("the API's Claims %+v, in %s", ad.Claims, ad.Status.Name)
+	if ad := admin.task(api.Key); len(ad.Claims) != 2 || ad.Claims[0].HolderID != id(advanced.Bot) || *ad.Claims[0].HowEnded != client.ClaimEndAdvanced ||
+		ad.Claims[1].HolderID != id("reviewer") || *ad.Claims[1].HowEnded != client.ClaimEndCompleted || ad.Task.State != client.TaskStateDone ||
+		ad.Task.StepID != nil {
+		t.Fatalf("the API's Claims %+v, %s at %s", ad.Claims, ad.Task.State, where(ad))
 	}
 
-	// Review and QA, unblocked by both builds, are worked; ship is refused while the demo and
-	// the polish wait in the Backlog, and succeeds once kai drops them.
-	rec.wait(30*time.Second, "reviewer", "completed", review.Key)
+	// QA, unblocked once both builds are done, is worked; the Parent cannot be completed while the
+	// demo and the polish wait in the Backlog, and is once kai drops them.
 	rec.wait(30*time.Second, "", "completed", qa.Key)
-	kai.refused(3, client.ErrorCodeTasksOpen, "feature", "ship", fkey)
+	kai.refused(3, client.ErrorCodeTasksOpen, "complete", pkey)
 	kai.ok("drop", demo.Key, "--reason", "no release notes this time")
 	kai.ok("drop", polish.Key, "--reason", "nothing worth a second pass")
-	var shipped client.FeatureDetail
-	kai.json(&shipped, "feature", "ship", fkey)
-	retro := shipped.Tasks[len(shipped.Tasks)-1]
-	if shipped.Feature.State != client.FeatureStateShipped || retro.Kind != client.Retrospective {
-		t.Fatalf("shipped %+v with %+v", shipped.Feature, retro)
+	var completed client.Task
+	kai.json(&completed, "complete", pkey)
+	if completed.State != client.TaskStateDone {
+		t.Fatalf("completed %+v", completed)
+	}
+	var retro client.Task
+	for _, tk := range admin.task(pkey).Subtasks {
+		if tk.Kind == client.Retrospective {
+			retro = tk
+		}
+	}
+	if retro.Key == "" {
+		t.Fatalf("completing %s filed no Retrospective", pkey)
 	}
 
 	// retro proposes build-acme v2 from the builder's Observation; the reviewer publishes it.
 	rec.wait(30*time.Second, "retro", "proposed", retro.Key)
-	rec.wait(30*time.Second, "retro", "handed over", retro.Key)
+	rec.wait(30*time.Second, "retro", "advanced", retro.Key)
 	rec.wait(30*time.Second, "reviewer", "published", retro.Key)
 	var v2 client.SkillDetail
 	ada.json(&v2, "skill", "show", bot.SkillCompany)
 	rd := admin.task(retro.Key)
 	if v2.Skill.CurrentVersion != 2 || v2.Current.PublishedBy == nil || *v2.Current.PublishedBy != id("reviewer") ||
-		!strings.Contains(v2.Current.Body, "From the Retrospective of "+fkey) || rd.Proposal == nil ||
-		rd.Proposal.State != client.Published || rd.Proposal.AuthorID != id("retro") || rd.Task.State != client.TaskStateDone {
-		t.Fatalf("%s is %+v; the Retrospective %+v with proposal %+v", bot.SkillCompany, v2, rd.Task, rd.Proposal)
+		!strings.Contains(v2.Current.Body, "From the Retrospective of "+pkey) || len(rd.Proposals) != 1 ||
+		rd.Proposals[0].State != client.Published || rd.Proposals[0].AuthorID != id("retro") || rd.Task.State != client.TaskStateDone {
+		t.Fatalf("%s is %+v; the Retrospective %+v with proposals %+v", bot.SkillCompany, v2, rd.Task, rd.Proposals)
 	}
 
 	// Stop the bots, then check the record as a whole.
@@ -324,7 +344,8 @@ func TestBots(t *testing.T) {
 	for _, tk := range admin.tasks(client.ListTasksParams{}) {
 		tasks[tk.ID] = admin.task(tk.Key)
 	}
-	predicted, named := replay(t, trail, statuses)
+	workflows := map[string]client.Workflow{web.ProjectID: web, ops.ProjectID: ops}
+	predicted := replay(t, trail, workflows)
 	for _, d := range tasks {
 		cs := d.Claims
 		for i := 1; i < len(cs); i++ {
@@ -335,12 +356,9 @@ func TestBots(t *testing.T) {
 		if d.Task.Claim != nil {
 			t.Errorf("%s is still held by %s after the bots stopped", d.Task.Key, d.Task.Claim.HolderID)
 		}
-		if want := restingKind(d, cs, named[d.Task.ID]); d.Status.ID != d.Task.StatusID || d.Status.Kind != want {
-			t.Errorf("%s is %s, its last Claim ended %v, and it is in %s (%s); want a %s Status", d.Task.Key, d.Task.State, lastEnd(cs),
-				d.Status.Name, d.Status.Kind, want)
-		}
-		if predicted[d.Task.ID] != d.Task.StatusID {
-			t.Errorf("%s is in %s, but its Activity puts it in %s", d.Task.Key, d.Status.Name, predicted[d.Task.ID])
+		atOneStep(t, d, workflows)
+		if predicted[d.Task.ID] != deref(d.Task.StepID) {
+			t.Errorf("%s is at %s, but its Activity puts it at %q", d.Task.Key, where(d), predicted[d.Task.ID])
 		}
 	}
 	for _, k := range []string{demo.ID, polish.ID} {
@@ -351,29 +369,26 @@ func TestBots(t *testing.T) {
 
 	tr := trailOf(t, trail)
 	tr.checkClaims(crew)
-	// The only Status moves Members made: the planner releasing review and QA once blocked, and
-	// mai moving the help page. Darkory's own moves record none (decisions.md).
-	sets := tr.of(client.ActivityKindTaskStatusSet, "")
-	if len(sets) != 3 {
-		t.Errorf("%d task.status_set entries, want 3: %+v", len(sets), sets)
+	// The only moves Members made by hand: the planner moving QA out of the Backlog once its
+	// blockers were set, and mai moving the help page.
+	moves := tr.of(client.ActivityKindTaskMoved, "")
+	if len(moves) != 2 {
+		t.Errorf("%d task.moved entries, want 2: %+v", len(moves), moves)
 	}
-	for _, en := range sets {
-		who := ""
-		if en.ActorID != nil {
-			who = *en.ActorID
-		}
+	for _, en := range moves {
+		who := deref(en.ActorID)
 		from, to := en.Payload["from"], en.Payload["to"]
 		switch {
-		case en.SubjectID == help.ID && who == mai.id:
-		case (en.SubjectID == review.ID || en.SubjectID == qa.ID) && who == id("planner"):
+		case en.SubjectID == help.ID && who == mai.id && to == docs.ID:
+		case en.SubjectID == qa.ID && who == id("planner") && to == qaStep.ID:
 			if b := tr.of(client.ActivityKindTaskBlockerAdded, en.SubjectID); len(b) != 2 || b[1].Seq > en.Seq {
 				t.Errorf("seq %d: the planner moved %s before both its blockers were set", en.Seq, en.SubjectID)
 			}
 		default:
-			t.Errorf("seq %d: an unexpected Status move %+v", en.Seq, en)
+			t.Errorf("seq %d: an unexpected move %+v", en.Seq, en)
 		}
-		if from != backlog.ID || to != todo.ID {
-			t.Errorf("seq %d: a move from %v to %v, want Backlog to Todo", en.Seq, from, to)
+		if from != backlog.ID {
+			t.Errorf("seq %d: a move from %v, want the Backlog", en.Seq, from)
 		}
 	}
 	// One lapse, recorded by Darkory; one take-back, by kai.
@@ -384,69 +399,74 @@ func TestBots(t *testing.T) {
 		*tb[0].ActorID != kai.id || tb[0].Payload["holder_id"] != id("stuck") {
 		t.Errorf("the take-backs %+v", tb)
 	}
-	// The Break down's Tasks were all filed before it completed.
-	bdDone := tr.one(client.ActivityKindTaskCompleted, checkout.Tasks[0].ID)
-	for _, tk := range []client.Task{api, screen, review, qa, help, demo, polish} {
-		if f := tr.one(client.ActivityKindTaskFiled, tk.ID); f.Seq > bdDone.Seq || f.ActorID == nil || *f.ActorID != id("planner") {
-			t.Errorf("%s was filed at seq %d, after the Break down completed at %d, or not by the planner", tk.Key, f.Seq, bdDone.Seq)
+	// The Breakdown's Subtasks were all filed by the planner before it completed.
+	bdDone := tr.one(client.ActivityKindTaskCompleted, checkout.Subtasks[0].ID)
+	for _, tk := range []client.Task{api, screen, qa, help, demo, polish} {
+		if f := tr.one(client.ActivityKindTaskFiled, tk.ID); f.Seq > bdDone.Seq || f.ActorID == nil || *f.ActorID != id("planner") ||
+			f.Payload["parent_id"] != checkout.Task.ID {
+			t.Errorf("%s was filed at seq %d, after the Breakdown completed at %d, or not by the planner under %s", tk.Key, f.Seq, bdDone.Seq, pkey)
 		}
 	}
-	// The question was filed and blocked the screen in one write, inside the builder's one Claim
-	// on the screen, and answered before that Claim completed.
+	// The question was filed beside the screen and blocked it in one write, inside the builder's
+	// one Claim at Build, and answered before that Claim advanced the screen.
 	qFiled := tr.one(client.ActivityKindTaskFiled, question.ID)
 	if next := tr.at(qFiled.Seq + 1); next.Kind != client.ActivityKindTaskBlockerAdded || next.SubjectID != screen.ID ||
-		next.Payload["blocker_id"] != question.ID || qFiled.Payload["aimed_at_id"] != mai.id || qFiled.Payload["blocks"] != screen.ID {
+		next.Payload["blocker_id"] != question.ID || qFiled.Payload["aimed_at_id"] != mai.id || qFiled.Payload["blocks"] != screen.ID ||
+		qFiled.Payload["parent_id"] != checkout.Task.ID {
 		t.Errorf("the question filed at seq %d %+v, then %+v", qFiled.Seq, qFiled, next)
 	}
-	screenClaim, screenDone := tr.one(client.ActivityKindTaskClaimed, screen.ID), tr.one(client.ActivityKindTaskCompleted, screen.ID)
+	screenClaim, screenOn := tr.of(client.ActivityKindTaskClaimed, screen.ID)[0], tr.one(client.ActivityKindTaskAdvanced, screen.ID)
 	qDone := tr.one(client.ActivityKindTaskCompleted, question.ID)
-	if !(screenClaim.Seq < qFiled.Seq && qFiled.Seq < qDone.Seq && qDone.Seq < screenDone.Seq) || screenDone.Payload["claim_id"] != screenClaim.Payload["claim_id"] {
-		t.Errorf("the screen claimed at %d, its question filed at %d and answered at %d, the screen completed at %d", screenClaim.Seq, qFiled.Seq, qDone.Seq, screenDone.Seq)
+	if !(screenClaim.Seq < qFiled.Seq && qFiled.Seq < qDone.Seq && qDone.Seq < screenOn.Seq) || screenOn.Payload["claim_id"] != screenClaim.Payload["claim_id"] ||
+		screenOn.Payload["from"] != build.ID || screenOn.Payload["to"] != reviewStep.ID || screenOn.Payload["outcome"] != "pass" {
+		t.Errorf("the screen claimed at %d, its question filed at %d and answered at %d, the screen advanced %+v", screenClaim.Seq, qFiled.Seq, qDone.Seq, screenOn)
 	}
-	// The API's Handover named In review; the reviewer then claimed and completed it.
-	ho := tr.one(client.ActivityKindTaskHandedOver, api.ID)
-	if ho.Payload["status_id"] != inReview.ID || ho.Payload["from_status_id"] != inProgress.ID {
-		t.Errorf("the API's Handover %+v", ho)
+	// The API was advanced from Build to Review; the reviewer then claimed it and advanced it into
+	// Done along "pass".
+	ho := tr.one(client.ActivityKindTaskAdvanced, api.ID)
+	apiDone := tr.one(client.ActivityKindTaskCompleted, api.ID)
+	if ho.Payload["from"] != build.ID || ho.Payload["to"] != reviewStep.ID || apiDone.Payload["from"] != reviewStep.ID || apiDone.Payload["outcome"] != "pass" {
+		t.Errorf("the API advanced %+v and completed %+v", ho, apiDone)
 	}
 	if cl := tr.of(client.ActivityKindTaskClaimed, api.ID); len(cl) != 2 || cl[1].Seq < ho.Seq || *cl[1].ActorID != id("reviewer") {
-		t.Errorf("the API's claims %+v after its Handover at %d", cl, ho.Seq)
+		t.Errorf("the API's claims %+v after it was advanced at %d", cl, ho.Seq)
 	}
-	// Review and QA were claimed only after both builds had ended.
-	built := max(tr.one(client.ActivityKindTaskCompleted, api.ID).Seq, screenDone.Seq)
-	for _, tk := range []client.Task{review, qa} {
-		if cl := tr.of(client.ActivityKindTaskClaimed, tk.ID); len(cl) == 0 || cl[0].Seq < built {
-			t.Errorf("%s was claimed at %+v, before both builds ended at %d", tk.Key, cl, built)
-		}
+	// QA was claimed only after both builds had ended.
+	built := max(apiDone.Seq, tr.one(client.ActivityKindTaskCompleted, screen.ID).Seq)
+	if cl := tr.of(client.ActivityKindTaskClaimed, qa.ID); len(cl) == 0 || cl[0].Seq < built {
+		t.Errorf("%s was claimed at %+v, before both builds ended at %d", qa.Key, cl, built)
 	}
-	// The ship came after every Task's end, and filed the Retrospective in the same write.
-	ships := tr.of(client.ActivityKindFeatureShipped, "")
-	if len(ships) != 1 || ships[0].SubjectID != checkout.Feature.ID {
-		t.Fatalf("the ships %+v", ships)
+	// The Parent's completion came after every Subtask's end, by kai, and filed the Retrospective in
+	// the same write.
+	parentDone := tr.one(client.ActivityKindTaskCompleted, checkout.Task.ID)
+	if parentDone.ActorID == nil || *parentDone.ActorID != kai.id {
+		t.Errorf("the Parent's completion %+v", parentDone)
 	}
-	if next := tr.at(ships[0].Seq + 1); next.Kind != client.ActivityKindTaskFiled || next.SubjectID != retro.ID || next.Payload["kind"] != "retrospective" {
-		t.Errorf("after the ship at %d: %+v", ships[0].Seq, next)
+	if next := tr.at(parentDone.Seq + 1); next.Kind != client.ActivityKindTaskFiled || next.SubjectID != retro.ID || next.Payload["kind"] != "retrospective" ||
+		next.ActorID != nil {
+		t.Errorf("after the Parent's completion at %d: %+v", parentDone.Seq, next)
 	}
-	for _, tk := range []client.Task{api, screen, review, qa, help} {
-		if e := tr.one(client.ActivityKindTaskCompleted, tk.ID); e.Seq > ships[0].Seq {
-			t.Errorf("%s completed at %d, after the ship at %d", tk.Key, e.Seq, ships[0].Seq)
+	for _, tk := range []client.Task{api, screen, qa, help} {
+		if e := tr.one(client.ActivityKindTaskCompleted, tk.ID); e.Seq > parentDone.Seq {
+			t.Errorf("%s completed at %d, after its Parent at %d", tk.Key, e.Seq, parentDone.Seq)
 		}
 	}
 	for _, tk := range []client.Task{demo, polish} {
-		if e := tr.one(client.ActivityKindTaskDropped, tk.ID); e.Seq > ships[0].Seq || e.ActorID == nil || *e.ActorID != kai.id {
-			t.Errorf("%s dropped %+v, after the ship at %d or not by kai", tk.Key, e, ships[0].Seq)
+		if e := tr.one(client.ActivityKindTaskDropped, tk.ID); e.Seq > parentDone.Seq || e.ActorID == nil || *e.ActorID != kai.id {
+			t.Errorf("%s dropped %+v, after its Parent's completion at %d or not by kai", tk.Key, e, parentDone.Seq)
 		}
 	}
-	// The proposal, its Handover to skill-review, the reviewer's claim, and the completion that
-	// published version 2 in the same write.
+	// The proposal, the Retrospective advanced to Skill review, the reviewer's claim, and the
+	// completion that published version 2 in the same write.
 	proposed := tr.one(client.ActivityKindTaskSkillProposed, retro.ID)
-	retroHo := tr.one(client.ActivityKindTaskHandedOver, retro.ID)
+	retroOn := tr.one(client.ActivityKindTaskAdvanced, retro.ID)
 	retroClaims := tr.of(client.ActivityKindTaskClaimed, retro.ID)
 	retroDone := tr.one(client.ActivityKindTaskCompleted, retro.ID)
 	published := tr.at(retroDone.Seq + 1)
-	if *proposed.ActorID != id("retro") || len(retroClaims) != 2 || *retroClaims[1].ActorID != id("reviewer") ||
-		!(proposed.Seq < retroHo.Seq && retroHo.Seq < retroClaims[1].Seq && retroClaims[1].Seq < retroDone.Seq) ||
+	if *proposed.ActorID != id("retro") || retroOn.Payload["outcome"] != "propose" || len(retroClaims) != 2 || *retroClaims[1].ActorID != id("reviewer") ||
+		!(proposed.Seq < retroOn.Seq && retroOn.Seq < retroClaims[1].Seq && retroClaims[1].Seq < retroDone.Seq) ||
 		published.Kind != client.ActivityKindSkillVersionPublished || published.Payload["version"] != float64(2) || published.Payload["task_id"] != retro.ID {
-		t.Errorf("the Retrospective: proposed %+v, handed over %+v, claimed %+v, completed %+v, then %+v", proposed, retroHo, retroClaims, retroDone, published)
+		t.Errorf("the Retrospective: proposed %+v, advanced %+v, claimed %+v, completed %+v, then %+v", proposed, retroOn, retroClaims, retroDone, published)
 	}
 }
 
@@ -540,22 +560,14 @@ func (a api) task(key string) client.TaskDetail {
 	return *res.JSON200
 }
 
-func (a api) feature(key string) client.FeatureDetail {
+// workflow reads a Project's Workflow.
+func (a api) workflow(project string) client.Workflow {
 	a.t.Helper()
-	res, err := a.c.GetFeatureWithResponse(context.Background(), key)
+	res, err := a.c.GetWorkflowWithResponse(context.Background(), project)
 	if err != nil || res.JSON200 == nil {
-		a.t.Fatalf("reading %s: %v %s", key, err, bodyOf(res))
+		a.t.Fatalf("reading %s's Workflow: %v %s", project, err, bodyOf(res))
 	}
 	return *res.JSON200
-}
-
-func (a api) statuses() []client.Status {
-	a.t.Helper()
-	res, err := a.c.ListStatusesWithResponse(context.Background())
-	if err != nil || res.JSON200 == nil {
-		a.t.Fatalf("listing Statuses: %v %s", err, bodyOf(res))
-	}
-	return res.JSON200.Items
 }
 
 // tasks lists every Task matching p, page by page.
@@ -576,18 +588,18 @@ func (a api) tasks(p client.ListTasksParams) []client.Task {
 	}
 }
 
-// inProgress finds the Task key among the Tasks GET /v1/tasks lists In progress.
-func (a api) inProgress(key string) client.Task {
+// held finds the Task key among the Tasks GET /v1/tasks lists at the Step step, held.
+func (a api) held(step, key string) client.Task {
 	a.t.Helper()
-	for _, tk := range a.tasks(client.ListTasksParams{Status: ptr("In progress")}) {
+	for _, tk := range a.tasks(client.ListTasksParams{Step: &step}) {
 		if tk.Key == key {
 			if tk.Claim == nil || tk.Claim.ExpiresAt == nil {
-				a.t.Fatalf("%s is listed In progress with Claim %+v", key, tk.Claim)
+				a.t.Fatalf("%s is listed at its Step with Claim %+v", key, tk.Claim)
 			}
 			return tk
 		}
 	}
-	a.t.Fatalf("%s is not listed In progress", key)
+	a.t.Fatalf("%s is not listed at the Step %s", key, step)
 	return client.Task{}
 }
 
@@ -622,29 +634,47 @@ func (a api) activity() []client.Activity {
 	}
 }
 
-// orgShape lists the Organisation's Teams with their defaults and Members, its Workspaces, its
-// Statuses in order, its Members with their kind, manager and Skills, and its Skills with their
-// versions, sorted, to compare one Setup with the next.
+// trailOfKind is the Activity entries of kind about subject, oldest first.
+func (a api) trailOfKind(kind client.ActivityKind, subject string) []client.Activity {
+	var out []client.Activity
+	for _, en := range a.activity() {
+		if en.Kind == kind && en.SubjectID == subject {
+			out = append(out, en)
+		}
+	}
+	return out
+}
+
+// orgShape lists the Organisation's Projects with their defaults, Members and Workflows, its
+// Workspaces, its Members with their kind, manager and Skills, and its Skills with their versions,
+// sorted, to compare one Setup with the next.
 func orgShape(a api) []string {
 	a.t.Helper()
 	ctx := context.Background()
 	var out []string
-	teams, err := a.c.ListTeamsWithResponse(ctx)
-	if err != nil || teams.JSON200 == nil {
-		a.t.Fatalf("listing Teams: %v %s", err, bodyOf(teams))
+	projects, err := a.c.ListProjectsWithResponse(ctx)
+	if err != nil || projects.JSON200 == nil {
+		a.t.Fatalf("listing Projects: %v %s", err, bodyOf(projects))
 	}
-	for _, tm := range teams.JSON200.Items {
-		res, err := a.c.GetTeamWithResponse(ctx, tm.Key)
+	for _, p := range projects.JSON200.Items {
+		res, err := a.c.GetProjectWithResponse(ctx, p.Key)
 		if err != nil || res.JSON200 == nil {
-			a.t.Fatalf("reading %s: %v %s", tm.Key, err, bodyOf(res))
+			a.t.Fatalf("reading %s: %v %s", p.Key, err, bodyOf(res))
 		}
 		var names []string
 		for _, m := range res.JSON200.Members {
 			names = append(names, m.Name)
 		}
 		sort.Strings(names)
-		out = append(out, fmt.Sprintf("team %s %s default=%s ship_when_done=%v: %s", tm.Key, tm.Name, deref(tm.DefaultWorkspaceID), tm.ShipWhenDone,
-			strings.Join(names, " ")))
+		out = append(out, fmt.Sprintf("project %s %s default=%s auto_complete=%v acceptance=%v: %s", p.Key, p.Name, deref(p.DefaultWorkspaceID),
+			p.AutoComplete, p.Acceptance, strings.Join(names, " ")))
+		wf := a.workflow(p.Key)
+		for _, s := range wf.Steps {
+			out = append(out, fmt.Sprintf("step %s %d %s %s %s", p.Key, s.Position, s.ID, s.Name, deref(s.SkillID)))
+		}
+		for _, k := range wf.Connectors {
+			out = append(out, fmt.Sprintf("connector %s %s %s %s %s %d", p.Key, k.ID, k.FromStepID, deref(k.ToStepID), k.Name, k.Position))
+		}
 	}
 	workspaces, err := a.c.ListWorkspacesWithResponse(ctx)
 	if err != nil || workspaces.JSON200 == nil {
@@ -652,9 +682,6 @@ func orgShape(a api) []string {
 	}
 	for _, w := range workspaces.JSON200.Items {
 		out = append(out, fmt.Sprintf("workspace %s %s %s %s %s", w.ID, w.Name, w.Kind, w.Path, w.DefaultBranch))
-	}
-	for _, s := range a.statuses() {
-		out = append(out, fmt.Sprintf("status %d %s %s %s", s.Position, s.ID, s.Name, s.Kind))
 	}
 	members, err := a.c.ListMembersWithResponse(ctx, &client.ListMembersParams{})
 	if err != nil || members.JSON200 == nil {
@@ -684,6 +711,31 @@ func orgShape(a api) []string {
 	return out
 }
 
+// stepNamesOf are a Workflow's Steps' names, in order; specStepNames a preset's.
+func stepNamesOf(wf client.Workflow) []string {
+	var out []string
+	for _, s := range wf.Steps {
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+func specStepNames(w bot.WorkflowSpec) []string {
+	var out []string
+	for _, s := range w.Steps {
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+// where names the Step a Task is at, for messages.
+func where(d client.TaskDetail) string {
+	if d.Step == nil {
+		return "no Step"
+	}
+	return d.Step.Name
+}
+
 func deref(s *string) string {
 	if s == nil {
 		return ""
@@ -700,77 +752,78 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// replay follows each Task's Status through the Activity alone, by the rules of ADR 0012, and
-// fails the test where an entry disagrees with it, such as a claim of a Task in a Backlog Status.
-// It returns each Task's predicted Status, and the kind of the Status it was last filed into or
-// moved to by a Member.
-func replay(t *testing.T, trail []client.Activity, statuses []client.Status) (map[string]string, map[string]client.StatusKind) {
+// atOneStep checks the invariant that a Task is at exactly one Step or none: an open Task that
+// is not a Parent and not aimed at a Member is at one Step of its Project's Workflow; any other
+// Task is at none.
+func atOneStep(t *testing.T, d client.TaskDetail, workflows map[string]client.Workflow) {
 	t.Helper()
-	kind := map[string]client.StatusKind{}
-	first := map[client.StatusKind]string{}
-	for _, s := range statuses {
-		kind[s.ID] = s.Kind
-		if _, ok := first[s.Kind]; !ok {
-			first[s.Kind] = s.ID
+	tk := d.Task
+	wantNone := tk.State != client.TaskStateOpen || tk.SubtaskCounts != nil || tk.AimedAtID != nil
+	switch {
+	case wantNone && tk.StepID != nil:
+		t.Errorf("%s (%s, Parent %v, aimed %v) is at the Step %s; it should be at none", tk.Key, tk.State, tk.SubtaskCounts != nil, tk.AimedAtID != nil, *tk.StepID)
+	case !wantNone && tk.StepID == nil:
+		t.Errorf("%s is open, worked and at no Step", tk.Key)
+	case tk.StepID != nil:
+		wf, ok := workflows[tk.ProjectID]
+		if ok && !slices.ContainsFunc(wf.Steps, func(s client.WorkflowStep) bool { return s.ID == *tk.StepID }) {
+			t.Errorf("%s is at %s, which is no Step of its Project's Workflow", tk.Key, *tk.StepID)
+		}
+		if d.Step == nil || d.Step.ID != *tk.StepID {
+			t.Errorf("%s is at %s, and its detail shows %+v", tk.Key, *tk.StepID, d.Step)
 		}
 	}
-	status := map[string]string{}
-	named := map[string]client.StatusKind{}
+}
+
+// replay follows each Task's Step through the Activity alone, by ADR 0016, and fails the test
+// where an entry disagrees with it, such as a claim of a Task at a hold or an advance from a Step
+// it is not at. It returns each Task's predicted Step, "" for none.
+func replay(t *testing.T, trail []client.Activity, workflows map[string]client.Workflow) map[string]string {
+	t.Helper()
+	skill := map[string]string{} // Step id → its Skill's id, "" at a hold
+	for _, wf := range workflows {
+		for _, s := range wf.Steps {
+			skill[s.ID] = deref(s.SkillID)
+		}
+	}
+	step := map[string]string{}
+	filed := false
 	str := func(en client.Activity, k string) string { s, _ := en.Payload[k].(string); return s }
-	// release is a Claim ending other than by Handover, Complete or Drop.
-	release := func(task string) {
-		if kind[status[task]] == client.StatusKindInProgress {
-			status[task] = first[client.StatusKindTodo]
+	from := func(en client.Activity) {
+		if f, ok := en.Payload["from"].(string); ok && f != step[en.SubjectID] {
+			t.Errorf("seq %d: %s from %s, but the Task was at %q", en.Seq, en.Kind, f, step[en.SubjectID])
 		}
 	}
-	for i, en := range trail {
+	for _, en := range trail {
 		task := en.SubjectID
 		switch en.Kind {
 		case client.ActivityKindTaskFiled:
-			status[task] = str(en, "status_id")
-			named[task] = kind[status[task]]
-		case client.ActivityKindTaskStatusSet:
-			if en.ActorID == nil || str(en, "from") != status[task] {
-				t.Errorf("seq %d: %+v moves from %s, by %v", en.Seq, en, status[task], en.ActorID)
+			filed = true
+			step[task] = str(en, "step_id")
+		case client.ActivityKindTaskMoved:
+			if en.ActorID == nil && en.Payload["workflow_changed"] == nil {
+				t.Errorf("seq %d: a move by nobody %+v", en.Seq, en)
 			}
-			status[task] = str(en, "to")
-			named[task] = kind[status[task]]
+			from(en)
+			step[task] = str(en, "to")
+		case client.ActivityKindTaskAdvanced:
+			from(en)
+			step[task] = str(en, "to")
 		case client.ActivityKindTaskClaimed:
-			switch kind[status[task]] {
-			case client.StatusKindTodo:
-				status[task] = first[client.StatusKindInProgress]
-			case client.StatusKindInProgress:
-			default:
-				t.Errorf("seq %d: %s claimed while in %s", en.Seq, task, kind[status[task]])
+			if s, at := step[task], step[task] != ""; at && skill[s] == "" {
+				t.Errorf("seq %d: %s claimed while at the hold %s", en.Seq, task, s)
 			}
-		case client.ActivityKindTaskLapsed:
-			// A lapse the next claim records in its own batch, just before its own entry and at its
-			// time, leaves the Status where it was (decisions.md).
-			if n := i + 1; n < len(trail) && trail[n].Kind == client.ActivityKindTaskClaimed && trail[n].SubjectID == task && trail[n].At.Equal(en.At) {
-				continue
-			}
-			release(task)
-		case client.ActivityKindTaskReleased, client.ActivityKindTaskTakenBack, client.ActivityKindTaskClaimEnded:
-			release(task)
-		case client.ActivityKindTaskHandedOver:
-			if to := str(en, "status_id"); to != "" {
-				if str(en, "from_status_id") != status[task] {
-					t.Errorf("seq %d: a Handover from %s, but the Task was in %s", en.Seq, str(en, "from_status_id"), status[task])
-				}
-				status[task] = to
-			}
-		case client.ActivityKindTaskCompleted:
-			status[task] = first[client.StatusKindDone]
-		case client.ActivityKindTaskDropped:
-			status[task] = first[client.StatusKindDropped]
-		case client.ActivityKindStatusesChanged:
-			// A preset's Setup may set the Statuses before anything is filed.
-			if len(status) > 0 {
-				t.Errorf("seq %d: the Statuses changed during the run, which replay does not follow", en.Seq)
+		case client.ActivityKindTaskCompleted, client.ActivityKindTaskDropped, client.ActivityKindTaskBecameParent:
+			from(en)
+			step[task] = ""
+		case client.ActivityKindWorkflowChanged:
+			// A preset's Setup sets the Workflows before anything is filed.
+			if filed {
+				t.Errorf("seq %d: a Workflow changed during the run, which replay does not follow", en.Seq)
 			}
 		}
 	}
-	return status, named
+	return step
 }
 
 // trail is the whole Activity, oldest first, numbered from 1.
@@ -829,8 +882,9 @@ func (tr trail) checkClaims(crew *bot.Crew) {
 	for _, s := range crew.Preset.Agents {
 		model[crew.Members[s.Name].ID] = s.Model
 	}
-	ends := []client.ActivityKind{client.ActivityKindTaskReleased, client.ActivityKindTaskHandedOver, client.ActivityKindTaskCompleted,
-		client.ActivityKindTaskLapsed, client.ActivityKindTaskTakenBack, client.ActivityKindTaskDropped, client.ActivityKindTaskClaimEnded}
+	ends := []client.ActivityKind{client.ActivityKindTaskReleased, client.ActivityKindTaskAdvanced, client.ActivityKindTaskCompleted,
+		client.ActivityKindTaskLapsed, client.ActivityKindTaskTakenBack, client.ActivityKindTaskDropped, client.ActivityKindTaskClaimEnded,
+		client.ActivityKindTaskSplit}
 	live := map[string]string{} // Task → the claim open on it
 	for _, en := range tr.entries {
 		claim, _ := en.Payload["claim_id"].(string)

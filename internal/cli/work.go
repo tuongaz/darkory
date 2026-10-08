@@ -23,25 +23,27 @@ var workCommands = []command{
 	{path: "heartbeat", args: "<task>", short: "tell Darkory you are still working a Task", run: cmdHeartbeat},
 	{path: "heartbeat run", args: "[--background] [--watch-pid pid]", short: "heartbeat this Session's Claims until stopped", run: cmdHeartbeatRun, long: true},
 	{path: "heartbeat stop", args: "", short: "stop this Session's background heartbeat", run: cmdHeartbeatStop},
-	{path: "release", args: "<task> [--note text]", short: "give up your Claim; the Task needs the same Skill", run: cmdRelease},
-	{path: "handover", args: "<task> --skill skill [--status s] [--note text]", short: "end your Claim and set the Skill the Task needs next", run: cmdHandover},
-	{path: "complete", args: "<task> [--note text]", short: "complete a Task you hold", run: cmdComplete},
-	{path: "drop", args: "<task> [--reason text]", short: "drop a Task (Feature owner)", run: cmdDrop},
-	{path: "take-back", args: "<task> [--reason text]", short: "end another Member's Claim (Reporting line or Feature owner)", run: cmdTakeBack},
+	{path: "release", args: "<task> [--note text]", short: "give up your Claim; the Task stays at its Step", run: cmdRelease},
+	{path: "advance", args: "<task> [outcome] [--note text]", short: "end your work on a Task along one of its Step's outcomes, to the next Step or into Done", run: cmdAdvance},
+	{path: "move", args: "<task> <step> [--note text]", short: "move a Task to a Step of its Workflow by hand (a held one: its Owner or the holder's Reporting line)", run: cmdMove},
+	{path: "complete", args: "<task> [--note text]", short: "complete a Task you hold whose Step has one way into Done, or a Parent you own", run: cmdComplete},
+	{path: "drop", args: "<task> [--reason text]", short: "drop a Task, and a Parent's open Subtasks (Owner)", run: cmdDrop},
+	{path: "take-back", args: "<task> [--reason text]", short: "end another Member's Claim (Reporting line or Owner)", run: cmdTakeBack},
+	{path: "rank", args: "<task> <position>", short: "move a Task in its Project's Rank (1 is first)", run: cmdRank},
+	{path: "owner", args: "<task> <member>", short: "pass a Task's ownership, with its Subtasks', to another Member", run: cmdOwner},
 	{path: "note", args: "<task> <text|->", short: "add a Note to a Task's running log", run: cmdNote},
 	{path: "observe", args: "<task> --worked <text|-> | --didnt-work <text|->", short: "record an Observation", run: cmdObserve},
-	{path: "attach", args: "<task|feature> <file> [--type mime] [--name filename] [--feature]", short: "attach Evidence", run: cmdAttach},
+	{path: "observations", args: "<task> [--all]", short: "list the Observations on a Task and its Subtasks not yet reviewed", run: cmdObservations},
+	{path: "attach", args: "<task> <file> [--type mime] [--name filename]", short: "attach Evidence", run: cmdAttach},
 	{path: "evidence get", args: "<id> [-o file|-]", short: "show an Evidence record, or download its file", run: cmdEvidenceGet},
-	{path: "file", args: "--title t (--skill s | --aim member) (--feature f | --blocks task) [--status s] [--workspace ws]… [--body text|-]", short: "file a Task; with --blocks, a question that blocks a Task", run: cmdFile},
+	{path: "file", args: "--title t (--project p | --parent task | --blocks task --aim member) [--step s] [--breakdown] [--label l]… [--owner m] [--workspace ws]… [--body text|-]", short: "file a Task; with --parent, a Subtask; with --blocks, a question that blocks a Task", run: cmdFile},
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
-	{path: "show", args: "<task>", short: "show a Task with its Claims, Notes, Evidence and Observations", run: cmdShow},
-	{path: "tasks", args: "[--feature f] [--team t] [--state s] [--status s] [--skill s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
-	{path: "status", args: "<task> <status>", short: "move a Task to another Status (its Feature's Team or owner, or its holder)", run: cmdStatus},
-	{path: "workflow", short: "list the Organisation's Statuses, in order, with their kinds", run: cmdWorkflow},
+	{path: "show", args: "<task>", short: "show a Task with its Step and outcomes, Subtasks, Claims, Notes, Evidence and Observations", run: cmdShow},
+	{path: "tasks", args: "[--project p] [--parent task] [--state s] [--step s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
-	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposal written on a Task, or one by id", run: cmdProposalShow},
-	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--team t] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
+	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposals written on a Task, or one by id", run: cmdProposalShow},
+	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--project p] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
 }
 
 // maxWait is the longest one `next` request waits; longer waits are made of several.
@@ -211,16 +213,11 @@ func (c *call) done(w io.Writer, what string, t client.Task) {
 	c.printTaskLine(w, t)
 }
 
-func cmdHandover(c *call) error {
-	skill := c.fs.String("skill", "", "the Skill the Task needs next")
-	status := c.fs.String("status", "", "the Status to move the Task to, such as \"In review\" (default: it stays where it is)")
+func cmdAdvance(c *call) error {
 	note := c.noteFlag()
-	args, err := c.args(1, 1)
+	args, err := c.args(1, 2)
 	if err != nil {
 		return err
-	}
-	if *skill == "" {
-		return usagef("needs --skill")
 	}
 	n, err := c.optText(*note)
 	if err != nil {
@@ -230,12 +227,111 @@ func cmdHandover(c *call) error {
 	if err != nil {
 		return err
 	}
-	res, err := conn.HandoverTaskWithResponse(c.ctx, args[0], &client.HandoverTaskParams{},
-		client.HandoverTaskBody{Skill: *skill, Note: n, Status: opt(*status)})
+	body := client.AdvanceTaskBody{Note: n}
+	if len(args) == 2 {
+		body.Outcome = &args[1]
+	}
+	res, err := conn.AdvanceTaskWithResponse(c.ctx, args[0], &client.AdvanceTaskParams{}, body)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
-	return c.show(res.Body, func(w io.Writer) { c.done(w, "Handed over", *res.JSON200) })
+	return c.show(res.Body, func(w io.Writer) {
+		t := *res.JSON200
+		if t.State == client.TaskStateDone {
+			c.done(w, "Completed", t)
+			return
+		}
+		c.done(w, "Advanced", t)
+	})
+}
+
+func cmdMove(c *call) error {
+	note := c.noteFlag()
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	n, err := c.optText(*note)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.MoveTaskWithResponse(c.ctx, args[0], &client.MoveTaskParams{}, client.MoveTaskBody{Step: args[1], Note: n})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.done(w, "Moved", *res.JSON200) })
+}
+
+func cmdRank(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	pos, err := strconv.ParseInt(args[1], 10, 64)
+	if err != nil || pos < 1 {
+		return usagef("the position is a number from 1")
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.RankTaskWithResponse(c.ctx, args[0], &client.RankTaskParams{}, client.RankTaskBody{Position: pos})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) { c.done(w, fmt.Sprintf("Ranked #%d:", deref(res.JSON200.Rank)), *res.JSON200) })
+}
+
+func cmdOwner(c *call) error {
+	args, err := c.args(2, 2)
+	if err != nil {
+		return err
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.PassOwnershipWithResponse(c.ctx, args[0], &client.PassOwnershipParams{}, client.PassOwnershipBody{Owner: args[1]})
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		c.done(w, "Passed ownership of", *res.JSON200)
+		fmt.Fprintf(w, "Owner: %s\n", c.member(res.JSON200.OwnerID))
+	})
+}
+
+func cmdObservations(c *call) error {
+	all := c.fs.Bool("all", false, "every Observation, reviewed by a Retrospective or not")
+	args, err := c.args(1, 1)
+	if err != nil {
+		return err
+	}
+	// The contract's reviewed=true means every Observation; leaving it out, only unreviewed ones.
+	params := &client.ListTaskObservationsParams{}
+	if *all {
+		params.Reviewed = ptr(true)
+	}
+	conn, err := c.dial(oneOff)
+	if err != nil {
+		return err
+	}
+	res, err := conn.ListTaskObservationsWithResponse(c.ctx, args[0], params)
+	if err := check(res, err, http.StatusOK); err != nil {
+		return err
+	}
+	return c.show(res.Body, func(w io.Writer) {
+		if len(res.JSON200.Items) == 0 {
+			fmt.Fprintln(w, "No Observations.")
+		}
+		for _, o := range res.JSON200.Items {
+			c.printObservation(w, o)
+		}
+	})
 }
 
 func cmdComplete(c *call) error {
@@ -351,7 +447,6 @@ func cmdObserve(c *call) error {
 func cmdAttach(c *call) error {
 	typ := c.fs.String("type", "", "the file's content type (default: from its extension, else its content)")
 	name := c.fs.String("name", "", "the name to show and download it as (default: the file's own)")
-	toFeature := c.fs.Bool("feature", false, "attach to the Feature without first asking whether the key names a Task")
 	args, err := c.args(2, 2)
 	if err != nil {
 		return err
@@ -381,7 +476,7 @@ func cmdAttach(c *call) error {
 		shown += " -> " + real
 	}
 	fmt.Fprintf(c.errOut(), "Attaching %s (%d bytes, %s) as %s.\n", shown, len(content), ct, filename)
-	ev, body, err := conn.Attach(c.ctx, args[0], filename, ct, content, *toFeature)
+	ev, body, err := conn.Attach(c.ctx, args[0], filename, ct, content)
 	if err != nil {
 		return err
 	}
@@ -439,16 +534,25 @@ func cmdEvidenceGet(c *call) error {
 }
 
 func cmdFile(c *call) error {
-	feature := c.fs.String("feature", "", "the Feature the Task belongs to")
-	skill := c.fs.String("skill", "", "the Skill the Task needs")
-	aim := c.fs.String("aim", "", "the Member the Task is aimed at by name")
-	blocks := c.fs.String("blocks", "", "a Task the new one blocks: a question or Escalation, filed on that Task's Feature")
+	project := c.fs.String("project", "", "the Project the Task belongs to")
+	parent := c.fs.String("parent", "", "the Task the new one is a Subtask of; it takes the Parent's Project and Owner (if you hold the Parent, filing ends your Claim)")
+	blocks := c.fs.String("blocks", "", "a Task the new one blocks: a question or Escalation, filed beside that Task, under its Parent if it has one")
+	aim := c.fs.String("aim", "", "the Member the Task is aimed at by name, who takes it whatever its Step")
 	title := c.fs.String("title", "", "the Task's title")
 	body := c.fs.String("body", "", "the Task's description (- reads standard input)")
-	status := c.fs.String("status", "", "the Status it starts in, such as Backlog, where next does not offer it (default: the first todo Status)")
+	step := c.fs.String("step", "", "the Step it starts at, by name or id, such as Backlog (default: the Project's first work Step)")
+	breakdown := c.fs.Bool("breakdown", false, "file it with Break down: a Breakdown Subtask at the Step carrying the breakdown Skill files its other Subtasks")
+	var labels strs
+	c.fs.Var(&labels, "label", "a Label it carries, by name or id; give it once per Label, or name several with commas")
+	owner := c.fs.String("owner", "", "its Owner (default: you; a Subtask's is its Parent's)")
+	retro := c.fs.String("from-retro", "", "the Retrospective filing this Task")
+	note := c.noteFlag()
+	var auto, acceptance optBool
+	c.fs.Var(&auto, "auto-complete", "it completes itself when its last Subtask ends Done (default: the Project's)")
+	c.fs.Var(&acceptance, "acceptance", "it has an Acceptance before it is done, where the Workflow has the Step (default: the Project's)")
 	var workspaces strs
-	c.fs.Var(&workspaces, "workspace", "a Workspace the Task names, where a session works it; give it once per Workspace (default: its Team's)")
-	noWorkspace := c.fs.Bool("no-workspace", false, "name no Workspace, though the Team has a default")
+	c.fs.Var(&workspaces, "workspace", "a Workspace the Task names, where a session works it; give it once per Workspace (default: its Parent's, else its Project's)")
+	noWorkspace := c.fs.Bool("no-workspace", false, "name no Workspace, though its Parent or Project names one")
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}
@@ -458,12 +562,14 @@ func cmdFile(c *call) error {
 	switch {
 	case *title == "":
 		return usagef("needs --title")
-	case (*skill == "") == (*aim == ""):
-		return usagef("give --skill or --aim, not both")
-	case *feature == "" && *blocks == "":
-		return usagef("needs --feature or --blocks")
+	case *project == "" && *parent == "" && *blocks == "":
+		return usagef("needs --project, --parent or --blocks")
 	}
 	desc, err := c.optText(*body)
+	if err != nil {
+		return err
+	}
+	n, err := c.optText(*note)
 	if err != nil {
 		return err
 	}
@@ -471,8 +577,23 @@ func cmdFile(c *call) error {
 	if err != nil {
 		return err
 	}
-	req := client.FileTaskBody{Feature: opt(*feature), Title: *title, Description: desc, Skill: opt(*skill), AimedAt: opt(*aim),
-		Blocks: opt(*blocks), Status: opt(*status)}
+	req := client.FileTaskBody{Project: opt(*project), Parent: opt(*parent), Blocks: opt(*blocks), Aim: opt(*aim), Title: *title,
+		Description: desc, Step: opt(*step), Owner: opt(*owner), FromRetrospective: opt(*retro), Note: n,
+		AutoComplete: auto.v, Acceptance: acceptance.v}
+	if *breakdown {
+		req.Breakdown = breakdown
+	}
+	if labels.set {
+		var ls []string
+		for _, l := range labels.v {
+			for _, one := range strings.Split(l, ",") {
+				if one = strings.TrimSpace(one); one != "" {
+					ls = append(ls, one)
+				}
+			}
+		}
+		req.Labels = &ls
+	}
 	switch {
 	case workspaces.set:
 		req.Workspaces = &workspaces.v
@@ -483,7 +604,14 @@ func cmdFile(c *call) error {
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return err
 	}
-	return c.show(res.Body, func(w io.Writer) { c.done(w, "Filed", res.JSON201.Task) })
+	return c.show(res.Body, func(w io.Writer) {
+		d := res.JSON201
+		c.done(w, "Filed", d.Task)
+		for _, st := range d.Subtasks {
+			fmt.Fprint(w, "  ")
+			c.printTaskLine(w, st)
+		}
+	})
 }
 
 func cmdBlock(c *call) error {
@@ -543,16 +671,15 @@ func cmdShow(c *call) error {
 }
 
 func cmdTasks(c *call) error {
-	feature := c.fs.String("feature", "", "only this Feature's Tasks")
-	team := c.fs.String("team", "", "only this Team's Tasks")
+	project := c.fs.String("project", "", "only this Project's Tasks")
+	parent := c.fs.String("parent", "", "only this Parent's Subtasks")
 	state := c.fs.String("state", "", "only Tasks in this state: open, done or dropped")
-	status := c.fs.String("status", "", "only Tasks in this Status, by name or id")
-	skill := c.fs.String("skill", "", "only Tasks that need this Skill now")
+	step := c.fs.String("step", "", "only Tasks at this Step: its id, or its name with --project")
 	aimed := c.fs.String("aimed-at", "", "only Tasks aimed at this Member")
 	holder := c.fs.String("holder", "", "only Tasks this Member holds")
 	mine := c.fs.Bool("mine", false, "only Tasks you hold")
 	var filters strs
-	c.fs.Var(&filters, "filter", "only Tasks matching field:op:values, such as holder:is:none or filed_at:last:7d (ids, not names); give it once per filter")
+	c.fs.Var(&filters, "filter", "only Tasks matching field:op:values, such as holder:is:none, skill:is:<id> or filed_at:last:7d (ids, not names); give it once per filter")
 	limit := c.fs.Int("limit", 0, "at most this many Tasks (default 100)")
 	cursor := c.fs.String("cursor", "", "the next page, from a previous list")
 	if _, err := c.args(0, 0); err != nil {
@@ -562,8 +689,8 @@ func cmdTasks(c *call) error {
 	if err != nil {
 		return err
 	}
-	params := &client.ListTasksParams{Feature: opt(*feature), Team: opt(*team), Skill: opt(*skill), AimedAt: opt(*aimed),
-		Holder: opt(*holder), Status: opt(*status), Cursor: opt(*cursor)}
+	params := &client.ListTasksParams{Project: opt(*project), Parent: opt(*parent), Step: opt(*step), AimedAt: opt(*aimed),
+		Holder: opt(*holder), Cursor: opt(*cursor)}
 	if filters.set {
 		params.Filter = &filters.v
 	}
@@ -622,8 +749,8 @@ func cmdPropose(c *call) error {
 	}
 	return c.show(res.Body, func(w io.Writer) {
 		p := res.JSON201
-		fmt.Fprintf(w, "Proposed a new version of %s against v%d (%s). Hand %s over to skill-review for review.\n",
-			c.skill(p.SkillID), p.BasedOnVersion, p.State, args[0])
+		fmt.Fprintf(w, "Proposed a new version of %s against v%d (%s). Advance %s to the Step carrying skill-review for review (darkory show %s lists the outcomes).\n",
+			c.skill(p.SkillID), p.BasedOnVersion, p.State, one(args[0]), one(args[0]))
 	})
 }
 
@@ -636,22 +763,29 @@ func cmdProposalShow(c *call) error {
 	if err != nil {
 		return err
 	}
-	// A Task carries its latest proposal; anything else is taken as a proposal's id.
+	// A Task carries its latest proposal for each Skill; anything else is taken as a proposal's id.
 	res, err := conn.GetTaskWithResponse(c.ctx, args[0])
 	err = check(res, err, http.StatusOK)
 	switch {
 	case err == nil:
-		p := res.JSON200.Proposal
-		if p == nil {
+		ps := res.JSON200.Proposals
+		if len(ps) == 0 {
 			return fmt.Errorf("no Skill proposal has been written on %s", res.JSON200.Task.Key)
 		}
 		var raw struct {
-			Proposal json.RawMessage `json:"proposal"`
+			Proposals json.RawMessage `json:"proposals"`
 		}
 		if err := json.Unmarshal(res.Body, &raw); err != nil {
 			return err
 		}
-		return c.show(raw.Proposal, func(w io.Writer) { c.printProposal(w, *p, res.JSON200.Task.Key) })
+		return c.show(raw.Proposals, func(w io.Writer) {
+			for i, p := range ps {
+				if i > 0 {
+					fmt.Fprintln(w)
+				}
+				c.printProposal(w, p, res.JSON200.Task.Key)
+			}
+		})
 	case remote.CodeOf(err) != client.ErrorCodeNotFound:
 		return err
 	}

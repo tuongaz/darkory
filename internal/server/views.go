@@ -7,10 +7,10 @@ import (
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
-// A Member's own Views of the task and feature lists.
+// A Member's own Views of the Tasks list, across Projects or of one Project's.
 
 func viewOut(v core.View) gen.View {
-	out := gen.View{ID: v.ID, Entity: gen.ViewEntity(v.Entity), TeamID: v.TeamID, Name: v.Name, Filters: v.Filters, Sort: v.Sort,
+	out := gen.View{ID: v.ID, Entity: gen.ViewEntity(v.Entity), ProjectID: v.ProjectID, Name: v.Name, Filters: v.Filters, Sort: v.Sort,
 		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 	if v.Display != nil {
 		out.Display = &v.Display
@@ -19,7 +19,7 @@ func viewOut(v core.View) gen.View {
 }
 
 func (s *Server) ListViews(w http.ResponseWriter, r *http.Request, params gen.ListViewsParams) {
-	vs, err := s.core.ListViews(r.Context(), caller(r), (*string)(params.Entity), params.Team)
+	vs, err := s.core.ListViews(r.Context(), caller(r), (*string)(params.Entity), params.Project)
 	s.respond(w, r, as(http.StatusOK, func(vs []core.View) any { return gen.ViewList{Items: each(vs, viewOut)} }), vs, err)
 }
 
@@ -30,7 +30,7 @@ func (s *Server) CreateView(w http.ResponseWriter, r *http.Request, params gen.C
 	if !ok {
 		return
 	}
-	nv := core.NewView{Entity: string(body.Entity), Team: body.Team, Name: body.Name, Sort: body.Sort}
+	nv := core.NewView{Entity: string(body.Entity), Project: body.Project, Name: body.Name, Sort: body.Sort}
 	if body.Filters != nil {
 		nv.Filters = *body.Filters
 	}

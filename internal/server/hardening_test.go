@@ -19,10 +19,10 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// webAndBuild creates the Team WEB and the Skill build, which agent needs.
+// webAndBuild creates the Project WEB and the Skill build, which agent needs.
 func (h *harness) webAndBuild() {
 	ctx := h.t.Context()
-	got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(h.t, http.StatusCreated)
+	got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(h.t, http.StatusCreated)
 	got(h.admin.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "Build it."})).want(h.t, http.StatusCreated)
 }
 
@@ -74,9 +74,9 @@ func TestSlowBodiesAreCutOff(t *testing.T) {
 		status             string
 	}{
 		{"email sign-in, no credential", http.MethodPost, "/v1/sign-in/email", nil, "400"},
-		{"a JSON write", http.MethodPost, "/v1/teams", bearer, "400"},
-		{"refused for want of a credential", http.MethodPost, "/v1/teams", nil, "401"},
-		{"Evidence", http.MethodPost, "/v1/features/NOPE-1/evidence?filename=a.txt", bearer, "404"},
+		{"a JSON write", http.MethodPost, "/v1/projects", bearer, "400"},
+		{"refused for want of a credential", http.MethodPost, "/v1/projects", nil, "401"},
+		{"Evidence", http.MethodPost, "/v1/tasks/NOPE-1/evidence?filename=a.txt", bearer, "404"},
 	} {
 		status, took := slowBody(t, h, c.method, c.path, c.headers)
 		if took > 3*time.Second || !strings.Contains(status, c.status) {
@@ -100,8 +100,8 @@ func TestLongRequestsOutliveTheBodyTimeout(t *testing.T) {
 		if took := time.Since(start); took < time.Second {
 			t.Fatalf("next answered after %v", took)
 		}
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "API", Name: "API"})).want(t, http.StatusCreated)
-		// The stream sent the agent's creation entries meanwhile; read up to the new Team.
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "API", Name: "API"})).want(t, http.StatusCreated)
+		// The stream sent the agent's creation entries meanwhile; read up to the new Project.
 		for {
 			res := stream.events(t, 1)
 			page := got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{})).want(t, http.StatusOK).JSON200
@@ -161,7 +161,7 @@ func TestIdempotencyKeyIsBounded(t *testing.T) {
 			return res.StatusCode
 		}
 		for i, bad := range []string{strings.Repeat("k", 256), strings.Repeat("k", 500_000), "with space", "tab\tkey", "é"} {
-			if code := send("/v1/teams", bad, fmt.Sprintf(`{"key":"T%c","name":"t%d"}`, 'A'+i, i), true); code != http.StatusBadRequest {
+			if code := send("/v1/projects", bad, fmt.Sprintf(`{"key":"T%c","name":"t%d"}`, 'A'+i, i), true); code != http.StatusBadRequest {
 				t.Errorf("key %.20q: %d", bad, code)
 			}
 		}
@@ -172,7 +172,7 @@ func TestIdempotencyKeyIsBounded(t *testing.T) {
 		if err := st.QueryRow(t.Context(), `SELECT COUNT(*) FROM idempotency_keys`).Scan(&n); err != nil || n != 0 {
 			t.Fatalf("%d keys stored, %v", n, err)
 		}
-		if code := send("/v1/teams", strings.Repeat("k", 255), `{"key":"OK","name":"ok"}`, true); code != http.StatusCreated {
+		if code := send("/v1/projects", strings.Repeat("k", 255), `{"key":"OK","name":"ok"}`, true); code != http.StatusCreated {
 			t.Fatalf("a 255-character key: %d", code)
 		}
 	})
@@ -186,8 +186,7 @@ func TestEvidenceFilenamesShowAsTheyAre(t *testing.T) {
 	ctx := t.Context()
 	h.webAndBuild()
 	builder, _ := h.agent("builder", nil, "build")
-	f := got(builder.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Docs"})).want(t, http.StatusCreated).JSON201
-	task := got(builder.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Feature.Key, Title: "Write", Skill: ptrStr("build")})).want(t, http.StatusCreated).JSON201.Task
+	task := h.file(builder, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Write", Step: ptrStr("Build")}).Task
 	for _, bad := range []string{"report‮fdp.exe", "a⁦b.txt", "zero​width.txt", "line sep.txt"} {
 		if res := attach(t, builder, task.Key, bad, "text/plain", []byte("x"), nil); res.StatusCode() != http.StatusBadRequest {
 			t.Errorf("filename %q: %d", bad, res.StatusCode())
@@ -286,7 +285,7 @@ func TestBrowserSessionsEndAndMembersDeactivate(t *testing.T) {
 			t.Fatalf("a year later the cookie answers %d", res.StatusCode)
 		}
 
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		bob, _ := h.agent("bob", nil)
 		got(bob.GetMeWithResponse(ctx)).want(t, http.StatusOK)
 		sessions := got(h.admin.ListSessionsWithResponse(ctx, "bob", &client.ListSessionsParams{})).want(t, http.StatusOK).JSON200

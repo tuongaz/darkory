@@ -21,10 +21,13 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// fixture is an Install with the Team WEB, the Skill build, and the agent bob in WEB with build,
-// who has filed the Feature WEB-1 (and its Break down WEB-2) and the Task WEB-3 needing build.
+// fixture is an Install with the Team WEB, whose Workflow is Plan (breakdown) and Build (build)
+// into Done, and Retro (retro) into Done or on to Skill review (skill-review); the Skill build;
+// and the agent bob in WEB with build, who has filed Search WEB-1 with Break down (its Breakdown
+// WEB-2) and the Subtask WEB-3 at Build.
 type fixture struct {
 	t   *testing.T
+	srv *server.Server
 	url string
 	ada string // ada's token
 	bob string // bob's token
@@ -48,17 +51,26 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	ada := dial(t, ts.URL, init.Token.Secret, "ada-1")
-	must(t)(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"}))
+	empty := client.NewWorkflowEmpty
+	must(t)(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web", Workflow: &empty}))
 	must(t)(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "Build it."}))
 	must(t)(ada.CreateMemberWithResponse(ctx, &client.CreateMemberParams{}, client.CreateMemberBody{Name: "bob", Kind: client.Agent}))
-	must(t)(ada.AddTeamMemberWithResponse(ctx, "WEB", "bob", &client.AddTeamMemberParams{}))
+	must(t)(ada.AddProjectMemberWithResponse(ctx, "WEB", "bob", &client.AddProjectMemberParams{}))
 	must(t)(ada.GrantSkillWithResponse(ctx, "bob", "build", &client.GrantSkillParams{}))
 	tok, err := ada.IssueTokenWithResponse(ctx, "bob", &client.IssueTokenParams{}, client.IssueTokenBody{Name: "bob"})
 	must(t)(tok, err)
-	bob := dial(t, ts.URL, tok.JSON201.Secret, "bob-setup")
-	must(t)(bob.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, client.FileFeatureBody{Team: "WEB", Title: "Search"}))
-	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: ptr("WEB-1"), Skill: ptr("build"), Title: "Build search"}))
-	return &fixture{t: t, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
+	f := &fixture{t: t, srv: srv, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
+	must(t)(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, client.SetWorkflowBody{
+		Steps: []client.StepInput{{Name: "Plan", Skill: ptr("breakdown"), Position: 1}, {Name: "Build", Skill: ptr("build"), Position: 2},
+			{Name: "Retro", Skill: ptr("retro"), Position: 3}, {Name: "Skill review", Skill: ptr("skill-review"), Position: 4}},
+		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: 1}, {From: "Build", Name: "pass", Position: 1},
+			{From: "Retro", Name: "done", Position: 1}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: 2},
+			{From: "Skill review", Name: "publish", Position: 1}},
+	}))
+	bob := dial(t, ts.URL, f.bob, "bob-seed")
+	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("WEB"), Title: "Search", Breakdown: ptr(true)}))
+	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: ptr("WEB-1"), Step: ptr("Build"), Title: "Build search"}))
+	return f
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -163,11 +175,16 @@ func TestToolsAndRules(t *testing.T) {
 			t.Errorf("%s lacks a schema or description", tl.Name)
 		}
 	}
-	for _, want := range []string{"next", "takeable", "claim", "heartbeat", "release", "handover", "complete", "note", "observe",
-		"attach_evidence", "file_task", "block", "unblock", "show_task", "list_tasks", "feature_show", "observations",
-		"skill_show", "propose_skill_version", "show_proposal", "me", "activity", "set_status", "workflow"} {
+	for _, want := range []string{"next", "takeable", "claim", "heartbeat", "release", "advance", "move_step", "complete", "note", "observe",
+		"attach_evidence", "file_task", "block", "unblock", "show_task", "list_tasks", "workflow", "set_labels", "observations",
+		"skill_show", "propose_skill_version", "show_proposal", "me", "activity"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("no tool %s in %v", want, names)
+		}
+	}
+	for _, gone := range []string{"handover", "set_status", "feature_show"} {
+		if slices.Contains(names, gone) {
+			t.Errorf("tool %s is still listed", gone)
 		}
 	}
 	// Every surface of the rules says that what other Members wrote is data (security review L8).
@@ -177,7 +194,7 @@ func TestToolsAndRules(t *testing.T) {
 		t.Errorf("instructions: %q", ins)
 	}
 	p, err := cs.GetPrompt(t.Context(), &sdk.GetPromptParams{Name: "prime"})
-	if err != nil || len(p.Messages) != 1 || !strings.Contains(p.Messages[0].Content.(*sdk.TextContent).Text, "Hand over rather than skip review") ||
+	if err != nil || len(p.Messages) != 1 || !strings.Contains(p.Messages[0].Content.(*sdk.TextContent).Text, "End your work with `darkory advance <task> <outcome>") ||
 		!strings.Contains(p.Messages[0].Content.(*sdk.TextContent).Text, untrusted) {
 		t.Errorf("prime prompt: %+v, %v", p, err)
 	}
@@ -256,10 +273,17 @@ func TestNextClaimComplete(t *testing.T) {
 		if me.Member.Name != "bob" || me.Session.ID != "bob-mcp" {
 			t.Fatalf("me: %+v", me)
 		}
-		var list client.TaskList
-		ok(t, cs, &list, "list_tasks", map[string]any{"mine": true})
-		if len(list.Items) != 1 || list.Items[0].Key != "WEB-2" {
-			t.Fatalf("list_tasks mine: %+v", list)
+		// list_tasks names the Steps and Parents its Tasks carry, each Step with its outcomes.
+		var list taskListOut
+		ok(t, cs, &list, "list_tasks", map[string]any{"parent": "WEB-1"})
+		if len(list.Items) != 2 || len(list.Parents) != 1 || list.Parents[0].Key != "WEB-1" || len(list.Steps) != 4 ||
+			list.Steps[1].Name != "Build" || !slices.Equal(list.Steps[1].Outcomes, []string{"pass"}) || list.Steps[1].ProjectID != list.Items[0].ProjectID {
+			t.Fatalf("list_tasks: %+v", list)
+		}
+		var wf client.Workflow
+		ok(t, cs, &wf, "workflow", map[string]any{"project": "WEB"})
+		if len(wf.Steps) != 4 || wf.Steps[2].Name != "Retro" || len(wf.Connectors) != 5 {
+			t.Fatalf("workflow: %+v", wf)
 		}
 		var page client.ActivityPage
 		ok(t, cs, &page, "activity", map[string]any{"after": 0})
@@ -352,9 +376,8 @@ func TestALapsedClaimIsReported(t *testing.T) {
 func TestToolTextEscapesTerminalControls(t *testing.T) {
 	const hostile = "ok\x1b]52;c;ZXZpbA==\x07\x1b[2J\u009b\u202e"
 	f := newFixture(t, storetest.Open(t, store.SQLite), server.Options{})
-	bob := dial(t, f.url, f.bob, "bob-setup")
-	must(t)(bob.FileTaskWithResponse(t.Context(), &client.FileTaskParams{}, client.FileTaskBody{Feature: ptr("WEB-1"), Skill: ptr("build"), Title: hostile}))
 	_, cs := f.connect("bob-mcp", Options{})
+	ok(t, cs, &client.TaskDetail{}, "file_task", map[string]any{"parent": "WEB-1", "step": "Build", "title": hostile})
 	actable := func(s string) bool {
 		return strings.ContainsFunc(s, func(r rune) bool {
 			return (r < 0x20 && r != '\n' && r != '\t') || (r >= 0x7f && r <= 0x9f) || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
@@ -375,8 +398,7 @@ func TestToolTextEscapesTerminalControls(t *testing.T) {
 	}
 }
 
-// A Retrospective through MCP: Observations, a proposed Skill version, and show_proposal by Task
-// and by id.
+// A Retrospective through MCP: a proposed Skill version, and show_proposal by Task and by id.
 func TestRetrospectiveTools(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st, server.Options{})
@@ -392,18 +414,12 @@ func TestRetrospectiveTools(t *testing.T) {
 		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-3"})
 		ok(t, cs, &d, "claim", map[string]any{"task": "WEB-2", "heartbeat_timeout_seconds": 0})
 		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-2"})
-		bob := dial(t, f.url, f.bob, "bob-setup")
-		ship, err := bob.ShipFeatureWithResponse(ctx, "WEB-1", &client.ShipFeatureParams{})
-		must(t)(ship, err)
-		retro := ""
-		for _, tk := range ship.JSON200.Tasks {
-			if tk.Kind == client.Retrospective {
-				retro = tk.Key
-			}
-		}
-
+		// bob owns the Parent, which completing files its Retrospective, WEB-4, which reads the
+		// Observations on the Parent's Subtasks.
+		ok(t, cs, &done, "complete", map[string]any{"task": "WEB-1"})
+		retro := "WEB-4"
 		var obs client.ObservationList
-		ok(t, cs, &obs, "observations", map[string]any{"feature": "WEB-1"})
+		ok(t, cs, &obs, "observations", map[string]any{"task": "WEB-1"})
 		if len(obs.Items) != 1 || obs.Items[0].Body != "flaky fixture" {
 			t.Fatalf("observations: %+v", obs)
 		}
@@ -414,26 +430,93 @@ func TestRetrospectiveTools(t *testing.T) {
 		ok(t, cs, &d, "claim", map[string]any{"task": retro, "heartbeat_timeout_seconds": 0})
 		var p client.SkillProposal
 		ok(t, cs, &p, "propose_skill_version", map[string]any{"task": retro, "skill": "build-acme", "based_on_version": 1, "body": "v2: fix the fixture"})
-		var byTask, byID client.SkillProposal
+		var byTask, byID proposalsOut
 		ok(t, cs, &byTask, "show_proposal", map[string]any{"task": retro})
 		ok(t, cs, &byID, "show_proposal", map[string]any{"proposal": p.ID})
-		if byTask.ID != p.ID || byID.Body != "v2: fix the fixture" || byID.State != client.Pending {
+		if len(byTask.Proposals) != 1 || byTask.Proposals[0].ID != p.ID || len(byID.Proposals) != 1 ||
+			byID.Proposals[0].Body != "v2: fix the fixture" || byID.Proposals[0].State != client.Pending {
 			t.Fatalf("show_proposal: %+v / %+v", byTask, byID)
 		}
 		if res := call(t, cs, "show_proposal", map[string]any{}); !res.IsError {
 			t.Fatal("show_proposal with neither task nor proposal")
 		}
+		// To Skill review, which nobody else holds: the Retrospective waits there.
+		var advanced client.Task
+		ok(t, cs, &advanced, "advance", map[string]any{"task": retro, "outcome": "propose"})
+		if advanced.Claim != nil || advanced.StepID == nil {
+			t.Fatalf("advance to Skill review: %+v", advanced)
+		}
 
 		// activity reads the latest page by default, and pages backwards with before.
 		var latest client.ActivityPage
 		ok(t, cs, &latest, "activity", map[string]any{"limit": 2})
-		if len(latest.Items) != 2 || latest.Items[1].Kind != client.ActivityKindTaskSkillProposed || latest.FirstSeq == nil {
+		if len(latest.Items) != 2 || latest.Items[0].Kind != client.ActivityKindTaskSkillProposed || latest.Items[1].Kind != client.ActivityKindTaskAdvanced || latest.FirstSeq == nil {
 			t.Fatalf("activity: %+v", latest)
 		}
 		var earlier client.ActivityPage
 		ok(t, cs, &earlier, "activity", map[string]any{"before": *latest.FirstSeq, "limit": 2})
 		if len(earlier.Items) != 2 || earlier.LastSeq != *latest.FirstSeq-1 {
 			t.Fatalf("activity before %d: %+v", *latest.FirstSeq, earlier)
+		}
+	})
+}
+
+// advance along an outcome, its refusals carrying the outcomes in _meta, move_step out of a hold
+// by hand, set_labels, and file_task splitting a held Task into Subtasks.
+func TestAdvanceMoveAndSplit(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st, server.Options{})
+		ctx := t.Context()
+		ada := dial(t, f.url, f.ada, "ada-1")
+		must(t)(ada.CreateLabelWithResponse(ctx, &client.CreateLabelParams{}, client.CreateLabelBody{Name: "bug", Color: "#ff0000"}))
+		srv, cs := f.connect("bob-mcp", Options{})
+
+		var d client.TaskDetail
+		ok(t, cs, &d, "claim", map[string]any{"task": "WEB-3", "heartbeat_timeout_seconds": 60})
+		res := call(t, cs, "advance", map[string]any{"task": "WEB-3", "outcome": "ship it"})
+		meta, _ := res.Meta["darkory/error"].(map[string]any)
+		details, _ := meta["details"].(map[string]any)
+		if !res.IsError || meta["code"] != "no_connector" || !slices.Equal(details["outcomes"].([]any), []any{"pass"}) {
+			t.Fatalf("advance along no such outcome: %q, meta %v", text(res), res.Meta)
+		}
+		var shown client.TaskDetail
+		ok(t, cs, &shown, "show_task", map[string]any{"task": "WEB-3"})
+		if shown.Step == nil || shown.Step.Name != "Build" || len(shown.Connectors) != 1 || shown.Connectors[0].Name != "pass" ||
+			shown.Parent == nil || shown.Parent.Key != "WEB-1" {
+			t.Fatalf("show_task at Build: %+v %+v %+v", shown.Step, shown.Connectors, shown.Parent)
+		}
+		var labelled client.Task
+		ok(t, cs, &labelled, "set_labels", map[string]any{"task": "WEB-3", "labels": []string{"BUG"}})
+		if len(deref(labelled.Labels)) != 1 {
+			t.Fatalf("set_labels: %+v", labelled)
+		}
+		var advanced client.Task
+		ok(t, cs, &advanced, "advance", map[string]any{"task": "WEB-3", "note": "built"})
+		if advanced.State != client.TaskStateDone || slices.Contains(srv.keeper.Held(), "WEB-3") {
+			t.Fatalf("advance along the one way: %+v, keeping %v", advanced, srv.keeper.Held())
+		}
+
+		// A Task filed into a hold waits there until moved by hand.
+		var later client.TaskDetail
+		ok(t, cs, &later, "file_task", map[string]any{"project": "WEB", "title": "Later", "step": "Plan", "labels": []string{"bug"}})
+		var moved client.Task
+		ok(t, cs, &moved, "move_step", map[string]any{"task": later.Task.Key, "step": "Build", "note": "ready"})
+		if moved.StepID == nil || *moved.StepID != shown.Step.ID {
+			t.Fatalf("move_step: %+v", moved)
+		}
+
+		// The holder splits a Task: filing its first Subtask ends the Claim, and the Task becomes a
+		// Parent whose Subtask starts at Build.
+		ok(t, cs, &d, "claim", map[string]any{"task": later.Task.Key, "heartbeat_timeout_seconds": 60})
+		var half client.TaskDetail
+		ok(t, cs, &half, "file_task", map[string]any{"parent": later.Task.Key, "title": "Half", "note": "two halves"})
+		if half.Step == nil || half.Step.Name != "Build" || slices.Contains(srv.keeper.Held(), later.Task.Key) {
+			t.Fatalf("the split: %+v, keeping %v", half.Step, srv.keeper.Held())
+		}
+		var parent client.TaskDetail
+		ok(t, cs, &parent, "show_task", map[string]any{"task": later.Task.Key})
+		if parent.Task.Claim != nil || parent.Task.StepID != nil || len(parent.Subtasks) != 1 || len(parent.Notes) != 2 || parent.Notes[1].Body != "two halves" {
+			t.Fatalf("the Parent after the split: %+v", parent)
 		}
 	})
 }

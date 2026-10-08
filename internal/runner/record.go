@@ -59,9 +59,16 @@ type AgentSettings struct {
 	ProgressFile string
 }
 
-// FeatureInfo is a Feature with what the runner reads of it.
+// FeatureInfo is what the runner reads of the whole a Task belongs to. model v2: the Runner still
+// thinks in Features: a Task's Parent stands in for its Feature, and a Task with no Parent for a
+// quick Feature of one Task; M3 reworks branches, merges and the prompt on Parents.
 type FeatureInfo struct {
-	client.Feature
+	// Key is the Parent's display key, or the Task's own when it has no Parent (Quick).
+	Key, Title, Description, OwnerID string
+	// Quick: the Task has no Parent.
+	Quick bool
+	// Open: the Parent, or the Task with no Parent, has not ended.
+	Open bool
 	// Owner is the owner's name.
 	Owner string
 }
@@ -77,6 +84,9 @@ type Record interface {
 	// Claim claims a named Task.
 	Claim(ctx context.Context, task string, timeout time.Duration, model string) (*client.TaskDetail, error)
 	Task(ctx context.Context, ref string) (*client.TaskDetail, error)
+	// Feature reads the Task ref names as the whole it is part of: its Parent, else itself (a
+	// Parent, or a Task standing alone, Quick).
+	// model v2: a Parent stands in for a Feature (M3).
 	Feature(ctx context.Context, ref string) (*FeatureInfo, error)
 	// Workspaces are the Workspaces task names, or its Team's default when it names none.
 	Workspaces(ctx context.Context, task *client.TaskDetail) ([]Workspace, error)
@@ -90,10 +100,10 @@ type Record interface {
 	Complete(ctx context.Context, task, note string) error
 	Note(ctx context.Context, task, body string) error
 	File(ctx context.Context, body client.FileTaskBody) (*client.Task, error)
-	// Attach attaches content as Evidence to task, or to its Feature when the Task is held by
-	// someone else; onFeature says which.
+	// Attach attaches content as Evidence to task, or to its Parent (feature) when the Task is held
+	// by someone else; onFeature says which.
 	Attach(ctx context.Context, task, feature, filename string, content []byte) (onFeature bool, err error)
-	// AttachFeature attaches content as Evidence to a Feature.
+	// AttachFeature attaches content as Evidence to a Parent, or a Task with none.
 	AttachFeature(ctx context.Context, feature, filename string, content []byte) error
 	// Activity reads one connection of the Activity stream from after, calling each for every
 	// entry, and returns the last sequence number seen.
@@ -185,11 +195,20 @@ func (r *conn) Task(ctx context.Context, ref string) (*client.TaskDetail, error)
 }
 
 func (r *conn) Feature(ctx context.Context, ref string) (*FeatureInfo, error) {
-	res, err := r.c.GetFeatureWithResponse(ctx, ref)
+	res, err := r.c.GetTaskWithResponse(ctx, ref)
 	if err := remote.Check(res, err, http.StatusOK); err != nil {
 		return nil, err
 	}
-	f := &FeatureInfo{Feature: res.JSON200.Feature}
+	d := res.JSON200
+	if d.Parent != nil {
+		if res, err = r.c.GetTaskWithResponse(ctx, d.Parent.ID); remote.Check(res, err, http.StatusOK) != nil {
+			return nil, remote.Check(res, err, http.StatusOK)
+		}
+	}
+	t := res.JSON200.Task
+	// A Task with neither Parent nor Subtasks stands alone, as a quick Feature's one Task did.
+	f := &FeatureInfo{Key: t.Key, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID,
+		Quick: d.Parent == nil && len(d.Subtasks) == 0, Open: t.State == client.TaskStateOpen}
 	m, err := r.c.GetMemberWithResponse(ctx, f.OwnerID)
 	if err := remote.Check(m, err, http.StatusOK); err != nil {
 		return nil, err
@@ -278,19 +297,19 @@ func (r *conn) File(ctx context.Context, body client.FileTaskBody) (*client.Task
 }
 
 func (r *conn) Attach(ctx context.Context, task, feature, filename string, content []byte) (bool, error) {
-	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), content, false)
+	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), content)
 	if err == nil {
 		return false, nil
 	}
-	// The next holder may have claimed the Task already; the log goes on the Feature then.
-	if remote.CodeOf(err) != client.ErrorCodeNotHolder || feature == "" {
+	// The next holder may have claimed the Task already; the log goes on its Parent then.
+	if remote.CodeOf(err) != client.ErrorCodeNotHolder || feature == "" || feature == task {
 		return false, err
 	}
 	return true, r.AttachFeature(ctx, feature, filename, content)
 }
 
 func (r *conn) AttachFeature(ctx context.Context, feature, filename string, content []byte) error {
-	_, _, err := r.c.Attach(ctx, feature, filename, contentType(filename, content), content, true)
+	_, _, err := r.c.Attach(ctx, feature, filename, contentType(filename, content), content)
 	return err
 }
 

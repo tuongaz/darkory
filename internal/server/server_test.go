@@ -78,6 +78,12 @@ func (h *harness) client(secret, session string) *client.ClientWithResponses {
 	return c
 }
 
+// file files a Task through the generated client as cl, and fails the test unless it is filed.
+func (h *harness) file(cl *client.ClientWithResponses, body client.FileTaskBody) client.TaskDetail {
+	h.t.Helper()
+	return *got(cl.FileTaskWithResponse(h.t.Context(), &client.FileTaskParams{}, body)).want(h.t, http.StatusCreated).JSON201
+}
+
 func newTestServer(t *testing.T) (*httptest.Server, *client.ClientWithResponses) {
 	t.Helper()
 	h := newHarness(t, storetest.Open(t, store.SQLite))
@@ -203,3 +209,5 @@ func assertError(t *testing.T, res *http.Response, status int, code gen.ErrorCod
 		t.Fatalf("body %+v, want code %s and a message", body, code)
 	}
 }
+
+func ptrBool(b bool) *bool { return &b }
