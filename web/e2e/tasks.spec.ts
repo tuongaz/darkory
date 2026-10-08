@@ -153,10 +153,12 @@ test("7 · the board: drag between Steps; a held card is refused for bob and mov
   await other.page.goto(`${base()}/projects/TSK/tasks?view=board`);
   await drag(other.page, held.task.key, "Review");
   await expect(other.page.getByText(`tsk-builder holds ${held.task.key}: only the Owner, ada, or someone above tsk-builder moves it.`)).toBeVisible();
+  await expect(other.page.locator(".card-overlay *")).toHaveCount(0);
   await shot(other.page, "7-refused");
 
   await drag(owner.page, held.task.key, "Review");
   await expect(owner.page.getByText("tsk-builder's Claim on it ended.")).toBeVisible();
+  await expect(owner.page.locator(".card-overlay *")).toHaveCount(0);
   await shot(owner.page, "7-moved");
   const after = await v1<Detail>(as.ada, "GET", `/v1/tasks/${held.task.key}`);
   expect(after.task.step_id).toBe(stepId("Review"));
@@ -181,8 +183,9 @@ test("8 · the Subtask graph: columns, a Blocking arrow, the next one highlighte
   await expect(graph.getByRole("img", { name: /tsk-builder \(agent\), working/ })).toBeVisible();
   await expect(graph.getByRole("button", { name: new RegExp(`^${c.task.key} Refund email, .*takeable now`) })).toHaveAttribute("data-takeable", "true");
   await expect(graph.getByRole("button", { name: new RegExp(`^${b.task.key} Refund button, Blocked`) })).not.toHaveAttribute("data-takeable");
+  await shot(page, "8-graph");
   await graph.getByRole("button", { name: new RegExp(`^${c.task.key} `) }).click();
   await expect(page.getByRole("dialog", { name: `Task ${c.task.key}` })).toBeVisible();
-  await shot(page, "8-graph");
+  await shot(page, "8-graph-peek");
   expect(errors).toEqual([]);
 });

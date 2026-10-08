@@ -169,8 +169,9 @@ function ColumnHead({ column: c, model }: { column: Column; model: TasksModel })
     return (
       <>
         <WorkGlyph glyph={{ glyph: skill ? "waiting" : "hold" }} label={skill ? c.step.name : `${c.step.name}, a hold`} />
-        <h2 className="truncate">{c.step.name}</h2>
-        {skill && <span className="truncate text-xs font-normal text-muted-foreground">{skill.name}</span>}
+        {/* Short of room, the Skill gives way before the Step's name. */}
+        <h2 className="max-w-[75%] flex-none truncate">{c.step.name}</h2>
+        {skill && <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">{skill.name}</span>}
       </>
     );
   }

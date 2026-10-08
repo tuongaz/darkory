@@ -311,6 +311,8 @@ test("scenario 2: an accounting Project worked by humans alone: out of Backlog, 
     await page.mouse.move(b.x + 40, b.y + 60, { steps: 12 });
     await page.mouse.up();
     await expect(to.locator(`[data-task="${key}"]`)).toBeVisible();
+    // The lifted card has settled into its column.
+    await expect(page.locator(".card-overlay *")).toHaveCount(0);
     await shot(page, "2-03-board-moved-to-gather");
   });
 
