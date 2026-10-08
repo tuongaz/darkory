@@ -73,7 +73,7 @@ function ReadingPage() {
         </Link>
       </p>
       <Content className="flex flex-col overflow-hidden">
-        {query.isError ? <Refusal error={query.error} className="m-6" /> : <EditingWorkflow draft={draft} base={query.data} skills={skills.data} />}
+        {query.isError ? <Refusal error={query.error} className="m-6" /> : <EditingWorkflow project={project} draft={draft} base={query.data} skills={skills.data} />}
       </Content>
     </>
   );
@@ -126,7 +126,7 @@ function EditingPage() {
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <EditingWorkflow editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} />
+        <EditingWorkflow project={project} editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} />
       </Content>
       {discarding && (
         <FormDialog

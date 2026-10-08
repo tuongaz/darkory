@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { Schemas, Workflow } from "@/api/client";
 import { mockApi, refuse, type Call } from "@/test/api";
-import { ada, bob, builder, review, skills, step, task, web, workflow } from "@/test/fixtures";
+import { ada, bob, builder, engineer, memberDetail, review, skillReview, skills, step, task, web, workflow } from "@/test/fixtures";
 import { signedIn } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { toBody } from "./bind";
@@ -403,5 +403,92 @@ describe("Settings › Workflow", () => {
     const dialog = within(await screen.findByRole("dialog", { name: "Discard 1 change?" }));
     await userEvent.click(dialog.getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(screen.queryByRole("list", { name: "Steps" })?.querySelector("input")).toBeFalsy());
+  });
+
+  describe("who takes a Step's Tasks", () => {
+    // builder holds engineer, ada review and skill-review; both are in WEB.
+    const people = {
+      "GET /v1/projects/:project": { project: web, members: [ada, builder] },
+      "GET /v1/members/:member": ({ params }: Call & { params: Record<string, string> }) => {
+        const m = [ada, bob, builder].find((x) => x.id === params.member || x.name === params.member)!;
+        return memberDetail(m, { skills: m === builder ? [engineer] : m === ada ? [review, skillReview] : [] });
+      },
+    };
+
+    it("marks each Step with the Members holding its Skill, and warns when none does", async () => {
+      serve(workflow(), ada, people);
+      const list = await openList();
+      expect(await within(list.getByRole("listitem", { name: "3. Build" })).findByRole("img", { name: "Members with engineer: builder" })).toBeInTheDocument();
+      expect(within(list.getByRole("listitem", { name: "4. Review" })).getByRole("img", { name: "Members with review: ada" })).toBeInTheDocument();
+      expect(within(list.getByRole("listitem", { name: "2. Plan" })).getByText("No Member has it")).toBeInTheDocument();
+      expect(within(list.getByRole("listitem", { name: "1. Backlog" })).queryByText("No Member has it")).toBeNull();
+    });
+
+    it("adds a Member with the Skill at once, joining the Project, and sends no Workflow", async () => {
+      const { api, puts } = serve(workflow(), ada, {
+        ...people,
+        "PUT /v1/projects/:project/members/:member": undefined,
+        "PUT /v1/members/:member/skills/:skill": undefined,
+      });
+      await openList();
+      await userEvent.click(screen.getByRole("button", { name: "Who takes Build's Tasks" }));
+      expect(await screen.findByText(/this happens now/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("menuitem", { name: "Add Member…" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Add a Member with engineer" }));
+      expect(dialog.queryByRole("option", { name: /^builder:/ })).toBeNull();
+      await userEvent.click(dialog.getByRole("option", { name: "bob: Joins Web, gets engineer" }));
+      await waitFor(() => expect(api.calls.some((c) => c.method === "PUT" && c.path === `/v1/members/m-bob/skills/${engineer.id}`)).toBe(true));
+      expect(api.calls.some((c) => c.method === "PUT" && c.path === "/v1/projects/WEB/members/m-bob")).toBe(true);
+      expect(puts).toHaveLength(0);
+      expect(header()).toHaveTextContent(/^Editing$/);
+    });
+
+    it("creates an agent for the Step at once and shows its token once, with how it runs", async () => {
+      const made = { ...builder, id: "m-new", name: "builder-2" };
+      const { api, puts } = serve(workflow(), ada, {
+        ...people,
+        "POST /v1/members": made,
+        "PUT /v1/projects/:project/members/:member": undefined,
+        "PUT /v1/members/:member/skills/:skill": undefined,
+        "PATCH /v1/members/:member/agent": made,
+        "POST /v1/members/:member/tokens": { token: { id: "t1", member_id: "m-new", name: "default", created_at: "" }, secret: "dk_secret" },
+      });
+      await openList();
+      await userEvent.click(screen.getByRole("button", { name: "Who takes Build's Tasks" }));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Create an agent…" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Create an agent" }));
+      expect(dialog.getByText(/This happens now/)).toBeInTheDocument();
+      await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "builder-2");
+      await userEvent.click(dialog.getByRole("button", { name: "Create agent" }));
+      expect(await screen.findByRole("textbox", { name: "Secret of builder-2's token" })).toHaveValue("dk_secret");
+      expect(screen.getByText("The Runner starts its sessions on this Install, on claude-sonnet-5-5.")).toBeInTheDocument();
+      const writes = api.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`);
+      expect(writes).toEqual([
+        "POST /v1/members",
+        "PUT /v1/projects/WEB/members/m-new",
+        `PUT /v1/members/m-new/skills/${engineer.id}`,
+        "POST /v1/members/m-new/tokens",
+        "PATCH /v1/members/m-new/agent",
+      ]);
+      expect(api.calls.find((c) => c.method === "POST" && c.path === "/v1/members")!.body).toEqual({ name: "builder-2", kind: "agent" });
+      expect(api.calls.find((c) => c.method === "PATCH")!.body).toEqual({ model: "claude-sonnet-5-5" });
+      expect(puts).toHaveLength(0);
+    });
+
+    it("offers no Member to a Skill created on Save, and none to a hold", async () => {
+      serve(workflow(), ada, people);
+      const list = await openList();
+      expect(within(list.getByRole("listitem", { name: "1. Backlog" })).queryByRole("button", { name: /^Who takes/ })).toBeNull();
+      await userEvent.click(screen.getByRole("combobox", { name: "Skill of Review" }));
+      await userEvent.type(await screen.findByPlaceholderText("Find or name a Skill"), "security");
+      await userEvent.click(await screen.findByRole("option", { name: /New Skill “security”/ }));
+      const dialog = within(await screen.findByRole("dialog", { name: "New Skill “security”" }));
+      await userEvent.type(dialog.getByRole("textbox", { name: "Text" }), "x");
+      await userEvent.click(dialog.getByRole("button", { name: "Use this Skill" }));
+      expect(within(list.getByRole("listitem", { name: "4. Review" })).getByText("No Member has it")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Who takes Review's Tasks" }));
+      expect(await screen.findByText("security is created on Save: add its Members after.")).toBeInTheDocument();
+      expect(screen.queryByRole("menuitem")).toBeNull();
+    });
   });
 });

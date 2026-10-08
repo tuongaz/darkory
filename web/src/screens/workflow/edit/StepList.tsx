@@ -1,18 +1,22 @@
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { GripVerticalIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from "lucide-react";
+import { BotIcon, GripVerticalIcon, MoreHorizontalIcon, PlusIcon, Trash2Icon, TriangleAlertIcon, UserPlusIcon } from "lucide-react";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefCallback } from "react";
-import type { Skill } from "@/api/client";
+import type { Project, Skill } from "@/api/client";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "../bind";
 import { nameMax } from "../edits";
 import { DeleteStepDialog } from "./DeleteStep";
+import type { Holder } from "./holders";
+import { AddMemberDialog, CreateAgentDialog, Takers } from "./people";
 import {
   addOutcome,
   deadEndsAfterDelete,
   deleteStep,
   inOrder,
   insertStep,
+  isNewSkill,
   moveStepTo,
   outcomes,
   removeOutcome,
@@ -35,9 +39,11 @@ import type { DraftEditor } from "./useDraft";
  * their own group. Rows reorder by their grip or Alt+↑/↓ within their group.
  */
 
-const grid = "md:grid md:grid-cols-[22px_210px_150px_18px_minmax(0,1fr)] md:items-center md:gap-x-2.5";
+const grid = "md:grid md:grid-cols-[22px_210px_150px_118px_minmax(0,1fr)] md:items-center md:gap-x-2.5";
 
 export function StepList({
+  project,
+  holders,
   editor,
   draft,
   base,
@@ -46,6 +52,9 @@ export function StepList({
   readOnly,
   focusStep,
 }: {
+  project?: Project;
+  /** Who holds each Skill, for the takers' marks; undefined while unknown. */
+  holders?: Map<string, Holder[]>;
   editor?: DraftEditor;
   draft: Draft;
   base: WorkflowRecord;
@@ -122,13 +131,8 @@ export function StepList({
     },
   };
 
-  const holders = new Map<string, string[]>();
-  for (const s of base.steps)
-    if (s.skill_id && s.takers.length)
-      holders.set(
-        s.skill_id,
-        s.takers.map((t) => t.name),
-      );
+  const holderNames = new Map([...(holders ?? new Map<string, Holder[]>())].map(([id, list]) => [id, list.map((h) => h.name)]));
+  const [people, setPeople] = useState<{ act: "add" | "agent"; skill: Skill } | undefined>();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -151,7 +155,12 @@ export function StepList({
       base={base}
       order={order}
       skills={skills}
-      holders={holders}
+      holders={holderNames}
+      takers={s.skill_id ? (isNewSkill(s.skill_id) ? [] : holders?.get(s.skill_id) ?? (holders ? [] : undefined)) : undefined}
+      onPeople={(act) => {
+        const skill = skills.find((k) => k.id === s.skill_id);
+        if (skill) setPeople({ act, skill });
+      }}
       readOnly={readOnly}
       invalid={invalid}
       actions={actions}
@@ -199,6 +208,10 @@ export function StepList({
           </>
         )}
       </div>
+      {people?.act === "add" && project && (
+        <AddMemberDialog project={project} skill={people.skill} holders={holders?.get(people.skill.id) ?? []} onClose={() => setPeople(undefined)} />
+      )}
+      {people?.act === "agent" && project && <CreateAgentDialog project={project} skill={people.skill} onClose={() => setPeople(undefined)} />}
       {deleting && editor && (
         <DeleteStepDialog
           draft={draft}
@@ -243,6 +256,8 @@ function StepRow({
   order,
   skills,
   holders,
+  takers,
+  onPeople,
   readOnly,
   invalid,
   actions,
@@ -260,6 +275,9 @@ function StepRow({
   order: RecordStep[];
   skills: Skill[];
   holders: Map<string, string[]>;
+  /** Who takes its Tasks: undefined on a hold or while unknown. */
+  takers: Holder[] | undefined;
+  onPeople: (act: "add" | "agent") => void;
   readOnly: boolean;
   invalid: boolean;
   actions: OutcomeActions;
@@ -345,12 +363,46 @@ function StepRow({
               <SkillPicker value={step.skill_id} label={`Skill of ${name}`} skills={skills} pending={draft.skills} holders={holders} onChange={onSkill} />
             )}
           </div>
-          <span className="hidden md:block" />
+          <div className={cn("flex min-w-0 items-center", !takers && "max-md:hidden")}>
+            {takers && skillName && <Takers skillName={skillName} holders={takers} />}
+          </div>
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               {head}
               {!readOnly && rest.length === 0 && <AddOutcome step={step} onAdd={actions.add} />}
             </div>
+            {!readOnly && step.skill_id && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label={`Who takes ${name}'s Tasks`}
+                    className="inline-flex size-6 flex-none items-center justify-center rounded-md text-muted-foreground opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:opacity-100 max-md:opacity-100"
+                  >
+                    <MoreHorizontalIcon aria-hidden className="size-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  {isNewSkill(step.skill_id) ? (
+                    <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                      {skillName} is created on Save: add its Members after.
+                    </DropdownMenuLabel>
+                  ) : (
+                    <>
+                      <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Who takes the Tasks needing {skillName}; this happens now.</DropdownMenuLabel>
+                      <DropdownMenuItem onSelect={() => onPeople("add")}>
+                        <UserPlusIcon aria-hidden />
+                        Add Member…
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onPeople("agent")}>
+                        <BotIcon aria-hidden />
+                        Create an agent…
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {!readOnly && (
               <button
                 type="button"

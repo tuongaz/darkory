@@ -1,12 +1,13 @@
 import { ChevronDownIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { Skill } from "@/api/client";
+import type { Project, Skill } from "@/api/client";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "./bind";
 import { groupOf, type Draft } from "./edit/draft";
+import { useSkillHolders } from "./edit/holders";
 import { Preview } from "./edit/Preview";
 import { StepList } from "./edit/StepList";
 import type { DraftEditor } from "./edit/useDraft";
@@ -17,12 +18,14 @@ import type { DraftEditor } from "./edit/useDraft";
  * Under the list, what Save would be refused, in words, or what `/v1` did refuse.
  */
 export function EditingWorkflow({
+  project,
   editor,
   draft,
   base,
   skills,
   focusStep,
 }: {
+  project: Project;
   /** Absent for a Member who is not an admin: the list read-only. */
   editor?: DraftEditor;
   draft: Draft | undefined;
@@ -32,6 +35,7 @@ export function EditingWorkflow({
 }) {
   const phone = useIsMobile();
   const [showLine, setShowLine] = useState(false);
+  const holders = useSkillHolders(project.key, skills);
   const skillMap = useMemo(() => new Map((skills ?? []).map((s) => [s.id, s])), [skills]);
   const groups = (s: Pick<RecordStep, "skill_id">) => groupOf(s, skillMap);
 
@@ -95,8 +99,8 @@ export function EditingWorkflow({
         {(!phone || showLine) && <Preview draft={draft.wf} base={base} skills={skillMap} groups={groups} className="mx-auto max-w-[1240px] px-2" />}
       </section>
       <div className="min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto w-full max-w-[900px] pt-3 pb-24 md:px-4">
-          <StepList editor={editor} draft={draft} base={base} skills={skills} groups={groups} readOnly={!editor} focusStep={focusStep} />
+        <div className="mx-auto w-full max-w-[1020px] pt-3 pb-24 md:px-4">
+          <StepList project={project} holders={holders} editor={editor} draft={draft} base={base} skills={skills} groups={groups} readOnly={!editor} focusStep={focusStep} />
         </div>
       </div>
       {said && <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3 [&>*]:pointer-events-auto">{said}</div>}

@@ -282,6 +282,14 @@ export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
           session: { id: "browser-1", member_id: me.id, kind: "browser", started_at: at, last_seen_at: at },
         });
       if (path === "/v1/members") return json(route, { items: [...members, human("m-bob", "bob")] });
+      if (path.startsWith("/v1/members/") && path.split("/").length === 4) {
+        const id = path.split("/")[3];
+        const m = [...members, human("m-bob", "bob")].find((x) => x.id === id || x.name === id);
+        if (!m) return json(route, { code: "not_found", message: `No Member ${id}` }, 404);
+        // A Member holds each Skill of a Step whose takers name them.
+        const held = new Set(initialWorkflow().steps.filter((x) => x.takers.some((t) => t.id === m.id)).map((x) => x.skill_id));
+        return json(route, { member: m, projects: [project], skills: skillList.filter((k) => held.has(k.id)), reports: [] });
+      }
       if (path === "/v1/projects") return json(route, { items: [project] });
       if (path === "/v1/projects/WEB" || path === "/v1/projects/p-web") return json(route, { project, members: members.filter((x) => x.id !== "m-mai") });
       if (path.endsWith("/workflow")) return json(route, wf);

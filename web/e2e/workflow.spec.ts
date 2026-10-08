@@ -5,7 +5,8 @@ import { startInstall } from "./server";
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
 // their own (init's MAIN with the default Workflow and the roster's agents):
 //   6. Workflow editing in the list: rename a Step, add one with a new Skill, delete one with Tasks
-//      (asked where they go), all saved in one go; the open board's columns follow.
+//      (asked where they go), all saved in one go; the open board's columns follow; then a new
+//      agent and a Member for Steps from their rows, at once, the No Member warning going.
 //   9. Marks: an agent's gradient border, turning while its Claim is live; a human's plain border.
 // And, first, the live canvas as things happen: a Task filed, picked up, advanced and completed.
 test.describe.configure({ mode: "serial" });
@@ -207,10 +208,32 @@ test("scenario 6: rename a Step while the board is open, delete one with Tasks, 
   const { items: skillList } = (await v1("GET", "/v1/skills")) as { items: { id: string; name: string }[] };
   expect(wf.steps.find((s) => s.name === "QA")!.skill_id).toBe(skillList.find((s) => s.name === "qa")!.id);
 
-  // An agent for QA, for scenario 9.
-  const bot = (await v1("POST", "/v1/members", { name: "qa-bot", kind: "agent" })) as { id: string };
-  await v1("PUT", `/v1/projects/MAIN/members/${bot.id}`);
-  await v1("PUT", `/v1/members/${bot.id}/skills/qa`);
+  // QA's Skill exists now: nobody holds it, so its row warns. A new agent for it, from the row, at once:
+  // its token shows once, and the warning goes.
+  await page.goto(`${base}/settings/projects/MAIN/workflow`);
+  const qaRow = page.getByRole("list", { name: "Steps" }).getByRole("listitem", { name: "4. QA" });
+  await expect(qaRow.getByText("No Member has it")).toBeVisible();
+  await page.screenshot({ path: `${shots}6-09-unstaffed.png`, animations: "disabled" });
+  await qaRow.getByRole("button", { name: "Who takes QA's Tasks" }).click();
+  await page.getByRole("menuitem", { name: "Create an agent…" }).click();
+  const agentDialog = page.getByRole("dialog", { name: "Create an agent" });
+  await agentDialog.getByRole("textbox", { name: "Name" }).fill("qa-bot");
+  await page.screenshot({ path: `${shots}6-10-create-agent.png`, animations: "disabled" });
+  await agentDialog.getByRole("button", { name: "Create agent" }).click();
+  await expect(page.getByRole("textbox", { name: "Secret of qa-bot's token" })).toHaveValue(/^dk_/);
+  await expect(page.getByText(/The Runner starts its sessions on this Install/)).toBeVisible();
+  await page.screenshot({ path: `${shots}6-11-agent-token-once.png`, animations: "disabled" });
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(qaRow.getByRole("img", { name: "Members with qa: qa-bot" })).toBeVisible();
+  await expect(qaRow.getByText("No Member has it")).toHaveCount(0);
+  // ada takes Make's Tasks, added from its row.
+  await page.getByRole("button", { name: "Who takes Make's Tasks" }).click();
+  await page.getByRole("menuitem", { name: "Add Member…" }).click();
+  await page.getByRole("option", { name: /^ada: / }).click();
+  await expect(page.getByRole("listitem", { name: "3. Make" }).getByRole("img", { name: /^Members with engineer: .*ada/ })).toBeVisible();
+  await page.screenshot({ path: `${shots}6-12-edited.png`, animations: "disabled" });
+  // Neither touched the Workflow: nothing to save.
+  await expect(page.getByRole("status", { name: "Editing" })).toHaveText("Editing");
 
   expect(errors).toEqual([]);
   expect(board.errors).toEqual([]);
@@ -225,9 +248,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   const { secret } = (await v1("POST", `/v1/members/${qaBot.id}/tokens`, { name: "scenario-9" })) as { secret: string };
   const filed = ((await v1("POST", "/v1/tasks", { project: "MAIN", title: "Test the ledger", step: "QA" })) as { task: { key: string } }).task;
   await v1("POST", `/v1/tasks/${filed.key}/claim`, { heartbeat_timeout_seconds: 600 }, secret, "qa-bot-1");
-  // ada takes Make's Tasks.
-  await v1("PUT", "/v1/projects/MAIN/members/ada");
-  await v1("PUT", "/v1/members/ada/skills/engineer");
+  // ada took Make's Tasks in scenario 6.
 
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflow");
   // The taker's mark, under the Task's chip (which carries the holder's mark too).
