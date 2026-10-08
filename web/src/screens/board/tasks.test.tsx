@@ -134,6 +134,65 @@ describe("Tasks, list", () => {
   });
 });
 
+describe("Tasks, Filter and Views", () => {
+  it("narrows the list by a Step pill, keeping a Parent whose Subtask passes, opened to that Subtask", async () => {
+    mockApi(routes());
+    renderApp(`/projects/WEB/tasks?filter.tasks=${encodeURIComponent(`step:is:${step.review}`)}`);
+    await row(/WEB-3 Checkout/);
+    expect(screen.queryByRole("link", { name: /WEB-2 Build/ })).not.toBeInTheDocument();
+    const subs = screen.getByRole("group", { name: "Subtasks of WEB-3" });
+    expect(within(subs).getAllByRole("link").map((l) => l.getAttribute("data-task"))).toEqual(["WEB-5"]);
+    expect(screen.getByText(/^1 Task match the Filter/)).toBeInTheDocument();
+    // The chip row says it, and Reset clears it.
+    await userEvent.click(within(screen.getByRole("toolbar", { name: "Filters" })).getByRole("button", { name: "Reset" }));
+    expect(await row(/WEB-2 Build/)).toBeInTheDocument();
+  });
+
+  it("F opens the Filters menu", async () => {
+    mockApi(routes());
+    renderApp("/projects/WEB/tasks");
+    await row(/WEB-2/);
+    await userEvent.keyboard("f");
+    expect(await screen.findByPlaceholderText(/Search/)).toBeInTheDocument();
+  });
+
+  it("narrows the board's cards by the pills", async () => {
+    mockApi(routes());
+    renderApp(`/projects/WEB/tasks?view=board&filter.tasks=${encodeURIComponent(`holder:is:${builder.id}`)}`);
+    await row(/WEB-2/);
+    expect(within(main()).getAllByRole("link").map((l) => l.getAttribute("data-task")).filter(Boolean)).toEqual(["WEB-2", "WEB-4"]);
+  });
+
+  it("applies a View: its pills, its layout and its Display", async () => {
+    mockApi(
+      routes({
+        "GET /v1/views": {
+          items: [
+            {
+              id: "v-1",
+              entity: "tasks",
+              project_id: "p-web",
+              name: "Agents at work",
+              filters: [`holder:is:${builder.id}`],
+              sort: "filed",
+              display: { group: "owner", order: "filed", showDone: false, layout: "list" },
+              created_at: "2026-10-01T09:00:00Z",
+            },
+          ],
+        },
+      }),
+    );
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-2/);
+    await userEvent.click(screen.getByRole("button", { name: "Views" }));
+    await userEvent.click(await screen.findByRole("option", { name: /Agents at work/ }));
+    expect(await screen.findByRole("heading", { name: "Tasks, list" })).toBeInTheDocument();
+    // builder holds WEB-2 (ada's) and WEB-4, under bob's Parent WEB-3.
+    await waitFor(() => expect(regions()).toEqual(["ada", "bob"]));
+    expect(within(screen.getByRole("toolbar", { name: "Filters" })).getByLabelText("View Agents at work")).toBeInTheDocument();
+  });
+});
+
 /**
  * jsdom lays nothing out; dnd-kit measures. Each column is 232px wide, 250px apart, in document
  * order; a card sits at the top of its column.

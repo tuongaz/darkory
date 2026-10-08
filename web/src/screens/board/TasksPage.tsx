@@ -1,7 +1,8 @@
 // /projects/:key/tasks?view=list|board: a Project's Tasks as rows grouped by Step, or as a
-// kanban whose columns are its Workflow's Steps, with Display and File Task.
+// kanban whose columns are its Workflow's Steps, with Views, Filter (its pills in ?filter.tasks=),
+// Display and File Task.
 import { BanIcon, ListTodoIcon, PlusIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { ApiError, type Task } from "@/api/client";
@@ -9,13 +10,17 @@ import { useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
+import { FilterChipRow, FilterMenuButton } from "@/components/filters/FilterBar";
+import { useSavedViews } from "@/components/filters/useSavedViews";
+import { useTaskFilter } from "@/components/filters/useTaskFilter";
+import { AppliedView, ViewsMenu } from "@/components/filters/ViewsMenu";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
-import { boardColumns, columnName, compareTasks, dropProblem, groupTasks, listRows, rankFinder, refusalText, type Column } from "./derive";
-import { taskMatches } from "./filterSeam";
+import type { Display } from "./derive";
+import { boardColumns, columnName, compareTasks, defaultDisplay, dropProblem, groupTasks, listRows, rankFinder, refusalText, type Column } from "./derive";
 import { useTasksModel, type TasksModel } from "./model";
 import { useMoveTask } from "./queries";
 import { expandedKey, foldedKey, openFileTask, useDisplay, useRememberedSet } from "./state";
@@ -33,10 +38,45 @@ export function TasksPage() {
   const [folded, fold] = useRememberedSet(foldedKey, ["dropped"]);
 
   const all = model.tasks.data;
-  const sorted = useMemo(
-    () => (all ?? []).filter(taskMatches).sort(compareTasks(display.order, rankFinder(model.byId))),
-    [all, display.order, model.byId],
-  );
+  const projects = useMemo(() => [project], [project]);
+  // Reset leaves an applied View too: the Views' clear, which needs the Filter's pills first.
+  const clear = useRef<() => void>(() => {});
+  const filter = useTaskFilter({ projects, tasks: all, onClearAll: () => clear.current() });
+  // A View keeps the pills, the order as its sort, and the Display with the layout; applying one
+  // sets all three.
+  const savedViews = useSavedViews({
+    entity: "tasks",
+    project: project.key,
+    fields: filter.fields,
+    pills: filter.pills,
+    rest: { sort: display.order, display: { ...display, layout: view } },
+    restParams: (v, next) => {
+      const layout = v.display?.layout;
+      if (layout === "list" || layout === "board") next.set("view", layout);
+    },
+    onApplied: (v) => changeDisplay(displayOf(v.display)),
+  });
+  useEffect(() => {
+    clear.current = savedViews.clear;
+  });
+  const filtering = filter.pills.length > 0;
+
+  const sorted = useMemo(() => [...(all ?? [])].sort(compareTasks(display.order, rankFinder(model.byId))), [all, display.order, model.byId]);
+  // What the Filter keeps. On the list a Parent's row stays while any of its Subtasks passes, and
+  // opens to those that do; on the board each card stands or falls by itself.
+  const passed = useMemo(() => new Set(sorted.filter(filter.matches).map((t) => t.id)), [sorted, filter.matches]);
+  const kept = useMemo(() => {
+    const shown = new Map<string, Task[]>();
+    for (const [parent, subs] of model.children) shown.set(parent, subs.filter((s) => passed.has(s.id)));
+    const rows = sorted.filter((t) => passed.has(t.id) || (shown.get(t.id)?.length ?? 0) > 0);
+    return { rows, shown };
+  }, [sorted, passed, model.children]);
+  const opened = useMemo(() => {
+    if (!filtering) return expanded;
+    const out = new Set(expanded);
+    for (const [parent, subs] of kept.shown) if (subs.length > 0 && !passed.has(parent)) out.add(parent);
+    return out;
+  }, [filtering, expanded, kept.shown, passed]);
 
   const top = (
     <>
@@ -44,7 +84,13 @@ export function TasksPage() {
       <TopBar
         crumbs={[projectCrumb(project, false), { label: "Tasks", wide: true }]}
         view={<ViewSwitch view={view} />}
-        actions={<DisplayMenu display={display} change={changeDisplay} view={view} />}
+        actions={
+          <>
+            <ViewsMenu {...savedViews} />
+            <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />
+            <DisplayMenu display={display} change={changeDisplay} view={view} />
+          </>
+        }
         primary={
           <Button onClick={() => openFileTask({ project: project.key })} aria-label="File Task">
             <PlusIcon />
@@ -53,6 +99,7 @@ export function TasksPage() {
           </Button>
         }
       />
+      <FilterChipRow {...filter.bar} leading={savedViews.applied && <AppliedView name={savedViews.applied.name} edited={savedViews.edited} />} />
     </>
   );
 
@@ -88,7 +135,7 @@ export function TasksPage() {
       <>
         {top}
         <Content>
-          <Board model={model} tasks={sorted} display={display} changeDisplay={changeDisplay} onAdd={add} />
+          <Board model={model} tasks={sorted.filter((t) => passed.has(t.id))} display={display} changeDisplay={changeDisplay} onAdd={add} />
         </Content>
       </>
     );
@@ -114,7 +161,7 @@ export function TasksPage() {
       </>
     );
   }
-  const rows = listRows(sorted, display);
+  const rows = listRows(kept.rows, display);
   const groups = groupTasks(rows, display.group, {
     steps: model.steps,
     children: model.children,
@@ -129,14 +176,15 @@ export function TasksPage() {
         <TaskList
           model={model}
           groups={groups}
-          expanded={expanded}
+          expanded={opened}
+          shownSubtasks={filtering ? kept.shown : undefined}
           onExpand={expand}
           folded={folded}
           onFold={fold}
           subtasks={display.showSubtasks}
           showStep={display.group !== "step"}
           onAdd={add}
-          footer={footerText(all, rows, display.group === "parent")}
+          footer={footerText(all, rows, display.group === "parent", filtering)}
         />
       </Content>
     </>
@@ -144,16 +192,16 @@ export function TasksPage() {
 }
 
 /** "18 Tasks · 4 Subtasks · Dropped hidden (2)". */
-function footerText(all: Task[], rows: Task[], bySubtask: boolean): string {
+function footerText(all: Task[], rows: Task[], bySubtask: boolean, filtering: boolean): string {
   const top = all.filter((t) => !t.parent_id);
-  const parts = [`${rows.length} ${rows.length === 1 ? "Task" : "Tasks"}`];
+  const parts = [`${rows.length} ${rows.length === 1 ? "Task" : "Tasks"}${filtering ? " match the Filter" : ""}`];
   if (!bySubtask) {
     const subs = all.length - top.length;
     if (subs > 0) parts.push(`${subs} ${subs === 1 ? "Subtask" : "Subtasks"} under their Parents`);
   }
   const visible = new Set(rows.map((t) => t.id));
   const pool = bySubtask ? all.filter((t) => !t.subtask_counts) : top;
-  for (const state of ["done", "dropped"] as const) {
+  for (const state of filtering ? [] : (["done", "dropped"] as const)) {
     const n = pool.filter((t) => t.state === state && !visible.has(t.id)).length;
     if (n > 0) parts.push(`${state === "done" ? "Done" : "Dropped"} hidden (${n})`);
   }
@@ -217,4 +265,14 @@ function Board({
       onAdd={onAdd}
     />
   );
+}
+
+
+/** The Display a View kept, over the defaults for anything it does not say. */
+function displayOf(saved: Record<string, unknown> | undefined): Display {
+  const out: Display = { ...defaultDisplay };
+  for (const k of Object.keys(defaultDisplay) as (keyof Display)[]) {
+    if (saved && typeof saved[k] === typeof defaultDisplay[k]) (out as Record<string, unknown>)[k] = saved[k];
+  }
+  return out;
 }
