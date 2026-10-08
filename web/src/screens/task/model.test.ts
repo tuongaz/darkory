@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { RunnerSession } from "@/api/client";
+import type { Activity, RunnerSession } from "@/api/client";
 import { ada, bob, builder, detail, parentTask, review, skills, step, subtask, task, workflow } from "@/test/fixtures";
 import { liveClaimOf } from "../board/testData";
 import { taskActions } from "./actions";
+import { taskRecord } from "./record";
 import { graphSteps, graphSubtasks } from "./graph";
 import { takersOf } from "./takers";
 
@@ -97,5 +98,22 @@ describe("the actions by role", () => {
     const a = taskActions({ ...ctx, me: ada.id, detail: out(held) });
     expect(a.menu).toEqual(["take-back", "move", "drop"]);
     expect(a.notes).toEqual({ onlyHolder: builder.id });
+  });
+});
+
+describe("the record's end", () => {
+  const ended = { state: "done" as const, ended_at: new Date(now).toISOString() };
+  const completed = (payload: Record<string, unknown>): Activity => ({ seq: 9, at: new Date(now).toISOString(), kind: "task.completed", subject_type: "task", subject_id: "t-1", actor_id: ada.id, payload });
+
+  it("names who completed a Parent by hand", () => {
+    const p = parentTask(1, { open: 0, working: 0, done: 2, dropped: 0 }, ended);
+    expect(taskRecord(detail(p), [{ ...completed({}), subject_id: p.id }]).at(-1)).toMatchObject({ kind: "ended", by: ada.id });
+  });
+
+  it("says a Parent with Auto-complete completed itself, not that the last Subtask's holder did", () => {
+    const p = parentTask(1, { open: 0, working: 0, done: 2, dropped: 0 }, ended);
+    const end = taskRecord(detail(p), [{ ...completed({ auto_complete: true }), subject_id: p.id }]).at(-1);
+    expect(end).toMatchObject({ kind: "ended", auto: true });
+    expect(end).not.toHaveProperty("by");
   });
 });
