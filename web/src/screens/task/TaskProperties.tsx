@@ -111,6 +111,10 @@ export function TaskProperties({ detail, steps, grouped }: { detail: TaskDetail;
           ),
       });
     }
+  } else {
+    // Nobody holds it, and nobody will: said, so the rail is never empty.
+    const why = parent && open ? "a Parent is never claimed" : `it ended ${task.state === "dropped" ? "Dropped" : "Done"}`;
+    hold.push({ label: "Held by", value: <span className="text-muted-foreground">Nobody: {why}</span> });
   }
 
   const work: Row[] = [];
