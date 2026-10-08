@@ -8,20 +8,20 @@ const arcNamed = (list: (Arc | Track)[], name: string) => list.find((e): e is Ar
 describe("the line on MAIN, the default Workflow", () => {
   const t = lineTopology(MAIN);
 
-  it("runs Backlog → Plan → Build → QA → Review → Done; Acceptance, Retro and Skill review sit on the branch", () => {
-    expect(t.main).toEqual(["backlog", "plan", "build", "qa", "review", DONE_STATION]);
+  it("runs Build → QA → Review → Done; Plan sits on Break down, Backlog parks by the entry, Acceptance, Retro and Skill review after a Parent", () => {
+    expect(t.main).toEqual(["build", "qa", "review", DONE_STATION]);
+    expect(t.start).toBe("build");
+    expect(t.before).toBe("plan");
+    expect(t.holds).toEqual(["backlog"]);
     expect(t.rows.map((r) => r.stations)).toEqual([["acceptance"], ["retro", "skillreview"]]);
   });
 
-  it("draws neighbours joined by a Connector solid and named, the rest dotted", () => {
-    expect(t.segments.map((s) => s.connector?.name ?? "dotted")).toEqual(["dotted", "dotted", "pass", "pass", "pass"]);
+  it("draws neighbours joined by a Connector solid and named: nothing on the main line is dotted now", () => {
+    expect(t.segments.map((s) => s.connector?.name ?? "dotted")).toEqual(["pass", "pass", "pass"]);
   });
 
-  it("sends the forward skips over, nested: no UI change inside done", () => {
-    expect(t.over.map((a) => [a.connector.name, a.back, a.depth])).toEqual([
-      ["no UI change", false, 1],
-      ["done", false, 2],
-    ]);
+  it("sends the forward skip over: no UI change; Plan's done is words beside Plan, not an arc", () => {
+    expect(t.over.map((a) => [a.connector.name, a.back, a.depth])).toEqual([["no UI change", false, 1]]);
   });
 
   it("nests the three loops under the line: fail and needs QA inside needs changes", () => {
@@ -41,7 +41,7 @@ describe("the line on MAIN, the default Workflow", () => {
     expect(retro.segments.map((s) => s.connector.name)).toEqual(["propose"]);
     expect(retro.exit?.name).toBe("publish");
     expect(retro.loops.map((l) => l.connector.name)).toEqual(["needs changes"]);
-    expect(t.chips.map((c) => c.text)).toEqual(["fail → Build", "done → Done"]);
+    expect(t.chips.map((c) => `${c.stepId}: ${c.text}`)).toEqual(["plan: done → Done", "acceptance: fail → Build", "retro: done → Done"]);
   });
 
   it("crosses nothing, in station order and in pixels", () => {

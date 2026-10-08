@@ -15,28 +15,74 @@ export type LineWorkflow = { steps: readonly LineStep[]; connectors: readonly Li
 
 /**
  * The Skills of the Steps where Darkory files what a Parent needs once its Subtasks end: they sit
- * on the short branch "After a Parent", off the main line. The breakdown Step stays on the main
- * line, where the approved drawing puts Plan.
+ * on the short branch "After a Parent", off the main line.
  */
 export const branchSkills: readonly string[] = ["acceptance", "retro", "skill-review"];
 
+/** The Skill of the Step where Darkory files a Breakdown Subtask: its Step sits on the branch "Break down", before the line. */
+export const breakdownSkill = "breakdown";
+
+/** The Organisation's builtin Skills, by name: no Step carrying one is where a Project's own work starts. */
+export const builtinSkills: readonly string[] = [breakdownSkill, ...branchSkills];
+
+const inPosition = (workflow: LineWorkflow) => [...workflow.steps].sort((a, b) => a.position - b.position);
+
 /**
- * The Steps on the branch: those carrying a branch Skill that no main-line Step leads into. A
- * Workflow that routes its work through Acceptance (Docs "pass" → Acceptance) keeps it on the
- * main line, where its Tasks arrive along a Connector rather than being filed there.
+ * Where a Task filed with no Step named starts: the first Step whose Skill is the Project's own
+ * work (not breakdown, acceptance, retro or skill-review); else the first Step with any Skill; else
+ * the first Step. The same rule as the server's `defaultStep` (internal/core/workflow.go).
  */
-export function branchSteps(workflow: LineWorkflow): Set<string> {
-  const side = new Set(workflow.steps.filter((s) => !!s.skill && branchSkills.includes(s.skill.name)).map((s) => s.id));
+export function startStep(workflow: LineWorkflow): string | undefined {
+  const steps = inPosition(workflow);
+  return (steps.find((s) => !!s.skill && !builtinSkills.includes(s.skill.name)) ?? steps.find((s) => !!s.skill) ?? steps[0])?.id;
+}
+
+/** Where each Step stands: on the main line, or off it on a branch or as a parking place. */
+export type Sides = {
+  /** Where new Tasks start (`startStep`); always on the main line. */
+  start?: string;
+  /** The breakdown Step (the first carrying breakdown, where Darkory files Breakdowns) on the branch "Break down", before the start Step. */
+  before: Set<string>;
+  /** The acceptance, retro and skill-review Steps on the branch "After a Parent". */
+  after: Set<string>;
+  /** The holds no Connector joins: parked off the line by the entry, moved on by hand. */
+  holds: Set<string>;
+};
+
+/**
+ * Which Steps leave the main line. A Step carrying a builtin Skill sits on a branch (breakdown
+ * only the first such Step, the one Darkory files Breakdowns at) unless a
+ * main-line Step leads into it (a Workflow that routes its work through Acceptance, Docs "pass" →
+ * Acceptance, keeps it on the line, where its Tasks arrive along a Connector rather than being
+ * filed there). A hold with no Connector in or out parks by the entry. The start Step never
+ * leaves the line.
+ */
+export function sideSteps(workflow: LineWorkflow): Sides {
+  const start = startStep(workflow);
+  const steps = inPosition(workflow).filter((s) => s.id !== start);
+  // Darkory files every Breakdown at the first Step carrying breakdown; any other is a Step like the rest.
+  const first = inPosition(workflow).find((s) => s.skill?.name === breakdownSkill);
+  const before = new Set(first && first.id !== start ? [first.id] : []);
+  const after = new Set(steps.filter((s) => !!s.skill && branchSkills.includes(s.skill.name)).map((s) => s.id));
+  const side = (id: string) => before.has(id) || after.has(id);
   for (let changed = true; changed; ) {
     changed = false;
     for (const c of workflow.connectors) {
-      if (c.to !== null && side.has(c.to) && !side.has(c.from)) {
-        side.delete(c.to);
+      if (c.to !== null && side(c.to) && !side(c.from)) {
+        before.delete(c.to);
+        after.delete(c.to);
         changed = true;
       }
     }
   }
-  return side;
+  const joined = new Set(workflow.connectors.flatMap((c) => (c.to === null ? [c.from] : [c.from, c.to])));
+  const holds = new Set(steps.filter((s) => isHoldStep(s) && !joined.has(s.id)).map((s) => s.id));
+  return { start, before, after, holds };
+}
+
+/** The Steps on the branch "After a Parent" (`sideSteps`'s `after`): what the editor's list groups by too. */
+export function branchSteps(workflow: LineWorkflow): Set<string> {
+  return sideSteps(workflow).after;
 }
 
 export function isHoldStep(step: LineStep): boolean {

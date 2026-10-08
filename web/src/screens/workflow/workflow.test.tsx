@@ -83,7 +83,7 @@ describe("Settings › Workflow", () => {
     expect(list.getAllByRole("listitem").map((r) => r.getAttribute("aria-label"))).toEqual(["1. Backlog", "2. Plan", "3. Build", "4. Review", "5. Retro", "6. Skill review"]);
     expect(list.getByText("After a Parent")).toBeInTheDocument();
     expect(within(list.getByRole("listitem", { name: "1. Backlog" })).getByText("moved by hand")).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /^The line: Backlog · Plan · Build → Review → Done$/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /^The line: Build → Review → Done\. New Tasks start at Build\. Break down: Plan, whose Subtasks start at Build\. Hold: Backlog, moved on by hand\.$/ })).toBeInTheDocument();
     expect(screen.getByText(/After a Parent ·/)).toHaveTextContent("After a Parent · Retro → Skill review");
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
