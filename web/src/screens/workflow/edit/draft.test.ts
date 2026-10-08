@@ -64,7 +64,7 @@ describe("inserting a Step", () => {
   it("sends the new Step by name and its outcomes from it by name", () => {
     const { draft, id } = insertStep(d0(), step.review, groups);
     const body = toBody(renameStep(draft, id, "Security review").wf);
-    expect(body.steps[4]).toEqual({ name: "Security review", position: 5, x: 448, y: 256 });
+    expect(body.steps[4]).toEqual({ name: "Security review", position: 5 });
     expect(body.connectors.filter((c) => c.from === "Security review")).toEqual([{ from: "Security review", name: "pass", position: 1 }]);
     expect(body.connectors.find((c) => c.id === `${step.review}-c3`)).toMatchObject({ to: "Security review" });
   });

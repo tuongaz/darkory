@@ -70,13 +70,11 @@ export function useDraftEditor(project: string) {
       for (const [placeholder, s] of Object.entries(d.skills)) {
         const made = await createSkill({ name: s.name, kind: "generic", body: s.body });
         // The draft carries the Skill by its id from now on, so a refused Workflow does not create it twice.
-        const rest = Object.fromEntries(Object.entries(d.skills).filter(([k]) => k !== placeholder));
-        d = {
-          ...d,
-          skills: rest,
-          wf: { ...d.wf, steps: d.wf.steps.map((st) => (st.skill_id === placeholder ? { ...st, skill_id: made.skill.id } : st)) },
-        };
+        d = adoptSkill(d, placeholder, made.skill.id);
         setDraftState(d);
+        // Undo steps back to drafts carrying the Skill by its id too: it exists now.
+        const id = made.skill.id;
+        history.current = history.current.map((h) => ({ ...h, before: adoptSkill(h.before, placeholder, id) }));
         void qc.invalidateQueries({ queryKey: keys.skills });
       }
       const body = toBody(d.wf, d.moves);
@@ -115,3 +113,13 @@ export function useDraftEditor(project: string) {
 }
 
 export type DraftEditor = ReturnType<typeof useDraftEditor>;
+
+/** `d` carrying the Skill `placeholder` stood for by its id, and no longer creating it. */
+function adoptSkill(d: Draft, placeholder: string, id: string): Draft {
+  if (!(placeholder in d.skills)) return d;
+  return {
+    ...d,
+    skills: Object.fromEntries(Object.entries(d.skills).filter(([k]) => k !== placeholder)),
+    wf: { ...d.wf, steps: d.wf.steps.map((s) => (s.skill_id === placeholder ? { ...s, skill_id: id } : s)) },
+  };
+}

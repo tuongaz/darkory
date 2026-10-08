@@ -214,6 +214,31 @@ describe("Settings › Workflow", () => {
     expect(puts[0].steps.find((s) => s.name === "Review")!.skill).toBe("sk-security");
   });
 
+  it("creates a new Skill once: a refused Workflow keeps it, and the next Save sends only the Workflow", async () => {
+    let refusing = true;
+    const { api, puts } = serve(workflow(), ada, {
+      "POST /v1/skills": ({ body }: Call) => ({
+        skill: { id: "sk-security", name: (body as { name: string }).name, kind: "generic", builtin: false, current_version: 1, created_at: "2026-10-08T00:00:00Z" },
+        current: { skill_id: "sk-security", version: 1, body: "", published_at: "2026-10-08T00:00:00Z" },
+      }),
+    });
+    const put = api.routes["PUT /v1/projects/:project/workflow"] as (call: Call) => Workflow;
+    api.routes["PUT /v1/projects/:project/workflow"] = (call: Call) => (refusing ? ((refusing = false), refuse(409, "conflict", "Try again.")) : put(call));
+    await openList();
+    await userEvent.click(screen.getByRole("combobox", { name: "Skill of Review" }));
+    await userEvent.type(await screen.findByPlaceholderText("Find or name a Skill"), "security");
+    await userEvent.click(await screen.findByRole("option", { name: /New Skill “security”/ }));
+    const dialog = within(await screen.findByRole("dialog", { name: "New Skill “security”" }));
+    await userEvent.type(dialog.getByRole("textbox", { name: "Text" }), "Look for holes.");
+    await userEvent.click(dialog.getByRole("button", { name: "Use this Skill" }));
+    await save();
+    expect(await screen.findByText(/Try again/)).toBeInTheDocument();
+    await save();
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(api.calls.filter((c) => c.method === "POST")).toHaveLength(1);
+    expect(puts[0].steps.find((s) => s.name === "Review")!.skill).toBe("sk-security");
+  });
+
   it("inserts a Step after Review: Review's first outcome now leads into it, struck with undo, and it leads on to Done", async () => {
     const { puts } = serve();
     const list = await openList();

@@ -117,7 +117,8 @@ export function toCanvas(
 
 /**
  * The whole Workflow as `PUT …/workflow` takes it: Steps numbered 1, 2, 3… in their order, each
- * with its id unless it is new, its Skill (left out on a hold) and where it stands; Connectors
+ * with its id unless it is new, its Skill (left out on a hold) and where it stands (left out on a
+ * new one, which `/v1` places); Connectors
  * numbered among those out of their Step, naming a new Step by its name (the spec takes a Step of
  * the body by id or name, and names are unique in a Workflow), leaving `to` out into Done.
  */
@@ -144,8 +145,8 @@ export function toBody(record: WorkflowRecord, moves?: Record<string, string>): 
       name: s.name,
       ...(s.skill_id ? { skill: s.skill_id } : {}),
       position: i + 1,
-      x: s.x,
-      y: s.y,
+      // A new Step is placed by /v1, clear of the others.
+      ...(isNew(s.id) ? {} : { x: s.x, y: s.y }),
     })),
     connectors,
   };

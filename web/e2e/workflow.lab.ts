@@ -133,6 +133,16 @@ test("editing: nothing is sent until Save; then the new Skill, then one PUT", as
   await page.getByRole("option", { name: /New Skill “testing”/ }).click();
   await page.getByRole("dialog").getByRole("textbox", { name: "Text" }).fill("Test it.");
   await page.getByRole("dialog").getByRole("button", { name: "Use this Skill" }).click();
+  // Its grip dragged onto Build's row: it lands in Build's place.
+  const grip = await page.getByRole("button", { name: /^Reorder Test/ }).boundingBox();
+  const build = await page.getByRole("listitem", { name: "3. Build" }).boundingBox();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + 4, grip!.y - 10, { steps: 4 });
+  await page.mouse.move(grip!.x + 4, build!.y + 6, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole("listitem", { name: "3. Test" })).toBeVisible();
+  await expect(page.getByRole("listitem", { name: "4. Build" })).toBeVisible();
   expect(writes).toEqual([]);
   await page.getByRole("button", { name: "Save" }).click();
   await expect.poll(() => writes).toEqual(["POST /v1/skills", "PUT /v1/projects/WEB/workflow"]);
