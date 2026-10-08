@@ -33,6 +33,7 @@ test("Local's switcher has no Switch Organisation; a sign-in reaching two shows 
   expect(me.organisations).toBeUndefined();
   let menu = await switcher(page);
   await expect(menu.getByRole("menuitem", { name: /Switch Organisation/ })).toHaveCount(0);
+  await page.screenshot({ path: "e2e/screenshots/organisations/one.png", animations: "disabled" });
   await page.keyboard.press("Escape");
 
   await page.route("**/v1/me", async (route) => {
@@ -43,6 +44,6 @@ test("Local's switcher has no Switch Organisation; a sign-in reaching two shows 
   await page.reload();
   menu = await switcher(page);
   await expect(menu.getByRole("menuitem", { name: /Switch Organisation/ })).toBeVisible();
-  await page.screenshot({ path: "e2e/screenshots/organisations-two.png" });
+  await page.screenshot({ path: "e2e/screenshots/organisations/two.png", animations: "disabled" });
   expect(errors).toEqual([]);
 });

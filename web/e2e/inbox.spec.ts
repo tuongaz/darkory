@@ -13,7 +13,7 @@ const base = () => process.env.DARKORY_E2E_BASE_URL!;
 const shots = fileURLToPath(new URL("./screenshots/inbox/", import.meta.url));
 
 function shot(page: Page, name: string) {
-  return page.screenshot({ path: `${shots}${name}.png` });
+  return page.screenshot({ path: `${shots}${name}.png`, animations: "disabled" });
 }
 
 function consoleErrors(page: Page): string[] {
