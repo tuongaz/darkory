@@ -1593,9 +1593,21 @@ type SetWorkflowBody struct {
 	// Connectors Every Connector of the new Workflow. One left out is deleted.
 	Connectors []ConnectorInput `json:"connectors"`
 
+	// Grants Skills to give Members; one a Member has changes nothing.
+	Grants *[]SkillGrantInput `json:"grants,omitempty"`
+
+	// Joins Members, by id or name, to add to the Project; one in it already changes nothing.
+	Joins *[]string `json:"joins,omitempty"`
+
 	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
 	// Workflow, by its id or its name in `steps`.
 	Moves *map[string]string `json:"moves,omitempty"`
+
+	// Revokes Skills to take away from Members; one a Member lacks changes nothing. Claims held under it are not ended.
+	Revokes *[]SkillGrantInput `json:"revokes,omitempty"`
+
+	// Skills Generic Skills to create before the Workflow is put in place, each published as version 1.
+	Skills *[]WorkflowSkillInput `json:"skills,omitempty"`
 
 	// Steps Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
 	// none. A Step left out is deleted.
@@ -1624,6 +1636,15 @@ type Skill struct {
 type SkillDetail struct {
 	Current SkillVersion `json:"current"`
 	Skill   Skill        `json:"skill"`
+}
+
+// SkillGrantInput defines model for SkillGrantInput.
+type SkillGrantInput struct {
+	// Member The Member, by id or name.
+	Member string `json:"member"`
+
+	// Skill The Skill, by id or name; one in `skills` by its name.
+	Skill string `json:"skill"`
 }
 
 // SkillKind defines model for SkillKind.
@@ -2045,6 +2066,13 @@ type Workflow struct {
 
 	// Steps The Steps, by `position`, each with what is happening at it now.
 	Steps []WorkflowStep `json:"steps"`
+}
+
+// WorkflowSkillInput defines model for WorkflowSkillInput.
+type WorkflowSkillInput struct {
+	// Body The Skill's text, published as version 1.
+	Body string `json:"body"`
+	Name string `json:"name"`
 }
 
 // WorkflowStep A Step with what is happening at it now.

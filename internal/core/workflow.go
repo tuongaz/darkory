@@ -318,7 +318,20 @@ type WorkflowInput struct {
 	// Moves says where the open Tasks at each Step left out go: the deleted Step's id → a Step of
 	// the new Workflow, by id or name.
 	Moves map[string]string
+	// Who takes the Steps, changed in the same write: the generic Skills to create first, so a
+	// Step or a grant may name one; the Members to add to the Project; the Skills to give and to
+	// take away.
+	Skills  []WorkflowSkill
+	Joins   []string
+	Grants  []SkillGrant
+	Revokes []SkillGrant
 }
+
+// WorkflowSkill is a generic Skill SetWorkflow creates before it puts the Workflow in place.
+type WorkflowSkill struct{ Name, Body string }
+
+// SkillGrant names a Member and a Skill, each by id or name.
+type SkillGrant struct{ Member, Skill string }
 
 // StepInput is one Step of a Workflow being set: ID names one the Workflow has now, and is empty
 // for a new one. Skill names a Skill by id or name; nil for a hold. Position is its place, 1
@@ -356,12 +369,23 @@ func (s *Service) SetWorkflow(ctx context.Context, c *auth.Caller, projectRef st
 	if err := mustAdmin(c); err != nil {
 		return WorkflowDetail{}, err
 	}
+	if err := checkTakers(w); err != nil {
+		return WorkflowDetail{}, err
+	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		projectID, err := resolveProject(ctx, t, c.OrgID, projectRef)
 		if err != nil {
 			return nil, err
 		}
+		for _, sk := range w.Skills {
+			if _, err := createSkill(t, sk.Name, "generic", nil, sk.Body, false); err != nil {
+				return nil, err
+			}
+		}
 		if _, err := replaceWorkflow(t, projectID, w); err != nil {
+			return nil, err
+		}
+		if err := changeTakers(t, projectID, w); err != nil {
 			return nil, err
 		}
 		return workflowDetail(ctx, t, c.OrgID, projectID, t.now)
@@ -370,6 +394,74 @@ func (s *Service) SetWorkflow(ctx context.Context, c *auth.Caller, projectRef st
 		return WorkflowDetail{}, err
 	}
 	return res.(WorkflowDetail), nil
+}
+
+// checkTakers refuses, before anything is written, a new Skill's name that is not one, a name
+// given twice, and a Member and Skill both granted and revoked.
+func checkTakers(w WorkflowInput) error {
+	named := map[string]bool{}
+	for _, sk := range w.Skills {
+		if !skillName.MatchString(sk.Name) || looksLikeID(sk.Name) {
+			return refuse(CodeInvalid, "a Skill name is lower-case letters, digits and dashes, such as qa: %q is not", sk.Name)
+		}
+		if named[sk.Name] {
+			return refuse(CodeInvalid, "the Skill %s is created twice", sk.Name)
+		}
+		named[sk.Name] = true
+	}
+	granted := map[SkillGrant]bool{}
+	for _, g := range w.Grants {
+		granted[g] = true
+	}
+	for _, r := range w.Revokes {
+		if granted[r] {
+			return refuse(CodeInvalid, "%s and %s are in both grants and revokes", r.Member, r.Skill)
+		}
+	}
+	return nil
+}
+
+// changeTakers makes SetWorkflow's changes to who takes the Steps inside its write: the Members
+// joining the Project, then the Skills given, then those taken away. Each act that changes
+// nothing records nothing.
+func changeTakers(t *tx, projectID string, w WorkflowInput) error {
+	ctx, org := t.ctx, t.caller.OrgID
+	for _, ref := range w.Joins {
+		member, err := resolveMember(ctx, t, org, ref)
+		if err != nil {
+			return err
+		}
+		if err := addProjectMember(t, projectID, member); err != nil {
+			return err
+		}
+	}
+	both := func(g SkillGrant) (string, string, error) {
+		member, err := resolveMember(ctx, t, org, g.Member)
+		if err != nil {
+			return "", "", err
+		}
+		skill, err := resolveSkill(ctx, t, org, g.Skill)
+		return member, skill, err
+	}
+	for _, g := range w.Grants {
+		member, skill, err := both(g)
+		if err != nil {
+			return err
+		}
+		if err := grantSkill(t, member, skill); err != nil {
+			return err
+		}
+	}
+	for _, g := range w.Revokes {
+		member, skill, err := both(g)
+		if err != nil {
+			return err
+		}
+		if err := revokeSkill(t, member, skill); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // resolvedWorkflow is a WorkflowInput checked against the record: every Step and Connector with
