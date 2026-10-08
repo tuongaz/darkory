@@ -133,7 +133,7 @@ describe("a story opened into its path", () => {
     expect(entriesOf(own, t9, ctx, now).map((x) => [x.text, x.detail, !!x.live])).toEqual([
       ["ada filed it", "Build", false],
       ["builder picked up", "waited 22m", false],
-      ["builder advanced along pass", "9m · to Review", false],
+      ["builder advanced along pass", "9m", false],
       ["ada picked up", "waited 7m · 5m so far", true],
     ]);
   });

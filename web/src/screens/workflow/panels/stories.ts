@@ -322,7 +322,6 @@ export function entriesOf(own: Activity[], task: Task | undefined, ctx: FlowCont
           const since = num(e.payload, "since");
           const start = claimed ?? since;
           if (start !== undefined && at - start >= 60_000) detail = ageText(at - start);
-          if (e.kind !== "task.completed") detail = [detail, stepName(ctx, str(e.payload, "to")) && `to ${stepName(ctx, str(e.payload, "to"))}`].filter(Boolean).join(" · ");
           reached = at;
           claimed = undefined;
           break;

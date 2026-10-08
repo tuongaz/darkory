@@ -1,5 +1,5 @@
 import { CheckIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { Project } from "@/api/client";
 import { useDirectory, useWorkflow } from "@/api/queries";
@@ -78,12 +78,10 @@ export function NeedCard({
           {t.title}
         </Link>
       </div>
-      <div className="col-start-2 flex min-w-0 items-center gap-1 pl-[21px] text-[11.5px] leading-[15px] text-muted-foreground max-sm:pl-0">
-        {project && <ProjectMark project={project} />}
-        <Key>{t.key}</Key>
-        <span aria-hidden>·</span>
-        <span className="min-w-0">{item.why}</span>
-      </div>
+      <p className="col-start-2 min-w-0 pl-[21px] text-[11.5px] leading-[15px] text-muted-foreground max-sm:pl-0">
+        {project && <ProjectMark project={project} className="mr-1 align-[-2px]" />}
+        <Key>{t.key}</Key> · {item.why}
+      </p>
       <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-end gap-[5px]">
         <span className="text-[11.5px] font-medium whitespace-nowrap text-state-waiting">{consequence(item)}</span>
         {item.act !== "answer" && <ActButton item={item} primary={primary} />}
@@ -96,15 +94,18 @@ export function NeedCard({
 /** The answer box: one submit claims, notes and completes; a refusal shows here and keeps the words. */
 function AnswerBox({ item, primary, holdsIt, onAnswered }: { item: NeedItem; primary?: boolean; holdsIt: boolean; onAnswered?: (a: Answered) => void }) {
   const [text, setText] = useState("");
+  const box = useRef<HTMLInputElement>(null);
   const answer = useAnswer(item.task, holdsIt, () => onAnswered?.({ key: item.task.key, unblocks: item.unblocks.map((u) => u.key), at: new Date().toISOString() }));
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (text.trim()) answer.mutate(text.trim());
+    else box.current?.focus();
   };
   return (
     <form onSubmit={submit} className="col-span-2 col-start-2 mt-1.5 flex flex-col gap-1.5 pl-[21px] max-sm:col-span-3 max-sm:col-start-1 max-sm:pl-0">
       <div className="flex gap-2">
         <Input
+          ref={box}
           aria-label={`Your answer to ${item.task.key}`}
           placeholder="Your answer"
           value={text}
@@ -113,7 +114,7 @@ function AnswerBox({ item, primary, holdsIt, onAnswered }: { item: NeedItem; pri
           aria-invalid={answer.isError || undefined}
           className={cn("h-8 flex-1", answer.isError && "border-state-blocked")}
         />
-        <Button type="submit" variant={primary === false ? "outline" : "default"} disabled={answer.isPending || !text.trim()}>
+        <Button type="submit" variant={primary ? "default" : "outline"} disabled={answer.isPending}>
           Answer
         </Button>
       </div>

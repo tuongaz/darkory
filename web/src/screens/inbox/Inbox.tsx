@@ -17,6 +17,7 @@ import { useNeeds } from "@/screens/workflow/panels/useNeeds";
 import { takeableCap } from "./derive";
 import { AnswerButton, ClaimButton, GroupHeader, KindPill, StandsAt, TaskRow } from "./parts";
 import { useStepNames } from "./queries";
+import { liveClaim } from "@/work";
 
 /**
  * /inbox, across Projects: what needs the signed-in Member, then what they can take. Needs you
@@ -33,14 +34,16 @@ export function InboxPage() {
   const dir = useDirectory();
   const steps = useStepNames();
   const needs = useNeeds();
+  const now = useNow();
   const takeable = useTakeable();
   const [allTakeable, setAllTakeable] = useState(false);
 
   const failed = [takeable].find((q) => q.isError)?.error ?? needs.error;
   const loading = takeable.isPending || needs.loading;
 
-  // Across Projects, a hold or a paused agent's wait is listed only where nobody else could move it.
-  const items = needs.items.filter((i) => (i.act !== "move" && i.act !== "resume") || i.onlyMe);
+  // Across Projects, a hold or a paused agent's wait is listed only where nobody else could move it;
+  // a question I have claimed to answer is in My work, held by me.
+  const items = needs.items.filter((i) => ((i.act !== "move" && i.act !== "resume") || i.onlyMe) && !(i.act === "answer" && liveClaim(i.task, now)?.holder_id === id));
   const listed = new Set(items.map((i) => i.task.id));
   const take = (takeable.data ?? []).filter((t) => !listed.has(t.id));
   const takeShown = allTakeable ? take : take.slice(0, takeableCap);

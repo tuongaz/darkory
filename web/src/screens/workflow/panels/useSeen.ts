@@ -46,6 +46,9 @@ export function useSeen(project: string): Seen | undefined {
   return useQuery({ queryKey: seenKey(project), queryFn: () => readSeen(project), staleTime: Infinity }).data;
 }
 
+// The mark each Project's panel will write as it goes, unless another mounts for it at once.
+const leaving = new Map<string, ReturnType<typeof setTimeout>>();
+
 /**
  * Makes the newest entry shown to the Member (`newest`) their mark when they leave the page or it
  * is hidden. Coming back to a hidden page reads the mark again, so the divider moves to where they
@@ -75,12 +78,14 @@ export function useMarkSeenOnLeave(project: string, newest: number | undefined) 
       if (document.visibilityState === "hidden") mark();
       else void qc.invalidateQueries({ queryKey: seenKey(project) });
     };
+    // A remount straight after an unmount (React's strict mode, the page moving the panel) is not leaving.
+    clearTimeout(leaving.get(project));
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", mark);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", mark);
-      mark();
+      leaving.set(project, setTimeout(mark, 0));
     };
   }, [project, qc]);
 }

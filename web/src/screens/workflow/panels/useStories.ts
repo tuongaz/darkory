@@ -87,7 +87,8 @@ export function useStories(project: Project): Stories {
     };
     const stories = storiesOf(input);
     const latest = storiesOf({ ...input, exclude: new Set(), from: 0, seenSeq: Number.MAX_SAFE_INTEGER })[0];
-    const quietNow = isQuiet(entries, now, seenSeq);
+    // Not quiet until the entries and the mark are read: the page would lay out twice.
+    const quietNow = !recent.query.isPending && seen !== undefined && isQuiet(entries, now, seenSeq);
     return {
       ctx,
       tasks,
