@@ -1,4 +1,5 @@
 import { expect, test, type Browser, type BrowserContext } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { startInstall } from "./server";
 
@@ -316,6 +317,34 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await expect(card.locator("[data-member-card]")).toHaveAttribute("data-member-card", "ada");
   await expect(card.getByText("Human", { exact: true })).toBeVisible();
 
+  expect(errors).toEqual([]);
+  await ctx.close();
+});
+
+test("the software Workflow at 1440×900: its line and the whole Loops list show as the page opens, nothing cut by the panels", async ({ browser }) => {
+  // The preset's 14 Steps and 7 loops back (examples/workflows/software), its Skills made first.
+  const workflow = JSON.parse(readFileSync(fileURLToPath(new URL("../../examples/workflows/software/workflow.json", import.meta.url)), "utf8")) as { steps: { skill?: string }[] };
+  const have = new Set(((await v1("GET", "/v1/skills")) as { items: { name: string }[] }).items.map((x) => x.name));
+  for (const name of new Set(workflow.steps.flatMap((x) => (x.skill ? [x.skill] : [])))) {
+    if (!have.has(name)) await v1("POST", "/v1/skills", { name, kind: "generic", body: `${name}.` });
+  }
+  await v1("POST", "/v1/projects", { key: "SWL", name: "Software line", workflow: "empty", members: ["ada"] });
+  await v1("PUT", "/v1/projects/SWL/workflow", workflow);
+
+  const { page, errors, ctx } = await open(browser, "/projects/SWL/workflow");
+  const loops = page.getByRole("region", { name: "Loops" });
+  await expect(loops).toContainText("Loops 7");
+  const rows = loops.getByRole("listitem");
+  await expect(rows).toHaveCount(7);
+  // Every row is on screen and on top where it is drawn: no pane above it cuts it off.
+  for (const row of await rows.all()) {
+    const seen = await row.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && el.contains(document.elementFromPoint(r.left + 12, r.top + r.height / 2));
+    });
+    expect(seen, await row.innerText()).toBe(true);
+  }
+  await page.screenshot({ path: `${liveShots}software-loops-1440.png`, animations: "disabled" });
   expect(errors).toEqual([]);
   await ctx.close();
 });
