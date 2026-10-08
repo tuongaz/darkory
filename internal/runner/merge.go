@@ -264,7 +264,8 @@ func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, 
 	title := fmt.Sprintf("Resolve the merge of %s into %s", branch, target)
 	work := fmt.Sprintf("Merge %s into this Task's branch, resolve what conflicts, run the tests, commit, and advance it as any "+
 		"work: this Task's branch merges into %s when it is done.", branch, target)
-	nt := client.FileTaskBody{Title: title}
+	// It works in the Workspace the merge did not go into, whatever its Parent or Project names.
+	nt := client.FileTaskBody{Title: title, Workspaces: &[]string{ws.ID}}
 	switch {
 	case parent != nil && parent.Open:
 		nt.Parent = &parent.ID

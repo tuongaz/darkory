@@ -862,6 +862,9 @@ func TestRunnerMergeConflict(t *testing.T) {
 			conflicted := strings.Fields(resolve.Title)[len(strings.Fields(resolve.Title))-3] // … the merge of <branch> into web-1
 			key := KeyOf(conflicted)
 			r := f.task(resolve.Key)
+			if len(r.Workspaces) != 1 || r.Workspaces[0].Name != "web" {
+				t.Fatalf("the resolving Task names the Workspaces %+v, not the one the merge did not go into", r.Workspaces)
+			}
 			if r.Step == nil || r.Step.Name != "Build" || !strings.Contains(resolve.Description, "shared.txt") || !strings.Contains(resolve.Description, "CONFLICT") {
 				t.Fatalf("the resolving Task, at %+v: %q\n%s", r.Step, resolve.Title, resolve.Description)
 			}
