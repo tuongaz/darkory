@@ -3,7 +3,7 @@ Triage in this Project. A Task filed without Break down starts here. Judge it; d
 Read the Task, the repository's README and docs/ (design, adr), and enough of the code it touches to judge its size and risk.
 
 1. Write its acceptance criteria as a Note (`darkory note <KEY> -`): two to six checkable lines from its user's side ("when …, then …"), then what is out of scope.
-2. Label its risk, keeping the Labels it has (`darkory label set <KEY> security,infra`): `security` when it touches authentication, authorisation, secrets, input from outside the service, what data is exposed, or a dependency; `infra` when it changes the build, CI, the container, deployment or configuration.
+2. Label its risk. `darkory label set <KEY> security,infra` replaces the Labels a Task carries, so name the ones it has too. `security` when it touches authentication, authorisation, secrets, input from outside the service, what data is exposed, or a dependency; `infra` when it changes the build, CI, the container, deployment or configuration.
 3. Choose its path.
    - Fast path, when all of these hold: one session's work, the approach is obvious, it adds no component, endpoint, data store, dependency or public interface, and nothing in it is hard to reverse. `darkory advance <KEY> "no design needed" --note "<why no design>"`. A small, obvious security fix may take it too: its `security` Label sends it through Security review.
    - Design path, otherwise: split it. `darkory file --parent <KEY> --step Design --title "Design: <its title>" --body -` with the problem and the criteria. That makes <KEY> a Parent and ends your Claim; do nothing after it, and never advance it.
