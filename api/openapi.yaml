@@ -363,11 +363,13 @@ paths:
       summary: Change a Member's name, email, admin mark or avatar
       description: |
         An admin changes any of them. A human Member may change their own avatar, and only that;
-        an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-        `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+        an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+        Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+        `""` removes the avatar. The avatar file a Member stops showing is
         deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
         for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-        file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+        file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+        `conflict` (name or email taken; removing the last
         admin).
       parameters:
         - {$ref: "#/components/parameters/MemberRef"}

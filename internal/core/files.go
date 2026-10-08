@@ -164,7 +164,8 @@ func releaseAvatar(t *tx, fileID string) error {
 	if err != nil {
 		return err
 	}
-	if f.Purpose != FileAvatar {
+	// Only a file the caller could delete themselves: its uploader's, or any for an admin.
+	if f.Purpose != FileAvatar || (!t.caller.Admin && f.CreatedBy != t.caller.MemberID) {
 		return nil
 	}
 	if _, err := t.Exec(t.ctx, `UPDATE files SET deleted_at = $1, deleted_by = $2 WHERE org_id = $3 AND id = $4`,
@@ -174,14 +175,19 @@ func releaseAvatar(t *tx, fileID string) error {
 	return t.recordByCaller("file.deleted", fileID, map[string]any{"name": f.Name, "released": true})
 }
 
-// avatarFile checks that id names a file of the caller's Organisation uploaded as an avatar.
-func avatarFile(ctx context.Context, r store.Reader, orgID, id string) error {
-	f, err := getFile(ctx, r, orgID, id)
+// avatarFile checks that id names a file of the caller's Organisation, not deleted, uploaded as an
+// avatar; a Member who is not an admin may only show a file they uploaded themselves, so nobody
+// can take another Member's upload, keep its uploader from deleting it, or have it released.
+func avatarFile(ctx context.Context, r store.Reader, c *auth.Caller, id string) error {
+	f, err := getFile(ctx, r, c.OrgID, id)
 	if err != nil {
 		return err
 	}
 	if f.Purpose != FileAvatar || !avatarTypes[f.ContentType] || f.Size > AvatarMaxBytes {
 		return refuse(CodeInvalid, "file %s was not uploaded as an avatar: upload the image with purpose avatar", id)
+	}
+	if !c.Admin && f.CreatedBy != c.MemberID {
+		return refuse(CodeForbidden, "only an admin may show a file another Member uploaded as an avatar")
 	}
 	return nil
 }

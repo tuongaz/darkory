@@ -3091,11 +3091,13 @@ type ClientInterface interface {
 	// UpdateMemberWithBody Change a Member's name, email, admin mark or avatar
 	//
 	// An admin changes any of them. A human Member may change their own avatar, and only that;
-	// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-	// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
 	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-	// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
 	// admin).
 	//
 	// Takes any type of body and a specified content type.
@@ -3106,11 +3108,13 @@ type ClientInterface interface {
 	// UpdateMember Change a Member's name, email, admin mark or avatar
 	//
 	// An admin changes any of them. A human Member may change their own avatar, and only that;
-	// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-	// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
 	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-	// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
 	// admin).
 	//
 	// Takes a body of the `application/json` content type.
@@ -4841,11 +4845,13 @@ func (c *Client) GetMember(ctx context.Context, member MemberRef, reqEditors ...
 // UpdateMemberWithBody Change a Member's name, email, admin mark or avatar
 //
 // An admin changes any of them. A human Member may change their own avatar, and only that;
-// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
 // deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 // for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
 // admin).
 //
 // Takes any type of body and a specified content type.
@@ -4866,11 +4872,13 @@ func (c *Client) UpdateMemberWithBody(ctx context.Context, member MemberRef, par
 // UpdateMember Change a Member's name, email, admin mark or avatar
 //
 // An admin changes any of them. A human Member may change their own avatar, and only that;
-// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
 // deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 // for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
 // admin).
 //
 // Takes a body of the `application/json` content type.
@@ -12241,11 +12249,13 @@ type ClientWithResponsesInterface interface {
 	// UpdateMemberWithBodyWithResponse Change a Member's name, email, admin mark or avatar
 	//
 	// An admin changes any of them. A human Member may change their own avatar, and only that;
-	// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-	// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
 	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-	// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
 	// admin).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -12256,11 +12266,13 @@ type ClientWithResponsesInterface interface {
 	// UpdateMemberWithResponse Change a Member's name, email, admin mark or avatar
 	//
 	// An admin changes any of them. A human Member may change their own avatar, and only that;
-	// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-	// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
 	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-	// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
 	// admin).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -18148,11 +18160,13 @@ func (c *ClientWithResponses) GetMemberWithResponse(ctx context.Context, member 
 // UpdateMemberWithBodyWithResponse Change a Member's name, email, admin mark or avatar
 //
 // An admin changes any of them. A human Member may change their own avatar, and only that;
-// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
 // deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 // for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
 // admin).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -18169,11 +18183,13 @@ func (c *ClientWithResponses) UpdateMemberWithBodyWithResponse(ctx context.Conte
 // UpdateMemberWithResponse Change a Member's name, email, admin mark or avatar
 //
 // An admin changes any of them. A human Member may change their own avatar, and only that;
-// an agent's avatar is changed by an admin. `avatar_file_id` names a file uploaded with
-// `purpose=avatar`; `""` removes the avatar. The avatar file a Member stops showing is
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
 // deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
 // for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
-// file was not uploaded as an avatar), `conflict` (name or email taken; removing the last
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
 // admin).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).

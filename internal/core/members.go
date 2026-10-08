@@ -157,7 +157,7 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 					avatar, payload["avatar_file_id"] = nil, nil
 				}
 			} else {
-				if err := avatarFile(ctx, t, c.OrgID, *ch.AvatarFileID); err != nil {
+				if err := avatarFile(ctx, t, c, *ch.AvatarFileID); err != nil {
 					return nil, err
 				}
 				avatar, payload["avatar_file_id"] = ch.AvatarFileID, *ch.AvatarFileID

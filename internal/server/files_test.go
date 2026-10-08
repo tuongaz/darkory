@@ -254,6 +254,105 @@ func TestFiles(t *testing.T) {
 	})
 }
 
+// Every authorisation rule of files and avatars, one check each (security review).
+func TestFileAuthorization(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		disk, err := blob.NewDisk(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		h := newHarnessWith(t, st, Options{Files: disk})
+		ctx := t.Context()
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		bob, _ := h.member("bob", client.Human, "WEB")
+		carol, _ := h.member("carol", client.Human, "WEB")
+		qa, _ := h.member("qa", client.Agent, "WEB")
+		zed := otherOrganisation(t, h, st)
+		face := func(c *client.ClientWithResponses) string {
+			t.Helper()
+			res := upload(t, c, "face.png", "avatar", "image/png", pngOf(t, 32, 32), nil)
+			if res.StatusCode() != http.StatusCreated {
+				t.Fatalf("avatar upload: %d %s", res.StatusCode(), res.Body)
+			}
+			return res.JSON201.ID
+		}
+		bobs, carols, admins, zeds := face(bob), face(carol), face(h.admin), face(zed)
+		general := upload(t, bob, "a.txt", "", "text/plain", []byte("x"), nil).JSON201.ID
+		zedGeneral := upload(t, zed, "z.txt", "", "text/plain", []byte("z"), nil).JSON201.ID
+
+		t.Run("another Organisation's file is not found on read, content and delete", func(t *testing.T) {
+			for _, id := range []string{zeds, zedGeneral} {
+				got(bob.GetFileWithResponse(ctx, id)).want(t, http.StatusNotFound)
+				got(bob.DownloadFileWithResponse(ctx, id, &client.DownloadFileParams{})).want(t, http.StatusNotFound)
+				got(h.admin.DeleteFileWithResponse(ctx, id, &client.DeleteFileParams{})).want(t, http.StatusNotFound)
+				got(zed.GetFileWithResponse(ctx, bobs)).want(t, http.StatusNotFound)
+			}
+		})
+		t.Run("an avatar cannot point at another Organisation's file", func(t *testing.T) {
+			got(setAvatar(t, bob, "bob", zeds)).want(t, http.StatusNotFound)
+			got(setAvatar(t, h.admin, "qa", zeds)).want(t, http.StatusNotFound)
+			got(setAvatar(t, zed, "zed", bobs)).want(t, http.StatusNotFound)
+		})
+		t.Run("an avatar cannot point at a file not uploaded as one", func(t *testing.T) {
+			got(setAvatar(t, bob, "bob", general)).want(t, http.StatusBadRequest)
+			got(setAvatar(t, h.admin, "qa", general)).want(t, http.StatusBadRequest)
+		})
+		t.Run("an avatar cannot point at a deleted or unknown file", func(t *testing.T) {
+			gone := face(bob)
+			got(bob.DeleteFileWithResponse(ctx, gone, &client.DeleteFileParams{})).want(t, http.StatusNoContent)
+			got(setAvatar(t, bob, "bob", gone)).want(t, http.StatusNotFound)
+			got(setAvatar(t, bob, "bob", "no-such-file")).want(t, http.StatusNotFound)
+		})
+		t.Run("a human cannot show a file another Member uploaded", func(t *testing.T) {
+			got(setAvatar(t, bob, "bob", carols)).want(t, http.StatusForbidden)
+			got(setAvatar(t, bob, "bob", admins)).want(t, http.StatusForbidden)
+		})
+		t.Run("a human sets only their own avatar", func(t *testing.T) {
+			got(setAvatar(t, bob, "carol", bobs)).want(t, http.StatusForbidden)
+			got(setAvatar(t, bob, "ada", bobs)).want(t, http.StatusForbidden)
+			got(setAvatar(t, bob, "bob", bobs)).want(t, http.StatusOK)
+			got(setAvatar(t, bob, "carol", "")).want(t, http.StatusForbidden)
+		})
+		t.Run("an agent's avatar is set by an admin only", func(t *testing.T) {
+			own := face(qa)
+			got(setAvatar(t, qa, "qa", own)).want(t, http.StatusForbidden)
+			got(setAvatar(t, bob, "qa", bobs)).want(t, http.StatusForbidden)
+			got(setAvatar(t, h.admin, "qa", admins)).want(t, http.StatusOK)
+			got(setAvatar(t, qa, "qa", "")).want(t, http.StatusForbidden)
+		})
+		t.Run("an admin sets a human's avatar", func(t *testing.T) {
+			got(setAvatar(t, h.admin, "carol", carols)).want(t, http.StatusOK)
+		})
+		t.Run("only the uploader or an admin deletes a file", func(t *testing.T) {
+			got(carol.DeleteFileWithResponse(ctx, general, &client.DeleteFileParams{})).want(t, http.StatusForbidden)
+			got(qa.DeleteFileWithResponse(ctx, general, &client.DeleteFileParams{})).want(t, http.StatusForbidden)
+			other := upload(t, carol, "c.txt", "", "text/plain", []byte("c"), nil).JSON201.ID
+			got(h.admin.DeleteFileWithResponse(ctx, other, &client.DeleteFileParams{})).want(t, http.StatusNoContent)
+			got(bob.DeleteFileWithResponse(ctx, general, &client.DeleteFileParams{})).want(t, http.StatusNoContent)
+		})
+		t.Run("a file shown as an avatar is not deleted, even by an admin", func(t *testing.T) {
+			got(bob.DeleteFileWithResponse(ctx, bobs, &client.DeleteFileParams{})).want(t, http.StatusConflict)
+			got(h.admin.DeleteFileWithResponse(ctx, carols, &client.DeleteFileParams{})).want(t, http.StatusConflict)
+		})
+		t.Run("changing an avatar releases only a file the caller could delete", func(t *testing.T) {
+			// Carol's avatar was set by an admin from her own upload; she replaces it: hers, released.
+			next := face(carol)
+			got(setAvatar(t, carol, "carol", next)).want(t, http.StatusOK)
+			got(carol.GetFileWithResponse(ctx, carols)).want(t, http.StatusNotFound)
+			// An admin-uploaded file an admin set on carol is not released by carol.
+			byAdmin := face(h.admin)
+			got(setAvatar(t, h.admin, "carol", byAdmin)).want(t, http.StatusOK)
+			got(setAvatar(t, carol, "carol", "")).want(t, http.StatusOK)
+			got(h.admin.GetFileWithResponse(ctx, byAdmin)).want(t, http.StatusOK)
+		})
+		t.Run("no credential reads nothing", func(t *testing.T) {
+			anon := h.client("", "")
+			got(anon.GetFileWithResponse(ctx, bobs)).want(t, http.StatusUnauthorized)
+			got(anon.DownloadFileWithResponse(ctx, bobs, &client.DownloadFileParams{})).want(t, http.StatusUnauthorized)
+		})
+	})
+}
+
 // orgOf returns the harness's Organisation id.
 func orgOf(t *testing.T, h *harness) string {
 	t.Helper()
