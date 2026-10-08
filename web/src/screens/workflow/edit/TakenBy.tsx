@@ -1,127 +1,109 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { BotIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { BotIcon, PlusIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Project, Skill } from "@/api/client";
-import { invalidateAll, useTasks } from "@/api/queries";
-import { addProjectMember, grantSkill, removeProjectMember, revokeSkill } from "@/api/writes";
 import { FormDialog } from "@/components/FormDialog";
 import { MemberAvatar } from "@/components/MemberAvatar";
-import { Refusal } from "@/components/Refusal";
-import { countTasks } from "@/components/workflow/model";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { memberSettingsPath } from "@/lib/members";
-import { orgWide, type Holder } from "./holders";
+import { cn } from "@/lib/utils";
+import { inOrder, isNewSkill, willBeIn, type Draft } from "./draft";
+import { orgWide, type Holder, type Roster } from "./holders";
 import { CreateAgentDialog } from "./people";
-import { andList, grantElsewhere, joinAlso, leaveReach, othersAt, staysIn, takeAwayReach, type OrgFacts, type Place } from "./reach";
+import { andList, takeAwayReach, type OrgFacts } from "./reach";
+import { Tip } from "./Tip";
 
 /*
  * Who takes a Step's Tasks, in its panel: the Members of the Project who have its Skill (the
- * Organisation's, for skill-review), each with the two acts that take them off it, named for what
- * they change and how far they reach (take the Skill away: every Project they are in; remove from
- * the Project: every Step there); then Add a Member and Create an agent. All four act at once: they
- * change Members, not the Workflow, so Save neither sends nor undoes them.
+ * Organisation's, for skill-review), as the draft has them. Each row's name opens the Member; its
+ * × removes them, which takes the Skill from them on Save and asks first only when that reaches
+ * past this Step. Add gives a Member the Skill (joining the Project first when they are not in it).
+ * Add and Remove edit the draft like the rest of the editor; New agent makes a Member at once.
  */
 
+/** The Skill a Step carries: one that exists, or a new one (`new-skill:<name>`) made on Save. */
+export type StepSkill = Pick<Skill, "id" | "name" | "builtin">;
+
 const kindWord = (h: Pick<Holder, "kind">) => (h.kind === "agent" ? "Agent" : "Human");
-const placeWord = (p: Place, many: boolean) => (many ? `${p.project.name} · ${p.step.name}` : p.step.name);
-const tasksWord = (places: Place[]) => countTasks(places.reduce((n, p) => n + p.tasks, 0));
 
 export function TakenBy({
   project,
-  stepName,
+  stepId,
   skill,
+  draft,
   holders,
-  skills,
+  roster,
   facts,
   readOnly,
+  onAdd,
+  onRemove,
 }: {
   project: Project;
-  stepName: string;
-  skill: Skill;
-  /** Who takes it now; undefined while unknown. */
+  stepId: string;
+  skill: StepSkill;
+  draft: Draft;
+  /** Who takes it at Save; undefined while unknown. */
   holders: Holder[] | undefined;
-  skills: Skill[];
+  roster: Roster | undefined;
   facts: OrgFacts | undefined;
   readOnly: boolean;
+  onAdd: (member: string, join: boolean) => void;
+  onRemove: (member: string) => void;
 }) {
-  const wide = orgWide(skill);
-  const [act, setAct] = useState<{ kind: "take" | "leave"; member: Holder } | undefined>();
+  const [asking, setAsking] = useState<{ member: Holder; also: string } | undefined>();
   const [agent, setAgent] = useState(false);
   const [adding, setAdding] = useState(false);
-  const scope = wide ? "the Organisation" : project.name;
+  const fresh = isNewSkill(skill.id);
+  const given = (id: string) => !!draft.people?.grants.some((g) => g.member === id && g.skill === skill.id);
 
-  const summary = (m: Holder, kind: "take" | "leave") => {
-    if (!facts) return "…";
-    if (kind === "take") {
-      const elsewhere = takeAwayReach(facts, m.id, skill).filter((p) => !(p.project.key === project.key && p.step.name === stepName));
-      if (elsewhere.length === 0) return "Only here";
-      if (elsewhere.length === 1) return `Also stops ${elsewhere[0].step.name} in ${elsewhere[0].project.name} · ${countTasks(elsewhere[0].tasks)}`;
-      return `Also stops ${elsewhere.length} other Steps · ${tasksWord(elsewhere)}`;
-    }
-    const steps = leaveReach(facts, m.id, project.key, skills).map((p) => p.step.name);
-    const stays = staysIn(facts, m.id, project.key).map((p) => p.name);
-    return `Leaves ${andList(steps)}${stays.length ? ` · stays in ${andList(stays)}` : ""}`;
+  // Where else the Member takes the Skill: other Steps here carrying it, and other Projects' Steps.
+  const elsewhere = (m: Holder): string | undefined => {
+    const here = inOrder(draft.wf.steps)
+      .filter((s) => s.id !== stepId && s.skill_id === skill.id)
+      .map((s) => s.name.trim() || "New Step");
+    const projects = [...new Set((facts ? takeAwayReach(facts, m.id, skill) : []).filter((p) => p.project.key !== project.key).map((p) => p.project.name))];
+    const parts = [here.length ? `at ${andList(here)}` : "", projects.length ? `in ${andList(projects)}` : ""].filter(Boolean);
+    return parts.length ? `${m.name} also takes ${skill.name} ${parts.join(", and ")}.` : undefined;
+  };
+  const remove = (m: Holder) => {
+    const also = fresh || given(m.id) ? undefined : elsewhere(m);
+    if (also) setAsking({ member: m, also });
+    else onRemove(m.id);
   };
 
   return (
     <section aria-label="Taken by" className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-baseline gap-x-2">
-        <h3 className="text-[13px] font-semibold">Taken by</h3>
-        {holders && holders.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {holders.length} in {scope} with {skill.name}
-            {!readOnly && " · changes here happen at once, not on Save"}
-          </span>
-        )}
-      </div>
+      <h3 className="text-[13px] font-semibold">Taken by</h3>
       {!holders ? (
         <span className="text-xs text-muted-foreground">…</span>
       ) : holders.length === 0 ? (
-        <p className="text-xs font-medium text-state-claimed">
-          Nobody in {scope} has {skill.name}: each Task's Owner takes it.
-        </p>
+        <Tip label="Each Task's Owner takes it">
+          <p tabIndex={0} className="self-start rounded-sm text-[13px] font-medium text-state-claimed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+            Nobody
+          </p>
+        </Tip>
       ) : (
         <ul aria-label={`Members with ${skill.name}`} className="flex flex-col gap-1.5">
           {holders.map((m) => (
-            <li key={m.id} className="flex h-9 items-center gap-2 rounded-md border pr-1.5 pl-2">
+            <li key={m.id} className={cn("flex h-9 items-center gap-2 rounded-md border pr-1 pl-2", given(m.id) && "bg-state-claimed-bg")}>
               <MemberAvatar member={m} />
-              <span className="truncate text-[13.5px]">{m.name}</span>
+              <Link to={memberSettingsPath(m)} className="truncate rounded-sm text-[13.5px] outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                {m.name}
+              </Link>
               <span className="text-xs text-muted-foreground">{kindWord(m)}</span>
               {!readOnly && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={`Take ${m.name} off ${stepName}`}
-                      className="ml-auto inline-flex size-7 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 data-[state=open]:bg-accent"
-                    >
-                      <MoreHorizontalIcon aria-hidden className="size-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-80">
-                    <DropdownMenuItem onSelect={() => setAct({ kind: "take", member: m })} className="flex-col items-start gap-0">
-                      <span>
-                        Take {skill.name} from {m.name}…
-                      </span>
-                      <span className="text-xs text-muted-foreground">{summary(m, "take")}</span>
-                    </DropdownMenuItem>
-                    {!wide && (
-                      <DropdownMenuItem onSelect={() => setAct({ kind: "leave", member: m })} className="flex-col items-start gap-0">
-                        <span>
-                          Remove {m.name} from {project.name}…
-                        </span>
-                        <span className="text-xs text-muted-foreground">{summary(m, "leave")}</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link to={memberSettingsPath(m)}>Open profile</Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Tip label="Remove">
+                  <button
+                    type="button"
+                    aria-label={`Remove ${m.name}`}
+                    disabled={!facts && !fresh && !given(m.id)}
+                    onClick={() => remove(m)}
+                    className="ml-auto inline-flex size-7 flex-none items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
+                  >
+                    <XIcon aria-hidden className="size-4" />
+                  </button>
+                </Tip>
               )}
             </li>
           ))}
@@ -129,12 +111,22 @@ export function TakenBy({
       )}
       {!readOnly && (
         <div className="flex flex-wrap gap-2 pt-0.5">
-          <Button type="button" variant="outline" size="sm" aria-expanded={adding} onClick={() => setAdding((v) => !v)} className="aria-expanded:border-foreground">
-            <PlusIcon aria-hidden /> Add a Member
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-label="Add a Member"
+            aria-expanded={adding}
+            onClick={() => setAdding((v) => !v)}
+            className="aria-expanded:border-foreground"
+          >
+            <PlusIcon aria-hidden /> Add
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setAgent(true)}>
-            <BotIcon aria-hidden /> Create an agent
-          </Button>
+          {!fresh && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setAgent(true)}>
+              <BotIcon aria-hidden /> New agent
+            </Button>
+          )}
         </div>
       )}
       {!readOnly && adding && (
@@ -144,194 +136,79 @@ export function TakenBy({
             if (e.key === "Escape") setAdding(false);
           }}
         >
-          <AddMember project={project} skill={skill} holders={holders ?? []} skills={skills} facts={facts} onDone={() => setAdding(false)} />
+          <AddMember
+            project={project}
+            skill={skill}
+            draft={draft}
+            holders={holders ?? []}
+            roster={roster}
+            onPick={(id, join) => {
+              onAdd(id, join);
+              setAdding(false);
+            }}
+          />
         </div>
       )}
-      {act && facts && <RemoveDialog act={act.kind} member={act.member} project={project} skill={skill} skills={skills} facts={facts} onClose={() => setAct(undefined)} />}
-      {agent && <CreateAgentDialog project={project} skill={skill} onClose={() => setAgent(false)} />}
+      {asking && (
+        <FormDialog
+          open
+          onOpenChange={(o) => !o && setAsking(undefined)}
+          title={`Remove ${asking.member.name} from ${skill.name}?`}
+          description={asking.also}
+          submitLabel="Remove"
+          onSubmit={() => {
+            onRemove(asking.member.id);
+            setAsking(undefined);
+          }}
+        >
+          {null}
+        </FormDialog>
+      )}
+      {agent && !fresh && <CreateAgentDialog project={project} skill={skill as Skill} onClose={() => setAgent(false)} />}
     </section>
   );
 }
 
 /**
- * Add a Member: the Project's Members without the Skill first, then the rest of the Organisation
- * (for skill-review, everyone without it: it is taken in every Project). Each row says exactly what
- * picking it does and where else that reaches; picking acts at once.
+ * Add a Member: the Project's Members first, then the rest of the Organisation, who join the
+ * Project too (for skill-review, everyone: it is taken in every Project). Picking edits the draft.
  */
 function AddMember({
   project,
   skill,
+  draft,
   holders,
-  skills,
-  facts,
-  onDone,
+  roster,
+  onPick,
 }: {
   project: Project;
-  skill: Skill;
+  skill: StepSkill;
+  draft: Draft;
   holders: Holder[];
-  skills: Skill[];
-  facts: OrgFacts | undefined;
-  onDone: () => void;
+  roster: Roster | undefined;
+  onPick: (id: string, join: boolean) => void;
 }) {
-  const qc = useQueryClient();
   const wide = orgWide(skill);
-  const here = facts?.projects.find((p) => p.key === project.key);
-  const has = (id: string) => !!facts?.skillsOf.get(id)?.has(skill.id);
   const taking = new Set(holders.map((h) => h.id));
-  const candidates = (facts?.members ?? []).filter((m) => !taking.has(m.id));
-  const inside = candidates.filter((m) => wide || here?.members.has(m.id)).filter((m) => !has(m.id));
-  const outside = wide ? [] : candidates.filter((m) => !here?.members.has(m.id));
-  const add = useMutation({
-    mutationFn: async (id: string) => {
-      if (!wide && !here?.members.has(id)) await addProjectMember(project.key, id);
-      if (!has(id)) await grantSkill(id, skill.id);
-    },
-    onSuccess: () => {
-      invalidateAll(qc);
-      onDone();
-    },
-  });
-  const what = (id: string) => {
-    const joins = !wide && !here?.members.has(id);
-    const elsewhere = facts && !has(id) ? grantElsewhere(facts, id, skill, project.key).map((p) => p.name) : [];
-    const gets = has(id) ? `has ${skill.name}` : `gets ${skill.name}${elsewhere.length ? `, here and in ${andList(elsewhere)}` : ""}`;
-    return joins ? `Joins ${project.name}${has(id) ? " · " : ", "}${gets}` : gets.charAt(0).toUpperCase() + gets.slice(1);
-  };
-  const also = (id: string) => {
-    if (!facts || wide || here?.members.has(id)) return undefined;
-    const steps = joinAlso(facts, id, skill, project.key, skills).map((p) => p.step.name);
-    return steps.length ? `Also takes ${andList(steps)} here` : undefined;
-  };
-  const item = (m: OrgFacts["members"][number]) => {
-    const extra = also(m.id);
-    return (
-      <CommandItem key={m.id} value={m.name} aria-label={`${m.name}: ${what(m.id)}`} disabled={add.isPending} onSelect={() => add.mutate(m.id)} className="items-start">
-        <MemberAvatar member={m} card={false} className="mt-0.5" />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex flex-wrap items-baseline gap-x-1.5">
-            <span className="truncate">{m.name}</span>
-            <span className="text-xs text-muted-foreground">· {m.kind === "agent" ? "Agent" : "Human"}</span>
-            <span className="text-xs text-muted-foreground max-sm:basis-full sm:ml-auto sm:pl-3 sm:text-right">{what(m.id)}</span>
-          </span>
-          {extra && <span className="text-xs text-muted-foreground">{extra}</span>}
-        </span>
-      </CommandItem>
-    );
-  };
+  const candidates = (roster?.members ?? []).filter((m) => !taking.has(m.id));
+  const isIn = (id: string) => willBeIn(draft, id, !!roster?.inProject.has(id));
+  const inside = candidates.filter((m) => wide || isIn(m.id));
+  const outside = wide ? [] : candidates.filter((m) => !isIn(m.id));
+  const item = (m: Holder, join: boolean) => (
+    <CommandItem key={m.id} value={m.name} onSelect={() => onPick(m.id, join)}>
+      <MemberAvatar member={m} card={false} />
+      <span className="truncate">{m.name}</span>
+      <span className="text-xs text-muted-foreground">{kindWord(m)}</span>
+    </CommandItem>
+  );
   return (
     <Command>
       <CommandInput placeholder="Find a Member" aria-label="Find a Member" autoFocus />
       <CommandList className="max-h-80">
-        <CommandEmpty>{facts ? `Every Member has ${skill.name}.` : "…"}</CommandEmpty>
-        {inside.length > 0 && <CommandGroup heading={wide ? `Without ${skill.name}` : `In ${project.name} · without ${skill.name}`}>{inside.map(item)}</CommandGroup>}
-        {outside.length > 0 && <CommandGroup heading={`Not in ${project.name}`}>{outside.map(item)}</CommandGroup>}
+        <CommandEmpty>{!roster ? "…" : candidates.length ? "No such Member." : `Every Member takes ${skill.name}.`}</CommandEmpty>
+        {inside.length > 0 && <CommandGroup heading={wide ? undefined : `In ${project.name}`}>{inside.map((m) => item(m, false))}</CommandGroup>}
+        {outside.length > 0 && <CommandGroup heading={`Not in ${project.name}`}>{outside.map((m) => item(m, true))}</CommandGroup>}
       </CommandList>
-      {add.error ? (
-        <div className="border-t px-3 py-2">
-          <Refusal error={add.error} />
-        </div>
-      ) : null}
     </Command>
-  );
-}
-
-/**
- * The two acts that take a Member off a Step, asked first: every Step they reach with its open
- * Tasks, who takes those Tasks then, and the Claims the Member keeps (neither act ends one).
- */
-function RemoveDialog({
-  act,
-  member,
-  project,
-  skill,
-  skills,
-  facts,
-  onClose,
-}: {
-  act: "take" | "leave";
-  member: Holder;
-  project: Project;
-  skill: Skill;
-  skills: Skill[];
-  facts: OrgFacts;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const places = act === "take" ? takeAwayReach(facts, member.id, skill) : leaveReach(facts, member.id, project.key, skills);
-  const many = new Set(places.map((p) => p.project.key)).size > 1 || (places[0] && places[0].project.key !== project.key);
-  const held = useTasks({ state: "open", holder: member.id });
-  const kept = (held.data ?? []).filter((t) => places.some((p) => p.step.id === t.step_id)).map((t) => t.key);
-  const skillAt = (p: Place) => skills.find((s) => s.id === facts.workflows.get(p.project.key)?.steps.find((x) => x.id === p.step.id)?.skill_id);
-  // Who takes each reached Step's Tasks then: the others with its Skill, or each Task's Owner.
-  const nobody = places.filter((p) => {
-    const sk = skillAt(p);
-    return sk && othersAt(facts, p, sk, member.id).length === 0;
-  });
-  const still = places
-    .map((p) => ({ p, names: skillAt(p) ? othersAt(facts, p, skillAt(p)!, member.id) : [] }))
-    .filter((x) => x.names.length > 0);
-  const stays = staysIn(facts, member.id, project.key);
-  const run = useMutation({
-    mutationFn: () => (act === "take" ? revokeSkill(member.id, skill.id) : removeProjectMember(project.key, member.id)),
-    onSuccess: () => {
-      invalidateAll(qc);
-      onClose();
-    },
-  });
-  return (
-    <FormDialog
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title={act === "take" ? `Take ${skill.name} from ${member.name}?` : `Remove ${member.name} from ${project.name}?`}
-      description={
-        places.length === 0
-          ? `${member.name} takes no Step's Tasks ${act === "take" ? `by ${skill.name}` : `in ${project.name}`}.`
-          : act === "take"
-            ? `${member.name} stops taking the Tasks at every Step that carries ${skill.name}:`
-            : `${member.name} stops taking ${project.name}'s Tasks at:`
-      }
-      submitLabel={act === "take" ? `Take ${skill.name} away` : `Remove from ${project.name}`}
-      destructive
-      pending={run.isPending}
-      error={run.error}
-      onSubmit={() => run.mutate()}
-    >
-      {places.length > 0 && (
-        <ul aria-label="Steps it reaches" className="flex flex-col gap-1">
-          {places.map((p) => (
-            <li key={`${p.project.key}-${p.step.id}`} className="flex justify-between gap-4">
-              <span>{placeWord(p, !!many)}</span>
-              <span className="text-muted-foreground tabular-nums">{countTasks(p.tasks)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="flex flex-col gap-1">
-        <span className="text-[13px] font-semibold">Then</span>
-        <ul className="list-disc pl-5 text-[13px]">
-          {act === "leave" && stays.length > 0 && (
-            <li>
-              {member.name} stays in {andList(stays.map((p) => p.name))}.
-            </li>
-          )}
-          {nobody.length > 0 && (
-            <li>
-              Nobody else {nobody.every((p) => p.project.key === project.key) ? `in ${project.name}` : `in ${andList([...new Set(nobody.map((p) => p.project.name))], "or")}`} takes{" "}
-              {andList([...new Set(nobody.map((p) => p.step.name))])}: each Task's Owner takes those Tasks.
-            </li>
-          )}
-          {still.map(({ p, names }) => (
-            <li key={`${p.project.key}-${p.step.id}`}>
-              {andList(names)} still {names.length === 1 ? "takes" : "take"} {placeWord(p, !!many)}.
-            </li>
-          ))}
-          {kept.length > 0 && (
-            <li>
-              {member.name} keeps {andList(kept)}, which {member.name} holds now.
-            </li>
-          )}
-        </ul>
-      </div>
-    </FormDialog>
   );
 }

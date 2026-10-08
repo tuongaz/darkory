@@ -7,17 +7,18 @@ import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "../bind";
 import { nameMax } from "../edits";
 import { isNewSkill, outcomes, tasksAt, type Draft } from "./draft";
-import { orgWide, type Holder } from "./holders";
+import type { Holder, Roster } from "./holders";
 import { AddOutcome, Outcome, type OutcomeActions } from "./Outcomes";
 import type { OrgFacts } from "./reach";
 import { SkillPicker, type SkillChoice } from "./SkillPicker";
-import { TakenBy } from "./TakenBy";
+import { TakenBy, type StepSkill } from "./TakenBy";
+import { Tip } from "./Tip";
 
 /*
  * The picked Step, edited beside the list: its name and a menu (move, add a Step after, delete);
- * how many Tasks are at it; its Skill; who takes it (TakenBy, which acts at once); its outcomes, the
- * main one picked by a radio; and Delete Step at the foot. Read-only for a Member who is not an
- * admin: the same facts as text.
+ * how many Tasks are at it; its Skill; who takes it (TakenBy); its outcomes, the main one picked by
+ * a radio; and Delete Step at the foot. Every edit is the draft's, saved on Save. Read-only for a
+ * Member who is not an admin: the same facts as text.
  */
 
 export type PanelActions = OutcomeActions & {
@@ -28,6 +29,9 @@ export type PanelActions = OutcomeActions & {
   reorder: (by: -1 | 1) => void;
   insertAfter: () => void;
   deleteStep: () => void;
+  /** Takes this Step's Skill on Save; `join`: joins the Project first. */
+  addTaker: (member: string, join: boolean) => void;
+  removeTaker: (member: string) => void;
 };
 
 export function StepPanel({
@@ -39,6 +43,7 @@ export function StepPanel({
   order,
   skills,
   holders,
+  roster,
   facts,
   readOnly,
   invalid,
@@ -55,6 +60,7 @@ export function StepPanel({
   order: RecordStep[];
   skills: Skill[];
   holders?: Map<string, Holder[]>;
+  roster: Roster | undefined;
   facts: OrgFacts | undefined;
   readOnly: boolean;
   invalid: boolean;
@@ -71,7 +77,8 @@ export function StepPanel({
   const out = outcomes(draft.wf, step.id);
   const tasks = tasksAt(draft, step.id);
   const holderNames = new Map([...(holders ?? new Map<string, Holder[]>())].map(([id, list]) => [id, list.map((h) => h.name)]));
-  const wide = !!skill && orgWide(skill);
+  // The Skill Taken by is about: one that exists, or the new one made on Save.
+  const stepSkill: StepSkill | undefined = skill ?? (pendingName ? { id: step.skill_id!, name: pendingName, builtin: false } : undefined);
 
   return (
     <section aria-label={`Step ${n}: ${step.name.trim() || "New Step"}`} className="flex flex-col gap-5 px-6 pt-4 pb-8 max-md:px-4">
@@ -128,78 +135,65 @@ export function StepPanel({
       </div>
 
       <section aria-label="Skill" className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <h3 className="text-[13px] font-semibold">Skill</h3>
-          <span className="text-xs text-muted-foreground">
-            {!step.skill_id
-              ? readOnly
-                ? ""
-                : "Pick one, or leave it a hold"
-              : wide
-                ? "Anyone in the Organisation with it takes this Step's Tasks"
-                : `Members of ${project.name} with it take this Step's Tasks`}
-          </span>
-        </div>
+        <h3 className="text-[13px] font-semibold">Skill</h3>
         {readOnly ? (
-          <span className={cn("font-mono text-[12px]", !step.skill_id && "font-sans text-[13px] text-muted-foreground")}>
-            {skill?.name ?? pendingName ?? "Hold · moved by hand"}
-          </span>
+          <span className={cn("font-mono text-[12px]", !step.skill_id && "font-sans text-[13px] text-muted-foreground")}>{skill?.name ?? pendingName ?? "Hold"}</span>
         ) : (
-          <SkillPicker
-            value={step.skill_id}
-            label={`Skill of ${name}`}
-            skills={skills}
-            pending={draft.skills}
-            holders={holderNames}
-            onChange={actions.skill}
-            className="w-[280px] max-md:w-full"
-          />
+          <SkillPicker value={step.skill_id} label={`Skill of ${name}`} skills={skills} pending={draft.skills} holders={holderNames} onChange={actions.skill} className="w-[280px] max-md:w-full" />
         )}
-        {!step.skill_id && <p className="text-xs text-muted-foreground">No Skill: a hold. Nobody is offered its Tasks; a human moves them on.</p>}
       </section>
 
-      {step.skill_id &&
-        (skill ? (
-          <TakenBy project={project} stepName={name} skill={skill} holders={holders ? (holders.get(skill.id) ?? []) : undefined} skills={skills} facts={facts} readOnly={readOnly} />
-        ) : (
-          <section aria-label="Taken by" className="flex flex-col gap-1.5">
-            <h3 className="text-[13px] font-semibold">Taken by</h3>
-            <p className="text-xs text-muted-foreground">{pendingName} is created on Save: add its Members after.</p>
-          </section>
-        ))}
-      {!step.skill_id && (
+      {stepSkill ? (
+        <TakenBy
+          project={project}
+          stepId={step.id}
+          skill={stepSkill}
+          draft={draft}
+          holders={holders ? (holders.get(stepSkill.id) ?? []) : undefined}
+          roster={roster}
+          facts={facts}
+          readOnly={readOnly}
+          onAdd={actions.addTaker}
+          onRemove={actions.removeTaker}
+        />
+      ) : (
         <section aria-label="Taken by" className="flex flex-col gap-1.5">
           <h3 className="text-[13px] font-semibold">Taken by</h3>
-          <p className="text-xs text-muted-foreground">Moved on by hand.</p>
+          <Tip label="A hold: nobody is offered its Tasks; a human moves them on">
+            <p tabIndex={0} className="self-start rounded-sm text-[13px] text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+              By hand
+            </p>
+          </Tip>
         </section>
       )}
 
       <section aria-label="Outcomes" className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <h3 className="text-[13px] font-semibold">Outcomes</h3>
-          {out.length > 1 && <span className="text-xs text-muted-foreground">● main: the line follows it</span>}
-        </div>
+        <h3 className="text-[13px] font-semibold">Outcomes</h3>
         {out.length === 0 && step.skill_id && (
-          <p className="flex items-center gap-1.5 text-xs font-medium text-state-claimed">
-            <TriangleAlertIcon aria-hidden className="size-3.5 flex-none" />
-            No way out: Tasks here can only be moved by hand.
-          </p>
+          <Tip label="Tasks here can only be moved by hand">
+            <p tabIndex={0} className="flex items-center gap-1.5 self-start rounded-sm text-xs font-medium text-state-claimed outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+              <TriangleAlertIcon aria-hidden className="size-3.5 flex-none" />
+              No way out
+            </p>
+          </Tip>
         )}
         <div role="radiogroup" aria-label={`Main outcome out of ${name}`} className="flex flex-col gap-1.5">
           {out.map((c, i) => (
             <div key={c.id} className="group/out flex min-h-8 items-center gap-2.5">
               {out.length > 1 && (
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={i === 0}
-                  aria-label={`${c.name.trim() || "outcome"}: the main way on`}
-                  disabled={readOnly}
-                  onClick={() => actions.main(c.id)}
-                  className="flex size-5 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <span className={cn("size-3.5 rounded-full border-[1.5px] border-ring", i === 0 && "border-foreground bg-foreground shadow-[inset_0_0_0_2.5px_var(--background)]")} />
-                </button>
+                <Tip label={i === 0 ? "Main: the line follows it" : "Make it the main way on"}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={i === 0}
+                    aria-label={`${c.name.trim() || "outcome"}: the main way on`}
+                    disabled={readOnly}
+                    onClick={() => actions.main(c.id)}
+                    className="flex size-5 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <span className={cn("size-3.5 rounded-full border-[1.5px] border-ring", i === 0 && "border-foreground bg-foreground shadow-[inset_0_0_0_2.5px_var(--background)]")} />
+                  </button>
+                </Tip>
               )}
               <Outcome wf={draft.wf} base={base} step={step} order={order} readOnly={readOnly} invalid={invalid} actions={actions} nameRef={nameRef} c={c} />
             </div>

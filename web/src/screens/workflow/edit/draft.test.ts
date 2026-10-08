@@ -1,24 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { engineer, review, skills, step, workflow } from "@/test/fixtures";
 import { isNew, toBody } from "../bind";
+import type { Roster } from "./holders";
 import {
   addOutcome,
+  addTaker,
   countChanges,
   deadEndsAfterDelete,
   deleteStep,
   describeChanges,
+  describePeople,
   firstOutcome,
   fromRecord,
   groupsOf,
+  holdersAt,
   inbound,
   insertStep,
   makeMain,
   outcomes,
   problem,
   removeOutcome,
+  removeTaker,
   renameOutcome,
   renameStep,
   reorderStep,
+  saveBody,
   setSkill,
   setTarget,
   tasksAt,
@@ -209,5 +215,78 @@ describe("outcomes and order", () => {
     expect(d.wf.steps.map((s) => s.name)).toEqual(["Plan", "Build", "Backlog", "Review", "Retro", "Skill review"]);
     expect(countChanges(base(), d.wf)).toBe(1);
     expect(describeChanges(base(), d.wf)).toEqual([{ kind: "Moved", text: "Backlog" }]);
+  });
+});
+
+describe("who takes the Steps, in the draft", () => {
+  // builder has engineer and is in the Project; ada has review; bob is in neither and has nothing; skill-review is taken Organisation-wide.
+  const roster: Roster = {
+    members: [
+      { id: "m-ada", name: "ada", kind: "human", skills: new Set([review.id, "sk-skill-review"]) },
+      { id: "m-bob", name: "bob", kind: "human", skills: new Set() },
+      { id: "m-builder", name: "builder", kind: "agent", skills: new Set([engineer.id]) },
+    ],
+    inProject: new Set(["m-ada", "m-builder"]),
+  };
+  const wide = new Set(["sk-skill-review"]);
+  const names = (d: ReturnType<typeof d0>, skill: string) => (holdersAt(d, roster, wide)?.get(skill) ?? []).map((h) => h.name);
+  const say = (d: ReturnType<typeof d0>) => describePeople(d, (id) => id.slice(2), (id) => skillMap.get(id)?.name ?? id, "Web");
+
+  it("takes a Skill away, drawn at once, listed, and sent as a revoke", () => {
+    const d = removeTaker(d0(), "m-builder", engineer.id);
+    expect(names(d0(), engineer.id)).toEqual(["builder"]);
+    expect(names(d, engineer.id)).toEqual([]);
+    expect(say(d)).toEqual([{ kind: "Removed", text: "builder from engineer" }]);
+    expect(saveBody(d)).toEqual({ ...toBody(base()), revokes: [{ member: "m-builder", skill: engineer.id }] });
+    // Taking it again changes nothing; adding them back undoes it, leaving no change.
+    expect(removeTaker(d, "m-builder", engineer.id)).toBe(d);
+    const back = addTaker(d, "m-builder", engineer.id, false);
+    expect(back.people).toBeUndefined();
+    expect(say(back)).toEqual([]);
+    expect(saveBody(back)).toEqual(toBody(base()));
+  });
+
+  it("gives a Skill to a Member outside the Project, who joins it; removing them takes back both", () => {
+    const d = addTaker(d0(), "m-bob", engineer.id, true);
+    expect(names(d, engineer.id)).toEqual(["bob", "builder"]);
+    expect(say(d)).toEqual([{ kind: "Added", text: "bob to engineer, joins Web" }]);
+    expect(saveBody(d)).toMatchObject({ joins: ["m-bob"], grants: [{ member: "m-bob", skill: engineer.id }] });
+    expect(addTaker(d, "m-bob", engineer.id, true)).toBe(d);
+    expect(removeTaker(d, "m-bob", engineer.id).people).toBeUndefined();
+  });
+
+  it("keeps a join while the Member is still given another Skill", () => {
+    let d = addTaker(d0(), "m-bob", engineer.id, true);
+    d = addTaker(d, "m-bob", review.id, false);
+    d = removeTaker(d, "m-bob", engineer.id);
+    expect(d.people).toEqual({ grants: [{ member: "m-bob", skill: review.id }], revokes: [], joins: ["m-bob"] });
+    expect(names(d, review.id)).toEqual(["ada", "bob"]);
+  });
+
+  it("draws a Member who joins under every Step whose Skill they have, and skill-review's takers from the whole Organisation", () => {
+    const r: Roster = { ...roster, members: roster.members.map((m) => (m.id === "m-bob" ? { ...m, skills: new Set([review.id, "sk-skill-review"]) } : m)) };
+    expect((holdersAt(d0(), r, wide)?.get(review.id) ?? []).map((h) => h.name)).toEqual(["ada"]);
+    expect((holdersAt(d0(), r, wide)?.get("sk-skill-review") ?? []).map((h) => h.name)).toEqual(["ada", "bob"]);
+    const d = addTaker(d0(), "m-bob", engineer.id, true);
+    expect((holdersAt(d, r, wide)?.get(review.id) ?? []).map((h) => h.name)).toEqual(["ada", "bob"]);
+  });
+
+  it("gives a new Skill by its name, and drops the grant when no Step carries the Skill any more", () => {
+    let d = setSkill(d0(), step.review, { create: { name: "security", body: "x" } });
+    d = addTaker(d, "m-ada", "new-skill:security", false);
+    expect(names(d, "new-skill:security")).toEqual(["ada"]);
+    expect(saveBody(d)).toMatchObject({ skills: [{ name: "security", body: "x" }], grants: [{ member: "m-ada", skill: "security" }] });
+    expect(saveBody(d).steps.find((s) => s.name === "Review")!.skill).toBe("security");
+    d = setSkill(d, step.review, { id: review.id });
+    expect(d.people).toBeUndefined();
+    expect(saveBody(d).skills).toBeUndefined();
+  });
+
+  it("lists the Workflow's changes and who takes the Steps' changes apart, each with the draft they undo to", () => {
+    const before = renameStep(d0(), step.build, "Make");
+    const after = removeTaker(before, "m-builder", engineer.id);
+    expect(describeChanges(base(), after.wf)).toEqual(describeChanges(base(), before.wf));
+    expect(say(before)).toEqual([]);
+    expect(say(after)).toHaveLength(1);
   });
 });

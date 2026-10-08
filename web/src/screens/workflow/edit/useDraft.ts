@@ -1,21 +1,23 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { invalidateAll, keys, useSkills, useWorkflow } from "@/api/queries";
-import { createSkill, setWorkflow } from "@/api/writes";
-import { toBody, type WorkflowRecord } from "../bind";
-import { describeChanges, fromRecord, isNewSkill, problem, type Draft } from "./draft";
+import { invalidateAll, keys, useMembers, useSkills, useWorkflow } from "@/api/queries";
+import { setWorkflow } from "@/api/writes";
+import type { WorkflowRecord } from "../bind";
+import { describeChanges, describePeople, fromRecord, problem, saveBody, type Draft } from "./draft";
 
 /**
  * Editing a Project's Workflow as a list: every change is made on a draft and drawn at once, and
- * nothing is sent until Save. Save creates the new generic Skills the draft's Steps carry, then
- * sends the whole Workflow in one `PUT …/workflow`. What `/v1` would refuse is said in words and
- * not sent; what it did refuse is kept with the draft, so nothing typed is lost. Undo steps back
- * one change at a time; a run of typing in one field is one change.
+ * nothing is sent until Save — who takes the Steps included. Save sends the whole draft in one
+ * `PUT …/workflow`, the new Skills and who takes the Steps with it, and `/v1` makes it in one
+ * write. What `/v1` would refuse is said in words and not sent; what it did refuse is kept with
+ * the draft, so nothing typed is lost. Undo steps back one change at a time; a run of typing in
+ * one field is one change.
  */
-export function useDraftEditor(project: string) {
+export function useDraftEditor(project: string, projectName: string) {
   const qc = useQueryClient();
   const query = useWorkflow(project);
   const skills = useSkills();
+  const members = useMembers();
   // The Workflow as it stood when the editing began: what the changes are counted against.
   const [base, setBase] = useState<WorkflowRecord | undefined>();
   const [draft, setDraftState] = useState<Draft | undefined>();
@@ -59,33 +61,21 @@ export function useDraftEditor(project: string) {
   const changeList = useMemo(() => {
     if (!base || !draft) return [];
     const skillName = (id: string | undefined) => (id ? (skills.data?.find((k) => k.id === id)?.name ?? draft.skills[id]?.name ?? "…") : "hold");
-    return describeChanges(base, draft.wf, draft.moves, skillName);
-  }, [base, draft, skills.data]);
+    const memberName = (id: string) => members.data?.find((m) => m.id === id)?.name ?? "…";
+    return [...describeChanges(base, draft.wf, draft.moves, skillName), ...describePeople(draft, memberName, (id) => skillName(id), projectName)];
+  }, [base, draft, skills.data, members.data, projectName]);
   const changes = changeList.length;
   const said = base && draft ? problem(draft, base, skills.data ?? []) : undefined;
 
-  /** Creates the new Skills, then sends the Workflow. Resolves true once `/v1` has taken it. */
+  /** Sends the draft whole. Resolves true once `/v1` has taken it. */
   async function save(): Promise<boolean> {
     if (!draft || !base) return false;
     setTried(true);
     if (said) return false;
     setSaving(true);
     setRefused(undefined);
-    let d = draft;
     try {
-      for (const [placeholder, s] of Object.entries(d.skills)) {
-        const made = await createSkill({ name: s.name, kind: "generic", body: s.body });
-        // The draft carries the Skill by its id from now on, so a refused Workflow does not create it twice.
-        d = adoptSkill(d, placeholder, made.skill.id);
-        setDraftState(d);
-        // Undo steps back to drafts carrying the Skill by its id too: it exists now.
-        const id = made.skill.id;
-        history.current = history.current.map((h) => ({ ...h, before: adoptSkill(h.before, placeholder, id) }));
-        void qc.invalidateQueries({ queryKey: keys.skills });
-      }
-      const body = toBody(d.wf, d.moves);
-      if (body.steps.some((s) => isNewSkill(s.skill))) throw new Error("A new Skill was not created.");
-      const reply = await setWorkflow(project, body);
+      const reply = await setWorkflow(project, saveBody(draft));
       qc.setQueryData(keys.workflow(project), reply);
       invalidateAll(qc);
       history.current = [];
@@ -120,13 +110,3 @@ export function useDraftEditor(project: string) {
 }
 
 export type DraftEditor = ReturnType<typeof useDraftEditor>;
-
-/** `d` carrying the Skill `placeholder` stood for by its id, and no longer creating it. */
-function adoptSkill(d: Draft, placeholder: string, id: string): Draft {
-  if (!(placeholder in d.skills)) return d;
-  return {
-    ...d,
-    skills: Object.fromEntries(Object.entries(d.skills).filter(([k]) => k !== placeholder)),
-    wf: { ...d.wf, steps: d.wf.steps.map((s) => (s.skill_id === placeholder ? { ...s, skill_id: id } : s)) },
-  };
-}
