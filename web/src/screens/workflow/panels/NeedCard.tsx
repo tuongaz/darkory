@@ -86,7 +86,7 @@ export function NeedCard({
       </div>
       <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-end gap-[5px]">
         <span className="text-[11.5px] font-medium whitespace-nowrap text-state-waiting">{consequence(item)}</span>
-        {item.act !== "answer" && <Act item={item} primary={primary} />}
+        {item.act !== "answer" && <ActButton item={item} primary={primary} />}
       </div>
       {item.act === "answer" && <AnswerBox item={item} primary={primary} holdsIt={liveClaim(t, now)?.holder_id === meId} onAnswered={onAnswered} />}
     </article>
@@ -127,8 +127,13 @@ function AnswerBox({ item, primary, holdsIt, onAnswered }: { item: NeedItem; pri
   );
 }
 
-/** The card's one button. */
-function Act({ item, primary }: { item: NeedItem; primary?: boolean }) {
+/** A decision's one button, outside the answer box: on a card, and on the Inbox's row. */
+export function ActButton({ item, primary }: { item: NeedItem; primary?: boolean }) {
+  // Above a row's link, which covers the row.
+  return <span className="relative z-10">{act(item, primary)}</span>;
+}
+
+function act(item: NeedItem, primary?: boolean) {
   const variant = primary ? "default" : "outline";
   const label = actLabel(item);
   const aria = `${label} ${item.task.key}`;
