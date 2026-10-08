@@ -25,7 +25,7 @@ export function TextView({
   const steps = stepsInOrder(workflow);
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3 px-4 py-5 sm:px-6">
-      {steps.length === 0 && <p className="text-muted-foreground">No steps yet: nothing can be filed in this Project.</p>}
+      {steps.length === 0 && <p className="text-muted-foreground">No Steps yet: nothing can be filed in this Project.</p>}
       <ol aria-label="Steps" className="flex flex-col gap-2">
         {steps.map((s, i) => {
           const out = outgoing(workflow, s.id);
@@ -104,7 +104,7 @@ export function TextView({
         })}
       </ol>
       <p className="text-xs text-muted-foreground">
-        A Task advanced into Done is complete. Its Owner drops it from any step, into Dropped.
+        A Task advanced into Done is complete. Its Owner drops it from any Step, into Dropped.
       </p>
     </div>
   );

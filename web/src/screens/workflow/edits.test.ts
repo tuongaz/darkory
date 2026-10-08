@@ -86,16 +86,16 @@ describe("each change as the PUT body", () => {
     const c = addStep(wf(), step.build);
     expect(isNew(c.select!)).toBe(true);
     const body = toBody(c.next);
-    expect(body.steps.map((s) => s.name)).toEqual(["Backlog", "Plan", "Build", "New step", "Review", "Retro", "Skill review"]);
+    expect(body.steps.map((s) => s.name)).toEqual(["Backlog", "Plan", "Build", "New Step", "Review", "Retro", "Skill review"]);
     // Right of Build, below Review and Skill review, which stand there.
-    expect(at(body, "New step")).toEqual({ name: "New step", position: 4, x: 448, y: 512 });
+    expect(at(body, "New Step")).toEqual({ name: "New Step", position: 4, x: 448, y: 512 });
     expect(at(body, "Review").position).toBe(5);
     // Build has "pass" already: the new outcome is "next", by the new Step's name.
     expect(out(body, step.build)).toEqual([
       { id: `${step.build}-c2`, from: step.build, to: step.review, name: "pass", position: 1 },
-      { from: step.build, to: "New step", name: "next", position: 2 },
+      { from: step.build, to: "New Step", name: "next", position: 2 },
     ]);
-    expect(addStep(c.next).next.steps.find((s) => s.name === "New step 2")).toBeDefined();
+    expect(addStep(c.next).next.steps.find((s) => s.name === "New Step 2")).toBeDefined();
   });
 
   it("deletes a Step with its Connectors, and moves its Tasks where asked", () => {
@@ -118,7 +118,7 @@ describe("each change as the PUT body", () => {
   it("moves Tasks of a deleted Step to a new Step by its name", () => {
     const added = addStep(workflow(undefined, { review: { tasks: 1 } }), step.build);
     const c = deleteStep(added.next, step.review, added.select);
-    expect(toBody(c.next, c.moves).moves).toEqual({ [step.review]: "New step" });
+    expect(toBody(c.next, c.moves).moves).toEqual({ [step.review]: "New Step" });
   });
 
   it("adds, renames, retargets, reorders and removes a Connector", () => {
@@ -162,20 +162,20 @@ describe("each change as the PUT body", () => {
 describe("what /v1 would refuse, in words", () => {
   const current = workflow(undefined, { build: { tasks: 2 } });
   it.each([
-    ["a blank name", renameStep(current, step.plan, " ").next, "A step needs a name."],
-    ["a name used twice", renameStep(current, step.plan, "build").next, "Two steps are called build"],
-    ["an outcome used twice out of one step", addConnector(current, step.review, step.plan, "PASS").next, "Two outcomes out of Review are called pass"],
+    ["a blank name", renameStep(current, step.plan, " ").next, "A Step needs a name."],
+    ["a name used twice", renameStep(current, step.plan, "build").next, "Two Steps are called build"],
+    ["an outcome used twice out of one Step", addConnector(current, step.review, step.plan, "PASS").next, "Two outcomes out of Review are called pass"],
     ["a blank outcome", renameConnector(current, `${step.review}-c3`, "").next, "An outcome out of Review needs a name."],
-    ["a Connector into its own step", reconnect(current, `${step.review}-c3`, { from: step.review, to: step.review }).next, "A Connector leads out of Review into another step or Done."],
-    ["a deleted step's Tasks with nowhere to go", deleteStep(current, step.build).next, "2 Tasks are at Build: say which step they move to."],
+    ["a Connector into its own step", reconnect(current, `${step.review}-c3`, { from: step.review, to: step.review }).next, "A Connector leads out of Review into another Step or Done."],
+    ["a deleted step's Tasks with nowhere to go", deleteStep(current, step.build).next, "2 Tasks are at Build: say which Step they move to."],
   ])("refuses %s", (_, next, words) => {
     expect(problem(next, current)).toContain(words);
   });
 
-  it("takes a deleted step's Tasks moved to a step it keeps, and refuses one it deletes", () => {
+  it("takes a deleted step's Tasks moved to a Step it keeps, and refuses one it deletes", () => {
     const c = deleteStep(current, step.build, step.review);
     expect(problem(c.next, current, c.moves)).toBeUndefined();
-    expect(problem(c.next, current, { [step.build]: step.build })).toBe("Build's Tasks must move to a step the Workflow keeps.");
+    expect(problem(c.next, current, { [step.build]: step.build })).toBe("Build's Tasks must move to a Step the Workflow keeps.");
   });
 });
 

@@ -4,8 +4,8 @@ import startServer from "./server";
 
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
 // their own (init's MAIN with the default Workflow, no roster):
-//   6. Workflow editing: rename a step while the board is open (its columns follow); delete a step
-//      with Tasks (asked where they go); add a step with a new Skill and a new agent; a step nobody
+//   6. Workflow editing: rename a Step while the board is open (its columns follow); delete a Step
+//      with Tasks (asked where they go); add a Step with a new Skill and a new agent; a Step nobody
 //      holds shows the warning on the canvas and in the list.
 //   9. Marks: an agent's gradient border, turning while its Claim is live; a human's plain border.
 test.describe.configure({ mode: "serial" });
@@ -74,7 +74,7 @@ async function open(browser: Browser, path: string, size = { width: 1440, height
 
 const node = (page: Page, name: string) => page.locator(".react-flow__node").filter({ has: page.getByText(name, { exact: true }) }).first();
 
-test("scenario 6: rename a step while the board is open, delete one with Tasks, add one with a new Skill and agent", async ({ browser }) => {
+test("scenario 6: rename a Step while the board is open, delete one with Tasks, add one with a new Skill and agent", async ({ browser }) => {
   // Two Tasks at Review, to be moved when it is deleted.
   for (const title of ["Check the ledger", "Check the totals"]) await v1("POST", "/v1/tasks", { project: "MAIN", title, step: "Review" });
 
@@ -108,12 +108,12 @@ test("scenario 6: rename a step while the board is open, delete one with Tasks, 
   const make = wf.steps.find((s) => s.name === "Make")!;
   expect(moved.items.filter((t) => t.title.startsWith("Check the")).every((t) => t.step_id === make.id)).toBe(true);
 
-  // Add a step after Make with a new Skill: nobody holds it, so the canvas and the list warn.
+  // Add a Step after Make with a new Skill: nobody holds it, so the canvas and the list warn.
   await node(page, "Make").hover();
-  await page.getByRole("button", { name: "Add a step after Make" }).click();
-  const added = page.getByRole("region", { name: "Step New step" });
-  await added.getByRole("textbox", { name: "Name of New step" }).fill("QA");
-  await added.getByRole("textbox", { name: "Name of New step" }).press("Enter");
+  await page.getByRole("button", { name: "Add a Step after Make" }).click();
+  const added = page.getByRole("region", { name: "Step New Step" });
+  await added.getByRole("textbox", { name: "Name of New Step" }).fill("QA");
+  await added.getByRole("textbox", { name: "Name of New Step" }).press("Enter");
   const qa = page.getByRole("region", { name: "Step QA" });
   await qa.getByRole("combobox", { name: "Skill of QA" }).click();
   await page.getByRole("option", { name: "Create a Skill…" }).click();

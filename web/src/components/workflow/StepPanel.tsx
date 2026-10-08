@@ -47,7 +47,7 @@ export function Problem({ children }: { children: ReactNode }) {
 
 /**
  * A selected step: its name, Skill, the Connectors out of it (each removable), and Delete. A
- * step with Tasks at it asks which step they move to first, as `/v1` refuses `step_in_use`
+ * step with Tasks at it asks which Step they move to first, as `/v1` refuses `step_in_use`
  * without one.
  */
 export function StepPanel({
@@ -113,7 +113,7 @@ export function StepPanel({
                 }}
               >
                 <SelectTrigger size="sm" aria-label={`Step that receives the Tasks at ${step.name}`} className="h-8 w-full">
-                  <SelectValue placeholder="Pick a step" />
+                  <SelectValue placeholder="Pick a Step" />
                 </SelectTrigger>
                 <SelectContent position="popper" align="start">
                   {others.map((s) => (
@@ -164,7 +164,7 @@ export function ConnectorPanel({
         <ArrowRightIcon aria-hidden className="size-3 flex-none text-muted-foreground" />
         <span className="truncate">{targetName(workflow, connector.to)}</span>
       </p>
-      <p className="text-xs text-muted-foreground">Drag either end of its line onto another step to reconnect it.</p>
+      <p className="text-xs text-muted-foreground">Drag either end of its line onto another Step to reconnect it.</p>
       {onDeleteConnector && (
         <Button variant="outline" size="xs" className="self-start text-destructive" onClick={() => onDeleteConnector(connector)}>
           <Trash2Icon />

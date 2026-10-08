@@ -27,7 +27,7 @@ export const nameMax = 50;
 
 const fresh = () => `${newIdPrefix}${newKey()}`;
 const stepById = (wf: WorkflowRecord, id: string) => wf.steps.find((s) => s.id === id);
-const nameOf = (wf: WorkflowRecord, id: string | undefined) => (id ? (stepById(wf, id)?.name ?? "a step that is gone") : "Done");
+const nameOf = (wf: WorkflowRecord, id: string | undefined) => (id ? (stepById(wf, id)?.name ?? "a Step that is gone") : "Done");
 const inOrder = (steps: RecordStep[]) => [...steps].sort((a, b) => a.position - b.position);
 const renumber = (steps: RecordStep[]) => steps.map((s, i) => (s.position === i + 1 ? s : { ...s, position: i + 1 }));
 
@@ -66,14 +66,14 @@ function placeAfter(wf: WorkflowRecord, from: RecordStep | undefined): Point {
 }
 
 /**
- * A new Step, a hold named "New step", after `from` in the Workflow's order and on the canvas
+ * A new Step, a hold named "New Step", after `from` in the Workflow's order and on the canvas
  * (at `at` when a connection was let go there), with a Connector into it from `from`; with no
  * `from`, last.
  */
 export function addStep(wf: WorkflowRecord, from?: string, at?: Point): Change {
   const after = from ? stepById(wf, from) : undefined;
   const id = fresh();
-  const name = unusedName("New step", wf.steps.map((s) => s.name));
+  const name = unusedName("New Step", wf.steps.map((s) => s.name));
   const place = at ?? placeAfter(wf, after);
   const order = inOrder(wf.steps);
   const index = after ? order.findIndex((s) => s.id === after.id) + 1 : order.length;
@@ -215,19 +215,19 @@ export function restore(current: WorkflowRecord, before: WorkflowRecord, label: 
 export function problem(next: WorkflowRecord, current: WorkflowRecord, moves: Record<string, string> = {}): string | undefined {
   const steps = inOrder(next.steps);
   for (const s of steps) {
-    if (!s.name.trim()) return "A step needs a name.";
-    if (s.name.trim().length > nameMax) return `A step's name is at most ${nameMax} characters.`;
+    if (!s.name.trim()) return "A Step needs a name.";
+    if (s.name.trim().length > nameMax) return `A Step's name is at most ${nameMax} characters.`;
   }
   for (let i = 0; i < steps.length; i++) {
     const twin = steps.slice(i + 1).find((t) => same(t.name, steps[i].name));
-    if (twin) return `Two steps are called ${steps[i].name.trim()}: a name is used once in a Workflow, whatever its case.`;
+    if (twin) return `Two Steps are called ${steps[i].name.trim()}: a name is used once in a Workflow, whatever its case.`;
   }
   const kept = new Set(next.steps.map((s) => s.id));
   for (const c of next.connectors) {
     const from = stepById(next, c.from_step_id);
-    if (!from) return "A Connector leads out of a step that is gone.";
-    if (c.to_step_id === c.from_step_id) return `A Connector leads out of ${from.name} into another step or Done.`;
-    if (c.to_step_id && !kept.has(c.to_step_id)) return `A Connector out of ${from.name} leads into a step that is gone.`;
+    if (!from) return "A Connector leads out of a Step that is gone.";
+    if (c.to_step_id === c.from_step_id) return `A Connector leads out of ${from.name} into another Step or Done.`;
+    if (c.to_step_id && !kept.has(c.to_step_id)) return `A Connector out of ${from.name} leads into a Step that is gone.`;
     if (!c.name.trim()) return `An outcome out of ${from.name} needs a name.`;
     if (c.name.trim().length > nameMax) return `An outcome's name is at most ${nameMax} characters.`;
     const twin = next.connectors.find((o) => o !== c && o.from_step_id === c.from_step_id && same(o.name, c.name));
@@ -236,9 +236,9 @@ export function problem(next: WorkflowRecord, current: WorkflowRecord, moves: Re
   for (const gone of current.steps.filter((s) => !kept.has(s.id))) {
     const to = moves[gone.id];
     if (gone.tasks > 0 && !to) {
-      return `${countTasks(gone.tasks)} ${gone.tasks === 1 ? "is" : "are"} at ${gone.name}: say which step they move to.`;
+      return `${countTasks(gone.tasks)} ${gone.tasks === 1 ? "is" : "are"} at ${gone.name}: say which Step they move to.`;
     }
-    if (to && !kept.has(to)) return `${gone.name}'s Tasks must move to a step the Workflow keeps.`;
+    if (to && !kept.has(to)) return `${gone.name}'s Tasks must move to a Step the Workflow keeps.`;
   }
   return undefined;
 }

@@ -6,8 +6,8 @@ import { roundedPath } from "./route";
 
 /**
  * A Connector, drawn along its route (route.ts): right angles with rounded corners, round the
- * nodes, its outcome's name just past where it leaves its step. Editing, the name selects it as
- * its line does, and its ends can be dragged to other steps.
+ * nodes, its outcome's name just past where it leaves its Step. Editing, the name selects it as
+ * its line does, and its ends can be dragged to other Steps.
  */
 export function ConnectorEdge({ id, data, selected, markerEnd }: EdgeProps<ConnectorFlowEdge>) {
   const { mode, onSelectConnector } = useCanvas();

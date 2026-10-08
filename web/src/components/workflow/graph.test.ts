@@ -18,7 +18,7 @@ describe("layoutSubtasks", () => {
     }
   });
 
-  it("puts each Subtask in its step's column, the aimed one with its Member, the ended at the right", () => {
+  it("puts each Subtask in its Step's column, the aimed one with its Member, the ended at the right", () => {
     expect(node("MAIN-6").column).toBe("step:s-build");
     expect(node("MAIN-9").column).toBe("step:s-qa");
     expect(node("MAIN-5").column).toBe("step:s-review");
@@ -61,7 +61,7 @@ describe("layoutSubtasks", () => {
     expect(last.x).toBeLessThan(blocked.x + NODE_W);
   });
 
-  it("highlights what someone can take now: open, unheld, unblocked, at a step with a Skill or aimed at a Member", () => {
+  it("highlights what someone can take now: open, unheld, unblocked, at a Step with a Skill or aimed at a Member", () => {
     expect(layout.nodes.filter((n) => n.takeable).map((n) => n.subtask.key).sort()).toEqual(["MAIN-10", "MAIN-5"]);
     const steps = new Map(sampleSteps.map((s) => [s.id, s]));
     const base: GraphSubtask = { id: "x", key: "MAIN-99", title: "x", stepId: "s-build", state: "open", blockedBy: [], kind: "work" };

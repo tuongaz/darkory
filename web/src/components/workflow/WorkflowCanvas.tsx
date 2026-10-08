@@ -30,20 +30,20 @@ const edgeTypes = { connector: ConnectorEdge };
 const edgeDefaults = { markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "var(--xy-edge-stroke)" } };
 const fit = { padding: 0.12, maxZoom: 1, minZoom: 0.5 };
 
-/** A Connector's ends once checked: into a step or Done. */
+/** A Connector's ends once checked: into a Step or Done. */
 export type ConnectorEnds = { from: string; to: string | null };
 
-/** What is selected on an editing canvas: a step, a Connector, or nothing (null). */
+/** What is selected on an editing canvas: a Step, a Connector, or nothing (null). */
 export type CanvasSelection = { kind: "step" | "connector"; id: string } | null;
 
 export type WorkflowCanvasProps = {
   workflow: Workflow;
   /**
-   * `live` (Project › Workflow): read-only, with each step's counts and its takers' rings.
+   * `live` (Project › Workflow): read-only, with each Step's counts and its takers' rings.
    * `edit` (Settings › Workflow): steps are dragged, selected, connected and added.
    */
   mode: Mode;
-  /** A step was selected, or nothing (or a Connector) is. */
+  /** A Step was selected, or nothing (or a Connector) is. */
   onSelect?: (step: Step | null) => void;
   /**
    * Editing, the selection when the page holds it (its own side panel, a selection that follows
@@ -52,20 +52,20 @@ export type WorkflowCanvasProps = {
    */
   selection?: CanvasSelection;
   onSelectionChange?: (selection: CanvasSelection) => void;
-  /** Live, a step was clicked, or Enter or Space pressed on it: open what it holds. */
+  /** Live, a Step was clicked, or Enter or Space pressed on it: open what it holds. */
   onOpenStep?: (step: Step) => void;
-  /** A step was dropped where it now stands (a drag ended, or an arrow key moved it). */
+  /** A Step was dropped where it now stands (a drag ended, or an arrow key moved it). */
   onMove?: (step: Step, x: number, y: number) => void;
-  /** "+" on a step, or a connection dropped on empty canvas: a new step after `from`, at `at` if dropped. */
+  /** "+" on a Step, or a connection dropped on empty canvas: a new step after `from`, at `at` if dropped. */
   onAddStep?: (from: string, at?: Point) => void;
-  /** A connection drawn from a step into another step or Done: a new Connector, to be named. */
+  /** A connection drawn from a Step into another Step or Done: a new Connector, to be named. */
   onAddConnector?: (ends: ConnectorEnds) => void;
-  /** A Connector's end dragged onto another step or Done. */
+  /** A Connector's end dragged onto another Step or Done. */
   onConnectorChange?: (connector: Connector, ends: ConnectorEnds) => void;
-  /** Delete in the panel; `moveTo` is the step its Tasks go to, when it has Tasks. */
+  /** Delete in the panel; `moveTo` is the Step its Tasks go to, when it has Tasks. */
   onDeleteStep?: (step: Step, moveTo?: string) => void;
   onDeleteConnector?: (connector: Connector) => void;
-  /** Tidy up: every step's new place. */
+  /** Tidy up: every Step's new place. */
   onLayout?: (positions: Record<string, Point>) => void;
   className?: string;
 };
@@ -73,10 +73,10 @@ export type WorkflowCanvasProps = {
 type Selection = CanvasSelection;
 
 /**
- * A Project's Workflow on a canvas (`@xyflow/react`): its steps, the Connectors between them
+ * A Project's Workflow on a canvas (`@xyflow/react`): its Steps, the Connectors between them
  * named by outcome, and Done and Dropped fixed right of them. The parent holds the record: every
  * edit is a callback, and the canvas draws whatever Workflow it is given next. What `/v1` would
- * refuse (a Connector into Dropped or back into its own step, a step deleted with its Tasks
+ * refuse (a Connector into Dropped or back into its own step, a Step deleted with its Tasks
  * nowhere to go) is said in words and not sent.
  */
 export function WorkflowCanvas(props: WorkflowCanvasProps) {
@@ -140,7 +140,7 @@ function Canvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- isSelected reads `selected`
     [nodes, selected],
   );
-  // Routed round the nodes where they stand, so the lines follow a step while it is dragged.
+  // Routed round the nodes where they stand, so the lines follow a Step while it is dragged.
   const routes = useMemo(() => routesOf(workflow, nodes), [workflow, nodes]);
   const edges = useMemo(
     () => toEdges(workflow, mode, routes).map((e) => (isSelected("connector", e.id) ? { ...e, selected: true } : e)),

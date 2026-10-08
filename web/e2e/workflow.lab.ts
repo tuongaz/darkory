@@ -84,7 +84,7 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
-test("editing: rename, add a step, undo, each one PUT", async ({ page }) => {
+test("editing: rename, add a Step, undo, each one PUT", async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockV1(page);
@@ -102,8 +102,8 @@ test("editing: rename, add a step, undo, each one PUT", async ({ page }) => {
 
   const qa = page.locator(".react-flow__node").filter({ hasText: "QA" }).first();
   await qa.hover();
-  await page.getByRole("button", { name: "Add a step after QA" }).click();
-  await expect(page.getByRole("region", { name: "Step New step" })).toBeVisible();
+  await page.getByRole("button", { name: "Add a Step after QA" }).click();
+  await expect(page.getByRole("region", { name: "Step New Step" })).toBeVisible();
   await page.waitForTimeout(400);
   await shot(page, "edit-added");
   expect(errors).toEqual([]);

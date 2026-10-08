@@ -43,7 +43,7 @@ describe("routeConnectors", () => {
     }
   });
 
-  it("puts an outcome's name beside its step, on the side its line leaves by", () => {
+  it("puts an outcome's name beside its Step, on the side its line leaves by", () => {
     const pass = routes.get("c-build-qa")!;
     const build = boxes.get("s-build")!;
     expect(pass.label).toEqual({ x: build.x + build.w + 8, y: pass.points[0].y, align: "left" });
@@ -63,7 +63,7 @@ describe("routeConnectors", () => {
     expect(new Set(doneEnds).size).toBe(doneEnds.length);
   });
 
-  it("follows a step as it moves", () => {
+  it("follows a Step as it moves", () => {
     const moved = toNodes({ ...sampleWorkflow, steps: sampleWorkflow.steps.map((s) => (s.id === "s-qa" ? { ...s, y: s.y + 300 } : s)) }, "live");
     const again = routesOf(sampleWorkflow, moved).get("c-build-qa")!;
     expect(again.points.at(-1)!.y).toBeGreaterThan(routes.get("c-build-qa")!.points.at(-1)!.y + 200);
@@ -86,7 +86,7 @@ describe("routeConnectors", () => {
       expect(placed.boxes.get("s-review")).toMatchObject({ x: 448, y: 256 });
     });
 
-    it("routes every Connector round every step it passes", () => {
+    it("routes every Connector round every Step it passes", () => {
       expect(defaultRoutes.size).toBe(defaultWorkflow.connectors.length);
       for (const { c, route } of all) {
         const to = c.to ?? DONE_NODE;
@@ -113,7 +113,7 @@ describe("routeConnectors", () => {
         }
     });
 
-    it("sets no outcome's name on a step, another name, or another line", () => {
+    it("sets no outcome's name on a Step, another name, or another line", () => {
       for (const a of all) {
         const box = labelBox(a.route, a.c.name);
         for (const [id, r] of placed.boxes) expect(overlap(box, r), `${a.c.id} on ${id}`).toBe(false);
@@ -127,7 +127,7 @@ describe("routeConnectors", () => {
     });
   });
 
-  it("goes round a node standing between two steps", () => {
+  it("goes round a node standing between two Steps", () => {
     const boxes = new Map<string, Rect>([
       ["a", { x: 0, y: 0, w: 100, h: 60 }],
       ["wall", { x: 300, y: -40, w: 100, h: 140 }],
