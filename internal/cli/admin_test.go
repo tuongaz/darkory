@@ -13,7 +13,7 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// The admin commands against the real server: Members, Teams, Skills, grants, Reporting lines,
+// The admin commands against the real server: Members, Projects, Skills, grants, Reporting lines,
 // tokens, login links and Sessions.
 func TestAdminCommands(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
@@ -35,26 +35,36 @@ func TestAdminCommands(t *testing.T) {
 		}
 		ada.fails(ExitUsage, "member", "update", "daniel")
 
-		var team client.Team
-		ada.json(&team, "team", "create", "OPS", "Operations")
-		ada.ok("team", "add", "OPS", "daniel")
-		var td client.TeamDetail
-		ada.json(&td, "team", "show", "OPS")
-		if td.Team.Key != "OPS" || len(td.Members) != 1 || td.Members[0].Name != "daniel" {
-			t.Fatalf("team show: %+v", td)
+		var created client.ProjectDetail
+		ada.json(&created, "project", "create", "OPS", "Operations", "--member", "daniel", "--acceptance")
+		if created.Project.Key != "OPS" || !created.Project.Acceptance || len(created.Members) != 1 || created.Members[0].Name != "daniel" {
+			t.Fatalf("project create: %+v", created)
 		}
-		if out := ada.ok("team", "list"); !strings.Contains(out, "OPS      Operations") {
-			t.Fatalf("team list: %q", out)
+		ada.ok("project", "remove", "OPS", "daniel")
+		ada.ok("project", "add", "OPS", "daniel")
+		var pd client.ProjectDetail
+		ada.json(&pd, "project", "show", "OPS")
+		if pd.Project.Key != "OPS" || len(pd.Members) != 1 || pd.Members[0].Name != "daniel" {
+			t.Fatalf("project show: %+v", pd)
+		}
+		if out := ada.ok("project", "show", "OPS"); !strings.HasPrefix(out, "OPS      Operations  acceptance\n  daniel ") {
+			t.Fatalf("project show printed %q", out)
+		}
+		if out := ada.ok("project", "list"); !strings.Contains(out, "OPS      Operations  acceptance\n") {
+			t.Fatalf("project list: %q", out)
 		}
 		var members client.MemberList
-		ada.json(&members, "member", "list", "--team", "OPS")
+		ada.json(&members, "member", "list", "--project", "OPS")
 		if len(members.Items) != 1 {
-			t.Fatalf("member list --team: %+v", members)
+			t.Fatalf("member list --project: %+v", members)
 		}
-		ada.ok("team", "remove", "OPS", "daniel")
-		ada.json(&members, "member", "list", "--team", "OPS")
+		ada.ok("project", "remove", "OPS", "daniel")
+		ada.json(&members, "member", "list", "--project", "OPS")
 		if len(members.Items) != 0 {
-			t.Fatalf("after team remove: %+v", members)
+			t.Fatalf("after project remove: %+v", members)
+		}
+		if res := ada.fails(ExitRefused, "project", "create", "OPS", "Again"); !strings.Contains(res.stderr, "conflict") {
+			t.Fatalf("a second OPS: %q", res.stderr)
 		}
 
 		var sk client.SkillDetail

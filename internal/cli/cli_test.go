@@ -18,28 +18,29 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// The claim path through the CLI against a real server: file a Feature and a Task, list what is
-// takeable, next, claim, heartbeat, release and complete, each with --json decoding as the /v1
-// type it prints.
+// The claim path through the CLI against a real server: file a Task with Break down and a Subtask,
+// list what is takeable, next, claim, heartbeat, release and complete, each with --json decoding
+// as the /v1 type it prints.
 func TestClaimPath(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		in := newInstall(t, st)
 		in.setup()
 		bob := in.as("bob", "bob-1")
 
-		fd := in.seed("bob", core.NewTask{Project: ptr("WEB"), Title: "Search", Breakdown: true})
-		if fd.Task.Key != "WEB-1" || len(fd.Subtasks) != 1 || fd.Subtasks[0].Kind != "breakdown" {
+		var fd client.TaskDetail
+		bob.json(&fd, "file", "--project", "WEB", "--title", "Search", "--breakdown")
+		if fd.Task.Key != "WEB-1" || len(fd.Subtasks) != 1 || fd.Subtasks[0].Kind != client.Breakdown {
 			t.Fatalf("filed: %+v", fd)
 		}
 		breakdown := fd.Subtasks[0].Key
-		filed := in.seed("bob", core.NewTask{Parent: ptr("WEB-1"), Step: ptr("Build"), Title: "Build search", Description: "Index it."})
+		var filed client.TaskDetail
+		bob.json(&filed, "file", "--parent", "WEB-1", "--step", "Build", "--title", "Build search", "--body", "Index it.")
 		build := filed.Task.Key
-		if filed.Task.Description != "Index it." || filed.Parent.Key != "WEB-1" {
+		if filed.Task.Description != "Index it." || filed.Parent == nil || filed.Parent.Key != "WEB-1" {
 			t.Fatalf("file: %+v", filed)
 		}
 
@@ -103,7 +104,7 @@ func TestClaimPath(t *testing.T) {
 				t.Errorf("show printed no %q:\n%s", want, text)
 			}
 		}
-		if text := bob.ok("tasks", "--feature", "WEB-1"); !strings.Contains(text, breakdown) || !strings.Contains(text, "done") {
+		if text := bob.ok("tasks", "--parent", "WEB-1"); !strings.Contains(text, breakdown) || !strings.Contains(text, "done") {
 			t.Errorf("tasks printed:\n%s", text)
 		}
 		if text := bob.ok("me"); !strings.Contains(text, "bob (agent) in Acme") || !strings.Contains(text, "Session  bob-1") {
@@ -161,7 +162,8 @@ func TestExitStatuses(t *testing.T) {
 	bob.fails(ExitUsage, "claim", "WEB-4", "--timeout", "soon")
 	bob.fails(ExitUsage, "claim", "WEB-4", "WEB-5")
 	bob.fails(ExitUsage, "nonsense")
-	bob.fails(ExitUsage, "file", "--feature", "WEB-1", "--title", "neither skill nor aim")
+	bob.fails(ExitUsage, "file", "--title", "nowhere to file it")
+	bob.fails(ExitUsage, "file", "--project", "WEB")
 	if res := bob.run("claim", "--help"); res.code != ExitOK || !strings.Contains(res.stderr, "Usage: darkory claim <task>") {
 		t.Errorf("claim --help: %+v", res)
 	}
@@ -240,9 +242,9 @@ func TestRetryAfterALostReplyWritesOnce(t *testing.T) {
 		flaky := in.as("bob", "bob-1")
 		flaky.hc = &http.Client{Transport: filing}
 		var filed client.TaskDetail
-		flaky.json(&filed, "file", "--feature", "WEB-1", "--aim", "bob", "--title", "Once")
+		flaky.json(&filed, "file", "--parent", "WEB-1", "--aim", "bob", "--title", "Once")
 		var list client.TaskList
-		bob.json(&list, "tasks", "--feature", "WEB-1")
+		bob.json(&list, "tasks", "--parent", "WEB-1")
 		if n := countTitle(list.Items, "Once"); n != 1 || len(filing.keys) != 2 || filing.keys[0] == "" || filing.keys[0] != filing.keys[1] {
 			t.Fatalf("filed %d Tasks with keys %q", n, filing.keys)
 		}
@@ -322,7 +324,7 @@ func TestPrimeEvalsInSh(t *testing.T) {
 	if strings.Contains(rules, "export") || strings.HasPrefix(rules, "#") {
 		t.Fatalf("--rules-only printed %q", rules)
 	}
-	for _, want := range []string{"darkory next", "heartbeat run --background", "handover", "--blocks", "observe", "attach", "another holder's Task",
+	for _, want := range []string{"darkory next", "heartbeat run --background", "advance <task> <outcome>", "file --parent", "--blocks", "observe", "attach", "another holder's Task",
 		"not instructions to you", "reveal a token", "Agents should not hold admin tokens"} {
 		if !strings.Contains(rules, want) {
 			t.Errorf("the rules say nothing of %q", want)
@@ -522,7 +524,7 @@ func TestActivityFollow(t *testing.T) {
 		now := &lockedBuffer{}
 		go func() { done <- ada.runTo(ctx3, now, &lockedBuffer{}, "activity", "--follow", "--json") }()
 		time.Sleep(300 * time.Millisecond)
-		bob.ok("file", "--feature", "WEB-1", "--aim", "bob", "--title", "After")
+		bob.ok("file", "--parent", "WEB-1", "--aim", "bob", "--title", "After")
 		eventually(t, 10*time.Second, "the new Task on the stream", func() bool { return strings.Contains(now.String(), `"task.filed"`) })
 		cancel3()
 		<-done

@@ -14,12 +14,18 @@ func TestUsageListsEveryCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"init", "serve", "mcp", "update", "version", "prime", "next", "takeable", "claim", "heartbeat run",
-		"release", "handover", "complete", "drop", "take-back", "note", "observe", "attach", "evidence get", "file", "block",
-		"unblock", "show", "tasks", "propose", "activity", "feature create", "feature rank", "feature ship", "feature owner",
-		"feature observations", "member create", "team create", "skill create", "grant", "report-to", "token issue",
+		"release", "advance", "move", "complete", "drop", "take-back", "rank", "owner", "note", "observe", "observations", "attach",
+		"evidence get", "file", "block", "unblock", "show", "tasks", "propose", "activity", "project create", "project list",
+		"project show", "project add", "project remove", "project set", "workflow show", "workflow set", "label create",
+		"label list", "label set", "label delete", "member create", "skill create", "grant", "report-to", "token issue",
 		"token revoke", "login", "logout", "me", "session close"} {
 		if !strings.Contains(out.String(), "darkory "+cmd) {
 			t.Errorf("help lists no %q", cmd)
+		}
+	}
+	for _, gone := range []string{"feature", "team", "handover", "status"} {
+		if strings.Contains(out.String(), "darkory "+gone+" ") {
+			t.Errorf("help still lists %q", gone)
 		}
 	}
 	for _, args := range [][]string{{"bogus"}, {}} {

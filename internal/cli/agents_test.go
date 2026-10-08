@@ -12,7 +12,6 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
@@ -54,7 +53,7 @@ func gitRepo(t *testing.T, name string) string {
 	return sub
 }
 
-// Workspaces, Team defaults, quick Features, Tasks naming Workspaces, agent settings and the
+// Workspaces, Project defaults, Tasks naming Workspaces, agent settings and the
 // Runner's sessions through the CLI, against a real server on both engines.
 func TestAgentCommands(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
@@ -62,7 +61,7 @@ func TestAgentCommands(t *testing.T) {
 		in.setup()
 		ada := in.as("ada", "ada-1")
 		bob := in.as("bob", "bob-1")
-		ada.ok("team", "add", "WEB", "ada")
+		ada.ok("project", "add", "WEB", "ada")
 		dir := gitRepo(t, "shop")
 
 		out := ada.ok("workspace", "add", "--path", dir)
@@ -85,29 +84,33 @@ func TestAgentCommands(t *testing.T) {
 			t.Fatalf("workspace list:\n%s", out)
 		}
 
-		out = ada.ok("team", "set", "WEB", "--default-workspace", "shop", "--ship-when-done")
-		if out != "WEB      Web  workspace shop  ships when done\n" {
-			t.Fatalf("team set:\n%q", out)
+		out = ada.ok("project", "set", "WEB", "--workspace", "shop", "--auto-complete")
+		if out != "WEB      Web  workspace shop  auto-complete\n" {
+			t.Fatalf("project set:\n%q", out)
 		}
-		if out := bob.ok("team", "list"); !strings.Contains(out, "WEB      Web  workspace shop  ships when done\n") {
-			t.Fatalf("team list:\n%s", out)
+		if out := bob.ok("project", "list"); !strings.Contains(out, "WEB      Web  workspace shop  auto-complete\n") {
+			t.Fatalf("project list:\n%s", out)
 		}
-		ada.fails(ExitUsage, "team", "set", "WEB")
+		ada.fails(ExitUsage, "project", "set", "WEB")
 
-		// model v2: quick Features and ship-when-done went with `feature create` (M2 rebuilds
-		// `file` with --parent and --breakdown).
-		in.seed("ada", core.NewTask{Project: ptr("WEB"), Title: "Search", Breakdown: true})
-		ada.ok("file", "--feature", "WEB-1", "--aim", "ada", "--title", "Two places", "--workspace", "api", "--workspace", "shop")
+		// A Task takes its Project's default Workspace and Auto-complete; a Subtask names what it is
+		// given, else its Parent's.
+		var search client.TaskDetail
+		ada.json(&search, "file", "--project", "WEB", "--title", "Search", "--breakdown")
+		if ws := deref(search.Task.WorkspaceIds); len(ws) != 1 || ws[0] != shop.ID || !search.Task.AutoComplete {
+			t.Fatalf("filed in WEB: %+v", search.Task)
+		}
+		ada.ok("file", "--parent", "WEB-1", "--aim", "ada", "--title", "Two places", "--workspace", "api", "--workspace", "shop")
 		out = bob.ok("show", "WEB-3")
 		if !strings.Contains(out, "\n  Workspace  api (git, main) /src/api\n             shop (git, trunk) ") {
 			t.Fatalf("show with two Workspaces:\n%s", out)
 		}
 		var none client.TaskDetail
-		ada.json(&none, "file", "--feature", "WEB-1", "--aim", "ada", "--title", "A question", "--no-workspace")
+		ada.json(&none, "file", "--parent", "WEB-1", "--aim", "ada", "--title", "A question", "--no-workspace")
 		if none.Task.WorkspaceIds != nil || len(none.Workspaces) != 0 {
 			t.Fatalf("--no-workspace named %v", none.Task.WorkspaceIds)
 		}
-		ada.fails(ExitUsage, "file", "--feature", "WEB-1", "--aim", "ada", "--title", "Q", "--no-workspace", "--workspace", "api")
+		ada.fails(ExitUsage, "file", "--parent", "WEB-1", "--aim", "ada", "--title", "Q", "--no-workspace", "--workspace", "api")
 		if res := ada.fails(ExitRefused, "workspace", "remove", "api"); !strings.Contains(res.stderr, "conflict") {
 			t.Fatalf("removing a named Workspace: %s", res.stderr)
 		}
@@ -139,7 +142,7 @@ func TestAgentCommands(t *testing.T) {
 		}
 		var task client.TaskDetail
 		bob.json(&task, "show", "WEB-3")
-		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: task.Task.FiledBy, SessionID: "run-1", Host: "box",
+		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: deref(task.Task.FiledBy), SessionID: "run-1", Host: "box",
 			Tmux: "dk-WEB-3", StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning, LogPath: "/data/pane.log"}}
 		in.srv.AttachRunner(fake)
 		out = bob.ok("sessions")

@@ -28,7 +28,7 @@ func cmdActivity(c *call) error {
 	follow := c.fs.Bool("follow", false, "keep printing entries as they are written, from now unless --after or --all, until stopped")
 	member := c.fs.String("member", "", "only entries this Member acted in, or that ended a Claim they held; not with --follow")
 	kinds := c.fs.String("kind", "", "only entries of these kinds, separated by commas, such as task.claimed,task.lapsed; not with --follow")
-	team := c.fs.String("team", "", "only entries about this Team's Features and their Tasks; not with --follow")
+	project := c.fs.String("project", "", "only entries about this Project, its Workflow, Labels and Tasks; not with --follow")
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}
@@ -41,8 +41,8 @@ func cmdActivity(c *call) error {
 		return usagef("--follow reads forwards; use --after or --all")
 	case *follow && set["limit"]:
 		return usagef("--limit does not apply to --follow")
-	case *follow && (*member != "" || *kinds != "" || *team != ""):
-		return usagef("--member, --kind and --team do not apply to --follow, which streams every entry")
+	case *follow && (*member != "" || *kinds != "" || *project != ""):
+		return usagef("--member, --kind and --project do not apply to --follow, which streams every entry")
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {
@@ -70,7 +70,7 @@ func cmdActivity(c *call) error {
 	if *limit > 0 {
 		params.Limit = limit
 	}
-	params.Member, params.Team = opt(*member), opt(*team)
+	params.Member, params.Project = opt(*member), opt(*project)
 	if *kinds != "" {
 		var ks []client.ActivityKind
 		for k := range strings.SplitSeq(*kinds, ",") {

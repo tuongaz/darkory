@@ -15,10 +15,8 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/blob"
 	"github.com/tuongaz/darkory/internal/cli/remote"
-	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server"
 	"github.com/tuongaz/darkory/internal/store"
 )
@@ -87,13 +85,13 @@ func (in *install) as(member, session string) *runner {
 		"DARKORY_URL": in.ts.URL, "DARKORY_TOKEN": tok, "DARKORY_SESSION": session}}
 }
 
-// agent creates an agent Member in team with skills, and a token for it.
-func (in *install) agent(name, team string, skills ...string) {
+// agent creates an agent Member in project with skills, and a token for it.
+func (in *install) agent(name, project string, skills ...string) {
 	in.t.Helper()
 	ada := in.as("ada", "ada-cli")
 	ada.ok("member", "create", name, "--kind", "agent")
-	if team != "" {
-		ada.ok("team", "add", team, name)
+	if project != "" {
+		ada.ok("project", "add", project, name)
 	}
 	for _, s := range skills {
 		ada.ok("grant", name, s)
@@ -103,53 +101,31 @@ func (in *install) agent(name, team string, skills ...string) {
 	in.tokens[name] = issued.Secret
 }
 
-// setup makes the Team WEB, whose Workflow is Plan (breakdown) and Build (engineer), each into
-// Done; the generic Skill build; and the agent bob in WEB with build and engineer.
+// webWorkflow is the Workflow setup gives WEB: Plan (breakdown) and Build (engineer), each into
+// Done.
+const webWorkflow = `{"steps": [{"name": "Plan", "skill": "breakdown", "position": 1}, {"name": "Build", "skill": "engineer", "position": 2}],
+ "connectors": [{"from": "Plan", "name": "done", "position": 1}, {"from": "Build", "name": "pass", "position": 1}]}`
+
+// setup makes the Project WEB, whose Workflow is webWorkflow; the generic Skill build; and the
+// agent bob in WEB with build and engineer.
 func (in *install) setup() {
 	in.t.Helper()
 	ada := in.as("ada", "ada-cli")
-	ada.ok("team", "create", "WEB", "Web")
+	ada.ok("project", "create", "WEB", "Web", "--workflow", "empty")
+	ada.stdin = webWorkflow
+	ada.ok("workflow", "set", "WEB", "--file", "-")
 	ada.ok("skill", "create", "build", "--kind", "generic", "--body", "Build it well.")
 	in.agent("bob", "WEB", "build", "engineer")
-	if _, err := in.srv.Core().SetWorkflow(in.t.Context(), in.caller("ada"), "WEB", core.WorkflowInput{
-		Steps:      []core.StepInput{{Name: "Plan", Skill: ptr(core.SkillBreakdown)}, {Name: "Build", Skill: ptr(core.SkillEngineer)}},
-		Connectors: []core.ConnectorInput{{From: "Plan", Name: "done"}, {From: "Build", Name: "pass"}},
-	}, core.Idem{}); err != nil {
-		in.t.Fatal(err)
-	}
 }
 
-// caller is the Member whose token is named, through a Session of its own, for the core.
-func (in *install) caller(member string) *auth.Caller {
-	in.t.Helper()
-	svc := in.srv.Core()
-	c, err := auth.New(svc.Store(), svc.Clock()).Authenticate(in.t.Context(), auth.Credentials{Bearer: in.tokens[member], Session: "seed"})
-	if err != nil {
-		in.t.Fatal(err)
-	}
-	return c
-}
-
-// seed files nt through the core as member, where /v1 has no route for it until it is rebuilt
-// on model v2: a Task with Break down, or one at a Step. model v2: the CLI's tests of Features,
-// Statuses and Handover went with those commands; M2 rebuilds them on the new ones, and these
-// tests then file through the CLI again.
-func (in *install) seed(member string, nt core.NewTask) core.TaskDetail {
-	in.t.Helper()
-	d, err := in.srv.Core().FileTask(in.t.Context(), in.caller(member), nt, core.Idem{})
-	if err != nil {
-		in.t.Fatal(err)
-	}
-	return d
-}
-
-// search seeds, as bob, Search (WEB-1) with its Breakdown (WEB-2), and Subtasks at Build titled
-// titles (WEB-3 on).
+// search files, as bob, Search (WEB-1) with Break down, which files its Breakdown (WEB-2), and
+// Subtasks at Build titled titles (WEB-3 on).
 func (in *install) search(titles ...string) {
 	in.t.Helper()
-	in.seed("bob", core.NewTask{Project: ptr("WEB"), Title: "Search", Breakdown: true})
+	bob := in.as("bob", "bob-cli")
+	bob.ok("file", "--project", "WEB", "--title", "Search", "--breakdown")
 	for _, title := range titles {
-		in.seed("bob", core.NewTask{Parent: ptr("WEB-1"), Title: title, Step: ptr("Build")})
+		bob.ok("file", "--parent", "WEB-1", "--title", title, "--step", "Build")
 	}
 }
 

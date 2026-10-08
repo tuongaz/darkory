@@ -132,7 +132,7 @@ func openStore(ctx context.Context, cfg config.Store, migrate bool, log *slog.Lo
 
 // initInstall creates the Install's Organisation, its first Member as a human admin, and the
 // built-in Skills, and prints that Member's first token and a login link (ADR 0006). Unless told
-// --no-agents it seeds the roster too (docs/build/agents-plan.md, D4): Team MAIN, the git
+// --no-agents it seeds the roster too (docs/build/agents-plan.md, D4): Project MAIN, the git
 // repository init runs in as its default Workspace, and the agents, whose tokens it writes to
 // <data>/agents/<name>.token for the Runner.
 func initInstall(args []string, stdout, stderr io.Writer) error {
@@ -193,9 +193,8 @@ func printRoster(w io.Writer, out core.Initialised, tokens string) {
 	if ws := out.Workspace; ws != nil {
 		fmt.Fprintf(w, "Workspace %s: %s (git, default branch %s), Project %s's default.\n", ws.Name, ws.Path, ws.DefaultBranch, out.Project.Key)
 	} else {
-		// model v2: the command becomes darkory project set in M2.
 		fmt.Fprintf(w, "No Workspace: init ran outside a git repository. Add one with darkory workspace add --path <repository>,\n"+
-			"then make it the Project's default with darkory team set %s --default-workspace <name>.\n", out.Project.Key)
+			"then make it the Project's default with darkory project set %s --workspace <name>.\n", out.Project.Key)
 	}
 	fmt.Fprintf(w, "Agents, reporting to %s, each with a token in %s:\n", out.Member.Name, filepath.Join(tokens, "<name>.token"))
 	for _, a := range out.Agents {
@@ -483,7 +482,7 @@ var openBrowser = func(url string) error {
 	return nil
 }
 
-// housekeeping records the lapses of expired Claims every second, so the Feature owner sees them
+// housekeeping records the lapses of expired Claims every second, so the Task's Owner sees them
 // promptly — correctness never waits for it (ADR 0004) — and drops idempotency responses older
 // than a day, every hour.
 func housekeeping(ctx context.Context, svc *core.Service, log *slog.Logger) {

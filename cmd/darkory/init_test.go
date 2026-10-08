@@ -142,7 +142,7 @@ func TestInitOutsideAGitRepository(t *testing.T) {
 	data := t.TempDir()
 	out := initIn(t, t.TempDir(), data)
 	if !strings.Contains(out, "No Workspace: init ran outside a git repository. Add one with darkory workspace add --path <repository>,\n"+
-		"then make it the Project's default with darkory team set MAIN --default-workspace <name>.\n") || !strings.Contains(out, "  planner ") {
+		"then make it the Project's default with darkory project set MAIN --workspace <name>.\n") || !strings.Contains(out, "  planner ") {
 		t.Fatalf("init outside a repository printed:\n%s", out)
 	}
 	agents, ws := agentsOf(t, data, firstToken.FindStringSubmatch(out)[1])
