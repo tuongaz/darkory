@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "../bind";
 import type { Holder } from "./holders";
 import { isNewSkill, outcomes, type Draft, type Group } from "./draft";
-import { Tip } from "./Tip";
+import { InfoTip } from "@/components/InfoTip";
+import { Tip } from "@/components/Tip";
 
 /*
  * The Workflow's Steps as text, one 38px row each: its number, name, Skill, who takes it and where
@@ -145,12 +146,11 @@ export function StepList({
         {group(main, "main")}
         {after.length > 0 && (
           <>
-            <div role="presentation" className="flex px-2 pt-4 pb-1 max-md:px-4">
-              <Tip label="Darkory files Acceptance under a Parent when its Subtasks end, and Retro when it ends; Skill review follows Retro.">
-                <span tabIndex={0} className="rounded-sm text-[13px] font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                  After a Parent
-                </span>
-              </Tip>
+            <div role="presentation" className="flex items-center gap-1 px-2 pt-4 pb-1 max-md:px-4">
+              <span className="text-[13px] font-semibold">After a Parent</span>
+              <InfoTip label="After a Parent">
+                Darkory files Acceptance under a Parent when its Subtasks end, and Retro when it ends; Skill review follows Retro.
+              </InfoTip>
             </div>
             {group(after, "after")}
           </>

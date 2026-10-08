@@ -104,20 +104,14 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
             its profile; pausing and deactivating last. */}
         <div className="flex flex-col gap-5">
           {agent && <AgentCard member={m} />}
-          <SettingsSection
-            title="Work"
-            description={`Who directs ${agent ? "it" : "them"}, the Projects ${agent ? "it works" : "they work"} in and the Skills ${agent ? "it holds" : "they hold"}.`}
-          >
+          <SettingsSection title="Work">
             <SettingsForm label={`Work of ${m.name}`}>
               <ManagerRow member={m} />
               <ProjectsRow detail={detail} />
               <SkillsRow detail={detail} />
             </SettingsForm>
           </SettingsSection>
-          <SettingsSection
-            title="Access"
-            description={agent ? "The tokens it works through, and its Sessions." : "How they sign in, the tokens they work through, and their Sessions."}
-          >
+          <SettingsSection title="Access">
             <SettingsForm label={`Access of ${m.name}`}>
               <SettingsRow label="Tokens" count={tokens.data ? liveTokens(tokens.data).length : undefined}>
                 <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data?.items ?? []} held={heldNow} />}</Loaded>
@@ -147,10 +141,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
               )}
             </SettingsForm>
           </SettingsSection>
-          <SettingsSection
-            title="Profile"
-            description={agent ? "Its name, and whether it is an admin." : "Their name, email, and whether they are an admin."}
-          >
+          <SettingsSection title="Profile">
             <SettingsForm label={`Settings of ${m.name}`}>
               {/* Keyed by the saved value, so an edit made elsewhere replaces the field's. */}
               <NameRow key={m.name} member={m} />
@@ -163,7 +154,6 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
               title={stopTitle}
               tone={canDeactivate ? "destructive" : undefined}
               description={[
-                pausable && "Paused, it starts no new Shift.",
                 canDeactivate && `Deactivating revokes ${they.its} tokens, closes ${they.its} Sessions and ends ${they.its} Claims.`,
                 !active && `Deactivated: ${they.do} no work until reactivated.`,
               ]
@@ -173,7 +163,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
               <SettingsForm label={`${stopTitle} ${m.name}`}>
                 {pausable && m.agent && <PausedRow member={m} settings={m.agent} />}
                 {canDeactivate && (
-                  <SettingsRow label="Deactivate" help={`Asks first, and counts what it stops.`}>
+                  <SettingsRow label="Deactivate" info="Asks first, and counts what it stops.">
                     <Button variant="outline" size="xs" className="text-destructive" onClick={() => setDialog("deactivate")}>
                       Deactivate {m.name}
                     </Button>
@@ -341,7 +331,7 @@ function EmailRow({ member }: { member: Member }) {
 function AdminRow({ member }: { member: Member }) {
   const save = useMutation({ mutationFn: (admin: boolean) => updateMember(member.id, { admin }) });
   return (
-    <SettingsRow label="Admin" htmlFor="member-admin" help="Creates Members, Projects, Skills and the Organisation's Labels, and sets Workflows.">
+    <SettingsRow label="Admin" htmlFor="member-admin" info="Creates Members, Projects, Skills and the Organisation's Labels, and sets Workflows.">
       <Switch
         id="member-admin"
         checked={save.isPending ? save.variables : member.admin}
@@ -366,7 +356,7 @@ function ManagerRow({ member }: { member: Member }) {
   const choices = memberList.filter((c) => c.id !== member.id && (!c.deactivated_at || c.id === member.manager_id));
   const current = member.manager_id ? members.get(member.manager_id) : undefined;
   return (
-    <SettingsRow label="Reporting line" htmlFor="member-manager" help="Who directs them: where they escalate when stuck.">
+    <SettingsRow label="Reporting line" htmlFor="member-manager" info="Who directs them: where they escalate when stuck.">
       <Select value={value} onValueChange={(v) => save.mutate(v)} disabled={save.isPending}>
         <SelectTrigger id="member-manager" size="sm" className={cn(w320, "h-8")} aria-label="Reports to">
           <SelectValue>

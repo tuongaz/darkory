@@ -12,7 +12,7 @@ import { inOrder, isNewSkill, willBeIn, type Draft } from "./draft";
 import { orgWide, type Holder, type Roster } from "./holders";
 import { CreateAgentDialog } from "./people";
 import { andList, takeAwayReach, type OrgFacts } from "./reach";
-import { Tip } from "./Tip";
+import { Tip } from "@/components/Tip";
 
 /*
  * Who takes a Step's Tasks, in its panel: the Members of the Project who have its Skill (the

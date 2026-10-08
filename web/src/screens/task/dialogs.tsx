@@ -6,6 +6,7 @@ import { api, ApiError, call, type Connector, type RunnerSession, type TaskDetai
 import { useDirectory, useOpenTasks, useTasks } from "@/api/queries";
 import { useNow } from "@/clock";
 import { FormDialog } from "@/components/FormDialog";
+import { InfoTip } from "@/components/InfoTip";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
@@ -26,13 +27,15 @@ import { useSkillDetail, useTaskWorkflow } from "./queries";
 type DialogProps = { detail: TaskDetail; open: boolean; onOpenChange: (open: boolean) => void };
 
 /** A field as the dialogs draw it: the label over the control, "optional" beside it, a line of help under it. */
-export function Field({ label, htmlFor, optional, help, children }: { label: string; htmlFor?: string; optional?: boolean; help?: ReactNode; children: ReactNode }) {
+export function Field({ label, htmlFor, info, help, children }: { label: string; htmlFor?: string; info?: ReactNode; help?: ReactNode; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <Label htmlFor={htmlFor} className="text-[12.5px] font-medium">
-        {label}
-        {optional && <span className="font-normal text-muted-foreground">optional</span>}
-      </Label>
+      <span className="flex items-center gap-1">
+        <Label htmlFor={htmlFor} className="text-[12.5px] font-medium">
+          {label}
+        </Label>
+        {info && <InfoTip label={label}>{info}</InfoTip>}
+      </span>
       {children}
       {help && <p className="text-xs text-muted-foreground">{help}</p>}
     </div>
@@ -62,7 +65,7 @@ function done(title: string, onOpenChange: (open: boolean) => void) {
 
 function NoteField({ id, value, onChange, placeholder }: { id: string; value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
-    <Field label="Note" htmlFor={id} optional>
+    <Field label="Note" htmlFor={id}>
       <Textarea id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </Field>
   );
@@ -262,7 +265,7 @@ export function TakeBackDialog({ detail, open, onOpenChange }: DialogProps) {
           </Consequence>
         )}
       </Consequences>
-      <Field label="Reason" htmlFor="take-back-reason" optional>
+      <Field label="Reason" htmlFor="take-back-reason">
         <Textarea id="take-back-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why you took it back" />
       </Field>
     </FormDialog>
@@ -337,7 +340,7 @@ export function DropTaskDialog({ detail, open, onOpenChange }: DialogProps) {
         {retro && <Consequence mark={<FileTextIcon />}>Its Retrospective is filed at {retro.name}</Consequence>}
         {pending.length > 0 && <Consequence mark={<MessageSquareIcon />}>Its proposals are not published</Consequence>}
       </Consequences>
-      <Field label="Reason" htmlFor="drop-reason" optional>
+      <Field label="Reason" htmlFor="drop-reason">
         <Textarea id="drop-reason" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why it will not be done" />
       </Field>
     </FormDialog>
@@ -402,14 +405,14 @@ export function RankDialog({ detail, open, onOpenChange }: DialogProps) {
       onOpenChange={onOpenChange}
       title={`Rank ${task.key}`}
       description={task.title}
-      hint={`Now #${task.rank ?? "?"} of ${ranked.length} in ${project?.name ?? "its Project"}; ended Tasks keep their places`}
+      hint={`Now #${task.rank ?? "?"} of ${ranked.length} in ${project?.name ?? "its Project"}`}
       submitLabel="Rank"
       submitDisabled={!valid || n === task.rank}
       onSubmit={() => rank.mutate()}
       pending={rank.isPending}
       error={rank.error}
     >
-      <Field label="Position" htmlFor="rank-position" help="1 is first; past the end is last.">
+      <Field label="Position" htmlFor="rank-position" info="1 is first; past the end is last. Ended Tasks keep their places.">
         <Input id="rank-position" type="number" min={1} value={position} onChange={(e) => setPosition(e.target.value)} className="w-28" />
       </Field>
     </FormDialog>

@@ -86,16 +86,21 @@ describe("an agent's settings", () => {
     expect(card).toHaveTextContent("In use");
     expect(card).toHaveTextContent("Not running: no Runner runs beside this server, so nothing starts this agent's command until one does.");
     expect(card).not.toHaveTextContent("whenever it has a Task to take");
-    expect(within(card).getByRole("button", { name: "About the Runner" })).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "About Runner" })).toBeInTheDocument();
     // The page in cards, the Agent's first and pausing and deactivating last, where Paused is.
     expect(screen.getAllByRole("region", { name: (n) => !n.startsWith("Notifications") }).map((r) => r.getAttribute("aria-label"))).toEqual(["Agent", "Work", "Access", "Profile", "Pause and deactivate"]);
-    expect(screen.getByRole("region", { name: "Agent" })).toHaveTextContent("How the Runner starts this agent's Shifts.");
+    // No line under the card's heading repeating its rows.
+    expect(screen.getByRole("region", { name: "Agent" })).not.toHaveTextContent("How the Runner starts");
     const stop = screen.getByRole("region", { name: "Pause and deactivate" });
     expect(within(stop).getByRole("switch", { name: "Paused" })).not.toBeChecked();
     expect(within(stop).getByRole("button", { name: "Deactivate builder" })).toBeInTheDocument();
+    // The placeholders are behind the Command's ⓘ, each with what it becomes.
+    await userEvent.click(within(card).getByRole("button", { name: "About Command" }));
+    const tip = await screen.findByRole("dialog");
     for (const p of ["{session_id}", "{model}", "{prompt_file}", "{mcp_config}", "{workspace}", "{task}"]) {
-      expect(within(card).getByText(p)).toBeInTheDocument();
+      expect(within(tip).getByText(p)).toBeInTheDocument();
     }
+    await userEvent.keyboard("{Escape}");
     expect(within(card).getByLabelText("Model")).toHaveAttribute("list", "agent-models");
     expect([...document.querySelectorAll("#agent-models option")].map((o) => o.getAttribute("value"))).toContain("claude-opus-5-5");
   });
@@ -202,8 +207,12 @@ describe("an agent's settings", () => {
     const api = mockApi(routes([ada, bob, builder]));
     renderApp("/settings/organisation/agents/m-builder");
     const card = await screen.findByRole("group", { name: "Agent settings of builder" });
-    expect(card).toHaveTextContent("the Runner does not start it");
-    expect(card).toHaveTextContent("In use, the Runner beside this server starts the agent's command whenever it has a Task to take.");
+    expect(card).toHaveTextContent("Not in use");
+    // What the Runner does is behind the Runner row's ⓘ.
+    expect(card).not.toHaveTextContent("whenever it has a Task to take");
+    await user.click(within(card).getByRole("button", { name: "About Runner" }));
+    expect(await screen.findByText(/the Runner beside this server starts the agent's command whenever it has a Task to take/)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
     // No Paused until the Runner starts it.
     expect(screen.queryByRole("switch", { name: "Paused" })).not.toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Use the Runner" }));
@@ -264,7 +273,7 @@ describe("Members and agents", () => {
     renderApp("/settings/organisation/members?new=1&kind=agent");
     const dialog = await screen.findByRole("dialog", { name: "New Member" });
     expect(within(dialog).getByRole("switch", { name: "Run with the Runner" })).toBeChecked();
-    expect(within(dialog).getByText("The Runner starts its Shifts with the Install's default command.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "About Runner" })).toBeInTheDocument();
     const model = within(dialog).getByLabelText("Model");
     expect(model).toHaveValue("claude-sonnet-5-5");
     await user.type(within(dialog).getByLabelText("Name"), "builder-9");
@@ -298,7 +307,6 @@ describe("Members and agents", () => {
     await user.type(within(dialog).getByLabelText("Name"), "bot-1");
     await user.click(within(dialog).getByRole("switch", { name: "Run with the Runner" }));
     expect(within(dialog).queryByLabelText("Model")).not.toBeInTheDocument();
-    expect(within(dialog).getByText("It works through its own token; the Runner does not start it.")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Create Member" }));
 
     expect(await screen.findByRole("dialog", { name: "Token for bot-1" })).toBeInTheDocument();

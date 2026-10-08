@@ -70,10 +70,13 @@ describe("Settings › a Project › General", () => {
     const api = mockApi(routes());
     renderApp("/settings/projects/WEB/general");
     const colours = await screen.findByRole("radiogroup", { name: "Colour of Web" });
-    // The help says what the colour is for, and claims nothing dark mode does not keep: dark draws a lighter tint.
+    // Its ⓘ says what the colour is for, and claims nothing dark mode does not keep: dark draws a lighter tint.
     const form = screen.getByRole("group", { name: "General settings of Web" });
-    expect(form).toHaveTextContent("The colour of its mark beside its name.");
-    expect(form).not.toHaveTextContent(/light and dark/);
+    expect(form).not.toHaveTextContent("The colour of its mark");
+    await user.click(within(form).getByRole("button", { name: "About Colour" }));
+    const tip = await screen.findByText("The colour of its mark beside its name.");
+    expect(tip).not.toHaveTextContent(/light and dark/);
+    await user.keyboard("{Escape}");
     const swatches = within(colours).getAllByRole("radio");
     expect(swatches).toHaveLength(12);
     // Web stores 0, red; Ops has 6, cyan.
@@ -96,6 +99,7 @@ describe("Settings › a Project › General", () => {
 
     mockApi(routes(undefined, { "GET /v1/projects/:project/workflow": withAcceptance }));
     renderApp("/settings/projects/WEB/general");
+    await userEvent.click(await screen.findByRole("button", { name: "About Acceptance" }));
     expect(await screen.findByText(/confirms a Parent filed here as a whole/)).toBeInTheDocument();
     expect(screen.queryByText(/has no Step carrying acceptance/)).not.toBeInTheDocument();
   });

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router";
@@ -12,7 +12,7 @@ import { SessionId } from "./CopyValue";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
 import { HeartbeatMeter } from "./HeartbeatMeter";
-import { InfoPopover } from "./InfoPopover";
+import { InfoTip } from "./InfoTip";
 import { Key } from "./Key";
 import { MemberAvatar } from "./MemberAvatar";
 import { Peek } from "./Peek";
@@ -322,12 +322,66 @@ describe("ProjectMark", () => {
   });
 });
 
-describe("InfoPopover", () => {
-  it("opens its explanation from the ⓘ", async () => {
-    render(<InfoPopover label="About holds">A Task at a hold is not takeable.</InfoPopover>);
+describe("InfoTip", () => {
+  it("is named About and its label, and opens its explanation on a click, until Esc", async () => {
+    render(<InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>);
+    const button = screen.getByRole("button", { name: "About Step" });
     expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "About holds" }));
+    await userEvent.click(button);
     expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
+    // Pinned: the pointer leaving does not close it.
+    await userEvent.unhover(button);
+    expect(screen.getByText(/not takeable/)).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument());
+  });
+
+  it("opens on hover and closes when the pointer leaves", async () => {
+    render(<InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>);
+    const button = screen.getByRole("button", { name: "About Step" });
+    await userEvent.hover(button);
+    expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
+    await userEvent.unhover(button);
+    await waitFor(() => expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument());
+  });
+
+  it("opens when the keyboard reaches it, leaving the focus where it is", async () => {
+    render(
+      <>
+        <input aria-label="Before" />
+        <InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>
+      </>,
+    );
+    screen.getByLabelText("Before").focus();
+    await userEvent.tab();
+    const button = screen.getByRole("button", { name: "About Step" });
+    expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
+    expect(button).toHaveFocus();
+    await userEvent.tab();
+    await waitFor(() => expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument());
+  });
+
+  it("moves nothing: the ⓘ is a fixed square and its explanation floats outside the label's line", async () => {
+    const { container } = render(
+      <span data-testid="line" className="flex items-center gap-1">
+        <label htmlFor="x">Step</label>
+        <InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>
+        <input id="x" />
+      </span>,
+    );
+    const line = screen.getByTestId("line");
+    const shape = [...line.children].map((e) => e.tagName);
+    const button = screen.getByRole("button", { name: "About Step" });
+    const classes = button.className;
+    expect(button).toHaveClass("size-4", "flex-none");
+    // Outside the <label>: the field's name stays the label's words.
+    expect(screen.getByRole("textbox")).toHaveAccessibleName("Step");
+    await userEvent.click(button);
+    const tip = await screen.findByText(/not takeable/);
+    expect(container).not.toContainElement(tip);
+    // The line holds only what it held, and the ⓘ keeps its classes: opening adds no box to it.
+    expect([...line.children].map((e) => e.tagName)).toEqual(shape);
+    expect(button.className).toBe(classes);
   });
 });
 

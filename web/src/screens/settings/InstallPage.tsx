@@ -72,7 +72,7 @@ export function InstallPage() {
           </SettingsRow>
           <SettingsRow
             label="Runner"
-            help={
+            info={
               runner.data?.runner === false
                 ? "Agents work through their own tokens. darkory serve starts one beside the Tracker unless --runner=off."
                 : "It starts the Shifts of agents with Runner settings; see Agents."

@@ -251,8 +251,8 @@ describe("Settings › a Member", () => {
     const profile = screen.getByRole("region", { name: "Profile" });
     expect(within(profile).getByLabelText("Email")).toBeInTheDocument();
     expect(within(profile).getByRole("switch", { name: "Admin" })).toBeInTheDocument();
-    // Each card says in a line what it holds.
-    expect(profile).toHaveTextContent("Their name, email, and whether they are an admin.");
+    // A card's heading stands alone: no line repeating its rows.
+    expect(profile).not.toHaveTextContent("Their name, email");
   });
 
   it("one's own page offers no Deactivate", async () => {

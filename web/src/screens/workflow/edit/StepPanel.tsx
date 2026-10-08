@@ -12,7 +12,7 @@ import { AddOutcome, Outcome, type OutcomeActions } from "./Outcomes";
 import type { OrgFacts } from "./reach";
 import { SkillPicker, type SkillChoice } from "./SkillPicker";
 import { TakenBy, type StepSkill } from "./TakenBy";
-import { Tip } from "./Tip";
+import { Tip } from "@/components/Tip";
 
 /*
  * The picked Step, edited beside the list: its name and a menu (move, add a Step after, delete);
