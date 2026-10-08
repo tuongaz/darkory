@@ -55,6 +55,7 @@ const (
 	ActivityKindTaskLapsed            ActivityKind = "task.lapsed"
 	ActivityKindTaskMoved             ActivityKind = "task.moved"
 	ActivityKindTaskNoteAdded         ActivityKind = "task.note_added"
+	ActivityKindTaskNudged            ActivityKind = "task.nudged"
 	ActivityKindTaskObserved          ActivityKind = "task.observed"
 	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
 	ActivityKindTaskRanked            ActivityKind = "task.ranked"
@@ -142,6 +143,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskMoved:
 		return true
 	case ActivityKindTaskNoteAdded:
+		return true
+	case ActivityKindTaskNudged:
 		return true
 	case ActivityKindTaskObserved:
 		return true
@@ -654,6 +657,8 @@ type Activity struct {
 	// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
 	// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
 	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+	// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+	// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
 	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
@@ -680,6 +685,8 @@ type Activity struct {
 // `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
 // when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
 // itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
 type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
@@ -1345,6 +1352,12 @@ type RankTaskBody struct {
 	Position int64 `json:"position"`
 }
 
+// RecordNudgeBody defines model for RecordNudgeBody.
+type RecordNudgeBody struct {
+	// Nudge Which of the Runner's two nudges it was.
+	Nudge int `json:"nudge"`
+}
+
 // ReleaseTaskBody defines model for ReleaseTaskBody.
 type ReleaseTaskBody struct {
 	// Note Added to the Task's Notes in the same write.
@@ -1374,8 +1387,11 @@ type RunnerSession struct {
 	// its progress has not moved for the Runner's stale window, so the Runner sends no more
 	// Heartbeats and the Claim lapses unless it moves again. `ending`: the Claim has ended and
 	// the session is closing.
-	State  RunnerSessionState `json:"state"`
-	TaskID string             `json:"task_id"`
+	State RunnerSessionState `json:"state"`
+
+	// StateSince When the session entered its current state; `started_at` until it first changed.
+	StateSince time.Time `json:"state_since"`
+	TaskID     string    `json:"task_id"`
 
 	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
@@ -2472,6 +2488,13 @@ type AddNoteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RecordNudgeParams defines parameters for RecordNudge.
+type RecordNudgeParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTaskObservationsParams defines parameters for ListTaskObservations.
 type ListTaskObservationsParams struct {
 	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
@@ -2651,6 +2674,9 @@ type SetTaskLabelsJSONRequestBody = SetTaskLabelsBody
 
 // AddNoteJSONRequestBody defines body for AddNote for application/json ContentType.
 type AddNoteJSONRequestBody = AddNoteBody
+
+// RecordNudgeJSONRequestBody defines body for RecordNudge for application/json ContentType.
+type RecordNudgeJSONRequestBody = RecordNudgeBody
 
 // ObserveJSONRequestBody defines body for Observe for application/json ContentType.
 type ObserveJSONRequestBody = ObserveBody
@@ -3879,6 +3905,32 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 	AddNote(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RecordNudgeWithBody Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudgeWithBody(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RecordNudge Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudge(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTaskObservations List the Observations recorded on a Task and, for a Parent, on its Subtasks
 	//
@@ -6197,6 +6249,52 @@ func (c *Client) AddNoteWithBody(ctx context.Context, task TaskRef, params *AddN
 // Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 func (c *Client) AddNote(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAddNoteRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RecordNudgeWithBody Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *Client) RecordNudgeWithBody(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordNudgeRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RecordNudge Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *Client) RecordNudge(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordNudgeRequest(c.Server, task, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10365,6 +10463,68 @@ func NewAddNoteRequestWithBody(server string, task TaskRef, params *AddNoteParam
 	return req, nil
 }
 
+// NewRecordNudgeRequest calls the generic RecordNudge builder with application/json body
+func NewRecordNudgeRequest(server string, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRecordNudgeRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewRecordNudgeRequestWithBody constructs an http.Request for the RecordNudge method, with any body, and a specified content type
+func NewRecordNudgeRequestWithBody(server string, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/nudged", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListTaskObservationsRequest constructs an http.Request for the ListTaskObservations method
 func NewListTaskObservationsRequest(server string, task TaskRef, params *ListTaskObservationsParams) (*http.Request, error) {
 	var err error
@@ -12586,6 +12746,32 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 	AddNoteWithResponse(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*AddNoteResponse, error)
+
+	// RecordNudgeWithBodyWithResponse Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudgeWithBodyWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error)
+
+	// RecordNudgeWithResponse Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudgeWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error)
 
 	// ListTaskObservationsWithResponse List the Observations recorded on a Task and, for a Parent, on its Subtasks
 	//
@@ -16028,6 +16214,47 @@ func (r AddNoteResponse) ContentType() string {
 	return ""
 }
 
+type RecordNudgeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r RecordNudgeResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RecordNudgeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RecordNudgeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RecordNudgeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RecordNudgeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListTaskObservationsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -18571,6 +18798,44 @@ func (c *ClientWithResponses) AddNoteWithResponse(ctx context.Context, task Task
 		return nil, err
 	}
 	return ParseAddNoteResponse(rsp)
+}
+
+// RecordNudgeWithBodyWithResponse Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *ClientWithResponses) RecordNudgeWithBodyWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error) {
+	rsp, err := c.RecordNudgeWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRecordNudgeResponse(rsp)
+}
+
+// RecordNudgeWithResponse Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *ClientWithResponses) RecordNudgeWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error) {
+	rsp, err := c.RecordNudge(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRecordNudgeResponse(rsp)
 }
 
 // ListTaskObservationsWithResponse List the Observations recorded on a Task and, for a Parent, on its Subtasks
@@ -21241,6 +21506,35 @@ func ParseAddNoteResponse(rsp *http.Response) (*AddNoteResponse, error) {
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRecordNudgeResponse parses an HTTP response from a RecordNudgeWithResponse call
+func ParseRecordNudgeResponse(rsp *http.Response) (*RecordNudgeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RecordNudgeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

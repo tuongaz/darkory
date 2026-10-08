@@ -35,6 +35,7 @@ const session: RunnerSession = {
   host: "mac-mini",
   tmux: "dk-WEB-3",
   started_at: minutes(-5),
+  state_since: minutes(-5),
   state: "running",
   log_path: "/data/sessions/WEB-3/pane.log",
 };

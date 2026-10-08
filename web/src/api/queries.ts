@@ -1,6 +1,6 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type Member, type Project, type RunnerSession, type Skill, type SubjectType, type Task, type ViewEntity } from "./client";
+import { api, call, type ActivityKind, type Member, type Project, type RunnerSession, type Skill, type SubjectType, type Task, type ViewEntity } from "./client";
 import { allPages } from "./pages";
 import type { paths } from "./schema.gen";
 
@@ -96,9 +96,15 @@ const affected: Record<SubjectType, Root[]> = {
   workspace: [...organisation, ...work, "workspaces"],
 };
 
+// Kinds that change less than their subject type says. A nudge records what the Runner typed into
+// a session; the Task, its Claim and the session's state stay as they were.
+const affectedByKind: Partial<Record<ActivityKind, Root[]>> = {
+  "task.nudged": [],
+};
+
 /** The query roots an Activity entry may have changed. */
 export function affectedBy(kind: string): Root[] | "all" {
-  return affected[kind.split(".")[0] as SubjectType] ?? "all";
+  return affectedByKind[kind as ActivityKind] ?? affected[kind.split(".")[0] as SubjectType] ?? "all";
 }
 
 /** Marks stale whatever the Activity entry may have changed; open views refetch. */

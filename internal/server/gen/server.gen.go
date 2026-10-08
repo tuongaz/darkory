@@ -52,6 +52,7 @@ const (
 	ActivityKindTaskLapsed            ActivityKind = "task.lapsed"
 	ActivityKindTaskMoved             ActivityKind = "task.moved"
 	ActivityKindTaskNoteAdded         ActivityKind = "task.note_added"
+	ActivityKindTaskNudged            ActivityKind = "task.nudged"
 	ActivityKindTaskObserved          ActivityKind = "task.observed"
 	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
 	ActivityKindTaskRanked            ActivityKind = "task.ranked"
@@ -139,6 +140,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskMoved:
 		return true
 	case ActivityKindTaskNoteAdded:
+		return true
+	case ActivityKindTaskNudged:
 		return true
 	case ActivityKindTaskObserved:
 		return true
@@ -651,6 +654,8 @@ type Activity struct {
 	// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
 	// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
 	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+	// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+	// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
 	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
@@ -677,6 +682,8 @@ type Activity struct {
 // `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
 // when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
 // itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
 type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
@@ -1342,6 +1349,12 @@ type RankTaskBody struct {
 	Position int64 `json:"position"`
 }
 
+// RecordNudgeBody defines model for RecordNudgeBody.
+type RecordNudgeBody struct {
+	// Nudge Which of the Runner's two nudges it was.
+	Nudge int `json:"nudge"`
+}
+
 // ReleaseTaskBody defines model for ReleaseTaskBody.
 type ReleaseTaskBody struct {
 	// Note Added to the Task's Notes in the same write.
@@ -1371,8 +1384,11 @@ type RunnerSession struct {
 	// its progress has not moved for the Runner's stale window, so the Runner sends no more
 	// Heartbeats and the Claim lapses unless it moves again. `ending`: the Claim has ended and
 	// the session is closing.
-	State  RunnerSessionState `json:"state"`
-	TaskID string             `json:"task_id"`
+	State RunnerSessionState `json:"state"`
+
+	// StateSince When the session entered its current state; `started_at` until it first changed.
+	StateSince time.Time `json:"state_since"`
+	TaskID     string    `json:"task_id"`
 
 	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
@@ -2469,6 +2485,13 @@ type AddNoteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RecordNudgeParams defines parameters for RecordNudge.
+type RecordNudgeParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTaskObservationsParams defines parameters for ListTaskObservations.
 type ListTaskObservationsParams struct {
 	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
@@ -2648,6 +2671,9 @@ type SetTaskLabelsJSONRequestBody = SetTaskLabelsBody
 
 // AddNoteJSONRequestBody defines body for AddNote for application/json ContentType.
 type AddNoteJSONRequestBody = AddNoteBody
+
+// RecordNudgeJSONRequestBody defines body for RecordNudge for application/json ContentType.
+type RecordNudgeJSONRequestBody = RecordNudgeBody
 
 // ObserveJSONRequestBody defines body for Observe for application/json ContentType.
 type ObserveJSONRequestBody = ObserveBody
@@ -2885,6 +2911,9 @@ type ServerInterface interface {
 	// AddNote Add a Note to a Task's running log
 	// (POST /v1/tasks/{task}/notes)
 	AddNote(w http.ResponseWriter, r *http.Request, task TaskRef, params AddNoteParams)
+	// RecordNudge Record that the Runner nudged the agent holding a Task
+	// (POST /v1/tasks/{task}/nudged)
+	RecordNudge(w http.ResponseWriter, r *http.Request, task TaskRef, params RecordNudgeParams)
 	// ListTaskObservations List the Observations recorded on a Task and, for a Parent, on its Subtasks
 	// (GET /v1/tasks/{task}/observations)
 	ListTaskObservations(w http.ResponseWriter, r *http.Request, task TaskRef, params ListTaskObservationsParams)
@@ -5924,6 +5953,56 @@ func (siw *ServerInterfaceWrapper) AddNote(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// RecordNudge operation middleware
+func (siw *ServerInterfaceWrapper) RecordNudge(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "task" -------------
+	var task TaskRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "task", r.PathValue("task"), &task, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "task", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RecordNudgeParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecordNudge(w, r, task, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTaskObservations operation middleware
 func (siw *ServerInterfaceWrapper) ListTaskObservations(w http.ResponseWriter, r *http.Request) {
 
@@ -6885,6 +6964,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/claim", wrapper.ClaimTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/heartbeat", wrapper.Heartbeat)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/release", wrapper.ReleaseTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/nudged", wrapper.RecordNudge)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/advance", wrapper.AdvanceTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/step", wrapper.MoveTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/complete", wrapper.CompleteTask)

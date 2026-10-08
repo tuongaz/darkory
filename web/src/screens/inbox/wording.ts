@@ -53,6 +53,7 @@ const kinds: Record<ActivityKind, KindWords> = {
   "task.dropped": { group: "Task", label: "Dropped", verb: "dropped" },
   "task.released": { group: "Task", label: "Released", verb: "released" },
   "task.lapsed": { group: "Task", label: "Lapsed", verb: "" },
+  "task.nudged": { group: "Task", label: "Nudged", verb: "nudged the holder of" },
   "task.taken_back": { group: "Task", label: "Taken back", verb: "" },
   "task.claim_ended": { group: "Task", label: "Claim ended", verb: "ended a Claim on" },
   "task.split": { group: "Task", label: "Split", verb: "split" },
@@ -237,6 +238,10 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
       if (timeout) s.details.push(`no Heartbeat in ${timeoutText(timeout)}`);
       break;
     }
+    case "task.nudged":
+      s.details.push(`held by ${member(text(p, "holder_id"))}`);
+      if (number(p, "nudge")) s.details.push(`nudge ${number(p, "nudge")} of 2`);
+      break;
     case "task.taken_back":
       s.mark = "taken_back";
       s.details.push(`held by ${member(text(p, "holder_id"))}`);

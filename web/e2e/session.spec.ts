@@ -377,6 +377,7 @@ test.describe("the Session panel with no Runner", () => {
       tmux: `dk-${taskKey}`,
       started_at: new Date().toISOString(),
       state: "running",
+      state_since: new Date().toISOString(),
       log_path: `/data/sessions/${taskKey}/pane.log`,
     };
     const members = await v1<{ items: { id: string; name: string }[] }>(token, "e2e-session-ada", "GET", "/v1/members");

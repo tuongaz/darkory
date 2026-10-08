@@ -29,7 +29,7 @@ describe("binding the record to the canvas", () => {
       task(3, { step_id: step.review, claim: { ...claim(3, bob.id), ended_at: "2026-10-08T09:30:00Z" } }),
     ];
     const kinds = new Map([ada, bob, builder].map((m) => [m.id, m.kind]));
-    const sessions = [{ task_id: "k-1", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled" as const, log_path: "" }];
+    const sessions = [{ task_id: "k-1", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled" as const, state_since: "", log_path: "" }];
     const working = workingAt(tasks, sessions, (id) => kinds.get(id), now);
     expect(working.get(step.build)?.get(builder.id)).toBe("stalled");
     expect(working.get(step.review)?.get(ada.id)).toBe("held");

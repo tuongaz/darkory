@@ -180,7 +180,7 @@ describe("Pill, Key, PropertiesRail, Timeline, EmptyState", () => {
 describe("RunnerSessionBadge", () => {
   it("says the session's state, since when and where, in one line", () => {
     const started = new Date(2026, 9, 7, 4, 25).toISOString();
-    const base = { task_id: "k-12", member_id: "m-builder", session_id: "s", host: "mac-mini", started_at: started, log_path: "/x" };
+    const base = { task_id: "k-12", member_id: "m-builder", session_id: "s", host: "mac-mini", started_at: started, state_since: started, log_path: "/x" };
     const { rerender, container } = render(<RunnerSessionBadge session={{ ...base, state: "running" }} />);
     expect(container).toHaveTextContent("SessionRunningstarted 04:25 · mac-mini");
     expect(screen.getByText("Running")).toHaveAttribute("data-tone", "done");

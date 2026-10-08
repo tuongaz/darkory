@@ -132,8 +132,8 @@ const tasks: T[] = [
 const shop = { id: "w-shop", name: "shop", kind: "git", path: "/Users/ada/src/shop", mode: "pull_request", default_branch: "main", created_at: created };
 
 const runnerSessions = [
-  { task_id: "k-10", member_id: builder.id, session_id: "sess-k-10", host: "mac-mini", tmux: "dk-WEB-10", started_at: ago(12), state: "running", log_path: "/tmp/WEB-10.log" },
-  { task_id: "k-11", member_id: reviewer.id, session_id: "sess-k-11", host: "mac-mini", tmux: "dk-WEB-11", started_at: ago(12), state: "waiting", log_path: "/tmp/WEB-11.log" },
+  { task_id: "k-10", member_id: builder.id, session_id: "sess-k-10", host: "mac-mini", tmux: "dk-WEB-10", started_at: ago(12), state: "running", state_since: ago(12), log_path: "/tmp/WEB-10.log" },
+  { task_id: "k-11", member_id: reviewer.id, session_id: "sess-k-11", host: "mac-mini", tmux: "dk-WEB-11", started_at: ago(12), state: "waiting", state_since: ago(12), log_path: "/tmp/WEB-11.log" },
 ];
 
 let seq = 0;

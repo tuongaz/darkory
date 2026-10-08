@@ -32,7 +32,7 @@ describe("the graph's binding", () => {
       subtask(4, p, { step_id: undefined, aimed_at_id: bob.id, blocked: true, open_blockers: [{ id: "k-9", key: "WEB-9", title: "x" }] }),
       subtask(5, p, { state: "done", step_id: undefined, kind: "acceptance" }),
     ];
-    const sessions = new Map<string, RunnerSession>([["k-2", { task_id: "k-2", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled", log_path: "" }]]);
+    const sessions = new Map<string, RunnerSession>([["k-2", { task_id: "k-2", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled", state_since: "", log_path: "" }]]);
     const nodes = graphSubtasks(subs, { members, now, sessions });
     expect(nodes.map((n) => [n.key, n.stepId, n.holder?.name, n.working, n.aimedAt?.name, n.blockedBy, n.kind])).toEqual([
       ["WEB-2", step.build, "builder", "stalled", undefined, [], "work"],

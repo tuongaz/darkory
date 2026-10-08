@@ -205,7 +205,7 @@ function answer(method: string, path: string, query: URLSearchParams): unknown {
       return { items: tasks };
     }
     case "runner":
-      return { items: [{ task_id: "k-42", member_id: "m-builder", session_id: heldSession, host: "mac-mini", tmux: "dk-WEB-42", started_at: ago(1), state: "running", log_path: "/tmp/x" }], runner: true };
+      return { items: [{ task_id: "k-42", member_id: "m-builder", session_id: heldSession, host: "mac-mini", tmux: "dk-WEB-42", started_at: ago(1), state: "running", state_since: ago(1), log_path: "/tmp/x" }], runner: true };
     case "activity":
       return { items: [], next_after: 0 };
     case "views":

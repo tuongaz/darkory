@@ -140,7 +140,7 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
 test("marks: an agent's gradient ring turns while its session runs, stops in its colour, and a human's is plain (scenario 9)", async ({ page }) => {
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
-  const session = { task_id: cart.id, member_id: "", session_id: "sess-inbox-builder", host: "e2e-host", tmux: `dk-${cart.key}`, started_at: new Date().toISOString(), log_path: "/tmp/x" };
+  const session = { task_id: cart.id, member_id: "", session_id: "sess-inbox-builder", host: "e2e-host", tmux: `dk-${cart.key}`, started_at: new Date().toISOString(), state_since: new Date().toISOString(), log_path: "/tmp/x" };
   const members = await v1<{ items: { id: string; name: string }[] }>(admin, "GET", "/v1/members");
   session.member_id = members.items.find((m) => m.name === "inbox-builder")!.id;
   await runnerSays(page, [{ ...session, state: "running" }]);

@@ -1282,6 +1282,30 @@ paths:
               schema: {$ref: "#/components/schemas/Task"}
         default: {$ref: "#/components/responses/Error"}
 
+  /v1/tasks/{task}/nudged:
+    post:
+      operationId: recordNudge
+      tags: [runner]
+      summary: Record that the Runner nudged the agent holding a Task
+      description: |
+        Called by the Runner, through the Session that holds the Task's Claim, after it typed
+        its nudge into a session whose turn ended with the Task still held and no decision. It
+        nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+        as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+        Claim), `invalid`.
+      parameters:
+        - {$ref: "#/components/parameters/TaskRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RecordNudgeBody"}
+      responses:
+        "204":
+          description: The nudge is recorded.
+        default: {$ref: "#/components/responses/Error"}
+
   /v1/tasks/{task}/advance:
     post:
       operationId: advanceTask
@@ -3519,10 +3543,13 @@ components:
         `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
         when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
         itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+        `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+        had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
       enum:
         - task.filed
         - task.claimed
         - task.lapsed
+        - task.nudged
         - task.released
         - task.advanced
         - task.moved
@@ -3596,7 +3623,7 @@ components:
       description: |
         An agent session the Runner runs for a Task it claimed as that agent. Not part of the
         record: it lives as long as the session.
-      required: [task_id, member_id, session_id, host, started_at, state, log_path]
+      required: [task_id, member_id, session_id, host, started_at, state, state_since, log_path]
       properties:
         task_id: {type: string}
         member_id:
@@ -3613,6 +3640,10 @@ components:
           description: The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
         started_at: {type: string, format: date-time}
         state: {$ref: "#/components/schemas/RunnerSessionState"}
+        state_since:
+          type: string
+          format: date-time
+          description: When the session entered its current state; `started_at` until it first changed.
         log_path:
           type: string
           description: Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends.
@@ -3628,6 +3659,15 @@ components:
         the session is closing.
       enum: [running, waiting, stalled, ending]
       x-enum-varnames: [RunnerSessionRunning, RunnerSessionWaiting, RunnerSessionStalled, RunnerSessionEnding]
+    RecordNudgeBody:
+      type: object
+      required: [nudge]
+      properties:
+        nudge:
+          type: integer
+          minimum: 1
+          maximum: 2
+          description: Which of the Runner's two nudges it was.
     RunnerSessionList:
       type: object
       required: [items, runner]

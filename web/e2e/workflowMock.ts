@@ -153,6 +153,7 @@ const session = (n: number, member: string, state: string) => ({
   tmux: `dk-WEB-${n}`,
   started_at: at,
   state,
+  state_since: at,
   log_path: `/tmp/WEB-${n}.log`,
 });
 export const sessions = [session(4, "m-planner", "running"), session(5, "m-builder-1", "running"), session(6, "m-builder-2", "stalled"), session(9, "m-qa", "waiting")];
