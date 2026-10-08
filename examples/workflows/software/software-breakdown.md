@@ -6,7 +6,7 @@ You do not hold the Parent, but steps 1 and 2 are yours to do on it: noting on a
 
 1. Write the Parent's acceptance criteria as a Note on the Parent (`darkory note <PARENT> -`): checkable lines from its user's side, then what is out of scope. Acceptance checks exactly these.
 2. Label the Parent `security` and `infra` as Triage would (`darkory label set <PARENT> …`, which replaces its Labels, so name the ones it has too).
-3. When it needs a design (a new component, endpoint, data store, dependency or public interface, anything hard to reverse, or a `security` Label), file one Subtask: `darkory file --parent <PARENT> --step Design --title "Design: <Parent title>" --body -` with the problem, the criteria and the constraints you found. The architect files the slices once the design exists; file none yourself.
+3. When it needs a design (a new component, endpoint, data store, dependency or public interface, anything hard to reverse, or a `security` Label), file one Subtask: `darkory file --parent <PARENT> --step Design --title "Design: <Parent title>" --body -` with the problem, the criteria and the constraints you found. When the Parent or repository names a toolchain or runtime version, check it is still supported and say in the body when it is not. The architect files the slices once the design exists; file none yourself.
    When it needs none, file the slices yourself, each `--parent <PARENT> --step Build`: a small vertical slice with its own checkable criteria, releasable on its own; block one by another (`darkory block <task> --by <task>`) only where the order is real.
 4. File no review, QA, security or release Subtasks: every slice passes those Steps on its way to Done.
 5. `darkory advance <KEY> done --note "<what you filed and why>"`.
