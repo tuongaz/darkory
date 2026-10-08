@@ -235,10 +235,11 @@ function BoardColumn({
       data-column={name}
       data-hold={hold || undefined}
       className={cn(
-        "flex flex-none flex-col gap-2 rounded-lg",
-        wide ? "w-full" : "w-[232px]",
-        hold && "border border-dashed border-border p-1.5",
-        c.kind === "with" && "bg-muted/40 p-1.5",
+        // Every column keeps the same inset, so the headers line up; a hold's edge is drawn dashed.
+        "flex flex-none flex-col gap-2 rounded-lg border border-transparent p-1.5",
+        wide ? "w-full" : "w-[244px]",
+        hold && "border-dashed border-border",
+        c.kind === "with" && "bg-muted/40",
         outline,
       )}
     >

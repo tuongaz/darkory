@@ -253,7 +253,7 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
         </span>
       }
     >
-      <div className="grid max-h-[calc(100svh-15rem)] grid-cols-1 gap-x-3 gap-y-3.5 overflow-y-auto sm:grid-cols-12">
+      <div className="-mx-1 grid max-h-[calc(100svh-15rem)] grid-cols-1 gap-x-3 gap-y-3.5 overflow-y-auto px-1 py-1 sm:grid-cols-12">
         <Field label="Project" htmlFor="file-task-project" className="sm:col-span-6">
           <Select
             value={key}

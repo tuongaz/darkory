@@ -23,7 +23,8 @@ const leftWords = (left: Stay["left"]) => {
 export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
   const now = useNow();
   const { stays, end } = taskPath(detail.task, path);
-  if (stays.length === 0 && !end) return null;
+  // A path with no Step on it (a Parent from its filing, history out of reach) says nothing.
+  if (stays.length === 0) return null;
   const name = (id: string) => steps.find((s) => s.id === id)?.name ?? "A Step since removed";
   const hold = (id: string) => !steps.find((s) => s.id === id)?.skill_id;
   return (
