@@ -73,8 +73,17 @@ describe("an agent's settings", () => {
     expect(within(card).getByLabelText("Model")).toHaveValue("claude-sonnet-5-5");
     expect(within(card).getByLabelText("Environment")).toHaveValue("HTTP_PROXY = http://proxy:3128");
     expect(within(card).getByLabelText("Progress file")).toHaveValue("");
-    expect(within(card).getByRole("switch", { name: "Paused" })).not.toBeChecked();
     expect(within(card).getByRole("switch", { name: "Unattended" })).toBeChecked();
+    // The Runner row says what the Runner is, in one line; ⓘ says more.
+    expect(card).toHaveTextContent("In use");
+    expect(card).toHaveTextContent("Darkory starts this agent's command on this machine whenever it has a Task to take.");
+    expect(within(card).getByRole("button", { name: "About the Runner" })).toBeInTheDocument();
+    // The page in cards, the Agent's first and pausing and deactivating last, where Paused is.
+    expect(screen.getAllByRole("region", { name: (n) => !n.startsWith("Notifications") }).map((r) => r.getAttribute("aria-label"))).toEqual(["Agent", "Work", "Access", "Profile", "Pause and deactivate"]);
+    expect(screen.getByRole("region", { name: "Agent" })).toHaveTextContent("How the Runner starts this agent's sessions.");
+    const stop = screen.getByRole("region", { name: "Pause and deactivate" });
+    expect(within(stop).getByRole("switch", { name: "Paused" })).not.toBeChecked();
+    expect(within(stop).getByRole("button", { name: "Deactivate builder" })).toBeInTheDocument();
     for (const p of ["{session_id}", "{model}", "{prompt_file}", "{mcp_config}", "{workspace}", "{task}"]) {
       expect(within(card).getByText(p)).toBeInTheDocument();
     }
@@ -138,7 +147,7 @@ describe("an agent's settings", () => {
     const api = mockApi(routes([ada, bob, runBuilder]));
     renderApp("/settings/organisation/agents/m-builder");
     const card = await screen.findByRole("group", { name: "Agent settings of builder" });
-    await user.click(within(card).getByRole("switch", { name: "Paused" }));
+    await user.click(within(screen.getByRole("region", { name: "Pause and deactivate" })).getByRole("switch", { name: "Paused" }));
     await waitFor(() => expect(patches(api.calls)).toHaveLength(1));
     await user.click(within(card).getByRole("switch", { name: "Unattended" }));
     await waitFor(() => expect(patches(api.calls)).toHaveLength(2));
@@ -172,6 +181,9 @@ describe("an agent's settings", () => {
     renderApp("/settings/organisation/agents/m-builder");
     const card = await screen.findByRole("group", { name: "Agent settings of builder" });
     expect(card).toHaveTextContent("the Runner does not start it");
+    expect(card).toHaveTextContent("Darkory starts this agent's command on this machine whenever it has a Task to take.");
+    // No Paused until the Runner starts it.
+    expect(screen.queryByRole("switch", { name: "Paused" })).not.toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Use the Runner" }));
     expect(await screen.findByLabelText("Command")).toHaveValue("claude");
     expect(patches(api.calls).map((c) => c.body)).toEqual([{}]);

@@ -313,8 +313,8 @@ test("an agent: its token shown once; deactivating it ends its live Claim and it
     const copy = session.getByRole("button", { name: "Copy Session id" });
     await session.getByText("sess-builder-1").hover();
     await expect(copy).toBeVisible();
-    await page.getByRole("button", { name: "More for builder-1" }).click();
-    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    // In the page's last card, with Paused: the agent's Runner settings came with it.
+    await page.getByRole("region", { name: "Pause and deactivate" }).getByRole("button", { name: "Deactivate builder-1" }).click();
     const confirm = page.getByRole("dialog", { name: "Deactivate builder-1?" });
     await expect(confirm).toContainText("1 token");
     await expect(confirm).toContainText("1 Session");
@@ -419,8 +419,10 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
 
     await card.getByLabel("Model").fill("claude-haiku-4-5-20251001");
     await page.keyboard.press("Enter");
-    await card.getByRole("switch", { name: "Paused" }).click();
-    await expect(card.getByRole("switch", { name: "Paused" })).toBeChecked();
+    await expect(card).toContainText("Darkory starts this agent's command on this machine whenever it has a Task to take.");
+    const stop = page.getByRole("region", { name: "Pause and deactivate" });
+    await stop.getByRole("switch", { name: "Paused" }).click();
+    await expect(stop.getByRole("switch", { name: "Paused" })).toBeChecked();
     await expect.poll(async () => (await ada<Agent>("GET", "/v1/members/planner-1")).member.agent).toMatchObject({ model: "claude-haiku-4-5-20251001", paused: true });
     await shot(page, "29-agent");
 

@@ -4,7 +4,6 @@ import { ApiError, type AgentSettings, type Member } from "@/api/client";
 import type { components } from "@/api/schema.gen";
 import { clearAgentSettings, setAgentSettings } from "@/api/writes";
 import { InfoPopover } from "@/components/InfoPopover";
-import { SectionHeader } from "@/components/PageHeader";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,36 +13,68 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { argsOf, argsText, envOf, envText, knownModels, placeholders } from "./agent";
 import { count } from "./model";
-import { ConfirmDialog, Fact, Facts, MoreMenu, SettingsForm, SettingsRow, w320 } from "./parts";
+import { ConfirmDialog, Fact, Facts, MoreMenu, SettingsForm, SettingsRow, SettingsSection, w320 } from "./parts";
 
 type Body = components["schemas"]["SetAgentSettingsBody"];
 
 /**
- * An agent's Agent card: how the Runner starts its sessions. Each field saves on its own when it
- * is left, and sends only itself (PATCH /v1/members/{member}/agent keeps the rest). An agent
- * with no settings works from elsewhere through its own token until an admin hands it to the
- * Runner; Stop using the Runner, behind ⋯, clears them again.
+ * An agent's Agent card: how the Runner starts its sessions, the Runner row first saying what the
+ * Runner is. Each field saves on its own when it is left, and sends only itself
+ * (PATCH /v1/members/{member}/agent keeps the rest). An agent with no settings works from
+ * elsewhere through its own token until an admin hands it to the Runner; Stop using the Runner,
+ * behind ⋯, clears them again. Paused is in the page's last card (`PausedRow`), with Deactivate.
  */
 export function AgentCard({ member }: { member: Member }) {
   const s = member.agent;
   const [stopping, setStopping] = useState(false);
   return (
-    <section aria-label="Agent" className="mt-8 flex flex-col gap-2">
-      <SectionHeader
-        title="Agent"
-        actions={
-          s && (
-            <MoreMenu label={`More for the Agent settings of ${member.name}`} size="icon-xs">
-              <DropdownMenuItem variant="destructive" onSelect={() => setStopping(true)}>
-                Stop using the Runner
-              </DropdownMenuItem>
-            </MoreMenu>
-          )
-        }
-      />
+    <SettingsSection
+      title="Agent"
+      description="How the Runner starts this agent's sessions."
+      actions={
+        s && (
+          <MoreMenu label={`More for the Agent settings of ${member.name}`} size="icon-xs">
+            <DropdownMenuItem variant="destructive" onSelect={() => setStopping(true)}>
+              Stop using the Runner
+            </DropdownMenuItem>
+          </MoreMenu>
+        )
+      }
+    >
       {s ? <AgentForm member={member} settings={s} /> : <NotRun member={member} />}
       {s && stopping && <StopRunnerDialog member={member} settings={s} onClose={() => setStopping(false)} />}
-    </section>
+    </SettingsSection>
+  );
+}
+
+/** What the Runner is, in a line under the Runner row; ⓘ says what it does with the Task. */
+export const runnerLine = "Darkory starts this agent's command on this machine whenever it has a Task to take.";
+
+function AboutRunner() {
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {runnerLine}
+      <InfoPopover label="About the Runner" className="w-[320px]">
+        <p>
+          It takes the Task through <code className="font-mono text-[11.5px]">next</code> as this agent, prepares its Workspace, and ends the
+          session when the Claim ends.
+        </p>
+      </InfoPopover>
+    </span>
+  );
+}
+
+/** Paused, for an agent the Runner starts: no new session until it is switched off. */
+export function PausedRow({ member, settings: s }: { member: Member; settings: AgentSettings }) {
+  return (
+    <SwitchSetting
+      member={member}
+      id="agent-paused"
+      label="Paused"
+      checked={s.paused}
+      body={(paused) => ({ paused })}
+      help="The Runner starts no new session; one running carries on."
+    />
   );
 }
 
@@ -84,11 +115,11 @@ function NotRun({ member }: { member: Member }) {
   const start = useMutation({ mutationFn: () => setAgentSettings(member.id, {}) });
   return (
     <SettingsForm label={`Agent settings of ${member.name}`}>
-      <SettingsRow label="Runner">
-        <span className="text-muted-foreground">Works through its own token; the Runner does not start it.</span>
+      <SettingsRow label="Runner" help={<AboutRunner />}>
         <Button variant="outline" size="xs" onClick={() => start.mutate()} disabled={start.isPending}>
           Use the Runner
         </Button>
+        <span className="text-muted-foreground">Works through its own token; the Runner does not start it.</span>
         <Refusal error={start.error} />
       </SettingsRow>
     </SettingsForm>
@@ -99,6 +130,9 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
   // Each row is keyed by its saved value, so a change made elsewhere replaces what the field shows.
   return (
     <SettingsForm label={`Agent settings of ${member.name}`}>
+      <SettingsRow label="Runner" help={<AboutRunner />}>
+        <span>In use</span>
+      </SettingsRow>
       <TextSetting
         key={`command:${s.command}`}
         member={member}
@@ -156,14 +190,6 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         placeholder="Claude Code's transcript"
         body={(progress_file) => ({ progress_file })}
         help="For a command other than Claude Code: the file whose changes show the session working."
-      />
-      <SwitchSetting
-        member={member}
-        id="agent-paused"
-        label="Paused"
-        checked={s.paused}
-        body={(paused) => ({ paused })}
-        help="The Runner starts no new session; one running carries on."
       />
       <SwitchSetting
         member={member}

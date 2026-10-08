@@ -141,8 +141,12 @@ describe("Settings › a Member", () => {
     expect(screen.getByRole("listitem", { name: "Token seed" })).toBeInTheDocument();
     expect(screen.queryByRole("listitem", { name: "Token old" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "More for builder" }));
-    await user.click(await screen.findByRole("menuitem", { name: "Deactivate" }));
+    // Deactivate is in the page's last card, which says what it stops.
+    const cards = screen.getAllByRole("region", { name: (n) => !n.startsWith("Notifications") }).map((r) => r.getAttribute("aria-label"));
+    expect(cards).toEqual(["Agent", "Work", "Access", "Profile", "Deactivate"]);
+    const stop = screen.getByRole("region", { name: "Deactivate" });
+    expect(stop).toHaveTextContent("Deactivating revokes its tokens, closes its Sessions and ends its Claims.");
+    await user.click(within(stop).getByRole("button", { name: "Deactivate builder" }));
     const confirm = await screen.findByRole("dialog", { name: "Deactivate builder?" });
     expect(confirm).toHaveTextContent("Revokes1 tokenseed");
     expect(confirm).toHaveTextContent("Closes1 Session…uilder-1");
@@ -204,7 +208,7 @@ describe("Settings › a Member", () => {
       "DELETE /v1/projects/:project/members/:member": undefined,
     });
     renderApp("/settings/organisation/members/m-ada");
-    const form = await screen.findByRole("group", { name: "Settings of ada" });
+    const form = await screen.findByRole("group", { name: "Work of ada" });
     await user.click(within(form).getByRole("button", { name: "Add to Project" }));
     await user.click(await screen.findByRole("option", { name: /Ops/ }));
     await user.click(within(form).getByRole("button", { name: "Remove from Web" }));
@@ -233,9 +237,40 @@ describe("Settings › a Member", () => {
     const user = userEvent.setup();
     mockApi({ ...signedIn(), ...details });
     renderApp("/settings/organisation/members/m-bob");
-    await user.click(await screen.findByRole("button", { name: "More for bob" }));
-    await user.click(await screen.findByRole("menuitem", { name: "Deactivate" }));
+    await user.click(await screen.findByRole("button", { name: "Deactivate bob" }));
     expect(await screen.findByRole("dialog", { name: "Deactivate bob?" })).toHaveTextContent("Holds no token, Session or Claim.");
+  });
+
+  it("a human's page is in cards: Work, Access with the Sign-in link, Profile with the email, then Deactivate", async () => {
+    mockApi({ ...signedIn(), ...details });
+    renderApp("/settings/organisation/members/m-bob");
+    expect(await screen.findByRole("heading", { name: "bob" })).toBeInTheDocument();
+    expect(screen.getAllByRole("region", { name: (n) => !n.startsWith("Notifications") }).map((r) => r.getAttribute("aria-label"))).toEqual(["Work", "Access", "Profile", "Deactivate"]);
+    expect(within(screen.getByRole("region", { name: "Work" })).getByRole("combobox", { name: "Reports to" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Access" })).getByRole("button", { name: "Issue link" })).toBeInTheDocument();
+    const profile = screen.getByRole("region", { name: "Profile" });
+    expect(within(profile).getByLabelText("Email")).toBeInTheDocument();
+    expect(within(profile).getByRole("switch", { name: "Admin" })).toBeInTheDocument();
+    // Each card says in a line what it holds.
+    expect(profile).toHaveTextContent("Their name, email, and whether they are an admin.");
+  });
+
+  it("one's own page offers no Deactivate", async () => {
+    mockApi({ ...signedIn(), ...details });
+    renderApp("/settings/organisation/members/m-ada");
+    expect(await screen.findByRole("heading", { name: "ada" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Deactivate" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Deactivate/ })).not.toBeInTheDocument();
+  });
+
+  it("a deactivated Member's last card offers Reactivate", async () => {
+    const user = userEvent.setup();
+    const api = mockApi({ ...signedIn(), ...details, "POST /v1/members/:member/reactivate": { ...gone, deactivated_at: undefined } });
+    renderApp("/settings/organisation/agents/m-gone");
+    const card = await screen.findByRole("region", { name: "Reactivate" });
+    expect(card).toHaveTextContent("Deactivated: it does no work until reactivated.");
+    await user.click(within(card).getByRole("button", { name: "Reactivate gone" }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/members/m-gone/reactivate")).toBe(true));
   });
 });
 
