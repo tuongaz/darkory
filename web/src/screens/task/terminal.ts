@@ -2,6 +2,8 @@
 // runnerTerminal): a WebSocket the Runner bridges to `tmux attach`. Binary frames carry the
 // terminal's bytes both ways; a text frame `{"cols": n, "rows": n}` sizes the client's view.
 
+import { shellQuote } from "@/lib/shell";
+
 /** The terminal's state as the panel draws it. */
 export type TerminalStatus = "connecting" | "open" | "closed";
 
@@ -24,5 +26,5 @@ export function resizeFrame(cols: number, rows: number): string {
 
 /** The shell line that joins the same session from a terminal on the machine. */
 export function joinCommand(task: string): string {
-  return `darkory join ${task}`;
+  return `darkory join ${shellQuote(task)}`;
 }

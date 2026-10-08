@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Loaded } from "@/components/Refusal";
+import { shellQuote } from "@/lib/shell";
 import { useCurrentMe } from "@/me";
 import { SessionRows, TokenRows } from "./credentials";
 import { SettingsFrame } from "./frame";
@@ -80,7 +81,7 @@ export function AccountPage() {
           <SettingsRow label="CLI">
             <span className="text-muted-foreground">Sign in another browser:</span>
             <code className="max-w-full truncate rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs">
-              darkory login {/^[\w.@-]+$/.test(m.name) ? m.name : `"${m.name}"`}
+              darkory login {shellQuote(m.name)}
             </code>
           </SettingsRow>
         </SettingsForm>
