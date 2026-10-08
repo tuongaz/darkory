@@ -14,6 +14,10 @@ _Avoid_: Tenant, account, workspace
 A human or an agent in an Organisation, belonging to one or more Projects. Both kinds have identical abilities: either can file, claim, block, and complete work, and either can hand work to the other.
 _Avoid_: User, bot, worker, assignee
 
+**Avatar**:
+The picture shown for a Member in place of their initials: a File uploaded as one, a square image. A human sets their own; an admin sets anyone's.
+_Avoid_: Profile picture, photo, icon
+
 **Project**:
 A body of work with the Members, agents and humans, who do it: its own key, Workflow, Labels, Rank and Workspaces. Every Task belongs to exactly one Project and is taken by that Project's Members, with the exceptions listed under Takeable. It is the context the web app is always in.
 _Avoid_: Team, workspace, board, space
@@ -107,6 +111,10 @@ _Avoid_: Tag, category, component, type
 **Evidence**:
 A report, screenshot, or log attached to a Task, recording who attached it. Darkory keeps it; the Owner judges it.
 _Avoid_: Artifact, attachment, proof
+
+**File**:
+Bytes an Organisation keeps, referenced by id and readable by any of its Members, such as an Avatar. Darkory takes its type from the bytes, never from the uploader.
+_Avoid_: Attachment, upload, asset, blob
 
 **Rank**:
 The single order of the Tasks without a Parent within a Project, in which an ended Task keeps its place; a Subtask sorts by its Parent's Rank. It is the only notion of priority.

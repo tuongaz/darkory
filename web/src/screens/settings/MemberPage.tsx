@@ -7,7 +7,6 @@ import type { Member, MemberDetail } from "@/api/client";
 import { useDirectory, useMember, useMemberSessions, useProjects, useSkills, useTokens } from "@/api/queries";
 import { addProjectMember, removeProjectMember } from "@/api/writes";
 import type { Crumb } from "@/app/TopBar";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
@@ -23,6 +22,7 @@ import { shortSessionId } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { AgentCard } from "./AgentSettings";
+import { AvatarControl } from "./AvatarControl";
 import { SessionRows, TokenRows } from "./credentials";
 import { LoadingFrame, SettingsFrame } from "./frame";
 import { count, deactivateSummary, heldClaims, liveTokens } from "./model";
@@ -93,7 +93,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" card={false} />}
+          mark={<AvatarControl member={m} editable={me.member.admin || (self && m.kind === "human")} />}
           meta={
             <>
               {m.kind === "agent" ? <Pill tone="agent">Agent</Pill> : <Pill>Human</Pill>}

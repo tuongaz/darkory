@@ -75,6 +75,8 @@ const (
 		`{"id":"st3","name":"Build","skill_id":"s1","position":2,"x":448,"y":0,"tasks":1,"working":0,"takers":[]}],` +
 		`"connectors":[{"id":"k1","from_step_id":"st1","to_step_id":"st3","name":"ready","position":1},{"id":"k2","from_step_id":"st3","name":"pass","position":1}]}`
 	evidenceJSON = `{"id":"ev1","task_id":"t3","filename":"shot.png","content_type":"image/png","size":4,"sha256":"x","attached_by":"m1","created_at":"2026-10-06T00:00:00Z"}`
+	fileJSON     = `{"id":"f1","name":"shot.png","content_type":"image/png","size":4,"sha256":"x","purpose":"avatar","created_by":"m1","created_at":"2026-10-06T00:00:00Z"}`
+	memberJSON   = `{"id":"m2","name":"qa","kind":"agent","admin":false,"avatar_file_id":"f1","created_at":"2026-10-06T00:00:00Z"}`
 	labelJSON    = `{"id":"l1","name":"bug","color":"#ff0000","created_at":"2026-10-06T00:00:00Z"}`
 	projectJSON  = `{"id":"p1","key":"WEB","name":"Web","auto_complete":false,"acceptance":false,"created_at":"2026-10-06T00:00:00Z"}`
 )
@@ -114,6 +116,11 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 		"GET /v1/evidence/ev1":                  {200, evidenceJSON},
 		"GET /v1/evidence/ev1/content":          {200, "\x89PNG"},
 		"PUT /v1/tasks/WEB-3/blockers/WEB-4":    {204, ""},
+		"POST /v1/files":                        {201, fileJSON},
+		"GET /v1/files/f1":                      {200, fileJSON},
+		"GET /v1/files/f1/content":              {200, "\x89PNG"},
+		"DELETE /v1/files/f1":                   {204, ""},
+		"PATCH /v1/members/qa":                  {200, memberJSON},
 		"DELETE /v1/tasks/WEB-3/blockers/WEB-4": {204, ""},
 		"POST /v1/tasks/WEB-9/skill-proposals":  {201, `{"id":"p1","skill_id":"s1","task_id":"t9","based_on_version":3,"body":"x","author_id":"m1","state":"pending","created_at":"2026-10-06T00:00:00Z"}`},
 		"POST /v1/tasks":                        {201, detail},
@@ -184,6 +191,18 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 		{name: "evidence get", args: []string{"evidence", "get", "ev1"}, method: "GET", path: "/v1/evidence/ev1"},
 		{name: "evidence download", args: []string{"evidence", "get", "ev1", "-o", filepath.Join(dir, "out.png")},
 			method: "GET", path: "/v1/evidence/ev1/content"},
+		{name: "files upload", args: []string{"files", "upload", report},
+			method: "POST", path: "/v1/files", query: "name=report", contentType: "text/plain; charset=utf-8", raw: "all green\n"},
+		{name: "files upload an avatar", args: []string{"files", "upload", png, "--avatar", "--name", "qa.png"},
+			method: "POST", path: "/v1/files", query: "name=qa.png&purpose=avatar", contentType: "image/png", raw: "\x89PNG\r\n\x1a\n"},
+		{name: "files get", args: []string{"files", "get", "f1"}, method: "GET", path: "/v1/files/f1"},
+		{name: "files download", args: []string{"files", "get", "f1", "-o", filepath.Join(dir, "f1.png")},
+			method: "GET", path: "/v1/files/f1/content"},
+		{name: "files delete", args: []string{"files", "delete", "f1"}, method: "DELETE", path: "/v1/files/f1"},
+		{name: "member update --avatar", args: []string{"member", "update", "qa", "--avatar", "f1"},
+			method: "PATCH", path: "/v1/members/qa", body: `{"avatar_file_id":"f1"}`},
+		{name: "member update --no-avatar", args: []string{"member", "update", "qa", "--no-avatar"},
+			method: "PATCH", path: "/v1/members/qa", body: `{"avatar_file_id":""}`},
 		{name: "block", args: []string{"block", "WEB-3", "--by", "WEB-4"}, method: "PUT", path: "/v1/tasks/WEB-3/blockers/WEB-4"},
 		{name: "unblock", args: []string{"unblock", "WEB-3", "--by", "WEB-4"}, method: "DELETE", path: "/v1/tasks/WEB-3/blockers/WEB-4"},
 		{name: "proposal show by id", args: []string{"proposal", "show", "p1"}, before: []string{"GET /v1/tasks/p1"},

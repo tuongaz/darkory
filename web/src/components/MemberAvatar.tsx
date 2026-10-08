@@ -1,11 +1,12 @@
 import { forwardRef, useContext, useLayoutEffect, useRef, useState, type ComponentProps } from "react";
-import type { Member } from "@/api/client";
+import { fileURL, type Member } from "@/api/client";
 import { MemberCard } from "@/components/MemberCard";
 import { MemberCards } from "@/components/memberCards";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { initials, tintOf } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import { workingWords, type Working } from "@/lib/work";
+import { useAvatarFile } from "./avatars";
 
 export type AvatarSize = "sm" | "md" | "lg";
 
@@ -15,7 +16,7 @@ const sizes: Record<AvatarSize, string> = {
   lg: "size-10 text-sm",
 };
 
-type MarkMember = Pick<Member, "name" | "kind"> & { id?: string };
+type MarkMember = Pick<Member, "name" | "kind"> & { id?: string; avatar_file_id?: string };
 
 /**
  * A Member's mark: initials on a muted tint of its own (by name, so "RT" for retro and "RT" for
@@ -26,6 +27,10 @@ type MarkMember = Pick<Member, "name" | "kind"> & { id?: string };
  * that its Member works, where a row's glyph would: an agent's ring turns while its session runs
  * and stops amber (`waiting`), red (`stalled`) or grey (`ending`); `held` is a human's live Claim,
  * a still ring. Reduced motion stops the turning.
+ *
+ * A Member with an Avatar shows it inside the same ring, cut round; the initials
+ * stand in when the image cannot load. A brief shape of a Member (a holder, a taker) finds its
+ * Avatar by id (`avatars.ts`).
  *
  * A mark whose Member has an `id` opens the Member's hover card (`MemberCard`) on hover after
  * 300 ms, on keyboard focus, and on a tap. Standing alone it is a tab stop; inside a button or a
@@ -55,6 +60,9 @@ type MarkProps = { member: MarkMember; size: AvatarSize; working?: Working } & O
 
 const Mark = forwardRef<HTMLSpanElement, MarkProps>(function Mark({ member, size, working, className, ...rest }, ref) {
   const tint = tintOf(member.name);
+  const file = useAvatarFile(member);
+  const [broken, setBroken] = useState<string>();
+  const image = file && broken !== file ? file : undefined;
   const name = member.kind === "agent" ? `${member.name} (agent)` : member.name;
   return (
     <span
@@ -64,6 +72,7 @@ const Mark = forwardRef<HTMLSpanElement, MarkProps>(function Mark({ member, size
       data-kind={member.kind}
       data-tint={tint}
       data-working={working}
+      data-avatar={image ? "image" : undefined}
       {...rest}
       className={cn(
         "avatar-tint inline-grid flex-none place-items-center rounded-full font-semibold leading-none select-none",
@@ -72,7 +81,11 @@ const Mark = forwardRef<HTMLSpanElement, MarkProps>(function Mark({ member, size
         className,
       )}
     >
-      {initials(member)}
+      {image ? (
+        <img src={fileURL(image)} alt="" draggable={false} onError={() => setBroken(image)} className="size-full rounded-full object-cover" />
+      ) : (
+        initials(member)
+      )}
     </span>
   );
 });

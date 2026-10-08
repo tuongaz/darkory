@@ -94,6 +94,9 @@ const affected: Record<SubjectType, Root[]> = {
   session: [...organisation, ...work, "runner"],
   login_link: [],
   workspace: [...organisation, ...work, "workspaces"],
+  // A file is shown only through what names it, such as a Member's avatar, whose change is a
+  // member.updated entry of its own.
+  file: [],
 };
 
 // Kinds that change less than their subject type says. A nudge records what the Runner typed into

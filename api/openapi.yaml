@@ -58,6 +58,7 @@ tags:
   - name: activity
   - name: runner
   - name: views
+  - name: files
 
 paths:
   # ---------------------------------------------------------------- install
@@ -359,8 +360,17 @@ paths:
     patch:
       operationId: updateMember
       tags: [members]
-      summary: Change a Member's name, email or admin mark (admin)
-      description: "Errors: `forbidden`, `conflict` (name or email taken; removing the last admin)."
+      summary: Change a Member's name, email, admin mark or avatar
+      description: |
+        An admin changes any of them. A human Member may change their own avatar, and only that;
+        an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+        Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+        `""` removes the avatar. The avatar file a Member stops showing is
+        deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+        for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+        file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+        `conflict` (name or email taken; removing the last
+        admin).
       parameters:
         - {$ref: "#/components/parameters/MemberRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -1763,6 +1773,106 @@ paths:
               schema: {type: string, format: binary}
         default: {$ref: "#/components/responses/Error"}
 
+  # ---------------------------------------------------------------- files
+  /v1/files:
+    post:
+      operationId: uploadFile
+      tags: [files]
+      summary: Upload a file the Organisation keeps, such as an avatar
+      description: |
+        The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+        server finds the file's type by reading its bytes and keeps that, never the
+        `Content-Type` the request claims. Any Member may upload; the file belongs to the
+        caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+        unless set otherwise.
+
+        With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+        (never SVG or HTML, which can carry script); the server keeps the largest square in its
+        middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+        metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+        Errors: `too_large`, `invalid` (not an image an avatar can be).
+      parameters:
+        - {$ref: "#/components/parameters/FileName"}
+        - name: purpose
+          in: query
+          description: What the file is for; `general` unless said.
+          schema: {$ref: "#/components/schemas/FilePurpose"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema: {type: string, format: binary}
+      responses:
+        "201":
+          description: The file's record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/File"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/files/{file}:
+    get:
+      operationId: getFile
+      tags: [files]
+      summary: Get a file's record
+      description: Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+      parameters:
+        - {$ref: "#/components/parameters/FileID"}
+      responses:
+        "200":
+          description: The file's record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/File"}
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: deleteFile
+      tags: [files]
+      summary: Delete a file (its uploader, or an admin)
+      description: |
+        Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+        `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+      parameters:
+        - {$ref: "#/components/parameters/FileID"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204": {description: Deleted.}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/files/{file}/content:
+    get:
+      operationId: downloadFile
+      tags: [files]
+      summary: Download a file's bytes
+      description: |
+        Any Member of the file's Organisation. Served with the type the server found in the
+        bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+        so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+        change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+        a year; `If-None-Match` with that ETag answers 304.
+      parameters:
+        - {$ref: "#/components/parameters/FileID"}
+        - name: If-None-Match
+          in: header
+          schema: {type: string}
+      responses:
+        "200":
+          description: The bytes.
+          headers:
+            Content-Disposition:
+              description: "`inline` for an image, else `attachment`, with the file's name."
+              schema: {type: string}
+            ETag:
+              schema: {type: string}
+            X-Content-Type-Options:
+              schema: {type: string, enum: [nosniff]}
+          content:
+            "*/*":
+              schema: {type: string, format: binary}
+        "304": {description: The copy the client holds is current.}
+        default: {$ref: "#/components/responses/Error"}
+
   # ---------------------------------------------------------------- activity
   /v1/activity:
     get:
@@ -2094,6 +2204,17 @@ components:
       in: path
       required: true
       schema: {type: string}
+    FileID:
+      name: file
+      in: path
+      required: true
+      schema: {type: string}
+    FileName:
+      name: name
+      in: query
+      required: true
+      description: The file's name, as it should be shown and downloaded.
+      schema: {type: string, minLength: 1, maxLength: 255}
     ProposalID:
       name: proposal
       in: path
@@ -2448,6 +2569,11 @@ components:
           description: When an admin deactivated the Member. Absent while the Member is active.
         agent:
           $ref: "#/components/schemas/AgentSettings"
+        avatar_file_id:
+          type: string
+          description: |
+            The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+            at most 256 pixels square. Absent when the Member has none.
     MemberKind:
       type: string
       enum: [human, agent]
@@ -2488,6 +2614,9 @@ components:
         name: {type: string, minLength: 1, maxLength: 100}
         email: {type: string, format: email}
         admin: {type: boolean}
+        avatar_file_id:
+          type: string
+          description: A file uploaded with `purpose=avatar`; `""` removes the avatar.
     AgentSettings:
       type: object
       description: |
@@ -3507,6 +3636,36 @@ components:
         attached_by: {type: string}
         created_at: {type: string, format: date-time}
 
+    # ------------------------------------------------------------ files
+    File:
+      type: object
+      description: |
+        Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+        at `/v1/files/{id}/content`.
+      required: [id, name, content_type, size, sha256, purpose, created_by, created_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        content_type:
+          type: string
+          description: The type the server found by reading the bytes.
+        size:
+          type: integer
+          format: int64
+        sha256: {type: string}
+        purpose: {$ref: "#/components/schemas/FilePurpose"}
+        created_by:
+          type: string
+          description: The Member who uploaded it.
+        created_at: {type: string, format: date-time}
+    FilePurpose:
+      type: string
+      description: |
+        What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+        most 256 pixels square, and only such a file can be set as a Member's avatar.
+      enum: [general, avatar]
+      x-enum-varnames: [FilePurposeGeneral, FilePurposeAvatar]
+
     # ------------------------------------------------------------ activity
     Activity:
       type: object
@@ -3595,12 +3754,14 @@ components:
         - session.closed
         - login_link.issued
         - login_link.redeemed
+        - file.uploaded
+        - file.deleted
     SubjectType:
       type: string
       description: |
         The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
         whole; its `subject_id` is the Project's id.
-      enum: [task, workflow, label, skill, member, project, token, session, login_link, workspace]
+      enum: [task, workflow, label, skill, member, project, token, session, login_link, workspace, file]
     ActivityPage:
       type: object
       required: [items, last_seq]

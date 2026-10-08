@@ -71,7 +71,7 @@ type command struct {
 var commands []command
 
 func init() {
-	commands = slices.Concat(workCommands, projectCommands, adminCommands, agentCommands)
+	commands = slices.Concat(workCommands, projectCommands, adminCommands, agentCommands, fileCommands)
 }
 
 // Usage lists every CLI command; cmd/darkory prints it after the server commands.

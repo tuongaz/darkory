@@ -25,11 +25,12 @@ var ActivityKinds = []string{
 	"token.issued", "token.revoked",
 	"session.closed",
 	"login_link.issued", "login_link.redeemed",
+	"file.uploaded", "file.deleted",
 }
 
 // SubjectTypes lists the kinds of record an Activity entry can be about. A workflow.changed entry
 // is about a Project's Workflow, and names the Project.
-var SubjectTypes = []string{"task", "workflow", "label", "skill", "member", "project", "token", "session", "login_link", "workspace"}
+var SubjectTypes = []string{"task", "workflow", "label", "skill", "member", "project", "token", "session", "login_link", "workspace", "file"}
 
 // ActivityQuery picks a page of Activity: the entries numbered above After and below Before
 // (zero for no bound), at most Limit of them. With Before the page is the entries closest below

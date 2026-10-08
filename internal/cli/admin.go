@@ -17,7 +17,7 @@ var adminCommands = []command{
 	{path: "member create", args: "<name> --kind human|agent [--email e] [--admin]", short: "create a Member (admin)", run: cmdMemberCreate},
 	{path: "member list", args: "[--project p] [--kind k]", short: "list Members", run: cmdMemberList},
 	{path: "member show", args: "<member>", short: "show a Member with their Projects, Skills and reports", run: cmdMemberShow},
-	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false]", short: "change a Member (admin)", run: cmdMemberUpdate},
+	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false] [--avatar file-id | --no-avatar]", short: "change a Member (admin), or your own avatar", run: cmdMemberUpdate},
 	{path: "member deactivate", args: "<member>", short: "revoke a Member's tokens, close their Sessions, end their Claims, refuse them from now on (admin)", run: cmdMemberDeactivate},
 	{path: "member reactivate", args: "<member>", short: "let a deactivated Member sign in and be issued tokens again (admin)", run: cmdMemberReactivate},
 	{path: "skill create", args: "<name> --kind generic|company [--base skill] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
@@ -146,13 +146,22 @@ func cmdMemberUpdate(c *call) error {
 	mail := c.fs.String("email", "", "the Member's new email address")
 	var admin optBool
 	c.fs.Var(&admin, "admin", "set (--admin or --admin=true) or clear (--admin=false) the admin mark")
+	avatar := c.fs.String("avatar", "", "show this file, uploaded with files upload --avatar, as the Member's avatar")
+	noAvatar := c.fs.Bool("no-avatar", false, "remove the Member's avatar")
 	args, err := c.args(1, 1)
 	if err != nil {
 		return err
 	}
-	body := client.UpdateMemberBody{Name: opt(*name), Email: email(*mail), Admin: admin.v}
-	if body.Name == nil && body.Email == nil && body.Admin == nil {
-		return usagef("nothing to change: give --name, --email or --admin")
+	body := client.UpdateMemberBody{Name: opt(*name), Email: email(*mail), Admin: admin.v, AvatarFileID: opt(*avatar)}
+	if *noAvatar {
+		if body.AvatarFileID != nil {
+			return usagef("give --avatar or --no-avatar, not both")
+		}
+		none := ""
+		body.AvatarFileID = &none
+	}
+	if body.Name == nil && body.Email == nil && body.Admin == nil && body.AvatarFileID == nil {
+		return usagef("nothing to change: give --name, --email, --admin, --avatar or --no-avatar")
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {

@@ -1,12 +1,12 @@
 import { Link } from "react-router";
 import { useMemberSessions, useTokens } from "@/api/queries";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Loaded } from "@/components/Refusal";
 import { shellQuote } from "@/lib/shell";
 import { useCurrentMe } from "@/me";
+import { AvatarControl } from "./AvatarControl";
 import { SessionRows, TokenRows } from "./credentials";
 import { SettingsFrame } from "./frame";
 import { heldClaims, liveTokens } from "./model";
@@ -30,7 +30,7 @@ export function AccountPage() {
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" card={false} />}
+          mark={<AvatarControl member={m} editable={m.admin || m.kind === "human"} />}
           meta={
             <>
               <span>{me.organisation.name}</span>
