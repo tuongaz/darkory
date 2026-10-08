@@ -56,7 +56,7 @@ Retro (retro) ── done ──► Done   ── propose ──► Skill review
 A Task takes one of three paths.
 
 1. **Fast path** (a standalone Task): Triage → Build → Code review → QA → Release → Done. It has no design, no threat model, and no security review unless its `security` Label or its diff calls for one.
-2. **Design path** (a Parent, filed with Break down, or split by Triage): Plan decides the shape. A `Design: …` Subtask goes Design → (Threat model) → Design review → Done. Its branch carries the design document, the ADRs and the threat model into the Parent's branch. The architect files the slices while designing, each blocked by the Design Subtask. So no slice is built before its design is approved, and every slice branches from a Parent branch that holds the design.
+2. **Design path** (a Parent, filed with Break down, or split by Triage): Plan decides the shape. A `Design: …` Subtask goes Design → (Threat model) → Design review → Done. Its branch carries the design document, the ADRs and the threat model into the Parent's branch. The architect files the slices while designing: each one in the Backlog first, then blocked by the Design Subtask and by any slice whose code it builds on, and only then moved to Build. So no slice is built before its design is approved, and every slice branches from a Parent branch that holds the design.
 3. **Slice path** (each slice): Build → Code review → (Security review) → QA → Release → Done, merging into the Parent's branch. When the last slice ends, Darkory files the Acceptance. Acceptance → Release → Done completes the Parent, which merges into the default branch, and then the Retrospective is filed.
 
 ### Why each Step and outcome exists
@@ -66,7 +66,7 @@ A Task takes one of three paths.
 | Backlog | hold | Ideas that nobody should take yet. A human moves them on. | (moved by hand) |
 | Triage | `triage` (product) | Sets the definition of done and judges the risk before anyone builds. It is the one place a small change is let through quickly. | `no design needed` → Build; otherwise it splits the Task with a Design Subtask |
 | Plan | `breakdown` (product) | A Parent filed with Break down gets its acceptance criteria and its shape: a design first, or slices straight away. | `done` |
-| Design | `architecture` (architect) | Design doc and ADRs before code, written on a branch that every slice later starts from. The slices are filed and blocked here. | `security impact` → Threat model; `no security impact` → Design review |
+| Design | `architecture` (architect) | Design doc and ADRs before code, written on a branch that every slice later starts from. The slices are filed here: in the Backlog, blocked, then moved to Build. | `security impact` → Threat model; `no security impact` → Design review |
 | Threat model | `security` (security) | The four questions and STRIDE, at design time when a fix is cheap. Their output is numbered security requirements, which bind slices as Notes and Labels. | `accepted` → Design review; `redesign` → Design |
 | Design review | `review` (reviewer) | Peer review of the design: is it the simplest one, do the slices cover it, is the rollout written. Approving it merges the documents and starts the slices. | `approved` → Done; `redesign` → Design |
 | Build | `engineer` (builder) | Test-first slice; attaches the test log. | `ready for review` → Code review |
@@ -112,6 +112,7 @@ The Workflow fits Darkory's rules as they are. Where the research asks for somet
 - **Releasing a Parent.** A Parent is at no Step, so its release rides on its Acceptance Subtask (Acceptance → Release). The Release Step is pre-merge: merging into the default branch is the deploy trigger, and nothing in Darkory watches production after Done. Canary analysis and the post-release check of the golden signals are written into the release note, but no Step runs them.
 - **Triage cannot turn a held Task into a Break down.** The design path from Triage is a split. The triager files a `Design: …` Subtask at Design, which makes the Task a Parent without a Breakdown Subtask.
 - **Labels carry risk, but rules never read them.** `security` and `infra` steer the agents' choice of outcome, and Darkory's rules ignore them, by design.
+- **A Task cannot be filed already blocked.** A Subtask filed at a Step is takeable the moment it exists, so the architect files each slice in the Backlog, blocks it, and then moves it. In the proof run, slices filed straight at Build were claimed in the same second, before the block landed. `file --blocked-by` would close this window in the record itself.
 - **Self-review is by Skill.** Someone who built a Task under `devops` could release it under `devops` again. So infrastructure is built by the builder (`engineer`) and released by DevOps, never both by one agent.
 
 ## Applying it to an Install
