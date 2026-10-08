@@ -27,16 +27,21 @@ export const members = [
   agent("m-qa", "qa", "claude-sonnet-5-5"),
   agent("m-rv", "reviewer", "claude-opus-5-5"),
   agent("m-rt", "retro", "claude-opus-5-5", true),
+  agent("m-ar", "architect", "claude-opus-5-5"),
+  agent("m-sc", "security", "claude-opus-5-5"),
+  agent("m-dv", "devops", "claude-sonnet-5-5"),
 ];
 const who = (id: string) => {
   const x = members.find((y) => y.id === id)!;
   return { id: x.id, name: x.name, kind: x.kind };
 };
 const skill = (name: string, builtin = false) => ({ id: `s-${name}`, name, kind: "generic", builtin, current_version: 1, created_at: at });
-const skills = ["breakdown", "acceptance", "retro", "skill-review"].map((n) => skill(n, true)).concat(["engineer", "qa", "review", "triage", "design", "security", "docs", "release"].map((n) => skill(n)));
+const skills = ["breakdown", "acceptance", "retro", "skill-review"].map((n) => skill(n, true)).concat(["engineer", "qa", "review", "triage", "design", "security", "docs", "release", "architecture", "devops"].map((n) => skill(n)));
 
 const MAIN = { id: "p-main", key: "MAIN", name: "Main", auto_complete: false, acceptance: true, created_at: at };
 const BIG = { id: "p-big", key: "BIG", name: "Big", auto_complete: false, acceptance: true, created_at: at };
+const SW = { id: "p-sw", key: "SW", name: "Software", auto_complete: true, acceptance: true, created_at: at };
+const projects = [MAIN, BIG, SW];
 
 const step = (id: string, name: string, position: number, skillName: string | undefined, takers: string[], median?: number) => ({
   id,
@@ -114,8 +119,62 @@ const bigWorkflow = {
   ],
 };
 
+// The software Workflow (examples/workflows/software/workflow.json): 14 Steps, loops into Design
+// and Build, skips over Design and over Security review, and the branch after a Parent.
+const swSteps: [string, string, string | undefined, string[]][] = [
+  ["sw-backlog", "Backlog", undefined, []],
+  ["sw-triage", "Triage", "triage", ["m-pl"]],
+  ["sw-plan", "Plan", "breakdown", ["m-pl"]],
+  ["sw-design", "Design", "architecture", ["m-ar"]],
+  ["sw-threat", "Threat model", "security", ["m-sc"]],
+  ["sw-dreview", "Design review", "review", ["m-rv"]],
+  ["sw-build", "Build", "engineer", ["m-bu"]],
+  ["sw-creview", "Code review", "review", ["m-rv"]],
+  ["sw-sreview", "Security review", "security", ["m-sc"]],
+  ["sw-qa", "QA", "qa", ["m-qa"]],
+  ["sw-release", "Release", "devops", ["m-dv"]],
+  ["sw-acc", "Acceptance", "acceptance", ["m-qa"]],
+  ["sw-retro", "Retro", "retro", ["m-rt"]],
+  ["sw-skrev", "Skill review", "skill-review", ["m-rv"]],
+];
+const swWorkflow = {
+  project_id: SW.id,
+  steps: swSteps.map(([id, name, s, takers], i) => step(id, name, i + 1, s, takers, s ? (8 + i) * min : undefined)),
+  connectors: [
+    conn("sw-triage", "no design needed", "sw-build", 1),
+    conn("sw-plan", "done", undefined, 1),
+    conn("sw-design", "security impact", "sw-threat", 1),
+    conn("sw-design", "no security impact", "sw-dreview", 2),
+    conn("sw-threat", "accepted", "sw-dreview", 1),
+    conn("sw-threat", "redesign", "sw-design", 2),
+    conn("sw-dreview", "approved", undefined, 1),
+    conn("sw-dreview", "redesign", "sw-design", 2),
+    conn("sw-build", "ready for review", "sw-creview", 1),
+    conn("sw-creview", "pass", "sw-qa", 1),
+    conn("sw-creview", "security review", "sw-sreview", 2),
+    conn("sw-creview", "needs changes", "sw-build", 3),
+    conn("sw-sreview", "pass", "sw-qa", 1),
+    conn("sw-sreview", "needs changes", "sw-build", 2),
+    conn("sw-qa", "pass", "sw-release", 1),
+    conn("sw-qa", "fail", "sw-build", 2),
+    conn("sw-release", "released", undefined, 1),
+    conn("sw-release", "not ready", "sw-build", 2),
+    conn("sw-acc", "pass", "sw-release", 1),
+    conn("sw-acc", "fixes filed", undefined, 2),
+    conn("sw-retro", "done", undefined, 1),
+    conn("sw-retro", "propose", "sw-skrev", 2),
+    conn("sw-skrev", "publish", undefined, 1),
+    conn("sw-skrev", "needs changes", "sw-retro", 2),
+  ],
+};
+const workflows = new Map<string, typeof mainWorkflow>([
+  [MAIN.id, mainWorkflow],
+  [BIG.id, bigWorkflow],
+  [SW.id, swWorkflow],
+]);
+
 type Rec = Record<string, unknown> & { id: string; key: string; project_id: string; state: string; step_id?: string; parent_id?: string };
-const stepSkill = (id: string | undefined) => [...mainWorkflow.steps, ...bigWorkflow.steps].find((s) => s.id === id)?.skill_id;
+const stepSkill = (id: string | undefined) => [...mainWorkflow.steps, ...bigWorkflow.steps, ...swWorkflow.steps].find((s) => s.id === id)?.skill_id;
 const brief = (id: string) => ({ id, key: id.replace("k-", "MAIN-"), title: titles[id] ?? "" });
 const titles: Record<string, string> = {
   "k-1": "Saved cards at checkout",
@@ -203,7 +262,28 @@ export function bigTasks(): Rec[] {
     ["b-retro", [24], []],
   ];
   const blocks: Record<number, number> = { 10: 9, 11: 9, 12: 7 };
-  return spread.flatMap(([stepId, ns, held]) =>
+  // BIG-25, a Parent whose Subtasks are spread over the line; two of them ended Done.
+  const children = new Set([2, 5, 7, 10, 13, 16, 18, 20, 21, 23]);
+  const parent: Rec = {
+    id: "big-25",
+    key: "BIG-25",
+    project_id: BIG.id,
+    kind: "work",
+    title: "Big Parent across the line",
+    description: "",
+    state: "open",
+    owner_id: "m-tu",
+    rank: 25,
+    breakdown: true,
+    auto_complete: true,
+    acceptance: true,
+    blocked: false,
+    subtask_counts: { open: children.size, working: 1, done: 2, dropped: 0 },
+    waiting_since: t(9, 0),
+    created_at: t(9, 0),
+  };
+  const ended: Rec[] = [26, 27].map((n) => ({ ...parent, id: `big-${n}`, key: `BIG-${n}`, title: `Big Subtask ${n}`, parent_id: "big-25", state: "done", ended_at: t(9, 40), subtask_counts: undefined, breakdown: false, rank: undefined }));
+  return [parent, ...ended, ...spread.flatMap(([stepId, ns, held]) =>
     ns.map((n) => ({
       id: `big-${n}`,
       key: `BIG-${n}`,
@@ -225,8 +305,57 @@ export function bigTasks(): Rec[] {
       ...(held.includes(n) ? { claim: { id: `bc-${n}`, task_id: `big-${n}`, holder_id: "m-bu", session_id: `bs-${n}`, started_at: t(9, 30), expires_at: new Date(CLOCK.getTime() + 9 * min).toISOString() } } : {}),
       waiting_since: t(9, 0),
       created_at: t(9, 0),
+      ...(children.has(n) ? { parent_id: "big-25" } : {}),
     })),
-  );
+  )];
+}
+
+/** Software's Tasks: the Parent SW-1 through design into slices, and Tasks at Triage and design. */
+export function swTasks(): Rec[] {
+  const base = (n: number, title: string, extra: Partial<Rec>): Rec => ({
+    id: `sw-${n}`,
+    key: `SW-${n}`,
+    project_id: SW.id,
+    kind: "work",
+    title,
+    description: "",
+    state: "open",
+    owner_id: "m-tu",
+    rank: n,
+    skill_id: stepSkill(extra.step_id),
+    breakdown: false,
+    auto_complete: false,
+    acceptance: false,
+    blocked: false,
+    filed_by: "m-tu",
+    waiting_since: (extra.step_since as string) ?? t(9, 0),
+    created_at: t(9, 0),
+    ...extra,
+  });
+  const held = (n: number, holder: string, started = t(10, 30)) => ({
+    claim: { id: `swc-${n}`, task_id: `sw-${n}`, holder_id: holder, session_id: `sws-${n}`, heartbeat_timeout_seconds: 600, started_at: started, expires_at: new Date(CLOCK.getTime() + 9 * min).toISOString() },
+  });
+  const sub = { parent_id: "sw-1", rank: undefined, filed_by: "m-ar" };
+  return [
+    base(1, "Only callers with an API key can create short links", { auto_complete: true, acceptance: true, subtask_counts: { open: 8, working: 3, done: 2, dropped: 0 } }),
+    base(2, "Design: Only callers with an API key can create short links", { ...sub, filed_by: "m-pl", state: "done", ended_at: t(9, 50) }),
+    base(3, "Keys are issued out of band and revocable", { ...sub, step_id: "sw-backlog", step_since: t(9, 51) }),
+    base(4, "Creating a link requires an API key", { ...sub, step_id: "sw-build", step_since: t(9, 52), ...held(4, "m-bu") }),
+    base(5, "Each key is rate limited", { ...sub, step_id: "sw-build", step_since: t(9, 52), blocked: true, open_blockers: [{ id: "sw-4", key: "SW-4", title: "Creating a link requires an API key" }] }),
+    base(6, "A health check a load balancer can poll", { ...sub, step_id: "sw-creview", step_since: t(10, 10) }),
+    base(7, "Callers learn when they are limited", { ...sub, step_id: "sw-sreview", step_since: t(10, 12), ...held(7, "m-sc") }),
+    base(8, "The service ships as a container image", { ...sub, step_id: "sw-qa", step_since: t(10, 20) }),
+    base(9, "A CI pipeline builds and tests every push", { ...sub, step_id: "sw-release", step_since: t(10, 25), ...held(9, "m-dv") }),
+    base(10, "Deploy and roll back notes", { ...sub, step_id: "sw-threat", step_since: t(10, 26) }),
+    base(11, "Short codes never collide", { ...sub, state: "done", ended_at: t(10, 0) }),
+    base(12, "Links expire after a set time", { step_id: "sw-triage", step_since: t(10, 31), ...held(12, "m-pl") }),
+    base(13, "Custom short codes", { step_id: "sw-triage", step_since: t(10, 33) }),
+    base(14, "Design: Click analytics per link", { parent_id: "sw-15", rank: undefined, filed_by: "m-pl", step_id: "sw-design", step_since: t(10, 2), ...held(14, "m-ar") }),
+    base(15, "Click analytics per link", { subtask_counts: { open: 1, working: 1, done: 0, dropped: 0 } }),
+    base(16, "Design: Bulk link import", { parent_id: "sw-17", rank: undefined, filed_by: "m-pl", step_id: "sw-dreview", step_since: t(10, 15) }),
+    base(17, "Bulk link import", { subtask_counts: { open: 1, working: 0, done: 0, dropped: 0 } }),
+    base(18, "A short code that does not exist answers 404", { step_id: "sw-build", step_since: t(10, 5) }),
+  ];
 }
 
 const sessionOf = (n: number, member: string, state: string, started: string, since = started) => ({ task_id: `k-${n}`, member_id: member, session_id: `sess-${n}`, host: "mac-mini", tmux: `dk-MAIN-${n}`, started_at: started, state, state_since: since, log_path: `/tmp/MAIN-${n}.log` });
@@ -310,7 +439,7 @@ export async function emit(page: Page, e: Record<string, unknown>) {
 export async function mockLine(page: Page) {
   await page.clock.setFixedTime(CLOCK);
   await page.addInitScript(fakeStream);
-  const tasks = [...mainTasks(), ...bigTasks()];
+  const tasks = [...mainTasks(), ...bigTasks(), ...swTasks()];
   const byRef = (ref: string) => tasks.find((x) => x.id === ref || x.key === ref);
   const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
   const me = members[0];
@@ -328,16 +457,16 @@ export async function mockLine(page: Page) {
       return json(route, {
         organisation: { id: "o-1", name: "Sacca", created_at: at },
         member: me,
-        projects: [MAIN, BIG],
+        projects,
         skills: [],
         session: { id: "browser-1", member_id: me.id, kind: "browser", started_at: at, last_seen_at: at },
       });
     if (path === "/v1/members") return json(route, { items: members });
-    if (path === "/v1/projects") return json(route, { items: [MAIN, BIG] });
-    for (const p of [MAIN, BIG]) {
+    if (path === "/v1/projects") return json(route, { items: projects });
+    for (const p of projects) {
       if (path === `/v1/projects/${p.key}` || path === `/v1/projects/${p.id}`) return json(route, { project: p, members });
       if (path === `/v1/projects/${p.key}/workflow` || path === `/v1/projects/${p.id}/workflow`) {
-        const wf = p === MAIN ? mainWorkflow : bigWorkflow;
+        const wf = workflows.get(p.id)!;
         const open = tasks.filter((x) => x.project_id === p.id && x.state === "open");
         return json(route, { ...wf, steps: wf.steps.map((s) => ({ ...s, tasks: open.filter((x) => x.step_id === s.id).length, working: open.filter((x) => x.step_id === s.id && x.claim).length })) });
       }
@@ -348,7 +477,7 @@ export async function mockLine(page: Page) {
     if (path === "/v1/tasks") {
       const q = url.searchParams;
       const project = q.get("project");
-      const proj = project ? [MAIN, BIG].find((p) => p.key === project || p.id === project)?.id : undefined;
+      const proj = project ? projects.find((p) => p.key === project || p.id === project)?.id : undefined;
       const parent = q.get("parent") ? byRef(q.get("parent")!)?.id : undefined;
       const items = tasks.filter(
         (x) =>
@@ -364,7 +493,7 @@ export async function mockLine(page: Page) {
       const x = byRef(decodeURIComponent(one[1]));
       if (!x) return json(route, { code: "not_found", message: "No such Task" }, 404);
       const parent = x.parent_id ? byRef(x.parent_id) : undefined;
-      const wf = x.project_id === MAIN.id ? mainWorkflow : bigWorkflow;
+      const wf = workflows.get(x.project_id)!;
       const s = wf.steps.find((y) => y.id === x.step_id);
       return json(route, {
         task: x,

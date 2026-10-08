@@ -13,12 +13,15 @@
 #   Project "Big" (BIG): the heavy 12-Step / 7-loop Workflow with 24 open Tasks, 6 of them held and
 #   9 Blockings (a 4-long chain and one Task blocked by two).
 #
+#   Project "Software" (SW): the software Workflow's 14 Steps; a Parent whose Design Subtask was
+#   approved, its slices from Backlog to Release, and Tasks at Triage, Threat model, Design review.
+#
 # Point it at an Install whose server runs with --runner=off, so no session starts for the agents:
 #
 #   DARKORY_URL=http://127.0.0.1:7788 DARKORY_TOKEN=dk_... scripts/seed-sample.sh
 #
 # DARKORY_TOKEN is an admin's (a fresh `darkory init` prints one). Never point it at a real Install:
-# it creates Members, Skills and two Projects. It is not idempotent; run it once per Install.
+# it creates Members, Skills and three Projects. It is not idempotent; run it once per Install.
 set -euo pipefail
 
 : "${DARKORY_URL:?set DARKORY_URL to the Install's address}"
@@ -51,7 +54,7 @@ say "seeding $URL as $me"
 
 # ------------------------------------------------------------------ Skills
 have_skill() { api GET /v1/skills | jq -e --arg n "$1" '.items[] | select(.name == $n)' >/dev/null; }
-for s in engineer qa review triage design security docs release; do
+for s in engineer qa review triage design security docs release architecture devops; do
   have_skill "$s" || { api POST /v1/skills "$(jq -nc --arg n "$s" '{name: $n, kind: "generic", body: ("Work a Task at a Step carrying " + $n + ".")}')" >/dev/null && say "Skill $s"; }
 done
 
@@ -221,4 +224,91 @@ for n in 4 6 7 9 15 17; do api POST "/v1/tasks/${big[$n]}/claim" '{"heartbeat_ti
 # 9 Blockings: BIG-7 → 10 → 12 → 19 (a 4-long chain), 14 by 9 and 13, and four pairs.
 for pair in "10:7" "12:10" "19:12" "11:9" "14:9" "14:13" "16:15" "22:21" "24:23"; do block "${big[${pair%%:*}]}" "${big[${pair##*:}]}"; done
 say "Big: 24 Tasks, 6 held, 9 Blockings"
+
+# ------------------------------------------------------------------ Software
+say "Project Software"
+# The software Workflow (examples/workflows/software/workflow.json; web/src/components/workflowLine/
+# workflows/software.json): 14 Steps. Its Tasks are held by sol, a human Member of Software alone
+# who holds its Skills, and ren, who reviews.
+sol=$(member_id sol)
+[[ -n "$sol" ]] || sol=$(api POST /v1/members '{"name":"sol","kind":"human"}' | jq -r '.member.id // .id')
+for s in triage breakdown architecture security review engineer qa devops acceptance retro skill-review; do api PUT "/v1/members/$sol/skills/$s" >/dev/null; done
+T_SOL=$(token "$sol")
+# ren reviews: whoever worked a Task at one Step does not take it again at the next.
+ren=$(member_id ren)
+[[ -n "$ren" ]] || ren=$(api POST /v1/members '{"name":"ren","kind":"human"}' | jq -r '.member.id // .id')
+for s in review security qa devops; do api PUT "/v1/members/$ren/skills/$s" >/dev/null; done
+T_REN=$(token "$ren")
+api POST /v1/projects "$(jq -nc --arg a "$admin" --arg m "$sol" --arg r "$ren" '{key: "SW", name: "Software", workflow: "empty", auto_complete: true, acceptance: true, members: [$a, $m, $r]}')" >/dev/null
+api PUT /v1/projects/SW/workflow '{
+  "steps": [
+    {"name": "Backlog", "position": 1},
+    {"name": "Triage", "skill": "triage", "position": 2},
+    {"name": "Plan", "skill": "breakdown", "position": 3},
+    {"name": "Design", "skill": "architecture", "position": 4},
+    {"name": "Threat model", "skill": "security", "position": 5},
+    {"name": "Design review", "skill": "review", "position": 6},
+    {"name": "Build", "skill": "engineer", "position": 7},
+    {"name": "Code review", "skill": "review", "position": 8},
+    {"name": "Security review", "skill": "security", "position": 9},
+    {"name": "QA", "skill": "qa", "position": 10},
+    {"name": "Release", "skill": "devops", "position": 11},
+    {"name": "Acceptance", "skill": "acceptance", "position": 12},
+    {"name": "Retro", "skill": "retro", "position": 13},
+    {"name": "Skill review", "skill": "skill-review", "position": 14}
+  ],
+  "connectors": [
+    {"from": "Triage", "to": "Build", "name": "no design needed", "position": 1},
+    {"from": "Plan", "name": "done", "position": 1},
+    {"from": "Design", "to": "Threat model", "name": "security impact", "position": 1},
+    {"from": "Design", "to": "Design review", "name": "no security impact", "position": 2},
+    {"from": "Threat model", "to": "Design review", "name": "accepted", "position": 1},
+    {"from": "Threat model", "to": "Design", "name": "redesign", "position": 2},
+    {"from": "Design review", "name": "approved", "position": 1},
+    {"from": "Design review", "to": "Design", "name": "redesign", "position": 2},
+    {"from": "Build", "to": "Code review", "name": "ready for review", "position": 1},
+    {"from": "Code review", "to": "QA", "name": "pass", "position": 1},
+    {"from": "Code review", "to": "Security review", "name": "security review", "position": 2},
+    {"from": "Code review", "to": "Build", "name": "needs changes", "position": 3},
+    {"from": "Security review", "to": "QA", "name": "pass", "position": 1},
+    {"from": "Security review", "to": "Build", "name": "needs changes", "position": 2},
+    {"from": "QA", "to": "Release", "name": "pass", "position": 1},
+    {"from": "QA", "to": "Build", "name": "fail", "position": 2},
+    {"from": "Release", "name": "released", "position": 1},
+    {"from": "Release", "to": "Build", "name": "not ready", "position": 2},
+    {"from": "Acceptance", "to": "Release", "name": "pass", "position": 1},
+    {"from": "Acceptance", "name": "fixes filed", "position": 2},
+    {"from": "Retro", "name": "done", "position": 1},
+    {"from": "Retro", "to": "Skill review", "name": "propose", "position": 2},
+    {"from": "Skill review", "name": "publish", "position": 1},
+    {"from": "Skill review", "to": "Retro", "name": "needs changes", "position": 2}
+  ]
+}' >/dev/null
+
+# The Parent: triaged onto the design path, its Design Subtask approved, its slices spread over the line.
+keys=$(file '{"project":"SW","title":"Only callers with an API key can create short links"}')
+design=$(file "$(jq -nc --arg p "$keys" '{parent: $p, title: "Design: Only callers with an API key can create short links", step: "Design"}')")
+claim "$T_SOL" sol-1 "$design"; advance "$T_SOL" sol-1 "$design" "no security impact"
+claim "$T_REN" ren-1 "$design"; advance "$T_REN" ren-1 "$design" approved
+slice() { file "$(jq -nc --arg p "$keys" --arg t "$1" --arg s "$2" '{parent: $p, title: $t, step: $s}')"; }
+slice "Keys are issued out of band and revocable" Backlog >/dev/null
+apikey=$(slice "Creating a link requires an API key" Build)
+limited=$(slice "Each key is rate limited" Build)
+health=$(slice "A health check a load balancer can poll" "Code review")
+slice "Callers learn when they are limited" "Security review" >/dev/null
+slice "The service ships as a container image" QA >/dev/null
+slice "A CI pipeline builds and tests every push" Release >/dev/null
+block "$limited" "$apikey"
+claim "$T_SOL" sol-3 "$apikey"
+claim "$T_REN" ren-2 "$health"
+# Tasks at Triage and on the design path.
+expiry=$(file '{"project":"SW","title":"Links expire after a set time","step":"Triage"}')
+claim "$T_SOL" sol-5 "$expiry"
+file '{"project":"SW","title":"Custom short codes","step":"Triage"}' >/dev/null
+analytics=$(file '{"project":"SW","title":"Click analytics per link"}')
+file "$(jq -nc --arg p "$analytics" '{parent: $p, title: "Design: Click analytics per link", step: "Threat model"}')" >/dev/null
+bulk=$(file '{"project":"SW","title":"Bulk link import"}')
+file "$(jq -nc --arg p "$bulk" '{parent: $p, title: "Design: Bulk link import", step: "Design review"}')" >/dev/null
+file '{"project":"SW","title":"A short code that does not exist answers 404","step":"Build"}' >/dev/null
+say "Software: $keys with its Design Subtask done and 7 slices; Tasks at Triage, Threat model, Design review and Build"
 say "done"
