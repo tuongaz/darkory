@@ -2,6 +2,7 @@ import { ActivityIcon, PanelRightCloseIcon } from "lucide-react";
 import { useState } from "react";
 import { useStreamState, type StreamState } from "@/api/live";
 import { MemberAvatar } from "@/components/MemberAvatar";
+import { Refusal } from "@/components/Refusal";
 import { SystemMark } from "@/components/Timeline";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -131,9 +132,13 @@ function Lines({
   // A pinned row keeps its Steps lit once the pointer leaves it.
   const focus = (f: TrailFocus | undefined) => onFocus(f ?? (pinnedLine ? { steps: pinnedLine.steps, taskId: pinnedLine.taskId } : undefined));
   if (trail.loading) return <Skeleton aria-label="Loading the trail" className="m-3 h-24" />;
+  // The recent moves could not be read: say so, over whatever has arrived since.
+  const refused = trail.error && <Refusal error={trail.error} className="m-3" />;
+  if (refused && trail.lines.length === 0) return refused;
   if (trail.lines.length === 0) return <p className="px-3 py-4 text-xs text-muted-foreground">No Task has moved yet. Each one shows here as it happens.</p>;
   return (
     <ol aria-label="Trail" className="flex min-h-0 flex-col overflow-y-auto">
+      {refused && <li>{refused}</li>}
       {trail.lines.map((l) => (
         <Row
           key={l.seq}

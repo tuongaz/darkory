@@ -17,7 +17,7 @@ export type TrailFocus = { steps: string[]; taskId?: string };
  * opened on the latest ones and joined on top by each that arrives over the stream (highlighted a
  * moment). `fresh` are the lines that arrived while the page was open.
  */
-export function useTrail(project: Project, ctx: FlowContext): { lines: TrailLine[]; fresh: Set<number>; loading: boolean } {
+export function useTrail(project: Project, ctx: FlowContext): { lines: TrailLine[]; fresh: Set<number>; loading: boolean; error: Error | null } {
   const history = useActivity({ project: project.key, kind: [...flowKinds], limit: seeded });
   const live = useLiveEntries();
   const [opened] = useState(() => live[0]?.seq ?? 0);
@@ -31,7 +31,7 @@ export function useTrail(project: Project, ctx: FlowContext): { lines: TrailLine
       .filter((l): l is TrailLine => !!l)
       .slice(0, kept);
     const fresh = new Set(lines.filter((l) => l.seq > opened && live.some((e) => e.seq === l.seq)).map((l) => l.seq));
-    return { lines, fresh, loading: history.isPending };
-  }, [history.data, history.isPending, live, ctx, opened]);
+    return { lines, fresh, loading: history.isPending && !history.isError, error: history.error };
+  }, [history.data, history.isPending, history.isError, history.error, live, ctx, opened]);
 }
 

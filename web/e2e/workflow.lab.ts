@@ -190,7 +190,8 @@ for (const scheme of ["light", "dark"] as const) {
 
     // The text view lists each Step's Tasks.
     await page.getByRole("button", { name: "Text" }).click();
-    await expect(page.getByRole("list", { name: "Tasks at Build" })).toContainText("WEB-7");
+    const steps = page.getByRole("list", { name: "Steps" });
+    await expect(steps.getByRole("list", { name: "Tasks at Build" })).toContainText("WEB-7");
     await shot(page, `live-moments-7-text-${scheme}`);
 
     expect(errors).toEqual([]);

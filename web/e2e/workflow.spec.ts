@@ -139,6 +139,14 @@ test("live: a Task filed shows at Build, its pickup is called out, it travels to
   await v1("POST", `/v1/tasks/${again.key}/drop`, undefined);
   await expect(trail.getByRole("listitem").first()).toContainText(`ada dropped ${again.key}`);
 
+  // Opened afresh, the trail starts from the Project's recent moves, read from /v1/activity.
+  await page.reload();
+  await expect(trail.getByRole("listitem").first()).toContainText(`ada dropped ${again.key}`);
+  await expect(trail.getByRole("listitem").filter({ hasText: `ada filed ${filed.key} at Build` })).toHaveCount(1);
+  // Filed, picked up, advanced, picked up, completed; filed, picked up, let go of, dropped.
+  await expect(trail.getByRole("listitem")).toHaveCount(9);
+  await page.screenshot({ path: `${liveShots}8-reopened-dark.png` });
+
   expect(errors).toEqual([]);
   await ctx.close();
 });
