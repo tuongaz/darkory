@@ -111,7 +111,7 @@ export function SessionsTable({
               <DayTime at={s.started_at} what="Started" />
             </td>
             <td className="text-xs leading-5">
-              <Ago at={s.last_seen_at} />
+              <Ago at={s.last_seen_at} className="whitespace-nowrap" />
             </td>
           </>
         )}
@@ -152,7 +152,7 @@ export function SessionsTable({
             ) : (
               <>
                 <col className="w-[56px]" />
-                <col className="w-[72px]" />
+                <col className="w-[80px]" />
               </>
             )}
             <col className={compact ? "w-[108px]" : "w-[112px]"} />
