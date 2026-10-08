@@ -8,7 +8,8 @@ import { keys, useTasks } from "@/api/queries";
 export const projectTasksQuery = (project: string) => ({ project });
 
 export function useProjectTasks(project: string) {
-  return useTasks(projectTasksQuery(project));
+  // No Project yet (File a Task opened before the Projects load): nothing to ask.
+  return useTasks(projectTasksQuery(project), { enabled: project !== "" });
 }
 
 /**

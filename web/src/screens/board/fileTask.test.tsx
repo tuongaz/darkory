@@ -78,6 +78,8 @@ describe("File a Task", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
     expect(filed(api)!.body).toMatchObject({ project: "WEB" });
+    // Nothing asked of /v1 for a Project not known yet.
+    expect(api.calls.filter((c) => c.path === "/v1/tasks" && c.query.get("project") === "")).toEqual([]);
   });
 
   it("refuses a blank title before asking /v1", async () => {
