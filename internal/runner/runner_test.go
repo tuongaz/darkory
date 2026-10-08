@@ -434,6 +434,45 @@ func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
 	})
 }
 
+// reviewThenRelease is a Workflow whose review is not its last Step: Build, Review, then Release,
+// whose holder advances the Task into Done.
+const reviewThenRelease = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1},
+  {"name": "Review", "skill": "review", "position": 2}, {"name": "Release", "skill": "devops", "position": 3}],
+ "connectors": [{"from": "Build", "to": "Review", "name": "built", "position": 1},
+  {"from": "Review", "to": "Release", "name": "pass", "position": 1}, {"from": "Release", "name": "released", "position": 1}]}`
+
+// A Task reviewed at an earlier Step and completed by a later one merges as reviewed work while
+// nothing was committed after the review; a commit after it is named in the merge's Note.
+func TestRunnerMergeNoteReadsAnEarlierReview(t *testing.T) {
+	for _, tc := range []struct {
+		name, devops, want string
+	}{
+		{"nothing committed after the review", "FAKEAGENT_NO_COMMIT=1", " (web)."},
+		{"a commit after the review", "FAKEAGENT_DELAY=1100ms", " (web); completed by devops under devops, and its branch changed after reviewer's review."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, storetest.Open(t, store.SQLite))
+			f.ok("ada", "skill", "create", "devops", "--kind", "generic", "--body", "Release it.")
+			f.workflow(reviewThenRelease)
+			f.agent("builder", "advance", "engineer")
+			f.agent("reviewer", "advance", "review")
+			f.setScenario("reviewer", "advance", "FAKEAGENT_OUTCOME=pass", "FAKEAGENT_NO_COMMIT=1", "FAKEAGENT_DELAY=1100ms")
+			f.agent("devops", "advance", "devops")
+			f.setScenario("devops", "advance", tc.devops)
+			f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+			f.run("builder", "reviewer", "devops")
+
+			eventually(t, 60*time.Second, "WEB-1's merge noted", func() bool { return strings.Contains(notesOf(f.task("WEB-1")), "Merged web-1-") })
+			web1 := f.task("WEB-1")
+			if !slices.ContainsFunc(web1.Notes, func(n client.Note) bool {
+				return strings.HasPrefix(n.Body, "Merged web-1-cart-page into main at ") && strings.HasSuffix(n.Body, tc.want)
+			}) {
+				t.Fatalf("WEB-1's Notes, wanting one ending %q:\n%s", tc.want, notesOf(web1))
+			}
+		})
+	}
+}
+
 // A Task with no Parent works on a branch from main, and its advance into Done merges it into
 // main; no Parent's branch is made.
 func TestRunnerMergesATaskStandingAlone(t *testing.T) {

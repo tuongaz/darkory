@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,8 +17,9 @@ import (
 
 // Merges follow the record (ADR 0015): a worked Task ending Done merges its branch into its base,
 // its Parent's branch for a Subtask or the default branch for a Task with no Parent, whoever
-// completed it: a review's advance into Done normally, its holder's own, without review,
-// otherwise, which the merge's Note then says. A Parent's Complete merges its branch into the
+// completed it: a review's advance into Done, or a later Step's after a review with nothing
+// committed since, as reviewed work; otherwise its holder's own, without review or changed after
+// it, which the merge's Note then says. A Parent's Complete merges its branch into the
 // default branch, or opens its pull request. In a Workspace merged through pull requests GitHub
 // merges, and the runner reads the merged pull request carrying the Task's key. The merger works
 // through the Activity entries one at a time, in order, so a Subtask's merge lands before the
@@ -117,9 +119,64 @@ func (r *Runner) completed(ctx context.Context, a client.Activity, d *client.Tas
 		if skill != "" {
 			unreviewed += " under " + skill
 		}
-		unreviewed += ", without review"
+		switch last := r.lastReview(ctx, rec, d); {
+		case last == nil:
+			unreviewed += ", without review"
+		case r.changedSince(ctx, rec, d, *last.EndedAt):
+			unreviewed += ", and its branch changed after " + r.memberName(ctx, last.HolderID) + "'s review"
+		default:
+			// Reviewed at an earlier Step, such as a code review before QA and a release, and
+			// nothing was committed since: the merge is of reviewed work.
+			unreviewed = ""
+		}
 	}
 	r.mergeTask(ctx, r.actingAs(by), d, unreviewed)
+}
+
+// lastReview is the latest of d's Claims held under a review Skill that its holder ended by
+// advancing the Task or completing it, nil when none was.
+func (r *Runner) lastReview(ctx context.Context, rec Record, d *client.TaskDetail) *client.Claim {
+	var last *client.Claim
+	for i := range d.Claims {
+		c := &d.Claims[i]
+		if c.SkillID == nil || c.EndedAt == nil || c.HowEnded == nil ||
+			(*c.HowEnded != client.ClaimEndAdvanced && *c.HowEnded != client.ClaimEndCompleted) {
+			continue
+		}
+		if sk, ok := r.skill(ctx, rec, *c.SkillID); !ok || !r.isReview(ctx, rec, sk) {
+			continue
+		}
+		if last == nil || c.EndedAt.After(*last.EndedAt) {
+			last = c
+		}
+	}
+	return last
+}
+
+// changedSince says whether a commit on one of d's branches came after t: a branch the runner made
+// for it whose tip was committed later, or one it cannot read, which it cannot say was not.
+func (r *Runner) changedSince(ctx context.Context, rec Record, d *client.TaskDetail, t time.Time) bool {
+	wss, err := rec.Workspaces(ctx, d)
+	if err != nil {
+		return true
+	}
+	for _, ws := range wss {
+		made, err := r.ledger.find(ws.Path, func(m Made) bool { return m.Task == d.Task.Key && strings.HasPrefix(m.Branch, taskPrefix(d.Task.Key)) })
+		if err != nil {
+			return true
+		}
+		for _, m := range made {
+			out, err := runGit(ctx, ws.Path, "log", "-1", "--format=%ct", "refs/heads/"+m.Branch)
+			if err != nil {
+				return true
+			}
+			sec, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+			if err != nil || sec > t.Unix() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func ptrValue[T any](p *T) T {
