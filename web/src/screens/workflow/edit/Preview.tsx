@@ -15,12 +15,15 @@ export function Preview({
   base,
   skills,
   groups,
+  onStep,
   className,
 }: {
   draft: WorkflowRecord;
   base: WorkflowRecord;
   skills: Map<string, Pick<Skill, "name">>;
   groups: (s: RecordStep) => Group;
+  /** Picks a Step clicked on the line. */
+  onStep?: (id: string) => void;
   className?: string;
 }) {
   const line = useMemo(() => asLine(draft, skills), [draft, skills]);
@@ -31,7 +34,15 @@ export function Preview({
   const after = inOrder(draft.steps).filter((s) => groups(s) === "after");
   const baseIds = new Set(base.steps.map((s) => s.id));
   return (
-    <figure aria-label="Preview of the line" className={cn("flex min-w-0 flex-col", className)}>
+    // A Step's name on the line picks it; the list beside is the keyboard's way to the same.
+    <figure
+      aria-label="Preview of the line"
+      onClick={(e) => {
+        const id = (e.target as HTMLElement).closest<HTMLElement>("[data-step]")?.dataset.step;
+        if (id && onStep) onStep(id);
+      }}
+      className={cn("flex min-w-0 flex-col", onStep && "[&_[data-step]]:cursor-pointer [&_[data-step]:hover]:underline", className)}
+    >
       <span role="img" aria-label={describe(line)} className="sr-only" />
       <WorkflowLine label="The line" workflow={line} tasks={[]} now={0} compactHeads noBranch noLoops density="tokens" highlight={changed} />
       {after.length > 0 && (

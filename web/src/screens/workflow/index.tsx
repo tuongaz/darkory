@@ -7,7 +7,6 @@ import { projectPath, projectSettingsPath, useRouteProject } from "@/app/current
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { FormDialog } from "@/components/FormDialog";
-import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { useCurrentMe } from "@/me";
@@ -24,6 +23,7 @@ import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
 import { ScopeChip } from "./ScopeChip";
 import { stepParam } from "./StepPeek";
+import { ChangesChip } from "./edit/Changes";
 
 /**
  * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; `?scope=`
@@ -127,20 +127,7 @@ function EditingPage() {
     <>
       <TopBar
         crumbs={settingsCrumbs(project.name)}
-        view={
-          <span role="status" aria-label="Editing">
-            <Pill tone={n > 0 ? "claimed" : "outline"} className="font-normal">
-              {n > 0 ? (
-                <>
-                  <span className="max-sm:sr-only">Editing · </span>
-                  {n} {n === 1 ? "change" : "changes"}
-                </>
-              ) : (
-                "Editing"
-              )}
-            </Pill>
-          </span>
-        }
+        view={<ChangesChip editor={editor} />}
         actions={
           <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(live))}>
             Cancel

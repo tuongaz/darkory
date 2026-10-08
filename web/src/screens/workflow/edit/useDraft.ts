@@ -3,7 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { invalidateAll, keys, useSkills, useWorkflow } from "@/api/queries";
 import { createSkill, setWorkflow } from "@/api/writes";
 import { toBody, type WorkflowRecord } from "../bind";
-import { countChanges, fromRecord, isNewSkill, problem, type Draft } from "./draft";
+import { describeChanges, fromRecord, isNewSkill, problem, type Draft } from "./draft";
 
 /**
  * Editing a Project's Workflow as a list: every change is made on a draft and drawn at once, and
@@ -55,7 +55,13 @@ export function useDraftEditor(project: string) {
     if (last) last.key = undefined;
   }
 
-  const changes = useMemo(() => (base && draft ? countChanges(base, draft.wf) : 0), [base, draft]);
+  // What the draft changes, as the header's list says it; its length is the count the header shows.
+  const changeList = useMemo(() => {
+    if (!base || !draft) return [];
+    const skillName = (id: string | undefined) => (id ? (skills.data?.find((k) => k.id === id)?.name ?? draft.skills[id]?.name ?? "…") : "hold");
+    return describeChanges(base, draft.wf, draft.moves, skillName);
+  }, [base, draft, skills.data]);
+  const changes = changeList.length;
   const said = base && draft ? problem(draft, base, skills.data ?? []) : undefined;
 
   /** Creates the new Skills, then sends the Workflow. Resolves true once `/v1` has taken it. */
@@ -104,6 +110,7 @@ export function useDraftEditor(project: string) {
     undo,
     settle,
     changes,
+    changeList,
     problem: said,
     tried,
     saving,

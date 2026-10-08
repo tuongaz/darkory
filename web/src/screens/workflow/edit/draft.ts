@@ -2,6 +2,7 @@ import type { Skill } from "@/api/client";
 import { newKey } from "@/api/client";
 import { branchSkills, branchSteps, type LineWorkflow } from "@/components/workflowLine/model";
 import { isNew, newIdPrefix, same, type RecordConnector, type RecordStep, type WorkflowRecord } from "../bind";
+import { countTasks } from "@/components/workflow/model";
 import { problem as recordProblem } from "../edits";
 
 /*
@@ -22,6 +23,8 @@ export type Draft = {
   skills: Record<string, NewSkill>;
   /** The open Tasks each deleted Step held, by its id: what `moves` carries. */
   removed?: Record<string, number>;
+  /** The group a new Step is listed in until its Skill places it: the group of the Step it was added after. */
+  placed?: Record<string, Group>;
 };
 
 /** A Step carries `new-skill:<name>` until Save creates that Skill. */
@@ -39,9 +42,10 @@ export type Group = "main" | "after";
  * and the line never disagree. "After a Parent" when it carries acceptance, retro or skill-review
  * and no Step on the main line leads into it; one a main Step leads into stays on the main line.
  */
-export function groupsOf(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>): (s: Pick<RecordStep, "id">) => Group {
+export function groupsOf(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>, placed: Record<string, Group> = {}): (s: Pick<RecordStep, "id">) => Group {
   const side = branchSteps(asLine(wf, skills));
-  return (s) => (side.has(s.id) ? "after" : "main");
+  const held = new Set(wf.steps.filter((s) => !s.skill_id).map((s) => s.id));
+  return (s) => (held.has(s.id) && placed[s.id] ? placed[s.id] : side.has(s.id) ? "after" : "main");
 }
 
 /** The record as the Workflow line takes it: Skills by name, a Connector into Done with `to` null. */
@@ -70,11 +74,12 @@ export function fromRecord(wf: WorkflowRecord): Draft {
 const withWf = (d: Draft, wf: WorkflowRecord): Draft => ({ ...d, wf });
 
 /**
- * A new Step, unnamed and a hold, right after `after` in the Workflow's order (last with none).
- * `after`'s first outcome now leads into it, and it leads on with "pass" to where that outcome
- * led; when `after` has no outcome, the new Step leads on to the next Step of its group, or Done.
+ * A new Step, unnamed, a hold and with no outcome, right after `after` in the Workflow's order (last
+ * with none): placed, not wired. No outcome is pointed into it and none leads out until the admin
+ * says so, so a hold that is new reads as Backlog does, moved by hand. It is listed in `group`
+ * (the group of the Step it follows) until its Skill places it.
  */
-export function insertStep(d: Draft, after: string | undefined, groups?: (s: RecordStep) => Group): { draft: Draft; id: string } {
+export function insertStep(d: Draft, after: string | undefined, group?: Group): { draft: Draft; id: string } {
   const wf = d.wf;
   const order = inOrder(wf.steps);
   const index = after ? order.findIndex((s) => s.id === after) + 1 : order.length;
@@ -91,18 +96,17 @@ export function insertStep(d: Draft, after: string | undefined, groups?: (s: Rec
     takers: [],
   };
   const steps = renumber([...order.slice(0, index), step, ...order.slice(index)]);
-  let connectors = wf.connectors;
-  const first = prev && firstOutcome(wf, prev.id);
-  let onTo: string | undefined;
-  if (first) {
-    onTo = first.to_step_id;
-    connectors = connectors.map((c) => (c.id === first.id ? { ...c, to_step_id: id } : c));
-  } else if (prev) {
-    const group = groups?.(prev);
-    onTo = order.slice(index).find((s) => !groups || groups(s) === group)?.id;
-  }
-  connectors = [...connectors, { id: fresh(), from_step_id: id, to_step_id: onTo, name: "pass", position: 1 }];
-  return { draft: withWf(d, { ...wf, steps, connectors }), id };
+  const placed = group ? { ...d.placed, [id]: group } : d.placed;
+  return { draft: { ...d, wf: { ...wf, steps }, placed }, id };
+}
+
+/** Makes an outcome the first out of its Step: the main way on, the one the line follows. The others keep their order after it. */
+export function makeMain(d: Draft, id: string): Draft {
+  const c = d.wf.connectors.find((x) => x.id === id);
+  if (!c || firstOutcome(d.wf, c.from_step_id)?.id === id) return d;
+  const order = [c, ...outOf(d.wf, c.from_step_id).filter((x) => x.id !== id)];
+  const at = new Map(order.map((x, i) => [x.id, i + 1]));
+  return withWf(d, { ...d.wf, connectors: d.wf.connectors.map((x) => (at.has(x.id) ? { ...x, position: at.get(x.id)! } : x)) });
 }
 
 export function renameStep(d: Draft, id: string, name: string): Draft {
@@ -165,24 +169,31 @@ function movedInto(d: Draft, id: string): number {
     .reduce((n, [from]) => n + (d.removed?.[from] ?? 0), 0);
 }
 
+/** The outcomes out of other Steps that lead into `id`, in the Workflow's order of their Steps, then their own. */
+export function inbound(wf: WorkflowRecord, id: string): RecordConnector[] {
+  const at = new Map(inOrder(wf.steps).map((s, i) => [s.id, i]));
+  return wf.connectors
+    .filter((c) => c.to_step_id === id && c.from_step_id !== id)
+    .sort((a, b) => (at.get(a.from_step_id) ?? 0) - (at.get(b.from_step_id) ?? 0) || a.position - b.position);
+}
+
+/** Where each outcome into a deleted Step leads instead, by its id: a Step's id, or undefined for Done. One not named is removed. */
+export type Repoint = Record<string, { to: string | undefined }>;
+
 /**
- * Deletes a Step. A Step whose first outcome led into it now leads where its first outcome led
- * (the reverse of inserting); any other outcome into it goes with it, as do all of them when it
- * had no outcome. Its open Tasks, and any moved
- * to it, go to `moveTo`.
+ * Deletes a Step and the outcomes out of it. Each outcome into it from another Step is removed,
+ * unless `repoint` leads it elsewhere: nothing is dropped or re-pointed without being asked. Its
+ * open Tasks, and any moved to it, go to `moveTo`.
  */
-export function deleteStep(d: Draft, id: string, moveTo?: string): Draft {
+export function deleteStep(d: Draft, id: string, moveTo?: string, repoint: Repoint = {}): Draft {
   const wf = d.wf;
   const step = wf.steps.find((s) => s.id === id);
   if (!step) return d;
-  const own = firstOutcome(wf, id);
-  const onTo = own?.to_step_id;
-  const firsts = new Set(wf.steps.map((s) => firstOutcome(wf, s.id)?.id));
   const connectors: RecordConnector[] = [];
   for (const c of wf.connectors) {
     if (c.from_step_id === id) continue;
     if (c.to_step_id !== id) connectors.push(c);
-    else if (own && firsts.has(c.id) && onTo !== c.from_step_id) connectors.push({ ...c, to_step_id: onTo });
+    else if (repoint[c.id] && repoint[c.id].to !== id && repoint[c.id].to !== c.from_step_id) connectors.push({ ...c, to_step_id: repoint[c.id].to });
   }
   let n = 0;
   let last = "";
@@ -209,10 +220,15 @@ export function deadEnds(wf: WorkflowRecord): RecordStep[] {
   return inOrder(wf.steps).filter((s) => s.skill_id && !wf.connectors.some((c) => c.from_step_id === s.id));
 }
 
+/** Whether deleting a Step asks first: it holds Tasks, other Steps lead into it, or it leaves one with no way out. */
+export function asksBeforeDelete(d: Draft, id: string): boolean {
+  return tasksAt(d, id) > 0 || inbound(d.wf, id).length > 0 || deadEndsAfterDelete(d, id).length > 0;
+}
+
 /** The Steps deleting `id` leaves with no way out, which had one before. */
-export function deadEndsAfterDelete(d: Draft, id: string): RecordStep[] {
+export function deadEndsAfterDelete(d: Draft, id: string, repoint: Repoint = {}): RecordStep[] {
   const before = new Set(deadEnds(d.wf).map((s) => s.id));
-  return deadEnds(deleteStep(d, id).wf).filter((s) => !before.has(s.id));
+  return deadEnds(deleteStep(d, id, undefined, repoint).wf).filter((s) => !before.has(s.id));
 }
 
 /** One place earlier (-1) or later (+1) among the Steps of its group, in the Workflow's order. */
@@ -246,66 +262,90 @@ export function wasTarget(server: WorkflowRecord, c: RecordConnector): { to: str
   return { to: was.to_step_id };
 }
 
+/** One change the draft makes, as the header's list says it: its kind, then what it changed. */
+export type Change = { kind: "Added" | "Deleted" | "Renamed" | "Skill" | "Moved" | "Removed" | "Re-pointed" | "Main"; text: string };
+
 /**
- * How many changes the draft makes to the Workflow it began from, counted as they were made: each
- * Step added or deleted, renamed or given another Skill; each outcome added (a new Step's first
- * comes with it), removed, renamed or pointed elsewhere; and the Steps moved in the order, the
- * fewest that put it as it is.
+ * The changes the draft makes to the Workflow it began from, in the order of the Steps: each Step
+ * added or deleted (with where its Tasks move), renamed, given another Skill or moved in the order
+ * (the fewest moves that put it as it is); each outcome added, removed (the outcomes out of a
+ * deleted Step go with it; one into it is a change of its own), renamed, pointed elsewhere, or made
+ * the main way on.
  */
-export function countChanges(server: WorkflowRecord, draft: WorkflowRecord): number {
-  let n = 0;
-  const kept = new Map(server.steps.map((s) => [s.id, s]));
-  for (const s of draft.steps) {
-    const was = kept.get(s.id);
-    if (!was) n++;
+export function describeChanges(server: WorkflowRecord, draft: WorkflowRecord, moves: Record<string, string> = {}, skillName: (id: string | undefined) => string = (id) => id ?? "hold"): Change[] {
+  const out: Change[] = [];
+  const name = (id: string | undefined) =>
+    id === undefined ? "Done" : (draft.steps.find((s) => s.id === id) ?? server.steps.find((s) => s.id === id))?.name.trim() || "New Step";
+  const was = new Map(server.steps.map((s) => [s.id, s]));
+  const ids = new Set(draft.steps.map((s) => s.id));
+  const moved = reordered(server, draft);
+  for (const s of inOrder(draft.steps)) {
+    const w = was.get(s.id);
+    if (!w) out.push({ kind: "Added", text: name(s.id) });
     else {
-      if (s.name.trim() !== was.name) n++;
-      if (s.skill_id !== was.skill_id) n++;
+      if (s.name.trim() !== w.name) out.push({ kind: "Renamed", text: `${w.name} → ${s.name.trim() || "New Step"}` });
+      if (s.skill_id !== w.skill_id) out.push({ kind: "Skill", text: `${name(s.id)} · ${skillName(w.skill_id)} → ${skillName(s.skill_id)}` });
+      if (moved.has(s.id)) out.push({ kind: "Moved", text: name(s.id) });
     }
   }
-  const ids = new Set(draft.steps.map((s) => s.id));
-  n += server.steps.filter((s) => !ids.has(s.id)).length;
+  for (const s of inOrder(server.steps).filter((x) => !ids.has(x.id))) {
+    const to = moves[s.id];
+    out.push({ kind: "Deleted", text: s.tasks > 0 && to ? `${s.name} · its ${countTasks(s.tasks)} move to ${name(to)}` : s.name });
+  }
   const wasC = new Map(server.connectors.map((c) => [c.id, c]));
+  const way = (c: RecordConnector, to = c.to_step_id) => `${name(c.from_step_id)} · ${c.name.trim() || "outcome"} → ${name(to)}`;
   for (const c of draft.connectors) {
-    const was = wasC.get(c.id);
-    if (!was) {
-      const bornWithStep = !kept.has(c.from_step_id) && firstOutcome(draft, c.from_step_id)?.id === c.id;
-      if (!bornWithStep) n++;
+    const w = wasC.get(c.id);
+    if (!w) {
+      out.push({ kind: "Added", text: way(c) });
       continue;
     }
-    if (c.name.trim() !== was.name) n++;
-    if (c.to_step_id !== was.to_step_id) n++;
+    if (c.name.trim() !== w.name) out.push({ kind: "Renamed", text: `${name(c.from_step_id)} · ${w.name} → ${c.name.trim() || "outcome"}` });
+    if (c.to_step_id !== w.to_step_id) out.push({ kind: "Re-pointed", text: `${way(c)} (was ${name(w.to_step_id)})` });
   }
   const cids = new Set(draft.connectors.map((c) => c.id));
-  // A Connector that went with a deleted Step, out of it or into it, is counted with the Step.
-  n += server.connectors.filter((c) => !cids.has(c.id) && ids.has(c.from_step_id) && (!c.to_step_id || ids.has(c.to_step_id))).length;
-  n += reordered(server, draft);
-  return n;
+  // An outcome out of a deleted Step goes with it; one into it, out of a Step kept, is a change of its own.
+  for (const c of server.connectors) if (!cids.has(c.id) && ids.has(c.from_step_id)) out.push({ kind: "Removed", text: way(c) });
+  for (const s of draft.steps) {
+    const first = firstOutcome(draft, s.id);
+    const before = firstOutcome(server, s.id);
+    if (first && before && first.id !== before.id && cids.has(before.id) && wasC.has(first.id)) out.push({ kind: "Main", text: way(first) });
+  }
+  return out;
 }
 
-/** The fewest Steps moved that turn the old order of the Steps kept into the new: those off the longest run kept in order. */
-function reordered(server: WorkflowRecord, draft: WorkflowRecord): number {
+/** How many changes the draft makes to the Workflow it began from: `describeChanges`, counted. */
+export function countChanges(server: WorkflowRecord, draft: WorkflowRecord): number {
+  return describeChanges(server, draft).length;
+}
+
+/** The Steps moved that turn the old order of the Steps kept into the new: the fewest, those off the longest run kept in order. */
+function reordered(server: WorkflowRecord, draft: WorkflowRecord): Set<string> {
   const ids = new Set(draft.steps.map((s) => s.id));
   const old = new Map(
     inOrder(server.steps)
       .filter((s) => ids.has(s.id))
       .map((s, i) => [s.id, i]),
   );
-  const seq = inOrder(draft.steps)
-    .filter((s) => old.has(s.id))
-    .map((s) => old.get(s.id)!);
+  const seq = inOrder(draft.steps).filter((s) => old.has(s.id));
+  // The longest run in order (patience sorting), kept with links back to rebuild it.
   const tails: number[] = [];
-  for (const x of seq) {
+  const prev: number[] = [];
+  for (let i = 0; i < seq.length; i++) {
+    const x = old.get(seq[i].id)!;
     let lo = 0;
     let hi = tails.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (tails[mid] < x) lo = mid + 1;
+      if (old.get(seq[tails[mid]].id)! < x) lo = mid + 1;
       else hi = mid;
     }
-    tails[lo] = x;
+    prev[i] = lo > 0 ? tails[lo - 1] : -1;
+    tails[lo] = i;
   }
-  return seq.length - tails.length;
+  const kept = new Set<string>();
+  for (let i = tails.length ? tails[tails.length - 1] : -1; i >= 0; i = prev[i]) kept.add(seq[i].id);
+  return new Set(seq.filter((s) => !kept.has(s.id)).map((s) => s.id));
 }
 
 /**

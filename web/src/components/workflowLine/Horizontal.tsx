@@ -198,7 +198,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const count = columns.get(id)?.length ?? 0;
     if (props.compactHeads || props.fold) {
       return (
-        <div key={id} data-head={s.name} className="absolute -translate-x-1/2 text-center whitespace-nowrap" style={{ left: x, top: h.headY + 20 }}>
+        <div key={id} data-head={s.name} data-step={id} className="absolute -translate-x-1/2 text-center whitespace-nowrap" style={{ left: x, top: h.headY + 20 }}>
           <span className="text-[13px] font-semibold">{s.name}</span>
           {hidden > 0 && <span className="ml-1 text-[11px] text-muted-foreground">+{hidden}</span>}
         </div>
@@ -214,6 +214,7 @@ export function HorizontalLine(props: HorizontalProps) {
           onClick={() => setOpenStep((o) => (o === id ? null : id))}
           onMouseEnter={() => count > 0 && setOpenStep(id)}
           data-head={s.name}
+          data-step={id}
           className="absolute w-[84px] -translate-x-1/2 text-center"
           style={{ left: x, top: h.headY }}
         >
@@ -227,7 +228,7 @@ export function HorizontalLine(props: HorizontalProps) {
     }
     const takers = s.takers ?? [];
     return (
-      <div key={id} data-head={s.name} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: h.headY }}>
+      <div key={id} data-head={s.name} data-step={id} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: h.headY }}>
         <div className="text-[13.5px] font-semibold whitespace-nowrap">
           {s.name}
           {s.skill && <span className="ml-1 font-mono text-[11px] font-normal text-muted-foreground">{s.skill.name}</span>}
@@ -503,7 +504,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const paused = takers.length > 0 && takers.every((m) => m.paused);
     const hidden = props.hidden?.get(id) ?? 0;
     return (
-      <div key={id} data-head={s.name} className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: x - 6, top: y - 36 }}>
+      <div key={id} data-head={s.name} data-step={id} className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: x - 6, top: y - 36 }}>
         <span className="text-[13px] font-semibold">{s.name}</span>
         {!props.compactHeads && !props.ghosts?.length && s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
         {!props.compactHeads && (!props.ghosts?.length || paused) && takers.slice(0, 2).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
@@ -529,7 +530,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const tokens = !props.fold && !props.compactHeads;
     return (
       <div key={id} className="absolute flex -translate-x-full flex-col items-end" style={{ left: x - 14, top: y - 10 }}>
-        <div data-head={s.name} {...hover(hint)} className="flex flex-col items-end leading-[18px] whitespace-nowrap">
+        <div data-head={s.name} data-step={id} {...hover(hint)} className="flex flex-col items-end leading-[18px] whitespace-nowrap">
           <span className="text-[13px] font-semibold">{s.name}</span>
           <span className="text-[11px] text-muted-foreground">{HOLD_NOTE}</span>
         </div>
