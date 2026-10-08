@@ -1,26 +1,23 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { newKey } from "@/api/client";
+import { api, call, type Schemas } from "@/api/client";
 
 // The Member's "seen" mark of a Project's Activity: `GET` and `PUT /v1/projects/{project}/seen`.
-// The operation is specified on the wl-seen branch; until it is merged into the spec this app is
-// generated from, it is called here by hand against its shape, and swapped for the typed client then.
 
 /** How far the Member has seen a Project's Activity: both null until they first looked. */
-export type Seen = { seq: number | null; at: string | null };
+export type Seen = Schemas["ProjectSeen"];
 
 const never: Seen = { seq: null, at: null };
 
 export const seenKey = (project: string) => ["seen", project] as const;
 
-const url = (project: string) => `${window.location.origin}/v1/projects/${encodeURIComponent(project)}/seen`;
-
-/** The mark, or none when it cannot be read (not in the Project, or a server without it). */
+/** The mark, or none when it cannot be read (the caller is not in the Project). */
 export async function readSeen(project: string): Promise<Seen> {
-  const res = await globalThis.fetch(new Request(url(project), { credentials: "include" }));
-  if (!res.ok) return never;
-  const body = (await res.json()) as Partial<Seen>;
-  return { seq: typeof body.seq === "number" ? body.seq : null, at: typeof body.at === "string" ? body.at : null };
+  try {
+    return await call(api.GET("/v1/projects/{project}/seen", { params: { path: { project } } }));
+  } catch {
+    return never;
+  }
 }
 
 /**
@@ -28,17 +25,7 @@ export async function readSeen(project: string): Promise<Seen> {
  * write outlive a page being left. A refusal changes nothing the Member sees: the mark stays.
  */
 export function writeSeen(project: string, seq: number): Promise<unknown> {
-  return globalThis
-    .fetch(
-      new Request(url(project), {
-        method: "PUT",
-        credentials: "include",
-        keepalive: true,
-        headers: { "Content-Type": "application/json", "Idempotency-Key": newKey() },
-        body: JSON.stringify({ seq }),
-      }),
-    )
-    .catch(() => undefined);
+  return call(api.PUT("/v1/projects/{project}/seen", { params: { path: { project } }, body: { seq }, keepalive: true })).catch(() => undefined);
 }
 
 /** The Member's mark of `project` as it stood when they came to the page (or last came back to it). */
