@@ -8,52 +8,64 @@ import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const startTimeoutMs = 60_000;
 
+/** An Install started for the tests: its address, the startup login link, ada's token, what init printed. */
+export type Install = { base: string; link: string; token: string; data: string; init: string; stop: () => Promise<void> };
+
 /**
  * Builds the darkory binary from this checkout (embedding web/dist/app, which `npm run e2e` has
  * just built), runs `darkory init` in a fresh data directory, and starts `darkory serve` on a free
- * port. The startup login link printed on stdout and the address it names reach the tests through
- * the environment. The returned function stops the server and removes the directories.
- *
- * A spec that starts an Install of its own with this restores every variable it sets
- * (DARKORY_E2E_LOGIN_LINK, _BASE_URL, _DATA and _ADMIN_TOKEN) afterwards: the specs after it in
- * the same worker talk to the shared Install.
+ * port. Without `roster` init seeds just the Organisation and ada (--no-agents), as an Install made
+ * outside the roster is; with it, Project MAIN on the default Workflow and the agents too. init
+ * runs in the data directory, outside any git repository, so the roster has no Workspace.
  */
-export default async function startServer(): Promise<() => Promise<void>> {
+export async function startInstall(opts: { roster?: boolean } = {}): Promise<Install> {
   const bin = mkdtempSync(join(tmpdir(), "darkory-e2e-bin-"));
   const data = mkdtempSync(join(tmpdir(), "darkory-e2e-data-"));
   const exe = join(bin, "darkory");
   const env = { ...process.env, DARKORY_NO_UPDATE_CHECK: "1" };
-
-  execFileSync("go", ["build", "-o", exe, "./cmd/darkory"], { cwd: repo, stdio: "inherit", env });
-  // --no-agents: the specs start from an Install with no Team, as one made outside the roster is.
-  const init = execFileSync(exe, ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada", "--no-agents"], { env, stdio: "pipe" });
-  // ada's token, which init prints once: a spec that runs after the startup link is used signs in
-  // by asking /v1 for a login link of its own.
-  process.env.DARKORY_E2E_ADMIN_TOKEN = /dk_\S+/.exec(init.toString())?.[0] ?? "";
-
-  // Port 0: the kernel picks a free port, and serve prints its link with the port it got.
-  // --runner=off: no agent the specs create ever gets a session started for it.
-  const server = spawn(exe, ["serve", "--no-browser", "--runner=off", "--listen", "127.0.0.1:0", "--data", data], {
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  let server: ChildProcess | undefined;
   const stop = async () => {
-    await stopProcess(server);
+    if (server) await stopProcess(server);
     rmSync(bin, { recursive: true, force: true });
     rmSync(data, { recursive: true, force: true });
   };
-  process.once("exit", () => server.kill("SIGKILL"));
 
   try {
+    execFileSync("go", ["build", "-o", exe, "./cmd/darkory"], { cwd: repo, stdio: "inherit", env });
+    const args = ["init", "--data", data, "--org", "E2E Organisation", "--name", "ada", ...(opts.roster ? [] : ["--no-agents"])];
+    const init = execFileSync(exe, args, { cwd: data, env, stdio: "pipe" }).toString();
+    // ada's token, which init prints once: a spec that runs after the startup link is used signs
+    // in by asking /v1 for a login link of its own.
+    const token = /^\s+(dk_\S+)$/m.exec(init)?.[1] ?? "";
+
+    // Port 0: the kernel picks a free port, and serve prints its link with the port it got.
+    // --runner=off: no agent the specs create ever gets a session started for it.
+    server = spawn(exe, ["serve", "--no-browser", "--runner=off", "--listen", "127.0.0.1:0", "--data", data], {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    const running = server;
+    process.once("exit", () => running.kill("SIGKILL"));
     const link = await loginLink(server);
-    process.env.DARKORY_E2E_LOGIN_LINK = link;
-    process.env.DARKORY_E2E_BASE_URL = new URL(link).origin;
-    process.env.DARKORY_E2E_DATA = data;
+    return { base: new URL(link).origin, link, token, data, init, stop };
   } catch (err) {
     await stop();
     throw err;
   }
-  return stop;
+}
+
+/**
+ * The shared Install every spec talks to unless it starts its own: `startInstall()`, whose startup
+ * login link, address, data directory and admin token reach the tests through the environment
+ * (DARKORY_E2E_LOGIN_LINK, _BASE_URL, _DATA and _ADMIN_TOKEN). The returned function stops it.
+ */
+export default async function startServer(): Promise<() => Promise<void>> {
+  const install = await startInstall();
+  process.env.DARKORY_E2E_LOGIN_LINK = install.link;
+  process.env.DARKORY_E2E_BASE_URL = install.base;
+  process.env.DARKORY_E2E_DATA = install.data;
+  process.env.DARKORY_E2E_ADMIN_TOKEN = install.token;
+  return install.stop;
 }
 
 /** An Install whose server runs the Runner beside it, for the Session panel's live terminal. */

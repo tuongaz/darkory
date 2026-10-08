@@ -1,9 +1,9 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
-import startServer from "./server";
+import { startInstall } from "./server";
 
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
-// their own (init's MAIN with the default Workflow, no roster):
+// their own (init's MAIN with the default Workflow and the roster's agents):
 //   6. Workflow editing: rename a Step while the board is open (its columns follow); delete a Step
 //      with Tasks (asked where they go); add a Step with a new Skill and a new agent; a Step nobody
 //      holds shows the warning on the canvas and in the list.
@@ -11,7 +11,6 @@ import startServer from "./server";
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/workflow/", import.meta.url));
-const envKeys = ["DARKORY_E2E_LOGIN_LINK", "DARKORY_E2E_BASE_URL", "DARKORY_E2E_DATA", "DARKORY_E2E_ADMIN_TOKEN"] as const;
 
 let stop: (() => Promise<void>) | undefined;
 let base = "";
@@ -37,17 +36,8 @@ async function v1(method: string, path: string, body?: unknown, secret = token, 
 
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(180_000);
-  const saved = envKeys.map((k) => [k, process.env[k]] as const);
-  try {
-    stop = await startServer();
-    base = process.env.DARKORY_E2E_BASE_URL!;
-    token = process.env.DARKORY_E2E_ADMIN_TOKEN!;
-  } finally {
-    for (const [k, v] of saved) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-  }
+  const install = await startInstall({ roster: true });
+  ({ stop, base, token } = install);
   const { url } = (await v1("POST", "/v1/members/ada/login-links")) as { url: string };
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
@@ -148,7 +138,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   const bot = (await v1("GET", "/v1/members")) as { items: { id: string; name: string }[] };
   const qaBot = bot.items.find((m) => m.name === "qa-bot")!;
   const { secret } = (await v1("POST", `/v1/members/${qaBot.id}/tokens`, { name: "scenario-9" })) as { secret: string };
-  const filed = (await v1("POST", "/v1/tasks", { project: "MAIN", title: "Test the ledger", step: "QA" })) as { key: string };
+  const filed = ((await v1("POST", "/v1/tasks", { project: "MAIN", title: "Test the ledger", step: "QA" })) as { task: { key: string } }).task;
   await v1("POST", `/v1/tasks/${filed.key}/claim`, { heartbeat_timeout_seconds: 600 }, secret, "qa-bot-1");
   // ada takes Make's Tasks.
   await v1("PUT", "/v1/projects/MAIN/members/ada");

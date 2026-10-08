@@ -63,7 +63,7 @@ function activityRows(page: Page) {
   return page.getByRole("list", { name: "Activity" }).locator("li[data-seq]");
 }
 
-type Task = { id: string; key: string; claim?: { id: string } };
+type Task = { id: string; key: string; parent_id?: string; claim?: { id: string } };
 type TaskDetail = { task: Task };
 
 let admin: APIRequestContext;
@@ -108,7 +108,7 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
   await expect(row).toContainText(`blocks ${cart.key}`);
   await expect(row).toContainText("inbox-builder");
   await expect(row).toContainText("With you");
-  await expect(row.getByTitle("Inbox")).toBeVisible();
+  await expect(row.getByTitle("Inbox", { exact: true })).toBeVisible();
   expect((await row.boundingBox())!.height).toBe(36);
   await notReloaded(page);
   await shot(page, "inbox-aimed");
@@ -123,8 +123,17 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
   await page.getByRole("button", { name: `Answer ${key}` }).click();
   await page.goto(`${base()}/my-work`);
   await expect(page.getByRole("region", { name: "Held by you" }).locator(`[data-task="${key}"]`)).toBeVisible();
-  await expect(page.getByRole("region", { name: "You own" }).locator(`[data-task="${checkout.key}"]`)).toContainText("0 of 2 done");
+  // The question joined the Parent beside the Task it blocks (scenario 5), so it owns three.
+  await expect(page.getByRole("region", { name: "You own" }).locator(`[data-task="${checkout.key}"]`)).toContainText("0 of 3 done");
   await shot(page, "my-work");
+
+  // Scenario 5, from a Subtask: the question is a Subtask of the same Parent, and blocks the cart page.
+  expect(question.task.parent_id).toBe(checkout.id);
+  await page.goto(`${base()}/tasks/${checkout.key}`);
+  const subtasks = page.getByRole("region", { name: "Subtasks" });
+  await expect(subtasks.getByRole("link", { name: /Stripe keys for staging\?/ })).toBeVisible();
+  await expect(subtasks.getByRole("link", { name: /Build the cart page/ })).toContainText("Blocked");
+  await shot(page, "question-beside-its-task");
   expect(errors).toEqual([]);
 });
 
@@ -164,9 +173,11 @@ test("marks: an agent's gradient ring turns while its session runs, stops in its
   await page.goto(`${base()}/projects/INB/activity`);
   const human = activityRows(page).getByRole("img", { name: "ada", exact: true }).first();
   await expect(human).toHaveAttribute("data-kind", "human");
-  expect(await human.evaluate((el) => getComputedStyle(el).borderRadius)).toBe("9999px");
+  // Round: a radius of at least half its size (Tailwind's rounded-full computes to an infinite one).
+  expect(await human.evaluate((el) => parseFloat(getComputedStyle(el).borderRadius) >= el.getBoundingClientRect().width / 2)).toBe(true);
   expect(await human.evaluate((el) => getComputedStyle(el).backgroundImage)).not.toContain("conic-gradient");
-  // The agent's, the AI gradient.
+  // The agent's, the AI gradient, once its session no longer colours it.
+  await runnerSays(page, []);
   await page.goto(`${base()}/projects/INB/agents`);
   const agentMark = page.getByRole("img", { name: /^inbox-builder \(agent\)/ }).first();
   await expect(agentMark).toHaveAttribute("data-kind", "agent");
@@ -217,7 +228,8 @@ test("a lapse on my Task shows in the Inbox; Activity words it and an advance, a
   await expect(activityRows(page)).toHaveCount(1);
 
   await page.getByRole("button", { name: "Clear Kind" }).click();
-  await page.getByRole("button", { name: "Task" }).click();
+  await expect(page).toHaveURL(`${base()}/projects/INB/activity`);
+  await page.getByRole("button", { name: "Task", exact: true }).click();
   await page.getByRole("option", { name: new RegExp(discount.key) }).click();
   await expect(page).toHaveURL(`${base()}/projects/INB/activity?about=${discount.key}`);
   await expect(activityRows(page).filter({ hasNotText: discount.key })).toHaveCount(0);
