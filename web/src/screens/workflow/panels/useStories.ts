@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { Project, Task } from "@/api/client";
 import { useMembers, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { useNow } from "@/clock";
@@ -71,6 +71,7 @@ export function useStories(project: Project): Stories {
   const needs = useNeeds(project);
   const sessions = useRunnerSessions();
   const opened = useOpened(project.key);
+  const open = useCallback((o: boolean) => setOpened(project.key, o), [project.key]);
   const entries = recent.entries;
   return useMemo(() => {
     const seenSeq = seen?.seq ?? null;
@@ -94,12 +95,12 @@ export function useStories(project: Project): Stories {
       latest,
       seen,
       quiet: quietNow && !opened,
-      setOpened: (o: boolean) => setOpened(project.key, o),
+      setOpened: open,
       newestSeq: entries[0]?.seq,
       loading: recent.query.isPending && !recent.query.isError,
       error: recent.query.error,
     };
-  }, [entries, ctx, tasks, needs.taskIds, sessions.data, now, seen, opened, project.key, recent.query.isPending, recent.query.isError, recent.query.error]);
+  }, [entries, ctx, tasks, needs.taskIds, sessions.data, now, seen, opened, open, recent.query.isPending, recent.query.isError, recent.query.error]);
 }
 
 /**

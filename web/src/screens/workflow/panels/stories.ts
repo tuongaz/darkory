@@ -126,11 +126,12 @@ export function tailOf(task: Task | undefined, now: number): string | undefined 
  */
 export function storiesOf(input: StoriesInput): Story[] {
   const { entries, tasks, ctx, exclude, sessions, now, from, seenSeq } = input;
-  const byRow = new Map<string, { latest: Activity; sub?: string; own: Activity[] }>();
+  const byRow = new Map<string, { latest: Activity; sub?: string; own: Activity[]; all: Activity[] }>();
   for (const e of entries) {
     if (e.subject_type !== "task" || !flow.has(e.kind)) continue;
     const { rowId, sub } = rowOf(e, tasks);
-    const row = byRow.get(rowId) ?? { latest: e, sub, own: [] };
+    const row = byRow.get(rowId) ?? { latest: e, sub, own: [], all: [] };
+    row.all.push(e);
     if (e.seq >= row.latest.seq) {
       row.latest = e;
       row.sub = sub;
@@ -144,7 +145,15 @@ export function storiesOf(input: StoriesInput): Story[] {
     const fresh = seenSeq === null ? true : row.latest.seq > seenSeq;
     if (Date.parse(row.latest.at) < from && !fresh) continue;
     const task = tasks.get(taskId);
-    const verb = storyVerb(row.latest, ctx, row.sub);
+    // A run of Subtasks filed (or ended) by one Member folds into one change: "ada filed 4 Subtasks".
+    let run = 0;
+    if (row.sub) {
+      for (const e of [...row.all].sort((a, b) => b.seq - a.seq)) {
+        if (e.kind !== row.latest.kind || e.actor_id !== row.latest.actor_id || e.subject_id === taskId) break;
+        run++;
+      }
+    }
+    const verb = storyVerb(row.latest, ctx, run > 1 ? `${run} Subtasks` : row.sub);
     if (!verb) continue;
     out.push({
       taskId,
@@ -183,6 +192,9 @@ export type Segment = { stepId: string; name: string; kind: "wait" | "work" | "b
 
 /** One line under the bar: the clock, the change in words, and the time it closed or has run. */
 export type StoryEntry = { seq: number; at: string; text: string; detail?: string; live?: boolean; count?: number };
+
+// What a line under the bar folds by: the same change by the same Member, and the Subtasks it named.
+type Folding = { kind: string; actor?: string; subs: string[] };
 
 /** The bar's stays: one label per Step visit, over its segments. */
 export type Stay = { stepId: string; name: string; from: number; to: number };
@@ -277,13 +289,15 @@ export function segmentsOf(own: Activity[], task: Task | undefined, ctx: FlowCon
 
 /**
  * The opened row's entries, oldest first, in the trail's words with the time each closed: "builder
- * picked up · waited 22m", "builder advanced along pass · 8m"; runs of the same change by the same
- * Member fold into one line with a count. The Task's state now closes the list: "qa picked up ·
+ * picked up · waited 22m", "builder advanced along pass · 8m"; a run of the same change by the same
+ * Member folds into one line: the Subtasks it filed or ended named together ("ada filed WEB-18,
+ * WEB-19"), any other change counted ("×3"). The Task's state now closes the list: "qa picked up ·
  * waited 7m · 5m so far", or "still waiting · 7m so far".
  */
 export function entriesOf(own: Activity[], task: Task | undefined, ctx: FlowContext, now: number): StoryEntry[] {
   const sorted = [...own].filter((e) => flow.has(e.kind)).sort((a, b) => a.seq - b.seq);
   const out: StoryEntry[] = [];
+  const folds: Folding[] = [];
   let reached: number | undefined;
   let claimed: number | undefined;
   for (const e of sorted) {
@@ -322,13 +336,24 @@ export function entriesOf(own: Activity[], task: Task | undefined, ctx: FlowCont
       }
     }
     const prev = out.at(-1);
-    if (prev && prev.text === words && !detail && !prev.detail) {
-      prev.count = (prev.count ?? 1) + 1;
+    const fold = folds.at(-1);
+    if (prev && fold && fold.kind === e.kind && fold.actor === e.actor_id && !detail && !prev.detail) {
+      if (sub && fold.subs.length > 0) {
+        fold.subs.push(sub);
+        prev.text = storyVerb(e, ctx, fold.subs.join(", ")) ?? prev.text;
+      } else if (!sub && fold.subs.length === 0) {
+        prev.count = (prev.count ?? 1) + 1;
+      } else {
+        out.push({ seq: e.seq, at: e.at, text: words });
+        folds.push({ kind: e.kind, actor: e.actor_id, subs: sub ? [sub] : [] });
+        continue;
+      }
       prev.at = e.at;
       prev.seq = e.seq;
       continue;
     }
     out.push({ seq: e.seq, at: e.at, text: words, detail: detail || undefined });
+    folds.push({ kind: e.kind, actor: e.actor_id, subs: sub ? [sub] : [] });
   }
   if (task?.state === "open" && !task.subtask_counts) {
     const claim = liveClaim(task, now);
