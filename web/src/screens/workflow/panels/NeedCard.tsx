@@ -83,7 +83,7 @@ export function NeedCard({
         <Key>{t.key}</Key> · {item.why}
       </p>
       <div className="col-start-3 row-span-2 row-start-1 flex flex-col items-end gap-[5px]">
-        <span className="text-[11.5px] font-medium whitespace-nowrap text-state-waiting">{consequence(item)}</span>
+        {consequence(item) && <span className="text-[11.5px] font-medium whitespace-nowrap text-state-waiting">{consequence(item)}</span>}
         {item.act !== "answer" && <ActButton item={item} primary={primary} />}
       </div>
       {item.act === "answer" && <AnswerBox item={item} primary={primary} holdsIt={liveClaim(t, now)?.holder_id === meId} onAnswered={onAnswered} />}

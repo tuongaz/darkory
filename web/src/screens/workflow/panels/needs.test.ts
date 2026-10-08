@@ -69,15 +69,15 @@ describe("Needs you", () => {
     ]);
   });
 
-  it("says why each is with me, what acting on it does, and how old it is", () => {
+  it("says why each is with me, what acting on it does beyond itself (nothing for a hold or a paused agent), and how old it is", () => {
     const { open, details, lapses } = heavyDay();
     const items = needsOf(input(open, { details, lapses }));
     expect(items.map((i) => [i.why, consequence(i), i.ageLabel, ageText(now - Date.parse(i.since))])).toEqual([
       ["Question from builder", "unblocks WEB-4", "asked", "36m"],
       ["Subtasks ended · 1 dropped", "lands 2 Subtasks", "ready", "1h 29m"],
-      ["engineer proposal stale", "lets 1 Task flow", "waiting", "2d"],
-      ["Held in Backlog", "lets 1 Task flow", "held", "18h"],
-      ["retro is paused", "lets 1 Task flow", "waiting", "17h"],
+      ["engineer proposal stale", undefined, "waiting", "2d"],
+      ["Held in Backlog", undefined, "held", "18h"],
+      ["retro is paused", undefined, "waiting", "17h"],
     ]);
   });
 

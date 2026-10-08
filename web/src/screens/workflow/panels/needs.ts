@@ -97,12 +97,16 @@ export function ageText(ms: number): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-/** "unblocks MAIN-4", "unblocks 3 Tasks", "lands 2 Subtasks", "lets 1 Task flow": what acting on it does. */
-export function consequence(item: Pick<NeedItem, "unblocks" | "lands" | "act">): string {
+/**
+ * "unblocks MAIN-4", "unblocks 3 Tasks", "lands 2 Subtasks": what acting on it does beyond the Task
+ * itself, or nothing when it does nothing more (a hold to move on, a paused agent to resume): the
+ * why line already says that, and a line on every card would read as if each unblocked something.
+ */
+export function consequence(item: Pick<NeedItem, "unblocks" | "lands" | "act">): string | undefined {
   if (item.unblocks.length === 1) return `unblocks ${item.unblocks[0].key}`;
   if (item.unblocks.length > 1) return `unblocks ${item.unblocks.length} Tasks`;
   if (item.act === "complete") return `lands ${item.lands ?? 0} Subtask${item.lands === 1 ? "" : "s"}`;
-  return "lets 1 Task flow";
+  return undefined;
 }
 
 /** The button's words. */
