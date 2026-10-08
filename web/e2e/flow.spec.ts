@@ -144,7 +144,12 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
     await dialog.getByRole("switch", { name: "Break down" }).click();
     await dialog.getByRole("switch", { name: "Auto-complete" }).click();
     await dialog.getByRole("switch", { name: "Acceptance" }).click();
-    await expect(dialog).toContainText("Also files its Breakdown at Plan");
+    // Filed as a Parent it is at no Step; its ⓘ says where the Breakdown waits.
+    await expect(dialog.getByRole("combobox", { name: "Step" })).toContainText("None: a Parent");
+    await dialog.getByRole("button", { name: "About Break down" }).click();
+    await expect(page.getByRole("dialog").filter({ hasText: "Files its Breakdown at Plan" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeVisible();
     await shot(page, "1-01-file-with-breakdown");
     await dialog.getByRole("button", { name: "File Task" }).click();
     await expect(dialog).toHaveCount(0);

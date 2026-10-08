@@ -446,7 +446,7 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
     await confirm.getByRole("button", { name: "Stop using the Runner" }).click();
     await expect(confirm).toHaveCount(0);
     const card = page.getByRole("group", { name: "Agent settings of planner-1" });
-    await expect(card).toContainText("the Runner does not start it");
+    await expect(card).toContainText("Not in use");
     await expect(card.getByRole("button", { name: "Use the Runner" })).toBeVisible();
     expect((await ada<{ member: { agent?: unknown } }>("GET", "/v1/members/planner-1")).member.agent).toBeUndefined();
     await shot(page, "32-agent-own-sessions");
@@ -471,4 +471,66 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
 
   expect(errors).toEqual([]);
   await ctx.close();
+});
+
+test("an ⓘ explains on hover, focus and tap, and moves nothing", async ({ browser }) => {
+  const { ctx, page, errors } = await open(browser);
+  /** Where every box of `root` sits: what an ⓘ opening must leave alone. */
+  const boxes = (root: string) =>
+    page.locator(root).evaluate((el) => [el, ...el.querySelectorAll("*")].map((e) => JSON.stringify(e.getBoundingClientRect())));
+
+  await test.step("Settings › General: hovering Colour's ⓘ opens its explanation over the page", async () => {
+    await page.goto(`${base}/settings/projects/MAIN/general`);
+    const form = page.getByRole("group", { name: "General settings of Main" });
+    await expect(form).toBeVisible();
+    await expect(form).not.toContainText("The colour of its mark");
+    const before = await boxes('[role="group"][aria-label="General settings of Main"]');
+    await form.getByRole("button", { name: "About Colour" }).hover();
+    const tip = page.getByRole("dialog").filter({ hasText: "The colour of its mark beside its name." });
+    await expect(tip).toBeVisible();
+    expect(await boxes('[role="group"][aria-label="General settings of Main"]')).toEqual(before);
+    await shot(page, "40-infotip-hover");
+    // The pointer leaving closes it.
+    await page.mouse.move(5, 5);
+    await expect(tip).toHaveCount(0);
+  });
+
+  await test.step("File a Task: the keyboard opens Auto-complete's ⓘ, a click pins it, Esc closes it, and nothing in the dialog moves", async () => {
+    await page.goto(`${base}/projects/MAIN/tasks`);
+    await page.getByRole("button", { name: "File Task" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "File a Task" });
+    await expect(dialog.getByRole("group", { name: "Subtasks" })).toBeVisible();
+    // Measured once the dialog has finished opening (it zooms in).
+    await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+    const before = await boxes('[role="dialog"][aria-labelledby]');
+    const about = dialog.getByRole("button", { name: "About Auto-complete" });
+    await dialog.getByRole("switch", { name: "Auto-complete" }).focus();
+    await page.keyboard.press("Tab");
+    await expect(about).toBeFocused();
+    const tip = page.getByRole("dialog").filter({ hasText: "Completes itself when its last Subtask ends Done." });
+    await expect(tip).toBeVisible();
+    expect(await boxes('[role="dialog"][aria-labelledby]')).toEqual(before);
+    await about.click();
+    await page.mouse.move(5, 5);
+    await expect(tip).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(tip).toHaveCount(0);
+    await expect(dialog).toBeVisible();
+  });
+
+  await ctx.close();
+
+  await test.step("on a touch screen a tap opens it and a tap elsewhere closes it", async () => {
+    const touch = await browser.newContext({ storageState: adaState, viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const phone = await touch.newPage();
+    await phone.goto(`${base}/settings/projects/MAIN/general`);
+    const about = phone.getByRole("button", { name: "About Key" });
+    await about.tap();
+    const tip = phone.getByRole("dialog").filter({ hasText: "Starts each Task key" });
+    await expect(tip).toBeVisible();
+    await phone.locator("h1").tap();
+    await expect(tip).toHaveCount(0);
+    await touch.close();
+  });
+  expect(errors).toEqual([]);
 });

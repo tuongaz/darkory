@@ -30,7 +30,7 @@ describe("File a Task", () => {
   it("files in the current Project at its first work Step, showing that Step's Skill and takers", async () => {
     const api = mockApi(routes(answer()));
     const dialog = await openDialog();
-    expect(dialog).toHaveTextContent("In WEB.");
+    expect(within(dialog).getByRole("combobox", { name: "Project" })).toHaveTextContent("Web");
     const stepField = within(dialog).getByRole("combobox", { name: "Step" });
     expect(stepField).toHaveTextContent("Build");
     expect(stepField).toHaveTextContent("engineer");
@@ -41,7 +41,7 @@ describe("File a Task", () => {
     expect(within(dialog).getByRole("combobox", { name: "Owner" })).toHaveTextContent("ada");
 
     await userEvent.type(within(dialog).getByLabelText("Title"), "Gift wrapping");
-    await pick(dialog, "Labels optional", /client-x/);
+    await pick(dialog, "Labels", /client-x/);
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
     expect(filed(api)!.body).toEqual({
@@ -73,7 +73,7 @@ describe("File a Task", () => {
     await userEvent.keyboard("c");
     loaded();
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
-    await waitFor(() => expect(dialog).toHaveTextContent("In WEB."));
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Project" })).toHaveTextContent("Web"));
     await userEvent.type(within(dialog).getByLabelText("Title"), "Gift wrapping");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
@@ -95,8 +95,13 @@ describe("File a Task", () => {
     const dialog = await openDialog();
     await userEvent.type(within(dialog).getByLabelText("Title"), "Checkout v2");
     await userEvent.click(within(dialog).getByRole("switch", { name: "Break down" }));
-    expect(within(dialog).getByRole("combobox", { name: "Step" })).toBeDisabled();
-    expect(within(dialog).getByText("Also files its Breakdown at Plan")).toBeInTheDocument();
+    const stepField = within(dialog).getByRole("combobox", { name: "Step" });
+    expect(stepField).toBeDisabled();
+    expect(stepField).toHaveTextContent("None: a Parent");
+    // A Parent is never blocked: Blocked by goes.
+    expect(within(dialog).queryByRole("combobox", { name: "Blocked by" })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "About Step" }));
+    expect(await screen.findByText("Filed as a Parent, it is at no Step; its Breakdown waits at Plan.")).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
     expect(filed(api)!.body).toMatchObject({ breakdown: true });
@@ -106,8 +111,10 @@ describe("File a Task", () => {
   it("files a Subtask under a Parent, which names no Owner or Auto-complete", async () => {
     const api = mockApi(routes(answer()));
     const dialog = await openDialog();
-    await pick(dialog, "Parent optional", /Checkout/);
-    expect(dialog).toHaveTextContent("In WEB, under WEB-3.");
+    await pick(dialog, "Parent", /Checkout/);
+    expect(within(dialog).getByRole("combobox", { name: "Parent" })).toHaveTextContent("WEB-3");
+    // A Subtask has no Subtasks: their group goes.
+    expect(within(dialog).queryByRole("group", { name: "Subtasks" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("combobox", { name: "Owner" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("switch", { name: "Auto-complete" })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("switch", { name: "Break down" })).not.toBeInTheDocument();
@@ -125,7 +132,7 @@ describe("File a Task", () => {
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
     expect(await within(dialog).findByText("This ends your Claim on WEB-2")).toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText("Title"), "Cart totals");
-    await userEvent.type(within(dialog).getByLabelText("Note optional"), "Two parts");
+    await userEvent.type(within(dialog).getByLabelText("Note"), "Two parts");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
     expect(filed(api)!.body).toMatchObject({ parent: "WEB-2", note: "Two parts" });
@@ -150,8 +157,13 @@ describe("File a Task", () => {
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
     // WEB-4 is a Subtask of WEB-3: the question joins WEB-3.
     expect(within(dialog).getByText("Joins WEB-3, beside WEB-4")).toBeInTheDocument();
-    expect(within(dialog).getByRole("combobox", { name: "Step" })).toBeDisabled();
-    expect(within(dialog).getByText("Waits with bob, blocking WEB-4")).toBeInTheDocument();
+    // The Question group opens itself for what the entry point named.
+    expect(within(dialog).getByRole("switch", { name: "Question" })).toBeChecked();
+    expect(within(dialog).getByRole("combobox", { name: "Aim at" })).toHaveTextContent("bob");
+    expect(within(dialog).getByRole("combobox", { name: "Blocks" })).toHaveTextContent("WEB-4");
+    const stepField = within(dialog).getByRole("combobox", { name: "Step" });
+    expect(stepField).toBeDisabled();
+    expect(stepField).toHaveTextContent("With bob");
     await userEvent.type(within(dialog).getByLabelText("Title"), "Which card brands?");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
@@ -164,8 +176,10 @@ describe("File a Task", () => {
     mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": wf }));
     const dialog = await openDialog();
     await within(dialog).findByRole("switch", { name: "Acceptance" });
-    expect(dialog).toHaveTextContent("Acceptance runs before it completes");
-    expect(dialog).not.toHaveTextContent("Acceptance at Acceptance");
+    // Explained from its ⓘ, not under it.
+    expect(dialog).not.toHaveTextContent("runs before it completes");
+    await userEvent.click(within(dialog).getByRole("button", { name: "About Acceptance" }));
+    expect(await screen.findByText("Acceptance runs before it completes.")).toBeInTheDocument();
   });
 
   it("offers Acceptance when the Workflow has an acceptance Step, starting at the Project's default", async () => {
@@ -181,7 +195,9 @@ describe("File a Task", () => {
     const dialog = await openDialog();
     expect(await within(dialog).findByRole("switch", { name: "Acceptance" })).toBeChecked();
     expect(within(dialog).getByRole("switch", { name: "Auto-complete" })).toBeChecked();
-    expect(dialog).toHaveTextContent("Runs at the Accept Step");
+    await userEvent.click(within(dialog).getByRole("button", { name: "About Acceptance" }));
+    expect(await screen.findByText("Runs at the Accept Step before it completes.")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(within(dialog).getByRole("switch", { name: "Acceptance" }));
     await userEvent.type(within(dialog).getByLabelText("Title"), "Refunds");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
@@ -205,5 +221,89 @@ describe("File a Task", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
     expect(filed(api)!.body).toMatchObject({ workspaces: [] });
+  });
+
+  it("groups its fields by what the filer decides, with no line repeating a field", async () => {
+    mockApi(routes(answer()));
+    const dialog = await openDialog();
+    const group = (name: string) => within(dialog).getByRole("group", { name });
+    const fields = (g: HTMLElement) => within(g).queryAllByRole("combobox").map((c) => c.id);
+    // The Task itself comes first, under no heading; the Title has the focus.
+    expect(within(dialog).getByLabelText("Title")).toHaveFocus();
+    expect(fields(group("Belongs to"))).toEqual(["file-task-project", "file-task-parent", "file-task-owner"]);
+    expect(fields(group("Start"))).toEqual(["file-task-step", "file-task-blocked-by"]);
+    expect(within(group("Subtasks")).getAllByRole("switch").map((s) => s.id)).toEqual(["file-task-breakdown", "file-task-auto-complete"]);
+    // The question is asked for: off, its fields are not there.
+    const question = within(group("Question")).getByRole("switch", { name: "Question" });
+    expect(question).not.toBeChecked();
+    expect(within(dialog).queryByRole("combobox", { name: "Aim at" })).not.toBeInTheDocument();
+    // Nothing repeats what a field shows: no "In WEB." under the title, no "Starts at Build" by the buttons, no "optional".
+    expect(dialog).not.toHaveTextContent(/In WEB|Starts at|optional/);
+    // Focus follows the groups: Title, Description, Labels, then Project.
+    await userEvent.tab();
+    expect(within(dialog).getByLabelText("Description")).toHaveFocus();
+    await userEvent.tab();
+    expect(within(dialog).getByRole("combobox", { name: "Labels" })).toHaveFocus();
+    await userEvent.tab();
+    expect(within(dialog).getByRole("combobox", { name: "Project" })).toHaveFocus();
+  });
+
+  it("asks a question once switched on, and switched off asks none", async () => {
+    const api = mockApi(routes(answer()));
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Question" }));
+    await pick(dialog, "Aim at", /bob/);
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent("With bob");
+    // A question waits for its answer: what it would do as a Parent is not asked.
+    expect(within(dialog).queryByRole("group", { name: "Subtasks" })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Question" }));
+    expect(within(dialog).getByRole("group", { name: "Subtasks" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("combobox", { name: "Aim at" })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent("Build");
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Gift wrapping");
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)!.body).not.toHaveProperty("aim");
+    expect(filed(api)!.body).toMatchObject({ step: step.build });
+  });
+
+  it("files a Task blocked by others from its first moment", async () => {
+    const api = mockApi(routes(answer()));
+    const dialog = await openDialog();
+    await pick(dialog, "Blocked by", /Draft the launch copy/);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Launch post");
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)!.body).toMatchObject({ title: "Launch post", step: step.build, blocked_by: ["WEB-1"] });
+  });
+
+  it("drops Blocked by when Break down makes it a Parent", async () => {
+    const api = mockApi(routes(answer()));
+    const dialog = await openDialog();
+    await pick(dialog, "Blocked by", /Draft the launch copy/);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(within(dialog).getByRole("switch", { name: "Break down" }));
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Launch");
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)!.body).toMatchObject({ breakdown: true });
+    expect(filed(api)!.body).not.toHaveProperty("blocked_by");
+  });
+
+  it("explains a Subtask's Workspaces from its ⓘ", async () => {
+    const shop: Workspace = { id: "w-shop", name: "shop", kind: "git", path: "/src/shop", mode: "plain", default_branch: "main", created_at: web.created_at };
+    const api = mockApi(routes({ ...answer(), "GET /v1/workspaces": { items: [shop] } }));
+    const dialog = await openDialog();
+    expect(within(dialog).queryByRole("button", { name: "About Workspaces" })).not.toBeInTheDocument();
+    await pick(dialog, "Parent", /Checkout/);
+    expect(within(within(dialog).getByRole("group", { name: "Start" })).getByRole("combobox", { name: "Workspaces" })).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole("button", { name: "About Workspaces" }));
+    expect(await screen.findByText("Its branch starts from its Parent's.")).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Coupon field");
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)!.body).toMatchObject({ parent: "WEB-3", workspaces: [] });
   });
 });

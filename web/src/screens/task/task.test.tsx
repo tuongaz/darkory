@@ -261,7 +261,8 @@ describe("a Parent's page", () => {
     const section = await screen.findByRole("region", { name: "Subtasks" });
     await userEvent.click(within(section).getByRole("button", { name: "Add Subtask" }));
     const dialog = await screen.findByRole("dialog", { name: "File a Task" });
-    await waitFor(() => expect(dialog).toHaveTextContent("In WEB, under WEB-3."));
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "Parent" })).toHaveTextContent("WEB-3"));
+    expect(within(dialog).getByRole("combobox", { name: "Project" })).toHaveTextContent("Web");
   });
 });
 
