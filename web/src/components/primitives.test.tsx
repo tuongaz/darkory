@@ -86,6 +86,40 @@ describe("MemberAvatar", () => {
     expect(agent).not.toHaveAttribute("data-working");
   });
 
+  it("rings an agent thick in the AI gradient at every size, inside the same box as a human's", () => {
+    render(
+      <>
+        {(["sm", "md", "lg"] as const).map((size) => (
+          <MemberAvatar key={`h-${size}`} member={{ name: `ada-${size}`, kind: "human" }} size={size} />
+        ))}
+        {(["sm", "md", "lg"] as const).map((size) => (
+          <MemberAvatar key={`a-${size}`} member={{ name: `bot-${size}`, kind: "agent" }} size={size} />
+        ))}
+      </>,
+    );
+    // The same box for both kinds at a size: the ring is drawn inside it.
+    for (const [size, box] of [["sm", "size-5"], ["md", "size-7"], ["lg", "size-10"]]) {
+      const human = screen.getByRole("img", { name: `ada-${size}` });
+      const agent = screen.getByRole("img", { name: `bot-${size} (agent)` });
+      expect(human).toHaveClass(box);
+      expect(agent).toHaveClass(box);
+      expect(agent.dataset.size).toBe(size);
+    }
+    // The rules (jsdom draws nothing): a human's 1px line; an agent's ring as wide as its size's
+    // --mark-ring, at least 2px and growing with the mark; a live Claim changes how it is drawn, never its width.
+    const css = readFileSync("src/globals.css", "utf8");
+    const rule = (selector: string) => css.match(new RegExp(`\\n  ${selector.replace(/[[\]".=]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+    expect(rule(".avatar-tint")).toMatch(/border: 1px solid transparent;/);
+    expect(rule('.avatar-tint[data-kind="agent"]')).toMatch(/border-width: var\(--mark-ring\);/);
+    expect(rule('.avatar-tint[data-kind="agent"]')).toMatch(/conic-gradient\(from var\(--spin\), var\(--agent-stops\)\) border-box/);
+    const ring = (selector: string) => parseFloat(rule(selector).match(/--mark-ring: ([\d.]+)px;/)?.[1] ?? "0");
+    const widths = [ring(".avatar-tint"), ring('.avatar-tint[data-size="md"]'), ring('.avatar-tint[data-size="lg"]')];
+    expect(widths[0]).toBeGreaterThanOrEqual(2);
+    expect(widths).toEqual([...widths].sort((a, b) => a - b));
+    expect(new Set(widths).size).toBe(3);
+    for (const state of ["running", "waiting", "stalled", "ending"]) expect(rule(`.avatar-tint[data-working="${state}"]`)).not.toMatch(/border-width/);
+  });
+
   it("says that a standalone mark's Member works, and how", () => {
     render(
       <>

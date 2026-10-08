@@ -370,14 +370,18 @@
   --tint-border: 0.42 0.07;
 }
 @layer components {
-  /* A Member's mark: a tinted disc in a round ring. The ring is the border box painted under the
-     disc, so it can be a gradient: a human's is a plain line in its tint, an agent's the AI
-     gradient. A standalone mark whose Member works (data-working) rings thicker: an agent's turns
-     while its session runs and stops amber (waiting), red (stalled) or grey (ending); a human's
-     live Claim is a still ring in the human ink. */
+  /* A Member's mark (MemberAvatar): a tinted disc, or its Avatar, in a round ring. The ring is
+     the border box painted under the disc, so it can be a gradient: a human's is a plain 1px line
+     in its tint; an agent's is the AI gradient, thick enough to tell at a glance at every size
+     (`--mark-ring` by `data-size`). The box is the size's own and the ring takes its width from
+     inside it, so nothing moves. A standalone mark whose Member works (data-working) keeps the
+     ring's width and changes how it is drawn: an agent's turns while its Shift runs and stops
+     amber (waiting), red (stalled) or grey (ending); a human's live Claim is a still 2px ring in
+     the human ink. */
   .avatar-tint {
     --mark-disc: oklch(var(--tint-bg) var(--tint-h));
     --mark-line: oklch(var(--tint-border) var(--tint-h));
+    --mark-ring: 2px;
     border: 1px solid transparent;
     border-radius: 9999px;
     background:
@@ -385,14 +389,22 @@
       linear-gradient(var(--mark-line) 0 0) border-box;
     color: oklch(var(--tint-fg) var(--tint-h));
   }
-  .avatar-tint[data-kind="agent"],
-  .avatar-tint[data-working="running"] {
-    border-width: 1.5px;
+  .avatar-tint[data-size="md"] {
+    --mark-ring: 2.5px;
+  }
+  .avatar-tint[data-size="lg"] {
+    --mark-ring: 3px;
+  }
+  .avatar-tint[data-size="xl"] {
+    --mark-ring: 5px;
+  }
+  .avatar-tint[data-kind="agent"] {
+    border-width: var(--mark-ring);
     background:
       linear-gradient(var(--mark-disc) 0 0) padding-box,
       conic-gradient(from var(--spin), var(--agent-stops)) border-box;
   }
-  .avatar-tint[data-working] {
+  .avatar-tint[data-working="held"] {
     border-width: 2px;
   }
   .avatar-tint[data-working="running"] {

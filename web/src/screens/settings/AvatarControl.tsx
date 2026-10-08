@@ -115,18 +115,17 @@ function PreviewDialog({ member, picked, onClose }: { member: Member; picked: Pi
       open
       onOpenChange={(o) => !o && onClose()}
       title={`New Avatar for ${member.name}`}
-      description="The middle square of the image, at most 256 pixels a side."
       submitLabel="Save Avatar"
       onSubmit={() => save.mutate()}
       pending={save.isPending}
       error={save.error}
     >
       <div className="flex items-center gap-6 py-3">
-        <Preview member={member} url={picked.url} className="size-24" />
+        <Preview member={member} url={picked.url} size="xl" className="size-24" />
         <div className="flex items-center gap-3">
-          <Preview member={member} url={picked.url} className="size-10" />
-          <Preview member={member} url={picked.url} className="size-7" />
-          <Preview member={member} url={picked.url} className="size-5" />
+          <Preview member={member} url={picked.url} size="lg" className="size-10" />
+          <Preview member={member} url={picked.url} size="md" className="size-7" />
+          <Preview member={member} url={picked.url} size="sm" className="size-5" />
         </div>
         <span className="min-w-0 truncate text-xs text-muted-foreground">{picked.file.name}</span>
       </div>
@@ -135,10 +134,11 @@ function PreviewDialog({ member, picked, onClose }: { member: Member; picked: Pi
 }
 
 /** The picked image as the mark draws an Avatar: round, in the Member's ring. */
-function Preview({ member, url, className }: { member: Member; url: string; className: string }) {
+function Preview({ member, url, size, className }: { member: Member; url: string; size: "sm" | "md" | "lg" | "xl"; className: string }) {
   return (
     <span
       data-kind={member.kind}
+      data-size={size}
       className={cn("avatar-tint inline-grid flex-none place-items-center rounded-full", `tint-${tintOf(member.name)}`, className)}
     >
       <img src={url} alt="" className="size-full rounded-full object-cover" />
