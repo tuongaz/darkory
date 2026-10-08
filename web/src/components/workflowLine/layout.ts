@@ -463,7 +463,9 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       rowYs.push(y);
       const k = row.stations.length;
       // Each row ends left of where the row above begins, so their names and chips stay clear.
-      let end = rightEdge;
+      // Its last Step's name line (and tokens) must end short of where the row turns into Done.
+      const turn = xd - 60 * r;
+      let end = Math.min(rightEdge, turn - ((opts.labelWidth?.(row.stations[k - 1]) ?? 0) + 34));
       if (end - (k - 1) * rowSp < margin + 60) end = Math.max(margin + 60 + (k - 1) * rowSp, xd - (opts.branchGap ?? 240));
       const xsRow: number[] = new Array(k);
       xsRow[k - 1] = Math.round(end);
@@ -504,7 +506,9 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       row.stations.forEach((id, i) => {
         const mine = t.chips.filter((c) => c.stepId === id);
         mine.forEach((c, m) => {
-          if (i === 0) chips.push({ stepId: id, x: xsRow[i] - 14, y: y - 9 + m * 22, text: c.text, align: "right", connectorId: c.connector.id });
+          // Left of the row's first Step while it fits in the band; else right below it.
+          const fits = xsRow[i] - 14 - (c.text.length * 6.2 + 18) >= 8;
+          if (i === 0 && fits) chips.push({ stepId: id, x: xsRow[i] - 14, y: y - 9 + m * 22, text: c.text, align: "right", connectorId: c.connector.id });
           else chips.push({ stepId: id, x: xsRow[i] + 8, y: y + 8 + m * 22, text: c.text, align: "left", connectorId: c.connector.id });
         });
       });

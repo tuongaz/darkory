@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { Ghost, Trace } from "./data";
 import { arrowhead } from "./draw";
 import { brackets, type LineTopology } from "./layout";
-import { DONE_STATION, isHoldStep, tokenTime, type LineFacts, type LineTask } from "./model";
+import { DONE_STATION, isHoldStep, spanTime, type LineFacts, type LineTask } from "./model";
 import { GhostToken, HiddenCount, Token } from "./Token";
 
 const RAIL = 32;
@@ -113,7 +113,7 @@ export function VerticalLine({
     const past = stays.get(id);
     const chips = trace ? [] : chipsAt(id);
     const current = trace?.current === id;
-    const right = terminal ? (doneToday !== undefined ? `${doneToday} today` : "") : !s ? "" : isHoldStep(s) ? "hold" : s.medianMs !== undefined ? `median ${tokenTime(s.medianMs)}` : "";
+    const right = terminal ? (doneToday !== undefined ? `${doneToday} today` : "") : !s ? "" : isHoldStep(s) ? "hold" : s.medianMs !== undefined ? `median ${spanTime(s.medianMs)}` : "";
     return (
       <li key={id} className="relative pr-0.5 pb-3 pl-[42px]">
         <span
@@ -131,14 +131,14 @@ export function VerticalLine({
           {!trace && right && <span className="ml-auto flex-none text-[11px] text-muted-foreground">{right}</span>}
           {past && (
             <span className="ml-auto flex flex-none flex-col items-end gap-0.5">
-              <Token task={{ ...(tasks[0] ?? { id: "p", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: tokenTime(past.worked) }} noKey />
-              {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {tokenTime(past.waited)}</span>}
+              <Token task={{ ...(tasks[0] ?? { id: "p", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanTime(past.worked) }} noKey />
+              {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanTime(past.waited)}</span>}
             </span>
           )}
           {current && list[0] && (
             <span className="ml-auto flex flex-none flex-col items-end gap-0.5">
               {token(list[0])}
-              {trace?.stays.at(-1) && trace.stays.at(-1)!.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {tokenTime(trace.stays.at(-1)!.waited)}</span>}
+              {trace?.stays.at(-1) && trace.stays.at(-1)!.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanTime(trace.stays.at(-1)!.waited)}</span>}
             </span>
           )}
         </div>

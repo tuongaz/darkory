@@ -65,7 +65,7 @@ export function LiveWorkflow({
 
   if (view === "blocking") {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-4 sm:px-6">
         <BlockingView
           project={project}
           scope={data.scope.kind === "parent" ? data.scope.id : undefined}

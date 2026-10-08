@@ -6,7 +6,7 @@ import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
 import { handRoute, horizontal as layOut, type Density, type DrawnArc, type Horizontal as Laid, type LineTopology } from "./layout";
-import { DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { DONE_STATION, isHoldStep, PICKUP_MS, spanTime, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { Bead, GhostToken, HiddenCount, Token } from "./Token";
 
 /** How many tokens a Step's column shows before "+N more". */
@@ -215,7 +215,7 @@ export function HorizontalLine(props: HorizontalProps) {
                 <MemberAvatar key={m.id} member={m} working={m.working} />
               ))}
               {takers.length > 3 && <span>+{takers.length - 3}</span>}
-              {s.medianMs !== undefined && <span>median {tokenTime(s.medianMs)}</span>}
+              {s.medianMs !== undefined && <span>median {spanTime(s.medianMs)}</span>}
             </>
           )}
         </div>
@@ -301,15 +301,15 @@ export function HorizontalLine(props: HorizontalProps) {
       <div key={`c-${id}`} className="absolute flex -translate-x-1/2 flex-col items-center gap-1.5" style={{ left: x, top: h.columnY }}>
         {past && trace && (
           <div className="flex flex-col items-center gap-0.5">
-            <Token task={{ ...(tasks[0] ?? { id: "past", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: tokenTime(past.worked) }} noKey />
-            {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {tokenTime(past.waited)}</span>}
+            <Token task={{ ...(tasks[0] ?? { id: "past", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanTime(past.worked) }} noKey />
+            {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanTime(past.waited)}</span>}
           </div>
         )}
         {shown.map((task) => (
           <Fragment key={task.id}>
             {token(task)}
             {trace?.current === id && trace.stays.at(-1)?.waited !== undefined && trace.stays.at(-1)!.waited > 60_000 && (
-              <span className="text-[11px] text-muted-foreground">waited {tokenTime(trace.stays.at(-1)!.waited)}</span>
+              <span className="text-[11px] text-muted-foreground">waited {spanTime(trace.stays.at(-1)!.waited)}</span>
             )}
           </Fragment>
         ))}

@@ -1,7 +1,7 @@
 import { ArrowRightIcon } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import type { LineData, LineTask } from "@/components/workflowLine";
-import { blockedBy, tokenState, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
+import { blockedBy, tokenState, spanTime, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
 import { cn } from "@/lib/utils";
 
 /**
@@ -61,7 +61,7 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {list.length} {list.length === 1 ? "Task" : "Tasks"}
             {hidden > 0 && ` · +${hidden} outside the scope`}
-            {s.medianMs !== undefined && ` · median ${tokenTime(s.medianMs)}`}
+            {s.medianMs !== undefined && ` · median ${spanTime(s.medianMs)}`}
           </span>
         </div>
         {list.length > 0 && (

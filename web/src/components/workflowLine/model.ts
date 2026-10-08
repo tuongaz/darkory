@@ -99,6 +99,12 @@ export function tokenTime(ms: number): string {
   return `${Math.floor(h / 24)}d`;
 }
 
+/** "40s", "12m", "1h 2m": a span that has ended (a median, the time worked at a past Step), never "now". */
+export function spanTime(ms: number): string {
+  const s = Math.max(1, Math.round(ms / 1000));
+  return s < 60 ? `${s}s` : tokenTime(ms);
+}
+
 /** How long a pickup reads "now" on its token, with its tag beside it. */
 export const PICKUP_MS = 60_000;
 
