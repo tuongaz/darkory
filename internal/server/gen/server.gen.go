@@ -691,17 +691,17 @@ type Activity struct {
 	// Kind What happened. The part before the dot is the `subject_type`. New kinds may be added
 	// within `/v1`; a client should skip a kind it does not know.
 	//
-	// The entries that trace a Task's path through its Workflow carry Step ids in their
+	// The entries that trace a Task's path through its Project's Workflows carry Step ids in their
 	// payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
-	// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
-	// Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
-	// down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
-	// and `from` when it was at a Step; `task.became_parent`, `task.completed` and
-	// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
-	// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
-	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
-	// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
-	// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
+	// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no Parent,
+	// `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break down on;
+	// `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`, and `from` when
+	// it was at a Step; `task.became_parent`, `task.completed` and `task.dropped` `from` when it
+	// was at a Step. Those that leave a Step also carry `since`, when the Task reached it, in
+	// milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
+	// Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
+	// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
+	// `holder_id` and `nudge`, 1 or 2.
 	//
 	// `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 	// (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -716,25 +716,25 @@ type Activity struct {
 	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID shortid.ID `json:"subject_id"`
 
-	// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
-	// whole; its `subject_id` is the Project's id.
+	// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflows as a
+	// whole, every Workflow, Step and Connector; its `subject_id` is the Project's id.
 	SubjectType SubjectType `json:"subject_type"`
 }
 
 // ActivityKind What happened. The part before the dot is the `subject_type`. New kinds may be added
 // within `/v1`; a client should skip a kind it does not know.
 //
-// The entries that trace a Task's path through its Workflow carry Step ids in their
+// The entries that trace a Task's path through its Project's Workflows carry Step ids in their
 // payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
-// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
-// Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
-// down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
-// and `from` when it was at a Step; `task.became_parent`, `task.completed` and
-// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
-// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
-// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
-// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
-// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
+// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no Parent,
+// `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break down on;
+// `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`, and `from` when
+// it was at a Step; `task.became_parent`, `task.completed` and `task.dropped` `from` when it
+// was at a Step. Those that leave a Step also carry `since`, when the Task reached it, in
+// milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
+// Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
+// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
+// `holder_id` and `nudge`, 1 or 2.
 //
 // `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 // (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -863,9 +863,9 @@ type CompleteTaskBody struct {
 	Note *string `json:"note,omitempty"`
 }
 
-// Connector A named way out of a Step into another Step, or into Done: the outcome its holder names
-// when they advance the Task. Advancing into Done completes the Task; dropping needs no
-// Connector.
+// Connector A named way out of a Step into another Step, of its Workflow or of another Workflow of the
+// same Project, or into Done: the outcome its holder names when they advance the Task.
+// Advancing into Done completes the Task; dropping needs no Connector.
 type Connector struct {
 	FromStepID shortid.ID `json:"from_step_id"`
 	ID         shortid.ID `json:"id"`
@@ -926,7 +926,7 @@ type CreateProjectBody struct {
 	// the hues the fewest Projects have), unless its creator names one.
 	Color *ProjectColor `json:"color,omitempty"`
 
-	// CopyFrom With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied.
+	// CopyFrom With `workflow` `copy` only, which needs it. Project id or key whose Workflows are copied.
 	CopyFrom *string `json:"copy_from,omitempty"`
 
 	// DefaultWorkspace Workspace id or name.
@@ -937,10 +937,11 @@ type CreateProjectBody struct {
 	Members *[]string `json:"members,omitempty"`
 	Name    string    `json:"name"`
 
-	// Workflow The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
-	// · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
-	// `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
-	// `default` when not given.
+	// Workflow The Workflows a new Project starts with. `default`: one Workflow named Work, Backlog · Plan
+	// · Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
+	// `retro` and `skill-review`, with their Connectors. `empty`: one Workflow named Work,
+	// Backlog, a hold, → Done. `copy`: every Workflow of another Project, with its Steps and
+	// Connectors. `default` when not given.
 	Workflow *NewWorkflow `json:"workflow,omitempty"`
 }
 
@@ -1014,7 +1015,7 @@ type Error struct {
 	//
 	// `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
 	// was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
-	// several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+	// several into Done. `no_step`: the Project has no Step the request needs (one carrying
 	// `breakdown` for Break down, or any Step to file at), or no Connector leads from a
 	// Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
 	// Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
@@ -1044,7 +1045,7 @@ type Error struct {
 //
 // `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
 // was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
-// several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+// several into Done. `no_step`: the Project has no Step the request needs (one carrying
 // `breakdown` for Break down, or any Step to file at), or no Connector leads from a
 // Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
 // Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
@@ -1132,10 +1133,10 @@ type FileTaskBody struct {
 	// Project Project id or key. May be left out when `parent` or `blocks` is given.
 	Project *string `json:"project,omitempty"`
 
-	// Step Step id or name in the Project's Workflow to start at. Defaults to the first Step
-	// carrying a Skill other than `breakdown`, `acceptance`, `retro` and `skill-review`
-	// (Build in the default Workflow); failing that, the first Step carrying any Skill;
-	// failing that, the first Step.
+	// Step Step id or name in any Workflow of the Project to start at. Defaults to the first Step,
+	// by its Workflows' order then their Steps', carrying a Skill other than `breakdown`,
+	// `acceptance`, `retro` and `skill-review` (Build in a `default` Project); failing that,
+	// the first Step carrying any Skill; failing that, the first Step.
 	Step  *string `json:"step,omitempty"`
 	Title string  `json:"title"`
 
@@ -1297,14 +1298,15 @@ type MoveTaskBody struct {
 	// Note Added to the Task's Notes in the same write.
 	Note *string `json:"note,omitempty"`
 
-	// Step Step id or name in the Task's Project's Workflow.
+	// Step Step id or name in any Workflow of the Task's Project.
 	Step string `json:"step"`
 }
 
-// NewWorkflow The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
-// · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
-// `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
-// `default` when not given.
+// NewWorkflow The Workflows a new Project starts with. `default`: one Workflow named Work, Backlog · Plan
+// · Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
+// `retro` and `skill-review`, with their Connectors. `empty`: one Workflow named Work,
+// Backlog, a hold, → Done. `copy`: every Workflow of another Project, with its Steps and
+// Connectors. `default` when not given.
 type NewWorkflow string
 
 // NextTaskBody defines model for NextTaskBody.
@@ -1381,7 +1383,7 @@ type PassOwnershipBody struct {
 	Owner string `json:"owner"`
 }
 
-// Project A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+// Project A body of work with the Members who do it: its own key, Workflows, Labels, Rank and
 // default Workspace. Every Task belongs to exactly one Project.
 type Project struct {
 	// Acceptance The `acceptance` a Task filed in the Project takes when its filer does not say.
@@ -1420,7 +1422,7 @@ type ProjectDetail struct {
 	// Members The Project's Members, by name.
 	Members []Member `json:"members"`
 
-	// Project A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+	// Project A body of work with the Members who do it: its own key, Workflows, Labels, Rank and
 	// default Workspace. Every Task belongs to exactly one Project.
 	Project Project `json:"project"`
 }
@@ -1609,23 +1611,25 @@ type SetWorkflowBody struct {
 	// Joins Members, by id or name, to add to the Project; one in it already changes nothing.
 	Joins *[]string `json:"joins,omitempty"`
 
-	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to any Step of the
-	// body, by its id or its name in `steps`.
+	// Moves Where the Tasks at a deleted Step go, the open ones and the ended ones that ended at
+	// it (`last_step_id`): the deleted Step's id to any Step of the body, by its id or its
+	// name in `steps`.
 	Moves *map[string]string `json:"moves,omitempty"`
 
 	// Revokes Skills to take away from Members; one a Member lacks changes nothing. Claims held under it are not ended.
 	Revokes *[]SkillGrantInput `json:"revokes,omitempty"`
 
-	// Skills Generic Skills to create before the Workflow is put in place, each published as version 1.
+	// Skills Generic Skills to create before the Workflows are put in place, each published as version 1.
 	Skills *[]WorkflowSkillInput `json:"skills,omitempty"`
 
 	// Steps Every Step of the Project, in any of its Workflows. A Step already there carries its
 	// `id`; a new one has none. A Step left out is deleted.
 	Steps []StepInput `json:"steps"`
 
-	// Workflows Every Workflow of the Project. One already there carries its `id`; one without an
-	// `id` keeps the id of the Workflow with the same name, ignoring case, and any other is
-	// new. One left out is deleted with its Steps, whose open Tasks need `moves`.
+	// Workflows Every Workflow of the Project, one at least. One already there carries its `id`; one
+	// without an `id` keeps the id of the Workflow with the same name, ignoring case, unless
+	// another Workflow of the body carries it, and any other is new. One left out is deleted
+	// with its Steps, whose open Tasks need `moves`.
 	Workflows []WorkflowInput `json:"workflows"`
 }
 
@@ -1776,8 +1780,8 @@ type StepInput struct {
 	Y *int64 `json:"y,omitempty"`
 }
 
-// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
-// whole; its `subject_id` is the Project's id.
+// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflows as a
+// whole, every Workflow, Step and Connector; its `subject_id` is the Project's id.
 type SubjectType string
 
 // SubtaskCounts How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks.
@@ -1804,14 +1808,14 @@ type Taker struct {
 	Name string     `json:"name"`
 }
 
-// Task The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
-// Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
-// waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+// Task The unit of work in a Project. A Task with no Subtasks is at one Step of one of its
+// Project's Workflows, where it is claimed, worked and advanced, or aimed at a Member by name
+// and waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
 // neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
 // Blocking and are not stored.
 type Task struct {
 	// Acceptance Once every Subtask of a Parent has ended and the last to end ended done, Darkory files
-	// an Acceptance under it, when its Workflow has a Step carrying `acceptance`. Always
+	// an Acceptance under it, when its Project has a Step carrying `acceptance`. Always
 	// false on a Subtask.
 	Acceptance bool `json:"acceptance"`
 
@@ -1853,7 +1857,9 @@ type Task struct {
 	// Labels The ids of the Labels it carries, by name. Absent when it carries none.
 	Labels *[]shortid.ID `json:"labels,omitempty"`
 
-	// LastStepID The Step an ended Task ended at. Absent while it is open, and when that Step was since deleted.
+	// LastStepID The Step an ended Task ended at; `moves` re-points it when that Step is deleted.
+	// Absent while it is open, on a Task that ended at no Step (a Parent, a Task aimed at a
+	// Member), and when that Step was since deleted with no `moves` for it.
 	LastStepID *shortid.ID `json:"last_step_id,omitempty"`
 
 	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
@@ -1891,7 +1897,9 @@ type Task struct {
 	// WaitingSince When the Task was filed or last reached a Step; `next` gives a tie to the Task that has waited longest.
 	WaitingSince time.Time `json:"waiting_since"`
 
-	// WorkflowID The Workflow of the Step the Task is at, or of the Step it ended at. Absent on a Parent, on a Task aimed at a Member, and when that Step was since deleted.
+	// WorkflowID The Workflow of the Step the Task is at, or of the Step it ended at. Absent on a
+	// Parent, on a Task aimed at a Member, and when that Step was since deleted with no
+	// `moves` for it.
 	WorkflowID *shortid.ID `json:"workflow_id,omitempty"`
 
 	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
@@ -1947,9 +1955,9 @@ type TaskDetail struct {
 	// Subtasks A Parent's Subtasks, in the order they were filed; empty on a Task with none.
 	Subtasks []Task `json:"subtasks"`
 
-	// Task The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
-	// Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
-	// waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+	// Task The unit of work in a Project. A Task with no Subtasks is at one Step of one of its
+	// Project's Workflows, where it is claimed, worked and advanced, or aimed at a Member by name
+	// and waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
 	// neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
 	// Blocking and are not stored.
 	Task Task `json:"task"`
@@ -2100,7 +2108,8 @@ type Workflow struct {
 
 // WorkflowInput defines model for WorkflowInput.
 type WorkflowInput struct {
-	// ID The id of a Workflow of the Project now; left out, the one with the same name keeps its id.
+	// ID The id of a Workflow of the Project now; left out, the one with the same name keeps
+	// its id unless another Workflow of the body carries it.
 	ID   *shortid.ID `json:"id,omitempty"`
 	Name string      `json:"name"`
 
@@ -2283,7 +2292,7 @@ type ListActivityParams struct {
 	// Kind Only entries of these kinds; repeat it for several.
 	Kind *[]ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
 
-	// Project Only entries about this Project (id or key): the Project itself, its Workflow, its own
+	// Project Only entries about this Project (id or key): the Project itself, its Workflows, its own
 	// Labels, or a Task of it.
 	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
@@ -2576,7 +2585,7 @@ type ListTasksParams struct {
 	// Step Only Tasks at this Step, by id, or by name together with `project`.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
-	// Workflow Only Tasks whose Workflow this is, by id, or by name together with `project`.
+	// Workflow Only Tasks at a Step of this Workflow or ended at one, by id, or by name together with `project`.
 	Workflow *string `form:"workflow,omitempty" json:"workflow,omitempty"`
 
 	// AimedAt Only Tasks aimed at this Member.
@@ -2601,8 +2610,10 @@ type ListTasksParams struct {
 	// `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
 	// `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
 	// match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
-	// Parent, a Task aimed at a Member, an ended Task), and on a field with several values
-	// (`label`, `workspace`) match a Task none of whose values is one given.
+	// Parent, a Task aimed at a Member, an ended Task; `workflow:not:<id>` matches a Task with no
+	// Workflow: a Parent, a Task aimed at a Member, an ended Task whose last Step was since
+	// deleted), and on a field with several values (`label`, `workspace`) match a Task none of
+	// whose values is one given.
 	//
 	// Fields: `project` (Project id) · `step` (Step id the Task is at) · `workflow` (Workflow
 	// id of the Step the Task is at, or of the Step it ended at) · `skill` (Skill id
@@ -3060,7 +3071,7 @@ type ServerInterface interface {
 	// ListProjects List the Organisation's Projects
 	// (GET /v1/projects)
 	ListProjects(w http.ResponseWriter, r *http.Request)
-	// CreateProject Create a Project with its first Workflow (admin)
+	// CreateProject Create a Project with its Workflows (admin)
 	// (POST /v1/projects)
 	CreateProject(w http.ResponseWriter, r *http.Request, params CreateProjectParams)
 	// GetProject Get a Project and its Members
@@ -3192,7 +3203,7 @@ type ServerInterface interface {
 	// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
 	// (POST /v1/tasks/{task}/skill-proposals)
 	ProposeSkillVersion(w http.ResponseWriter, r *http.Request, task TaskRef, params ProposeSkillVersionParams)
-	// MoveTask Move a Task to a Step of its Workflow by hand
+	// MoveTask Move a Task to a Step of its Project by hand
 	// (POST /v1/tasks/{task}/step)
 	MoveTask(w http.ResponseWriter, r *http.Request, task TaskRef, params MoveTaskParams)
 	// TakeBackTask End another Member's Claim on a Task

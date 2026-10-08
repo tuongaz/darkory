@@ -115,14 +115,18 @@ On `Step`: add `workflow_id: {type: string, format: id, description: The Workflo
 ```yaml
         workflows:
           type: array
+          minItems: 1
           description: |
-            Every Workflow of the Project. One already there carries its `id`; one without an
-            `id` keeps the id of the Workflow with the same name, ignoring case, and any other is
-            new. One left out is deleted with its Steps, whose open Tasks need `moves`.
+            Every Workflow of the Project, one at least. One already there carries its `id`; one
+            without an `id` keeps the id of the Workflow with the same name, ignoring case, unless
+            another Workflow of the body carries it, and any other is new. One left out is deleted
+            with its Steps, whose Tasks, open or ended there, need `moves`.
           items: {$ref: "#/components/schemas/WorkflowInput"}
 ```
 
-Change `moves`' description to end "…to any Step of the body, by its id or its name in `steps`." Add after `SkillGrantInput`:
+`moves`' description: `Where the Tasks at a deleted Step go, the open ones and the ended ones that ended at it (`last_step_id`): the deleted Step's id to any Step of the body, by its id or its name in `steps`.` The `invalid` list gains `no Workflow at all`.
+
+Add after `SkillGrantInput`:
 
 ```yaml
     WorkflowInput:
@@ -151,14 +155,14 @@ On `StepInput`: `required: [workflow, name, position]`; add `workflow: {type: st
         workflow_id:
           type: string
           format: id
-          description: The Workflow of the Step the Task is at, or of the Step it ended at. Absent on a Parent, on a Task aimed at a Member, and when that Step was since deleted.
+          description: The Workflow of the Step the Task is at, or of the Step it ended at. Absent on a Parent, on a Task aimed at a Member, and when that Step was since deleted with no `moves` for it.
         last_step_id:
           type: string
           format: id
-          description: The Step an ended Task ended at. Absent while it is open, and when that Step was since deleted.
+          description: The Step an ended Task ended at; `moves` re-points it when that Step is deleted. Absent while it is open, on a Task that ended at no Step (a Parent, a Task aimed at a Member), and when that Step was since deleted with no `moves` for it.
 ```
 
-On `listTasks`: add a query parameter `workflow` beside `step`: `description: Only Tasks whose Workflow this is: by id, or by name together with `project`.` In the `filter` parameter's field list add `workflow` with `is|in|nin` (ids, or names with `project`), reading the Step the Task is at or ended at.
+On `listTasks`: add a query parameter `workflow` beside `step`: `description: Only Tasks whose Workflow this is: by id, or by name together with `project`.` In the `filter` parameter's field list add `workflow`, an id field like `step` (`is|not|in|nin`, ids only; names belong to the query parameter), reading the Step the Task is at or ended at; `workflow:not:<id>` and `nin` also match a Task with no Workflow (a Parent, a Task aimed at a Member, an ended Task whose last Step was since deleted).
 
 **Step 5: Activity.** In the `ActivityKind` payload notes for `workflow.changed`: `{workflows: [{id, name, position}], steps: [{id, workflow_id, name, skill_id, position}], connectors: […], moves?, tasks_moved?}`.
 
@@ -333,7 +337,8 @@ type Workflow struct {
 
 **Step 1: Failing tests** (add to `TestSetWorkflow` or beside it):
 - A Workflow left out is deleted with its Steps; with open Tasks at one of them and no `moves` → `step_in_use`; with `moves` to a Step of another Workflow → moved, `task.moved` recorded with `workflow_changed: true`.
-- A Workflow sent without an id but with a current name keeps its id; sent back exactly as read (ids stripped from Workflows, kept on Steps) → `sameWorkflow` true: no `workflow.changed`.
+- A Workflow sent without an id but with a current name keeps its id; sent back exactly as read (ids stripped from Workflows, kept on Steps) → `sameWorkflow` true: no `workflow.changed`. A body that renames Workflow A (by id) from Work to Bugs and adds a new Workflow named Work without an id: the new one does not take A's id (another entry carries it) and is new.
+- An empty `workflows` list → `invalid` "no Workflow at all".
 - Renaming only a Workflow records `workflow.changed` whose payload has `workflows` with the new name and every Step with `workflow_id`.
 - Two Workflows named alike ignoring case → `invalid`; a Step naming a Workflow not in the body → `invalid`; two Steps of one Workflow at one position → `invalid`; two Steps of different Workflows at position 1 → allowed.
 - A Connector into a Step of another Workflow is kept, and `advance` along it moves the Task there (use `f.advance`).
@@ -377,8 +382,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: every core UPDATE that sets `step_id = NULL` on an ending Task (`grep -n "step_id = NULL" internal/core/*.go`: complete in `advance.go`, drop and the Parent's cascade in `tasks.go`/`flow.go`, and any batch statement) → add `last_step_id = step_id,` before it in the same SET (SQL reads the old row on both engines, so the order inside SET does not matter)
 - Modify: `internal/core/model.go` (`Task` gains `WorkflowID *string`, `LastStepID *string`)
 - Modify: `internal/core/read.go:79-86` (`taskFrom`: `LEFT JOIN steps ls ON ls.id = t.last_step_id`; select `t.last_step_id`, `COALESCE(ts.workflow_id, ls.workflow_id)`)
-- Modify: `internal/core/filter.go:195-208` (field `workflow`: `is|in|nin`, SQL `(SELECT s.workflow_id FROM steps s WHERE s.id = COALESCE(t.step_id, t.last_step_id))`; names resolve with `project` as `step` does)
-- Modify: `internal/core/tasks.go:586-603` (the `workflow` list parameter beside `step`)
+- Modify: `internal/core/filter.go:195-208` (field `workflow`: an `idField` like `step` (`is|not|in|nin`, ids only) whose SQL is `(SELECT s.workflow_id FROM steps s WHERE s.id = COALESCE(t.step_id, t.last_step_id))`; `not` and `nin` match a null, so a Parent, an aimed Task and an ended Task whose last Step is gone match them)
+- Modify: `internal/core/tasks.go:586-603` (the `workflow` list parameter beside `step`: an id, or a name with `project`, resolved against the Project's Workflows; it matches Tasks at a Step of that Workflow or ended at one)
 - Test: `internal/core/flow_test.go` / `workflow_test.go`
 
 **Step 1: Failing tests.** A Task advanced into Done has `LastStepID` = the Step it left and `WorkflowID` = that Step's Workflow; a dropped Task likewise; an open Task has `LastStepID` nil and `WorkflowID` its Step's; a Parent and an aimed Task have both nil. `ListTasks` with `Workflow: "Bugs"` (name, with project) lists the Tasks at Bugs' Steps and the Tasks that ended there; filter `workflow:nin:<id>` excludes them. Run → FAIL.
