@@ -1,3 +1,4 @@
+import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon } from "lucide-react";
 import { BaseEdge, Handle, MarkerType, Position, ReactFlow, ReactFlowProvider, type Edge, type EdgeProps, type Node, type NodeProps } from "@xyflow/react";
 import { createContext, useContext, useId, useMemo } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -5,7 +6,7 @@ import { Pill } from "@/components/Pill";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { glyphLabel, workingOf } from "@/lib/work";
-import { HEADER_H, layoutSubtasks, NODE_H, NODE_W, PAD, type GraphColumn, type GraphNode, type GraphStep, type GraphSubtask } from "./graph";
+import { HEADER_H, layoutSubtasks, NODE_H, NODE_W, PAD, STUB_H, type GraphColumn, type GraphNode, type GraphStep, type GraphSubtask, type OutsideLink } from "./graph";
 import type { Point } from "./model";
 import { roundedPath } from "./route";
 
@@ -102,9 +103,33 @@ function ColumnHead({ column }: { column: GraphColumn }) {
 }
 
 /**
+ * A Blocking that crosses the Parent, under the Subtask it joins: "← MAIN-12 ↗" for a Task
+ * outside blocking it, "→ MAIN-19 ↗" for one it blocks. A click opens that Task.
+ */
+function OutsideStub({ stub, x, onOpen }: { stub: OutsideLink & { y: number }; x: number; onOpen: (id: string) => void }) {
+  const into = stub.direction === "in";
+  return (
+    <button
+      type="button"
+      aria-label={`${into ? "Blocked by" : "Blocks"} ${stub.key} ${stub.title}, outside this Parent`}
+      title={stub.title}
+      onClick={() => onOpen(stub.id)}
+      className="absolute z-10 inline-flex max-w-[208px] items-center gap-1 rounded-full border border-dashed border-state-blocked bg-card px-2 font-mono text-2xs text-state-blocked hover:bg-state-blocked-bg focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&_svg]:size-3 [&_svg]:flex-none"
+      // Placed by the layout: a CSSOM write, which the CSP allows.
+      style={{ left: x, top: stub.y, height: STUB_H - 4 }}
+    >
+      {into ? <ArrowLeftIcon aria-hidden /> : <ArrowRightIcon aria-hidden />}
+      <span className="truncate">{stub.key}</span>
+      <ArrowUpRightIcon aria-hidden />
+    </button>
+  );
+}
+
+/**
  * A Parent's Subtasks over its Project's Workflow (Task page, Subtasks › Graph): each in its
  * step's column (`layoutSubtasks` says where), Blocking arrows from blocker to blocked, the ones
- * someone can take now highlighted and the rest dimmed. Read-only: a click opens the Subtask.
+ * someone can take now highlighted and the rest dimmed; a Blocking with a Task outside the Parent
+ * is a stub under its Subtask. Read-only: a click opens the Subtask, or the Task a stub names.
  * Drawn at full size; wider than its box, it scrolls sideways inside it.
  */
 export function SubtaskGraph({
@@ -116,6 +141,7 @@ export function SubtaskGraph({
   /** The Project's steps, in the Workflow's order. */
   steps: GraphStep[];
   subtasks: GraphSubtask[];
+  /** Opens a Subtask, or the Task outside the Parent a stub names, by id. */
   onOpen: (id: string) => void;
   className?: string;
 }) {
@@ -193,6 +219,7 @@ export function SubtaskGraph({
             />
           </ReactFlowProvider>
         </OpenContext.Provider>
+        {layout.nodes.flatMap((n) => n.stubs.map((s) => <OutsideStub key={`${n.subtask.id}:${s.direction}:${s.id}`} stub={s} x={n.x} onOpen={onOpen} />))}
       </div>
     </div>
   );
