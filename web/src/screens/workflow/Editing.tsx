@@ -39,9 +39,10 @@ import { toShort } from "@/lib/shortid";
 
 /**
  * Settings › a Project › Workflow: the line on top (behind a toggle on a phone), then the Steps as
- * a text list beside the picked Step's panel. Picking a Step — in the list, with ↑/↓, or on the
- * line — opens it in the panel and puts it in the address (`?step=`); on a phone the panel takes
- * the list's place. An admin edits the draft and saves it whole; anyone else reads it. Under it,
+ * a text list beside the picked Step's panel. None is picked until the address names one or a
+ * Step is picked — in the list, with ↑/↓, or on the line — which opens it in the panel and puts
+ * it in the address (`?step=`); on a phone the panel takes the list's place. Deleting the picked
+ * Step picks its neighbour in its part of the list. An admin edits the draft and saves it whole; anyone else reads it. Under it,
  * what Save would be refused, in words, or what `/v1` did refuse.
  */
 export function EditingWorkflow({
@@ -69,7 +70,7 @@ export function EditingWorkflow({
   const readOnly = !editor;
   const apply = useCallback((edit: (d: Draft) => Draft, key?: string) => editor?.apply(edit, key), [editor]);
 
-  // The picked Step: from the address, else where New Tasks start, else the first.
+  // The picked Step: the one the address names, else none until one is picked.
   const [params, setParams] = useSearchParams();
   // A Step id from an old link may be a UUID's long text: the API writes it short (ADR 0017).
   const fromAddress = params.get(stepParam);
@@ -77,7 +78,7 @@ export function EditingWorkflow({
   const [opened, setOpened] = useState(!!focusStep);
   const topology = useMemo(() => (draft ? lineTopology(asLine(draft.wf, skillMap)) : undefined), [draft, skillMap]);
   const order = useMemo(() => (draft ? inOrder(draft.wf.steps) : []), [draft]);
-  const picked = order.find((s) => s.id === asked)?.id ?? topology?.start ?? order[0]?.id;
+  const picked = order.find((s) => s.id === asked)?.id;
   const pick = useCallback(
     (id: string) => {
       setParams(
@@ -165,9 +166,11 @@ export function EditingWorkflow({
     else removeNow(s, undefined, {});
   };
   const removeNow = (s: RecordStep, moveTo: string | undefined, repoint: Parameters<typeof deleteStep>[3]) => {
-    // The panel moves to the Step after it in the list, or before it at the end.
-    const at = numbered.findIndex((x) => x.id === s.id);
-    const next = numbered[at + 1] ?? numbered[at - 1];
+    // The panel moves to its neighbour in its own part of the list: the Step below it, else the
+    // one above; a Step on the line never hands the panel to one "After a Parent", or back.
+    const own = groups(s) === "main" ? main : after;
+    const at = own.findIndex((x) => x.id === s.id);
+    const next = own[at + 1] ?? own[at - 1];
     apply((d) => deleteStep(d, s.id, moveTo, repoint));
     if (next) pick(next.id);
   };
@@ -256,6 +259,14 @@ export function EditingWorkflow({
               onMove={(id, onto) => apply((d) => moveStepTo(d, id, onto))}
               tags={tags}
             />
+          </div>
+        )}
+        {!phone && !step && (
+          <div className="min-h-0 overflow-auto border-l pb-24">
+            <div role="note" aria-label="No Step picked" className="flex flex-col gap-1.5 px-6 pt-8 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Pick a Step</p>
+              <p>{readOnly ? "Pick a Step in the list or on the line to see who takes its Tasks and where its outcomes lead." : "Pick a Step in the list or on the line to change its Skill, who takes it and where its outcomes lead."}</p>
+            </div>
           </div>
         )}
         {panelShown && step && actions && (

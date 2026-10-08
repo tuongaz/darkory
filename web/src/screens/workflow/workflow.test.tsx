@@ -57,8 +57,8 @@ function serve(record: Workflow = workflow(), who = ada, extra: Record<string, u
 const skillMap = new Map(skills.map((s) => [s.id, s]));
 const groups = groupsOf(workflow(), skillMap);
 
-/** Settings › Workflow open on the list, once WEB's Workflow is drawn. */
-async function openList(path = "/settings/projects/WEB/workflow") {
+/** Settings › Workflow open on the list with Build in the panel (the address names it), once WEB's Workflow is drawn. */
+async function openList(path = `/settings/projects/WEB/workflow?step=${step.build}`) {
   renderApp(path);
   await screen.findByRole("list", { name: "Steps" });
   return within(screen.getByRole("list", { name: "Steps" }));
@@ -82,9 +82,9 @@ describe("Settings › Workflow", () => {
     expect(panel("Step 3: Build").getByRole("heading", { name: "Build" })).toBeInTheDocument();
   });
 
-  it("lists the Steps as text in order, the Steps after a Parent in their own group with why, the line above, and Build open", async () => {
+  it("lists the Steps as text in order, the Steps after a Parent in their own group with why, the line above, and none open", async () => {
     serve();
-    const list = await openList();
+    const list = await openList("/settings/projects/WEB/workflow");
     expect(list.getAllByRole("listitem").map((r) => r.getAttribute("aria-label"))).toEqual(["1. Backlog", "2. Plan", "3. Build", "4. Review", "5. Retro", "6. Skill review"]);
     expect(list.getByText("After a Parent")).toBeInTheDocument();
     expect(list.getByText(/Darkory files Acceptance under a Parent/)).toBeInTheDocument();
@@ -94,10 +94,14 @@ describe("Settings › Workflow", () => {
     expect(list.getByRole("listitem", { name: "6. Skill review" })).toHaveTextContent("Taken by anyone in the Organisation with skill-review");
     expect(list.queryAllByRole("textbox")).toHaveLength(0);
     expect(screen.getByRole("img", { name: /^The line: Build → Review → Done\. New Tasks start at Build\. Break down: Plan, whose Subtasks start at Build by default\. Hold: Backlog, moved on by hand\.$/ })).toBeInTheDocument();
-    // Where New Tasks start is open in the panel.
-    expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
-    expect(screen.getByRole("textbox", { name: "Name of Step 3" })).toHaveValue("Build");
+    // No Step is open until one is picked: the panel says how.
+    expect(list.getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "true")).toEqual([]);
+    expect(screen.queryByRole("textbox", { name: /^Name of Step/ })).toBeNull();
+    expect(screen.getByRole("note", { name: "No Step picked" })).toHaveTextContent("Pick a Step in the list or on the line");
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await pick("3. Build");
+    expect(screen.getByRole("textbox", { name: "Name of Step 3" })).toHaveValue("Build");
+    expect(screen.queryByRole("note", { name: "No Step picked" })).toBeNull();
   });
 
   it("picks a Step from its row, with ↑ and ↓, and from the address", async () => {
@@ -331,6 +335,10 @@ describe("Settings › Workflow", () => {
     await userEvent.click(dialog.getByRole("button", { name: "Delete Review" }));
     expect(list.queryByRole("listitem", { name: /Review$/ })).toBeNull();
     expect(header()).toHaveTextContent("2 changes");
+    // Review was the last Step on the line: the panel moves to the one above it, Build, never to
+    // Retro after a Parent.
+    expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("textbox", { name: "Name of Step 3" })).toHaveValue("Build");
     await save();
     await waitFor(() => expect(puts).toHaveLength(1));
     const d = deleteStep(fromRecord(record), step.review, step.build, { [`${step.build}-c2`]: { to: undefined } });
@@ -346,6 +354,8 @@ describe("Settings › Workflow", () => {
     expect(dialog.getByText("New Tasks start at Review, and so do Plan's Subtasks filed naming no Step.")).toBeInTheDocument();
     await userEvent.click(dialog.getByRole("button", { name: "Delete Build" }));
     expect(header()).toHaveTextContent("2 changes");
+    // The panel moves to the Step that was below Build.
+    expect(screen.getByRole("textbox", { name: "Name of Step 3" })).toHaveValue("Review");
     await userEvent.click(screen.getByRole("button", { name: "Editing · 2 changes: list them" }));
     const changes = within(await screen.findByRole("list", { name: "Changes" }));
     expect(changes.getAllByRole("listitem").map((li) => li.textContent)).toEqual(["DeletedBuild", "RemovedReview · needs changes → Build"]);

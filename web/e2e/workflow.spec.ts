@@ -153,11 +153,13 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(board.page.getByText("Build", { exact: true }).first()).toBeVisible();
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
-  // C1: the Steps as text, where New Tasks start open in the panel.
+  // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
   const { page, errors, ctx } = await open(browser, "/settings/projects/MAIN/workflow");
   const list = page.getByRole("list", { name: "Steps" });
-  await expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
   await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
+  await list.getByRole("button", { name: "3. Build" }).click();
+  await expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
   await page.screenshot({ path: `${shots}6-02-editing.png`, animations: "disabled" });
 
   // Rename Build to Make: nothing is sent yet, the board keeps Build.
@@ -207,6 +209,8 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.screenshot({ path: `${shots}6-06-delete-asks.png`, animations: "disabled" });
   await dialog.getByRole("button", { name: "Delete Review" }).click();
   await expect(list.getByRole("listitem", { name: /Review$/ })).toHaveCount(0);
+  // Review was the last Step on the line: the panel moves to QA above it, not to Retro after a Parent.
+  await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toHaveValue("QA");
   // The changes, listed from the header.
   const chip = page.getByRole("button", { name: /^Editing · \d+ changes: list them$/ });
   await chip.click();
