@@ -14,9 +14,9 @@ export type Install = { base: string; link: string; token: string; data: string;
 /**
  * Builds the darkory binary from this checkout (embedding web/dist/app, which `npm run e2e` has
  * just built), runs `darkory init` in a fresh data directory, and starts `darkory serve` on a free
- * port. Without `roster` init seeds just the Organisation and ada (--no-agents), as an Install made
- * outside the roster is; with it, Project MAIN on the default Workflow and the agents too. init
- * runs in the data directory, outside any git repository, so the roster has no Workspace.
+ * port. init always makes the Organisation, ada and Project MAIN on the default Workflow; without
+ * `roster` it seeds no agents (--no-agents), with it the roster's agents too. init runs in the
+ * data directory, outside any git repository, so MAIN has no Workspace.
  */
 export async function startInstall(opts: { roster?: boolean } = {}): Promise<Install> {
   const bin = mkdtempSync(join(tmpdir(), "darkory-e2e-bin-"));

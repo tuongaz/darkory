@@ -4,7 +4,7 @@ import { startInstall, type Install } from "./server";
 
 // The Settings area against the real binary (docs/build/model-v2-plan.md, scenario 10, and the
 // journeys Admin had: New Project, Members, Skills, agents, Workspaces), on an Install of its own
-// with no Project yet. Every step leaves a screenshot in e2e/screenshots/settings/.
+// with init's MAIN only. Every step leaves a screenshot in e2e/screenshots/settings/.
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/settings/", import.meta.url));
@@ -79,10 +79,10 @@ const nav = (page: Page) => page.getByRole("navigation", { name: "Settings pages
 test("New Project, Members and Skills from Settings", async ({ browser }) => {
   const { ctx, page, errors } = await open(browser);
 
-  await test.step("an Install with no Project: Settings offers New Project; creating Web opens its General page", async () => {
+  await test.step("Settings offers New Project; creating Web opens its General page", async () => {
     await page.goto(`${base}/settings`);
     await expect(page).toHaveURL(`${base}/settings/account`);
-    await shot(page, "01-settings-empty-install");
+    await shot(page, "01-settings-fresh-install");
     await nav(page).getByRole("button", { name: "New Project" }).click();
     const dialog = page.getByRole("dialog", { name: "New Project" });
     await dialog.getByLabel("Name").fill("Web");

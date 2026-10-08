@@ -7,8 +7,8 @@ import { startInstall, startRunnerInstall, type Install, type RunnerInstall } fr
 // Two journeys against the real binary, each on Installs of its own:
 //
 // - Signing in and setting up: the signed-out page, the startup login link, the Install
-//   checklist in an empty Inbox (Create Project, Add Member, File Task), then the shell around the
-//   first Task: live updates, ⌘K, the keys, the peek, a phone.
+//   checklist in an empty Inbox (init's MAIN done, another Project made from it, Add Member, File
+//   Task), then the shell around the first Task: live updates, ⌘K, the keys, the peek, a phone.
 // - The Session panel and the Agents page's Runner state (docs/build/agents-plan.md, R2). With no
 //   Runner (serve --runner=off) the panel must be absent, and the terminal is played by Playwright
 //   (page.route and page.routeWebSocket) to check it under the Install's CSP. Then Installs whose
@@ -131,16 +131,16 @@ test.describe("signing in and setting up an empty Install", () => {
     });
 
     const setup = page.getByRole("region", { name: "Set up E2E Organisation" });
-    await test.step("an empty Install: the checklist, Create Project first, the rest waiting", async () => {
+    await test.step("a fresh Install: init's MAIN makes step 1 done; Add Member is next, File Task waits", async () => {
       await expect(setup).toBeVisible();
-      await expect(setup.getByLabel("Step 1, done")).toHaveCount(0);
-      await expect(setup.getByRole("button", { name: "Add Member" })).toBeDisabled();
+      await expect(setup.getByLabel("Step 1, done")).toBeVisible();
+      await expect(setup.getByLabel("Step 2, done")).toHaveCount(0);
       await expect(setup.getByRole("button", { name: "File Task" })).toBeDisabled();
-      await expect(page.getByRole("button", { name: "Project: none yet" })).toBeVisible();
-      await shot(page, "03-checklist-empty");
+      await expect(page.getByRole("button", { name: "Project: Main" })).toBeVisible();
+      await shot(page, "03-checklist-fresh");
     });
 
-    await test.step("Create Project opens New Project; once made, step 1 is done", async () => {
+    await test.step("Create Project still offers another: Web, made from New Project", async () => {
       await setup.getByRole("button", { name: "Create Project" }).click();
       const dialog = page.getByRole("dialog", { name: "New Project" });
       await dialog.getByLabel("Name").fill("Web");
@@ -148,8 +148,9 @@ test.describe("signing in and setting up an empty Install", () => {
       await shot(page, "04-checklist-new-project");
       await dialog.getByRole("button", { name: "Create Project" }).click();
       await expect(dialog).toHaveCount(0);
+      await expect(page).toHaveURL(new RegExp(`${at}/projects/WEB/`));
       await page.goto(`${at}/inbox`);
-      await expect(setup.getByLabel("Step 1, done")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Project: Web" })).toBeVisible();
       await shot(page, "05-checklist-project-made");
     });
 
