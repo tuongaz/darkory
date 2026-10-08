@@ -292,7 +292,8 @@ function AgentTableRow({
           </span>
         </span>
       </td>
-      <td>
+      {/* Short of room, what it holds is cut at its column's edge, never over the Session beside it. */}
+      <td className="overflow-hidden">
         {claim ? (
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="flex min-w-0 items-center gap-1.5">
