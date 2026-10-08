@@ -242,11 +242,11 @@ func (s *session) start(ctx context.Context) error {
 		wss = nil
 	}
 	r.awaitMerges(ctx, s.key, parent, wss)
-	checkouts, err := r.Prepare(ctx, s.key, parentKey(s.d), PlanCheckouts(r.cfg.Data, s.key, s.d.Task.Title, parentKey(s.d), wss))
+	checkouts, err := r.Prepare(ctx, s.key, parentKey(s.d), PlanCheckouts(r.taskDir(s.key), s.key, s.d.Task.Title, parentKey(s.d), wss))
 	if err != nil {
 		return fmt.Errorf("preparing the Workspaces: %w", err)
 	}
-	cwd := TaskDir(r.cfg.Data, s.key)
+	cwd := r.taskDir(s.key)
 	if len(checkouts) > 0 {
 		cwd = checkouts[0].Dir
 	}
@@ -272,7 +272,7 @@ func (s *session) start(ctx context.Context) error {
 	env = setEnv(env, remote.EnvToken, s.a.token)
 	env = setEnv(env, remote.EnvSession, s.rec.Session())
 	mcpFile := filepath.Join(s.dir, "mcp.json")
-	if err := s.writeMCPConfig(mcpFile, TaskDir(r.cfg.Data, s.key)); err != nil {
+	if err := s.writeMCPConfig(mcpFile, r.taskDir(s.key)); err != nil {
 		return err
 	}
 	v := Values{PromptFile: promptFile, Workspace: cwd, SessionID: s.rec.Session(), Model: s.set.Model, MCPConfig: mcpFile, Task: s.key,
@@ -349,7 +349,7 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 		names[m.ID] = m.Name
 	}
 	d := s.d
-	p := Prompt{Agent: s.a.name(), Manager: names[s.manager(d)], Dir: TaskDir(s.r.cfg.Data, s.key), Checkouts: checkouts, Rules: remote.Rules,
+	p := Prompt{Agent: s.a.name(), Manager: names[s.manager(d)], Dir: s.r.taskDir(s.key), Checkouts: checkouts, Rules: remote.Rules,
 		Task: PromptTask{Key: d.Task.Key, Title: d.Task.Title, Description: d.Task.Description, Step: stepName(d), Kind: string(d.Task.Kind),
 			Outcomes: outcomes(d)}}
 	if parent != nil {

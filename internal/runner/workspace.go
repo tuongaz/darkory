@@ -2,11 +2,13 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -90,14 +92,55 @@ func dirName(name string) string {
 	return s
 }
 
-// TaskDir is a Task's directory under data.
+// TaskDir is a Task's directory where it was before the Workspaces root could be set, under data;
+// it is also where the Workspaces root defaults to for a data directory outside any checkout.
 func TaskDir(data, task string) string { return filepath.Join(data, "workspaces", task) }
 
-// PlanCheckouts says where each git Workspace of a Task goes and on which branches: from its
-// Parent's branch when parent names one, else from the default branch. Workspaces of other kinds
-// are left out. The default branch of a Workspace that names none is main here; Prepare asks the
-// repository.
-func PlanCheckouts(data, task, title, parent string, workspaces []Workspace) []Checkout {
+// DefaultWorkspaces is where Task directories go for the data directory data: <data>/workspaces,
+// unless data is inside a git checkout or under a directory holding a CLAUDE.md. A session works
+// in its Task's directory, and Claude Code reads every CLAUDE.md from there up to the root, so a
+// session under another project would take that project's rules for its own. There it is
+// ~/.darkory/workspaces/<data's name>-<a hash of data's path>, one per data directory.
+func DefaultWorkspaces(data string) string {
+	inside := false
+	if out, err := exec.Command("git", "-C", data, "rev-parse", "--is-inside-work-tree").Output(); err == nil && strings.TrimSpace(string(out)) == "true" {
+		inside = true
+	}
+	for dir := data; !inside; {
+		if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err == nil {
+			inside = true
+		}
+		up := filepath.Dir(dir)
+		if up == dir {
+			break
+		}
+		dir = up
+	}
+	home, err := os.UserHomeDir()
+	if !inside || err != nil {
+		return filepath.Join(data, "workspaces")
+	}
+	sum := sha256.Sum256([]byte(data))
+	return filepath.Join(home, ".darkory", "workspaces", fmt.Sprintf("%s-%x", dirName(filepath.Base(data)), sum[:4]))
+}
+
+// taskDir is a Task's directory, holding its checkouts and the session's working directory: under
+// the Workspaces root, or under <data>/workspaces when an earlier session left its worktrees there,
+// so a Task begun before the root moved keeps working where it was until it ends.
+func (r *Runner) taskDir(task string) string {
+	if old := TaskDir(r.cfg.Data, task); old != filepath.Join(r.cfg.Workspaces, task) {
+		if _, err := os.Stat(filepath.Join(old, checkoutsFile)); err == nil {
+			return old
+		}
+	}
+	return filepath.Join(r.cfg.Workspaces, task)
+}
+
+// PlanCheckouts says where each git Workspace of a Task goes, in its directory dir, and on which
+// branches: from its Parent's branch when parent names one, else from the default branch.
+// Workspaces of other kinds are left out. The default branch of a Workspace that names none is
+// main here; Prepare asks the repository.
+func PlanCheckouts(dir, task, title, parent string, workspaces []Workspace) []Checkout {
 	var out []Checkout
 	seen := map[string]bool{}
 	for _, ws := range workspaces {
@@ -113,7 +156,7 @@ func PlanCheckouts(data, task, title, parent string, workspaces []Workspace) []C
 		if parent != "" {
 			base = ParentBranch(parent)
 		}
-		out = append(out, Checkout{Workspace: ws, Dir: filepath.Join(TaskDir(data, task), name), Branch: TaskBranch(task, title), Base: base})
+		out = append(out, Checkout{Workspace: ws, Dir: filepath.Join(dir, name), Branch: TaskBranch(task, title), Base: base})
 	}
 	return out
 }
@@ -216,7 +259,10 @@ const checkoutsFile = "checkouts.json"
 // worktree, or its branch. The Parent's branch is made when it is missing (makeParentBranch). It
 // refuses a Task branch the runner did not make.
 func (r *Runner) Prepare(ctx context.Context, task, parent string, plan []Checkout) ([]Checkout, error) {
-	dir := TaskDir(r.cfg.Data, task)
+	dir := r.taskDir(task)
+	if len(plan) > 0 {
+		dir = filepath.Dir(plan[0].Dir) // the Task's directory the plan was made for
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -454,7 +500,7 @@ func (r *Runner) makeParentBranch(ctx context.Context, ws Workspace, parent stri
 // RemoveCheckouts removes a Task's worktrees, keeping their branches. A worktree with uncommitted
 // changes stays, and so does the directory holding it.
 func (r *Runner) RemoveCheckouts(ctx context.Context, task string) {
-	dir := TaskDir(r.cfg.Data, task)
+	dir := r.taskDir(task)
 	b, err := os.ReadFile(filepath.Join(dir, checkoutsFile))
 	if errors.Is(err, fs.ErrNotExist) {
 		os.Remove(dir)

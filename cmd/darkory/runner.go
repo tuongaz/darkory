@@ -20,7 +20,7 @@ import (
 	"github.com/tuongaz/darkory/internal/runner"
 )
 
-const runnerUsage = `Usage: darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]… [--tmux auto|on|off]
+const runnerUsage = `Usage: darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]… [--tmux auto|on|off] [--workspaces dir]
 
 Runs the Runner on its own (ADR 0013): for every agent Member whose token is in the token
 directory (<data>/agents unless set), it pulls Tasks through next and works each in a session,
@@ -41,6 +41,7 @@ func runRunner(args []string, stderr io.Writer) error {
 	data := fs.String("data", or(os.Getenv("DARKORY_DATA"), config.DefaultData), "the Install's data directory, where sessions and worktrees go (DARKORY_DATA)")
 	url := fs.String("url", or(os.Getenv(remote.EnvURL), remote.DefaultURL), "the Install's URL (DARKORY_URL)")
 	tokenDir := fs.String("token-dir", "", "the directory of <member>.token files; default <data>/agents")
+	workspaces := fs.String("workspaces", os.Getenv("DARKORY_WORKSPACES"), "where each Task's checkouts go; default <data>/workspaces, or ~/.darkory/workspaces/… when the data directory is inside a git checkout or under a CLAUDE.md (DARKORY_WORKSPACES)")
 	tmux := fs.String("tmux", or(os.Getenv("DARKORY_RUNNER_TMUX"), "auto"), "run sessions in tmux: auto (when it is installed), on or off (DARKORY_RUNNER_TMUX)")
 	var members names
 	fs.Var(&members, "member", "run only this agent; repeat for more")
@@ -67,7 +68,7 @@ func runRunner(args []string, stderr io.Writer) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	r, err := newRunner(*url, *data, tokens, members, *tmux, slog.New(slog.NewTextHandler(stderr, nil)))
+	r, err := newRunner(*url, *data, *workspaces, tokens, members, *tmux, slog.New(slog.NewTextHandler(stderr, nil)))
 	if err != nil {
 		return err
 	}
@@ -75,7 +76,7 @@ func runRunner(args []string, stderr io.Writer) error {
 }
 
 // newRunner makes the Runner for an Install's data directory.
-func newRunner(url, data string, tokens []runner.Token, members []string, tmux string, log *slog.Logger) (*runner.Runner, error) {
+func newRunner(url, data, workspaces string, tokens []runner.Token, members []string, tmux string, log *slog.Logger) (*runner.Runner, error) {
 	timings, err := runner.ParseTimings(os.Getenv("DARKORY_RUNNER_TIMINGS"))
 	if err != nil {
 		return nil, err
@@ -84,7 +85,7 @@ func newRunner(url, data string, tokens []runner.Token, members []string, tmux s
 	if err != nil {
 		return nil, err
 	}
-	return runner.New(runner.Config{URL: url, Data: abs, Tokens: tokens, Members: members, Timings: timings, Tmux: tmux, Log: log})
+	return runner.New(runner.Config{URL: url, Data: abs, Workspaces: workspaces, Tokens: tokens, Members: members, Timings: timings, Tmux: tmux, Log: log})
 }
 
 // names collects a repeated flag.
