@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { lineOverlaps } from "./lineBoxes";
 import { mockLine } from "./lineMock";
 
 // The Workflow line on the dense Workflows (`npm run lab -- dense`): Software (14 Steps, the
@@ -20,34 +21,6 @@ const pages = [
   { name: "big-parent", path: "/tasks/BIG-25?view=line", region: "Subtask line" },
 ] as const;
 
-/**
- * Every drawn word, chip and Step head inside a line running across, as boxes: the pairs that
- * overlap, and what the layout itself says met (a word on a line it does not sit on). A line run
- * down the page draws none of these.
- */
-async function overlaps(page: Page, region: string): Promise<string[]> {
-  return page.getByRole("region", { name: region, exact: true }).evaluate((root) => {
-    if (root.getAttribute("data-orientation") === "vertical") return [];
-    const clashes = root.querySelector("[data-clashes]")?.getAttribute("data-clashes");
-    const els = [...root.querySelectorAll<HTMLElement>("[data-box]")];
-    if (els.length === 0) return ["no boxes drawn"];
-    const boxes = els
-      .map((el) => ({ el, r: el.getBoundingClientRect(), text: el.textContent?.trim() ?? "" }))
-      .filter((b) => b.r.width > 0 && b.r.height > 0);
-    const found: string[] = clashes ? [`layout: ${clashes}`] : [];
-    for (let i = 0; i < boxes.length; i++) {
-      for (let j = i + 1; j < boxes.length; j++) {
-        const [a, b] = [boxes[i], boxes[j]];
-        if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
-        const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
-        const h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
-        if (w > 0.5 && h > 0.5) found.push(`"${a.text}" × "${b.text}"`);
-      }
-    }
-    return found;
-  });
-}
-
 for (const size of sizes) {
   test(`the dense Workflows at ${size.name}`, async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, colorScheme: "dark", deviceScaleFactor: 1 });
@@ -66,7 +39,7 @@ for (const size of sizes) {
       await page.screenshot({ path: `${out}/${p.name}-${size.name}-full.png`, fullPage: true });
       const w = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
       expect(w.scroll, p.name).toBe(w.client);
-      if (process.env.DENSE_BEFORE !== "1") expect(await overlaps(page, p.region), `${p.name} at ${size.name}`).toEqual([]);
+      if (process.env.DENSE_BEFORE !== "1") expect(await lineOverlaps(page, p.region), `${p.name} at ${size.name}`).toEqual([]);
     }
     expect(errors).toEqual([]);
     await context.close();

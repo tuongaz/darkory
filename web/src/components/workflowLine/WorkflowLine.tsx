@@ -110,7 +110,11 @@ export function WorkflowLine(props: WorkflowLineProps) {
     if (!fixed && d === "tokens" && fitsAt("beads")) return { density: "beads" as const, fits: true };
     return { density: d, fits: false };
   }, [topology, w, measure, fixed, compact]);
-  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && (width < (props.verticalBelow ?? VERTICAL_BELOW) || !fits));
+  // The drawing itself may find its heads and words meet once its Tasks are in (a name line
+  // carrying tokens): then it too runs down the page, at that width.
+  const [tight, setTight] = useState<{ width: number; topology: unknown } | null>(null);
+  const tooTight = !!tight && tight.width === w && tight.topology === topology;
+  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && (width < (props.verticalBelow ?? VERTICAL_BELOW) || !fits || tooTight));
   const flow = props.flow ?? quiet;
   const all = props.all ?? props.tasks;
   const me = props.me ?? nobody;
@@ -188,6 +192,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
           highlight={props.highlight}
           noBranch={props.noBranch}
           measure={measure}
+          onTight={() => setTight({ width: w, topology })}
         />
       )}
       {heavy && !vertical && <LoopsList loops={topology.loops} onHover={setLitLoop} />}

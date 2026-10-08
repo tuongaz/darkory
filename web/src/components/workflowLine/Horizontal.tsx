@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
-import { handRoute, horizontal as layOut, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology } from "./layout";
+import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology } from "./layout";
 import { estimate, type Measure } from "./measure";
 import { DONE_STATION, isHoldStep, PICKUP_MS, spanTime, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { Bead, GhostToken, HiddenCount, Token } from "./Token";
@@ -51,6 +51,8 @@ export type HorizontalProps = {
   noBranch?: boolean;
   /** How wide the line's words run (the page's fonts); estimated when unsaid. */
   measure?: Measure;
+  /** Said when the drawing's heads and words cannot all stand clear across this width. */
+  onTight?: () => void;
 };
 
 /** The line laid left to right: stations, routes, tokens and the moments playing on them. */
@@ -167,6 +169,11 @@ export function HorizontalLine(props: HorizontalProps) {
       }),
     [t, width, density, compact, columnPx, props.fold, props.noBranch, props.branchLabel, ghosts?.length, labelWidth, holdColumn, headDetail, measure],
   );
+
+  const { onTight } = props;
+  useLayoutEffect(() => {
+    if (!h.fits) onTight?.();
+  }, [h.fits, onTight]);
 
   // What a line means, in words, while the pointer is on it.
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
@@ -568,7 +575,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const paused = takers.length > 0 && takers.every((m) => m.paused);
     const hidden = props.hidden?.get(id) ?? 0;
     return (
-      <div key={id} data-head={s.name} data-step={id} data-box="name" className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: x - 6, top: y - 36 }}>
+      <div key={id} data-head={s.name} data-step={id} data-box="name" className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: x - 6, top: y - NAME_TOP }}>
         <span className="text-[13px] font-semibold">{s.name}</span>
         {!props.compactHeads && !props.ghosts?.length && s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
         {!props.compactHeads && (!props.ghosts?.length || paused) && takers.slice(0, 2).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}

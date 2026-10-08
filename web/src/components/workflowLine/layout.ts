@@ -401,8 +401,10 @@ const CHIP_PAD = 18;
 const CHIP_H = 20;
 /** Half the room a station takes on its line. */
 const STATION_R = 9;
-/** A branch Step's name line over its station (a token there stands 26px tall). */
-const NAME_H = 28;
+/** A branch Step's name line over its station: as tall as a token there. */
+const NAME_H = 30;
+/** How far over its station a branch Step's name line begins: its foot clear of the words on its row. */
+export const NAME_TOP = 38;
 
 const chipW = (text: string, measure: Measure) => measure(text, "chip") + CHIP_PAD;
 const labelW = (text: string, measure: Measure) => measure(text, "label") + LABEL_PAD;
@@ -834,7 +836,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
         board.fix({ id: "files", kind: "label", text: FILES_LABEL, x: label.x - w / 2, y: py - LABEL_H / 2, w, h: LABEL_H }, ["files"]);
       }
       board.fix({ id: "breakdown", kind: "note", text: BREAKDOWN_BRANCH, x: px - 6, y: py - 60, w: measure(BREAKDOWN_BRANCH, "note"), h: 16 });
-      board.fix({ id: `name:${id}`, kind: "name", text: name(id), x: px - 6, y: py - 36, w: opts.labelWidth?.(id) ?? nameLine(t.steps.get(id), measure), h: NAME_H });
+      board.fix({ id: `name:${id}`, kind: "name", text: name(id), x: px - 6, y: py - NAME_TOP, w: opts.labelWidth?.(id) ?? nameLine(t.steps.get(id), measure), h: NAME_H });
       zone.chips.forEach((c, m) => {
         const connector = c.connectorId ? t.connectors.get(c.connectorId) : undefined;
         const w = chipW(c.text, measure);
@@ -1028,7 +1030,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
     for (const l of lines) board.addRuns(runsOf(l.id, l.points));
     for (const s of stations) board.obstacle("station", { x: s.x - 7, y: s.y - 7, w: 14, h: 14 });
     // The names of the branch's Steps over their stations, the words on its rows: where they stand.
-    for (const s of stations) board.fix({ id: `name:${s.id}`, kind: "name", text: name(s.id), x: s.x - 6, y: s.y - 36, w: widthOf(s.id), h: NAME_H });
+    for (const s of stations) board.fix({ id: `name:${s.id}`, kind: "name", text: name(s.id), x: s.x - 6, y: s.y - NAME_TOP, w: widthOf(s.id), h: NAME_H });
     labels.forEach((l, i) => {
       const w = labelW(l.text, measure);
       const row = stations.find((s) => s.y === l.y)?.row ?? 0;

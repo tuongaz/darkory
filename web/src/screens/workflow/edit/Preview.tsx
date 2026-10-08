@@ -67,7 +67,7 @@ export function Preview({
 /**
  * The line in words: "The line: Build → Review → Done. New Tasks start at Build. Break down: Plan,
  * whose Subtasks start at Build. Hold: Backlog, moved on by hand." → where a Connector joins
- * neighbours, · where a human moves a Task on by hand.
+ * neighbours, · where none does.
  */
 function describe(line: ReturnType<typeof asLine>): string {
   const t = lineTopology(line);

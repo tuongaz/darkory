@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { lineOverlaps } from "./lineBoxes";
 import { mockLine } from "./lineMock";
 
 // The Workflow line under `vite dev` with the fixture's /v1 (`npm run lab -- line`): each frame of
@@ -43,6 +44,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.waitForTimeout(500);
       await noSidewaysScroll(page);
       await shot(page, `page-${tag}`);
+      expect(await lineOverlaps(page, "Workflow"), "page").toEqual([]);
       if (phone) await shot(page, `page-full-${tag}`, true);
 
       // r2-final-2: MAIN-19 selected, its chain and callout.
@@ -61,6 +63,7 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(page).toHaveURL(/scope=k-7/);
         await page.waitForTimeout(400);
         await shot(page, `scope-parent-${tag}`);
+      expect(await lineOverlaps(page, "Workflow"), "scope-parent").toEqual([]);
         // A single Task's path on the Project line (MAIN-9).
         await page.goto("/projects/MAIN/workflow?scope=k-9");
         await page.waitForTimeout(600);
@@ -76,6 +79,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByRole("region", { name: "Subtask line" }).locator('[data-task="MAIN-10"]')).toBeVisible();
       await page.waitForTimeout(500);
       await shot(page, `task-parent-${tag}`);
+      expect(await lineOverlaps(page, "Subtask line"), "task-parent").toEqual([]);
       await page.goto("/tasks/MAIN-9");
       await expect(page.getByRole("region", { name: "MAIN-9's way through the Workflow" })).toBeVisible();
       await page.waitForTimeout(500);
@@ -99,6 +103,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.waitForTimeout(500);
       await noSidewaysScroll(page);
       await shot(page, `big-${tag}`);
+      expect(await lineOverlaps(page, "Workflow"), "big").toEqual([]);
 
       expect(errors).toEqual([]);
       await context.close();
