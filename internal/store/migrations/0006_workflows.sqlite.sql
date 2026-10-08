@@ -62,3 +62,6 @@ UPDATE tasks SET last_step_id = (
 WHERE state <> 'open';
 UPDATE tasks SET last_step_id = NULL
 WHERE last_step_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM steps s WHERE s.id = tasks.last_step_id);
+
+-- The FK's SET NULL and `moves` look Tasks up by the Step they ended at.
+CREATE INDEX tasks_last_step ON tasks (last_step_id) WHERE last_step_id IS NOT NULL;

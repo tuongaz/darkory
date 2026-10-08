@@ -38,3 +38,6 @@ FROM (SELECT DISTINCT ON (a.subject_id) a.subject_id, a.payload::jsonb ->> 'from
       ORDER BY a.subject_id, a.seq DESC) e
 WHERE tasks.id = e.subject_id AND tasks.state <> 'open'
   AND EXISTS (SELECT 1 FROM steps s WHERE s.id = e.from_step);
+
+-- The FK's SET NULL and `moves` look Tasks up by the Step they ended at.
+CREATE INDEX tasks_last_step ON tasks (last_step_id) WHERE last_step_id IS NOT NULL;

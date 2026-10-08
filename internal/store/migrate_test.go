@@ -518,7 +518,7 @@ VALUES ('ghost', 'o', 'p2', 'TWO-1', 'work', 'Ghost', 'dropped', 'm', 1, 0, 0, 5
 			if e == store.Postgres {
 				index = `SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = $1`
 			}
-			for _, name := range []string{"steps_project_name", "steps_workflow", "workflows_project_name"} {
+			for _, name := range []string{"steps_project_name", "steps_workflow", "workflows_project_name", "tasks_last_step"} {
 				var n int
 				if err := s.QueryRow(ctx, index, name).Scan(&n); err != nil {
 					t.Fatal(err)
