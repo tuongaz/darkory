@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -122,6 +123,7 @@ func scanFile(row interface{ Scan(...any) error }) (File, error) {
 
 // getFile returns a file of orgID that is not deleted.
 func getFile(ctx context.Context, r store.Reader, orgID, id string) (File, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	f, err := scanFile(r.QueryRow(ctx, `SELECT `+fileCols+` FROM files WHERE org_id = $1 AND id = $2 AND deleted_at IS NULL`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return f, refuse(CodeNotFound, "no file %s", id)

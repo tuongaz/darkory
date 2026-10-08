@@ -2468,8 +2468,8 @@ type ListTasksParams struct {
 	// with the other parameters; `in` and `nin` match any of their values (OR). Each value is
 	// percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
 	// `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-	// query-encoded as usual. References are ids, not names; an id that names nothing matches
-	// nothing.
+	// query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+	// that names nothing matches nothing. A View's saved filters come back with short ids.
 	//
 	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
 	// boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
@@ -7396,7 +7396,7 @@ func NewGetEvidenceRequest(server string, evidence EvidenceID) (*http.Request, e
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "evidence", evidence, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "evidence", evidence, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -7430,7 +7430,7 @@ func NewDownloadEvidenceRequest(server string, evidence EvidenceID) (*http.Reque
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "evidence", evidence, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "evidence", evidence, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -7543,7 +7543,7 @@ func NewDeleteFileRequest(server string, file FileID, params *DeleteFileParams) 
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -7592,7 +7592,7 @@ func NewGetFileRequest(server string, file FileID) (*http.Request, error) {
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -7626,7 +7626,7 @@ func NewDownloadFileRequest(server string, file FileID, params *DownloadFilePara
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -7784,7 +7784,7 @@ func NewDeleteLabelRequest(server string, label LabelID, params *DeleteLabelPara
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "label", label, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "label", label, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -7844,7 +7844,7 @@ func NewUpdateLabelRequestWithBody(server string, label LabelID, params *UpdateL
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "label", label, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "label", label, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -9690,7 +9690,7 @@ func NewCloseSessionRequest(server string, session SessionID, params *CloseSessi
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "session", session, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "session", session, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -9821,7 +9821,7 @@ func NewGetSkillProposalRequest(server string, proposal ProposalID) (*http.Reque
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "proposal", proposal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "proposal", proposal, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -11544,7 +11544,7 @@ func NewRevokeTokenRequest(server string, token TokenID, params *RevokeTokenPara
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "token", token, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "token", token, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -11714,7 +11714,7 @@ func NewDeleteViewRequest(server string, view ViewID, params *DeleteViewParams) 
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "view", view, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "view", view, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}
@@ -11774,7 +11774,7 @@ func NewUpdateViewRequestWithBody(server string, view ViewID, params *UpdateView
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "view", view, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "view", view, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "id"})
 	if err != nil {
 		return nil, err
 	}

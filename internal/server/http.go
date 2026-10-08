@@ -252,7 +252,7 @@ func refusalOut(refusal *core.Error) (int, []byte, error) {
 	}
 	out := gen.Error{Code: gen.ErrorCode(refusal.Code), Message: refusal.Message}
 	if len(refusal.Details) > 0 {
-		d := refusal.Details
+		d := shortIDs(refusal.Details)
 		out.Details = &d
 	}
 	b, err := json.Marshal(out)

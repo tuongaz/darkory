@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -29,6 +30,7 @@ func scanLabel(row interface{ Scan(...any) error }) (Label, error) {
 }
 
 func getLabel(ctx context.Context, r store.Reader, orgID, id string) (Label, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	l, err := scanLabel(r.QueryRow(ctx, `SELECT `+labelCols+` FROM labels l WHERE l.org_id = $1 AND l.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return l, refuse(CodeNotFound, "no Label %s", id)
@@ -306,7 +308,7 @@ WHERE l.org_id = $1 AND (l.project_id IS NULL OR l.project_id = $2) ORDER BY l.i
 	}
 	for _, ref := range refs {
 		ref = strings.TrimSpace(ref)
-		i := slices.IndexFunc(usable, func(l Label) bool { return l.ID == ref })
+		i := slices.IndexFunc(usable, func(l Label) bool { return l.ID == shortid.Canonical(ref) })
 		if i < 0 {
 			i = slices.IndexFunc(usable, func(l Label) bool { return strings.EqualFold(l.Name, ref) })
 		}

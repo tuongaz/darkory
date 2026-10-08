@@ -5,6 +5,7 @@ import (
 
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // Projects with their Members and Workflows (ADR 0015, ADR 0016), and Labels.
@@ -82,10 +83,10 @@ func (s *Server) SetWorkflow(w http.ResponseWriter, r *http.Request, project gen
 	}
 	in := core.WorkflowInput{
 		Steps: each(body.Steps, func(st gen.StepInput) core.StepInput {
-			return core.StepInput{ID: deref(st.ID), Name: st.Name, Skill: st.Skill, Position: st.Position, X: st.X, Y: st.Y}
+			return core.StepInput{ID: deref(shortid.StringPtr(st.ID)), Name: st.Name, Skill: st.Skill, Position: st.Position, X: st.X, Y: st.Y}
 		}),
 		Connectors: each(body.Connectors, func(k gen.ConnectorInput) core.ConnectorInput {
-			return core.ConnectorInput{ID: deref(k.ID), From: k.From, To: k.To, Name: k.Name, Position: k.Position}
+			return core.ConnectorInput{ID: deref(shortid.StringPtr(k.ID)), From: k.From, To: k.To, Name: k.Name, Position: k.Position}
 		}),
 	}
 	if body.Moves != nil {
@@ -134,7 +135,7 @@ func (s *Server) UpdateLabel(w http.ResponseWriter, r *http.Request, label gen.L
 	if !ok {
 		return
 	}
-	l, err := s.core.UpdateLabel(r.Context(), c, label, core.LabelChange{Name: body.Name, Color: body.Color}, idem)
+	l, err := s.core.UpdateLabel(r.Context(), c, string(label), core.LabelChange{Name: body.Name, Color: body.Color}, idem)
 	s.respond(w, r, out, l, err)
 }
 
@@ -143,7 +144,7 @@ func (s *Server) DeleteLabel(w http.ResponseWriter, r *http.Request, label gen.L
 	if !ok {
 		return
 	}
-	s.respond(w, r, noContent, nil, s.core.DeleteLabel(r.Context(), c, label, idem))
+	s.respond(w, r, noContent, nil, s.core.DeleteLabel(r.Context(), c, string(label), idem))
 }
 
 func deref(p *string) string {

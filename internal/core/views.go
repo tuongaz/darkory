@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -70,6 +71,7 @@ func scanView(row interface{ Scan(...any) error }) (View, error) {
 
 // getView reads one of the caller's Views; another Member's is not found, as if it did not exist.
 func getView(ctx context.Context, r store.Reader, c *auth.Caller, id string) (View, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	v, err := scanView(r.QueryRow(ctx, `SELECT `+viewCols+` FROM views v WHERE v.org_id = $1 AND v.member_id = $2 AND v.id = $3`,
 		c.OrgID, c.MemberID, id))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -205,7 +207,8 @@ func viewColumns(entity string, name *string, filters *[]string, sort *string, d
 		if _, err := parseFilters(entity, *filters); err != nil {
 			return nil, err
 		}
-		b, err := json.Marshal(*filters)
+		// Kept with canonical ids, as storage keeps every id (ADR 0017).
+		b, err := json.Marshal(FilterIDs(entity, *filters, shortid.Canonical))
 		if err != nil {
 			return nil, err
 		}

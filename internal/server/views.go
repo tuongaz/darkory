@@ -5,12 +5,13 @@ import (
 
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // A Member's own Views of the Tasks list, across Projects or of one Project's.
 
 func viewOut(v core.View) gen.View {
-	out := gen.View{ID: v.ID, Entity: gen.ViewEntity(v.Entity), ProjectID: v.ProjectID, Name: v.Name, Filters: v.Filters, Sort: v.Sort,
+	out := gen.View{ID: shortid.Of(v.ID), Entity: gen.ViewEntity(v.Entity), ProjectID: shortid.OfPtr(v.ProjectID), Name: v.Name, Filters: core.FilterIDs(v.Entity, v.Filters, shortid.Short), Sort: v.Sort,
 		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
 	if v.Display != nil {
 		out.Display = &v.Display
@@ -52,7 +53,7 @@ func (s *Server) UpdateView(w http.ResponseWriter, r *http.Request, view gen.Vie
 	if body.Display != nil {
 		ch.Display = *body.Display
 	}
-	v, err := s.core.UpdateView(r.Context(), c, view, ch, idem)
+	v, err := s.core.UpdateView(r.Context(), c, string(view), ch, idem)
 	s.respond(w, r, out, v, err)
 }
 
@@ -61,5 +62,5 @@ func (s *Server) DeleteView(w http.ResponseWriter, r *http.Request, view gen.Vie
 	if !ok {
 		return
 	}
-	s.respond(w, r, noContent, nil, s.core.DeleteView(r.Context(), c, view, idem))
+	s.respond(w, r, noContent, nil, s.core.DeleteView(r.Context(), c, string(view), idem))
 }

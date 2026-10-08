@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -16,7 +17,7 @@ import (
 func (f *fixture) openSessions(st *store.Store, name string) int {
 	f.t.Helper()
 	var n int
-	if err := st.QueryRow(f.t.Context(), `SELECT COUNT(*) FROM sessions WHERE member_id = $1 AND closed_at IS NULL`, f.ids[name]).Scan(&n); err != nil {
+	if err := st.QueryRow(f.t.Context(), `SELECT COUNT(*) FROM sessions WHERE member_id = $1 AND closed_at IS NULL`, shortid.Canonical(f.ids[name])).Scan(&n); err != nil {
 		f.t.Fatal(err)
 	}
 	return n

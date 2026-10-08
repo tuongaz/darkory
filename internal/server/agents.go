@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"net/http"
 	"net/url"
 
@@ -92,7 +93,7 @@ func noRunner(w http.ResponseWriter) {
 }
 
 func runnerSessionOut(rs runnerapi.Session) gen.RunnerSession {
-	return gen.RunnerSession{TaskID: rs.TaskID, MemberID: rs.MemberID, SessionID: rs.SessionID, Host: rs.Host, Tmux: optional(rs.Tmux),
+	return gen.RunnerSession{TaskID: shortid.Of(rs.TaskID), MemberID: shortid.Of(rs.MemberID), SessionID: shortid.Of(rs.SessionID), Host: rs.Host, Tmux: optional(rs.Tmux),
 		StartedAt: rs.StartedAt, State: gen.RunnerSessionState(rs.State), StateSince: rs.StateSince, LogPath: rs.LogPath}
 }
 
@@ -127,7 +128,7 @@ func (s *Server) runnerSession(w http.ResponseWriter, r *http.Request, task stri
 		return nil, runnerapi.Session{}, false
 	}
 	for _, rs := range run.Sessions() {
-		if rs.TaskID == t.Task.ID {
+		if shortid.Canonical(rs.TaskID) == t.Task.ID { // the Runner has ids as the API wrote them
 			return run, rs, true
 		}
 	}

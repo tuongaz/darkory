@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -359,6 +360,7 @@ func (s *Service) TouchSession(ctx context.Context, c *auth.Caller) error {
 }
 
 func getSession(ctx context.Context, r store.Reader, orgID, id string) (Session, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	s, err := scanSession(r.QueryRow(ctx, `SELECT `+sessionCols+` FROM sessions s WHERE s.org_id = $1 AND s.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, refuse(CodeNotFound, "no Session %s", id)

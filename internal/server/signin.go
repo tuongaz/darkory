@@ -157,7 +157,7 @@ func (s *Server) CloseSession(w http.ResponseWriter, r *http.Request, session ge
 	if !ok {
 		return
 	}
-	cs, err := s.core.CloseSession(r.Context(), c, session, params.Member, idem)
+	cs, err := s.core.CloseSession(r.Context(), c, string(session), params.Member, idem)
 	s.respond(w, r, out, cs, err)
 }
 
@@ -194,7 +194,7 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, token gen.T
 	if !ok {
 		return
 	}
-	t, err := s.core.RevokeToken(r.Context(), c, token, idem)
+	t, err := s.core.RevokeToken(r.Context(), c, string(token), idem)
 	s.respond(w, r, out, t, err)
 }
 

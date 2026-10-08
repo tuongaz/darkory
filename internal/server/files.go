@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"io"
 	"net"
 	"net/http"
@@ -143,7 +144,7 @@ func (s *Server) uploadFailed(w http.ResponseWriter, r *http.Request, err error,
 }
 
 func (s *Server) GetFile(w http.ResponseWriter, r *http.Request, file gen.FileID) {
-	f, err := s.core.GetFile(r.Context(), caller(r), file)
+	f, err := s.core.GetFile(r.Context(), caller(r), string(file))
 	s.respond(w, r, as(http.StatusOK, func(f core.File) any { return fileOut(f) }), f, err)
 }
 
@@ -152,7 +153,7 @@ func (s *Server) GetFile(w http.ResponseWriter, r *http.Request, file gen.FileID
 // or SVG never runs as the Install's own. Bytes never change under an id, so they are cached.
 func (s *Server) DownloadFile(w http.ResponseWriter, r *http.Request, file gen.FileID, params gen.DownloadFileParams) {
 	ctx := r.Context()
-	f, err := s.core.GetFile(ctx, caller(r), file)
+	f, err := s.core.GetFile(ctx, caller(r), string(file))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -212,7 +213,7 @@ func (s *Server) DeleteFile(w http.ResponseWriter, r *http.Request, file gen.Fil
 	if !ok {
 		return
 	}
-	_, err := s.core.DeleteFile(r.Context(), c, file, idem)
+	_, err := s.core.DeleteFile(r.Context(), c, string(file), idem)
 	if err == nil {
 		s.purgeFiles(r.Context(), c)
 	}
@@ -244,6 +245,6 @@ func (s *Server) purgeFiles(ctx context.Context, c *auth.Caller) {
 }
 
 func fileOut(f core.File) gen.File {
-	return gen.File{ID: f.ID, Name: f.Name, ContentType: f.ContentType, Size: f.Size, Sha256: f.SHA256,
-		Purpose: gen.FilePurpose(f.Purpose), CreatedBy: f.CreatedBy, CreatedAt: f.CreatedAt}
+	return gen.File{ID: shortid.Of(f.ID), Name: f.Name, ContentType: f.ContentType, Size: f.Size, Sha256: f.SHA256,
+		Purpose: gen.FilePurpose(f.Purpose), CreatedBy: shortid.Of(f.CreatedBy), CreatedAt: f.CreatedAt}
 }
