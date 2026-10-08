@@ -257,3 +257,16 @@ test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll"
   expect(errors).toEqual([]);
   await context.close();
 });
+
+test("a Project's Agents table fits a 1280px laptop beside the sidebar, with no sideways scroll", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage();
+  await signIn(page, admin, "ada");
+  await page.goto(`${base()}/projects/INB/agents`);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("link", { name: "inbox-builder", exact: true })).toBeVisible();
+  const scroller = table.locator("xpath=ancestor::div[contains(@class,'overflow-auto')][1]");
+  expect(await scroller.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+  await shot(page, "agents-laptop");
+  await context.close();
+});

@@ -134,7 +134,7 @@ export function AgentsPage() {
             ) : (
               // On a phone the table keeps Agent and Holds, and fits the screen; the rest is in the
               // agent's peek.
-              <table className="w-full table-fixed border-collapse md:min-w-[1080px]">
+              <table className="w-full table-fixed border-collapse md:min-w-[1024px]">
                 <thead>
                   <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 md:[&>th:first-child]:pl-6">
                     <th className="w-[132px] md:w-[168px]">Agent</th>
