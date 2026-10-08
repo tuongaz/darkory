@@ -39,6 +39,9 @@ describe("a Task's path through its Steps", () => {
     const path = taskPath(done, [entry(7, "task.completed", 30, { from: step.review, since: ms(20) })]);
     expect(path.stays).toEqual([{ stepId: step.review, since: ms(20), until: ms(30), left: { by: "completed" } }]);
     expect(path.end).toEqual({ kind: "done", at: ms(30) });
+    // Completed by advancing into Done: the Connector's outcome is how it left.
+    const along = taskPath(done, [entry(7, "task.completed", 30, { from: step.review, since: ms(20), outcome: "pass" })]);
+    expect(along.stays[0].left).toEqual({ by: "completed", outcome: "pass" });
   });
 
   it("takes the record's Step when no Activity reaches it", () => {

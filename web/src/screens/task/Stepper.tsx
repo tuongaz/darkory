@@ -12,6 +12,7 @@ import { stayText, taskPath, type Stay } from "./path";
 const leftWords = (left: Stay["left"]) => {
   switch (left?.by) {
     case "advanced":
+    case "completed":
       return left.outcome;
     case "moved":
       return "moved";
