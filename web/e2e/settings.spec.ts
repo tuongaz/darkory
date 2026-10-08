@@ -75,6 +75,8 @@ async function noSidewaysScroll(page: Page, what: string) {
 }
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Settings pages" });
+/** The Organisation's button at the head of the app's sidebar. */
+const orgButton = (page: Page) => page.locator("[data-slot=sidebar-header]").getByRole("button", { name: "E2E Organisation" });
 
 test("New Project, Members and Skills from Settings", async ({ browser }) => {
   const { ctx, page, errors } = await open(browser);
@@ -187,7 +189,8 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
 
   await test.step("the Project's Settings in the sidebar opens its General page", async () => {
     await page.goto(`${base}/projects/WEB/tasks`);
-    await page.getByRole("navigation", { name: "Project" }).getByRole("link", { name: "Settings" }).click();
+    // The current Project unfolds in the sidebar's Projects onto its places, Settings last.
+    await page.getByRole("navigation", { name: "Projects" }).getByRole("list", { name: "Web" }).getByRole("link", { name: "Settings" }).click();
     await expect(page).toHaveURL(`${base}/settings/projects/WEB/general`);
     await expect(nav(page).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
     await shot(page, "13-door-project");
@@ -196,14 +199,21 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
     await expect(page).toHaveURL(`${base}/projects/WEB/tasks`);
   });
 
-  await test.step("the account menu opens Account, and Organisation settings", async () => {
-    await page.getByRole("button", { name: "Account: ada" }).click();
-    await shot(page, "14-door-account-menu");
-    await page.getByRole("menuitem", { name: "Account" }).click();
+  await test.step("the Organisation menu opens Settings, Invite and manage Members, and Account settings", async () => {
+    const organisation = orgButton(page);
+    await organisation.click();
+    await shot(page, "14-door-organisation-menu");
+    // An admin's Settings opens on the Organisation.
+    await page.getByRole("menuitem", { name: /^Settings/ }).click();
+    await expect(page).toHaveURL(`${base}/settings/organisation/members`);
+    await page.getByRole("link", { name: "Back" }).click();
+    await organisation.click();
+    await page.getByRole("menuitem", { name: /^Switch Organisation/ }).press("ArrowRight");
+    await page.getByRole("menuitem", { name: "Account settings" }).click();
     await expect(page).toHaveURL(`${base}/settings/account`);
     await page.getByRole("link", { name: "Back" }).click();
-    await page.getByRole("button", { name: "Account: ada" }).click();
-    await page.getByRole("menuitem", { name: "Organisation settings" }).click();
+    await organisation.click();
+    await page.getByRole("menuitem", { name: "Invite and manage Members" }).click();
     await expect(page).toHaveURL(`${base}/settings/organisation/members`);
     await shot(page, "15-door-organisation");
   });
@@ -247,12 +257,12 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
     await shot(mai.page, "18-non-admin-refused");
     await mai.page.goto(`${base}/admin/members`);
     await expect(mai.page.getByRole("heading", { name: "Admins only" })).toBeVisible();
-    // Her account menu has no Organisation settings.
+    // Her Organisation menu has no Invite and manage Members.
     await mai.page.goto(`${base}/inbox`);
-    await mai.page.getByRole("button", { name: "Account: Mai Tran" }).click();
-    await expect(mai.page.getByRole("menuitem", { name: "Account" })).toBeVisible();
-    await expect(mai.page.getByRole("menuitem", { name: "Organisation settings" })).toHaveCount(0);
-    await shot(mai.page, "19-non-admin-account-menu");
+    await orgButton(mai.page).click();
+    await expect(mai.page.getByRole("menuitem", { name: /^Settings/ })).toBeVisible();
+    await expect(mai.page.getByRole("menuitem", { name: "Invite and manage Members" })).toHaveCount(0);
+    await shot(mai.page, "19-non-admin-organisation-menu");
     expect(mai.errors).toEqual([]);
     await mai.ctx.close();
   });
@@ -326,7 +336,7 @@ test("an agent: its token shown once; deactivating it ends its live Claim and it
 
   await test.step("Account: my token, this browser, the CLI line", async () => {
     await page.goto(`${base}/settings/account`);
-    await expect(page.getByRole("listitem", { name: "This browser" }).getByRole("button", { name: "Sign out" })).toBeVisible();
+    await expect(page.getByRole("listitem", { name: "This browser" }).getByRole("button", { name: "Log out" })).toBeVisible();
     await expect(page.getByRole("button", { name: /^More for token / }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(0);
     await expect(page.getByText("darkory login ada")).toBeVisible();

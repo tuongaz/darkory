@@ -246,7 +246,7 @@ describe("Settings › Account", () => {
     { id: "browser-2", member_id: ada.id, kind: "browser", started_at: at, last_seen_at: at },
   ];
 
-  it("shows the profile, gives each token and each other Session one ⋯, and Sign out to this browser only", async () => {
+  it("shows the profile, gives each token and each other Session one ⋯, and Log out to this browser only", async () => {
     const user = userEvent.setup();
     const api = mockApi({
       ...signedIn(),
@@ -264,10 +264,10 @@ describe("Settings › Account", () => {
     // Besides its id, which copies itself, a Session has one action.
     const actions = (row: HTMLElement) => within(row).getAllByRole("button").filter((b) => !b.getAttribute("aria-label")?.startsWith("Copy the Session id"));
     const here = await screen.findByRole("listitem", { name: "This browser" });
-    expect(actions(here).map((b) => b.textContent)).toEqual(["Sign out"]);
+    expect(actions(here).map((b) => b.textContent)).toEqual(["Log out"]);
     const other = screen.getByRole("listitem", { name: "Session browser-2" });
     expect(actions(other).map((b) => b.getAttribute("aria-label"))).toEqual(["More for Session browser-2"]);
-    expect(screen.getAllByRole("button", { name: /Sign out/ })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /Log out/ })).toHaveLength(1);
 
     await user.click(within(other).getByRole("button", { name: "More for Session browser-2" }));
     await user.click(await screen.findByRole("menuitem", { name: "Close Session" }));

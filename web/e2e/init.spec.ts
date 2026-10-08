@@ -74,7 +74,8 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     await expect(setup).toContainText("Project: Main");
     await expect(setup.getByLabel("2 of 3, done")).toBeVisible();
     await expect(setup.getByRole("button", { name: "File Task" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Project: Main" })).toBeVisible();
+    // MAIN is current: unfolded in the sidebar's Projects.
+    await expect(page.getByRole("navigation", { name: "Projects" }).getByRole("button", { name: "Main", exact: true })).toHaveAttribute("aria-expanded", "true");
     await shot(page, "02-checklist");
   });
 

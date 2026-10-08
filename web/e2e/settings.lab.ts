@@ -241,6 +241,11 @@ async function mock(page: Page) {
   });
 }
 
+/** Waits for what slides or fades in to finish; the turning rings never do. */
+function settled(page: Page) {
+  return page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity));
+}
+
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -283,6 +288,30 @@ for (const scheme of ["light", "dark"] as const) {
         expect(widths.scroll, `${p.path} scrolls sideways`).toBe(widths.client);
         await page.screenshot({ path: `e2e/screenshots/${p.slug}-${size.name}-${scheme}.png`, fullPage: true });
       }
+      // The app's sidebar after Linear's: closed, its Organisation menu open, and Switch Organisation open.
+      await page.goto("/projects/WEB/tasks");
+      await page.getByRole("navigation", { name: "Breadcrumb" }).waitFor({ state: "attached" });
+      await page.waitForLoadState("networkidle");
+      if (size.name === "phone") await page.getByRole("button", { name: "Toggle Sidebar" }).click();
+      const projects = page.getByRole("navigation", { name: "Projects" });
+      await expect(projects.getByRole("list", { name: "Web storefront" })).toBeVisible();
+      await settled(page);
+      await page.screenshot({ path: `e2e/screenshots/sidebar-closed-${size.name}-${scheme}.png` });
+      await page.locator("[data-slot=sidebar-header]").getByRole("button", { name: "Acme" }).click();
+      const menu = page.getByRole("menu");
+      await expect(menu.getByRole("menuitem", { name: /^Log out/ })).toBeVisible();
+      await settled(page);
+      await page.screenshot({ path: `e2e/screenshots/sidebar-menu-${size.name}-${scheme}.png` });
+      await menu.getByRole("menuitem", { name: /^Switch Organisation/ }).press("ArrowRight");
+      await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
+      await settled(page);
+      await expect(page.getByRole("menu").nth(1)).toBeInViewport({ ratio: 1 });
+      const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+      expect(widths.scroll, "the open menus scroll sideways").toBe(widths.client);
+      await page.screenshot({ path: `e2e/screenshots/sidebar-switch-${size.name}-${scheme}.png` });
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+
       if (size.name === "phone") {
         // Settings' nav is the sheet the top bar's button opens.
         await page.goto("/settings/projects/WEB/general");

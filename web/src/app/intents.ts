@@ -8,16 +8,20 @@ import { useEffect, useRef } from "react";
  *   start at (`step`, a Step id: a board column's +), the Task to file a Subtask under (`parent`,
  *   a key), and the `title` to start with (⌘K's words when nothing matched them). The Tasks
  *   screen's dialogs answer it (`BoardDialogs`, mounted once by the shell).
- * - `new-project`: "+ New Project" in the switcher, ⌘K, Settings and the Install checklist; the
- *   shell's New Project dialog answers it.
- * - `switch-project`: G then P; the sidebar opens its Project switcher.
- * - `search`: the sidebar's Search; the shell opens ⌘K.
+ * - `new-project`: "+ New Project" under the sidebar's Projects, ⌘K, Settings and the Install
+ *   checklist; the shell's New Project dialog answers it.
+ * - `focus-projects`: G then P; the sidebar focuses the current Project's row in its Projects.
+ * - `switch-organisation`: O then W; the sidebar opens the Organisation menu on Switch Organisation.
+ * - `search`: the sidebar's Search button; the shell opens ⌘K.
+ * - `log-out`: ⌥⇧Q and the Organisation menu's Log out; the shell ends this browser's Session.
  * - `filter`: the F key; a page with Filters opens its menu.
  */
 export type Intent =
   | { kind: "file-task"; project?: string; step?: string; parent?: string; title?: string }
   | { kind: "new-project" }
-  | { kind: "switch-project" }
+  | { kind: "focus-projects" }
+  | { kind: "switch-organisation" }
+  | { kind: "log-out" }
   | { kind: "search" }
   | { kind: "filter" };
 
