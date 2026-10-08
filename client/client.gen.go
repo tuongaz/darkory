@@ -2041,6 +2041,11 @@ type ListActivityParams struct {
 	// Labels, or a Task of it.
 	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
+	// Task Only entries about this Task (id or key): those whose subject is the Task, and for a
+	// Parent its Subtasks' too, the ones filed after the request included. Errors:
+	// `not_found` (no such Task).
+	Task *string `form:"task,omitempty" json:"task,omitempty"`
+
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 }
@@ -2733,8 +2738,8 @@ type ClientInterface interface {
 	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
-	// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
-	// matching entries; the page is then the `limit` matching entries after `after` or just
+	// 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
+	// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
 	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
 	// Corresponds with GET /v1/activity (the `ListActivity` operationId).
@@ -4134,8 +4139,8 @@ type ClientInterface interface {
 // `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
-// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
-// matching entries; the page is then the `limit` matching entries after `after` or just
+// 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
+// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
 // below `before`, and its `first_seq` and `last_seq` are theirs.
 //
 // Corresponds with GET /v1/activity (the `ListActivity` operationId).
@@ -6747,6 +6752,18 @@ func NewListActivityRequest(server string, params *ListActivityParams) (*http.Re
 		if params.Project != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Task != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "task", *params.Task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -11142,8 +11159,8 @@ type ClientWithResponsesInterface interface {
 	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
-	// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
-	// matching entries; the page is then the `limit` matching entries after `after` or just
+	// 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
+	// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
 	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -16460,8 +16477,8 @@ func (r UpdateWorkspaceResponse) ContentType() string {
 // `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
-// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
-// matching entries; the page is then the `limit` matching entries after `after` or just
+// 9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
+// the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
 // below `before`, and its `first_seq` and `last_seq` are theirs.
 //
 // Returns a wrapper object for the known response body format(s).

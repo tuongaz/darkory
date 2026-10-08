@@ -68,7 +68,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 | `note`, `observe`, `observations <task> [--all]`, `attach <task> <file>`, `evidence get` | Notes, Observations and Evidence |
 | `block <task> --by <task>`, `unblock` | Blocking |
 | `propose <task> --skill s --base n --file f`, `proposal show <task\|id>` | a Retrospective's Skill proposals |
-| `activity [--project p] [--follow]` | the Activity trail |
+| `activity [--project p] [--task t] [--follow]` | the Activity trail, of a Project or of a Task and its Subtasks |
 
 | Projects, Workflows and Labels | |
 |---|---|
