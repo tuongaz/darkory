@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,11 +15,11 @@ import (
 )
 
 // Builder takes work through next and works it as the rules say: it heartbeats in the background,
-// writes a Note, attaches a small Evidence file, and, when the Task's description has a question
-// for someone, files that question aimed at them, blocking its own Task, and waits for the answer
-// holding its Claim. Then it hands over to the Skill the description names, moving the Task to
-// the review Status, or completes it with an Observation: didn't work when the Skill left it
-// asking, worked otherwise. It reports its model label on every Claim.
+// writes a Note, attaches a small Evidence file, and, when the Task asks a question of someone,
+// files that question aimed at them, blocking its own Task, and waits for the answer holding its
+// Claim. Then it records an Observation (didn't work when the Skill left it asking, worked
+// otherwise) and advances the Task along its Step's way on: a build to review, a QA into Done. It
+// reports its model label on every Claim.
 //
 // A prober is a Builder that asks next without waiting, every Pace.Poll, and reports each empty
 // answer, to show which Tasks next does not offer.
@@ -39,14 +40,10 @@ func NewProber(cfg Config, m Member, model string) *Builder {
 	return b
 }
 
-// A Task's description asks a builder for something with lines such as these.
-var (
-	questionRe = regexp.MustCompile(`(?m)^Question for (\S+): (.+)$`)
-	handoverRe = regexp.MustCompile(`(?m)^Hand over to (\S+) when built\.$`)
-)
+// A Task's description asks a worker a question with a line such as this.
+var questionRe = regexp.MustCompile(`(?m)^Question for (\S+): (.+)$`)
 
 func questionLine(who, q string) string { return "Question for " + who + ": " + q }
-func handoverLine(skill string) string  { return "Hand over to " + skill + " when built." }
 
 func (b *Builder) Run(ctx context.Context) error {
 	return b.loop(ctx, func() (bool, error) {
@@ -66,71 +63,87 @@ func (b *Builder) Run(ctx context.Context) error {
 			return true, nil
 		}
 		b.took(d)
-		return true, on(d.Task.Key, b.build(ctx, d))
+		return true, on(d.Task.Key, b.work(ctx, d, true))
 	})
 }
 
-func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
+// work works d's Task, which the agent has just claimed, as its Item says: a Note, the Evidence,
+// a question when it asks one, then, at a Step that reviews, a hand-back along "needs changes"
+// the first time; otherwise an Observation when observe says so, and the Task advanced along its
+// Step's way on, or completed where that is the Step's one way, into Done, and the agent is a
+// person.
+func (a *agent) work(ctx context.Context, d *client.TaskDetail, observe bool) error {
 	key := d.Task.Key
-	wctx, stop := b.hold(ctx, d)
+	wctx, stop := a.hold(ctx, d)
 	defer stop()
 	skill := ""
 	if d.Task.SkillID != nil {
-		s, err := b.skill(wctx, *d.Task.SkillID)
+		s, err := a.skill(wctx, *d.Task.SkillID)
 		if err != nil {
 			return gone(wctx, err)
 		}
 		skill = s.Skill.Name
 	}
-	// What the Task asks of its worker: its plan's Step says, or else lines of its description.
-	step := b.step(d)
-	var who, question, handover string
+	step := where(d)
+	// What the Task asks of its worker: its plan's Item says, or else lines of its description.
+	item := a.item(d)
+	var who, question string
 	if m := questionRe.FindStringSubmatch(d.Task.Description); m != nil {
 		who, question = m[1], m[2]
 	}
-	if m := handoverRe.FindStringSubmatch(d.Task.Description); m != nil {
-		handover = m[1]
-	}
-	// A Task handed back after review is reworked: the fix is appended and it goes to review again.
-	rework := false
-	if step != nil {
-		if q := step.Question; q != nil {
-			who, question = or(q.AimedAt, b.ask), q.Title
+	outcome, handBack, rework := "", "", false
+	if item != nil {
+		if q := item.Question; q != nil && (q.Step == "" || q.Step == step) {
+			who, question = or(q.AimedAt, a.ask), q.Title
 		}
-		handover = or(step.Handover, handover)
-		for _, c := range d.Claims {
-			rework = rework || (c.HolderID == b.m.ID && c.HowEnded != nil && *c.HowEnded == client.ClaimEndHandedOver)
+		outcome = item.Outcome
+		// A reviewing Step hands the Task back the first time; the Step it goes back to fixes it.
+		if item.HandBack != "" {
+			sent := hasNote(d, item.HandBack)
+			switch {
+			case back(d) != "" && !sent:
+				handBack = item.HandBack
+			case sent && !hasNote(d, item.Fix) && back(d) == "":
+				rework = true
+			}
 		}
 	}
 
-	total := b.work()
+	total := a.busy()
 	if !sleep(wctx, total/3) {
 		return nil
 	}
 	note := ""
 	switch {
-	case step == nil || step.Workpaper == "":
+	case handBack != "":
+		note = fmt.Sprintf("Reviewing %q.", d.Task.Title)
+	case item == nil || item.Workpaper == "":
 		note = fmt.Sprintf("Starting on %q.", d.Task.Title)
 		if first, _, _ := strings.Cut(d.Task.Description, "\n"); strings.TrimSpace(first) != "" {
 			note = fmt.Sprintf("Starting on %q: %s.", d.Task.Title, strings.TrimSuffix(strings.TrimSpace(first), "."))
 		}
 	case rework:
-		note = fmt.Sprintf("Back from review, fixing %s.", step.Workpaper)
+		note = fmt.Sprintf("Back from review, fixing %s.", item.Workpaper)
 	default:
-		note = fmt.Sprintf("Starting on %s, in %s.", d.Task.Title, step.Workpaper)
+		note = fmt.Sprintf("Working %s at %s, in %s.", d.Task.Title, step, item.Workpaper)
 	}
-	if err := b.note(wctx, key, note); err != nil {
+	if err := a.note(wctx, key, note); err != nil {
 		return gone(wctx, err)
 	}
 	if !sleep(wctx, total/3) {
 		return nil
 	}
-	name, content, err := b.evidence(wctx, d, step, skill, rework)
-	if err != nil {
-		return gone(wctx, err)
-	}
-	if err := b.attach(wctx, key, name, content); err != nil {
-		return gone(wctx, err)
+	name := ""
+	if handBack == "" {
+		var content string
+		var err error
+		name, content, err = a.evidence(wctx, d, item, skill, step, rework)
+		if err != nil {
+			return gone(wctx, err)
+		}
+		if err := a.attach(wctx, key, name, content); err != nil {
+			return gone(wctx, err)
+		}
 	}
 
 	// A question asked once, by whoever held the Task, is not asked again.
@@ -138,9 +151,9 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 	for _, bl := range d.Blockers {
 		asked = asked || bl.AimedAtID != nil
 	}
-	if question != "" && !asked {
+	if question != "" && !asked && handBack == "" {
 		asked = true
-		answered, err := b.askAndWait(wctx, d, who, question)
+		answered, err := a.askAndWait(wctx, d, who, question)
 		if err != nil || wctx.Err() != nil {
 			return gone(wctx, err) // the Claim was lost while waiting, or the bot is stopping
 		}
@@ -149,52 +162,66 @@ func (b *Builder) build(ctx context.Context, d *client.TaskDetail) error {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return gone(ctx, b.release(ctx, key, fmt.Sprintf("Waiting for %s to answer; whoever takes it next can carry on once they have.", who)))
+			return gone(ctx, a.release(ctx, key, fmt.Sprintf("Waiting for %s to answer; whoever takes it next can carry on once they have.", who)))
 		}
 	}
 	if !sleep(wctx, total/3) {
 		return nil
 	}
 
-	if handover != "" && handover != skill {
-		status, err := b.reviewStatus(wctx)
-		if err != nil {
-			return gone(wctx, err)
-		}
+	if handBack != "" {
 		stop()
 		if ctx.Err() != nil {
 			return nil
 		}
-		hnote := fmt.Sprintf("Built, with %s attached; ready for %s.", name, handover)
-		if step != nil && step.Workpaper != "" {
-			hnote = fmt.Sprintf("The workpaper %s is attached and ready for %s.", name, handover)
+		if _, err := a.advance(ctx, key, back(d), handBack); err != nil {
+			return gone(ctx, err)
 		}
-		return gone(ctx, b.handover(ctx, key, handover, status, hnote))
+		a.say("handed back", key, "%q", handBack)
+		return nil
 	}
-
-	outcome, body := client.Worked, fmt.Sprintf("%s went as %s describes.", d.Task.Title, or(skill, "the Skill"))
-	if question != "" && asked && !rework {
-		outcome, body = client.DidntWork, fmt.Sprintf("%s did not answer this, so %s had to: %s", or(skill, "The Skill"), who, question)
+	if observe {
+		outcome, body := client.Worked, fmt.Sprintf("%s went as %s describes.", d.Task.Title, or(skill, "the Skill"))
+		if question != "" && asked && !rework {
+			outcome, body = client.DidntWork, fmt.Sprintf("%s did not answer this, so %s had to: %s", or(skill, "The Skill"), who, question)
+		}
+		res, err := a.c.ObserveWithResponse(wctx, key, &client.ObserveParams{}, client.ObserveBody{Outcome: outcome, Body: body})
+		if err := check(res, err, http.StatusCreated); err != nil {
+			return gone(wctx, err)
+		}
+		a.say("observed", key, "%s: %q", outcome, body)
 	}
-	res, err := b.c.ObserveWithResponse(wctx, key, &client.ObserveParams{}, client.ObserveBody{Outcome: outcome, Body: body})
-	if err := check(res, err, http.StatusCreated); err != nil {
-		return gone(wctx, err)
-	}
-	b.say("observed", key, "%s: %q", outcome, body)
 	stop()
 	if ctx.Err() != nil {
 		return nil
 	}
-	_, err = b.complete(ctx, key, "Done; "+name+" is attached.")
+	done := "Done; " + name + " is attached."
+	if item != nil && item.entry(step) != "" {
+		done = item.entry(step)
+	}
+	if rework {
+		done = or(item.Fix, "Fixed what review asked for.")
+	}
+	// A person completes a Task whose Step has one way out, into Done; an agent always advances.
+	if !observe && len(d.Connectors) == 1 && d.Connectors[0].ToStepID == nil {
+		_, err := a.complete(ctx, key, done)
+		return gone(ctx, err)
+	}
+	_, err := a.advance(ctx, key, onward(d, outcome), done)
 	return gone(ctx, err)
+}
+
+// hasNote says whether one of d's Notes says text.
+func hasNote(d *client.TaskDetail, text string) bool {
+	return text != "" && slices.ContainsFunc(d.Notes, func(n client.Note) bool { return n.Body == text })
 }
 
 // askAndWait files a question aimed at who that blocks d's Task, then waits, holding the Claim,
 // until the Task is unblocked or Patience runs out. It says whether the question was answered.
-func (b *Builder) askAndWait(wctx context.Context, d *client.TaskDetail, who, q string) (bool, error) {
+func (b *agent) askAndWait(wctx context.Context, d *client.TaskDetail, who, q string) (bool, error) {
 	desc := fmt.Sprintf("%s asks while working %s %q.", b.m.Name, d.Task.Key, d.Task.Title)
 	res, err := b.c.FileTaskWithResponse(wctx, &client.FileTaskParams{}, client.FileTaskBody{
-		Title: q, AimedAt: &who, Blocks: &d.Task.Key, Description: &desc})
+		Title: q, Aim: &who, Blocks: &d.Task.Key, Description: &desc})
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return false, err
 	}
@@ -222,26 +249,12 @@ func (b *Builder) askAndWait(wctx context.Context, d *client.TaskDetail, who, q 
 	return false, nil
 }
 
-// reviewStatus is the Status a Task handed over to review moves to: the in_progress Status whose
-// name says review, else none, which leaves the Status as it is.
-func (b *Builder) reviewStatus(ctx context.Context) (string, error) {
-	list, err := b.listStatuses(ctx)
-	if err != nil {
-		return "", err
-	}
-	for _, s := range list {
-		if s.Kind == client.StatusKindInProgress && strings.Contains(strings.ToLower(s.Name), "review") {
-			return s.Name, nil
-		}
-	}
-	return "", nil
-}
-
-// evidence is the file the builder attaches to d's Task: the workpaper its Step names, with the
-// Step's line (or, on rework, its fix) appended, from the Task's first Workspace on this machine;
-// the line alone when that Workspace is elsewhere; else the preset's file for the Skill.
-func (b *Builder) evidence(ctx context.Context, d *client.TaskDetail, step *Step, skill string, rework bool) (string, string, error) {
-	if step == nil || step.Workpaper == "" {
+// evidence is the file a worker attaches to d's Task: the workpaper its Item names, with the
+// Item's line for the Step (or, on rework, its fix) appended, from the Task's first Workspace on
+// this machine; the line alone when there is no Workspace or it is elsewhere; else the preset's
+// file for the Skill.
+func (b *agent) evidence(ctx context.Context, d *client.TaskDetail, item *Item, skill, step string, rework bool) (string, string, error) {
+	if item == nil || item.Workpaper == "" {
 		if b.preset.Evidence != nil {
 			name, content := b.preset.Evidence(d, skill)
 			return name, content, nil
@@ -249,15 +262,15 @@ func (b *Builder) evidence(ctx context.Context, d *client.TaskDetail, step *Step
 		name, content := evidence(d, skill)
 		return name, content, nil
 	}
-	entry := step.Entry
+	entry := item.entry(step)
 	if rework {
-		entry = or(step.Fix, "Fixed what review asked for.")
+		entry = or(item.Fix, "Fixed what review asked for.")
 	}
-	name := path.Base(step.Workpaper)
+	name := path.Base(item.Workpaper)
 	if len(d.Workspaces) > 0 {
-		content, err := appendWorkpaper(ctx, d.Workspaces[0].Path, step.Workpaper, d.Task.Key, b.m.Name, entry)
+		content, err := appendWorkpaper(ctx, d.Workspaces[0].Path, item.Workpaper, d.Task.Key, b.m.Name, entry)
 		if err == nil {
-			b.say("wrote", d.Task.Key, "%q to %s in %s", entry, step.Workpaper, d.Workspaces[0].Name)
+			b.say("wrote", d.Task.Key, "%q to %s in %s", entry, item.Workpaper, d.Workspaces[0].Name)
 			return name, content, nil
 		}
 		if !errors.Is(err, errNoCheckout) {

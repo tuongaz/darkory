@@ -84,7 +84,8 @@ type Record interface {
 	// Claim claims a named Task.
 	Claim(ctx context.Context, task string, timeout time.Duration, model string) (*client.TaskDetail, error)
 	Task(ctx context.Context, ref string) (*client.TaskDetail, error)
-	// Feature reads the Task ref names as the whole it is part of: its Parent, else itself.
+	// Feature reads the Task ref names as the whole it is part of: its Parent, else itself (a
+	// Parent, or a Task standing alone, Quick).
 	// model v2: a Parent stands in for a Feature (M3).
 	Feature(ctx context.Context, ref string) (*FeatureInfo, error)
 	// Workspaces are the Workspaces task names, or its Team's default when it names none.
@@ -205,8 +206,9 @@ func (r *conn) Feature(ctx context.Context, ref string) (*FeatureInfo, error) {
 		}
 	}
 	t := res.JSON200.Task
-	f := &FeatureInfo{Key: t.Key, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID, Quick: d.Parent == nil,
-		Open: t.State == client.TaskStateOpen}
+	// A Task with neither Parent nor Subtasks stands alone, as a quick Feature's one Task did.
+	f := &FeatureInfo{Key: t.Key, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID,
+		Quick: d.Parent == nil && len(d.Subtasks) == 0, Open: t.State == client.TaskStateOpen}
 	m, err := r.c.GetMemberWithResponse(ctx, f.OwnerID)
 	if err := remote.Check(m, err, http.StatusOK); err != nil {
 		return nil, err

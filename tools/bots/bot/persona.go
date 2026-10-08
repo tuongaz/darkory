@@ -2,12 +2,9 @@ package bot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
-	"path"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/tuongaz/darkory/client"
@@ -15,14 +12,13 @@ import (
 
 // Person is a human persona at work, acting through a token of their own as a person in the web
 // app would. One who answers looks at their takeable list every Pace.Poll and, Pace.Answer after
-// first seeing a question aimed at them or a Task needing a Skill they work, claims it, writes a
-// Note (the answer, or what they did, with the workpaper attached) and completes it. One who
-// answers into an Awaiting Status moves the Tasks a question blocks there on first seeing it, and
-// back to the first todo Status after writing the answer, before completing the question. One who
-// owns looks over the Features they own every Pace.Round: they ship each whose Tasks have all
-// ended (one that ships when done has shipped itself), and move one unblocked Task waiting in the
-// first backlog Status, of a Feature whose Break down has ended, to the first todo Status; a Task
-// in another backlog Status waits for whoever put it there. A human reports no model label.
+// first seeing a question aimed at them, claims it, writes the answer as a Note and completes it.
+// One who works a Skill takes the Tasks at its Steps the same way and works them as an agent
+// would (agent.work), with no Observation and no model label: advancing each along its Step's way
+// on, or completing it where that is the Step's one way, into Done. One who owns looks over the
+// Tasks they own every Pace.Round: they complete each Parent whose Subtasks have all ended (one
+// with Auto-complete has completed itself), and move one unblocked Task waiting in the hold, the
+// intake, to the Step it is for, once its Parent's Breakdown, if any, has ended.
 type Person struct {
 	agent
 	p Persona
@@ -84,11 +80,6 @@ func (h *Person) answer(ctx context.Context) error {
 		}
 		seen[t.ID] = true
 		if _, ok := h.due[t.ID]; !ok {
-			if aimed && h.p.Answers && h.p.Awaiting != "" {
-				if err := h.park(ctx, t); err != nil {
-					return on(t.Key, err)
-				}
-			}
 			h.due[t.ID] = now.Add(h.between(h.cfg.Pace.Answer))
 		}
 		if next == nil && !now.Before(h.due[t.ID]) {
@@ -107,7 +98,8 @@ func (h *Person) answer(ctx context.Context) error {
 	return on(next.Key, h.do(ctx, next.Key))
 }
 
-// do claims the Task key, notes and completes it.
+// do claims the Task key and does it: a question answered with a Note and completed, any other
+// Task worked as its Item says.
 func (h *Person) do(ctx context.Context, key string) error {
 	timeout := h.cfg.Pace.Timeout
 	res, err := h.c.ClaimTaskWithResponse(ctx, key, &client.ClaimTaskParams{}, client.ClaimTaskBody{HeartbeatTimeoutSeconds: &timeout})
@@ -120,6 +112,9 @@ func (h *Person) do(ctx context.Context, key string) error {
 	}
 	d := res.JSON200
 	h.took(d)
+	if d.Task.AimedAtID == nil {
+		return h.work(ctx, d, false)
+	}
 	// A Claim with a timeout ends when the token is revoked, so none is left held when the run stops.
 	wctx, stop := h.hold(ctx, d)
 	defer stop()
@@ -127,180 +122,98 @@ func (h *Person) do(ctx context.Context, key string) error {
 	if !sleep(wctx, h.cfg.Pace.Step) {
 		return nil
 	}
-	note := ""
-	if d.Task.AimedAtID != nil {
-		note = h.preset.answer(d.Task.Title)
-	} else {
-		step := h.step(d)
-		if step == nil {
-			note = "Done as the Task describes."
-		} else {
-			note = or(step.Entry, "Done as the Task describes.")
-			if step.Workpaper != "" && len(d.Workspaces) > 0 {
-				content, err := appendWorkpaper(wctx, d.Workspaces[0].Path, step.Workpaper, key, h.m.Name, note)
-				switch {
-				case err == nil:
-					if err := h.attach(wctx, key, path.Base(step.Workpaper), content); err != nil {
-						return gone(wctx, err)
-					}
-				case !errors.Is(err, errNoCheckout):
-					return gone(wctx, err)
-				}
-			}
-		}
-	}
-	if err := h.note(wctx, key, note); err != nil {
+	if err := h.note(wctx, key, h.preset.answer(d.Task.Title)); err != nil {
 		return gone(wctx, err)
-	}
-	// Moved back while the question still blocks them, so nothing can take them in between.
-	if d.Task.AimedAtID != nil && h.p.Awaiting != "" {
-		if err := h.unpark(wctx, d); err != nil {
-			return gone(wctx, err)
-		}
 	}
 	stop()
 	if ctx.Err() != nil {
 		return nil
 	}
-	cres, err := h.c.CompleteTaskWithResponse(ctx, key, &client.CompleteTaskParams{}, client.CompleteTaskBody{})
-	if err := check(cres, err, http.StatusOK); err != nil {
-		return gone(ctx, err)
-	}
-	h.say("completed", key, "now %s", h.statusName(ctx, cres.JSON200.StatusID))
-	return nil
+	_, err = h.complete(ctx, key, "")
+	return gone(ctx, err)
 }
 
-// look ships the persona's Features whose Tasks have all ended, then moves one Task waiting in the
-// first backlog Status to the first todo Status.
+// look completes the persona's Parents whose Subtasks have all ended, then moves one Task waiting
+// in the hold to the Step it is for.
 func (h *Person) look(ctx context.Context) error {
-	open := client.FeatureStateOpen
-	res, err := h.c.ListFeaturesWithResponse(ctx, &client.ListFeaturesParams{Owner: &h.m.ID, State: &open, Limit: ptr(500)})
+	filter := []string{"owner:is:" + h.m.ID, "top:is:true"}
+	open := client.TaskStateOpen
+	res, err := h.c.ListTasksWithResponse(ctx, &client.ListTasksParams{Filter: &filter, State: &open, Limit: ptr(500)})
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
-	features := res.JSON200.Items
-	for _, f := range features {
-		if f.TaskCounts.Open > 0 {
+	tasks := res.JSON200.Items
+	for _, t := range tasks {
+		if n := t.SubtaskCounts; n == nil || n.Open > 0 {
 			continue
 		}
-		sres, err := h.c.ShipFeatureWithResponse(ctx, f.Key, &client.ShipFeatureParams{})
-		if err := check(sres, err, http.StatusOK); err != nil {
-			// Shipped by ship-when-done, or a Task filed, since the list was read.
+		cres, err := h.c.CompleteTaskWithResponse(ctx, t.Key, &client.CompleteTaskParams{}, client.CompleteTaskBody{})
+		if err := check(cres, err, http.StatusOK); err != nil {
+			// Completed by Auto-complete, or a Subtask filed, since the list was read.
 			if c := Code(err); c == client.ErrorCodeEnded || c == client.ErrorCodeTasksOpen {
 				continue
 			}
-			return fmt.Errorf("shipping %s: %w", f.Key, err)
+			return fmt.Errorf("completing %s: %w", t.Key, err)
 		}
-		retro := "it has no Retrospective"
-		if !f.Quick {
-			retro = "its Retrospective waits for retro"
-		}
-		h.say("shipped", "", "%s %q, every Task having ended; %s", f.Key, f.Title, retro)
+		h.say("completed", t.Key, "%q, every Subtask having ended", t.Title)
 	}
-	list, err := h.listStatuses(ctx)
-	if err != nil {
-		return err
-	}
-	todo, todoName := firstOfKind(list, client.StatusKindTodo)
-	backlog, _ := firstOfKind(list, client.StatusKindBacklog)
-	if backlog == "" || todo == "" {
+	hold := h.preset.Workflow.Hold()
+	if hold == "" {
 		return nil
 	}
-	for _, f := range features {
-		if f.TaskCounts.Open == 0 {
-			continue
-		}
-		fres, err := h.c.GetFeatureWithResponse(ctx, f.Key)
-		if err := check(fres, err, http.StatusOK); err != nil {
-			return err
-		}
-		tasks := fres.JSON200.Tasks
-		// The planner files Tasks into the Backlog before it sets their blockers; once the Break
-		// down has ended they are all set.
-		if slices.ContainsFunc(tasks, func(t client.Task) bool { return t.Kind == client.Breakdown && t.State == client.TaskStateOpen }) {
-			continue
-		}
-		for _, t := range tasks {
-			if t.State != client.TaskStateOpen || t.StatusID != backlog || t.Blocked {
+	for _, t := range tasks {
+		var candidates []client.Task
+		parent := ""
+		if t.SubtaskCounts == nil {
+			candidates = []client.Task{t}
+		} else {
+			d, err := h.c.GetTaskWithResponse(ctx, t.Key)
+			if err := check(d, err, http.StatusOK); err != nil {
+				return err
+			}
+			// The planner files Subtasks into the hold before it sets their blockers; once the
+			// Breakdown has ended they are all set.
+			if slices.ContainsFunc(d.JSON200.Subtasks, func(s client.Task) bool { return s.Kind == client.Breakdown && s.State == client.TaskStateOpen }) {
 				continue
 			}
-			return h.move(ctx, t, todo, todoName, "")
+			candidates, parent = d.JSON200.Subtasks, t.Title
+		}
+		for _, c := range candidates {
+			if c.State != client.TaskStateOpen || c.Blocked || c.Claim != nil || h.stepName(ctx, c.ProjectID, c.StepID) != hold {
+				continue
+			}
+			to, err := h.stepFor(ctx, c, parent)
+			if err != nil || to == "" {
+				return err
+			}
+			return h.move(ctx, c.Key, to, "out of "+hold)
 		}
 	}
 	return nil
 }
 
-// park moves the open Tasks the question q blocks to the persona's Awaiting Status, where next
-// does not offer them, while the persona gets the answer.
-func (h *Person) park(ctx context.Context, q client.Task) error {
-	list, err := h.listStatuses(ctx)
+// stepFor is the Step a Task in the hold is for: its Item's, else the first Step of its Workflow
+// whose Skill is the Project's own work rather than one Darkory files its Subtasks at.
+func (h *Person) stepFor(ctx context.Context, t client.Task, parent string) (string, error) {
+	if it := h.preset.item(parent, t.Title, h.ask); it != nil && it.Step != "" {
+		return it.Step, nil
+	}
+	wf, err := h.workflow(ctx, t.ProjectID)
 	if err != nil {
-		return err
+		return "", err
 	}
-	awaiting, name := statusNamed(list, h.p.Awaiting)
-	if awaiting == "" {
-		return nil
-	}
-	res, err := h.c.GetTaskWithResponse(ctx, q.Key)
+	res, err := h.c.ListSkillsWithResponse(ctx, &client.ListSkillsParams{})
 	if err := check(res, err, http.StatusOK); err != nil {
-		return err
+		return "", err
 	}
-	for _, t := range res.JSON200.Blocking {
-		if t.State != client.TaskStateOpen || t.StatusID == awaiting {
-			continue
-		}
-		if err := h.move(ctx, t, awaiting, name, fmt.Sprintf(" until %s %q is answered", q.Key, q.Title)); err != nil {
-			return err
-		}
+	builtin := map[string]bool{}
+	for _, s := range res.JSON200.Items {
+		builtin[s.ID] = s.Builtin
 	}
-	return nil
-}
-
-// unpark moves the open Tasks the question q blocks out of the persona's Awaiting Status to the
-// first todo Status, now that the persona has the answer.
-func (h *Person) unpark(ctx context.Context, q *client.TaskDetail) error {
-	list, err := h.listStatuses(ctx)
-	if err != nil {
-		return err
-	}
-	awaiting, _ := statusNamed(list, h.p.Awaiting)
-	todo, todoName := firstOfKind(list, client.StatusKindTodo)
-	if awaiting == "" || todo == "" {
-		return nil
-	}
-	for _, t := range q.Blocking {
-		if t.State != client.TaskStateOpen || t.StatusID != awaiting {
-			continue
-		}
-		if err := h.move(ctx, t, todo, todoName, fmt.Sprintf(", now that %s has its answer", q.Task.Key)); err != nil {
-			return err
+	for _, s := range wf.Steps {
+		if s.SkillID != nil && !builtin[*s.SkillID] {
+			return s.Name, nil
 		}
 	}
-	return nil
-}
-
-// move moves the Task t to the Status id, named name, and reports it with why after; a Task that
-// ended since it was read stays where it is.
-func (h *Person) move(ctx context.Context, t client.Task, id, name, why string) error {
-	from := h.statusName(ctx, t.StatusID)
-	res, err := h.c.SetTaskStatusWithResponse(ctx, t.Key, &client.SetTaskStatusParams{}, client.SetTaskStatusBody{Status: id})
-	if err := check(res, err, http.StatusOK); err != nil {
-		if Code(err) == client.ErrorCodeEnded {
-			return nil
-		}
-		return on(t.Key, fmt.Errorf("moving it to %s: %w", name, err))
-	}
-	h.say("moved", t.Key, "%q from %s to %s%s", t.Title, from, name, why)
-	return nil
-}
-
-// statusNamed returns the id and name of the Status named name, ignoring case, as Darkory matches
-// names, or empty strings when the Organisation has none.
-func statusNamed(list []client.Status, name string) (string, string) {
-	for _, s := range list {
-		if strings.EqualFold(s.Name, name) {
-			return s.ID, s.Name
-		}
-	}
-	return "", ""
+	return "", nil
 }

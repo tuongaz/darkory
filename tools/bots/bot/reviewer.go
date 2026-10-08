@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/tuongaz/darkory/client"
 )
 
-// Reviewer takes review and skill-review Tasks through next. A Retrospective handed over with a
-// pending Skill proposal it reviews and completes, which publishes the proposed version, or hands
-// back to retro when another version was published since the proposal was written; a Task whose
-// Step carries a HandBack it hands back to the Step's Skill, in Todo, the first time it reviews
-// it; any other review it reads and completes with a Note.
+// Reviewer takes the Tasks at review and Skill review Steps through next. A Retrospective
+// advanced to Skill review with pending Skill proposals it reviews and advances into Done, which
+// publishes the proposed versions; when another version was published since a proposal was
+// written, Darkory sends the Retrospective back to Retro and the reviewer says so. A Task whose
+// Item carries a HandBack it advances along "needs changes" the first time it reviews it; any
+// other review it reads and advances into Done with a Note.
 type Reviewer struct{ agent }
 
 // NewReviewer makes a reviewer.
@@ -36,41 +36,31 @@ func (r *Reviewer) review(ctx context.Context, d *client.TaskDetail) error {
 	key := d.Task.Key
 	wctx, stop := r.hold(ctx, d)
 	defer stop()
-	if !sleep(wctx, r.work()) {
+	if !sleep(wctx, r.busy()) {
 		return nil
 	}
-	p := d.Proposal
-	// A Step that says what review finds wrong is handed back to its worker the first time.
-	if step := r.step(d); step != nil && step.HandBack != "" && !slices.ContainsFunc(d.Claims, func(c client.Claim) bool {
-		return c.HolderID == r.m.ID && c.ID != d.Task.Claim.ID
-	}) {
-		list, err := r.listStatuses(wctx)
-		if err != nil {
-			return gone(wctx, err)
+	var pending []client.SkillProposal
+	for _, p := range d.Proposals {
+		if p.State == client.Pending {
+			pending = append(pending, p)
 		}
-		_, todo := firstOfKind(list, client.StatusKindTodo)
+	}
+	// An Item that says what review finds wrong is handed back to its worker the first time.
+	if it := r.item(d); it != nil && it.HandBack != "" && back(d) != "" && !hasNote(d, it.HandBack) {
 		stop()
 		if ctx.Err() != nil {
 			return nil
 		}
-		if err := r.handover(ctx, key, step.Skill, todo, step.HandBack); err != nil {
+		if _, err := r.advance(ctx, key, back(d), it.HandBack); err != nil {
 			return gone(ctx, err)
 		}
-		r.say("handed back", key, "to %s: %q", step.Skill, step.HandBack)
+		r.say("handed back", key, "%q", it.HandBack)
 		return nil
 	}
-	if d.Task.Kind != client.Retrospective || p == nil || p.State != client.Pending {
+	done := or(intoDone(d), onward(d, ""))
+	if d.Task.Kind != client.Retrospective || len(pending) == 0 {
 		note := fmt.Sprintf("Read %q with its %s and %s; it does what it says.", d.Task.Title, count(len(d.Notes), "Note"),
 			count(len(d.Evidence), "Evidence file"))
-		// A review Task filed for others' work is blocked by that work; a Task handed over to
-		// review is the work.
-		if len(d.Blockers) > 0 && len(d.Claims) == 1 {
-			var keys []string
-			for _, bl := range d.Blockers {
-				keys = append(keys, bl.Key)
-			}
-			note = fmt.Sprintf("Read %s with their Notes and logs; they do what they say.", strings.Join(keys, " and "))
-		}
 		if d.Task.Kind == client.Retrospective {
 			note = "No Skill proposal is pending on this Retrospective; nothing to publish."
 		}
@@ -78,33 +68,50 @@ func (r *Reviewer) review(ctx context.Context, d *client.TaskDetail) error {
 		if ctx.Err() != nil {
 			return nil
 		}
-		_, err := r.complete(ctx, key, note)
+		_, err := r.advance(ctx, key, done, note)
 		return gone(ctx, err)
 	}
-	s, err := r.skill(wctx, p.SkillID)
-	if err != nil {
-		return gone(wctx, err)
+	var names []string
+	for _, p := range pending {
+		s, err := r.skill(wctx, p.SkillID)
+		if err != nil {
+			return gone(wctx, err)
+		}
+		names = append(names, fmt.Sprintf("%s v%d", s.Skill.Name, p.BasedOnVersion+1))
 	}
+	slices.Sort(names)
 	stop()
 	if ctx.Err() != nil {
 		return nil
 	}
-	// A version published since the proposal was written makes it stale: it goes back to retro
-	// to be written again, as the refusal to complete would say.
-	if p.BasedOnVersion == s.Skill.CurrentVersion {
-		_, err = r.complete(ctx, key, fmt.Sprintf("Reviewed the proposal for %s v%d, which says what the workers missed, and published it.",
-			s.Skill.Name, p.BasedOnVersion+1))
-		if err == nil {
-			r.say("published", key, "%s v%d", s.Skill.Name, p.BasedOnVersion+1)
-			return nil
+	// A version published since a proposal was written makes it stale: Darkory sends the
+	// Retrospective back to be written again, with the refusal as its Note.
+	_, err := r.advance(ctx, key, done, fmt.Sprintf("Reviewed the proposals (%s), which say what the workers missed, and published them.",
+		joinAnd(names)))
+	switch {
+	case err == nil:
+		for _, n := range names {
+			r.say("published", key, "%s", n)
 		}
-		if Code(err) != client.ErrorCodeProposalStale {
-			return gone(ctx, err)
-		}
-		if s, err = r.skill(ctx, p.SkillID); err != nil {
-			return gone(ctx, err)
-		}
+		return nil
+	case Code(err) == client.ErrorCodeProposalStale:
+		r.say("handed back", key, "a proposal went stale before its review: %v", err)
+		return nil
 	}
-	return gone(ctx, r.handover(ctx, key, SkillRetro, "", fmt.Sprintf("%s is at v%d since this proposal was written against v%d; please write it again.",
-		s.Skill.Name, s.Skill.CurrentVersion, p.BasedOnVersion)))
+	return gone(ctx, err)
+}
+
+// joinAnd joins names as "a", "a and b", "a, b and c".
+func joinAnd(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	}
+	out := names[0]
+	for _, n := range names[1 : len(names)-1] {
+		out += ", " + n
+	}
+	return out + " and " + names[len(names)-1]
 }

@@ -9,10 +9,10 @@ import (
 	"github.com/tuongaz/darkory/client"
 )
 
-// Retro takes Retrospective Tasks through next (it holds retro), reads the Feature's Observations
-// and, when some say a company Skill didn't work, proposes that Skill's next version with what
-// they said, then hands the Retrospective over to skill-review. With nothing to change it
-// completes the Retrospective with a Note.
+// Retro takes Retrospective Subtasks through next (it holds retro), reads the Observations on its
+// Parent and the Parent's Subtasks and, when some say a company Skill didn't work, proposes that
+// Skill's next version with what they said, then advances the Retrospective along "propose" to
+// Skill review. With nothing to change it advances it into Done with a Note.
 type Retro struct{ agent }
 
 // NewRetro makes a retro bot.
@@ -38,7 +38,11 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 	key := d.Task.Key
 	wctx, stop := r.hold(ctx, d)
 	defer stop()
-	res, err := r.c.ListFeatureObservationsWithResponse(wctx, d.Feature.ID, &client.ListFeatureObservationsParams{})
+	if d.Parent == nil {
+		return fmt.Errorf("the Retrospective %s has no Parent", key)
+	}
+	parent := d.Parent.Key
+	res, err := r.c.ListTaskObservationsWithResponse(wctx, d.Parent.ID, &client.ListTaskObservationsParams{})
 	if err := check(res, err, http.StatusOK); err != nil {
 		return gone(wctx, err)
 	}
@@ -69,8 +73,8 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 			lessons = append(lessons, o.Body)
 		}
 	}
-	r.say("read", key, "%s on %s: %d worked, %d didn't", count(len(obs), "Observation"), d.Feature.Key, worked, len(obs)-worked)
-	if !sleep(wctx, r.work()) {
+	r.say("read", key, "%s on %s: %d worked, %d didn't", count(len(obs), "Observation"), parent, worked, len(obs)-worked)
+	if !sleep(wctx, r.busy()) {
 		return nil
 	}
 	if skill == nil {
@@ -78,13 +82,13 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 		if ctx.Err() != nil {
 			return nil
 		}
-		_, err := r.complete(ctx, key, fmt.Sprintf("Read %s; no company Skill needs a change.", count(len(obs), "Observation")))
+		_, err := r.advance(ctx, key, intoDone(d), fmt.Sprintf("Read %s; no company Skill needs a change.", count(len(obs), "Observation")))
 		return gone(ctx, err)
 	}
 	// Another Retrospective may publish a version between reading the Skill and proposing; then
 	// read it again and propose against the new one.
 	for try := 1; ; try++ {
-		body := skill.Current.Body + "\n\nFrom the Retrospective of " + d.Feature.Key + ":\n- " + strings.Join(lessons, "\n- ")
+		body := skill.Current.Body + "\n\nFrom the Retrospective of " + parent + ":\n- " + strings.Join(lessons, "\n- ")
 		res, err := r.c.ProposeSkillVersionWithResponse(wctx, key, &client.ProposeSkillVersionParams{},
 			client.ProposeSkillVersionBody{Skill: skill.Skill.Name, BasedOnVersion: skill.Skill.CurrentVersion, Body: body})
 		err = check(res, err, http.StatusCreated)
@@ -104,6 +108,23 @@ func (r *Retro) retro(ctx context.Context, d *client.TaskDetail) error {
 	if ctx.Err() != nil {
 		return nil
 	}
-	return gone(ctx, r.handover(ctx, key, SkillSkillReview, "", fmt.Sprintf("Proposed %s v%d from %s that didn't work.",
-		skill.Skill.Name, skill.Skill.CurrentVersion+1, count(len(lessons), "Observation"))))
+	_, err = r.advance(ctx, key, toReview(d), fmt.Sprintf("Proposed %s v%d from %s that didn't work.",
+		skill.Skill.Name, skill.Skill.CurrentVersion+1, count(len(lessons), "Observation")))
+	return gone(ctx, err)
+}
+
+// toReview is the outcome of a Retrospective's Step that leads on to a Step, Skill review: "propose",
+// else the first that does.
+func toReview(d *client.TaskDetail) string {
+	out := ""
+	for _, k := range d.Connectors {
+		if k.ToStepID == nil {
+			continue
+		}
+		if k.Name == "propose" {
+			return k.Name
+		}
+		out = or(out, k.Name)
+	}
+	return out
 }

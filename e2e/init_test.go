@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,7 +12,8 @@ import (
 )
 
 // TestInitSeedsTheRoster runs darkory init without --no-agents in a git repository of its own, as
-// a person starting a Local Install does: Team MAIN holds ada and the four agents, reporting to
+// a person starting a Local Install does: Project MAIN, on the default Workflow, holds ada and the
+// four agents, reporting to
 // her with their Skills and agent settings; the repository is MAIN's default Workspace with the
 // branch it was made on; each agent's token is in <data>/agents/<name>.token, readable by its
 // user alone, never printed, and works.
@@ -31,8 +33,8 @@ func TestInitSeedsTheRoster(t *testing.T) {
 	ada := in.ada
 
 	for _, want := range []string{
-		"\nTeam MAIN (Main) holds ada and the agents below.\n",
-		"Workspace shop: " + root + " (git, default branch trunk), Team MAIN's default.\n",
+		"\nProject MAIN (Main), on the default Workflow, holds ada and the agents below.\n",
+		"Workspace shop: " + root + " (git, default branch trunk), Project MAIN's default.\n",
 		"Agents, reporting to ada, each with a token in " + filepath.Join(in.dir, "agents", "<name>.token") + ":\n",
 		"  planner   breakdown              claude-opus-5-5\n",
 		"  builder   engineer               claude-sonnet-5-5\n",
@@ -44,10 +46,10 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		}
 	}
 
-	var team client.TeamDetail
-	ada.json(&team, "team", "show", "MAIN")
+	var project client.ProjectDetail
+	ada.json(&project, "project", "show", "MAIN")
 	var names []string
-	for _, m := range team.Members {
+	for _, m := range project.Members {
 		names = append(names, m.Name)
 	}
 	if strings.Join(names, " ") != "ada builder planner retro reviewer" {
@@ -56,8 +58,32 @@ func TestInitSeedsTheRoster(t *testing.T) {
 	var workspaces client.WorkspaceList
 	ada.json(&workspaces, "workspace", "list")
 	if len(workspaces.Items) != 1 || workspaces.Items[0].Name != "shop" || workspaces.Items[0].Path != root ||
-		workspaces.Items[0].DefaultBranch != "trunk" || team.Team.DefaultWorkspaceID == nil || *team.Team.DefaultWorkspaceID != workspaces.Items[0].ID {
-		t.Fatalf("Workspaces %+v, MAIN's default %v", workspaces.Items, team.Team.DefaultWorkspaceID)
+		workspaces.Items[0].DefaultBranch != "trunk" || project.Project.DefaultWorkspaceID == nil || *project.Project.DefaultWorkspaceID != workspaces.Items[0].ID {
+		t.Fatalf("Workspaces %+v, MAIN's default %v", workspaces.Items, project.Project.DefaultWorkspaceID)
+	}
+	// MAIN's Workflow is the default: its Steps, their Skills, and the Connectors out of each.
+	var flow client.Workflow
+	ada.json(&flow, "workflow", "show", "MAIN")
+	var steps []string
+	for _, s := range flow.Steps {
+		steps = append(steps, s.Name)
+	}
+	if strings.Join(steps, " · ") != "Backlog · Plan · Build · Review · Retro · Skill review" || len(flow.Connectors) != 8 || flow.Steps[0].SkillID != nil {
+		t.Fatalf("MAIN's Workflow: %v, %d Connectors", steps, len(flow.Connectors))
+	}
+	if out := ada.ok("workflow", "show", "MAIN"); !strings.Contains(out, "3   Build            engineer         0 waiting, 0 working  taken by builder (agent)\n      pass → Review\n") {
+		t.Fatalf("workflow show MAIN:\n%s", out)
+	}
+	var seeded client.SkillList
+	ada.json(&seeded, "skill", "list")
+	var skillNames []string
+	for _, s := range seeded.Items {
+		skillNames = append(skillNames, s.Name)
+	}
+	for _, want := range []string{"acceptance", "breakdown", "engineer", "retro", "review", "skill-review"} {
+		if !slices.Contains(skillNames, want) {
+			t.Fatalf("init seeded the Skills %v, without %s", skillNames, want)
+		}
 	}
 
 	models := map[string]string{"planner": "claude-opus-5-5", "builder": "claude-sonnet-5-5", "reviewer": "claude-opus-5-5", "retro": "claude-opus-5-5"}
@@ -96,10 +122,17 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		t.Fatalf("the agents directory: %v %v", info, err)
 	}
 
-	// A Feature filed in MAIN: its Break down names the repository.
-	var filed client.FeatureDetail
-	ada.json(&filed, "feature", "create", "--team", "MAIN", "--title", "Checkout")
-	if ids := filed.Tasks[0].WorkspaceIds; ids == nil || (*ids)[0] != workspaces.Items[0].ID {
-		t.Fatalf("the Break down names %v", ids)
+	// A Task filed in MAIN with Break down: its Breakdown names the repository and waits at Plan
+	// for the planner.
+	var filed client.TaskDetail
+	ada.json(&filed, "file", "--project", "MAIN", "--title", "Checkout", "--breakdown")
+	if len(filed.Subtasks) != 1 {
+		t.Fatalf("filed %+v", filed)
+	}
+	if ids := filed.Subtasks[0].WorkspaceIds; ids == nil || (*ids)[0] != workspaces.Items[0].ID {
+		t.Fatalf("the Breakdown names %v", ids)
+	}
+	if out := ada.ok("tasks", "--project", "MAIN", "--step", "Plan"); !strings.Contains(out, " Plan ") || !strings.Contains(out, "breakdown") {
+		t.Fatalf("tasks at Plan:\n%s", out)
 	}
 }

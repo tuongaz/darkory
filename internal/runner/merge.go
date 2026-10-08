@@ -25,7 +25,8 @@ func (r *Runner) logError(ctx context.Context, msg string, args ...any) {
 	}
 }
 
-// shipRecord names the Evidence a Ship's merge is recorded in on its Feature, which has no Notes.
+// shipRecord names the Evidence a Parent's merge is recorded in on the Parent. model v2: a Parent
+// has Notes now; M3 decides where its merge is recorded.
 func shipRecord(feature string) string { return "merge-" + feature + ".txt" }
 
 func (r *Runner) merger(ctx context.Context) {
@@ -225,19 +226,18 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 	if len(lines) == 0 {
 		return
 	}
-	r.recordMerge(ctx, rec, key, f.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, key, false, strings.Join(lines, "\n"))
 }
 
 // short is a commit's short name.
 func short(sha string) string { return sha[:min(len(sha), 12)] }
 
 // recordMerge records what a merge did: a Note on the done Task key, which a Member of its
-// Feature's Team may write though nobody holds it; or, for a Ship (key the Feature's), Evidence on
-// the Feature.
-func (r *Runner) recordMerge(ctx context.Context, rec Record, key, feature, text string) {
+// Project may write though nobody holds it; or, for a Parent's (onParent), Evidence on the Parent.
+func (r *Runner) recordMerge(ctx context.Context, rec Record, key string, onParent bool, text string) {
 	var err error
-	if key == feature {
-		err = rec.AttachFeature(ctx, feature, shipRecord(feature), []byte(text+"\n"))
+	if onParent {
+		err = rec.AttachFeature(ctx, key, shipRecord(key), []byte(text+"\n"))
 	} else {
 		err = rec.Note(ctx, key, text)
 	}
@@ -348,7 +348,7 @@ func (r *Runner) shipped(ctx context.Context, featureID string) {
 			r.log.Info("shipped a Feature's branch", "feature", f.Key, "workspace", ws.Name, "into", def, "commit", short(res.Commit))
 		}
 	}
-	r.recordMerge(ctx, rec, f.Key, f.Key, strings.Join(lines, "\n"))
+	r.recordMerge(ctx, rec, f.Key, true, strings.Join(lines, "\n"))
 }
 
 // pollPullRequests completes the review of a Task whose pull request was merged on GitHub, in

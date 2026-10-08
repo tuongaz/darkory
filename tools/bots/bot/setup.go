@@ -12,7 +12,8 @@ import (
 	"github.com/tuongaz/darkory/client"
 )
 
-// The Skills the software bots need. Darkory has breakdown, retro and skill-review built in.
+// The Skills the software bots need. Darkory has breakdown, acceptance, retro and skill-review
+// built in.
 const (
 	SkillBuild       = "build"
 	SkillCompany     = "build-acme" // the company Skill the builders work under, which a Retrospective improves
@@ -51,45 +52,45 @@ const (
 	RoleProber   Role = "prober"
 )
 
-// Spec is one bot's agent Member: its role, the keys of its preset's Teams it is in, its Skills
-// and the model label it reports.
+// Spec is one bot's agent Member: its role, the keys of its preset's Projects it is in, its
+// Skills and the model label it reports.
 type Spec struct {
-	Name   string
-	Role   Role
-	Teams  []string
-	Skills []string
-	Model  string
+	Name     string
+	Role     Role
+	Projects []string
+	Skills   []string
+	Model    string
 }
 
 // Roster is every bot of the software preset.
 var Roster = []Spec{
-	{Name: "planner", Role: RolePlanner, Teams: []string{"WEB"}, Skills: []string{SkillBreakdown}, Model: "claude-opus-5-5"},
-	{Name: "builder-1", Role: RoleBuilder, Teams: []string{"WEB"}, Skills: []string{SkillBuild, SkillCompany, SkillQA}, Model: "claude-sonnet-5-5"},
-	{Name: "builder-2", Role: RoleBuilder, Teams: []string{"WEB"}, Skills: []string{SkillBuild, SkillCompany, SkillQA}, Model: "claude-opus-5-5"},
-	{Name: "reviewer", Role: RoleReviewer, Teams: []string{"WEB", "OPS"}, Skills: []string{SkillReview, SkillSkillReview}, Model: "claude-opus-5-5"},
-	{Name: "retro", Role: RoleRetro, Teams: []string{"WEB"}, Skills: []string{SkillRetro}, Model: "claude-sonnet-5-5"},
-	{Name: "lapser", Role: RoleLapser, Teams: []string{"OPS"}, Skills: []string{SkillTriage}, Model: "claude-haiku-4-5"},
-	{Name: "stuck", Role: RoleStuck, Teams: []string{"OPS"}, Skills: []string{SkillDeploy}, Model: "claude-haiku-4-5"},
-	{Name: "prober", Role: RoleProber, Teams: []string{"WEB"}, Skills: []string{SkillDocs}, Model: "claude-haiku-4-5"},
+	{Name: "planner", Role: RolePlanner, Projects: []string{"WEB"}, Skills: []string{SkillBreakdown}, Model: "claude-opus-5-5"},
+	{Name: "builder-1", Role: RoleBuilder, Projects: []string{"WEB"}, Skills: []string{SkillBuild, SkillCompany, SkillQA}, Model: "claude-sonnet-5-5"},
+	{Name: "builder-2", Role: RoleBuilder, Projects: []string{"WEB"}, Skills: []string{SkillBuild, SkillCompany, SkillQA}, Model: "claude-opus-5-5"},
+	{Name: "reviewer", Role: RoleReviewer, Projects: []string{"WEB", "OPS"}, Skills: []string{SkillReview, SkillSkillReview}, Model: "claude-opus-5-5"},
+	{Name: "retro", Role: RoleRetro, Projects: []string{"WEB"}, Skills: []string{SkillRetro}, Model: "claude-sonnet-5-5"},
+	{Name: "lapser", Role: RoleLapser, Projects: []string{"OPS"}, Skills: []string{SkillTriage}, Model: "claude-haiku-4-5"},
+	{Name: "stuck", Role: RoleStuck, Projects: []string{"OPS"}, Skills: []string{SkillDeploy}, Model: "claude-haiku-4-5"},
+	{Name: "prober", Role: RoleProber, Projects: []string{"WEB"}, Skills: []string{SkillDocs}, Model: "claude-haiku-4-5"},
 }
 
 // Options says what Setup makes and where.
 type Options struct {
 	// Preset is the Organisation to make; Software when nil.
 	Preset *Preset
-	// Team and TeamName, when set, rename the preset's first Team, whose Features the bots plan,
-	// build and review; Ops and OpsName its second, whose chores the lapser and Stuck take.
-	Team, TeamName, Ops, OpsName string
+	// Project and ProjectName, when set, rename the preset's first Project, whose Tasks the bots
+	// plan, build and review; Ops and OpsName its second, whose chores the lapser and Stuck take.
+	Project, ProjectName, Ops, OpsName string
 	// Manager is the Member every agent reports to, who may take back their Claims: the
 	// preset's Manager with Personas, else the admin, when empty.
 	Manager string
 	// Ask is the Member the agents' questions are aimed at unless a Step names another: the
 	// preset's Ask with Personas, else the Manager, when empty.
 	Ask string
-	// Humans are human Members Setup creates when missing and adds to Team.
+	// Humans are human Members Setup creates when missing and adds to Project.
 	Humans []string
-	// Personas makes the preset's human personas, in their Teams with their Skills, and issues
-	// each a token, so Bots runs them too; the Features the owner files are then the persona
+	// Personas makes the preset's human personas, in their Projects with their Skills, and
+	// issues each a token, so Bots runs them too; the Tasks the owner files are then the persona
 	// Manager's.
 	Personas bool
 	// WorkspaceRoot is the directory Setup makes a missing Workspace's repository in, at
@@ -107,7 +108,7 @@ type Crew struct {
 	Options
 	Preset *Preset
 	Admin  client.Member
-	// Owner is the Member who owns the Features the bots' owner files: the persona Manager with
+	// Owner is the Member who owns the Tasks the bots' owner files: the persona who owns with
 	// Personas, else the admin.
 	Owner   string
 	Members map[string]Member
@@ -117,18 +118,19 @@ type Crew struct {
 	Workspaces map[string]client.Workspace
 	// Tokens are the ids of the tokens Setup issued.
 	Tokens []string
-	// keys maps the preset's Team keys to the Teams Setup made.
+	// keys maps the preset's Project keys to the Projects Setup made.
 	keys map[string]string
 }
 
-// TeamKey is the key of the Team Setup made for the preset's Team key.
-func (crew *Crew) TeamKey(key string) string { return or(crew.keys[key], key) }
+// ProjectKey is the key of the Project Setup made for the preset's Project key.
+func (crew *Crew) ProjectKey(key string) string { return or(crew.keys[key], key) }
 
-// Setup makes the Teams, Skills, Statuses, Workspaces and Members the preset needs, as the admin c
-// acts for, and issues each agent, and each persona when asked, a token. It is idempotent on
-// names: what exists is kept, what is missing is created, a deactivated Member is reactivated,
-// the Statuses are written only when they differ, and a Workspace whose repository is missing
-// gets a new one where the Workspace says; only the tokens are new on every run.
+// Setup makes the Projects, Skills, Workflows, Workspaces and Members the preset needs, as the
+// admin c acts for, and issues each agent, and each persona when asked, a token. It is
+// idempotent on names: what exists is kept, what is missing is created, a deactivated Member is
+// reactivated, a Project's Workflow is written only when it differs from the preset's, and a
+// Workspace whose repository is missing gets a new one where the Workspace says; only the tokens
+// are new on every run.
 func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew, error) {
 	p := o.Preset
 	if p == nil {
@@ -144,13 +146,13 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 	crew := &Crew{Options: o, Preset: p, Admin: me.JSON200.Member, Members: map[string]Member{}, Workspaces: map[string]client.Workspace{},
 		keys: map[string]string{}}
 
-	specs := slices.Clone(p.Teams)
+	specs := slices.Clone(p.Projects)
 	for i := range specs {
 		from := specs[i].Key
 		switch i {
 		case 0:
-			specs[i].Key, specs[i].Name = or(o.Team, specs[i].Key), or(o.TeamName, specs[i].Name)
-			crew.Team, crew.TeamName = specs[i].Key, specs[i].Name
+			specs[i].Key, specs[i].Name = or(o.Project, specs[i].Key), or(o.ProjectName, specs[i].Name)
+			crew.Project, crew.ProjectName = specs[i].Key, specs[i].Name
 		case 1:
 			specs[i].Key, specs[i].Name = or(o.Ops, specs[i].Key), or(o.OpsName, specs[i].Name)
 			crew.Ops, crew.OpsName = specs[i].Key, specs[i].Name
@@ -171,25 +173,14 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 	crew.Manager = or(crew.Manager, crew.Admin.Name)
 	crew.Ask = or(crew.Ask, crew.Manager)
 
-	tres, err := c.ListTeamsWithResponse(ctx)
-	if err := check(tres, err, http.StatusOK); err != nil {
+	pres, err := c.ListProjectsWithResponse(ctx)
+	if err := check(pres, err, http.StatusOK); err != nil {
 		return nil, err
 	}
-	teams := map[string]client.Team{}
-	for _, t := range tres.JSON200.Items {
-		teams[t.Key] = t
+	projects := map[string]client.Project{}
+	for _, pr := range pres.JSON200.Items {
+		projects[pr.Key] = pr
 	}
-	for _, t := range specs {
-		if _, ok := teams[t.Key]; ok {
-			continue
-		}
-		res, err := c.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: t.Key, Name: t.Name})
-		if err := check(res, err, http.StatusCreated); err != nil {
-			return nil, fmt.Errorf("creating Team %s: %w", t.Key, err)
-		}
-		teams[t.Key] = *res.JSON201
-	}
-
 	have, err := c.ListSkillsWithResponse(ctx, &client.ListSkillsParams{})
 	if err := check(have, err, http.StatusOK); err != nil {
 		return nil, err
@@ -204,33 +195,43 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 		}
 	}
 
-	if err := setStatuses(ctx, c, p.Statuses); err != nil {
-		return nil, err
-	}
 	if err := crew.workspaces(ctx, c, p.Workspaces); err != nil {
 		return nil, err
 	}
+	// The Projects, made with an empty Workflow and given the preset's, after the Skills it names.
 	for _, t := range specs {
-		cur := teams[t.Key]
-		var body client.UpdateTeamBody
+		cur, ok := projects[t.Key]
+		if !ok {
+			empty := client.NewWorkflowEmpty
+			res, err := c.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: t.Key, Name: t.Name, Workflow: &empty})
+			if err := check(res, err, http.StatusCreated); err != nil {
+				return nil, fmt.Errorf("creating Project %s: %w", t.Key, err)
+			}
+			cur = res.JSON201.Project
+			projects[t.Key] = cur
+		}
+		if err := setWorkflow(ctx, c, t.Key, p.Workflow); err != nil {
+			return nil, err
+		}
+		var body client.UpdateProjectBody
 		if t.DefaultWorkspace != "" {
 			ws, ok := crew.Workspaces[t.DefaultWorkspace]
 			if !ok {
-				return nil, fmt.Errorf("Team %s names %s as its default Workspace, which the preset does not make", t.Key, t.DefaultWorkspace)
+				return nil, fmt.Errorf("Project %s names %s as its default Workspace, which the preset does not make", t.Key, t.DefaultWorkspace)
 			}
 			if cur.DefaultWorkspaceID == nil || *cur.DefaultWorkspaceID != ws.ID {
 				body.DefaultWorkspace = &ws.ID
 			}
 		}
-		if t.ShipWhenDone && !cur.ShipWhenDone {
-			body.ShipWhenDone = ptr(true)
+		if t.AutoComplete && !cur.AutoComplete {
+			body.AutoComplete = ptr(true)
 		}
-		if body.DefaultWorkspace == nil && body.ShipWhenDone == nil {
+		if body.DefaultWorkspace == nil && body.AutoComplete == nil {
 			continue
 		}
-		res, err := c.UpdateTeamWithResponse(ctx, t.Key, &client.UpdateTeamParams{}, body)
+		res, err := c.UpdateProjectWithResponse(ctx, t.Key, &client.UpdateProjectParams{}, body)
 		if err := check(res, err, http.StatusOK); err != nil {
-			return nil, fmt.Errorf("setting Team %s's defaults: %w", t.Key, err)
+			return nil, fmt.Errorf("setting Project %s's defaults: %w", t.Key, err)
 		}
 	}
 
@@ -260,10 +261,10 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 		}
 		return m, nil
 	}
-	join := func(team string, m client.Member) error {
-		res, err := c.AddTeamMemberWithResponse(ctx, team, m.ID, &client.AddTeamMemberParams{})
+	join := func(project string, m client.Member) error {
+		res, err := c.AddProjectMemberWithResponse(ctx, project, m.ID, &client.AddProjectMemberParams{})
 		if err := check(res, err, http.StatusNoContent); err != nil {
-			return fmt.Errorf("adding %s to %s: %w", m.Name, team, err)
+			return fmt.Errorf("adding %s to %s: %w", m.Name, project, err)
 		}
 		return nil
 	}
@@ -295,11 +296,11 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 		if err != nil {
 			return nil, err
 		}
-		if err := join(crew.Team, m); err != nil {
+		if err := join(crew.Project, m); err != nil {
 			return nil, err
 		}
 	}
-	// The admin files the Features and the chores, which needs them in every Team.
+	// The admin files the Tasks and the chores, which needs them in every Project.
 	for _, t := range specs {
 		if err := join(t.Key, crew.Admin); err != nil {
 			return nil, err
@@ -311,8 +312,8 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 			if err != nil {
 				return nil, err
 			}
-			for _, t := range h.Teams {
-				if err := join(crew.TeamKey(t), m); err != nil {
+			for _, t := range h.Projects {
+				if err := join(crew.ProjectKey(t), m); err != nil {
 					return nil, err
 				}
 			}
@@ -331,8 +332,8 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 		if err != nil {
 			return nil, err
 		}
-		for _, t := range s.Teams {
-			if err := join(crew.TeamKey(t), m); err != nil {
+		for _, t := range s.Projects {
+			if err := join(crew.ProjectKey(t), m); err != nil {
 				return nil, err
 			}
 		}
@@ -350,70 +351,81 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 	return crew, nil
 }
 
-// setStatuses makes the Organisation's Statuses want, in order, when they are not already: a
-// Status keeps its id where one of the same name exists, else where one of the same kind is left
-// over (Done becoming Lodged is a rename), and one left over after that is deleted,
-// its Tasks moved to the first Status of the same ending. A nil want changes nothing.
-func setStatuses(ctx context.Context, c *client.ClientWithResponses, want []client.StatusInput) error {
-	if want == nil {
-		return nil
-	}
-	res, err := c.ListStatusesWithResponse(ctx)
+// setWorkflow gives the Project project the Workflow want, unless it has it already: Steps are
+// kept by name, so a Step keeps its id and its Tasks; a Step the Project has and want does not is
+// deleted, its Tasks moved to want's first Step.
+func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project string, want WorkflowSpec) error {
+	res, err := c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
-	have := res.JSON200.Items
-	items := slices.Clone(want)
-	used := map[string]bool{}
-	for i := range items {
-		if j := slices.IndexFunc(have, func(s client.Status) bool { return !used[s.ID] && strings.EqualFold(s.Name, items[i].Name) }); j >= 0 {
-			items[i].ID = &have[j].ID
-			used[have[j].ID] = true
+	have := res.JSON200
+	skills, err := c.ListSkillsWithResponse(ctx, &client.ListSkillsParams{})
+	if err := check(skills, err, http.StatusOK); err != nil {
+		return err
+	}
+	skillName := map[string]string{}
+	for _, sk := range skills.JSON200.Items {
+		skillName[sk.ID] = sk.Name
+	}
+	name := map[string]string{}
+	for _, st := range have.Steps {
+		name[st.ID] = st.Name
+	}
+	// Both as lines, to compare.
+	var got, wanted []string
+	for _, st := range have.Steps {
+		got = append(got, fmt.Sprintf("step %d %s %s", st.Position, st.Name, skillName[deref(st.SkillID)]))
+	}
+	for _, k := range have.Connectors {
+		got = append(got, fmt.Sprintf("connector %s %s %s %d", name[k.FromStepID], name[deref(k.ToStepID)], k.Name, k.Position))
+	}
+	body := client.SetWorkflowBody{Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
+	position := map[string]int64{}
+	for i, st := range want.Steps {
+		wanted = append(wanted, fmt.Sprintf("step %d %s %s", i+1, st.Name, st.Skill))
+		in := client.StepInput{Name: st.Name, Position: int64(i + 1)}
+		if st.Skill != "" {
+			in.Skill = ptr(st.Skill)
 		}
-	}
-	named := func(s client.Status) bool {
-		return slices.ContainsFunc(want, func(w client.StatusInput) bool { return strings.EqualFold(w.Name, s.Name) })
-	}
-	for i := range items {
-		if items[i].ID != nil {
-			continue
+		if j := slices.IndexFunc(have.Steps, func(h client.WorkflowStep) bool { return strings.EqualFold(h.Name, st.Name) }); j >= 0 {
+			in.ID = ptr(have.Steps[j].ID)
 		}
-		if j := slices.IndexFunc(have, func(s client.Status) bool { return !used[s.ID] && !named(s) && s.Kind == items[i].Kind }); j >= 0 {
-			items[i].ID = &have[j].ID
-			used[have[j].ID] = true
+		body.Steps = append(body.Steps, in)
+	}
+	for _, k := range want.Connectors {
+		position[k.From]++
+		wanted = append(wanted, fmt.Sprintf("connector %s %s %s %d", k.From, k.To, k.Name, position[k.From]))
+		in := client.ConnectorInput{From: k.From, Name: k.Name, Position: position[k.From]}
+		if k.To != "" {
+			in.To = ptr(k.To)
 		}
+		body.Connectors = append(body.Connectors, in)
 	}
-	same := len(have) == len(items)
-	for i := 0; same && i < len(items); i++ {
-		same = items[i].ID != nil && *items[i].ID == have[i].ID && items[i].Name == have[i].Name && items[i].Kind == have[i].Kind
-	}
-	if same {
+	if slices.Equal(got, wanted) {
 		return nil
 	}
-	ending := func(k client.StatusKind) client.StatusKind {
-		if k == client.StatusKindDone || k == client.StatusKindDropped {
-			return k
-		}
-		return client.StatusKindTodo
-	}
 	moves := map[string]string{}
-	for _, s := range have {
-		if used[s.ID] {
-			continue
-		}
-		if j := slices.IndexFunc(items, func(w client.StatusInput) bool { return w.ID != nil && ending(w.Kind) == ending(s.Kind) }); j >= 0 {
-			moves[s.ID] = *items[j].ID
+	for _, st := range have.Steps {
+		if !slices.ContainsFunc(want.Steps, func(w StepSpec) bool { return strings.EqualFold(w.Name, st.Name) }) && len(want.Steps) > 0 {
+			moves[st.ID] = want.Steps[0].Name
 		}
 	}
-	body := client.SetStatusesBody{Items: items}
 	if len(moves) > 0 {
 		body.Moves = &moves
 	}
-	sres, err := c.SetStatusesWithResponse(ctx, &client.SetStatusesParams{}, body)
+	sres, err := c.SetWorkflowWithResponse(ctx, project, &client.SetWorkflowParams{}, body)
 	if err := check(sres, err, http.StatusOK); err != nil {
-		return fmt.Errorf("setting the Statuses: %w", err)
+		return fmt.Errorf("setting %s's Workflow: %w", project, err)
 	}
 	return nil
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // workspaces makes the preset's Workspaces: one that exists by name is kept, its repository made
@@ -457,26 +469,51 @@ func (crew *Crew) workspaces(ctx context.Context, c *client.ClientWithResponses,
 	return nil
 }
 
-// File files the Feature t, as the client c acts for, titled title (t's own when empty) and owned
-// by the crew's Owner: a quick Feature with its one Task, or one whose Break down the planner
-// takes.
-func (crew *Crew) File(ctx context.Context, c *client.ClientWithResponses, t FeatureTemplate, title string) (*client.FeatureDetail, error) {
-	body := client.FileFeatureBody{Team: crew.TeamKey(or(t.Team, crew.Preset.Teams[0].Key)), Title: or(title, t.Title), Description: &t.Description,
-		Owner: &crew.Owner}
-	if t.Quick && len(t.Tasks) > 0 {
-		body.Quick, body.Skill = ptr(true), &t.Tasks[0].Skill
-		if len(t.Tasks[0].Workspaces) > 0 {
-			body.Workspaces = &t.Tasks[0].Workspaces
+// File files the Task t, as the client c acts for, titled title (t's own when empty) and owned
+// by the crew's Owner: with Break down, which the planner takes; alone, at its one Item's Step
+// (or the hold, filed ahead); or as a Parent with its Items filed under it as Subtasks.
+func (crew *Crew) File(ctx context.Context, c *client.ClientWithResponses, t TaskTemplate, title string) (*client.TaskDetail, error) {
+	project := crew.ProjectKey(or(t.Project, crew.Preset.Projects[0].Key))
+	body := client.FileTaskBody{Project: &project, Title: or(title, t.Title), Description: &t.Description, Owner: &crew.Owner}
+	hold := crew.Preset.Workflow.Hold()
+	switch {
+	case t.Breakdown:
+		body.Breakdown = ptr(true)
+	case t.Alone && len(t.Items) > 0:
+		it := t.Items[0]
+		step := it.Step
+		if it.Backlog && hold != "" {
+			step = hold
 		}
+		if step != "" {
+			body.Step = &step
+		}
+		if len(it.Workspaces) > 0 {
+			body.Workspaces = &it.Workspaces
+		}
+	case len(t.Items) > 0 && hold != "":
+		// A Parent filed before its Subtasks waits at the hold until the first makes it a Parent.
+		body.Step = &hold
 	}
-	if t.ShipWhenDone {
-		body.ShipWhenDone = ptr(true)
+	if t.AutoComplete {
+		body.AutoComplete = ptr(true)
 	}
-	res, err := c.FileFeatureWithResponse(ctx, &client.FileFeatureParams{}, body)
+	res, err := c.FileTaskWithResponse(ctx, &client.FileTaskParams{}, body)
 	if err := check(res, err, http.StatusCreated); err != nil {
 		return nil, fmt.Errorf("filing %q: %w", body.Title, err)
 	}
-	return res.JSON201, nil
+	if t.Breakdown || t.Alone || len(t.Items) == 0 {
+		return res.JSON201, nil
+	}
+	a := agent{m: Member{Name: crew.Admin.Name, ID: crew.Admin.ID}, c: c, preset: crew.Preset}
+	if _, _, _, err := fileItems(ctx, &a, res.JSON201.Task.Key, res.JSON201.Task.ProjectID, t.Items, hold); err != nil {
+		return nil, err
+	}
+	d, err := c.GetTaskWithResponse(ctx, res.JSON201.Task.Key)
+	if err := check(d, err, http.StatusOK); err != nil {
+		return nil, err
+	}
+	return d.JSON200, nil
 }
 
 // planned is every bot: Bots tells it the preset whose plans say what a Task asks.

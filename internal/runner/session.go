@@ -768,6 +768,10 @@ func (s *session) attachLog(ctx context.Context) {
 	name := SessionLogName(s.key, s.a.name(), s.started)
 	onFeature, err := s.rec.Attach(ctx, s.key, parentKey(s.d), name, b)
 	switch {
+	case err != nil && remote.CodeOf(err) == client.ErrorCodeNotHolder && parentKey(s.d) == "":
+		// model v2: a Task with no Parent has nowhere else to keep the log once the next holder
+		// has claimed it (M3).
+		s.log.Warn("could not attach the session's log: the Task is held by someone else and has no Parent", "evidence", name)
 	case err != nil:
 		s.log.Error("could not attach the session's log", "err", err)
 	case onFeature:
