@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -57,7 +56,7 @@ func (h *harness) agent(name string, defaultTimeout *int, skills ...string) (*cl
 	ctx := t.Context()
 	m := got(h.admin.CreateMemberWithResponse(ctx, &client.CreateMemberParams{},
 		client.CreateMemberBody{Name: name, Kind: client.Agent})).want(t, http.StatusCreated)
-	got(h.admin.AddTeamMemberWithResponse(ctx, "WEB", name, &client.AddTeamMemberParams{})).want(t, http.StatusNoContent)
+	got(h.admin.AddProjectMemberWithResponse(ctx, "WEB", name, &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
 	for _, s := range skills {
 		got(h.admin.GrantSkillWithResponse(ctx, name, s, &client.GrantSkillParams{})).want(t, http.StatusNoContent)
 	}
@@ -83,7 +82,7 @@ func TestClaimPathThroughTheClient(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		ctx := t.Context()
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		bot, botID := h.agent("bot", ptrInt(60), "breakdown")
 
 		// Nothing to take yet: `next` waits, then answers 204.
@@ -93,9 +92,9 @@ func TestClaimPathThroughTheClient(t *testing.T) {
 			t.Fatalf("next answered after %s, want about a second", waited)
 		}
 
-		filed := h.seed(h.secretOf(t, "bot"), core.NewTask{Project: ptrStr("WEB"), Title: "Sign-up", Breakdown: true})
+		filed := h.file(bot, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Sign-up", Breakdown: ptrBool(true)})
 		if filed.Task.Key != "WEB-1" || filed.Task.OwnerID != botID || len(filed.Subtasks) != 1 ||
-			filed.Subtasks[0].Kind != "breakdown" || filed.Subtasks[0].Key != "WEB-2" {
+			filed.Subtasks[0].Kind != client.Breakdown || filed.Subtasks[0].Key != "WEB-2" {
 			t.Fatalf("filed %+v", filed)
 		}
 		takeable := got(bot.ListTakeableTasksWithResponse(ctx, &client.ListTakeableTasksParams{})).want(t, http.StatusOK).JSON200
@@ -165,19 +164,19 @@ func TestIdempotencyKeys(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		ctx := t.Context()
-		p := &client.CreateTeamParams{IdempotencyKey: key("team")}
-		first := got(h.admin.CreateTeamWithResponse(ctx, p, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
-		retry := got(h.admin.CreateTeamWithResponse(ctx, p, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		p := &client.CreateProjectParams{IdempotencyKey: key("project")}
+		first := got(h.admin.CreateProjectWithResponse(ctx, p, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		retry := got(h.admin.CreateProjectWithResponse(ctx, p, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		if !bytes.Equal(first.Body, retry.Body) {
 			t.Fatalf("retry answered %s, first %s", retry.Body, first.Body)
 		}
-		reused := got(h.admin.CreateTeamWithResponse(ctx, p, client.CreateTeamBody{Key: "API", Name: "API"})).want(t, http.StatusUnprocessableEntity)
+		reused := got(h.admin.CreateProjectWithResponse(ctx, p, client.CreateProjectBody{Key: "API", Name: "API"})).want(t, http.StatusUnprocessableEntity)
 		if reused.JSONDefault.Code != client.ErrorCodeIdempotencyKeyReused {
 			t.Fatalf("reused key: %s", reused.Body)
 		}
-		teams := got(h.admin.ListTeamsWithResponse(ctx)).want(t, http.StatusOK).JSON200
-		if len(teams.Items) != 1 {
-			t.Fatalf("%d Teams", len(teams.Items))
+		projects := got(h.admin.ListProjectsWithResponse(ctx)).want(t, http.StatusOK).JSON200
+		if len(projects.Items) != 1 {
+			t.Fatalf("%d Projects", len(projects.Items))
 		}
 		tp := &client.IssueTokenParams{IdempotencyKey: key("tok")}
 		tok := got(h.admin.IssueTokenWithResponse(ctx, "ada", tp, client.IssueTokenBody{Name: "laptop"})).want(t, http.StatusCreated)
@@ -270,7 +269,7 @@ func TestActivityStream(t *testing.T) {
 		if ids[len(ids)-1] != before {
 			t.Fatalf("the stream started with %v, want 1…%d", ids, before)
 		}
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		if got := stream.events(t, 1); got[0] != before+1 {
 			t.Fatalf("the new entry came as %v", got)
 		}
@@ -279,7 +278,7 @@ func TestActivityStream(t *testing.T) {
 		}
 		stream.close()
 
-		got(h.admin.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "API", Name: "API"})).want(t, http.StatusCreated)
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "API", Name: "API"})).want(t, http.StatusCreated)
 		resumed := h.openStream(t, strconv.FormatInt(before+1, 10))
 		defer resumed.close()
 		if got := resumed.events(t, 1); got[0] != before+2 {

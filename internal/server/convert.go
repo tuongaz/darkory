@@ -25,14 +25,14 @@ func each[T, U any](in []T, conv func(T) U) []U {
 	return out
 }
 
-func memberOut(m core.Member) gen.Member {
-	out := gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID,
-		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt}
-	if a := m.Agent; a != nil {
-		out.Agent = &gen.AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended,
-			Paused: a.Paused, ProgressFile: optional(a.ProgressFile)}
+// some is a copy of in, or nil when it is empty: the API leaves out a list with no items unless
+// its schema requires it.
+func some[T any](in []T) *[]T {
+	if len(in) == 0 {
+		return nil
 	}
-	return out
+	out := append([]T(nil), in...)
+	return &out
 }
 
 // optional is s, or nil when it is empty.
@@ -43,23 +43,33 @@ func optional(s string) *string {
 	return &s
 }
 
-func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
-	return gen.MemberDetail{Member: memberOut(d.Member), Teams: each(d.Projects, teamOut), Skills: each(d.Skills, skillOut), Reports: each(d.Reports, memberOut)}
+func memberOut(m core.Member) gen.Member {
+	out := gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID,
+		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt}
+	if a := m.Agent; a != nil {
+		out.Agent = &gen.AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended,
+			Paused: a.Paused, ProgressFile: optional(a.ProgressFile)}
+	}
+	return out
 }
 
-// teamOut renders a Project in the shape the API still names a Team, its auto_complete as
-// ship_when_done. model v2: replaced by the Project schema (M1b).
-func teamOut(p core.Project) gen.Team {
-	return gen.Team{ID: p.ID, Key: p.Key, Name: p.Name, DefaultWorkspaceID: p.DefaultWorkspaceID, ShipWhenDone: p.AutoComplete, CreatedAt: p.CreatedAt}
+func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
+	return gen.MemberDetail{Member: memberOut(d.Member), Projects: each(d.Projects, projectOut), Skills: each(d.Skills, skillOut),
+		Reports: each(d.Reports, memberOut)}
+}
+
+func projectOut(p core.Project) gen.Project {
+	return gen.Project{ID: p.ID, Key: p.Key, Name: p.Name, DefaultWorkspaceID: p.DefaultWorkspaceID, AutoComplete: p.AutoComplete,
+		Acceptance: p.Acceptance, CreatedAt: p.CreatedAt}
+}
+
+func projectDetailOut(d core.ProjectDetail) gen.ProjectDetail {
+	return gen.ProjectDetail{Project: projectOut(d.Project), Members: each(d.Members, memberOut)}
 }
 
 func workspaceOut(w core.Workspace) gen.Workspace {
 	return gen.Workspace{ID: w.ID, Name: w.Name, Kind: gen.WorkspaceKind(w.Kind), Path: w.Path, Mode: gen.WorkspaceMode(w.Mode),
 		DefaultBranch: w.DefaultBranch, CreatedAt: w.CreatedAt}
-}
-
-func teamDetailOut(d core.ProjectDetail) gen.TeamDetail {
-	return gen.TeamDetail{Team: teamOut(d.Project), Members: each(d.Members, memberOut)}
 }
 
 func skillOut(s core.Skill) gen.Skill {
@@ -76,6 +86,35 @@ func skillDetailOut(d core.SkillDetail) gen.SkillDetail {
 	return gen.SkillDetail{Skill: skillOut(d.Skill), Current: skillVersionOut(d.Current)}
 }
 
+func stepOut(s core.Step) gen.Step {
+	return gen.Step{ID: s.ID, Name: s.Name, SkillID: s.SkillID, Position: s.Position, X: s.X, Y: s.Y}
+}
+
+func connectorOut(k core.Connector) gen.Connector {
+	return gen.Connector{ID: k.ID, FromStepID: k.FromStepID, ToStepID: k.ToStepID, Name: k.Name, Position: k.Position}
+}
+
+// workflowOut renders a Workflow with each Step's live facts; facts are in the order of the Steps.
+func workflowOut(d core.WorkflowDetail) gen.Workflow {
+	out := gen.Workflow{ProjectID: d.ProjectID, Steps: make([]gen.WorkflowStep, 0, len(d.Steps)), Connectors: each(d.Connectors, connectorOut)}
+	for i, s := range d.Steps {
+		ws := gen.WorkflowStep{ID: s.ID, Name: s.Name, SkillID: s.SkillID, Position: s.Position, X: s.X, Y: s.Y, Takers: []gen.Taker{}}
+		if i < len(d.Facts) {
+			f := d.Facts[i]
+			ws.Tasks, ws.Working, ws.MedianMs = f.Tasks, f.Working, f.MedianMS
+			ws.Takers = each(f.Takers, func(t core.Taker) gen.Taker {
+				return gen.Taker{ID: t.MemberID, Name: t.Name, Kind: gen.MemberKind(t.Kind)}
+			})
+		}
+		out.Steps = append(out.Steps, ws)
+	}
+	return out
+}
+
+func labelOut(l core.Label) gen.Label {
+	return gen.Label{ID: l.ID, ProjectID: l.ProjectID, Name: l.Name, Color: l.Color, CreatedAt: l.CreatedAt}
+}
+
 func claimOut(c core.Claim) gen.Claim {
 	out := gen.Claim{ID: c.ID, TaskID: c.TaskID, HolderID: c.HolderID, SessionID: c.SessionID, SkillID: c.SkillID,
 		SkillVersion: c.SkillVersion, ModelLabel: c.ModelLabel, HeartbeatTimeoutSeconds: seconds(c.Timeout),
@@ -87,82 +126,47 @@ func claimOut(c core.Claim) gen.Claim {
 	return out
 }
 
-// taskOut renders a Task in the shape the API still has: its Parent as its Feature (its own id
-// when it has none, as a Feature became a Task with the same id), its Step as its Status. model
-// v2: replaced by the Task schema with project, parent, step and labels (M1b).
+func taskBriefOut(b core.TaskBrief) gen.TaskBrief {
+	return gen.TaskBrief{ID: b.ID, Key: b.Key, Title: b.Title}
+}
+
 func taskOut(t core.Task) gen.Task {
-	feature := t.ID
-	if t.ParentID != nil {
-		feature = *t.ParentID
-	}
-	out := gen.Task{ID: t.ID, Key: t.Key, FeatureID: feature, Kind: gen.TaskKind(t.Kind), Title: t.Title,
-		Description: t.Description, State: gen.TaskState(t.State), StatusID: deref(t.StepID), SkillID: t.SkillID, AimedAtID: t.AimedAtID,
-		Blocked: t.Blocked, FiledBy: deref(t.FiledBy), WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
+	out := gen.Task{ID: t.ID, Key: t.Key, ProjectID: t.ProjectID, ParentID: t.ParentID, Kind: gen.TaskKind(t.Kind), Title: t.Title,
+		Description: t.Description, State: gen.TaskState(t.State), OwnerID: t.OwnerID, Rank: t.Rank, StepID: t.StepID,
+		StepSince: t.StepSince, SkillID: t.SkillID, AimedAtID: t.AimedAtID, Labels: some(t.Labels), Breakdown: t.Breakdown,
+		AutoComplete: t.AutoComplete, Acceptance: t.Acceptance, FromRetrospectiveTaskID: t.FromRetrospectiveTaskID, Blocked: t.Blocked,
+		WorkspaceIds: some(t.WorkspaceIDs), FiledBy: t.FiledBy, WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
 	if t.Claim != nil {
 		c := claimOut(*t.Claim)
 		out.Claim = &c
 	}
 	if len(t.OpenBlockers) > 0 {
-		bs := each(t.OpenBlockers, func(b core.TaskBrief) gen.TaskBrief { return gen.TaskBrief{ID: b.ID, Key: b.Key} })
+		bs := each(t.OpenBlockers, taskBriefOut)
 		out.OpenBlockers = &bs
 	}
-	if len(t.WorkspaceIDs) > 0 {
-		ws := append([]string(nil), t.WorkspaceIDs...)
-		out.WorkspaceIds = &ws
+	if n := t.SubtaskCounts; n != nil {
+		out.SubtaskCounts = &gen.SubtaskCounts{Open: n.Open, Working: n.Working, Done: n.Done, Dropped: n.Dropped}
 	}
 	return out
 }
 
 func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 	out := gen.TaskDetail{
-		Task: taskOut(d.Task), Status: stepStatusOut(d), Feature: parentFeatureOut(d), Workspaces: each(d.Workspaces, workspaceOut),
-		Claims: each(d.Claims, claimOut), Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut),
-		Blockers: each(d.Blockers, taskOut), Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
-	}
-	// model v2: the spec has one proposal; the latest of the Task's proposals stands in (M1b).
-	if n := len(d.Proposals); n > 0 {
-		p := proposalOut(d.Proposals[n-1])
-		out.Proposal = &p
-	}
-	return out
-}
-
-// stepStatusOut renders a Task's Step as the Status the API still has: a hold as backlog, a Step
-// with a live Claim as in progress, any other as todo; an ended Task's as done or dropped. model
-// v2: replaced by the Step and its Connectors in TaskDetail (M1b).
-func stepStatusOut(d core.TaskDetail) gen.Status {
-	switch {
-	case d.Task.State != "open":
-		return gen.Status{Name: d.Task.State, Kind: gen.StatusKind(d.Task.State)}
-	case d.Step == nil:
-		return gen.Status{Kind: gen.StatusKind("todo")}
-	}
-	kind := "todo"
-	switch {
-	case d.Step.SkillID == nil:
-		kind = "backlog"
-	case d.Task.Claim != nil:
-		kind = "in_progress"
-	}
-	return gen.Status{ID: d.Step.ID, Name: d.Step.Name, Kind: gen.StatusKind(kind), Position: d.Step.Position}
-}
-
-// parentFeatureOut renders a Task's Parent, or the Task itself when it has none, as the Feature
-// the API still has. model v2: replaced by the parent brief and subtasks in TaskDetail (M1b).
-func parentFeatureOut(d core.TaskDetail) gen.Feature {
-	t := d.Task
-	f := gen.Feature{ID: t.ID, Key: t.Key, TeamID: t.ProjectID, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID,
-		State: gen.FeatureState(t.State), FiledBy: deref(t.FiledBy), CreatedAt: t.CreatedAt, EndedAt: t.EndedAt, ShipWhenDone: t.AutoComplete}
-	if t.State == "done" {
-		f.State = gen.FeatureState("shipped")
-	}
-	if t.Rank != nil {
-		f.Rank = *t.Rank
+		Task: taskOut(d.Task), Subtasks: each(d.Subtasks, taskOut), Connectors: each(d.Connectors, connectorOut),
+		Labels: each(d.Labels, labelOut), Workspaces: each(d.Workspaces, workspaceOut), Claims: each(d.Claims, claimOut),
+		Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut), Blockers: each(d.Blockers, taskOut),
+		Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
+		Proposals: each(d.Proposals, proposalOut),
 	}
 	if d.Parent != nil {
-		f.ID, f.Key, f.Title, f.Description, f.ShipWhenDone = d.Parent.ID, d.Parent.Key, d.Parent.Title, "", false
+		p := taskBriefOut(*d.Parent)
+		out.Parent = &p
 	}
-	return f
+	if d.Step != nil {
+		st := stepOut(*d.Step)
+		out.Step = &st
+	}
+	return out
 }
 
 func proposalOut(p core.SkillProposal) gen.SkillProposal {
@@ -182,7 +186,7 @@ func observationOut(o core.Observation) gen.Observation {
 }
 
 func evidenceOut(e core.Evidence) gen.Evidence {
-	return gen.Evidence{ID: e.ID, TaskID: &e.TaskID, Filename: e.Filename, ContentType: e.ContentType,
+	return gen.Evidence{ID: e.ID, TaskID: e.TaskID, Filename: e.Filename, ContentType: e.ContentType,
 		Size: e.Size, Sha256: e.SHA256, AttachedBy: e.AttachedBy, CreatedAt: e.CreatedAt}
 }
 

@@ -9,11 +9,6 @@ import (
 
 // Flow and learning: Notes, Observations, Blocking, take-back and drop on Tasks; Skill proposals.
 
-// HandoverTask: model v2: replaced by /v1/tasks/{task}/advance along a Connector (M1b).
-func (s *Server) HandoverTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.HandoverTaskParams) {
-	replaced(w, "a Task is advanced along a Connector out of its Step")
-}
-
 func (s *Server) AddNote(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AddNoteParams) {
 	var body gen.AddNoteBody
 	out := as(http.StatusCreated, func(n core.Note) any { return noteOut(n) })
@@ -90,25 +85,12 @@ func (s *Server) GetSkillProposal(w http.ResponseWriter, r *http.Request, propos
 	s.respond(w, r, as(http.StatusOK, func(p core.SkillProposal) any { return proposalOut(p) }), p, err)
 }
 
-// Features are Tasks now (ADR 0015). model v2: replaced by /v1/tasks/{task}/rank, /complete,
-// /drop, /owner and the Parent's Observations (M1b).
-
-func (s *Server) RankFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.RankFeatureParams) {
-	replaced(w, "a Feature is a Task with Subtasks; rank the Task")
-}
-
-func (s *Server) ShipFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.ShipFeatureParams) {
-	replaced(w, "a Feature is a Task with Subtasks; its Owner completes it")
-}
-
-func (s *Server) DropFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.DropFeatureParams) {
-	replaced(w, "a Feature is a Task with Subtasks; its Owner drops it")
-}
-
-func (s *Server) PassFeatureOwnership(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.PassFeatureOwnershipParams) {
-	replaced(w, "a Feature is a Task with Subtasks; pass the Task's ownership")
-}
-
-func (s *Server) ListFeatureObservations(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.ListFeatureObservationsParams) {
-	replaced(w, "a Feature is a Task with Subtasks; read the Parent's Observations")
+// ListTaskObservations lists the Observations on a Task, and on a Parent's Subtasks: what its
+// Retrospective reads.
+func (s *Server) ListTaskObservations(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.ListTaskObservationsParams) {
+	all := params.Reviewed != nil && *params.Reviewed
+	os, err := s.core.ListParentObservations(r.Context(), caller(r), task, all)
+	s.respond(w, r, as(http.StatusOK, func(os []core.Observation) any {
+		return gen.ObservationList{Items: each(os, observationOut)}
+	}), os, err)
 }

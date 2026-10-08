@@ -11,17 +11,17 @@ import (
 )
 
 // Views through the generated client on both engines: saved under an Idempotency-Key and saved
-// again by a retry with the same answer, listed by list and Team, changed, refused with their
+// again by a retry with the same answer, listed by list and Project, changed, refused with their
 // codes and statuses, another Member's not found, and deleted.
 func TestViewsThroughTheClient(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		bob, _ := h.member("bob", client.Human, "WEB")
 
-		body := client.CreateViewBody{Entity: client.ViewEntityTasks, Team: ptrStr("WEB"), Name: "Unheld",
+		body := client.CreateViewBody{Entity: client.ViewEntityTasks, Project: ptrStr("WEB"), Name: "Unheld",
 			Filters: &[]string{"holder:is:none", "filed_at:last:7d"}, Sort: ptrStr("rank"), Display: &map[string]any{"layout": "board"}}
 		first := got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{IdempotencyKey: key("v-1")}, body)).want(t, http.StatusCreated)
 		again := got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{IdempotencyKey: key("v-1")}, body)).want(t, http.StatusCreated)
@@ -29,18 +29,18 @@ func TestViewsThroughTheClient(t *testing.T) {
 		if again.JSON201.ID != v.ID || string(again.Body) != string(first.Body) {
 			t.Fatalf("the retry: %s, first %s", again.Body, first.Body)
 		}
-		if v.Entity != client.ViewEntityTasks || v.TeamID == nil || v.Name != "Unheld" || !slices.Equal(v.Filters, []string{"holder:is:none", "filed_at:last:7d"}) ||
+		if v.Entity != client.ViewEntityTasks || v.ProjectID == nil || v.Name != "Unheld" || !slices.Equal(v.Filters, []string{"holder:is:none", "filed_at:last:7d"}) ||
 			*v.Sort != "rank" || (*v.Display)["layout"] != "board" {
 			t.Fatalf("saved %s", first.Body)
 		}
 		got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Name: "Quick",
 			Filters: &[]string{"top:is:true"}})).want(t, http.StatusCreated)
-		// model v2: Views are of the Tasks list only (M1b drops features from the enum).
-		got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityFeatures, Name: "Gone"})).
+		// Views are of the Tasks list only.
+		got(bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: "features", Name: "Gone"})).
 			want(t, http.StatusBadRequest)
 
 		list := got(bob.ListViewsWithResponse(ctx, &client.ListViewsParams{})).want(t, http.StatusOK).JSON200.Items
-		if len(list) != 2 || list[0].ID != v.ID || list[1].Name != "Quick" || list[1].TeamID != nil || list[1].Sort != nil || list[1].Display != nil {
+		if len(list) != 2 || list[0].ID != v.ID || list[1].Name != "Quick" || list[1].ProjectID != nil || list[1].Sort != nil || list[1].Display != nil {
 			t.Fatalf("bob's Views: %+v", list)
 		}
 		entity := client.ViewEntityTasks
@@ -48,7 +48,7 @@ func TestViewsThroughTheClient(t *testing.T) {
 		if len(list) != 2 {
 			t.Fatalf("bob's task Views: %+v", list)
 		}
-		list = got(bob.ListViewsWithResponse(ctx, &client.ListViewsParams{Team: ptrStr("WEB")})).want(t, http.StatusOK).JSON200.Items
+		list = got(bob.ListViewsWithResponse(ctx, &client.ListViewsParams{Project: ptrStr("WEB")})).want(t, http.StatusOK).JSON200.Items
 		if len(list) != 1 || list[0].ID != v.ID {
 			t.Fatalf("bob's Views of WEB: %+v", list)
 		}
@@ -70,14 +70,14 @@ func TestViewsThroughTheClient(t *testing.T) {
 				t.Fatalf("status %d %+v, want %d %s", res.StatusCode(), def, status, code)
 			}
 		}
-		res, err := bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Team: ptrStr("WEB"), Name: "UNHELD"})
+		res, err := bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Project: ptrStr("WEB"), Name: "UNHELD"})
 		got(res, err)
 		refused(http.StatusConflict, client.ErrorCodeConflict, res, res.JSONDefault)
 		res, err = bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Name: "x",
 			Filters: &[]string{"status:is:Todo"}})
 		got(res, err)
 		refused(http.StatusBadRequest, client.ErrorCodeInvalid, res, res.JSONDefault)
-		res, err = bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Team: ptrStr("NOPE"), Name: "x"})
+		res, err = bob.CreateViewWithResponse(ctx, &client.CreateViewParams{}, client.CreateViewBody{Entity: client.ViewEntityTasks, Project: ptrStr("NOPE"), Name: "x"})
 		got(res, err)
 		refused(http.StatusNotFound, client.ErrorCodeNotFound, res, res.JSONDefault)
 		up, err := ada.UpdateViewWithResponse(ctx, v.ID, &client.UpdateViewParams{}, client.UpdateViewBody{Name: ptrStr("Mine")})

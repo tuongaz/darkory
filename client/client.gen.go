@@ -20,68 +20,64 @@ import (
 
 // Defines values for ActivityKind.
 const (
-	ActivityKindFeatureDropped          ActivityKind = "feature.dropped"
-	ActivityKindFeatureEvidenceAttached ActivityKind = "feature.evidence_attached"
-	ActivityKindFeatureFiled            ActivityKind = "feature.filed"
-	ActivityKindFeatureOwnerPassed      ActivityKind = "feature.owner_passed"
-	ActivityKindFeatureRanked           ActivityKind = "feature.ranked"
-	ActivityKindFeatureShipped          ActivityKind = "feature.shipped"
-	ActivityKindLoginLinkIssued         ActivityKind = "login_link.issued"
-	ActivityKindLoginLinkRedeemed       ActivityKind = "login_link.redeemed"
-	ActivityKindMemberAgentChanged      ActivityKind = "member.agent_changed"
-	ActivityKindMemberCreated           ActivityKind = "member.created"
-	ActivityKindMemberDeactivated       ActivityKind = "member.deactivated"
-	ActivityKindMemberManagerCleared    ActivityKind = "member.manager_cleared"
-	ActivityKindMemberManagerSet        ActivityKind = "member.manager_set"
-	ActivityKindMemberReactivated       ActivityKind = "member.reactivated"
-	ActivityKindMemberSkillGranted      ActivityKind = "member.skill_granted"
-	ActivityKindMemberSkillRevoked      ActivityKind = "member.skill_revoked"
-	ActivityKindMemberUpdated           ActivityKind = "member.updated"
-	ActivityKindSessionClosed           ActivityKind = "session.closed"
-	ActivityKindSkillCreated            ActivityKind = "skill.created"
-	ActivityKindSkillVersionPublished   ActivityKind = "skill.version_published"
-	ActivityKindStatusesChanged         ActivityKind = "statuses.changed"
-	ActivityKindTaskBlockerAdded        ActivityKind = "task.blocker_added"
-	ActivityKindTaskBlockerRemoved      ActivityKind = "task.blocker_removed"
-	ActivityKindTaskClaimEnded          ActivityKind = "task.claim_ended"
-	ActivityKindTaskClaimed             ActivityKind = "task.claimed"
-	ActivityKindTaskCompleted           ActivityKind = "task.completed"
-	ActivityKindTaskDropped             ActivityKind = "task.dropped"
-	ActivityKindTaskEvidenceAttached    ActivityKind = "task.evidence_attached"
-	ActivityKindTaskFiled               ActivityKind = "task.filed"
-	ActivityKindTaskHandedOver          ActivityKind = "task.handed_over"
-	ActivityKindTaskLapsed              ActivityKind = "task.lapsed"
-	ActivityKindTaskNoteAdded           ActivityKind = "task.note_added"
-	ActivityKindTaskObserved            ActivityKind = "task.observed"
-	ActivityKindTaskReleased            ActivityKind = "task.released"
-	ActivityKindTaskSkillProposed       ActivityKind = "task.skill_proposed"
-	ActivityKindTaskStatusSet           ActivityKind = "task.status_set"
-	ActivityKindTaskTakenBack           ActivityKind = "task.taken_back"
-	ActivityKindTeamChanged             ActivityKind = "team.changed"
-	ActivityKindTeamCreated             ActivityKind = "team.created"
-	ActivityKindTeamMemberAdded         ActivityKind = "team.member_added"
-	ActivityKindTeamMemberRemoved       ActivityKind = "team.member_removed"
-	ActivityKindTokenIssued             ActivityKind = "token.issued"
-	ActivityKindTokenRevoked            ActivityKind = "token.revoked"
-	ActivityKindWorkspaceAdded          ActivityKind = "workspace.added"
-	ActivityKindWorkspaceChanged        ActivityKind = "workspace.changed"
-	ActivityKindWorkspaceRemoved        ActivityKind = "workspace.removed"
+	ActivityKindLabelChanged          ActivityKind = "label.changed"
+	ActivityKindLabelCreated          ActivityKind = "label.created"
+	ActivityKindLabelDeleted          ActivityKind = "label.deleted"
+	ActivityKindLoginLinkIssued       ActivityKind = "login_link.issued"
+	ActivityKindLoginLinkRedeemed     ActivityKind = "login_link.redeemed"
+	ActivityKindMemberAgentChanged    ActivityKind = "member.agent_changed"
+	ActivityKindMemberCreated         ActivityKind = "member.created"
+	ActivityKindMemberDeactivated     ActivityKind = "member.deactivated"
+	ActivityKindMemberManagerCleared  ActivityKind = "member.manager_cleared"
+	ActivityKindMemberManagerSet      ActivityKind = "member.manager_set"
+	ActivityKindMemberReactivated     ActivityKind = "member.reactivated"
+	ActivityKindMemberSkillGranted    ActivityKind = "member.skill_granted"
+	ActivityKindMemberSkillRevoked    ActivityKind = "member.skill_revoked"
+	ActivityKindMemberUpdated         ActivityKind = "member.updated"
+	ActivityKindProjectChanged        ActivityKind = "project.changed"
+	ActivityKindProjectCreated        ActivityKind = "project.created"
+	ActivityKindProjectMemberAdded    ActivityKind = "project.member_added"
+	ActivityKindProjectMemberRemoved  ActivityKind = "project.member_removed"
+	ActivityKindSessionClosed         ActivityKind = "session.closed"
+	ActivityKindSkillCreated          ActivityKind = "skill.created"
+	ActivityKindSkillVersionPublished ActivityKind = "skill.version_published"
+	ActivityKindTaskAdvanced          ActivityKind = "task.advanced"
+	ActivityKindTaskBecameParent      ActivityKind = "task.became_parent"
+	ActivityKindTaskBlockerAdded      ActivityKind = "task.blocker_added"
+	ActivityKindTaskBlockerRemoved    ActivityKind = "task.blocker_removed"
+	ActivityKindTaskClaimEnded        ActivityKind = "task.claim_ended"
+	ActivityKindTaskClaimed           ActivityKind = "task.claimed"
+	ActivityKindTaskCompleted         ActivityKind = "task.completed"
+	ActivityKindTaskDropped           ActivityKind = "task.dropped"
+	ActivityKindTaskEvidenceAttached  ActivityKind = "task.evidence_attached"
+	ActivityKindTaskFiled             ActivityKind = "task.filed"
+	ActivityKindTaskLabelsSet         ActivityKind = "task.labels_set"
+	ActivityKindTaskLapsed            ActivityKind = "task.lapsed"
+	ActivityKindTaskMoved             ActivityKind = "task.moved"
+	ActivityKindTaskNoteAdded         ActivityKind = "task.note_added"
+	ActivityKindTaskObserved          ActivityKind = "task.observed"
+	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
+	ActivityKindTaskRanked            ActivityKind = "task.ranked"
+	ActivityKindTaskReleased          ActivityKind = "task.released"
+	ActivityKindTaskSkillProposed     ActivityKind = "task.skill_proposed"
+	ActivityKindTaskSplit             ActivityKind = "task.split"
+	ActivityKindTaskTakenBack         ActivityKind = "task.taken_back"
+	ActivityKindTokenIssued           ActivityKind = "token.issued"
+	ActivityKindTokenRevoked          ActivityKind = "token.revoked"
+	ActivityKindWorkflowChanged       ActivityKind = "workflow.changed"
+	ActivityKindWorkspaceAdded        ActivityKind = "workspace.added"
+	ActivityKindWorkspaceChanged      ActivityKind = "workspace.changed"
+	ActivityKindWorkspaceRemoved      ActivityKind = "workspace.removed"
 )
 
 // Valid indicates whether the value is a known member of the ActivityKind enum.
 func (e ActivityKind) Valid() bool {
 	switch e {
-	case ActivityKindFeatureDropped:
+	case ActivityKindLabelChanged:
 		return true
-	case ActivityKindFeatureEvidenceAttached:
+	case ActivityKindLabelCreated:
 		return true
-	case ActivityKindFeatureFiled:
-		return true
-	case ActivityKindFeatureOwnerPassed:
-		return true
-	case ActivityKindFeatureRanked:
-		return true
-	case ActivityKindFeatureShipped:
+	case ActivityKindLabelDeleted:
 		return true
 	case ActivityKindLoginLinkIssued:
 		return true
@@ -105,13 +101,23 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindMemberUpdated:
 		return true
+	case ActivityKindProjectChanged:
+		return true
+	case ActivityKindProjectCreated:
+		return true
+	case ActivityKindProjectMemberAdded:
+		return true
+	case ActivityKindProjectMemberRemoved:
+		return true
 	case ActivityKindSessionClosed:
 		return true
 	case ActivityKindSkillCreated:
 		return true
 	case ActivityKindSkillVersionPublished:
 		return true
-	case ActivityKindStatusesChanged:
+	case ActivityKindTaskAdvanced:
+		return true
+	case ActivityKindTaskBecameParent:
 		return true
 	case ActivityKindTaskBlockerAdded:
 		return true
@@ -129,33 +135,33 @@ func (e ActivityKind) Valid() bool {
 		return true
 	case ActivityKindTaskFiled:
 		return true
-	case ActivityKindTaskHandedOver:
+	case ActivityKindTaskLabelsSet:
 		return true
 	case ActivityKindTaskLapsed:
+		return true
+	case ActivityKindTaskMoved:
 		return true
 	case ActivityKindTaskNoteAdded:
 		return true
 	case ActivityKindTaskObserved:
 		return true
+	case ActivityKindTaskOwnerPassed:
+		return true
+	case ActivityKindTaskRanked:
+		return true
 	case ActivityKindTaskReleased:
 		return true
 	case ActivityKindTaskSkillProposed:
 		return true
-	case ActivityKindTaskStatusSet:
+	case ActivityKindTaskSplit:
 		return true
 	case ActivityKindTaskTakenBack:
-		return true
-	case ActivityKindTeamChanged:
-		return true
-	case ActivityKindTeamCreated:
-		return true
-	case ActivityKindTeamMemberAdded:
-		return true
-	case ActivityKindTeamMemberRemoved:
 		return true
 	case ActivityKindTokenIssued:
 		return true
 	case ActivityKindTokenRevoked:
+		return true
+	case ActivityKindWorkflowChanged:
 		return true
 	case ActivityKindWorkspaceAdded:
 		return true
@@ -170,13 +176,14 @@ func (e ActivityKind) Valid() bool {
 
 // Defines values for ClaimEnd.
 const (
+	ClaimEndAdvanced          ClaimEnd = "advanced"
 	ClaimEndCompleted         ClaimEnd = "completed"
 	ClaimEndDropped           ClaimEnd = "dropped"
-	ClaimEndHandedOver        ClaimEnd = "handed_over"
 	ClaimEndLapsed            ClaimEnd = "lapsed"
 	ClaimEndMemberDeactivated ClaimEnd = "member_deactivated"
 	ClaimEndReleased          ClaimEnd = "released"
 	ClaimEndSessionClosed     ClaimEnd = "session_closed"
+	ClaimEndSplit             ClaimEnd = "split"
 	ClaimEndTakenBack         ClaimEnd = "taken_back"
 	ClaimEndTokenRevoked      ClaimEnd = "token_revoked"
 )
@@ -184,11 +191,11 @@ const (
 // Valid indicates whether the value is a known member of the ClaimEnd enum.
 func (e ClaimEnd) Valid() bool {
 	switch e {
+	case ClaimEndAdvanced:
+		return true
 	case ClaimEndCompleted:
 		return true
 	case ClaimEndDropped:
-		return true
-	case ClaimEndHandedOver:
 		return true
 	case ClaimEndLapsed:
 		return true
@@ -197,6 +204,8 @@ func (e ClaimEnd) Valid() bool {
 	case ClaimEndReleased:
 		return true
 	case ClaimEndSessionClosed:
+		return true
+	case ClaimEndSplit:
 		return true
 	case ClaimEndTakenBack:
 		return true
@@ -214,23 +223,27 @@ const (
 	ErrorCodeCycle                ErrorCode = "cycle"
 	ErrorCodeEnded                ErrorCode = "ended"
 	ErrorCodeForbidden            ErrorCode = "forbidden"
+	ErrorCodeHeld                 ErrorCode = "held"
 	ErrorCodeIdempotencyKeyReused ErrorCode = "idempotency_key_reused"
 	ErrorCodeInternal             ErrorCode = "internal"
 	ErrorCodeInvalid              ErrorCode = "invalid"
+	ErrorCodeNoConnector          ErrorCode = "no_connector"
 	ErrorCodeNoRunner             ErrorCode = "no_runner"
+	ErrorCodeNoStep               ErrorCode = "no_step"
 	ErrorCodeNotFound             ErrorCode = "not_found"
 	ErrorCodeNotHolder            ErrorCode = "not_holder"
 	ErrorCodeNotImplemented       ErrorCode = "not_implemented"
 	ErrorCodeNotTakeable          ErrorCode = "not_takeable"
+	ErrorCodeOneLevel             ErrorCode = "one_level"
 	ErrorCodeProposalStale        ErrorCode = "proposal_stale"
 	ErrorCodeSessionRequired      ErrorCode = "session_required"
-	ErrorCodeStatusInUse          ErrorCode = "status_in_use"
+	ErrorCodeStepInUse            ErrorCode = "step_in_use"
 	ErrorCodeTasksOpen            ErrorCode = "tasks_open"
 	ErrorCodeTooLarge             ErrorCode = "too_large"
 	ErrorCodeTooManyRequests      ErrorCode = "too_many_requests"
 	ErrorCodeUnauthenticated      ErrorCode = "unauthenticated"
-	ErrorCodeUseComplete          ErrorCode = "use_complete"
-	ErrorCodeUseDrop              ErrorCode = "use_drop"
+	ErrorCodeUseAdvance           ErrorCode = "use_advance"
+	ErrorCodeUseParent            ErrorCode = "use_parent"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -246,13 +259,19 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeForbidden:
 		return true
+	case ErrorCodeHeld:
+		return true
 	case ErrorCodeIdempotencyKeyReused:
 		return true
 	case ErrorCodeInternal:
 		return true
 	case ErrorCodeInvalid:
 		return true
+	case ErrorCodeNoConnector:
+		return true
 	case ErrorCodeNoRunner:
+		return true
+	case ErrorCodeNoStep:
 		return true
 	case ErrorCodeNotFound:
 		return true
@@ -262,11 +281,13 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeNotTakeable:
 		return true
+	case ErrorCodeOneLevel:
+		return true
 	case ErrorCodeProposalStale:
 		return true
 	case ErrorCodeSessionRequired:
 		return true
-	case ErrorCodeStatusInUse:
+	case ErrorCodeStepInUse:
 		return true
 	case ErrorCodeTasksOpen:
 		return true
@@ -276,30 +297,9 @@ func (e ErrorCode) Valid() bool {
 		return true
 	case ErrorCodeUnauthenticated:
 		return true
-	case ErrorCodeUseComplete:
+	case ErrorCodeUseAdvance:
 		return true
-	case ErrorCodeUseDrop:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for FeatureState.
-const (
-	FeatureStateDropped FeatureState = "dropped"
-	FeatureStateOpen    FeatureState = "open"
-	FeatureStateShipped FeatureState = "shipped"
-)
-
-// Valid indicates whether the value is a known member of the FeatureState enum.
-func (e FeatureState) Valid() bool {
-	switch e {
-	case FeatureStateDropped:
-		return true
-	case FeatureStateOpen:
-		return true
-	case FeatureStateShipped:
+	case ErrorCodeUseParent:
 		return true
 	default:
 		return false
@@ -357,6 +357,27 @@ func (e MemberKind) Valid() bool {
 	case Agent:
 		return true
 	case Human:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewWorkflow.
+const (
+	NewWorkflowCopy    NewWorkflow = "copy"
+	NewWorkflowDefault NewWorkflow = "default"
+	NewWorkflowEmpty   NewWorkflow = "empty"
+)
+
+// Valid indicates whether the value is a known member of the NewWorkflow enum.
+func (e NewWorkflow) Valid() bool {
+	switch e {
+	case NewWorkflowCopy:
+		return true
+	case NewWorkflowDefault:
+		return true
+	case NewWorkflowEmpty:
 		return true
 	default:
 		return false
@@ -480,67 +501,40 @@ func (e SkillKind) Valid() bool {
 	}
 }
 
-// Defines values for StatusKind.
-const (
-	StatusKindBacklog    StatusKind = "backlog"
-	StatusKindDone       StatusKind = "done"
-	StatusKindDropped    StatusKind = "dropped"
-	StatusKindInProgress StatusKind = "in_progress"
-	StatusKindTodo       StatusKind = "todo"
-)
-
-// Valid indicates whether the value is a known member of the StatusKind enum.
-func (e StatusKind) Valid() bool {
-	switch e {
-	case StatusKindBacklog:
-		return true
-	case StatusKindDone:
-		return true
-	case StatusKindDropped:
-		return true
-	case StatusKindInProgress:
-		return true
-	case StatusKindTodo:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SubjectType.
 const (
-	SubjectTypeFeature   SubjectType = "feature"
+	SubjectTypeLabel     SubjectType = "label"
 	SubjectTypeLoginLink SubjectType = "login_link"
 	SubjectTypeMember    SubjectType = "member"
+	SubjectTypeProject   SubjectType = "project"
 	SubjectTypeSession   SubjectType = "session"
 	SubjectTypeSkill     SubjectType = "skill"
-	SubjectTypeStatuses  SubjectType = "statuses"
 	SubjectTypeTask      SubjectType = "task"
-	SubjectTypeTeam      SubjectType = "team"
 	SubjectTypeToken     SubjectType = "token"
+	SubjectTypeWorkflow  SubjectType = "workflow"
 	SubjectTypeWorkspace SubjectType = "workspace"
 )
 
 // Valid indicates whether the value is a known member of the SubjectType enum.
 func (e SubjectType) Valid() bool {
 	switch e {
-	case SubjectTypeFeature:
+	case SubjectTypeLabel:
 		return true
 	case SubjectTypeLoginLink:
 		return true
 	case SubjectTypeMember:
 		return true
+	case SubjectTypeProject:
+		return true
 	case SubjectTypeSession:
 		return true
 	case SubjectTypeSkill:
 		return true
-	case SubjectTypeStatuses:
-		return true
 	case SubjectTypeTask:
 		return true
-	case SubjectTypeTeam:
-		return true
 	case SubjectTypeToken:
+		return true
+	case SubjectTypeWorkflow:
 		return true
 	case SubjectTypeWorkspace:
 		return true
@@ -551,6 +545,7 @@ func (e SubjectType) Valid() bool {
 
 // Defines values for TaskKind.
 const (
+	Acceptance    TaskKind = "acceptance"
 	Breakdown     TaskKind = "breakdown"
 	Retrospective TaskKind = "retrospective"
 	Work          TaskKind = "work"
@@ -559,6 +554,8 @@ const (
 // Valid indicates whether the value is a known member of the TaskKind enum.
 func (e TaskKind) Valid() bool {
 	switch e {
+	case Acceptance:
+		return true
 	case Breakdown:
 		return true
 	case Retrospective:
@@ -593,15 +590,12 @@ func (e TaskState) Valid() bool {
 
 // Defines values for ViewEntity.
 const (
-	ViewEntityFeatures ViewEntity = "features"
-	ViewEntityTasks    ViewEntity = "tasks"
+	ViewEntityTasks ViewEntity = "tasks"
 )
 
 // Valid indicates whether the value is a known member of the ViewEntity enum.
 func (e ViewEntity) Valid() bool {
 	switch e {
-	case ViewEntityFeatures:
-		return true
 	case ViewEntityTasks:
 		return true
 	default:
@@ -650,6 +644,16 @@ type Activity struct {
 
 	// Kind What happened. The part before the dot is the `subject_type`. New kinds may be added
 	// within `/v1`; a client should skip a kind it does not know.
+	//
+	// The entries that trace a Task's path through its Workflow carry Step ids in their
+	// payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
+	// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
+	// Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
+	// down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
+	// and `from` when it was at a Step; `task.became_parent`, `task.completed` and
+	// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
+	// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
+	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
 	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
@@ -659,13 +663,23 @@ type Activity struct {
 	// SubjectID The id of the record the entry is about, of `subject_type`.
 	SubjectID string `json:"subject_id"`
 
-	// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
-	// Statuses as a whole; its `subject_id` is the Organisation's id.
+	// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
+	// whole; its `subject_id` is the Project's id.
 	SubjectType SubjectType `json:"subject_type"`
 }
 
 // ActivityKind What happened. The part before the dot is the `subject_type`. New kinds may be added
 // within `/v1`; a client should skip a kind it does not know.
+//
+// The entries that trace a Task's path through its Workflow carry Step ids in their
+// payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
+// Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
+// Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
+// down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
+// and `from` when it was at a Step; `task.became_parent`, `task.completed` and
+// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
+// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
+// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
 type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
@@ -681,6 +695,16 @@ type ActivityPage struct {
 // AddNoteBody defines model for AddNoteBody.
 type AddNoteBody struct {
 	Body string `json:"body"`
+}
+
+// AdvanceTaskBody defines model for AdvanceTaskBody.
+type AdvanceTaskBody struct {
+	// Note Added to the Task's Notes in the same write, before it moves on.
+	Note *string `json:"note,omitempty"`
+
+	// Outcome The name of a Connector out of the Task's Step, ignoring case. May be left out when
+	// the Step has exactly one.
+	Outcome *string `json:"outcome,omitempty"`
 }
 
 // AgentSettings How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
@@ -728,10 +752,15 @@ type Claim struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// HeartbeatTimeoutSeconds Absent when the Claim never lapses on its own.
-	HeartbeatTimeoutSeconds *int      `json:"heartbeat_timeout_seconds,omitempty"`
-	HolderID                string    `json:"holder_id"`
-	HowEnded                *ClaimEnd `json:"how_ended,omitempty"`
-	ID                      string    `json:"id"`
+	HeartbeatTimeoutSeconds *int   `json:"heartbeat_timeout_seconds,omitempty"`
+	HolderID                string `json:"holder_id"`
+
+	// HowEnded How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
+	// holder filed a Subtask under the Task, which became a Parent. `completed`: the Task ended
+	// done. `taken_back`: someone on the holder's Reporting line or the Task's Owner took it
+	// back, or moved the Task. The rest are named for what ended it.
+	HowEnded *ClaimEnd `json:"how_ended,omitempty"`
+	ID       string    `json:"id"`
 
 	// ModelLabel The AI model the holder said it used. Stored, never interpreted.
 	ModelLabel *string `json:"model_label,omitempty"`
@@ -739,7 +768,7 @@ type Claim struct {
 	// SessionID The Session that made the Claim.
 	SessionID string `json:"session_id"`
 
-	// SkillID The Skill the Claim was made under. Absent for a Task aimed at a Member.
+	// SkillID The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member.
 	SkillID *string `json:"skill_id,omitempty"`
 
 	// SkillVersion The version of the Skill the Claim was worked under.
@@ -748,7 +777,10 @@ type Claim struct {
 	TaskID       string    `json:"task_id"`
 }
 
-// ClaimEnd defines model for ClaimEnd.
+// ClaimEnd How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
+// holder filed a Subtask under the Task, which became a Parent. `completed`: the Task ended
+// done. `taken_back`: someone on the holder's Reporting line or the Task's Owner took it
+// back, or moved the Task. The rest are named for what ended it.
 type ClaimEnd string
 
 // ClaimTaskBody defines model for ClaimTaskBody.
@@ -771,12 +803,78 @@ type CompleteTaskBody struct {
 	Note *string `json:"note,omitempty"`
 }
 
+// Connector A named way out of a Step into another Step, or into Done: the outcome its holder names
+// when they advance the Task. Advancing into Done completes the Task; dropping needs no
+// Connector.
+type Connector struct {
+	FromStepID string `json:"from_step_id"`
+	ID         string `json:"id"`
+
+	// Name The outcome, such as `pass` or `needs changes`; unique among the Connectors out of its Step, ignoring case.
+	Name string `json:"name"`
+
+	// Position Its place among the Connectors out of its Step, 1 first.
+	Position int64 `json:"position"`
+
+	// ToStepID The Step it leads to. Absent when it leads into Done.
+	ToStepID *string `json:"to_step_id,omitempty"`
+}
+
+// ConnectorInput defines model for ConnectorInput.
+type ConnectorInput struct {
+	// From The Step it leads out of, by its id or its name in `steps`.
+	From string `json:"from"`
+
+	// ID The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
+	// with the same name, ignoring case, keeps its id; any other is new.
+	ID   *string `json:"id,omitempty"`
+	Name string  `json:"name"`
+
+	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
+	Position int64 `json:"position"`
+
+	// To The Step it leads to, by its id or its name in `steps`. Left out, it leads into Done.
+	To *string `json:"to,omitempty"`
+}
+
+// CreateLabelBody defines model for CreateLabelBody.
+type CreateLabelBody struct {
+	Color string `json:"color"`
+	Name  string `json:"name"`
+}
+
 // CreateMemberBody defines model for CreateMemberBody.
 type CreateMemberBody struct {
 	Admin *bool                `json:"admin,omitempty"`
 	Email *openapi_types.Email `json:"email,omitempty"`
 	Kind  MemberKind           `json:"kind"`
 	Name  string               `json:"name"`
+}
+
+// CreateProjectBody defines model for CreateProjectBody.
+type CreateProjectBody struct {
+	// Acceptance Defaults to false.
+	Acceptance *bool `json:"acceptance,omitempty"`
+
+	// AutoComplete Defaults to false.
+	AutoComplete *bool `json:"auto_complete,omitempty"`
+
+	// CopyFrom With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied.
+	CopyFrom *string `json:"copy_from,omitempty"`
+
+	// DefaultWorkspace Workspace id or name.
+	DefaultWorkspace *string `json:"default_workspace,omitempty"`
+	Key              string  `json:"key"`
+
+	// Members Member ids or names put in the Project with it. The creator is not, unless named.
+	Members *[]string `json:"members,omitempty"`
+	Name    string    `json:"name"`
+
+	// Workflow The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
+	// · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
+	// `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
+	// `default` when not given.
+	Workflow *NewWorkflow `json:"workflow,omitempty"`
 }
 
 // CreateSkillBody defines model for CreateSkillBody.
@@ -790,27 +888,22 @@ type CreateSkillBody struct {
 	Name string    `json:"name"`
 }
 
-// CreateTeamBody defines model for CreateTeamBody.
-type CreateTeamBody struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
-}
-
 // CreateViewBody defines model for CreateViewBody.
 type CreateViewBody struct {
 	// Display At most 16 KiB as JSON.
 	Display *map[string]interface{} `json:"display,omitempty"`
 
-	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	// Entity The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+	// more may be added within `/v1`.
 	Entity ViewEntity `json:"entity"`
 
 	// Filters The list's `filter` tokens; none when omitted.
 	Filters *[]string `json:"filters,omitempty"`
 	Name    string    `json:"name"`
-	Sort    *string   `json:"sort,omitempty"`
 
-	// Team The Team whose list it is, by id or key; omitted for a list across Teams.
-	Team *string `json:"team,omitempty"`
+	// Project The Project whose list it is, by id or key; omitted for a list across Projects.
+	Project *string `json:"project,omitempty"`
+	Sort    *string `json:"sort,omitempty"`
 }
 
 // CreateWorkspaceBody defines model for CreateWorkspaceBody.
@@ -821,8 +914,9 @@ type CreateWorkspaceBody struct {
 	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
 	Kind *WorkspaceKind `json:"kind,omitempty"`
 
-	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-	// merged pull request carrying a Task's key completes that Task's review.
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+	// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+	// having landed.
 	Mode *WorkspaceMode `json:"mode,omitempty"`
 	Name string         `json:"name"`
 
@@ -846,12 +940,26 @@ type Error struct {
 	// `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 	// `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 	// `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-	// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
-	// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+	// `no_connector` 409 · `use_advance` 409 · `no_step` 409 · `one_level` 409 · `held` 409 ·
+	// `step_in_use` 409 · `use_parent` 409 · `no_runner` 409 · `too_large` 413 ·
+	// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 	// `not_implemented` 501.
+	//
+	// `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
+	// was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
+	// several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+	// `breakdown` for Break down, or any Step to file at), or no Connector leads from a
+	// Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
+	// Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
+	// whoever may take it back, may do this. `step_in_use`: a Step being deleted has open Tasks
+	// at it and nothing says where they go. `use_parent`: a Subtask takes this from its Parent
+	// (its Owner, its Rank); ask it of the Parent.
 	Code ErrorCode `json:"code"`
 
-	// Details Extra facts about the failure, by code.
+	// Details Extra facts about the failure, by code. `no_connector` and `use_advance` carry
+	// `outcomes`: the names of the Connectors out of the Task's Step, in order, so a caller
+	// can choose one. `proposal_stale` from an advance or a Complete carries `proposals`:
+	// the ids of the proposals no longer written against their Skill's current version.
 	Details *map[string]interface{} `json:"details,omitempty"`
 
 	// Message For people; may change between releases.
@@ -862,140 +970,83 @@ type Error struct {
 // `invalid` 400 · `unauthenticated` 401 · `session_required` 401 · `forbidden` 403 ·
 // `not_found` 404 · `conflict` 409 · `already_claimed` 409 · `not_takeable` 409 ·
 // `not_holder` 409 · `ended` 409 · `tasks_open` 409 · `cycle` 409 · `proposal_stale` 409 ·
-// `status_in_use` 409 · `use_complete` 409 · `use_drop` 409 · `no_runner` 409 ·
-// `too_large` 413 · `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
+// `no_connector` 409 · `use_advance` 409 · `no_step` 409 · `one_level` 409 · `held` 409 ·
+// `step_in_use` 409 · `use_parent` 409 · `no_runner` 409 · `too_large` 413 ·
+// `idempotency_key_reused` 422 · `too_many_requests` 429 · `internal` 500 ·
 // `not_implemented` 501.
+//
+// `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
+// was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
+// several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+// `breakdown` for Break down, or any Step to file at), or no Connector leads from a
+// Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
+// Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
+// whoever may take it back, may do this. `step_in_use`: a Step being deleted has open Tasks
+// at it and nothing says where they go. `use_parent`: a Subtask takes this from its Parent
+// (its Owner, its Rank); ask it of the Parent.
 type ErrorCode string
 
-// Evidence defines model for Evidence.
+// Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
+// about a Parent as a whole is attached to the Parent.
 type Evidence struct {
 	AttachedBy  string    `json:"attached_by"`
 	ContentType string    `json:"content_type"`
 	CreatedAt   time.Time `json:"created_at"`
-	FeatureID   string    `json:"feature_id"`
 	Filename    string    `json:"filename"`
 	ID          string    `json:"id"`
 	Sha256      string    `json:"sha256"`
 	Size        int64     `json:"size"`
-
-	// TaskID Absent when attached to the Feature itself.
-	TaskID *string `json:"task_id,omitempty"`
-}
-
-// Feature defines model for Feature.
-type Feature struct {
-	CreatedAt   time.Time  `json:"created_at"`
-	Description string     `json:"description"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
-	FiledBy     string     `json:"filed_by"`
-
-	// FromRetrospectiveTaskID The Retrospective that filed this Feature.
-	FromRetrospectiveTaskID *string `json:"from_retrospective_task_id,omitempty"`
-	ID                      string  `json:"id"`
-
-	// Key Display key, such as `WEB-1`.
-	Key     string `json:"key"`
-	OwnerID string `json:"owner_id"`
-
-	// Quick A quick Feature was filed with its one Task and no Break down; it has no Retrospective.
-	Quick bool `json:"quick"`
-
-	// Rank Position in the Team's Rank, 1 first. An ended Feature keeps its place.
-	Rank int64 `json:"rank"`
-
-	// ShipWhenDone The Feature ships itself when its last open Task is completed. Always true for a quick Feature.
-	ShipWhenDone bool         `json:"ship_when_done"`
-	State        FeatureState `json:"state"`
-
-	// TaskCounts How many of the Feature's Tasks are in each state.
-	TaskCounts TaskCounts `json:"task_counts"`
-	TeamID     string     `json:"team_id"`
-	Title      string     `json:"title"`
-}
-
-// FeatureDetail defines model for FeatureDetail.
-type FeatureDetail struct {
-	Evidence []Evidence `json:"evidence"`
-	Feature  Feature    `json:"feature"`
-	Tasks    []Task     `json:"tasks"`
-}
-
-// FeatureList defines model for FeatureList.
-type FeatureList struct {
-	Items []Feature `json:"items"`
-
-	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
-	NextCursor *string `json:"next_cursor,omitempty"`
-}
-
-// FeatureState defines model for FeatureState.
-type FeatureState string
-
-// FileFeatureBody defines model for FileFeatureBody.
-type FileFeatureBody struct {
-	Description *string `json:"description,omitempty"`
-
-	// FromRetrospective Id or display key of the Retrospective Task filing this Feature.
-	FromRetrospective *string `json:"from_retrospective,omitempty"`
-
-	// Owner Member id or name. Defaults to the caller.
-	Owner *string `json:"owner,omitempty"`
-
-	// Quick File a quick Feature, with its one Task instead of a Break down. Needs `skill`.
-	Quick *bool `json:"quick,omitempty"`
-
-	// ShipWhenDone Ship the Feature when its last open Task is completed. Defaults to the Team's; true for a quick Feature.
-	ShipWhenDone *bool `json:"ship_when_done,omitempty"`
-
-	// Skill A quick Feature's only. Skill id or name its one Task needs.
-	Skill *string `json:"skill,omitempty"`
-
-	// Team Team id or key.
-	Team  string `json:"team"`
-	Title string `json:"title"`
-
-	// Workspaces A quick Feature's only. Workspace ids or names its one Task names; default the Team's default Workspace.
-	Workspaces *[]string `json:"workspaces,omitempty"`
+	TaskID      string    `json:"task_id"`
 }
 
 // FileTaskBody defines model for FileTaskBody.
 type FileTaskBody struct {
-	// AimedAt Member id or name the Task is aimed at. Give this or `skill`.
-	AimedAt *string `json:"aimed_at,omitempty"`
+	// Acceptance Defaults to the Project's. Not on a Subtask.
+	Acceptance *bool `json:"acceptance,omitempty"`
+
+	// Aim Member id or name the Task is aimed at by name; it then waits with them at no Step.
+	Aim *string `json:"aim,omitempty"`
+
+	// AutoComplete Defaults to the Project's. Not on a Subtask.
+	AutoComplete *bool `json:"auto_complete,omitempty"`
 
 	// Blocks Id or display key of a Task the new one blocks (a question or Escalation).
-	Blocks      *string `json:"blocks,omitempty"`
+	Blocks *string `json:"blocks,omitempty"`
+
+	// Breakdown File the Task with its Breakdown Subtask, making it a Parent from its first moment.
+	Breakdown   *bool   `json:"breakdown,omitempty"`
 	Description *string `json:"description,omitempty"`
 
-	// Feature Feature id or display key. May be left out when `blocks` is given.
-	Feature *string `json:"feature,omitempty"`
+	// FromRetrospective Id or display key of the Retrospective filing this Task.
+	FromRetrospective *string `json:"from_retrospective,omitempty"`
 
-	// Skill Skill id or name the Task needs. Give this or `aimed_at`.
-	Skill *string `json:"skill,omitempty"`
+	// Labels Label ids or names, each the Project's own or the Organisation's.
+	Labels *[]string `json:"labels,omitempty"`
 
-	// Status Status id or name the Task starts in, of kind `backlog`, `todo` or `in_progress`;
-	// `backlog` files it ahead, where `next` does not offer it. Defaults to the first `todo`
-	// Status.
-	Status *string `json:"status,omitempty"`
-	Title  string  `json:"title"`
-
-	// Workspaces Workspace ids or names the Task names: where a session works it. Left out, the Task
-	// names its Feature's Team's default Workspace, or none when the Team has none; an
-	// empty list names none.
-	Workspaces *[]string `json:"workspaces,omitempty"`
-}
-
-// HandoverTaskBody defines model for HandoverTaskBody.
-type HandoverTaskBody struct {
-	// Note Added to the Task's Notes in the same write.
+	// Note Only when filing a Subtask under a Task the caller holds: added to the Parent's Notes
+	// in the same write, as the Claim the filing ends hands its context on.
 	Note *string `json:"note,omitempty"`
 
-	// Skill Skill id or name the Task needs next.
-	Skill string `json:"skill"`
+	// Owner Member id or name. Defaults to the caller; a Subtask's is its Parent's and cannot be named.
+	Owner *string `json:"owner,omitempty"`
 
-	// Status Status id or name to move the Task to, of kind `backlog`, `todo` or `in_progress`,
-	// such as In review. Left out, the Status stays as it is.
-	Status *string `json:"status,omitempty"`
+	// Parent Id or display key of the Task to file a Subtask under.
+	Parent *string `json:"parent,omitempty"`
+
+	// Project Project id or key. May be left out when `parent` or `blocks` is given.
+	Project *string `json:"project,omitempty"`
+
+	// Step Step id or name in the Project's Workflow to start at. Defaults to the first Step
+	// carrying a Skill other than `breakdown`, `acceptance`, `retro` and `skill-review`
+	// (Build in the default Workflow); failing that, the first Step carrying any Skill;
+	// failing that, the first Step.
+	Step  *string `json:"step,omitempty"`
+	Title string  `json:"title"`
+
+	// Workspaces Workspace ids or names the Task names: where a session works it. Left out, a Task with
+	// no Parent names its Project's default Workspace, or none when the Project has none,
+	// and a Subtask names its Parent's Workspaces; an empty list names none.
+	Workspaces *[]string `json:"workspaces,omitempty"`
 }
 
 // Health defines model for Health.
@@ -1024,14 +1075,14 @@ type HeartbeatReply struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Status `ok`: the Claim is extended. `lapsed`: it ran out before this Heartbeat. `taken_back`:
-	// someone on the Reporting line or the Feature owner took it back. `ended`: it ended some
-	// other way (released, handed over, completed, dropped, revoked).
+	// someone on the Reporting line or the Task's Owner took it back, or moved the Task.
+	// `ended`: it ended some other way (released, advanced, split, completed, dropped, revoked).
 	Status HeartbeatStatus `json:"status"`
 }
 
 // HeartbeatStatus `ok`: the Claim is extended. `lapsed`: it ran out before this Heartbeat. `taken_back`:
-// someone on the Reporting line or the Feature owner took it back. `ended`: it ended some
-// other way (released, handed over, completed, dropped, revoked).
+// someone on the Reporting line or the Task's Owner took it back, or moved the Task.
+// `ended`: it ended some other way (released, advanced, split, completed, dropped, revoked).
 type HeartbeatStatus string
 
 // IssueTokenBody defines model for IssueTokenBody.
@@ -1047,6 +1098,26 @@ type IssuedToken struct {
 	Token  Token  `json:"token"`
 }
 
+// Label A named, coloured mark carried by any number of Tasks: a Project's own, or the
+// Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
+type Label struct {
+	// Color `#rrggbb`.
+	Color     string    `json:"color"`
+	CreatedAt time.Time `json:"created_at"`
+	ID        string    `json:"id"`
+
+	// Name Unique among the Labels a Task of its Project can carry, ignoring case.
+	Name string `json:"name"`
+
+	// ProjectID The Project that defined it for itself. Absent for the Organisation's.
+	ProjectID *string `json:"project_id,omitempty"`
+}
+
+// LabelList defines model for LabelList.
+type LabelList struct {
+	Items []Label `json:"items"`
+}
+
 // LoginLink defines model for LoginLink.
 type LoginLink struct {
 	ExpiresAt time.Time `json:"expires_at"`
@@ -1059,14 +1130,20 @@ type LoginLink struct {
 type Me struct {
 	Member       Member       `json:"member"`
 	Organisation Organisation `json:"organisation"`
-	Session      Session      `json:"session"`
-	Skills       []Skill      `json:"skills"`
-	Teams        []Team       `json:"teams"`
+
+	// Organisations The Organisations the caller's sign-in reaches, the current one included, by name,
+	// for switching between them. Absent on Local, which holds exactly one.
+	Organisations *[]OrganisationBrief `json:"organisations,omitempty"`
+
+	// Projects The Projects the caller is a Member of, by name.
+	Projects []Project `json:"projects"`
+	Session  Session   `json:"session"`
+	Skills   []Skill   `json:"skills"`
 }
 
 // Member defines model for Member.
 type Member struct {
-	// Admin Admins create Members, Teams and Skills, set Reporting lines, and issue tokens and login links.
+	// Admin Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links.
 	Admin bool `json:"admin"`
 
 	// Agent How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
@@ -1099,10 +1176,12 @@ type Member struct {
 type MemberDetail struct {
 	Member Member `json:"member"`
 
+	// Projects The Projects the Member is in, by name.
+	Projects []Project `json:"projects"`
+
 	// Reports The Members this Member directs.
 	Reports []Member `json:"reports"`
 	Skills  []Skill  `json:"skills"`
-	Teams   []Team   `json:"teams"`
 }
 
 // MemberKind defines model for MemberKind.
@@ -1112,6 +1191,21 @@ type MemberKind string
 type MemberList struct {
 	Items []Member `json:"items"`
 }
+
+// MoveTaskBody defines model for MoveTaskBody.
+type MoveTaskBody struct {
+	// Note Added to the Task's Notes in the same write.
+	Note *string `json:"note,omitempty"`
+
+	// Step Step id or name in the Task's Project's Workflow.
+	Step string `json:"step"`
+}
+
+// NewWorkflow The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
+// · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
+// `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
+// `default` when not given.
+type NewWorkflow string
 
 // NextTaskBody defines model for NextTaskBody.
 type NextTaskBody struct {
@@ -1135,12 +1229,13 @@ type Note struct {
 	TaskID  string  `json:"task_id"`
 }
 
-// Observation defines model for Observation.
+// Observation An entry on a Task, marked worked or didn't work, recording who wrote it and the Skill
+// they worked under. It feeds the Retrospective of the Task's Parent, which marks it
+// reviewed.
 type Observation struct {
 	AuthorID   string             `json:"author_id"`
 	Body       string             `json:"body"`
 	CreatedAt  time.Time          `json:"created_at"`
-	FeatureID  string             `json:"feature_id"`
 	ID         string             `json:"id"`
 	Outcome    ObservationOutcome `json:"outcome"`
 	ReviewedAt *time.Time         `json:"reviewed_at,omitempty"`
@@ -1174,15 +1269,56 @@ type Organisation struct {
 	Name      string    `json:"name"`
 }
 
-// PassFeatureOwnershipBody defines model for PassFeatureOwnershipBody.
-type PassFeatureOwnershipBody struct {
+// OrganisationBrief An Organisation named by its id and name.
+type OrganisationBrief struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// PassOwnershipBody defines model for PassOwnershipBody.
+type PassOwnershipBody struct {
 	// Owner Member id or name.
 	Owner string `json:"owner"`
 }
 
+// Project A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+// default Workspace. Every Task belongs to exactly one Project.
+type Project struct {
+	// Acceptance The `acceptance` a Task filed in the Project takes when its filer does not say.
+	Acceptance bool `json:"acceptance"`
+
+	// AutoComplete The `auto_complete` a Task filed in the Project takes when its filer does not say.
+	AutoComplete bool      `json:"auto_complete"`
+	CreatedAt    time.Time `json:"created_at"`
+
+	// DefaultWorkspaceID The Workspace a Task with no Parent filed in the Project names when it names none.
+	// Absent when the Project has none.
+	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
+	ID                 string  `json:"id"`
+
+	// Key The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`.
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// ProjectDetail defines model for ProjectDetail.
+type ProjectDetail struct {
+	// Members The Project's Members, by name.
+	Members []Member `json:"members"`
+
+	// Project A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+	// default Workspace. Every Task belongs to exactly one Project.
+	Project Project `json:"project"`
+}
+
+// ProjectList defines model for ProjectList.
+type ProjectList struct {
+	Items []Project `json:"items"`
+}
+
 // ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
-// not be published, because a newer proposal replaced it on its Task or its Task ended
-// without publishing it.
+// not be published, because a newer proposal for the same Skill replaced it on its Task, or
+// its Task ended without publishing it.
 type ProposalState string
 
 // ProposeSkillVersionBody defines model for ProposeSkillVersionBody.
@@ -1194,8 +1330,8 @@ type ProposeSkillVersionBody struct {
 	Skill string `json:"skill"`
 }
 
-// RankFeatureBody defines model for RankFeatureBody.
-type RankFeatureBody struct {
+// RankTaskBody defines model for RankTaskBody.
+type RankTaskBody struct {
 	Position int64 `json:"position"`
 }
 
@@ -1231,7 +1367,7 @@ type RunnerSession struct {
 	State  RunnerSessionState `json:"state"`
 	TaskID string             `json:"task_id"`
 
-	// Tmux The tmux session's name, such as `dk-WEB-12`. Absent when the session runs without tmux and cannot be joined.
+	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
 }
 
@@ -1302,22 +1438,24 @@ type SetManagerBody struct {
 	Manager string `json:"manager"`
 }
 
-// SetStatusesBody defines model for SetStatusesBody.
-type SetStatusesBody struct {
-	// Items The whole list, in its new order. A Status already in the list carries its `id`; a
-	// new one has none. A Status left out is deleted.
-	Items []StatusInput `json:"items"`
-
-	// Moves Where the Tasks in a deleted Status go: the deleted Status's id to the id of a Status
-	// kept in the list, of the same kind of ending (an open kind to an open kind, `done` to
-	// `done`, `dropped` to `dropped`).
-	Moves *map[string]string `json:"moves,omitempty"`
+// SetTaskLabelsBody defines model for SetTaskLabelsBody.
+type SetTaskLabelsBody struct {
+	// Labels Label ids or names, each the Task's Project's own or the Organisation's; the whole set it carries.
+	Labels []string `json:"labels"`
 }
 
-// SetTaskStatusBody defines model for SetTaskStatusBody.
-type SetTaskStatusBody struct {
-	// Status Status id or name, of kind `backlog`, `todo` or `in_progress`.
-	Status string `json:"status"`
+// SetWorkflowBody defines model for SetWorkflowBody.
+type SetWorkflowBody struct {
+	// Connectors Every Connector of the new Workflow. One left out is deleted.
+	Connectors []ConnectorInput `json:"connectors"`
+
+	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
+	// Workflow, by its id or its name in `steps`.
+	Moves *map[string]string `json:"moves,omitempty"`
+
+	// Steps Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
+	// none. A Step left out is deleted.
+	Steps []StepInput `json:"steps"`
 }
 
 // SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
@@ -1329,7 +1467,7 @@ type Skill struct {
 	// BaseSkillID The generic Skill a company Skill builds on.
 	BaseSkillID *string `json:"base_skill_id,omitempty"`
 
-	// Builtin True for `breakdown`, `retro` and `skill-review`, which Darkory relies on.
+	// Builtin True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on.
 	Builtin        bool      `json:"builtin"`
 	CreatedAt      time.Time `json:"created_at"`
 	CurrentVersion int64     `json:"current_version"`
@@ -1368,8 +1506,8 @@ type SkillProposal struct {
 	SkillID          string `json:"skill_id"`
 
 	// State `pending`: waiting for review. `published`: a review published it. `superseded`: it will
-	// not be published, because a newer proposal replaced it on its Task or its Task ended
-	// without publishing it.
+	// not be published, because a newer proposal for the same Skill replaced it on its Task, or
+	// its Task ended without publishing it.
 	State  ProposalState `json:"state"`
 	TaskID string        `json:"task_id"`
 }
@@ -1393,120 +1531,191 @@ type SkillVersionList struct {
 	Items []SkillVersion `json:"items"`
 }
 
-// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
-// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
-// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
-// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
-// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
-// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
-// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
-// holder names one. Claimed and blocked are not Statuses.
-type Status struct {
+// Step A place in a Workflow, carrying at most one Skill: a Task at it is taken by a Member with
+// that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human
+// moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
+type Step struct {
 	ID string `json:"id"`
 
-	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
-	Kind StatusKind `json:"kind"`
-	Name string     `json:"name"`
+	// Name Unique in its Workflow, ignoring case.
+	Name string `json:"name"`
 
-	// Position Its place in the Organisation's list, 1 first.
+	// Position Its place in the Workflow, 1 first.
 	Position int64 `json:"position"`
+
+	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
+	SkillID *string `json:"skill_id,omitempty"`
+
+	// X Where the canvas draws it, in pixels from the left.
+	X int64 `json:"x"`
+
+	// Y Where the canvas draws it, in pixels from the top.
+	Y int64 `json:"y"`
 }
 
-// StatusInput defines model for StatusInput.
-type StatusInput struct {
-	// ID The id of a Status in the list now; left out for a new one.
-	ID *string `json:"id,omitempty"`
+// StepFacts defines model for StepFacts.
+type StepFacts struct {
+	// MedianMs The median time Tasks that left the Step in the last 30 days spent at it, by advance,
+	// move, Complete or drop. Absent when none left it.
+	MedianMs *int64 `json:"median_ms,omitempty"`
 
-	// Kind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-	// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-	// `dropped`: reached only by completing or dropping the Task, which never leaves them.
-	Kind StatusKind `json:"kind"`
-	Name string     `json:"name"`
+	// Takers The active Members who could take a Task at the Step by its Skill: the Project's
+	// Members holding it, or for `skill-review` the Organisation's, by name. None on a hold;
+	// a Step with a Skill and no takers is one nobody can work.
+	Takers []Taker `json:"takers"`
+
+	// Tasks The open Tasks at the Step.
+	Tasks int `json:"tasks"`
+
+	// Working Those of them with a live Claim; also counted in `tasks`.
+	Working int `json:"working"`
 }
 
-// StatusKind What Darkory's rules read. `backlog`: filed ahead, not takeable. `todo`: takeable.
-// `in_progress`: being worked, and still takeable once its Claim has lapsed. `done` and
-// `dropped`: reached only by completing or dropping the Task, which never leaves them.
-type StatusKind string
+// StepInput defines model for StepInput.
+type StepInput struct {
+	// ID The id of a Step in the Workflow now; left out for a new one.
+	ID   *string `json:"id,omitempty"`
+	Name string  `json:"name"`
 
-// StatusList defines model for StatusList.
-type StatusList struct {
-	// Items The Organisation's Statuses, in their order.
-	Items []Status `json:"items"`
+	// Position The Step's place in the Workflow; distinct among the Steps, and the Workflow numbers them 1, 2, 3… in this order.
+	Position int64 `json:"position"`
+
+	// Skill Skill id or name the Step carries. Left out, the Step is a hold.
+	Skill *string `json:"skill,omitempty"`
+
+	// X Left out, a Step in the Workflow now keeps its place, and a new one is drawn at (position − 1) × 448.
+	X *int64 `json:"x,omitempty"`
+
+	// Y Left out, a Step in the Workflow now keeps its place, and a new one is drawn at 0.
+	Y *int64 `json:"y,omitempty"`
 }
 
-// SubjectType The kind of record an Activity entry is about. `statuses` is the Organisation's list of
-// Statuses as a whole; its `subject_id` is the Organisation's id.
+// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
+// whole; its `subject_id` is the Project's id.
 type SubjectType string
+
+// SubtaskCounts How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks.
+type SubtaskCounts struct {
+	Done    int `json:"done"`
+	Dropped int `json:"dropped"`
+
+	// Open Open Subtasks, held or not.
+	Open int `json:"open"`
+
+	// Working Open Subtasks with a live Claim; also counted in `open`.
+	Working int `json:"working"`
+}
 
 // TakeBackTaskBody defines model for TakeBackTaskBody.
 type TakeBackTaskBody struct {
 	Reason *string `json:"reason,omitempty"`
 }
 
-// Task defines model for Task.
+// Taker A Member who holds a Step's Skill.
+type Taker struct {
+	ID   string     `json:"id"`
+	Kind MemberKind `json:"kind"`
+	Name string     `json:"name"`
+}
+
+// Task The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
+// Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
+// waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+// neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
+// Blocking and are not stored.
 type Task struct {
-	// AimedAtID The Member the Task is aimed at by name.
+	// Acceptance Once every Subtask of a Parent has ended and the last to end ended done, Darkory files
+	// an Acceptance under it, when its Workflow has a Step carrying `acceptance`. Always
+	// false on a Subtask.
+	Acceptance bool `json:"acceptance"`
+
+	// AimedAtID The Member the Task is aimed at by name, who may take it at no Step.
 	AimedAtID *string `json:"aimed_at_id,omitempty"`
 
-	// Blocked True while any Task blocking this one is open.
-	Blocked     bool       `json:"blocked"`
-	Claim       *Claim     `json:"claim,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Description string     `json:"description"`
-	EndedAt     *time.Time `json:"ended_at,omitempty"`
-	FeatureID   string     `json:"feature_id"`
-	FiledBy     string     `json:"filed_by"`
-	ID          string     `json:"id"`
+	// AutoComplete A Parent completes itself when its last open Subtask ends done and no Acceptance is
+	// due. Always false on a Subtask.
+	AutoComplete bool `json:"auto_complete"`
 
-	// Key Display key, such as `WEB-42`.
+	// Blocked True while any Task blocking this one is open. Always false on a Parent.
+	Blocked bool `json:"blocked"`
+
+	// Breakdown Filed with Break down on; its Breakdown Subtask was filed with it.
+	Breakdown   bool      `json:"breakdown"`
+	Claim       *Claim    `json:"claim,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	Description string    `json:"description"`
+
+	// EndedAt When it ended, done or dropped.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
+
+	// FiledBy The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
+	// Acceptance, a Retrospective.
+	FiledBy *string `json:"filed_by,omitempty"`
+
+	// FromRetrospectiveTaskID The Retrospective that filed this Task.
+	FromRetrospectiveTaskID *string `json:"from_retrospective_task_id,omitempty"`
+	ID                      string  `json:"id"`
+
+	// Key Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence.
 	Key string `json:"key"`
 
-	// Kind `breakdown` and `retrospective` Tasks are filed by Darkory.
+	// Kind `work`: filed by a Member, a question or Escalation included. `breakdown`, `acceptance`
+	// and `retrospective`: the Subtasks Darkory files about a Parent as a whole, at the Steps
+	// carrying those Skills.
 	Kind TaskKind `json:"kind"`
+
+	// Labels The ids of the Labels it carries, by name. Absent when it carries none.
+	Labels *[]string `json:"labels,omitempty"`
 
 	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
 	OpenBlockers *[]TaskBrief `json:"open_blockers,omitempty"`
 
-	// SkillID The Skill the Task needs now. Absent when it is aimed at a Member.
+	// OwnerID The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's.
+	OwnerID string `json:"owner_id"`
+
+	// ParentID The Parent of a Subtask. Absent on a Task with no Parent.
+	ParentID  *string `json:"parent_id,omitempty"`
+	ProjectID string  `json:"project_id"`
+
+	// Rank Position in the Project's Rank, 1 first; an ended Task keeps its place. Absent on a
+	// Subtask, which sorts by its Parent's.
+	Rank *int64 `json:"rank,omitempty"`
+
+	// SkillID The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
+	// wherever `step_id` is.
 	SkillID *string `json:"skill_id,omitempty"`
 
-	// State Claimed and lapsed are not states; they follow from the Task's Claim.
+	// State Claimed, lapsed, waiting and blocked are not states; they follow from the Task's Claim and Blocking.
 	State TaskState `json:"state"`
 
-	// StatusID The Task's Status, one of the Organisation's (`listStatuses`).
-	StatusID string `json:"status_id"`
-	Title    string `json:"title"`
+	// StepID The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
+	// ended Task.
+	StepID *string `json:"step_id,omitempty"`
 
-	// WaitingSince When the Task was filed or last handed over.
+	// StepSince When the Task reached its Step. Absent when `step_id` is.
+	StepSince *time.Time `json:"step_since,omitempty"`
+
+	// SubtaskCounts How many of a Parent's Subtasks are in each state. Absent on a Task with no Subtasks.
+	SubtaskCounts *SubtaskCounts `json:"subtask_counts,omitempty"`
+	Title         string         `json:"title"`
+
+	// WaitingSince When the Task was filed or last reached a Step; `next` gives a tie to the Task that has waited longest.
 	WaitingSince time.Time `json:"waiting_since"`
 
 	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
 	WorkspaceIds *[]string `json:"workspace_ids,omitempty"`
 }
 
-// TaskBrief A Task named by its id and display key.
+// TaskBrief A Task named by its id, display key and title.
 type TaskBrief struct {
 	ID string `json:"id"`
 
-	// Key Display key, such as `WEB-42`.
-	Key string `json:"key"`
+	// Key Display key, such as `MAIN-42`.
+	Key   string `json:"key"`
+	Title string `json:"title"`
 }
 
-// TaskCounts How many of the Feature's Tasks are in each state.
-type TaskCounts struct {
-	// Claimed Open Tasks with a live Claim; these are also counted in `open`.
-	Claimed int `json:"claimed"`
-	Done    int `json:"done"`
-	Dropped int `json:"dropped"`
-
-	// Open Open Tasks, claimed or not.
-	Open int `json:"open"`
-}
-
-// TaskDetail The Task with its record. `proposal` is the latest Skill proposal written on it, when any.
+// TaskDetail The Task with its record.
 type TaskDetail struct {
 	// Blockers The Tasks blocking this one.
 	Blockers []Task `json:"blockers"`
@@ -1515,31 +1724,51 @@ type TaskDetail struct {
 	Blocking []Task `json:"blocking"`
 
 	// Claims Every Claim on the Task, oldest first.
-	Claims   []Claim    `json:"claims"`
-	Evidence []Evidence `json:"evidence"`
-	Feature  Feature    `json:"feature"`
+	Claims []Claim `json:"claims"`
+
+	// Connectors The Connectors out of the Task's Step, in order: the outcomes its holder may advance
+	// it along. Empty when it is at no Step.
+	Connectors []Connector `json:"connectors"`
+	Evidence   []Evidence  `json:"evidence"`
+
+	// Labels The Labels it carries, by name.
+	Labels []Label `json:"labels"`
 
 	// Notes The running log, oldest first.
-	Notes        []Note         `json:"notes"`
-	Observations []Observation  `json:"observations"`
-	Proposal     *SkillProposal `json:"proposal,omitempty"`
+	Notes []Note `json:"notes"`
 
-	// Status Where a Task is in its workflow, from the list the Organisation defines and orders. The
-	// rules read the kind, never the name. A Task in a `backlog` Status is not takeable, so
-	// `next` never offers it. Darkory moves the Status on its own acts: a claim moves a Task in
-	// a `todo` Status to the first `in_progress` one; complete moves it to the first `done` one,
-	// drop to the first `dropped` one; a Claim that ends any other way but Handover (release, a
-	// lapse, take-back, a revoked token, a closed Session, a deactivated Member) moves a Task in
-	// an `in_progress` Status to the first `todo` one. Handover leaves the Status unless the
-	// holder names one. Claimed and blocked are not Statuses.
-	Status Status `json:"status"`
-	Task   Task   `json:"task"`
+	// Observations The Observations recorded on the Task itself, oldest first.
+	Observations []Observation `json:"observations"`
+
+	// Parent A Task named by its id, display key and title.
+	Parent *TaskBrief `json:"parent,omitempty"`
+
+	// Proposals The latest Skill proposal written on the Task for each Skill, pending or decided,
+	// oldest first. A Retrospective carries at most one pending proposal per Skill.
+	Proposals []SkillProposal `json:"proposals"`
+
+	// Step A place in a Workflow, carrying at most one Skill: a Task at it is taken by a Member with
+	// that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human
+	// moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
+	Step *Step `json:"step,omitempty"`
+
+	// Subtasks A Parent's Subtasks, in the order they were filed; empty on a Task with none.
+	Subtasks []Task `json:"subtasks"`
+
+	// Task The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
+	// Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
+	// waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+	// neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
+	// Blocking and are not stored.
+	Task Task `json:"task"`
 
 	// Workspaces The Workspaces the Task names, in the order of `task.workspace_ids`.
 	Workspaces []Workspace `json:"workspaces"`
 }
 
-// TaskKind `breakdown` and `retrospective` Tasks are filed by Darkory.
+// TaskKind `work`: filed by a Member, a question or Escalation included. `breakdown`, `acceptance`
+// and `retrospective`: the Subtasks Darkory files about a Parent as a whole, at the Steps
+// carrying those Skills.
 type TaskKind string
 
 // TaskList defines model for TaskList.
@@ -1550,35 +1779,8 @@ type TaskList struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
-// TaskState Claimed and lapsed are not states; they follow from the Task's Claim.
+// TaskState Claimed, lapsed, waiting and blocked are not states; they follow from the Task's Claim and Blocking.
 type TaskState string
-
-// Team defines model for Team.
-type Team struct {
-	CreatedAt time.Time `json:"created_at"`
-
-	// DefaultWorkspaceID The Workspace a Task filed in the Team names when it names none. Absent when the Team has none.
-	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
-	ID                 string  `json:"id"`
-
-	// Key The prefix of the Team's display keys, such as `WEB` in `WEB-42`.
-	Key  string `json:"key"`
-	Name string `json:"name"`
-
-	// ShipWhenDone The `ship_when_done` a Feature filed in the Team takes when its filer does not say.
-	ShipWhenDone bool `json:"ship_when_done"`
-}
-
-// TeamDetail defines model for TeamDetail.
-type TeamDetail struct {
-	Members []Member `json:"members"`
-	Team    Team     `json:"team"`
-}
-
-// TeamList defines model for TeamList.
-type TeamList struct {
-	Items []Team `json:"items"`
-}
 
 // Token defines model for Token.
 type Token struct {
@@ -1601,6 +1803,12 @@ type TokenList struct {
 	Items []Token `json:"items"`
 }
 
+// UpdateLabelBody defines model for UpdateLabelBody.
+type UpdateLabelBody struct {
+	Color *string `json:"color,omitempty"`
+	Name  *string `json:"name,omitempty"`
+}
+
 // UpdateMemberBody defines model for UpdateMemberBody.
 type UpdateMemberBody struct {
 	Admin *bool                `json:"admin,omitempty"`
@@ -1608,12 +1816,14 @@ type UpdateMemberBody struct {
 	Name  *string              `json:"name,omitempty"`
 }
 
-// UpdateTeamBody defines model for UpdateTeamBody.
-type UpdateTeamBody struct {
-	// DefaultWorkspace Workspace id or name; `""` clears the Team's default.
+// UpdateProjectBody defines model for UpdateProjectBody.
+type UpdateProjectBody struct {
+	Acceptance   *bool `json:"acceptance,omitempty"`
+	AutoComplete *bool `json:"auto_complete,omitempty"`
+
+	// DefaultWorkspace Workspace id or name; `""` clears the Project's default.
 	DefaultWorkspace *string `json:"default_workspace,omitempty"`
 	Name             *string `json:"name,omitempty"`
-	ShipWhenDone     *bool   `json:"ship_when_done,omitempty"`
 }
 
 // UpdateViewBody defines model for UpdateViewBody.
@@ -1631,8 +1841,9 @@ type UpdateViewBody struct {
 type UpdateWorkspaceBody struct {
 	DefaultBranch *string `json:"default_branch,omitempty"`
 
-	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-	// merged pull request carrying a Task's key completes that Task's review.
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+	// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+	// having landed.
 	Mode *WorkspaceMode `json:"mode,omitempty"`
 	Name *string        `json:"name,omitempty"`
 	Path *string        `json:"path,omitempty"`
@@ -1645,7 +1856,8 @@ type View struct {
 	// Display How the list is shown, as the client wrote it; the server does not read it.
 	Display *map[string]interface{} `json:"display,omitempty"`
 
-	// Entity The list a View is of; its filters are that list's `filter` tokens.
+	// Entity The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+	// more may be added within `/v1`.
 	Entity ViewEntity `json:"entity"`
 
 	// Filters The list's `filter` tokens, in the order saved.
@@ -1653,20 +1865,67 @@ type View struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 
-	// Sort How the list is sorted, as the client wrote it; the server does not read it.
-	Sort *string `json:"sort,omitempty"`
+	// ProjectID The Project whose list it is; absent for a list across Projects.
+	ProjectID *string `json:"project_id,omitempty"`
 
-	// TeamID The Team whose list it is; absent for a list across Teams.
-	TeamID    *string   `json:"team_id,omitempty"`
+	// Sort How the list is sorted, as the client wrote it; the server does not read it.
+	Sort      *string   `json:"sort,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// ViewEntity The list a View is of; its filters are that list's `filter` tokens.
+// ViewEntity The list a View is of; its filters are that list's `filter` tokens. Only `tasks` for now;
+// more may be added within `/v1`.
 type ViewEntity string
 
 // ViewList defines model for ViewList.
 type ViewList struct {
 	Items []View `json:"items"`
+}
+
+// Workflow A Project's Steps, in order, and the Connectors between them. The board's columns are
+// the Steps in this order, then Done.
+type Workflow struct {
+	// Connectors Every Connector, by its Step's `position`, then its own.
+	Connectors []Connector `json:"connectors"`
+	ProjectID  string      `json:"project_id"`
+
+	// Steps The Steps, by `position`, each with what is happening at it now.
+	Steps []WorkflowStep `json:"steps"`
+}
+
+// WorkflowStep A Step with what is happening at it now.
+type WorkflowStep struct {
+	ID string `json:"id"`
+
+	// MedianMs The median time Tasks that left the Step in the last 30 days spent at it, by advance,
+	// move, Complete or drop. Absent when none left it.
+	MedianMs *int64 `json:"median_ms,omitempty"`
+
+	// Name Unique in its Workflow, ignoring case.
+	Name string `json:"name"`
+
+	// Position Its place in the Workflow, 1 first.
+	Position int64 `json:"position"`
+
+	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
+	SkillID *string `json:"skill_id,omitempty"`
+
+	// Takers The active Members who could take a Task at the Step by its Skill: the Project's
+	// Members holding it, or for `skill-review` the Organisation's, by name. None on a hold;
+	// a Step with a Skill and no takers is one nobody can work.
+	Takers []Taker `json:"takers"`
+
+	// Tasks The open Tasks at the Step.
+	Tasks int `json:"tasks"`
+
+	// Working Those of them with a live Claim; also counted in `tasks`.
+	Working int `json:"working"`
+
+	// X Where the canvas draws it, in pixels from the left.
+	X int64 `json:"x"`
+
+	// Y Where the canvas draws it, in pixels from the top.
+	Y int64 `json:"y"`
 }
 
 // Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
@@ -1683,8 +1942,9 @@ type Workspace struct {
 	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
 	Kind WorkspaceKind `json:"kind"`
 
-	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-	// merged pull request carrying a Task's key completes that Task's review.
+	// Mode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+	// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+	// having landed.
 	Mode WorkspaceMode `json:"mode"`
 
 	// Name Unique on the Install, ignoring case; it names the session's checkout directory.
@@ -1702,8 +1962,9 @@ type WorkspaceList struct {
 	Items []Workspace `json:"items"`
 }
 
-// WorkspaceMode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests, and a
-// merged pull request carrying a Task's key completes that Task's review.
+// WorkspaceMode `plain`: the Runner merges branches itself. `pull_request`: it opens pull requests
+// instead, and reads a merged pull request carrying a Task's key as that Task's branch
+// having landed.
 type WorkspaceMode string
 
 // BlockerRef defines model for BlockerRef.
@@ -1718,14 +1979,11 @@ type EvidenceFilename = string
 // EvidenceID defines model for EvidenceID.
 type EvidenceID = string
 
-// FeatureFilter defines model for FeatureFilter.
-type FeatureFilter = []string
-
-// FeatureRef defines model for FeatureRef.
-type FeatureRef = string
-
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
+
+// LabelID defines model for LabelID.
+type LabelID = string
 
 // Limit defines model for Limit.
 type Limit = int
@@ -1735,6 +1993,9 @@ type LoginCode = string
 
 // MemberRef defines model for MemberRef.
 type MemberRef = string
+
+// ProjectRef defines model for ProjectRef.
+type ProjectRef = string
 
 // ProposalID defines model for ProposalID.
 type ProposalID = string
@@ -1750,9 +2011,6 @@ type TaskFilter = []string
 
 // TaskRef defines model for TaskRef.
 type TaskRef = string
-
-// TeamRef defines model for TeamRef.
-type TeamRef = string
 
 // TokenID defines model for TokenID.
 type TokenID = string
@@ -1772,14 +2030,16 @@ type ListActivityParams struct {
 	Before *int64 `form:"before,omitempty" json:"before,omitempty"`
 
 	// Member Only entries this Member (id or name) acted in, or that ended a Claim they held: a
-	// lapse, a take-back, a drop, a revoked token, a closed Session or a deactivation.
+	// lapse, a take-back, a move, a drop, a revoked token, a closed Session or a
+	// deactivation.
 	Member *string `form:"member,omitempty" json:"member,omitempty"`
 
 	// Kind Only entries of these kinds; repeat it for several.
 	Kind *[]ActivityKind `form:"kind,omitempty" json:"kind,omitempty"`
 
-	// Team Only entries about a Feature of this Team (id or key), or about a Task of one.
-	Team *string `form:"team,omitempty" json:"team,omitempty"`
+	// Project Only entries about this Project (id or key): the Project itself, its Workflow, its own
+	// Labels, or a Task of it.
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1792,79 +2052,22 @@ type StreamActivityParams struct {
 	LastEventID *int64 `json:"Last-Event-ID,omitempty"`
 }
 
-// ListFeaturesParams defines parameters for ListFeatures.
-type ListFeaturesParams struct {
-	Team  *string       `form:"team,omitempty" json:"team,omitempty"`
-	State *FeatureState `form:"state,omitempty" json:"state,omitempty"`
-	Owner *string       `form:"owner,omitempty" json:"owner,omitempty"`
-
-	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`, in the grammar of `listTasks`' `filter`
-	// (each value percent-encoded on its own, ids not names, several `filter`s AND, `in` and
-	// `nin` OR within one).
-	//
-	// Fields: `state` (`open`, `shipped`, `dropped`) · `owner` (Member id) · `team` (Team id)
-	// · `quick` (`true`, `false`) · `ship_when_done` (`true`, `false`) · `filed_at` ·
-	// `ended_at` (when it shipped or dropped; an open Feature has none) · `q` (`contains`,
-	// ignoring case, over the key and the title).
-	//
-	// Example: `filter=state:is:open&filter=owner:in:<id>,<id>`. Refused with `invalid`,
-	// naming the token, as on `listTasks`.
-	Filter *FeatureFilter `form:"filter,omitempty" json:"filter,omitempty"`
-
-	// Limit At most this many items. Defaults to 100.
-	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
-
-	// Cursor The `next_cursor` of the previous page.
-	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
-}
-
-// FileFeatureParams defines parameters for FileFeature.
-type FileFeatureParams struct {
+// CreateLabelParams defines parameters for CreateLabel.
+type CreateLabelParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// DropFeatureParams defines parameters for DropFeature.
-type DropFeatureParams struct {
+// DeleteLabelParams defines parameters for DeleteLabel.
+type DeleteLabelParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// AttachFeatureEvidenceParams defines parameters for AttachFeatureEvidence.
-type AttachFeatureEvidenceParams struct {
-	// Filename The file's name, as it should be shown and downloaded.
-	Filename EvidenceFilename `form:"filename" json:"filename"`
-
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// ListFeatureObservationsParams defines parameters for ListFeatureObservations.
-type ListFeatureObservationsParams struct {
-	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
-	// Observation, reviewed or not.
-	Reviewed *bool `form:"reviewed,omitempty" json:"reviewed,omitempty"`
-}
-
-// PassFeatureOwnershipParams defines parameters for PassFeatureOwnership.
-type PassFeatureOwnershipParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// RankFeatureParams defines parameters for RankFeature.
-type RankFeatureParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// ShipFeatureParams defines parameters for ShipFeature.
-type ShipFeatureParams struct {
+// UpdateLabelParams defines parameters for UpdateLabel.
+type UpdateLabelParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -1886,9 +2089,9 @@ type LogoutParams struct {
 
 // ListMembersParams defines parameters for ListMembers.
 type ListMembersParams struct {
-	// Team Only Members of this Team.
-	Team *string     `form:"team,omitempty" json:"team,omitempty"`
-	Kind *MemberKind `form:"kind,omitempty" json:"kind,omitempty"`
+	// Project Only Members of this Project, by id or key.
+	Project *string     `form:"project,omitempty" json:"project,omitempty"`
+	Kind    *MemberKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
 // CreateMemberParams defines parameters for CreateMember.
@@ -1984,6 +2187,48 @@ type IssueTokenParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// CreateProjectParams defines parameters for CreateProject.
+type CreateProjectParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// UpdateProjectParams defines parameters for UpdateProject.
+type UpdateProjectParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// CreateProjectLabelParams defines parameters for CreateProjectLabel.
+type CreateProjectLabelParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RemoveProjectMemberParams defines parameters for RemoveProjectMember.
+type RemoveProjectMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// AddProjectMemberParams defines parameters for AddProjectMember.
+type AddProjectMemberParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// SetWorkflowParams defines parameters for SetWorkflow.
+type SetWorkflowParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // NudgeRunnerSessionParams defines parameters for NudgeRunnerSession.
 type NudgeRunnerSessionParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2033,30 +2278,23 @@ type CreateSkillParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// SetStatusesParams defines parameters for SetStatuses.
-type SetStatusesParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
 // ListTasksParams defines parameters for ListTasks.
 type ListTasksParams struct {
-	Feature *string    `form:"feature,omitempty" json:"feature,omitempty"`
-	Team    *string    `form:"team,omitempty" json:"team,omitempty"`
-	State   *TaskState `form:"state,omitempty" json:"state,omitempty"`
+	// Project Only Tasks of this Project, by id or key.
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
 
-	// Skill Only Tasks that need this Skill now.
-	Skill *string `form:"skill,omitempty" json:"skill,omitempty"`
+	// Parent Only the Subtasks of this Task, by id or display key.
+	Parent *string    `form:"parent,omitempty" json:"parent,omitempty"`
+	State  *TaskState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Step Only Tasks at this Step, by id, or by name together with `project`.
+	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
 	// AimedAt Only Tasks aimed at this Member.
 	AimedAt *string `form:"aimed_at,omitempty" json:"aimed_at,omitempty"`
 
 	// Holder Only Tasks this Member holds a live Claim on.
 	Holder *string `form:"holder,omitempty" json:"holder,omitempty"`
-
-	// Status Only Tasks in this Status, by id or name.
-	Status *string `form:"status,omitempty" json:"status,omitempty"`
 
 	// Filter Repeatable: `filter=<field>:<op>:<v1>,<v2>…`. Several `filter`s all apply (AND), together
 	// with the other parameters; `in` and `nin` match any of their values (OR). Each value is
@@ -2066,34 +2304,43 @@ type ListTasksParams struct {
 	// nothing.
 	//
 	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
-	// boolean fields; `contains` (one value) on text; on dates `before` (earlier than),
-	// `after` (later than), `gte`, `lte` (one value), `btw` (two values, both ends included,
-	// the earlier first) and `last` (`7d`, `30d` or `90d`: at or after the server's now less
-	// that many days). A date is RFC 3339 with its offset, to the millisecond, such as
+	// boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
+	// `contains` (one value) on text; on dates `before` (earlier than), `after` (later than),
+	// `gte`, `lte` (one value), `btw` (two values, both ends included, the earlier first) and
+	// `last` (`7d`, `30d` or `90d`: at or after the server's now less that many days). A date
+	// is RFC 3339 with its offset, to the millisecond, such as
 	// `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
 	// `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
-	// match a Task with no value for the field (`skill:not:<id>` matches Tasks aimed at a
-	// Member, which need no Skill), and on a field with several values (`workspace`) match a
-	// Task none of whose values is one given.
+	// match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
+	// Parent, a Task aimed at a Member, an ended Task), and on a field with several values
+	// (`label`, `workspace`) match a Task none of whose values is one given.
 	//
-	// Fields: `status` (Status id) · `status_kind` (`backlog`, `todo`, `in_progress`, `done`,
-	// `dropped`) · `skill` (Skill id) · `holder` (Member id holding a live Claim, or `none`
-	// for no live Claim) · `aimed_at` (Member id) · `feature` (Feature id) · `owner` (Member
-	// id owning the Task's Feature) · `team` (Team id of the Task's Feature) · `filed_by`
-	// (Member id) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is open
-	// and blocks an open Task) · `kind` (`work`, `breakdown`, `retrospective`, or `question`: a
-	// work Task aimed at a Member; `work` is a work Task aimed at nobody) · `claim` (`held`: a
-	// live Claim; `unheld`: none, as `holder:is:none`; `lapsed`: a Claim of the Task lapsed
-	// within the last 24 hours; `session`: the Runner beside this server runs a session for
-	// it now, as `listRunnerSessions` lists) · `workspace` (Workspace id the Task names) ·
-	// `model` (the live Claim's model label) · `filed_at` (when it was filed) ·
-	// `completed_at` (when it ended done; a dropped Task has none) · `q` (`contains`,
-	// ignoring case, over the key and the title).
+	// Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+	// carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
+	// `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
+	// (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
+	// (Member id holding a live Claim, or `none` for no live Claim) · `aimed_at` (Member id) ·
+	// `owner` (Member id owning the Task) · `filed_by` (Member id; the Subtasks Darkory files
+	// itself have none) · `blocked` (`true`: an open Task blocks it) · `blocks` (`true`: it is
+	// open and blocks an open Task) · `kind` (`work`, `breakdown`, `acceptance`,
+	// `retrospective`, or `question`: a work Task aimed at a Member; `work` is a work Task aimed
+	// at nobody) · `claim` (`held`: a live Claim; `unheld`: none, as `holder:is:none`;
+	// `lapsed`: a Claim of the Task lapsed within the last 24 hours; `session`: the Runner
+	// beside this server runs a session for it now, as `listRunnerSessions` lists) ·
+	// `takeable_by` (`agents`: an active agent could take it by its Step's Skill, being a
+	// Member of its Project with that Skill, or for `skill-review` any Member of the
+	// Organisation with it; `humans`: likewise a human; `both`: an agent and a human could) ·
+	// `rank` (a number, its place in its Project's Rank, 1 first; a Subtask's is its Parent's)
+	// · `auto_complete` (`true`, `false`) · `acceptance` (`true`, `false`) · `workspace`
+	// (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
+	// it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
+	// (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
+	// title).
 	//
-	// Example: `filter=status_kind:in:todo,in_progress&filter=holder:is:none&filter=filed_at:last:7d`.
-	// An unknown field, an operator the field does not take, the wrong number of values or a
-	// value the field cannot hold is refused with `invalid`, naming the token. At most 50
-	// `filter`s of at most 100 values each.
+	// Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
+	// unknown field, an operator the field does not take, the wrong number of values or a value
+	// the field cannot hold is refused with `invalid`, naming the token. At most 50 `filter`s
+	// of at most 100 values each.
 	Filter *TaskFilter `form:"filter,omitempty" json:"filter,omitempty"`
 
 	// Limit At most this many items. Defaults to 100.
@@ -2121,6 +2368,13 @@ type NextTaskParams struct {
 type ListTakeableTasksParams struct {
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// AdvanceTaskParams defines parameters for AdvanceTask.
+type AdvanceTaskParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
 // RemoveBlockerParams defines parameters for RemoveBlocker.
@@ -2168,15 +2422,15 @@ type AttachTaskEvidenceParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// HandoverTaskParams defines parameters for HandoverTask.
-type HandoverTaskParams struct {
+// HeartbeatParams defines parameters for Heartbeat.
+type HeartbeatParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// HeartbeatParams defines parameters for Heartbeat.
-type HeartbeatParams struct {
+// SetTaskLabelsParams defines parameters for SetTaskLabels.
+type SetTaskLabelsParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2189,8 +2443,29 @@ type AddNoteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// ListTaskObservationsParams defines parameters for ListTaskObservations.
+type ListTaskObservationsParams struct {
+	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
+	// Observation, reviewed or not.
+	Reviewed *bool `form:"reviewed,omitempty" json:"reviewed,omitempty"`
+}
+
 // ObserveParams defines parameters for Observe.
 type ObserveParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// PassOwnershipParams defines parameters for PassOwnership.
+type PassOwnershipParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// RankTaskParams defines parameters for RankTask.
+type RankTaskParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2210,8 +2485,8 @@ type ProposeSkillVersionParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// SetTaskStatusParams defines parameters for SetTaskStatus.
-type SetTaskStatusParams struct {
+// MoveTaskParams defines parameters for MoveTask.
+type MoveTaskParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2219,34 +2494,6 @@ type SetTaskStatusParams struct {
 
 // TakeBackTaskParams defines parameters for TakeBackTask.
 type TakeBackTaskParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// CreateTeamParams defines parameters for CreateTeam.
-type CreateTeamParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// UpdateTeamParams defines parameters for UpdateTeam.
-type UpdateTeamParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// RemoveTeamMemberParams defines parameters for RemoveTeamMember.
-type RemoveTeamMemberParams struct {
-	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
-	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
-	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
-}
-
-// AddTeamMemberParams defines parameters for AddTeamMember.
-type AddTeamMemberParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
 	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
@@ -2264,8 +2511,8 @@ type ListViewsParams struct {
 	// Entity Only Views of this list.
 	Entity *ViewEntity `form:"entity,omitempty" json:"entity,omitempty"`
 
-	// Team Only Views of this Team's list, by id or key.
-	Team *string `form:"team,omitempty" json:"team,omitempty"`
+	// Project Only Views of this Project's list, by id or key.
+	Project *string `form:"project,omitempty" json:"project,omitempty"`
 }
 
 // CreateViewParams defines parameters for CreateView.
@@ -2310,14 +2557,11 @@ type UpdateWorkspaceParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
-// FileFeatureJSONRequestBody defines body for FileFeature for application/json ContentType.
-type FileFeatureJSONRequestBody = FileFeatureBody
+// CreateLabelJSONRequestBody defines body for CreateLabel for application/json ContentType.
+type CreateLabelJSONRequestBody = CreateLabelBody
 
-// PassFeatureOwnershipJSONRequestBody defines body for PassFeatureOwnership for application/json ContentType.
-type PassFeatureOwnershipJSONRequestBody = PassFeatureOwnershipBody
-
-// RankFeatureJSONRequestBody defines body for RankFeature for application/json ContentType.
-type RankFeatureJSONRequestBody = RankFeatureBody
+// UpdateLabelJSONRequestBody defines body for UpdateLabel for application/json ContentType.
+type UpdateLabelJSONRequestBody = UpdateLabelBody
 
 // CreateMemberJSONRequestBody defines body for CreateMember for application/json ContentType.
 type CreateMemberJSONRequestBody = CreateMemberBody
@@ -2334,20 +2578,32 @@ type SetManagerJSONRequestBody = SetManagerBody
 // IssueTokenJSONRequestBody defines body for IssueToken for application/json ContentType.
 type IssueTokenJSONRequestBody = IssueTokenBody
 
+// CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
+type CreateProjectJSONRequestBody = CreateProjectBody
+
+// UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
+type UpdateProjectJSONRequestBody = UpdateProjectBody
+
+// CreateProjectLabelJSONRequestBody defines body for CreateProjectLabel for application/json ContentType.
+type CreateProjectLabelJSONRequestBody = CreateLabelBody
+
+// SetWorkflowJSONRequestBody defines body for SetWorkflow for application/json ContentType.
+type SetWorkflowJSONRequestBody = SetWorkflowBody
+
 // RequestEmailSignInJSONRequestBody defines body for RequestEmailSignIn for application/json ContentType.
 type RequestEmailSignInJSONRequestBody = EmailSignInBody
 
 // CreateSkillJSONRequestBody defines body for CreateSkill for application/json ContentType.
 type CreateSkillJSONRequestBody = CreateSkillBody
 
-// SetStatusesJSONRequestBody defines body for SetStatuses for application/json ContentType.
-type SetStatusesJSONRequestBody = SetStatusesBody
-
 // FileTaskJSONRequestBody defines body for FileTask for application/json ContentType.
 type FileTaskJSONRequestBody = FileTaskBody
 
 // NextTaskJSONRequestBody defines body for NextTask for application/json ContentType.
 type NextTaskJSONRequestBody = NextTaskBody
+
+// AdvanceTaskJSONRequestBody defines body for AdvanceTask for application/json ContentType.
+type AdvanceTaskJSONRequestBody = AdvanceTaskBody
 
 // ClaimTaskJSONRequestBody defines body for ClaimTask for application/json ContentType.
 type ClaimTaskJSONRequestBody = ClaimTaskBody
@@ -2358,8 +2614,8 @@ type CompleteTaskJSONRequestBody = CompleteTaskBody
 // DropTaskJSONRequestBody defines body for DropTask for application/json ContentType.
 type DropTaskJSONRequestBody = DropTaskBody
 
-// HandoverTaskJSONRequestBody defines body for HandoverTask for application/json ContentType.
-type HandoverTaskJSONRequestBody = HandoverTaskBody
+// SetTaskLabelsJSONRequestBody defines body for SetTaskLabels for application/json ContentType.
+type SetTaskLabelsJSONRequestBody = SetTaskLabelsBody
 
 // AddNoteJSONRequestBody defines body for AddNote for application/json ContentType.
 type AddNoteJSONRequestBody = AddNoteBody
@@ -2367,23 +2623,23 @@ type AddNoteJSONRequestBody = AddNoteBody
 // ObserveJSONRequestBody defines body for Observe for application/json ContentType.
 type ObserveJSONRequestBody = ObserveBody
 
+// PassOwnershipJSONRequestBody defines body for PassOwnership for application/json ContentType.
+type PassOwnershipJSONRequestBody = PassOwnershipBody
+
+// RankTaskJSONRequestBody defines body for RankTask for application/json ContentType.
+type RankTaskJSONRequestBody = RankTaskBody
+
 // ReleaseTaskJSONRequestBody defines body for ReleaseTask for application/json ContentType.
 type ReleaseTaskJSONRequestBody = ReleaseTaskBody
 
 // ProposeSkillVersionJSONRequestBody defines body for ProposeSkillVersion for application/json ContentType.
 type ProposeSkillVersionJSONRequestBody = ProposeSkillVersionBody
 
-// SetTaskStatusJSONRequestBody defines body for SetTaskStatus for application/json ContentType.
-type SetTaskStatusJSONRequestBody = SetTaskStatusBody
+// MoveTaskJSONRequestBody defines body for MoveTask for application/json ContentType.
+type MoveTaskJSONRequestBody = MoveTaskBody
 
 // TakeBackTaskJSONRequestBody defines body for TakeBackTask for application/json ContentType.
 type TakeBackTaskJSONRequestBody = TakeBackTaskBody
-
-// CreateTeamJSONRequestBody defines body for CreateTeam for application/json ContentType.
-type CreateTeamJSONRequestBody = CreateTeamBody
-
-// UpdateTeamJSONRequestBody defines body for UpdateTeam for application/json ContentType.
-type UpdateTeamJSONRequestBody = UpdateTeamBody
 
 // CreateViewJSONRequestBody defines body for CreateView for application/json ContentType.
 type CreateViewJSONRequestBody = CreateViewBody
@@ -2477,7 +2733,7 @@ type ClientInterface interface {
 	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
-	// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+	// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
 	// matching entries; the page is then the `limit` matching entries after `after` or just
 	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
@@ -2510,140 +2766,72 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/evidence/{evidence}/content (the `DownloadEvidence` operationId).
 	DownloadEvidence(ctx context.Context, evidence EvidenceID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListFeatures List Features
-	//
-	// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
-	// with the others.
-	//
-	// Corresponds with GET /v1/features (the `ListFeatures` operationId).
-	ListFeatures(ctx context.Context, params *ListFeaturesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// FileFeatureWithBody File a Feature
-	//
-	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`.
-	//
-	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-	// down it files its one work Task, with the Feature's title and description, needing
-	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-	// default Workspace and none named).
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/features (the `FileFeature` operationId).
-	FileFeatureWithBody(ctx context.Context, params *FileFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// FileFeature File a Feature
-	//
-	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`.
-	//
-	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-	// down it files its one work Task, with the Feature's title and description, needing
-	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-	// default Workspace and none named).
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /v1/features (the `FileFeature` operationId).
-	FileFeature(ctx context.Context, params *FileFeatureParams, body FileFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetFeature Get a Feature with its Tasks and Evidence
-	//
-	// Corresponds with GET /v1/features/{feature} (the `GetFeature` operationId).
-	GetFeature(ctx context.Context, feature FeatureRef, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DropFeature Drop a Feature (Feature owner)
-	//
-	// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
-	// `forbidden` (not the owner), `ended`.
-	//
-	// Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
-	DropFeature(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AttachFeatureEvidenceWithBody Attach Evidence to a Feature
-	//
-	// The request body is the file itself, sent with its own `Content-Type` and a
-	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
-	// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/features/{feature}/evidence (the `AttachFeatureEvidence` operationId).
-	AttachFeatureEvidenceWithBody(ctx context.Context, feature FeatureRef, params *AttachFeatureEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListFeatureObservations List the Observations recorded on a Feature's Tasks
-	//
-	// Corresponds with GET /v1/features/{feature}/observations (the `ListFeatureObservations` operationId).
-	ListFeatureObservations(ctx context.Context, feature FeatureRef, params *ListFeatureObservationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PassFeatureOwnershipWithBody Pass a Feature's ownership to another Member
-	//
-	// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-	PassFeatureOwnershipWithBody(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PassFeatureOwnership Pass a Feature's ownership to another Member
-	//
-	// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-	PassFeatureOwnership(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, body PassFeatureOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RankFeatureWithBody Move a Feature to a position in its Team's Rank
-	//
-	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-	// their places and count as positions. By a Member of the Feature's Team or its owner.
-	// Errors: `forbidden`.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-	RankFeatureWithBody(ctx context.Context, feature FeatureRef, params *RankFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RankFeature Move a Feature to a position in its Team's Rank
-	//
-	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-	// their places and count as positions. By a Member of the Feature's Team or its owner.
-	// Errors: `forbidden`.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-	RankFeature(ctx context.Context, feature FeatureRef, params *RankFeatureParams, body RankFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ShipFeature Ship a Feature (Feature owner)
-	//
-	// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
-	// `ship_when_done` ships without this call when its last open Task is completed. Errors:
-	// `forbidden` (not the owner), `tasks_open`, `ended`.
-	//
-	// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
-	ShipFeature(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	//
 	// Corresponds with GET /v1/health (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListLabels List the Organisation's Labels, which every Project's Tasks may carry
+	//
+	// Corresponds with GET /v1/labels (the `ListLabels` operationId).
+	ListLabels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateLabelWithBody Define a Label for the Organisation (admin)
+	//
+	// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+	// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+	// name), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+	CreateLabelWithBody(ctx context.Context, params *CreateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateLabel Define a Label for the Organisation (admin)
+	//
+	// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+	// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+	// name), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+	CreateLabel(ctx context.Context, params *CreateLabelParams, body CreateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteLabel Delete a Label
+	//
+	// With the authority that defines it, as on `updateLabel`. Every Task carrying it, open or
+	// ended, stops carrying it in the same write; Views whose filters name it match nothing for
+	// that value. Records `label.deleted`. Errors: `forbidden`.
+	//
+	// Corresponds with DELETE /v1/labels/{label} (the `DeleteLabel` operationId).
+	DeleteLabel(ctx context.Context, label LabelID, params *DeleteLabelParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateLabelWithBody Rename or recolour a Label
+	//
+	// Changes the fields given and keeps the others. With the authority that defines it: an
+	// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+	// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+	// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+	UpdateLabelWithBody(ctx context.Context, label LabelID, params *UpdateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateLabel Rename or recolour a Label
+	//
+	// Changes the fields given and keeps the others. With the authority that defines it: an
+	// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+	// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+	// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+	UpdateLabel(ctx context.Context, label LabelID, params *UpdateLabelParams, body UpdateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ShowLoginLink Show a login link's sign-in page
 	//
@@ -2676,7 +2864,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/logout (the `Logout` operationId).
 	Logout(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetMe The calling Member, their Teams and Skills, and the Session making the request
+	// GetMe The calling Member, their Projects and Skills, and the Session making the request
 	//
 	// Corresponds with GET /v1/me (the `GetMe` operationId).
 	GetMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2704,7 +2892,7 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/members (the `CreateMember` operationId).
 	CreateMember(ctx context.Context, params *CreateMemberParams, body CreateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetMember Get a Member with their Teams, Skills and Reporting line
+	// GetMember Get a Member with their Projects, Skills and Reporting line
 	//
 	// Corresponds with GET /v1/members/{member} (the `GetMember` operationId).
 	GetMember(ctx context.Context, member MemberRef, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2865,6 +3053,200 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/members/{member}/tokens (the `IssueToken` operationId).
 	IssueToken(ctx context.Context, member MemberRef, params *IssueTokenParams, body IssueTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListProjects List the Organisation's Projects
+	//
+	// Corresponds with GET /v1/projects (the `ListProjects` operationId).
+	ListProjects(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProjectWithBody Create a Project with its first Workflow (admin)
+	//
+	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+	// when its filer does not say; both default to false. Records `project.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+	// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+	// `copy_from` with another `workflow`).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+	CreateProjectWithBody(ctx context.Context, params *CreateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProject Create a Project with its first Workflow (admin)
+	//
+	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+	// when its filer does not say; both default to false. Records `project.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+	// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+	// `copy_from` with another `workflow`).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+	CreateProject(ctx context.Context, params *CreateProjectParams, body CreateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetProject Get a Project and its Members
+	//
+	// Corresponds with GET /v1/projects/{project} (the `GetProject` operationId).
+	GetProject(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateProjectWithBody Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+	// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+	// already filed keep theirs. Records `project.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+	UpdateProjectWithBody(ctx context.Context, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateProject Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+	// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+	// already filed keep theirs. Records `project.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+	UpdateProject(ctx context.Context, project ProjectRef, params *UpdateProjectParams, body UpdateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListProjectLabels List a Project's own Labels
+	//
+	// The Labels the Project defined for itself. A Task of the Project may also carry the
+	// Organisation's (`listLabels`).
+	//
+	// Corresponds with GET /v1/projects/{project}/labels (the `ListProjectLabels` operationId).
+	ListProjectLabels(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProjectLabelWithBody Define a Label for a Project
+	//
+	// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+	// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+	// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+	// Project or the Organisation has a Label of that name), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+	CreateProjectLabelWithBody(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateProjectLabel Define a Label for a Project
+	//
+	// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+	// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+	// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+	// Project or the Organisation has a Label of that name), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+	CreateProjectLabel(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, body CreateProjectLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveProjectMember Remove a Member from a Project (admin)
+	//
+	// Claims the Member holds on the Project's Tasks are not ended. Records
+	// `project.member_removed`. Errors: `forbidden` (not an admin).
+	//
+	// Corresponds with DELETE /v1/projects/{project}/members/{member} (the `RemoveProjectMember` operationId).
+	RemoveProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *RemoveProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AddProjectMember Add a Member to a Project (admin)
+	//
+	// The Member can then take the Project's Tasks at the Steps whose Skills they have. Adding a
+	// Member already in the Project changes nothing. Records `project.member_added`. Errors:
+	// `forbidden` (not an admin).
+	//
+	// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
+	AddProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetWorkflow Get a Project's Workflow with what is happening at each Step now
+	//
+	// The Steps in their order and the Connectors out of each, with each Step's live facts: the
+	// open Tasks at it, how many of them are being worked, the Members who could take them by
+	// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
+	// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+	// no Step and counted at none.
+	//
+	// Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
+	GetWorkflow(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetWorkflowWithBody Replace a Project's Workflow (admin)
+	//
+	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+	// unless a Connector out of the same Step with the same name exists, which it then keeps.
+	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+	// none of them: its Project then offers no Break down, files no Acceptance and no
+	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// names a Step that is not in the body; two Connectors out of one Step share a name,
+	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+	// `step_in_use`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+	SetWorkflowWithBody(ctx context.Context, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetWorkflow Replace a Project's Workflow (admin)
+	//
+	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+	// unless a Connector out of the same Step with the same name exists, which it then keeps.
+	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+	// none of them: its Project then offers no Break down, files no Acceptance and no
+	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// names a Step that is not in the body; two Connectors out of one Step share a name,
+	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+	// `step_in_use`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+	SetWorkflow(ctx context.Context, project ProjectRef, params *SetWorkflowParams, body SetWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListRunnerSessions List the agent sessions the Runner is running now
 	//
 	// A read model of the Runner beside this server, not part of the record: what it runs now,
@@ -2877,7 +3259,7 @@ type ClientInterface interface {
 
 	// NudgeRunnerSession Nudge the agent in a Task's session to end the Task (admin)
 	//
-	// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+	// Types the Runner's nudge into the session: advance the Task, complete it, or file a
 	// question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
 	// Task).
 	//
@@ -2977,85 +3359,123 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/skills/{skill}/versions (the `ListSkillVersions` operationId).
 	ListSkillVersions(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListStatuses List the Organisation's Statuses, in their order
-	//
-	// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
-	ListStatuses(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SetStatusesWithBody Replace the Organisation's list of Statuses (admin)
-	//
-	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-	// Names are unique, ignoring case. The list must keep at least one Status of each kind
-	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-	// admin), `invalid`, `status_in_use`.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-	SetStatusesWithBody(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// SetStatuses Replace the Organisation's list of Statuses (admin)
-	//
-	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-	// Names are unique, ignoring case. The list must keep at least one Status of each kind
-	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-	// admin), `invalid`, `status_in_use`.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-	SetStatuses(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListTasks List Tasks
 	//
-	// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
-	// narrows the list, `filter` together with the others.
+	// Ordered by Project, then Rank: a Task with no Parent by its own, each Subtask after its
+	// Parent, by how long it has waited. Every parameter given narrows the list, `filter`
+	// together with the others.
 	//
 	// Corresponds with GET /v1/tasks (the `ListTasks` operationId).
 	ListTasks(ctx context.Context, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// FileTaskWithBody File a Task
+	// FileTaskWithBody File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 	//
-	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-	// `not_found` (no such Workspace), `ended` (the Feature has
-	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
+	// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+	// question or Escalation; `project` may be given with the other two, and must then be theirs.
+	//
+	// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+	// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+	// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+	// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+	// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+	// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+	// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+	// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+	// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+	// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+	// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+	// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+	// default Workspace, or none when the Project has no default.
+	//
+	// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+	// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+	// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+	// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+	// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+	// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+	// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+	// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+	// blocked: remove the Blocking first.
+	//
+	// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+	// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+	// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+	// while it is held, else its ownership or membership of its Project.
+	//
+	// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+	// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+	// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+	// when they apply, in the same write.
+	//
+	// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+	// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+	// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+	// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+	// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+	// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+	// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+	// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+	// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+	// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+	// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+	// Task; the blocked Task is a Parent), `cycle`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/tasks (the `FileTask` operationId).
 	FileTaskWithBody(ctx context.Context, params *FileTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// FileTask File a Task
+	// FileTask File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 	//
-	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-	// `not_found` (no such Workspace), `ended` (the Feature has
-	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
+	// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+	// question or Escalation; `project` may be given with the other two, and must then be theirs.
+	//
+	// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+	// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+	// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+	// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+	// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+	// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+	// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+	// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+	// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+	// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+	// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+	// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+	// default Workspace, or none when the Project has no default.
+	//
+	// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+	// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+	// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+	// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+	// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+	// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+	// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+	// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+	// blocked: remove the Blocking first.
+	//
+	// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+	// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+	// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+	// while it is held, else its ownership or membership of its Project.
+	//
+	// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+	// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+	// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+	// when they apply, in the same write.
+	//
+	// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+	// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+	// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+	// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+	// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+	// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+	// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+	// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+	// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+	// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+	// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+	// Task; the blocked Task is a Parent), `cycle`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3064,13 +3484,15 @@ type ClientInterface interface {
 
 	// NextTaskWithBody Wait for a takeable Task and claim it
 	//
-	// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-	// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-	// another come first). When none is takeable, holds the request open for up to
-	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default. A Member may have a limited number of `next` calls waiting at once
-	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+	// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+	// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+	// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+	// has waited longest since it was filed or last reached its Step; among one Parent's
+	// Subtasks, those that block another come first. When none is takeable, holds the request
+	// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+	// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+	// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+	// by default); one more is refused with `too_many_requests`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3079,13 +3501,15 @@ type ClientInterface interface {
 
 	// NextTask Wait for a takeable Task and claim it
 	//
-	// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-	// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-	// another come first). When none is takeable, holds the request open for up to
-	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default. A Member may have a limited number of `next` calls waiting at once
-	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+	// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+	// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+	// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+	// has waited longest since it was filed or last reached its Step; among one Parent's
+	// Subtasks, those that block another come first. When none is takeable, holds the request
+	// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+	// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+	// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+	// by default); one more is refused with `too_many_requests`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3097,14 +3521,63 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/tasks/takeable (the `ListTakeableTasks` operationId).
 	ListTakeableTasks(ctx context.Context, params *ListTakeableTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetTask Get a Task with its Claims, Notes, Evidence, blockers and Observations
+	// GetTask Get a Task with its Parent, Subtasks, Step and outcomes, Labels, Claims, Notes, Evidence, Blocking and Observations
 	//
 	// Corresponds with GET /v1/tasks/{task} (the `GetTask` operationId).
 	GetTask(ctx context.Context, task TaskRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdvanceTaskWithBody End the caller's work on a Task along a Connector out of its Step
+	//
+	// By the Member holding the Task. The Connector is the one out of the Task's Step named
+	// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+	// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+	// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+	// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+	// Claim, so its context goes with it to the next Step.
+	//
+	// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+	// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+	// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+	//
+	// Along a Connector into Done, the Task completes, with everything `completeTask` says
+	// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+	// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+	// and `forbidden` and `proposal_stale` as on `completeTask`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+	AdvanceTaskWithBody(ctx context.Context, task TaskRef, params *AdvanceTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdvanceTask End the caller's work on a Task along a Connector out of its Step
+	//
+	// By the Member holding the Task. The Connector is the one out of the Task's Step named
+	// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+	// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+	// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+	// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+	// Claim, so its context goes with it to the next Step.
+	//
+	// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+	// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+	// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+	//
+	// Along a Connector into Done, the Task completes, with everything `completeTask` says
+	// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+	// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+	// and `forbidden` and `proposal_stale` as on `completeTask`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+	AdvanceTask(ctx context.Context, task TaskRef, params *AdvanceTaskParams, body AdvanceTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RemoveBlocker Stop one Task blocking another
 	//
-	// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
+	// Needs the same authority as adding the blocker. An open question under an ended Parent
+	// must keep blocking an open Task, so removing its last such edge is refused with `ended`:
+	// complete or drop the question instead. Records `task.blocker_removed`. Errors:
+	// `forbidden`, `not_holder`, `ended`.
 	//
 	// Corresponds with DELETE /v1/tasks/{task}/blockers/{blocker} (the `RemoveBlocker` operationId).
 	RemoveBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *RemoveBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3112,20 +3585,30 @@ type ClientInterface interface {
 	// AddBlocker Let one Task block another
 	//
 	// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
-	// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
-	// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
-	// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
+	// may be under different Parents. A Parent neither blocks nor is blocked. Needs `{task}`'s
+	// Claim when it is held, else its ownership or membership of its Project. Records
+	// `task.blocker_added`. Errors: `forbidden`, `not_holder`, `ended`, `conflict` (either is a
+	// Parent), `cycle` (`{task}` already blocks `{blocker}`, directly or through other Tasks, or
+	// they are the same Task).
 	//
 	// Corresponds with PUT /v1/tasks/{task}/blockers/{blocker} (the `AddBlocker` operationId).
 	AddBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *AddBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ClaimTaskWithBody Claim a Task
 	//
-	// One conditional write: it succeeds only when the Task is takeable by the caller. The
-	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-	// than retry), `not_takeable`.
+	// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+	// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+	// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+	// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+	// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+	// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+	// Member who has held the Task under one Skill can take it again only under that Skill. The
+	// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+	// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+	// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+	// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+	// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+	// a blocked or ended Task, or one the caller may not take).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3134,61 +3617,119 @@ type ClientInterface interface {
 
 	// ClaimTask Claim a Task
 	//
-	// One conditional write: it succeeds only when the Task is takeable by the caller. The
-	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-	// than retry), `not_takeable`.
+	// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+	// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+	// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+	// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+	// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+	// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+	// Member who has held the Task under one Skill can take it again only under that Skill. The
+	// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+	// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+	// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+	// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+	// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+	// a blocked or ended Task, or one the caller may not take).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/claim (the `ClaimTask` operationId).
 	ClaimTask(ctx context.Context, task TaskRef, params *ClaimTaskParams, body ClaimTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CompleteTaskWithBody Complete a Task the caller holds
+	// CompleteTaskWithBody Complete a Task the caller holds, or a Parent the caller owns
 	//
-	// Ends the Task done, in the first `done` Status. Completing a Task that needs
-	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-	// (the version the proposal was written against is no longer current; nothing changes, and
-	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+	// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+	// completed by the Member holding it, along the one Connector out of its Step into Done;
+	// when its Step has none or several, the request is refused with `use_advance`, whose
+	// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+	// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+	// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+	// Acceptance included). `note` is added to the Task's Notes first.
+	//
+	// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+	// the Task as its Skill's next version. When the version one was written against is no
+	// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+	// nothing is published, and the Task is advanced back along the Connector named "needs
+	// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+	// write is made and the refusal is the reply. A proposal is never published by its author
+	// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+	// reviewed by it.
+	//
+	// A Subtask ending done may finish its Parent. When the Parent is open and every other
+	// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+	// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+	// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+	// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+	// in the same write. A Parent that ends, done or dropped, files its Retrospective
+	// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+	// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+	// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+	// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+	// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+	// `proposal_stale`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/complete (the `CompleteTask` operationId).
 	CompleteTaskWithBody(ctx context.Context, task TaskRef, params *CompleteTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CompleteTask Complete a Task the caller holds
+	// CompleteTask Complete a Task the caller holds, or a Parent the caller owns
 	//
-	// Ends the Task done, in the first `done` Status. Completing a Task that needs
-	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-	// (the version the proposal was written against is no longer current; nothing changes, and
-	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+	// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+	// completed by the Member holding it, along the one Connector out of its Step into Done;
+	// when its Step has none or several, the request is refused with `use_advance`, whose
+	// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+	// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+	// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+	// Acceptance included). `note` is added to the Task's Notes first.
+	//
+	// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+	// the Task as its Skill's next version. When the version one was written against is no
+	// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+	// nothing is published, and the Task is advanced back along the Connector named "needs
+	// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+	// write is made and the refusal is the reply. A proposal is never published by its author
+	// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+	// reviewed by it.
+	//
+	// A Subtask ending done may finish its Parent. When the Parent is open and every other
+	// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+	// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+	// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+	// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+	// in the same write. A Parent that ends, done or dropped, files its Retrospective
+	// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+	// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+	// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+	// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+	// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+	// `proposal_stale`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/complete (the `CompleteTask` operationId).
 	CompleteTask(ctx context.Context, task TaskRef, params *CompleteTaskParams, body CompleteTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DropTaskWithBody Drop a Task (Feature owner)
+	// DropTaskWithBody Drop a Task (Owner)
 	//
-	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+	// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+	// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+	// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+	// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/drop (the `DropTask` operationId).
 	DropTaskWithBody(ctx context.Context, task TaskRef, params *DropTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DropTask Drop a Task (Feature owner)
+	// DropTask Drop a Task (Owner)
 	//
-	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+	// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+	// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+	// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+	// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3199,39 +3740,14 @@ type ClientInterface interface {
 	//
 	// The request body is the file itself, sent with its own `Content-Type` and a
 	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
-	// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+	// Claim while it is held, else its ownership or membership of its Project. Evidence about a
+	// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
 	// `not_holder`, `forbidden`, `too_large`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/evidence (the `AttachTaskEvidence` operationId).
 	AttachTaskEvidenceWithBody(ctx context.Context, task TaskRef, params *AttachTaskEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// HandoverTaskWithBody End the caller's Claim and set the Skill the Task needs next
-	//
-	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. The Status stays as it is unless `status` names another.
-	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-	HandoverTaskWithBody(ctx context.Context, task TaskRef, params *HandoverTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// HandoverTask End the caller's Claim and set the Skill the Task needs next
-	//
-	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. The Status stays as it is unless `status` names another.
-	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-	HandoverTask(ctx context.Context, task TaskRef, params *HandoverTaskParams, body HandoverTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// Heartbeat Tell Darkory the caller is still working a Task
 	//
@@ -3244,12 +3760,39 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/heartbeat (the `Heartbeat` operationId).
 	Heartbeat(ctx context.Context, task TaskRef, params *HeartbeatParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SetTaskLabelsWithBody Set the Labels a Task carries
+	//
+	// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+	// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+	// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+	// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+	// such Label), `invalid` (another Project's Label).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+	SetTaskLabelsWithBody(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetTaskLabels Set the Labels a Task carries
+	//
+	// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+	// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+	// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+	// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+	// such Label), `invalid` (another Project's Label).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+	SetTaskLabels(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, body SetTaskLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AddNoteWithBody Add a Note to a Task's running log
 	//
 	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+	// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+	// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+	// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+	// Task), `forbidden`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3259,19 +3802,29 @@ type ClientInterface interface {
 	// AddNote Add a Note to a Task's running log
 	//
 	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+	// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+	// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+	// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+	// Task), `forbidden`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 	AddNote(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListTaskObservations List the Observations recorded on a Task and, for a Parent, on its Subtasks
+	//
+	// What a Retrospective reads about its Parent: the Parent's Observations are those recorded
+	// on its Subtasks.
+	//
+	// Corresponds with GET /v1/tasks/{task}/observations (the `ListTaskObservations` operationId).
+	ListTaskObservations(ctx context.Context, task TaskRef, params *ListTaskObservationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ObserveWithBody Record an Observation on a Task
 	//
-	// By the Member holding the Task; the Observation records the Skill they hold it under.
-	// Errors: `not_holder`.
+	// By the Member holding the Task; the Observation records the Skill they hold it under. It
+	// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+	// `not_holder`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3280,38 +3833,93 @@ type ClientInterface interface {
 
 	// Observe Record an Observation on a Task
 	//
-	// By the Member holding the Task; the Observation records the Skill they hold it under.
-	// Errors: `not_holder`.
+	// By the Member holding the Task; the Observation records the Skill they hold it under. It
+	// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+	// `not_holder`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/observations (the `Observe` operationId).
 	Observe(ctx context.Context, task TaskRef, params *ObserveParams, body ObserveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReleaseTaskWithBody Give up the caller's Claim, leaving the Task needing the same Skill
+	// PassOwnershipWithBody Pass a Task's ownership, with its Subtasks', to another Member
 	//
-	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+	// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+	// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+	// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+	// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+	PassOwnershipWithBody(ctx context.Context, task TaskRef, params *PassOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PassOwnership Pass a Task's ownership, with its Subtasks', to another Member
+	//
+	// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+	// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+	// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+	// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+	PassOwnership(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RankTaskWithBody Move a Task to a position in its Project's Rank
+	//
+	// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+	// position past the end moves the Task last. Ended Tasks keep their places and count as
+	// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+	// Errors: `forbidden`, `use_parent` (a Subtask).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+	RankTaskWithBody(ctx context.Context, task TaskRef, params *RankTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RankTask Move a Task to a position in its Project's Rank
+	//
+	// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+	// position past the end moves the Task last. Ended Tasks keep their places and count as
+	// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+	// Errors: `forbidden`, `use_parent` (a Subtask).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+	RankTask(ctx context.Context, task TaskRef, params *RankTaskParams, body RankTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReleaseTaskWithBody Give up the caller's Claim, leaving the Task at its Step
+	//
+	// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+	// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/release (the `ReleaseTask` operationId).
 	ReleaseTaskWithBody(ctx context.Context, task TaskRef, params *ReleaseTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReleaseTask Give up the caller's Claim, leaving the Task needing the same Skill
+	// ReleaseTask Give up the caller's Claim, leaving the Task at its Step
 	//
-	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+	// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+	// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/release (the `ReleaseTask` operationId).
 	ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseTaskParams, body ReleaseTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Task the caller holds
+	// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+	// Member with `skill-review`, other than the author, publishes the proposals by advancing
+	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 	// company Skill).
 	//
 	// Takes any type of body and a specified content type.
@@ -3319,12 +3927,16 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
+	// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+	// Member with `skill-review`, other than the author, publishes the proposals by advancing
+	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 	// company Skill).
 	//
 	// Takes a body of the `application/json` content type.
@@ -3332,43 +3944,45 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersion(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, body ProposeSkillVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetTaskStatusWithBody Move a Task to another Status
+	// MoveTaskWithBody Move a Task to a Step of its Workflow by hand
 	//
-	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-	// `dropped` Status).
+	// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+	// a move rather than an advance; it is the only way out of a hold. By any Member of the
+	// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+	// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+	// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+	// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+	// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+	// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+	// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-	SetTaskStatusWithBody(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+	MoveTaskWithBody(ctx context.Context, task TaskRef, params *MoveTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetTaskStatus Move a Task to another Status
+	// MoveTask Move a Task to a Step of its Workflow by hand
 	//
-	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-	// `dropped` Status).
+	// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+	// a move rather than an advance; it is the only way out of a hold. By any Member of the
+	// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+	// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+	// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+	// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+	// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+	// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+	// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-	SetTaskStatus(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+	MoveTask(ctx context.Context, task TaskRef, params *MoveTaskParams, body MoveTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// TakeBackTaskWithBody End another Member's Claim on a Task
 	//
-	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-	// `forbidden`, `not_holder` (nobody holds it).
+	// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+	// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+	// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3377,80 +3991,14 @@ type ClientInterface interface {
 
 	// TakeBackTask End another Member's Claim on a Task
 	//
-	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-	// `forbidden`, `not_holder` (nobody holds it).
+	// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+	// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+	// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/take-back (the `TakeBackTask` operationId).
 	TakeBackTask(ctx context.Context, task TaskRef, params *TakeBackTaskParams, body TakeBackTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListTeams List the Organisation's Teams
-	//
-	// Corresponds with GET /v1/teams (the `ListTeams` operationId).
-	ListTeams(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateTeamWithBody Create a Team (admin)
-	//
-	// Errors: `forbidden`, `conflict` (key or name taken).
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-	CreateTeamWithBody(ctx context.Context, params *CreateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateTeam Create a Team (admin)
-	//
-	// Errors: `forbidden`, `conflict` (key or name taken).
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-	CreateTeam(ctx context.Context, params *CreateTeamParams, body CreateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetTeam Get a Team and its Members
-	//
-	// Corresponds with GET /v1/teams/{team} (the `GetTeam` operationId).
-	GetTeam(ctx context.Context, team TeamRef, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateTeamWithBody Change a Team's name, default Workspace or Ship-when-done default (admin)
-	//
-	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-	// Workspace).
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-	UpdateTeamWithBody(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateTeam Change a Team's name, default Workspace or Ship-when-done default (admin)
-	//
-	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-	// Workspace).
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-	UpdateTeam(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// RemoveTeamMember Remove a Member from a Team (admin)
-	//
-	// Claims the Member holds on the Team's Tasks are not ended.
-	//
-	// Corresponds with DELETE /v1/teams/{team}/members/{member} (the `RemoveTeamMember` operationId).
-	RemoveTeamMember(ctx context.Context, team TeamRef, member MemberRef, params *RemoveTeamMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// AddTeamMember Add a Member to a Team (admin)
-	//
-	// Corresponds with PUT /v1/teams/{team}/members/{member} (the `AddTeamMember` operationId).
-	AddTeamMember(ctx context.Context, team TeamRef, member MemberRef, params *AddTeamMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeToken Revoke a token
 	//
@@ -3470,10 +4018,10 @@ type ClientInterface interface {
 
 	// CreateViewWithBody Save a View
 	//
-	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-	// as the list checks them. A View is a Member's preference, not the record: saving,
-	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+	// checks them. A View is a Member's preference, not the record: saving, changing or
+	// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+	// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3482,10 +4030,10 @@ type ClientInterface interface {
 
 	// CreateView Save a View
 	//
-	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-	// as the list checks them. A View is a Member's preference, not the record: saving,
-	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+	// checks them. A View is a Member's preference, not the record: saving, changing or
+	// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+	// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3502,7 +4050,7 @@ type ClientInterface interface {
 	// UpdateViewWithBody Change one of the caller's Views
 	//
 	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 	// caller's with that id), `conflict` (name taken), `invalid`.
 	//
 	// Takes any type of body and a specified content type.
@@ -3513,7 +4061,7 @@ type ClientInterface interface {
 	// UpdateView Change one of the caller's Views
 	//
 	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 	// caller's with that id), `conflict` (name taken), `invalid`.
 	//
 	// Takes a body of the `application/json` content type.
@@ -3551,7 +4099,7 @@ type ClientInterface interface {
 	// RemoveWorkspace Remove a Workspace (admin)
 	//
 	// Refused with `conflict` while any Task, open or ended, names it: the record keeps where
-	// its work was done. A Team whose default it was has no default afterwards. Records
+	// its work was done. A Project whose default it was has no default afterwards. Records
 	// `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
 	//
 	// Corresponds with DELETE /v1/workspaces/{workspace} (the `RemoveWorkspace` operationId).
@@ -3586,7 +4134,7 @@ type ClientInterface interface {
 // `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
-// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
 // matching entries; the page is then the `limit` matching entries after `after` or just
 // below `before`, and its `first_seq` and `last_seq` are theirs.
 //
@@ -3659,261 +4207,133 @@ func (c *Client) DownloadEvidence(ctx context.Context, evidence EvidenceID, reqE
 	return c.Client.Do(req)
 }
 
-// ListFeatures List Features
-//
-// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
-// with the others.
-//
-// Corresponds with GET /v1/features (the `ListFeatures` operationId).
-func (c *Client) ListFeatures(ctx context.Context, params *ListFeaturesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListFeaturesRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// FileFeatureWithBody File a Feature
-//
-// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`.
-//
-// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-// down it files its one work Task, with the Feature's title and description, needing
-// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-// default Workspace and none named).
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/features (the `FileFeature` operationId).
-func (c *Client) FileFeatureWithBody(ctx context.Context, params *FileFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewFileFeatureRequestWithBody(c.Server, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// FileFeature File a Feature
-//
-// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`.
-//
-// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-// down it files its one work Task, with the Feature's title and description, needing
-// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-// default Workspace and none named).
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /v1/features (the `FileFeature` operationId).
-func (c *Client) FileFeature(ctx context.Context, params *FileFeatureParams, body FileFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewFileFeatureRequest(c.Server, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetFeature Get a Feature with its Tasks and Evidence
-//
-// Corresponds with GET /v1/features/{feature} (the `GetFeature` operationId).
-func (c *Client) GetFeature(ctx context.Context, feature FeatureRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetFeatureRequest(c.Server, feature)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// DropFeature Drop a Feature (Feature owner)
-//
-// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
-// `forbidden` (not the owner), `ended`.
-//
-// Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
-func (c *Client) DropFeature(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDropFeatureRequest(c.Server, feature, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AttachFeatureEvidenceWithBody Attach Evidence to a Feature
-//
-// The request body is the file itself, sent with its own `Content-Type` and a
-// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
-// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/features/{feature}/evidence (the `AttachFeatureEvidence` operationId).
-func (c *Client) AttachFeatureEvidenceWithBody(ctx context.Context, feature FeatureRef, params *AttachFeatureEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAttachFeatureEvidenceRequestWithBody(c.Server, feature, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListFeatureObservations List the Observations recorded on a Feature's Tasks
-//
-// Corresponds with GET /v1/features/{feature}/observations (the `ListFeatureObservations` operationId).
-func (c *Client) ListFeatureObservations(ctx context.Context, feature FeatureRef, params *ListFeatureObservationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListFeatureObservationsRequest(c.Server, feature, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PassFeatureOwnershipWithBody Pass a Feature's ownership to another Member
-//
-// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-func (c *Client) PassFeatureOwnershipWithBody(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPassFeatureOwnershipRequestWithBody(c.Server, feature, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PassFeatureOwnership Pass a Feature's ownership to another Member
-//
-// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-func (c *Client) PassFeatureOwnership(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, body PassFeatureOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPassFeatureOwnershipRequest(c.Server, feature, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RankFeatureWithBody Move a Feature to a position in its Team's Rank
-//
-// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-// their places and count as positions. By a Member of the Feature's Team or its owner.
-// Errors: `forbidden`.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-func (c *Client) RankFeatureWithBody(ctx context.Context, feature FeatureRef, params *RankFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRankFeatureRequestWithBody(c.Server, feature, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RankFeature Move a Feature to a position in its Team's Rank
-//
-// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-// their places and count as positions. By a Member of the Feature's Team or its owner.
-// Errors: `forbidden`.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-func (c *Client) RankFeature(ctx context.Context, feature FeatureRef, params *RankFeatureParams, body RankFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRankFeatureRequest(c.Server, feature, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ShipFeature Ship a Feature (Feature owner)
-//
-// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
-// `ship_when_done` ships without this call when its last open Task is completed. Errors:
-// `forbidden` (not the owner), `tasks_open`, `ended`.
-//
-// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
-func (c *Client) ShipFeature(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewShipFeatureRequest(c.Server, feature, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 //
 // Corresponds with GET /v1/health (the `GetHealth` operationId).
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListLabels List the Organisation's Labels, which every Project's Tasks may carry
+//
+// Corresponds with GET /v1/labels (the `ListLabels` operationId).
+func (c *Client) ListLabels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLabelsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateLabelWithBody Define a Label for the Organisation (admin)
+//
+// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+// name), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+func (c *Client) CreateLabelWithBody(ctx context.Context, params *CreateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLabelRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateLabel Define a Label for the Organisation (admin)
+//
+// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+// name), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+func (c *Client) CreateLabel(ctx context.Context, params *CreateLabelParams, body CreateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLabelRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteLabel Delete a Label
+//
+// With the authority that defines it, as on `updateLabel`. Every Task carrying it, open or
+// ended, stops carrying it in the same write; Views whose filters name it match nothing for
+// that value. Records `label.deleted`. Errors: `forbidden`.
+//
+// Corresponds with DELETE /v1/labels/{label} (the `DeleteLabel` operationId).
+func (c *Client) DeleteLabel(ctx context.Context, label LabelID, params *DeleteLabelParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteLabelRequest(c.Server, label, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateLabelWithBody Rename or recolour a Label
+//
+// Changes the fields given and keeps the others. With the authority that defines it: an
+// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+func (c *Client) UpdateLabelWithBody(ctx context.Context, label LabelID, params *UpdateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateLabelRequestWithBody(c.Server, label, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateLabel Rename or recolour a Label
+//
+// Changes the fields given and keeps the others. With the authority that defines it: an
+// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+func (c *Client) UpdateLabel(ctx context.Context, label LabelID, params *UpdateLabelParams, body UpdateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateLabelRequest(c.Server, label, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3985,7 +4405,7 @@ func (c *Client) Logout(ctx context.Context, params *LogoutParams, reqEditors ..
 	return c.Client.Do(req)
 }
 
-// GetMe The calling Member, their Teams and Skills, and the Session making the request
+// GetMe The calling Member, their Projects and Skills, and the Session making the request
 //
 // Corresponds with GET /v1/me (the `GetMe` operationId).
 func (c *Client) GetMe(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4053,7 +4473,7 @@ func (c *Client) CreateMember(ctx context.Context, params *CreateMemberParams, b
 	return c.Client.Do(req)
 }
 
-// GetMember Get a Member with their Teams, Skills and Reporting line
+// GetMember Get a Member with their Projects, Skills and Reporting line
 //
 // Corresponds with GET /v1/members/{member} (the `GetMember` operationId).
 func (c *Client) GetMember(ctx context.Context, member MemberRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4394,6 +4814,340 @@ func (c *Client) IssueToken(ctx context.Context, member MemberRef, params *Issue
 	return c.Client.Do(req)
 }
 
+// ListProjects List the Organisation's Projects
+//
+// Corresponds with GET /v1/projects (the `ListProjects` operationId).
+func (c *Client) ListProjects(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListProjectsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateProjectWithBody Create a Project with its first Workflow (admin)
+//
+// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+// when its filer does not say; both default to false. Records `project.created`. Errors:
+// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+// `copy_from` with another `workflow`).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+func (c *Client) CreateProjectWithBody(ctx context.Context, params *CreateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProjectRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateProject Create a Project with its first Workflow (admin)
+//
+// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+// when its filer does not say; both default to false. Records `project.created`. Errors:
+// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+// `copy_from` with another `workflow`).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+func (c *Client) CreateProject(ctx context.Context, params *CreateProjectParams, body CreateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProjectRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetProject Get a Project and its Members
+//
+// Corresponds with GET /v1/projects/{project} (the `GetProject` operationId).
+func (c *Client) GetProject(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProjectRequest(c.Server, project)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateProjectWithBody Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+// already filed keep theirs. Records `project.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+func (c *Client) UpdateProjectWithBody(ctx context.Context, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateProjectRequestWithBody(c.Server, project, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdateProject Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+// already filed keep theirs. Records `project.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+func (c *Client) UpdateProject(ctx context.Context, project ProjectRef, params *UpdateProjectParams, body UpdateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateProjectRequest(c.Server, project, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListProjectLabels List a Project's own Labels
+//
+// The Labels the Project defined for itself. A Task of the Project may also carry the
+// Organisation's (`listLabels`).
+//
+// Corresponds with GET /v1/projects/{project}/labels (the `ListProjectLabels` operationId).
+func (c *Client) ListProjectLabels(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListProjectLabelsRequest(c.Server, project)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateProjectLabelWithBody Define a Label for a Project
+//
+// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+// Project or the Organisation has a Label of that name), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+func (c *Client) CreateProjectLabelWithBody(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProjectLabelRequestWithBody(c.Server, project, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateProjectLabel Define a Label for a Project
+//
+// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+// Project or the Organisation has a Label of that name), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+func (c *Client) CreateProjectLabel(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, body CreateProjectLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateProjectLabelRequest(c.Server, project, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveProjectMember Remove a Member from a Project (admin)
+//
+// Claims the Member holds on the Project's Tasks are not ended. Records
+// `project.member_removed`. Errors: `forbidden` (not an admin).
+//
+// Corresponds with DELETE /v1/projects/{project}/members/{member} (the `RemoveProjectMember` operationId).
+func (c *Client) RemoveProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *RemoveProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveProjectMemberRequest(c.Server, project, member, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AddProjectMember Add a Member to a Project (admin)
+//
+// The Member can then take the Project's Tasks at the Steps whose Skills they have. Adding a
+// Member already in the Project changes nothing. Records `project.member_added`. Errors:
+// `forbidden` (not an admin).
+//
+// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
+func (c *Client) AddProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAddProjectMemberRequest(c.Server, project, member, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetWorkflow Get a Project's Workflow with what is happening at each Step now
+//
+// The Steps in their order and the Connectors out of each, with each Step's live facts: the
+// open Tasks at it, how many of them are being worked, the Members who could take them by
+// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
+// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+// no Step and counted at none.
+//
+// Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
+func (c *Client) GetWorkflow(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetWorkflowRequest(c.Server, project)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetWorkflowWithBody Replace a Project's Workflow (admin)
+//
+// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+// unless a Connector out of the same Step with the same name exists, which it then keeps.
+// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+// none of them: its Project then offers no Break down, files no Acceptance and no
+// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// names a Step that is not in the body; two Connectors out of one Step share a name,
+// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+// `step_in_use`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+func (c *Client) SetWorkflowWithBody(ctx context.Context, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetWorkflowRequestWithBody(c.Server, project, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetWorkflow Replace a Project's Workflow (admin)
+//
+// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+// unless a Connector out of the same Step with the same name exists, which it then keeps.
+// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+// none of them: its Project then offers no Break down, files no Acceptance and no
+// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// names a Step that is not in the body; two Connectors out of one Step share a name,
+// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+// `step_in_use`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+func (c *Client) SetWorkflow(ctx context.Context, project ProjectRef, params *SetWorkflowParams, body SetWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetWorkflowRequest(c.Server, project, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListRunnerSessions List the agent sessions the Runner is running now
 //
 // A read model of the Runner beside this server, not part of the record: what it runs now,
@@ -4416,7 +5170,7 @@ func (c *Client) ListRunnerSessions(ctx context.Context, reqEditors ...RequestEd
 
 // NudgeRunnerSession Nudge the agent in a Task's session to end the Task (admin)
 //
-// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+// Types the Runner's nudge into the session: advance the Task, complete it, or file a
 // question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
 // Task).
 //
@@ -4636,79 +5390,11 @@ func (c *Client) ListSkillVersions(ctx context.Context, skill SkillRef, reqEdito
 	return c.Client.Do(req)
 }
 
-// ListStatuses List the Organisation's Statuses, in their order
-//
-// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
-func (c *Client) ListStatuses(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListStatusesRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SetStatusesWithBody Replace the Organisation's list of Statuses (admin)
-//
-// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-// Names are unique, ignoring case. The list must keep at least one Status of each kind
-// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-// admin), `invalid`, `status_in_use`.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-func (c *Client) SetStatusesWithBody(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetStatusesRequestWithBody(c.Server, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// SetStatuses Replace the Organisation's list of Statuses (admin)
-//
-// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-// Names are unique, ignoring case. The list must keep at least one Status of each kind
-// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-// admin), `invalid`, `status_in_use`.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-func (c *Client) SetStatuses(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetStatusesRequest(c.Server, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // ListTasks List Tasks
 //
-// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
-// narrows the list, `filter` together with the others.
+// Ordered by Project, then Rank: a Task with no Parent by its own, each Subtask after its
+// Parent, by how long it has waited. Every parameter given narrows the list, `filter`
+// together with the others.
 //
 // Corresponds with GET /v1/tasks (the `ListTasks` operationId).
 func (c *Client) ListTasks(ctx context.Context, params *ListTasksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4723,19 +5409,57 @@ func (c *Client) ListTasks(ctx context.Context, params *ListTasksParams, reqEdit
 	return c.Client.Do(req)
 }
 
-// FileTaskWithBody File a Task
+// FileTaskWithBody File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 //
-// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-// `not_found` (no such Workspace), `ended` (the Feature has
-// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
+// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+// question or Escalation; `project` may be given with the other two, and must then be theirs.
+//
+// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+// default Workspace, or none when the Project has no default.
+//
+// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+// blocked: remove the Blocking first.
+//
+// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+// while it is held, else its ownership or membership of its Project.
+//
+// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+// when they apply, in the same write.
+//
+// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+// Task; the blocked Task is a Parent), `cycle`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4752,19 +5476,57 @@ func (c *Client) FileTaskWithBody(ctx context.Context, params *FileTaskParams, c
 	return c.Client.Do(req)
 }
 
-// FileTask File a Task
+// FileTask File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 //
-// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-// `not_found` (no such Workspace), `ended` (the Feature has
-// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
+// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+// question or Escalation; `project` may be given with the other two, and must then be theirs.
+//
+// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+// default Workspace, or none when the Project has no default.
+//
+// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+// blocked: remove the Blocking first.
+//
+// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+// while it is held, else its ownership or membership of its Project.
+//
+// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+// when they apply, in the same write.
+//
+// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+// Task; the blocked Task is a Parent), `cycle`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4783,13 +5545,15 @@ func (c *Client) FileTask(ctx context.Context, params *FileTaskParams, body File
 
 // NextTaskWithBody Wait for a takeable Task and claim it
 //
-// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-// another come first). When none is takeable, holds the request open for up to
-// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default. A Member may have a limited number of `next` calls waiting at once
-// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+// has waited longest since it was filed or last reached its Step; among one Parent's
+// Subtasks, those that block another come first. When none is takeable, holds the request
+// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+// by default); one more is refused with `too_many_requests`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4808,13 +5572,15 @@ func (c *Client) NextTaskWithBody(ctx context.Context, params *NextTaskParams, c
 
 // NextTask Wait for a takeable Task and claim it
 //
-// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-// another come first). When none is takeable, holds the request open for up to
-// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default. A Member may have a limited number of `next` calls waiting at once
-// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+// has waited longest since it was filed or last reached its Step; among one Parent's
+// Subtasks, those that block another come first. When none is takeable, holds the request
+// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+// by default); one more is refused with `too_many_requests`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4846,7 +5612,7 @@ func (c *Client) ListTakeableTasks(ctx context.Context, params *ListTakeableTask
 	return c.Client.Do(req)
 }
 
-// GetTask Get a Task with its Claims, Notes, Evidence, blockers and Observations
+// GetTask Get a Task with its Parent, Subtasks, Step and outcomes, Labels, Claims, Notes, Evidence, Blocking and Observations
 //
 // Corresponds with GET /v1/tasks/{task} (the `GetTask` operationId).
 func (c *Client) GetTask(ctx context.Context, task TaskRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4861,9 +5627,78 @@ func (c *Client) GetTask(ctx context.Context, task TaskRef, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
+// AdvanceTaskWithBody End the caller's work on a Task along a Connector out of its Step
+//
+// By the Member holding the Task. The Connector is the one out of the Task's Step named
+// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+// Claim, so its context goes with it to the next Step.
+//
+// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+//
+// Along a Connector into Done, the Task completes, with everything `completeTask` says
+// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+// and `forbidden` and `proposal_stale` as on `completeTask`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+func (c *Client) AdvanceTaskWithBody(ctx context.Context, task TaskRef, params *AdvanceTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdvanceTaskRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdvanceTask End the caller's work on a Task along a Connector out of its Step
+//
+// By the Member holding the Task. The Connector is the one out of the Task's Step named
+// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+// Claim, so its context goes with it to the next Step.
+//
+// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+//
+// Along a Connector into Done, the Task completes, with everything `completeTask` says
+// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+// and `forbidden` and `proposal_stale` as on `completeTask`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+func (c *Client) AdvanceTask(ctx context.Context, task TaskRef, params *AdvanceTaskParams, body AdvanceTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdvanceTaskRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // RemoveBlocker Stop one Task blocking another
 //
-// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
+// Needs the same authority as adding the blocker. An open question under an ended Parent
+// must keep blocking an open Task, so removing its last such edge is refused with `ended`:
+// complete or drop the question instead. Records `task.blocker_removed`. Errors:
+// `forbidden`, `not_holder`, `ended`.
 //
 // Corresponds with DELETE /v1/tasks/{task}/blockers/{blocker} (the `RemoveBlocker` operationId).
 func (c *Client) RemoveBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *RemoveBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4881,9 +5716,11 @@ func (c *Client) RemoveBlocker(ctx context.Context, task TaskRef, blocker Blocke
 // AddBlocker Let one Task block another
 //
 // `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
-// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
-// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
-// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
+// may be under different Parents. A Parent neither blocks nor is blocked. Needs `{task}`'s
+// Claim when it is held, else its ownership or membership of its Project. Records
+// `task.blocker_added`. Errors: `forbidden`, `not_holder`, `ended`, `conflict` (either is a
+// Parent), `cycle` (`{task}` already blocks `{blocker}`, directly or through other Tasks, or
+// they are the same Task).
 //
 // Corresponds with PUT /v1/tasks/{task}/blockers/{blocker} (the `AddBlocker` operationId).
 func (c *Client) AddBlocker(ctx context.Context, task TaskRef, blocker BlockerRef, params *AddBlockerParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4900,11 +5737,19 @@ func (c *Client) AddBlocker(ctx context.Context, task TaskRef, blocker BlockerRe
 
 // ClaimTaskWithBody Claim a Task
 //
-// One conditional write: it succeeds only when the Task is takeable by the caller. The
-// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-// than retry), `not_takeable`.
+// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+// Member who has held the Task under one Skill can take it again only under that Skill. The
+// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+// a blocked or ended Task, or one the caller may not take).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4923,11 +5768,19 @@ func (c *Client) ClaimTaskWithBody(ctx context.Context, task TaskRef, params *Cl
 
 // ClaimTask Claim a Task
 //
-// One conditional write: it succeeds only when the Task is takeable by the caller. The
-// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-// than retry), `not_takeable`.
+// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+// Member who has held the Task under one Skill can take it again only under that Skill. The
+// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+// a blocked or ended Task, or one the caller may not take).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4944,16 +5797,37 @@ func (c *Client) ClaimTask(ctx context.Context, task TaskRef, params *ClaimTaskP
 	return c.Client.Do(req)
 }
 
-// CompleteTaskWithBody Complete a Task the caller holds
+// CompleteTaskWithBody Complete a Task the caller holds, or a Parent the caller owns
 //
-// Ends the Task done, in the first `done` Status. Completing a Task that needs
-// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-// (the version the proposal was written against is no longer current; nothing changes, and
-// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+// completed by the Member holding it, along the one Connector out of its Step into Done;
+// when its Step has none or several, the request is refused with `use_advance`, whose
+// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+// Acceptance included). `note` is added to the Task's Notes first.
+//
+// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+// the Task as its Skill's next version. When the version one was written against is no
+// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+// nothing is published, and the Task is advanced back along the Connector named "needs
+// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+// write is made and the refusal is the reply. A proposal is never published by its author
+// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+// reviewed by it.
+//
+// A Subtask ending done may finish its Parent. When the Parent is open and every other
+// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+// in the same write. A Parent that ends, done or dropped, files its Retrospective
+// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+// `proposal_stale`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4970,16 +5844,37 @@ func (c *Client) CompleteTaskWithBody(ctx context.Context, task TaskRef, params 
 	return c.Client.Do(req)
 }
 
-// CompleteTask Complete a Task the caller holds
+// CompleteTask Complete a Task the caller holds, or a Parent the caller owns
 //
-// Ends the Task done, in the first `done` Status. Completing a Task that needs
-// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-// (the version the proposal was written against is no longer current; nothing changes, and
-// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+// completed by the Member holding it, along the one Connector out of its Step into Done;
+// when its Step has none or several, the request is refused with `use_advance`, whose
+// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+// Acceptance included). `note` is added to the Task's Notes first.
+//
+// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+// the Task as its Skill's next version. When the version one was written against is no
+// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+// nothing is published, and the Task is advanced back along the Connector named "needs
+// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+// write is made and the refusal is the reply. A proposal is never published by its author
+// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+// reviewed by it.
+//
+// A Subtask ending done may finish its Parent. When the Parent is open and every other
+// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+// in the same write. A Parent that ends, done or dropped, files its Retrospective
+// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+// `proposal_stale`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -4996,9 +5891,13 @@ func (c *Client) CompleteTask(ctx context.Context, task TaskRef, params *Complet
 	return c.Client.Do(req)
 }
 
-// DropTaskWithBody Drop a Task (Feature owner)
+// DropTaskWithBody Drop a Task (Owner)
 //
-// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5015,9 +5914,13 @@ func (c *Client) DropTaskWithBody(ctx context.Context, task TaskRef, params *Dro
 	return c.Client.Do(req)
 }
 
-// DropTask Drop a Task (Feature owner)
+// DropTask Drop a Task (Owner)
 //
-// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5038,7 +5941,8 @@ func (c *Client) DropTask(ctx context.Context, task TaskRef, params *DropTaskPar
 //
 // The request body is the file itself, sent with its own `Content-Type` and a
 // `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
-// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+// Claim while it is held, else its ownership or membership of its Project. Evidence about a
+// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
 // `not_holder`, `forbidden`, `too_large`.
 //
 // Takes any type of body and a specified content type.
@@ -5046,52 +5950,6 @@ func (c *Client) DropTask(ctx context.Context, task TaskRef, params *DropTaskPar
 // Corresponds with POST /v1/tasks/{task}/evidence (the `AttachTaskEvidence` operationId).
 func (c *Client) AttachTaskEvidenceWithBody(ctx context.Context, task TaskRef, params *AttachTaskEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAttachTaskEvidenceRequestWithBody(c.Server, task, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// HandoverTaskWithBody End the caller's Claim and set the Skill the Task needs next
-//
-// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. The Status stays as it is unless `status` names another.
-// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-func (c *Client) HandoverTaskWithBody(ctx context.Context, task TaskRef, params *HandoverTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewHandoverTaskRequestWithBody(c.Server, task, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// HandoverTask End the caller's Claim and set the Skill the Task needs next
-//
-// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. The Status stays as it is unless `status` names another.
-// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-func (c *Client) HandoverTask(ctx context.Context, task TaskRef, params *HandoverTaskParams, body HandoverTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewHandoverTaskRequest(c.Server, task, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5123,12 +5981,59 @@ func (c *Client) Heartbeat(ctx context.Context, task TaskRef, params *HeartbeatP
 	return c.Client.Do(req)
 }
 
+// SetTaskLabelsWithBody Set the Labels a Task carries
+//
+// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+// such Label), `invalid` (another Project's Label).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+func (c *Client) SetTaskLabelsWithBody(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTaskLabelsRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetTaskLabels Set the Labels a Task carries
+//
+// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+// such Label), `invalid` (another Project's Label).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+func (c *Client) SetTaskLabels(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, body SetTaskLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetTaskLabelsRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AddNoteWithBody Add a Note to a Task's running log
 //
 // On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+// Task), `forbidden`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5148,9 +6053,10 @@ func (c *Client) AddNoteWithBody(ctx context.Context, task TaskRef, params *AddN
 // AddNote Add a Note to a Task's running log
 //
 // On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+// Task), `forbidden`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5167,10 +6073,29 @@ func (c *Client) AddNote(ctx context.Context, task TaskRef, params *AddNoteParam
 	return c.Client.Do(req)
 }
 
+// ListTaskObservations List the Observations recorded on a Task and, for a Parent, on its Subtasks
+//
+// What a Retrospective reads about its Parent: the Parent's Observations are those recorded
+// on its Subtasks.
+//
+// Corresponds with GET /v1/tasks/{task}/observations (the `ListTaskObservations` operationId).
+func (c *Client) ListTaskObservations(ctx context.Context, task TaskRef, params *ListTaskObservationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTaskObservationsRequest(c.Server, task, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ObserveWithBody Record an Observation on a Task
 //
-// By the Member holding the Task; the Observation records the Skill they hold it under.
-// Errors: `not_holder`.
+// By the Member holding the Task; the Observation records the Skill they hold it under. It
+// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+// `not_holder`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5189,8 +6114,9 @@ func (c *Client) ObserveWithBody(ctx context.Context, task TaskRef, params *Obse
 
 // Observe Record an Observation on a Task
 //
-// By the Member holding the Task; the Observation records the Skill they hold it under.
-// Errors: `not_holder`.
+// By the Member holding the Task; the Observation records the Skill they hold it under. It
+// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+// `not_holder`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5207,9 +6133,98 @@ func (c *Client) Observe(ctx context.Context, task TaskRef, params *ObserveParam
 	return c.Client.Do(req)
 }
 
-// ReleaseTaskWithBody Give up the caller's Claim, leaving the Task needing the same Skill
+// PassOwnershipWithBody Pass a Task's ownership, with its Subtasks', to another Member
 //
-// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+func (c *Client) PassOwnershipWithBody(ctx context.Context, task TaskRef, params *PassOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPassOwnershipRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PassOwnership Pass a Task's ownership, with its Subtasks', to another Member
+//
+// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPassOwnershipRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RankTaskWithBody Move a Task to a position in its Project's Rank
+//
+// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+// position past the end moves the Task last. Ended Tasks keep their places and count as
+// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+// Errors: `forbidden`, `use_parent` (a Subtask).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+func (c *Client) RankTaskWithBody(ctx context.Context, task TaskRef, params *RankTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRankTaskRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RankTask Move a Task to a position in its Project's Rank
+//
+// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+// position past the end moves the Task last. Ended Tasks keep their places and count as
+// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+// Errors: `forbidden`, `use_parent` (a Subtask).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+func (c *Client) RankTask(ctx context.Context, task TaskRef, params *RankTaskParams, body RankTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRankTaskRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReleaseTaskWithBody Give up the caller's Claim, leaving the Task at its Step
+//
+// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5226,9 +6241,10 @@ func (c *Client) ReleaseTaskWithBody(ctx context.Context, task TaskRef, params *
 	return c.Client.Do(req)
 }
 
-// ReleaseTask Give up the caller's Claim, leaving the Task needing the same Skill
+// ReleaseTask Give up the caller's Claim, leaving the Task at its Step
 //
-// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5245,12 +6261,16 @@ func (c *Client) ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseT
 	return c.Client.Do(req)
 }
 
-// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Task the caller holds
+// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the current version, for a company
-// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// Written against `based_on_version`, which must be the Skill's current version, for a
+// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+// Member with `skill-review`, other than the author, publishes the proposals by advancing
+// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 // company Skill).
 //
 // Takes any type of body and a specified content type.
@@ -5268,12 +6288,16 @@ func (c *Client) ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, 
 	return c.Client.Do(req)
 }
 
-// ProposeSkillVersion Propose a new version of a company Skill from the Task the caller holds
+// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the current version, for a company
-// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// Written against `based_on_version`, which must be the Skill's current version, for a
+// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+// Member with `skill-review`, other than the author, publishes the proposals by advancing
+// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 // company Skill).
 //
 // Takes a body of the `application/json` content type.
@@ -5291,22 +6315,23 @@ func (c *Client) ProposeSkillVersion(ctx context.Context, task TaskRef, params *
 	return c.Client.Do(req)
 }
 
-// SetTaskStatusWithBody Move a Task to another Status
+// MoveTaskWithBody Move a Task to a Step of its Workflow by hand
 //
-// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-// `dropped` Status).
+// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+// a move rather than an advance; it is the only way out of a hold. By any Member of the
+// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-func (c *Client) SetTaskStatusWithBody(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetTaskStatusRequestWithBody(c.Server, task, params, contentType, body)
+// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+func (c *Client) MoveTaskWithBody(ctx context.Context, task TaskRef, params *MoveTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMoveTaskRequestWithBody(c.Server, task, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5317,22 +6342,23 @@ func (c *Client) SetTaskStatusWithBody(ctx context.Context, task TaskRef, params
 	return c.Client.Do(req)
 }
 
-// SetTaskStatus Move a Task to another Status
+// MoveTask Move a Task to a Step of its Workflow by hand
 //
-// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-// `dropped` Status).
+// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+// a move rather than an advance; it is the only way out of a hold. By any Member of the
+// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-func (c *Client) SetTaskStatus(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewSetTaskStatusRequest(c.Server, task, params, body)
+// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+func (c *Client) MoveTask(ctx context.Context, task TaskRef, params *MoveTaskParams, body MoveTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewMoveTaskRequest(c.Server, task, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5345,9 +6371,9 @@ func (c *Client) SetTaskStatus(ctx context.Context, task TaskRef, params *SetTas
 
 // TakeBackTaskWithBody End another Member's Claim on a Task
 //
-// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-// `forbidden`, `not_holder` (nobody holds it).
+// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5366,161 +6392,15 @@ func (c *Client) TakeBackTaskWithBody(ctx context.Context, task TaskRef, params 
 
 // TakeBackTask End another Member's Claim on a Task
 //
-// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-// `forbidden`, `not_holder` (nobody holds it).
+// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /v1/tasks/{task}/take-back (the `TakeBackTask` operationId).
 func (c *Client) TakeBackTask(ctx context.Context, task TaskRef, params *TakeBackTaskParams, body TakeBackTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewTakeBackTaskRequest(c.Server, task, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListTeams List the Organisation's Teams
-//
-// Corresponds with GET /v1/teams (the `ListTeams` operationId).
-func (c *Client) ListTeams(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListTeamsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateTeamWithBody Create a Team (admin)
-//
-// Errors: `forbidden`, `conflict` (key or name taken).
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-func (c *Client) CreateTeamWithBody(ctx context.Context, params *CreateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateTeamRequestWithBody(c.Server, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateTeam Create a Team (admin)
-//
-// Errors: `forbidden`, `conflict` (key or name taken).
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-func (c *Client) CreateTeam(ctx context.Context, params *CreateTeamParams, body CreateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateTeamRequest(c.Server, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetTeam Get a Team and its Members
-//
-// Corresponds with GET /v1/teams/{team} (the `GetTeam` operationId).
-func (c *Client) GetTeam(ctx context.Context, team TeamRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetTeamRequest(c.Server, team)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// UpdateTeamWithBody Change a Team's name, default Workspace or Ship-when-done default (admin)
-//
-// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-// Workspace).
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-func (c *Client) UpdateTeamWithBody(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateTeamRequestWithBody(c.Server, team, params, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// UpdateTeam Change a Team's name, default Workspace or Ship-when-done default (admin)
-//
-// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-// Workspace).
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-func (c *Client) UpdateTeam(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateTeamRequest(c.Server, team, params, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// RemoveTeamMember Remove a Member from a Team (admin)
-//
-// Claims the Member holds on the Team's Tasks are not ended.
-//
-// Corresponds with DELETE /v1/teams/{team}/members/{member} (the `RemoveTeamMember` operationId).
-func (c *Client) RemoveTeamMember(ctx context.Context, team TeamRef, member MemberRef, params *RemoveTeamMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRemoveTeamMemberRequest(c.Server, team, member, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// AddTeamMember Add a Member to a Team (admin)
-//
-// Corresponds with PUT /v1/teams/{team}/members/{member} (the `AddTeamMember` operationId).
-func (c *Client) AddTeamMember(ctx context.Context, team TeamRef, member MemberRef, params *AddTeamMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAddTeamMemberRequest(c.Server, team, member, params)
 	if err != nil {
 		return nil, err
 	}
@@ -5569,10 +6449,10 @@ func (c *Client) ListViews(ctx context.Context, params *ListViewsParams, reqEdit
 
 // CreateViewWithBody Save a View
 //
-// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-// as the list checks them. A View is a Member's preference, not the record: saving,
-// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+// checks them. A View is a Member's preference, not the record: saving, changing or
+// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5591,10 +6471,10 @@ func (c *Client) CreateViewWithBody(ctx context.Context, params *CreateViewParam
 
 // CreateView Save a View
 //
-// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-// as the list checks them. A View is a Member's preference, not the record: saving,
-// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+// checks them. A View is a Member's preference, not the record: saving, changing or
+// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5631,7 +6511,7 @@ func (c *Client) DeleteView(ctx context.Context, view ViewID, params *DeleteView
 // UpdateViewWithBody Change one of the caller's Views
 //
 // Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 // caller's with that id), `conflict` (name taken), `invalid`.
 //
 // Takes any type of body and a specified content type.
@@ -5652,7 +6532,7 @@ func (c *Client) UpdateViewWithBody(ctx context.Context, view ViewID, params *Up
 // UpdateView Change one of the caller's Views
 //
 // Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 // caller's with that id), `conflict` (name taken), `invalid`.
 //
 // Takes a body of the `application/json` content type.
@@ -5730,7 +6610,7 @@ func (c *Client) CreateWorkspace(ctx context.Context, params *CreateWorkspacePar
 // RemoveWorkspace Remove a Workspace (admin)
 //
 // Refused with `conflict` while any Task, open or ended, names it: the record keeps where
-// its work was done. A Team whose default it was has no default afterwards. Records
+// its work was done. A Project whose default it was has no default afterwards. Records
 // `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
 //
 // Corresponds with DELETE /v1/workspaces/{workspace} (the `RemoveWorkspace` operationId).
@@ -5864,9 +6744,9 @@ func NewListActivityRequest(server string, params *ListActivityParams) (*http.Re
 
 		}
 
-		if params.Team != nil {
+		if params.Project != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -6039,566 +6919,6 @@ func NewDownloadEvidenceRequest(server string, evidence EvidenceID) (*http.Reque
 	return req, nil
 }
 
-// NewListFeaturesRequest constructs an http.Request for the ListFeatures method
-func NewListFeaturesRequest(server string, params *ListFeaturesParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Team != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.State != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Owner != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "owner", *params.Owner, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Filter != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filter", *params.Filter, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Cursor != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewFileFeatureRequest calls the generic FileFeature builder with application/json body
-func NewFileFeatureRequest(server string, params *FileFeatureParams, body FileFeatureJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewFileFeatureRequestWithBody(server, params, "application/json", bodyReader)
-}
-
-// NewFileFeatureRequestWithBody constructs an http.Request for the FileFeature method, with any body, and a specified content type
-func NewFileFeatureRequestWithBody(server string, params *FileFeatureParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewGetFeatureRequest constructs an http.Request for the GetFeature method
-func NewGetFeatureRequest(server string, feature FeatureRef) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewDropFeatureRequest constructs an http.Request for the DropFeature method
-func NewDropFeatureRequest(server string, feature FeatureRef, params *DropFeatureParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s/drop", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewAttachFeatureEvidenceRequestWithBody constructs an http.Request for the AttachFeatureEvidence method, with any body, and a specified content type
-func NewAttachFeatureEvidenceRequestWithBody(server string, feature FeatureRef, params *AttachFeatureEvidenceParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s/evidence", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "filename", params.Filename, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
-			}
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewListFeatureObservationsRequest constructs an http.Request for the ListFeatureObservations method
-func NewListFeatureObservationsRequest(server string, feature FeatureRef, params *ListFeatureObservationsParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s/observations", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Reviewed != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reviewed", *params.Reviewed, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPassFeatureOwnershipRequest calls the generic PassFeatureOwnership builder with application/json body
-func NewPassFeatureOwnershipRequest(server string, feature FeatureRef, params *PassFeatureOwnershipParams, body PassFeatureOwnershipJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewPassFeatureOwnershipRequestWithBody(server, feature, params, "application/json", bodyReader)
-}
-
-// NewPassFeatureOwnershipRequestWithBody constructs an http.Request for the PassFeatureOwnership method, with any body, and a specified content type
-func NewPassFeatureOwnershipRequestWithBody(server string, feature FeatureRef, params *PassFeatureOwnershipParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s/owner", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewRankFeatureRequest calls the generic RankFeature builder with application/json body
-func NewRankFeatureRequest(server string, feature FeatureRef, params *RankFeatureParams, body RankFeatureJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewRankFeatureRequestWithBody(server, feature, params, "application/json", bodyReader)
-}
-
-// NewRankFeatureRequestWithBody constructs an http.Request for the RankFeature method, with any body, and a specified content type
-func NewRankFeatureRequestWithBody(server string, feature FeatureRef, params *RankFeatureParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s/rank", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewShipFeatureRequest constructs an http.Request for the ShipFeature method
-func NewShipFeatureRequest(server string, feature FeatureRef, params *ShipFeatureParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "feature", feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/features/%s/ship", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
 // NewGetHealthRequest constructs an http.Request for the GetHealth method
 func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -6621,6 +6941,199 @@ func NewGetHealthRequest(server string) (*http.Request, error) {
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListLabelsRequest constructs an http.Request for the ListLabels method
+func NewListLabelsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/labels")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateLabelRequest calls the generic CreateLabel builder with application/json body
+func NewCreateLabelRequest(server string, params *CreateLabelParams, body CreateLabelJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateLabelRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateLabelRequestWithBody constructs an http.Request for the CreateLabel method, with any body, and a specified content type
+func NewCreateLabelRequestWithBody(server string, params *CreateLabelParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/labels")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteLabelRequest constructs an http.Request for the DeleteLabel method
+func NewDeleteLabelRequest(server string, label LabelID, params *DeleteLabelParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "label", label, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/labels/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewUpdateLabelRequest calls the generic UpdateLabel builder with application/json body
+func NewUpdateLabelRequest(server string, label LabelID, params *UpdateLabelParams, body UpdateLabelJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateLabelRequestWithBody(server, label, params, "application/json", bodyReader)
+}
+
+// NewUpdateLabelRequestWithBody constructs an http.Request for the UpdateLabel method, with any body, and a specified content type
+func NewUpdateLabelRequestWithBody(server string, label LabelID, params *UpdateLabelParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "label", label, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/labels/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -6806,9 +7319,9 @@ func NewListMembersRequest(server string, params *ListMembersParams) (*http.Requ
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.Team != nil {
+		if params.Project != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7645,6 +8158,488 @@ func NewIssueTokenRequestWithBody(server string, member MemberRef, params *Issue
 	return req, nil
 }
 
+// NewListProjectsRequest constructs an http.Request for the ListProjects method
+func NewListProjectsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateProjectRequest calls the generic CreateProject builder with application/json body
+func NewCreateProjectRequest(server string, params *CreateProjectParams, body CreateProjectJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateProjectRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateProjectRequestWithBody constructs an http.Request for the CreateProject method, with any body, and a specified content type
+func NewCreateProjectRequestWithBody(server string, params *CreateProjectParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetProjectRequest constructs an http.Request for the GetProject method
+func NewGetProjectRequest(server string, project ProjectRef) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateProjectRequest calls the generic UpdateProject builder with application/json body
+func NewUpdateProjectRequest(server string, project ProjectRef, params *UpdateProjectParams, body UpdateProjectJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateProjectRequestWithBody(server, project, params, "application/json", bodyReader)
+}
+
+// NewUpdateProjectRequestWithBody constructs an http.Request for the UpdateProject method, with any body, and a specified content type
+func NewUpdateProjectRequestWithBody(server string, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListProjectLabelsRequest constructs an http.Request for the ListProjectLabels method
+func NewListProjectLabelsRequest(server string, project ProjectRef) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/labels", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateProjectLabelRequest calls the generic CreateProjectLabel builder with application/json body
+func NewCreateProjectLabelRequest(server string, project ProjectRef, params *CreateProjectLabelParams, body CreateProjectLabelJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateProjectLabelRequestWithBody(server, project, params, "application/json", bodyReader)
+}
+
+// NewCreateProjectLabelRequestWithBody constructs an http.Request for the CreateProjectLabel method, with any body, and a specified content type
+func NewCreateProjectLabelRequestWithBody(server string, project ProjectRef, params *CreateProjectLabelParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/labels", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRemoveProjectMemberRequest constructs an http.Request for the RemoveProjectMember method
+func NewRemoveProjectMemberRequest(server string, project ProjectRef, member MemberRef, params *RemoveProjectMemberParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/members/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewAddProjectMemberRequest constructs an http.Request for the AddProjectMember method
+func NewAddProjectMemberRequest(server string, project ProjectRef, member MemberRef, params *AddProjectMemberParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/members/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetWorkflowRequest constructs an http.Request for the GetWorkflow method
+func NewGetWorkflowRequest(server string, project ProjectRef) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/workflow", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetWorkflowRequest calls the generic SetWorkflow builder with application/json body
+func NewSetWorkflowRequest(server string, project ProjectRef, params *SetWorkflowParams, body SetWorkflowJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetWorkflowRequestWithBody(server, project, params, "application/json", bodyReader)
+}
+
+// NewSetWorkflowRequestWithBody constructs an http.Request for the SetWorkflow method, with any body, and a specified content type
+func NewSetWorkflowRequestWithBody(server string, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/workflow", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListRunnerSessionsRequest constructs an http.Request for the ListRunnerSessions method
 func NewListRunnerSessionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -8173,88 +9168,6 @@ func NewListSkillVersionsRequest(server string, skill SkillRef) (*http.Request, 
 	return req, nil
 }
 
-// NewListStatusesRequest constructs an http.Request for the ListStatuses method
-func NewListStatusesRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/statuses")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewSetStatusesRequest calls the generic SetStatuses builder with application/json body
-func NewSetStatusesRequest(server string, params *SetStatusesParams, body SetStatusesJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewSetStatusesRequestWithBody(server, params, "application/json", bodyReader)
-}
-
-// NewSetStatusesRequestWithBody constructs an http.Request for the SetStatuses method, with any body, and a specified content type
-func NewSetStatusesRequestWithBody(server string, params *SetStatusesParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/statuses")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
 // NewListTasksRequest constructs an http.Request for the ListTasks method
 func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request, error) {
 	var err error
@@ -8283,9 +9196,9 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.Feature != nil {
+		if params.Project != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "feature", *params.Feature, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8295,9 +9208,9 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 
 		}
 
-		if params.Team != nil {
+		if params.Parent != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "parent", *params.Parent, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8319,9 +9232,9 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 
 		}
 
-		if params.Skill != nil {
+		if params.Step != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "skill", *params.Skill, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "step", *params.Step, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8346,18 +9259,6 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 		if params.Holder != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "holder", *params.Holder, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Status != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8610,6 +9511,68 @@ func NewGetTaskRequest(server string, task TaskRef) (*http.Request, error) {
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdvanceTaskRequest calls the generic AdvanceTask builder with application/json body
+func NewAdvanceTaskRequest(server string, task TaskRef, params *AdvanceTaskParams, body AdvanceTaskJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdvanceTaskRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewAdvanceTaskRequestWithBody constructs an http.Request for the AdvanceTask method, with any body, and a specified content type
+func NewAdvanceTaskRequestWithBody(server string, task TaskRef, params *AdvanceTaskParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/advance", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -8987,68 +9950,6 @@ func NewAttachTaskEvidenceRequestWithBody(server string, task TaskRef, params *A
 	return req, nil
 }
 
-// NewHandoverTaskRequest calls the generic HandoverTask builder with application/json body
-func NewHandoverTaskRequest(server string, task TaskRef, params *HandoverTaskParams, body HandoverTaskJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewHandoverTaskRequestWithBody(server, task, params, "application/json", bodyReader)
-}
-
-// NewHandoverTaskRequestWithBody constructs an http.Request for the HandoverTask method, with any body, and a specified content type
-func NewHandoverTaskRequestWithBody(server string, task TaskRef, params *HandoverTaskParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/tasks/%s/handover", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
 // NewHeartbeatRequest constructs an http.Request for the Heartbeat method
 func NewHeartbeatRequest(server string, task TaskRef, params *HeartbeatParams) (*http.Request, error) {
 	var err error
@@ -9079,6 +9980,68 @@ func NewHeartbeatRequest(server string, task TaskRef, params *HeartbeatParams) (
 	if err != nil {
 		return nil, err
 	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSetTaskLabelsRequest calls the generic SetTaskLabels builder with application/json body
+func NewSetTaskLabelsRequest(server string, task TaskRef, params *SetTaskLabelsParams, body SetTaskLabelsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetTaskLabelsRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewSetTaskLabelsRequestWithBody constructs an http.Request for the SetTaskLabels method, with any body, and a specified content type
+func NewSetTaskLabelsRequestWithBody(server string, task TaskRef, params *SetTaskLabelsParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/labels", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	if params != nil {
 
@@ -9160,6 +10123,67 @@ func NewAddNoteRequestWithBody(server string, task TaskRef, params *AddNoteParam
 	return req, nil
 }
 
+// NewListTaskObservationsRequest constructs an http.Request for the ListTaskObservations method
+func NewListTaskObservationsRequest(server string, task TaskRef, params *ListTaskObservationsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/observations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Reviewed != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reviewed", *params.Reviewed, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewObserveRequest calls the generic Observe builder with application/json body
 func NewObserveRequest(server string, task TaskRef, params *ObserveParams, body ObserveJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -9188,6 +10212,130 @@ func NewObserveRequestWithBody(server string, task TaskRef, params *ObserveParam
 	}
 
 	operationPath := fmt.Sprintf("/v1/tasks/%s/observations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewPassOwnershipRequest calls the generic PassOwnership builder with application/json body
+func NewPassOwnershipRequest(server string, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPassOwnershipRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewPassOwnershipRequestWithBody constructs an http.Request for the PassOwnership method, with any body, and a specified content type
+func NewPassOwnershipRequestWithBody(server string, task TaskRef, params *PassOwnershipParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/owner", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewRankTaskRequest calls the generic RankTask builder with application/json body
+func NewRankTaskRequest(server string, task TaskRef, params *RankTaskParams, body RankTaskJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRankTaskRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewRankTaskRequestWithBody constructs an http.Request for the RankTask method, with any body, and a specified content type
+func NewRankTaskRequestWithBody(server string, task TaskRef, params *RankTaskParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/rank", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9346,19 +10494,19 @@ func NewProposeSkillVersionRequestWithBody(server string, task TaskRef, params *
 	return req, nil
 }
 
-// NewSetTaskStatusRequest calls the generic SetTaskStatus builder with application/json body
-func NewSetTaskStatusRequest(server string, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody) (*http.Request, error) {
+// NewMoveTaskRequest calls the generic MoveTask builder with application/json body
+func NewMoveTaskRequest(server string, task TaskRef, params *MoveTaskParams, body MoveTaskJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewSetTaskStatusRequestWithBody(server, task, params, "application/json", bodyReader)
+	return NewMoveTaskRequestWithBody(server, task, params, "application/json", bodyReader)
 }
 
-// NewSetTaskStatusRequestWithBody constructs an http.Request for the SetTaskStatus method, with any body, and a specified content type
-func NewSetTaskStatusRequestWithBody(server string, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader) (*http.Request, error) {
+// NewMoveTaskRequestWithBody constructs an http.Request for the MoveTask method, with any body, and a specified content type
+func NewMoveTaskRequestWithBody(server string, task TaskRef, params *MoveTaskParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -9373,7 +10521,7 @@ func NewSetTaskStatusRequestWithBody(server string, task TaskRef, params *SetTas
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/tasks/%s/status", pathParam0)
+	operationPath := fmt.Sprintf("/v1/tasks/%s/step", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9451,296 +10599,6 @@ func NewTakeBackTaskRequestWithBody(server string, task TaskRef, params *TakeBac
 	}
 
 	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewListTeamsRequest constructs an http.Request for the ListTeams method
-func NewListTeamsRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/teams")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateTeamRequest calls the generic CreateTeam builder with application/json body
-func NewCreateTeamRequest(server string, params *CreateTeamParams, body CreateTeamJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateTeamRequestWithBody(server, params, "application/json", bodyReader)
-}
-
-// NewCreateTeamRequestWithBody constructs an http.Request for the CreateTeam method, with any body, and a specified content type
-func NewCreateTeamRequestWithBody(server string, params *CreateTeamParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/teams")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewGetTeamRequest constructs an http.Request for the GetTeam method
-func NewGetTeamRequest(server string, team TeamRef) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/teams/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewUpdateTeamRequest calls the generic UpdateTeam builder with application/json body
-func NewUpdateTeamRequest(server string, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpdateTeamRequestWithBody(server, team, params, "application/json", bodyReader)
-}
-
-// NewUpdateTeamRequestWithBody constructs an http.Request for the UpdateTeam method, with any body, and a specified content type
-func NewUpdateTeamRequestWithBody(server string, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/teams/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewRemoveTeamMemberRequest constructs an http.Request for the RemoveTeamMember method
-func NewRemoveTeamMemberRequest(server string, team TeamRef, member MemberRef, params *RemoveTeamMemberParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/teams/%s/members/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-
-		if params.IdempotencyKey != nil {
-			var headerParam0 string
-
-			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
-			if err != nil {
-				return nil, err
-			}
-
-			req.Header.Set("Idempotency-Key", headerParam0)
-		}
-
-	}
-
-	return req, nil
-}
-
-// NewAddTeamMemberRequest constructs an http.Request for the AddTeamMember method
-func NewAddTeamMemberRequest(server string, team TeamRef, member MemberRef, params *AddTeamMemberParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "team", team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "member", member, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/v1/teams/%s/members/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	if params != nil {
 
@@ -9849,9 +10707,9 @@ func NewListViewsRequest(server string, params *ListViewsParams) (*http.Request,
 
 		}
 
-		if params.Team != nil {
+		if params.Project != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "team", *params.Team, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -10284,7 +11142,7 @@ type ClientWithResponsesInterface interface {
 	// `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 	// entries numbered just below it, still in sequence order, and its `first_seq` is the
 	// `before` of the page before it. A `before` past the newest entry (such as
-	// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+	// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
 	// matching entries; the page is then the `limit` matching entries after `after` or just
 	// below `before`, and its `first_seq` and `last_seq` are theirs.
 	//
@@ -10325,152 +11183,78 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/evidence/{evidence}/content (the `DownloadEvidence` operationId).
 	DownloadEvidenceWithResponse(ctx context.Context, evidence EvidenceID, reqEditors ...RequestEditorFn) (*DownloadEvidenceResponse, error)
 
-	// ListFeaturesWithResponse List Features
-	//
-	// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
-	// with the others.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/features (the `ListFeatures` operationId).
-	ListFeaturesWithResponse(ctx context.Context, params *ListFeaturesParams, reqEditors ...RequestEditorFn) (*ListFeaturesResponse, error)
-
-	// FileFeatureWithBodyWithResponse File a Feature
-	//
-	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`.
-	//
-	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-	// down it files its one work Task, with the Feature's title and description, needing
-	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-	// default Workspace and none named).
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features (the `FileFeature` operationId).
-	FileFeatureWithBodyWithResponse(ctx context.Context, params *FileFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FileFeatureResponse, error)
-
-	// FileFeatureWithResponse File a Feature
-	//
-	// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-	// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-	// by a Retrospective names it in `from_retrospective`.
-	//
-	// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-	// down it files its one work Task, with the Feature's title and description, needing
-	// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-	// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-	// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-	// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-	// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-	// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-	// default Workspace and none named).
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features (the `FileFeature` operationId).
-	FileFeatureWithResponse(ctx context.Context, params *FileFeatureParams, body FileFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*FileFeatureResponse, error)
-
-	// GetFeatureWithResponse Get a Feature with its Tasks and Evidence
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/features/{feature} (the `GetFeature` operationId).
-	GetFeatureWithResponse(ctx context.Context, feature FeatureRef, reqEditors ...RequestEditorFn) (*GetFeatureResponse, error)
-
-	// DropFeatureWithResponse Drop a Feature (Feature owner)
-	//
-	// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
-	// `forbidden` (not the owner), `ended`.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
-	DropFeatureWithResponse(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*DropFeatureResponse, error)
-
-	// AttachFeatureEvidenceWithBodyWithResponse Attach Evidence to a Feature
-	//
-	// The request body is the file itself, sent with its own `Content-Type` and a
-	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
-	// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/evidence (the `AttachFeatureEvidence` operationId).
-	AttachFeatureEvidenceWithBodyWithResponse(ctx context.Context, feature FeatureRef, params *AttachFeatureEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AttachFeatureEvidenceResponse, error)
-
-	// ListFeatureObservationsWithResponse List the Observations recorded on a Feature's Tasks
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/features/{feature}/observations (the `ListFeatureObservations` operationId).
-	ListFeatureObservationsWithResponse(ctx context.Context, feature FeatureRef, params *ListFeatureObservationsParams, reqEditors ...RequestEditorFn) (*ListFeatureObservationsResponse, error)
-
-	// PassFeatureOwnershipWithBodyWithResponse Pass a Feature's ownership to another Member
-	//
-	// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-	PassFeatureOwnershipWithBodyWithResponse(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PassFeatureOwnershipResponse, error)
-
-	// PassFeatureOwnershipWithResponse Pass a Feature's ownership to another Member
-	//
-	// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-	PassFeatureOwnershipWithResponse(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, body PassFeatureOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PassFeatureOwnershipResponse, error)
-
-	// RankFeatureWithBodyWithResponse Move a Feature to a position in its Team's Rank
-	//
-	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-	// their places and count as positions. By a Member of the Feature's Team or its owner.
-	// Errors: `forbidden`.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-	RankFeatureWithBodyWithResponse(ctx context.Context, feature FeatureRef, params *RankFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RankFeatureResponse, error)
-
-	// RankFeatureWithResponse Move a Feature to a position in its Team's Rank
-	//
-	// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-	// their places and count as positions. By a Member of the Feature's Team or its owner.
-	// Errors: `forbidden`.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-	RankFeatureWithResponse(ctx context.Context, feature FeatureRef, params *RankFeatureParams, body RankFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*RankFeatureResponse, error)
-
-	// ShipFeatureWithResponse Ship a Feature (Feature owner)
-	//
-	// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-	// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
-	// `ship_when_done` ships without this call when its last open Task is completed. Errors:
-	// `forbidden` (not the owner), `tasks_open`, `ended`.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
-	ShipFeatureWithResponse(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*ShipFeatureResponse, error)
-
 	// GetHealthWithResponse Report that the Install is up, how Members sign in, and whether a newer release exists
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/health (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+
+	// ListLabelsWithResponse List the Organisation's Labels, which every Project's Tasks may carry
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/labels (the `ListLabels` operationId).
+	ListLabelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListLabelsResponse, error)
+
+	// CreateLabelWithBodyWithResponse Define a Label for the Organisation (admin)
+	//
+	// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+	// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+	// name), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+	CreateLabelWithBodyWithResponse(ctx context.Context, params *CreateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLabelResponse, error)
+
+	// CreateLabelWithResponse Define a Label for the Organisation (admin)
+	//
+	// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+	// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+	// name), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+	CreateLabelWithResponse(ctx context.Context, params *CreateLabelParams, body CreateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLabelResponse, error)
+
+	// DeleteLabelWithResponse Delete a Label
+	//
+	// With the authority that defines it, as on `updateLabel`. Every Task carrying it, open or
+	// ended, stops carrying it in the same write; Views whose filters name it match nothing for
+	// that value. Records `label.deleted`. Errors: `forbidden`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/labels/{label} (the `DeleteLabel` operationId).
+	DeleteLabelWithResponse(ctx context.Context, label LabelID, params *DeleteLabelParams, reqEditors ...RequestEditorFn) (*DeleteLabelResponse, error)
+
+	// UpdateLabelWithBodyWithResponse Rename or recolour a Label
+	//
+	// Changes the fields given and keeps the others. With the authority that defines it: an
+	// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+	// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+	// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+	UpdateLabelWithBodyWithResponse(ctx context.Context, label LabelID, params *UpdateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLabelResponse, error)
+
+	// UpdateLabelWithResponse Rename or recolour a Label
+	//
+	// Changes the fields given and keeps the others. With the authority that defines it: an
+	// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+	// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+	// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+	UpdateLabelWithResponse(ctx context.Context, label LabelID, params *UpdateLabelParams, body UpdateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLabelResponse, error)
 
 	// ShowLoginLinkWithResponse Show a login link's sign-in page
 	//
@@ -10509,7 +11293,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/logout (the `Logout` operationId).
 	LogoutWithResponse(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
-	// GetMeWithResponse The calling Member, their Teams and Skills, and the Session making the request
+	// GetMeWithResponse The calling Member, their Projects and Skills, and the Session making the request
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10541,7 +11325,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/members (the `CreateMember` operationId).
 	CreateMemberWithResponse(ctx context.Context, params *CreateMemberParams, body CreateMemberJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMemberResponse, error)
 
-	// GetMemberWithResponse Get a Member with their Teams, Skills and Reporting line
+	// GetMemberWithResponse Get a Member with their Projects, Skills and Reporting line
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10722,6 +11506,212 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/members/{member}/tokens (the `IssueToken` operationId).
 	IssueTokenWithResponse(ctx context.Context, member MemberRef, params *IssueTokenParams, body IssueTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueTokenResponse, error)
 
+	// ListProjectsWithResponse List the Organisation's Projects
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/projects (the `ListProjects` operationId).
+	ListProjectsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProjectsResponse, error)
+
+	// CreateProjectWithBodyWithResponse Create a Project with its first Workflow (admin)
+	//
+	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+	// when its filer does not say; both default to false. Records `project.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+	// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+	// `copy_from` with another `workflow`).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+	CreateProjectWithBodyWithResponse(ctx context.Context, params *CreateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProjectResponse, error)
+
+	// CreateProjectWithResponse Create a Project with its first Workflow (admin)
+	//
+	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+	// when its filer does not say; both default to false. Records `project.created`. Errors:
+	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+	// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+	// `copy_from` with another `workflow`).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+	CreateProjectWithResponse(ctx context.Context, params *CreateProjectParams, body CreateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProjectResponse, error)
+
+	// GetProjectWithResponse Get a Project and its Members
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/projects/{project} (the `GetProject` operationId).
+	GetProjectWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectResponse, error)
+
+	// UpdateProjectWithBodyWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+	// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+	// already filed keep theirs. Records `project.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+	UpdateProjectWithBodyWithResponse(ctx context.Context, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateProjectResponse, error)
+
+	// UpdateProjectWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	//
+	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+	// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+	// already filed keep theirs. Records `project.changed` with the fields that changed.
+	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+	// Workspace).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+	UpdateProjectWithResponse(ctx context.Context, project ProjectRef, params *UpdateProjectParams, body UpdateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateProjectResponse, error)
+
+	// ListProjectLabelsWithResponse List a Project's own Labels
+	//
+	// The Labels the Project defined for itself. A Task of the Project may also carry the
+	// Organisation's (`listLabels`).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/projects/{project}/labels (the `ListProjectLabels` operationId).
+	ListProjectLabelsWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*ListProjectLabelsResponse, error)
+
+	// CreateProjectLabelWithBodyWithResponse Define a Label for a Project
+	//
+	// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+	// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+	// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+	// Project or the Organisation has a Label of that name), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+	CreateProjectLabelWithBodyWithResponse(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProjectLabelResponse, error)
+
+	// CreateProjectLabelWithResponse Define a Label for a Project
+	//
+	// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+	// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+	// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+	// Project or the Organisation has a Label of that name), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+	CreateProjectLabelWithResponse(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, body CreateProjectLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProjectLabelResponse, error)
+
+	// RemoveProjectMemberWithResponse Remove a Member from a Project (admin)
+	//
+	// Claims the Member holds on the Project's Tasks are not ended. Records
+	// `project.member_removed`. Errors: `forbidden` (not an admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/projects/{project}/members/{member} (the `RemoveProjectMember` operationId).
+	RemoveProjectMemberWithResponse(ctx context.Context, project ProjectRef, member MemberRef, params *RemoveProjectMemberParams, reqEditors ...RequestEditorFn) (*RemoveProjectMemberResponse, error)
+
+	// AddProjectMemberWithResponse Add a Member to a Project (admin)
+	//
+	// The Member can then take the Project's Tasks at the Steps whose Skills they have. Adding a
+	// Member already in the Project changes nothing. Records `project.member_added`. Errors:
+	// `forbidden` (not an admin).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
+	AddProjectMemberWithResponse(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*AddProjectMemberResponse, error)
+
+	// GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
+	//
+	// The Steps in their order and the Connectors out of each, with each Step's live facts: the
+	// open Tasks at it, how many of them are being worked, the Members who could take them by
+	// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
+	// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+	// no Step and counted at none.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
+	GetWorkflowWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetWorkflowResponse, error)
+
+	// SetWorkflowWithBodyWithResponse Replace a Project's Workflow (admin)
+	//
+	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+	// unless a Connector out of the same Step with the same name exists, which it then keeps.
+	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+	// none of them: its Project then offers no Break down, files no Acceptance and no
+	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// names a Step that is not in the body; two Connectors out of one Step share a name,
+	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+	// `step_in_use`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+	SetWorkflowWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetWorkflowResponse, error)
+
+	// SetWorkflowWithResponse Replace a Project's Workflow (admin)
+	//
+	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+	// unless a Connector out of the same Step with the same name exists, which it then keeps.
+	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+	// none of them: its Project then offers no Break down, files no Acceptance and no
+	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// names a Step that is not in the body; two Connectors out of one Step share a name,
+	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+	// `step_in_use`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+	SetWorkflowWithResponse(ctx context.Context, project ProjectRef, params *SetWorkflowParams, body SetWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetWorkflowResponse, error)
+
 	// ListRunnerSessionsWithResponse List the agent sessions the Runner is running now
 	//
 	// A read model of the Runner beside this server, not part of the record: what it runs now,
@@ -10736,7 +11726,7 @@ type ClientWithResponsesInterface interface {
 
 	// NudgeRunnerSessionWithResponse Nudge the agent in a Task's session to end the Task (admin)
 	//
-	// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+	// Types the Runner's nudge into the session: advance the Task, complete it, or file a
 	// question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
 	// Task).
 	//
@@ -10852,89 +11842,125 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/skills/{skill}/versions (the `ListSkillVersions` operationId).
 	ListSkillVersionsWithResponse(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*ListSkillVersionsResponse, error)
 
-	// ListStatusesWithResponse List the Organisation's Statuses, in their order
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
-	ListStatusesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListStatusesResponse, error)
-
-	// SetStatusesWithBodyWithResponse Replace the Organisation's list of Statuses (admin)
-	//
-	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-	// Names are unique, ignoring case. The list must keep at least one Status of each kind
-	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-	// admin), `invalid`, `status_in_use`.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-	SetStatusesWithBodyWithResponse(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error)
-
-	// SetStatusesWithResponse Replace the Organisation's list of Statuses (admin)
-	//
-	// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-	// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-	// Names are unique, ignoring case. The list must keep at least one Status of each kind
-	// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-	// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-	// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-	// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-	// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-	// admin), `invalid`, `status_in_use`.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-	SetStatusesWithResponse(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error)
-
 	// ListTasksWithResponse List Tasks
 	//
-	// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
-	// narrows the list, `filter` together with the others.
+	// Ordered by Project, then Rank: a Task with no Parent by its own, each Subtask after its
+	// Parent, by how long it has waited. Every parameter given narrows the list, `filter`
+	// together with the others.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/tasks (the `ListTasks` operationId).
 	ListTasksWithResponse(ctx context.Context, params *ListTasksParams, reqEditors ...RequestEditorFn) (*ListTasksResponse, error)
 
-	// FileTaskWithBodyWithResponse File a Task
+	// FileTaskWithBodyWithResponse File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 	//
-	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-	// `not_found` (no such Workspace), `ended` (the Feature has
-	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
+	// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+	// question or Escalation; `project` may be given with the other two, and must then be theirs.
+	//
+	// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+	// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+	// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+	// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+	// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+	// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+	// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+	// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+	// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+	// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+	// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+	// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+	// default Workspace, or none when the Project has no default.
+	//
+	// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+	// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+	// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+	// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+	// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+	// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+	// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+	// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+	// blocked: remove the Blocking first.
+	//
+	// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+	// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+	// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+	// while it is held, else its ownership or membership of its Project.
+	//
+	// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+	// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+	// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+	// when they apply, in the same write.
+	//
+	// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+	// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+	// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+	// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+	// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+	// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+	// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+	// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+	// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+	// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+	// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+	// Task; the blocked Task is a Parent), `cycle`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks (the `FileTask` operationId).
 	FileTaskWithBodyWithResponse(ctx context.Context, params *FileTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FileTaskResponse, error)
 
-	// FileTaskWithResponse File a Task
+	// FileTaskWithResponse File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 	//
-	// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-	// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-	// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-	// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-	// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-	// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-	// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-	// `not_found` (no such Workspace), `ended` (the Feature has
-	// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-	// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
+	// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+	// question or Escalation; `project` may be given with the other two, and must then be theirs.
+	//
+	// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+	// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+	// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+	// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+	// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+	// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+	// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+	// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+	// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+	// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+	// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+	// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+	// default Workspace, or none when the Project has no default.
+	//
+	// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+	// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+	// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+	// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+	// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+	// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+	// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+	// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+	// blocked: remove the Blocking first.
+	//
+	// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+	// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+	// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+	// while it is held, else its ownership or membership of its Project.
+	//
+	// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+	// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+	// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+	// when they apply, in the same write.
+	//
+	// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+	// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+	// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+	// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+	// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+	// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+	// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+	// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+	// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+	// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+	// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+	// Task; the blocked Task is a Parent), `cycle`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10943,13 +11969,15 @@ type ClientWithResponsesInterface interface {
 
 	// NextTaskWithBodyWithResponse Wait for a takeable Task and claim it
 	//
-	// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-	// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-	// another come first). When none is takeable, holds the request open for up to
-	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default. A Member may have a limited number of `next` calls waiting at once
-	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+	// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+	// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+	// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+	// has waited longest since it was filed or last reached its Step; among one Parent's
+	// Subtasks, those that block another come first. When none is takeable, holds the request
+	// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+	// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+	// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+	// by default); one more is refused with `too_many_requests`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10958,13 +11986,15 @@ type ClientWithResponsesInterface interface {
 
 	// NextTaskWithResponse Wait for a takeable Task and claim it
 	//
-	// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-	// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-	// another come first). When none is takeable, holds the request open for up to
-	// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-	// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-	// token's default. A Member may have a limited number of `next` calls waiting at once
-	// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+	// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+	// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+	// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+	// has waited longest since it was filed or last reached its Step; among one Parent's
+	// Subtasks, those that block another come first. When none is takeable, holds the request
+	// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+	// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+	// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+	// by default); one more is refused with `too_many_requests`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10978,16 +12008,65 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/tasks/takeable (the `ListTakeableTasks` operationId).
 	ListTakeableTasksWithResponse(ctx context.Context, params *ListTakeableTasksParams, reqEditors ...RequestEditorFn) (*ListTakeableTasksResponse, error)
 
-	// GetTaskWithResponse Get a Task with its Claims, Notes, Evidence, blockers and Observations
+	// GetTaskWithResponse Get a Task with its Parent, Subtasks, Step and outcomes, Labels, Claims, Notes, Evidence, Blocking and Observations
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /v1/tasks/{task} (the `GetTask` operationId).
 	GetTaskWithResponse(ctx context.Context, task TaskRef, reqEditors ...RequestEditorFn) (*GetTaskResponse, error)
 
+	// AdvanceTaskWithBodyWithResponse End the caller's work on a Task along a Connector out of its Step
+	//
+	// By the Member holding the Task. The Connector is the one out of the Task's Step named
+	// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+	// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+	// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+	// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+	// Claim, so its context goes with it to the next Step.
+	//
+	// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+	// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+	// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+	//
+	// Along a Connector into Done, the Task completes, with everything `completeTask` says
+	// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+	// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+	// and `forbidden` and `proposal_stale` as on `completeTask`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+	AdvanceTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *AdvanceTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdvanceTaskResponse, error)
+
+	// AdvanceTaskWithResponse End the caller's work on a Task along a Connector out of its Step
+	//
+	// By the Member holding the Task. The Connector is the one out of the Task's Step named
+	// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+	// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+	// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+	// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+	// Claim, so its context goes with it to the next Step.
+	//
+	// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+	// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+	// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+	//
+	// Along a Connector into Done, the Task completes, with everything `completeTask` says
+	// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+	// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+	// and `forbidden` and `proposal_stale` as on `completeTask`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+	AdvanceTaskWithResponse(ctx context.Context, task TaskRef, params *AdvanceTaskParams, body AdvanceTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*AdvanceTaskResponse, error)
+
 	// RemoveBlockerWithResponse Stop one Task blocking another
 	//
-	// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
+	// Needs the same authority as adding the blocker. An open question under an ended Parent
+	// must keep blocking an open Task, so removing its last such edge is refused with `ended`:
+	// complete or drop the question instead. Records `task.blocker_removed`. Errors:
+	// `forbidden`, `not_holder`, `ended`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10997,9 +12076,11 @@ type ClientWithResponsesInterface interface {
 	// AddBlockerWithResponse Let one Task block another
 	//
 	// `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
-	// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
-	// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
-	// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
+	// may be under different Parents. A Parent neither blocks nor is blocked. Needs `{task}`'s
+	// Claim when it is held, else its ownership or membership of its Project. Records
+	// `task.blocker_added`. Errors: `forbidden`, `not_holder`, `ended`, `conflict` (either is a
+	// Parent), `cycle` (`{task}` already blocks `{blocker}`, directly or through other Tasks, or
+	// they are the same Task).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11008,11 +12089,19 @@ type ClientWithResponsesInterface interface {
 
 	// ClaimTaskWithBodyWithResponse Claim a Task
 	//
-	// One conditional write: it succeeds only when the Task is takeable by the caller. The
-	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-	// than retry), `not_takeable`.
+	// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+	// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+	// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+	// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+	// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+	// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+	// Member who has held the Task under one Skill can take it again only under that Skill. The
+	// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+	// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+	// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+	// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+	// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+	// a blocked or ended Task, or one the caller may not take).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11021,61 +12110,119 @@ type ClientWithResponsesInterface interface {
 
 	// ClaimTaskWithResponse Claim a Task
 	//
-	// One conditional write: it succeeds only when the Task is takeable by the caller. The
-	// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-	// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-	// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-	// than retry), `not_takeable`.
+	// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+	// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+	// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+	// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+	// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+	// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+	// Member who has held the Task under one Skill can take it again only under that Skill. The
+	// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+	// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+	// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+	// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+	// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+	// a blocked or ended Task, or one the caller may not take).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/claim (the `ClaimTask` operationId).
 	ClaimTaskWithResponse(ctx context.Context, task TaskRef, params *ClaimTaskParams, body ClaimTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*ClaimTaskResponse, error)
 
-	// CompleteTaskWithBodyWithResponse Complete a Task the caller holds
+	// CompleteTaskWithBodyWithResponse Complete a Task the caller holds, or a Parent the caller owns
 	//
-	// Ends the Task done, in the first `done` Status. Completing a Task that needs
-	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-	// (the version the proposal was written against is no longer current; nothing changes, and
-	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+	// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+	// completed by the Member holding it, along the one Connector out of its Step into Done;
+	// when its Step has none or several, the request is refused with `use_advance`, whose
+	// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+	// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+	// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+	// Acceptance included). `note` is added to the Task's Notes first.
+	//
+	// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+	// the Task as its Skill's next version. When the version one was written against is no
+	// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+	// nothing is published, and the Task is advanced back along the Connector named "needs
+	// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+	// write is made and the refusal is the reply. A proposal is never published by its author
+	// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+	// reviewed by it.
+	//
+	// A Subtask ending done may finish its Parent. When the Parent is open and every other
+	// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+	// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+	// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+	// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+	// in the same write. A Parent that ends, done or dropped, files its Retrospective
+	// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+	// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+	// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+	// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+	// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+	// `proposal_stale`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/complete (the `CompleteTask` operationId).
 	CompleteTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *CompleteTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CompleteTaskResponse, error)
 
-	// CompleteTaskWithResponse Complete a Task the caller holds
+	// CompleteTaskWithResponse Complete a Task the caller holds, or a Parent the caller owns
 	//
-	// Ends the Task done, in the first `done` Status. Completing a Task that needs
-	// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-	// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-	// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-	// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-	// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-	// (the version the proposal was written against is no longer current; nothing changes, and
-	// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+	// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+	// completed by the Member holding it, along the one Connector out of its Step into Done;
+	// when its Step has none or several, the request is refused with `use_advance`, whose
+	// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+	// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+	// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+	// Acceptance included). `note` is added to the Task's Notes first.
+	//
+	// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+	// the Task as its Skill's next version. When the version one was written against is no
+	// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+	// nothing is published, and the Task is advanced back along the Connector named "needs
+	// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+	// write is made and the refusal is the reply. A proposal is never published by its author
+	// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+	// reviewed by it.
+	//
+	// A Subtask ending done may finish its Parent. When the Parent is open and every other
+	// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+	// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+	// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+	// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+	// in the same write. A Parent that ends, done or dropped, files its Retrospective
+	// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+	// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+	// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+	// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+	// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+	// `proposal_stale`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/complete (the `CompleteTask` operationId).
 	CompleteTaskWithResponse(ctx context.Context, task TaskRef, params *CompleteTaskParams, body CompleteTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*CompleteTaskResponse, error)
 
-	// DropTaskWithBodyWithResponse Drop a Task (Feature owner)
+	// DropTaskWithBodyWithResponse Drop a Task (Owner)
 	//
-	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+	// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+	// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+	// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+	// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/drop (the `DropTask` operationId).
 	DropTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *DropTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DropTaskResponse, error)
 
-	// DropTaskWithResponse Drop a Task (Feature owner)
+	// DropTaskWithResponse Drop a Task (Owner)
 	//
-	// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+	// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+	// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+	// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+	// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+	// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11086,39 +12233,14 @@ type ClientWithResponsesInterface interface {
 	//
 	// The request body is the file itself, sent with its own `Content-Type` and a
 	// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
-	// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+	// Claim while it is held, else its ownership or membership of its Project. Evidence about a
+	// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
 	// `not_holder`, `forbidden`, `too_large`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/evidence (the `AttachTaskEvidence` operationId).
 	AttachTaskEvidenceWithBodyWithResponse(ctx context.Context, task TaskRef, params *AttachTaskEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AttachTaskEvidenceResponse, error)
-
-	// HandoverTaskWithBodyWithResponse End the caller's Claim and set the Skill the Task needs next
-	//
-	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. The Status stays as it is unless `status` names another.
-	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-	HandoverTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *HandoverTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*HandoverTaskResponse, error)
-
-	// HandoverTaskWithResponse End the caller's Claim and set the Skill the Task needs next
-	//
-	// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-	// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-	// again only under that Skill. The Status stays as it is unless `status` names another.
-	// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-	// `dropped`).
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-	HandoverTaskWithResponse(ctx context.Context, task TaskRef, params *HandoverTaskParams, body HandoverTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*HandoverTaskResponse, error)
 
 	// HeartbeatWithResponse Tell Darkory the caller is still working a Task
 	//
@@ -11133,12 +12255,39 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/heartbeat (the `Heartbeat` operationId).
 	HeartbeatWithResponse(ctx context.Context, task TaskRef, params *HeartbeatParams, reqEditors ...RequestEditorFn) (*HeartbeatResponse, error)
 
+	// SetTaskLabelsWithBodyWithResponse Set the Labels a Task carries
+	//
+	// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+	// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+	// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+	// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+	// such Label), `invalid` (another Project's Label).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+	SetTaskLabelsWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskLabelsResponse, error)
+
+	// SetTaskLabelsWithResponse Set the Labels a Task carries
+	//
+	// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+	// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+	// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+	// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+	// such Label), `invalid` (another Project's Label).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+	SetTaskLabelsWithResponse(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, body SetTaskLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskLabelsResponse, error)
+
 	// AddNoteWithBodyWithResponse Add a Note to a Task's running log
 	//
 	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+	// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+	// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+	// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+	// Task), `forbidden`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11148,19 +12297,31 @@ type ClientWithResponsesInterface interface {
 	// AddNoteWithResponse Add a Note to a Task's running log
 	//
 	// On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-	// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-	// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-	// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+	// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+	// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+	// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+	// Task), `forbidden`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 	AddNoteWithResponse(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*AddNoteResponse, error)
 
+	// ListTaskObservationsWithResponse List the Observations recorded on a Task and, for a Parent, on its Subtasks
+	//
+	// What a Retrospective reads about its Parent: the Parent's Observations are those recorded
+	// on its Subtasks.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/tasks/{task}/observations (the `ListTaskObservations` operationId).
+	ListTaskObservationsWithResponse(ctx context.Context, task TaskRef, params *ListTaskObservationsParams, reqEditors ...RequestEditorFn) (*ListTaskObservationsResponse, error)
+
 	// ObserveWithBodyWithResponse Record an Observation on a Task
 	//
-	// By the Member holding the Task; the Observation records the Skill they hold it under.
-	// Errors: `not_holder`.
+	// By the Member holding the Task; the Observation records the Skill they hold it under. It
+	// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+	// `not_holder`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11169,38 +12330,93 @@ type ClientWithResponsesInterface interface {
 
 	// ObserveWithResponse Record an Observation on a Task
 	//
-	// By the Member holding the Task; the Observation records the Skill they hold it under.
-	// Errors: `not_holder`.
+	// By the Member holding the Task; the Observation records the Skill they hold it under. It
+	// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+	// `not_holder`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/observations (the `Observe` operationId).
 	ObserveWithResponse(ctx context.Context, task TaskRef, params *ObserveParams, body ObserveJSONRequestBody, reqEditors ...RequestEditorFn) (*ObserveResponse, error)
 
-	// ReleaseTaskWithBodyWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
+	// PassOwnershipWithBodyWithResponse Pass a Task's ownership, with its Subtasks', to another Member
 	//
-	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+	// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+	// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+	// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+	// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+	PassOwnershipWithBodyWithResponse(ctx context.Context, task TaskRef, params *PassOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PassOwnershipResponse, error)
+
+	// PassOwnershipWithResponse Pass a Task's ownership, with its Subtasks', to another Member
+	//
+	// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+	// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+	// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+	// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+	PassOwnershipWithResponse(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PassOwnershipResponse, error)
+
+	// RankTaskWithBodyWithResponse Move a Task to a position in its Project's Rank
+	//
+	// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+	// position past the end moves the Task last. Ended Tasks keep their places and count as
+	// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+	// Errors: `forbidden`, `use_parent` (a Subtask).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+	RankTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *RankTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RankTaskResponse, error)
+
+	// RankTaskWithResponse Move a Task to a position in its Project's Rank
+	//
+	// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+	// position past the end moves the Task last. Ended Tasks keep their places and count as
+	// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+	// Errors: `forbidden`, `use_parent` (a Subtask).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+	RankTaskWithResponse(ctx context.Context, task TaskRef, params *RankTaskParams, body RankTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*RankTaskResponse, error)
+
+	// ReleaseTaskWithBodyWithResponse Give up the caller's Claim, leaving the Task at its Step
+	//
+	// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+	// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/release (the `ReleaseTask` operationId).
 	ReleaseTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *ReleaseTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReleaseTaskResponse, error)
 
-	// ReleaseTaskWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
+	// ReleaseTaskWithResponse Give up the caller's Claim, leaving the Task at its Step
 	//
-	// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+	// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+	// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/release (the `ReleaseTask` operationId).
 	ReleaseTaskWithResponse(ctx context.Context, task TaskRef, params *ReleaseTaskParams, body ReleaseTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*ReleaseTaskResponse, error)
 
-	// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Task the caller holds
+	// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+	// Member with `skill-review`, other than the author, publishes the proposals by advancing
+	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 	// company Skill).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -11208,12 +12424,16 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersionWithBodyWithResponse(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ProposeSkillVersionResponse, error)
 
-	// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Task the caller holds
+	// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
 	//
-	// Written against `based_on_version`, which must be the current version, for a company
-	// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-	// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-	// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+	// Written against `based_on_version`, which must be the Skill's current version, for a
+	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+	// Member with `skill-review`, other than the author, publishes the proposals by advancing
+	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 	// company Skill).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -11221,43 +12441,45 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersionWithResponse(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, body ProposeSkillVersionJSONRequestBody, reqEditors ...RequestEditorFn) (*ProposeSkillVersionResponse, error)
 
-	// SetTaskStatusWithBodyWithResponse Move a Task to another Status
+	// MoveTaskWithBodyWithResponse Move a Task to a Step of its Workflow by hand
 	//
-	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-	// `dropped` Status).
+	// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+	// a move rather than an advance; it is the only way out of a hold. By any Member of the
+	// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+	// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+	// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+	// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+	// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+	// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+	// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-	SetTaskStatusWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error)
+	// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+	MoveTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *MoveTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MoveTaskResponse, error)
 
-	// SetTaskStatusWithResponse Move a Task to another Status
+	// MoveTaskWithResponse Move a Task to a Step of its Workflow by hand
 	//
-	// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-	// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-	// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-	// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-	// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-	// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-	// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-	// `dropped` Status).
+	// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+	// a move rather than an advance; it is the only way out of a hold. By any Member of the
+	// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+	// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+	// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+	// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+	// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+	// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+	// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-	SetTaskStatusWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error)
+	// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+	MoveTaskWithResponse(ctx context.Context, task TaskRef, params *MoveTaskParams, body MoveTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*MoveTaskResponse, error)
 
 	// TakeBackTaskWithBodyWithResponse End another Member's Claim on a Task
 	//
-	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-	// `forbidden`, `not_holder` (nobody holds it).
+	// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+	// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+	// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11266,88 +12488,14 @@ type ClientWithResponsesInterface interface {
 
 	// TakeBackTaskWithResponse End another Member's Claim on a Task
 	//
-	// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-	// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-	// `forbidden`, `not_holder` (nobody holds it).
+	// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+	// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+	// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/take-back (the `TakeBackTask` operationId).
 	TakeBackTaskWithResponse(ctx context.Context, task TaskRef, params *TakeBackTaskParams, body TakeBackTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*TakeBackTaskResponse, error)
-
-	// ListTeamsWithResponse List the Organisation's Teams
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/teams (the `ListTeams` operationId).
-	ListTeamsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTeamsResponse, error)
-
-	// CreateTeamWithBodyWithResponse Create a Team (admin)
-	//
-	// Errors: `forbidden`, `conflict` (key or name taken).
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-	CreateTeamWithBodyWithResponse(ctx context.Context, params *CreateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTeamResponse, error)
-
-	// CreateTeamWithResponse Create a Team (admin)
-	//
-	// Errors: `forbidden`, `conflict` (key or name taken).
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-	CreateTeamWithResponse(ctx context.Context, params *CreateTeamParams, body CreateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTeamResponse, error)
-
-	// GetTeamWithResponse Get a Team and its Members
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /v1/teams/{team} (the `GetTeam` operationId).
-	GetTeamWithResponse(ctx context.Context, team TeamRef, reqEditors ...RequestEditorFn) (*GetTeamResponse, error)
-
-	// UpdateTeamWithBodyWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
-	//
-	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-	// Workspace).
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-	UpdateTeamWithBodyWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error)
-
-	// UpdateTeamWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
-	//
-	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-	// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-	// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-	// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-	// Workspace).
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-	UpdateTeamWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error)
-
-	// RemoveTeamMemberWithResponse Remove a Member from a Team (admin)
-	//
-	// Claims the Member holds on the Team's Tasks are not ended.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with DELETE /v1/teams/{team}/members/{member} (the `RemoveTeamMember` operationId).
-	RemoveTeamMemberWithResponse(ctx context.Context, team TeamRef, member MemberRef, params *RemoveTeamMemberParams, reqEditors ...RequestEditorFn) (*RemoveTeamMemberResponse, error)
-
-	// AddTeamMemberWithResponse Add a Member to a Team (admin)
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with PUT /v1/teams/{team}/members/{member} (the `AddTeamMember` operationId).
-	AddTeamMemberWithResponse(ctx context.Context, team TeamRef, member MemberRef, params *AddTeamMemberParams, reqEditors ...RequestEditorFn) (*AddTeamMemberResponse, error)
 
 	// RevokeTokenWithResponse Revoke a token
 	//
@@ -11371,10 +12519,10 @@ type ClientWithResponsesInterface interface {
 
 	// CreateViewWithBodyWithResponse Save a View
 	//
-	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-	// as the list checks them. A View is a Member's preference, not the record: saving,
-	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+	// checks them. A View is a Member's preference, not the record: saving, changing or
+	// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+	// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11383,10 +12531,10 @@ type ClientWithResponsesInterface interface {
 
 	// CreateViewWithResponse Save a View
 	//
-	// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-	// as the list checks them. A View is a Member's preference, not the record: saving,
-	// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-	// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+	// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+	// checks them. A View is a Member's preference, not the record: saving, changing or
+	// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+	// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11405,7 +12553,7 @@ type ClientWithResponsesInterface interface {
 	// UpdateViewWithBodyWithResponse Change one of the caller's Views
 	//
 	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 	// caller's with that id), `conflict` (name taken), `invalid`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -11416,7 +12564,7 @@ type ClientWithResponsesInterface interface {
 	// UpdateViewWithResponse Change one of the caller's Views
 	//
 	// Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-	// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+	// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 	// caller's with that id), `conflict` (name taken), `invalid`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -11456,7 +12604,7 @@ type ClientWithResponsesInterface interface {
 	// RemoveWorkspaceWithResponse Remove a Workspace (admin)
 	//
 	// Refused with `conflict` while any Task, open or ended, names it: the record keeps where
-	// its work was done. A Team whose default it was has no default afterwards. Records
+	// its work was done. A Project whose default it was has no default afterwards. Records
 	// `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -11673,438 +12821,6 @@ func (r DownloadEvidenceResponse) ContentType() string {
 	return ""
 }
 
-type ListFeaturesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *FeatureList
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListFeaturesResponse) GetJSON200() *FeatureList {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r ListFeaturesResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ListFeaturesResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListFeaturesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListFeaturesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListFeaturesResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type FileFeatureResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *FeatureDetail
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r FileFeatureResponse) GetJSON201() *FeatureDetail {
-	return r.JSON201
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r FileFeatureResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r FileFeatureResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r FileFeatureResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r FileFeatureResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r FileFeatureResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetFeatureResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *FeatureDetail
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetFeatureResponse) GetJSON200() *FeatureDetail {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r GetFeatureResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r GetFeatureResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetFeatureResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetFeatureResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetFeatureResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type DropFeatureResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *FeatureDetail
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r DropFeatureResponse) GetJSON200() *FeatureDetail {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r DropFeatureResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r DropFeatureResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r DropFeatureResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DropFeatureResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r DropFeatureResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type AttachFeatureEvidenceResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *Evidence
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r AttachFeatureEvidenceResponse) GetJSON201() *Evidence {
-	return r.JSON201
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r AttachFeatureEvidenceResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r AttachFeatureEvidenceResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r AttachFeatureEvidenceResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r AttachFeatureEvidenceResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r AttachFeatureEvidenceResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListFeatureObservationsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ObservationList
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListFeatureObservationsResponse) GetJSON200() *ObservationList {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r ListFeatureObservationsResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ListFeatureObservationsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListFeatureObservationsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListFeatureObservationsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListFeatureObservationsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type PassFeatureOwnershipResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Feature
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PassFeatureOwnershipResponse) GetJSON200() *Feature {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r PassFeatureOwnershipResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r PassFeatureOwnershipResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r PassFeatureOwnershipResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PassFeatureOwnershipResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PassFeatureOwnershipResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type RankFeatureResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Feature
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r RankFeatureResponse) GetJSON200() *Feature {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r RankFeatureResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r RankFeatureResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r RankFeatureResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r RankFeatureResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r RankFeatureResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ShipFeatureResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *FeatureDetail
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ShipFeatureResponse) GetJSON200() *FeatureDetail {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r ShipFeatureResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ShipFeatureResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ShipFeatureResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ShipFeatureResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ShipFeatureResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12147,6 +12863,191 @@ func (r GetHealthResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetHealthResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListLabelsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LabelList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListLabelsResponse) GetJSON200() *LabelList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListLabelsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListLabelsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLabelsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLabelsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListLabelsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateLabelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Label
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateLabelResponse) GetJSON201() *Label {
+	return r.JSON201
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateLabelResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateLabelResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateLabelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateLabelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateLabelResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteLabelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteLabelResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteLabelResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteLabelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteLabelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteLabelResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateLabelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Label
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateLabelResponse) GetJSON200() *Label {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateLabelResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateLabelResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateLabelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateLabelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateLabelResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13079,6 +13980,472 @@ func (r IssueTokenResponse) ContentType() string {
 	return ""
 }
 
+type ListProjectsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProjectList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListProjectsResponse) GetJSON200() *ProjectList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListProjectsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListProjectsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListProjectsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListProjectsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListProjectsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateProjectResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *ProjectDetail
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateProjectResponse) GetJSON201() *ProjectDetail {
+	return r.JSON201
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateProjectResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateProjectResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateProjectResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateProjectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateProjectResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetProjectResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProjectDetail
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetProjectResponse) GetJSON200() *ProjectDetail {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetProjectResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetProjectResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProjectResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProjectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetProjectResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdateProjectResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Project
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdateProjectResponse) GetJSON200() *Project {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UpdateProjectResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdateProjectResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateProjectResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateProjectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdateProjectResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListProjectLabelsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LabelList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListProjectLabelsResponse) GetJSON200() *LabelList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListProjectLabelsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListProjectLabelsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListProjectLabelsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListProjectLabelsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListProjectLabelsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreateProjectLabelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Label
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateProjectLabelResponse) GetJSON201() *Label {
+	return r.JSON201
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r CreateProjectLabelResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateProjectLabelResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateProjectLabelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateProjectLabelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateProjectLabelResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveProjectMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r RemoveProjectMemberResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveProjectMemberResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveProjectMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveProjectMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveProjectMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AddProjectMemberResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r AddProjectMemberResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AddProjectMemberResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AddProjectMemberResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AddProjectMemberResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AddProjectMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetWorkflowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Workflow
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetWorkflowResponse) GetJSON200() *Workflow {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetWorkflowResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetWorkflowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetWorkflowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetWorkflowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetWorkflowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetWorkflowResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Workflow
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetWorkflowResponse) GetJSON200() *Workflow {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetWorkflowResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetWorkflowResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetWorkflowResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetWorkflowResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetWorkflowResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListRunnerSessionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13579,102 +14946,6 @@ func (r ListSkillVersionsResponse) ContentType() string {
 	return ""
 }
 
-type ListStatusesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *StatusList
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListStatusesResponse) GetJSON200() *StatusList {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r ListStatusesResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ListStatusesResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListStatusesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListStatusesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListStatusesResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type SetStatusesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *StatusList
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SetStatusesResponse) GetJSON200() *StatusList {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r SetStatusesResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r SetStatusesResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r SetStatusesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r SetStatusesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SetStatusesResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type ListTasksResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13909,6 +15180,54 @@ func (r GetTaskResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetTaskResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdvanceTaskResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdvanceTaskResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r AdvanceTaskResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r AdvanceTaskResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdvanceTaskResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdvanceTaskResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdvanceTaskResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14189,54 +15508,6 @@ func (r AttachTaskEvidenceResponse) ContentType() string {
 	return ""
 }
 
-type HandoverTaskResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Task
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r HandoverTaskResponse) GetJSON200() *Task {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r HandoverTaskResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r HandoverTaskResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r HandoverTaskResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r HandoverTaskResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r HandoverTaskResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type HeartbeatResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14279,6 +15550,54 @@ func (r HeartbeatResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r HeartbeatResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetTaskLabelsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetTaskLabelsResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetTaskLabelsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetTaskLabelsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetTaskLabelsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetTaskLabelsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetTaskLabelsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14333,6 +15652,54 @@ func (r AddNoteResponse) ContentType() string {
 	return ""
 }
 
+type ListTaskObservationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ObservationList
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListTaskObservationsResponse) GetJSON200() *ObservationList {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r ListTaskObservationsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListTaskObservationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTaskObservationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTaskObservationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListTaskObservationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ObserveResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14375,6 +15742,102 @@ func (r ObserveResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ObserveResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PassOwnershipResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PassOwnershipResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PassOwnershipResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PassOwnershipResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PassOwnershipResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PassOwnershipResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PassOwnershipResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RankTaskResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Task
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RankTaskResponse) GetJSON200() *Task {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r RankTaskResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RankTaskResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RankTaskResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RankTaskResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RankTaskResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14477,7 +15940,7 @@ func (r ProposeSkillVersionResponse) ContentType() string {
 	return ""
 }
 
-type SetTaskStatusResponse struct {
+type MoveTaskResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
@@ -14487,22 +15950,22 @@ type SetTaskStatusResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SetTaskStatusResponse) GetJSON200() *Task {
+func (r MoveTaskResponse) GetJSON200() *Task {
 	return r.JSON200
 }
 
 // GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r SetTaskStatusResponse) GetJSONDefault() *Error {
+func (r MoveTaskResponse) GetJSONDefault() *Error {
 	return r.JSONDefault
 }
 
 // GetBody returns the raw response body bytes
-func (r SetTaskStatusResponse) GetBody() []byte {
+func (r MoveTaskResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r SetTaskStatusResponse) Status() string {
+func (r MoveTaskResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -14510,7 +15973,7 @@ func (r SetTaskStatusResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r SetTaskStatusResponse) StatusCode() int {
+func (r MoveTaskResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -14518,7 +15981,7 @@ func (r SetTaskStatusResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r SetTaskStatusResponse) ContentType() string {
+func (r MoveTaskResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14567,280 +16030,6 @@ func (r TakeBackTaskResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r TakeBackTaskResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListTeamsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *TeamList
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListTeamsResponse) GetJSON200() *TeamList {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r ListTeamsResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r ListTeamsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListTeamsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListTeamsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListTeamsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type CreateTeamResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *Team
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateTeamResponse) GetJSON201() *Team {
-	return r.JSON201
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r CreateTeamResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r CreateTeamResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateTeamResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateTeamResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateTeamResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetTeamResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *TeamDetail
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetTeamResponse) GetJSON200() *TeamDetail {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r GetTeamResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r GetTeamResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetTeamResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetTeamResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetTeamResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type UpdateTeamResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Team
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r UpdateTeamResponse) GetJSON200() *Team {
-	return r.JSON200
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r UpdateTeamResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r UpdateTeamResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r UpdateTeamResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpdateTeamResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r UpdateTeamResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type RemoveTeamMemberResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r RemoveTeamMemberResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r RemoveTeamMemberResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r RemoveTeamMemberResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r RemoveTeamMemberResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r RemoveTeamMemberResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type AddTeamMemberResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSONDefault the response for an HTTP default `application/json` response
-	JSONDefault *Error
-}
-
-// GetJSONDefault returns the response for an HTTP default `application/json` response
-func (r AddTeamMemberResponse) GetJSONDefault() *Error {
-	return r.JSONDefault
-}
-
-// GetBody returns the raw response body bytes
-func (r AddTeamMemberResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r AddTeamMemberResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r AddTeamMemberResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r AddTeamMemberResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15271,7 +16460,7 @@ func (r UpdateWorkspaceResponse) ContentType() string {
 // `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
 // entries numbered just below it, still in sequence order, and its `first_seq` is the
 // `before` of the page before it. A `before` past the newest entry (such as
-// 9007199254740991) reads the latest page. `member`, `kind` and `team` keep only the
+// 9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
 // matching entries; the page is then the `limit` matching entries after `after` or just
 // below `before`, and its `first_seq` and `last_seq` are theirs.
 //
@@ -15336,218 +16525,6 @@ func (c *ClientWithResponses) DownloadEvidenceWithResponse(ctx context.Context, 
 	return ParseDownloadEvidenceResponse(rsp)
 }
 
-// ListFeaturesWithResponse List Features
-//
-// Ordered by Team, then Rank. Every parameter given narrows the list, `filter` together
-// with the others.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/features (the `ListFeatures` operationId).
-func (c *ClientWithResponses) ListFeaturesWithResponse(ctx context.Context, params *ListFeaturesParams, reqEditors ...RequestEditorFn) (*ListFeaturesResponse, error) {
-	rsp, err := c.ListFeatures(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListFeaturesResponse(rsp)
-}
-
-// FileFeatureWithBodyWithResponse File a Feature
-//
-// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`.
-//
-// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-// down it files its one work Task, with the Feature's title and description, needing
-// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-// default Workspace and none named).
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features (the `FileFeature` operationId).
-func (c *ClientWithResponses) FileFeatureWithBodyWithResponse(ctx context.Context, params *FileFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FileFeatureResponse, error) {
-	rsp, err := c.FileFeatureWithBody(ctx, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseFileFeatureResponse(rsp)
-}
-
-// FileFeatureWithResponse File a Feature
-//
-// Files the Feature at the bottom of its Team's Rank, and files its Break down Task needing
-// the `breakdown` Skill in the same write. The owner defaults to the caller. A Feature filed
-// by a Retrospective names it in `from_retrospective`.
-//
-// A **quick** Feature (`quick: true`) is small enough for one branch: instead of the Break
-// down it files its one work Task, with the Feature's title and description, needing
-// `skill`, in `workspaces` (default the Team's default Workspace). It always ships when
-// done, and it has no Retrospective when it ships or drops. `ship_when_done` defaults to the
-// Team's (`updateTeam`); a Feature with it ships itself, in the same write, when its last
-// open Task is completed (not dropped). Errors: `forbidden` (not in the Team), `invalid` (a
-// quick Feature without `skill`, with `from_retrospective` or with `ship_when_done: false`;
-// `skill` or `workspaces` on a Feature that is not quick; a quick Feature in a Team with no
-// default Workspace and none named).
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features (the `FileFeature` operationId).
-func (c *ClientWithResponses) FileFeatureWithResponse(ctx context.Context, params *FileFeatureParams, body FileFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*FileFeatureResponse, error) {
-	rsp, err := c.FileFeature(ctx, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseFileFeatureResponse(rsp)
-}
-
-// GetFeatureWithResponse Get a Feature with its Tasks and Evidence
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/features/{feature} (the `GetFeature` operationId).
-func (c *ClientWithResponses) GetFeatureWithResponse(ctx context.Context, feature FeatureRef, reqEditors ...RequestEditorFn) (*GetFeatureResponse, error) {
-	rsp, err := c.GetFeature(ctx, feature, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetFeatureResponse(rsp)
-}
-
-// DropFeatureWithResponse Drop a Feature (Feature owner)
-//
-// Drops its open Tasks, ends their Claims, and files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write, unless the Feature is quick. Errors:
-// `forbidden` (not the owner), `ended`.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/drop (the `DropFeature` operationId).
-func (c *ClientWithResponses) DropFeatureWithResponse(ctx context.Context, feature FeatureRef, params *DropFeatureParams, reqEditors ...RequestEditorFn) (*DropFeatureResponse, error) {
-	rsp, err := c.DropFeature(ctx, feature, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDropFeatureResponse(rsp)
-}
-
-// AttachFeatureEvidenceWithBodyWithResponse Attach Evidence to a Feature
-//
-// The request body is the file itself, sent with its own `Content-Type` and a
-// `Content-Length`; the Install's limit is 100 MiB unless set otherwise. By the Feature's
-// owner or a Member of its Team. Errors: `forbidden`, `too_large`.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/evidence (the `AttachFeatureEvidence` operationId).
-func (c *ClientWithResponses) AttachFeatureEvidenceWithBodyWithResponse(ctx context.Context, feature FeatureRef, params *AttachFeatureEvidenceParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AttachFeatureEvidenceResponse, error) {
-	rsp, err := c.AttachFeatureEvidenceWithBody(ctx, feature, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAttachFeatureEvidenceResponse(rsp)
-}
-
-// ListFeatureObservationsWithResponse List the Observations recorded on a Feature's Tasks
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/features/{feature}/observations (the `ListFeatureObservations` operationId).
-func (c *ClientWithResponses) ListFeatureObservationsWithResponse(ctx context.Context, feature FeatureRef, params *ListFeatureObservationsParams, reqEditors ...RequestEditorFn) (*ListFeatureObservationsResponse, error) {
-	rsp, err := c.ListFeatureObservations(ctx, feature, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListFeatureObservationsResponse(rsp)
-}
-
-// PassFeatureOwnershipWithBodyWithResponse Pass a Feature's ownership to another Member
-//
-// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-func (c *ClientWithResponses) PassFeatureOwnershipWithBodyWithResponse(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PassFeatureOwnershipResponse, error) {
-	rsp, err := c.PassFeatureOwnershipWithBody(ctx, feature, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePassFeatureOwnershipResponse(rsp)
-}
-
-// PassFeatureOwnershipWithResponse Pass a Feature's ownership to another Member
-//
-// By the owner, or by a Member on the owner's Reporting line. Errors: `forbidden`.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/owner (the `PassFeatureOwnership` operationId).
-func (c *ClientWithResponses) PassFeatureOwnershipWithResponse(ctx context.Context, feature FeatureRef, params *PassFeatureOwnershipParams, body PassFeatureOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PassFeatureOwnershipResponse, error) {
-	rsp, err := c.PassFeatureOwnership(ctx, feature, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePassFeatureOwnershipResponse(rsp)
-}
-
-// RankFeatureWithBodyWithResponse Move a Feature to a position in its Team's Rank
-//
-// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-// their places and count as positions. By a Member of the Feature's Team or its owner.
-// Errors: `forbidden`.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-func (c *ClientWithResponses) RankFeatureWithBodyWithResponse(ctx context.Context, feature FeatureRef, params *RankFeatureParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RankFeatureResponse, error) {
-	rsp, err := c.RankFeatureWithBody(ctx, feature, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRankFeatureResponse(rsp)
-}
-
-// RankFeatureWithResponse Move a Feature to a position in its Team's Rank
-//
-// Position 1 is first. A position past the end moves the Feature last. Ended Features keep
-// their places and count as positions. By a Member of the Feature's Team or its owner.
-// Errors: `forbidden`.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/rank (the `RankFeature` operationId).
-func (c *ClientWithResponses) RankFeatureWithResponse(ctx context.Context, feature FeatureRef, params *RankFeatureParams, body RankFeatureJSONRequestBody, reqEditors ...RequestEditorFn) (*RankFeatureResponse, error) {
-	rsp, err := c.RankFeature(ctx, feature, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRankFeatureResponse(rsp)
-}
-
-// ShipFeatureWithResponse Ship a Feature (Feature owner)
-//
-// Needs every Task of the Feature to have ended. Files the Retrospective Task ("Retrospective:
-// <title>", needing `retro`) in the same write, unless the Feature is quick. A Feature with
-// `ship_when_done` ships without this call when its last open Task is completed. Errors:
-// `forbidden` (not the owner), `tasks_open`, `ended`.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/features/{feature}/ship (the `ShipFeature` operationId).
-func (c *ClientWithResponses) ShipFeatureWithResponse(ctx context.Context, feature FeatureRef, params *ShipFeatureParams, reqEditors ...RequestEditorFn) (*ShipFeatureResponse, error) {
-	rsp, err := c.ShipFeature(ctx, feature, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseShipFeatureResponse(rsp)
-}
-
 // GetHealthWithResponse Report that the Install is up, how Members sign in, and whether a newer release exists
 //
 // Returns a wrapper object for the known response body format(s).
@@ -15559,6 +16536,108 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetHealthResponse(rsp)
+}
+
+// ListLabelsWithResponse List the Organisation's Labels, which every Project's Tasks may carry
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/labels (the `ListLabels` operationId).
+func (c *ClientWithResponses) ListLabelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListLabelsResponse, error) {
+	rsp, err := c.ListLabels(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLabelsResponse(rsp)
+}
+
+// CreateLabelWithBodyWithResponse Define a Label for the Organisation (admin)
+//
+// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+// name), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+func (c *ClientWithResponses) CreateLabelWithBodyWithResponse(ctx context.Context, params *CreateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLabelResponse, error) {
+	rsp, err := c.CreateLabelWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateLabelResponse(rsp)
+}
+
+// CreateLabelWithResponse Define a Label for the Organisation (admin)
+//
+// Every Project's Tasks may carry it. Its name may not be one a Project already uses,
+// ignoring case, so that a name always means one Label. Records `label.created`. Errors:
+// `forbidden` (not an admin), `conflict` (the Organisation or a Project has a Label of that
+// name), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/labels (the `CreateLabel` operationId).
+func (c *ClientWithResponses) CreateLabelWithResponse(ctx context.Context, params *CreateLabelParams, body CreateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLabelResponse, error) {
+	rsp, err := c.CreateLabel(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateLabelResponse(rsp)
+}
+
+// DeleteLabelWithResponse Delete a Label
+//
+// With the authority that defines it, as on `updateLabel`. Every Task carrying it, open or
+// ended, stops carrying it in the same write; Views whose filters name it match nothing for
+// that value. Records `label.deleted`. Errors: `forbidden`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/labels/{label} (the `DeleteLabel` operationId).
+func (c *ClientWithResponses) DeleteLabelWithResponse(ctx context.Context, label LabelID, params *DeleteLabelParams, reqEditors ...RequestEditorFn) (*DeleteLabelResponse, error) {
+	rsp, err := c.DeleteLabel(ctx, label, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteLabelResponse(rsp)
+}
+
+// UpdateLabelWithBodyWithResponse Rename or recolour a Label
+//
+// Changes the fields given and keeps the others. With the authority that defines it: an
+// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+func (c *ClientWithResponses) UpdateLabelWithBodyWithResponse(ctx context.Context, label LabelID, params *UpdateLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLabelResponse, error) {
+	rsp, err := c.UpdateLabelWithBody(ctx, label, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateLabelResponse(rsp)
+}
+
+// UpdateLabelWithResponse Rename or recolour a Label
+//
+// Changes the fields given and keeps the others. With the authority that defines it: an
+// Organisation Label by an admin, a Project's by a Member of the Project or an admin. The
+// Tasks carrying it keep it. Records `label.changed` with the fields that changed. Errors:
+// `forbidden`, `conflict` (name taken, as on creating), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/labels/{label} (the `UpdateLabel` operationId).
+func (c *ClientWithResponses) UpdateLabelWithResponse(ctx context.Context, label LabelID, params *UpdateLabelParams, body UpdateLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLabelResponse, error) {
+	rsp, err := c.UpdateLabel(ctx, label, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateLabelResponse(rsp)
 }
 
 // ShowLoginLinkWithResponse Show a login link's sign-in page
@@ -15616,7 +16695,7 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, params *Lo
 	return ParseLogoutResponse(rsp)
 }
 
-// GetMeWithResponse The calling Member, their Teams and Skills, and the Session making the request
+// GetMeWithResponse The calling Member, their Projects and Skills, and the Session making the request
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15672,7 +16751,7 @@ func (c *ClientWithResponses) CreateMemberWithResponse(ctx context.Context, para
 	return ParseCreateMemberResponse(rsp)
 }
 
-// GetMemberWithResponse Get a Member with their Teams, Skills and Reporting line
+// GetMemberWithResponse Get a Member with their Projects, Skills and Reporting line
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15961,6 +17040,296 @@ func (c *ClientWithResponses) IssueTokenWithResponse(ctx context.Context, member
 	return ParseIssueTokenResponse(rsp)
 }
 
+// ListProjectsWithResponse List the Organisation's Projects
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/projects (the `ListProjects` operationId).
+func (c *ClientWithResponses) ListProjectsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListProjectsResponse, error) {
+	rsp, err := c.ListProjects(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListProjectsResponse(rsp)
+}
+
+// CreateProjectWithBodyWithResponse Create a Project with its first Workflow (admin)
+//
+// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+// when its filer does not say; both default to false. Records `project.created`. Errors:
+// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+// `copy_from` with another `workflow`).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+func (c *ClientWithResponses) CreateProjectWithBodyWithResponse(ctx context.Context, params *CreateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProjectResponse, error) {
+	rsp, err := c.CreateProjectWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProjectResponse(rsp)
+}
+
+// CreateProjectWithResponse Create a Project with its first Workflow (admin)
+//
+// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
+// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
+// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
+// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
+// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
+// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
+// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
+// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
+// when its filer does not say; both default to false. Records `project.created`. Errors:
+// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
+// such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
+// `copy_from` with another `workflow`).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/projects (the `CreateProject` operationId).
+func (c *ClientWithResponses) CreateProjectWithResponse(ctx context.Context, params *CreateProjectParams, body CreateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProjectResponse, error) {
+	rsp, err := c.CreateProject(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProjectResponse(rsp)
+}
+
+// GetProjectWithResponse Get a Project and its Members
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/projects/{project} (the `GetProject` operationId).
+func (c *ClientWithResponses) GetProjectWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectResponse, error) {
+	rsp, err := c.GetProject(ctx, project, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProjectResponse(rsp)
+}
+
+// UpdateProjectWithBodyWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+// already filed keep theirs. Records `project.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+func (c *ClientWithResponses) UpdateProjectWithBodyWithResponse(ctx context.Context, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateProjectResponse, error) {
+	rsp, err := c.UpdateProjectWithBody(ctx, project, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateProjectResponse(rsp)
+}
+
+// UpdateProjectWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+//
+// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
+// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
+// default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
+// already filed keep theirs. Records `project.changed` with the fields that changed.
+// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
+// Workspace).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
+func (c *ClientWithResponses) UpdateProjectWithResponse(ctx context.Context, project ProjectRef, params *UpdateProjectParams, body UpdateProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateProjectResponse, error) {
+	rsp, err := c.UpdateProject(ctx, project, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateProjectResponse(rsp)
+}
+
+// ListProjectLabelsWithResponse List a Project's own Labels
+//
+// The Labels the Project defined for itself. A Task of the Project may also carry the
+// Organisation's (`listLabels`).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/projects/{project}/labels (the `ListProjectLabels` operationId).
+func (c *ClientWithResponses) ListProjectLabelsWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*ListProjectLabelsResponse, error) {
+	rsp, err := c.ListProjectLabels(ctx, project, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListProjectLabelsResponse(rsp)
+}
+
+// CreateProjectLabelWithBodyWithResponse Define a Label for a Project
+//
+// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+// Project or the Organisation has a Label of that name), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+func (c *ClientWithResponses) CreateProjectLabelWithBodyWithResponse(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateProjectLabelResponse, error) {
+	rsp, err := c.CreateProjectLabelWithBody(ctx, project, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProjectLabelResponse(rsp)
+}
+
+// CreateProjectLabelWithResponse Define a Label for a Project
+//
+// By a Member of the Project or an admin. A name is unique among the Labels a Task of the
+// Project can carry, ignoring case: the Project's own and the Organisation's. Records
+// `label.created`. Errors: `forbidden` (not in the Project, not an admin), `conflict` (the
+// Project or the Organisation has a Label of that name), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/projects/{project}/labels (the `CreateProjectLabel` operationId).
+func (c *ClientWithResponses) CreateProjectLabelWithResponse(ctx context.Context, project ProjectRef, params *CreateProjectLabelParams, body CreateProjectLabelJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateProjectLabelResponse, error) {
+	rsp, err := c.CreateProjectLabel(ctx, project, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateProjectLabelResponse(rsp)
+}
+
+// RemoveProjectMemberWithResponse Remove a Member from a Project (admin)
+//
+// Claims the Member holds on the Project's Tasks are not ended. Records
+// `project.member_removed`. Errors: `forbidden` (not an admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/projects/{project}/members/{member} (the `RemoveProjectMember` operationId).
+func (c *ClientWithResponses) RemoveProjectMemberWithResponse(ctx context.Context, project ProjectRef, member MemberRef, params *RemoveProjectMemberParams, reqEditors ...RequestEditorFn) (*RemoveProjectMemberResponse, error) {
+	rsp, err := c.RemoveProjectMember(ctx, project, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveProjectMemberResponse(rsp)
+}
+
+// AddProjectMemberWithResponse Add a Member to a Project (admin)
+//
+// The Member can then take the Project's Tasks at the Steps whose Skills they have. Adding a
+// Member already in the Project changes nothing. Records `project.member_added`. Errors:
+// `forbidden` (not an admin).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
+func (c *ClientWithResponses) AddProjectMemberWithResponse(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*AddProjectMemberResponse, error) {
+	rsp, err := c.AddProjectMember(ctx, project, member, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAddProjectMemberResponse(rsp)
+}
+
+// GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
+//
+// The Steps in their order and the Connectors out of each, with each Step's live facts: the
+// open Tasks at it, how many of them are being worked, the Members who could take them by
+// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
+// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+// no Step and counted at none.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
+func (c *ClientWithResponses) GetWorkflowWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetWorkflowResponse, error) {
+	rsp, err := c.GetWorkflow(ctx, project, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetWorkflowResponse(rsp)
+}
+
+// SetWorkflowWithBodyWithResponse Replace a Project's Workflow (admin)
+//
+// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+// unless a Connector out of the same Step with the same name exists, which it then keeps.
+// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+// none of them: its Project then offers no Break down, files no Acceptance and no
+// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// names a Step that is not in the body; two Connectors out of one Step share a name,
+// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+// `step_in_use`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+func (c *ClientWithResponses) SetWorkflowWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetWorkflowResponse, error) {
+	rsp, err := c.SetWorkflowWithBody(ctx, project, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetWorkflowResponse(rsp)
+}
+
+// SetWorkflowWithResponse Replace a Project's Workflow (admin)
+//
+// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
+// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
+// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
+// unless a Connector out of the same Step with the same name exists, which it then keeps.
+// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
+// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
+// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
+// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
+// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
+// none of them: its Project then offers no Break down, files no Acceptance and no
+// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// names a Step that is not in the body; two Connectors out of one Step share a name,
+// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
+// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
+// `step_in_use`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
+func (c *ClientWithResponses) SetWorkflowWithResponse(ctx context.Context, project ProjectRef, params *SetWorkflowParams, body SetWorkflowJSONRequestBody, reqEditors ...RequestEditorFn) (*SetWorkflowResponse, error) {
+	rsp, err := c.SetWorkflow(ctx, project, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetWorkflowResponse(rsp)
+}
+
 // ListRunnerSessionsWithResponse List the agent sessions the Runner is running now
 //
 // A read model of the Runner beside this server, not part of the record: what it runs now,
@@ -15981,7 +17350,7 @@ func (c *ClientWithResponses) ListRunnerSessionsWithResponse(ctx context.Context
 
 // NudgeRunnerSessionWithResponse Nudge the agent in a Task's session to end the Task (admin)
 //
-// Types the Runner's nudge into the session: complete the Task, hand it over, or file a
+// Types the Runner's nudge into the session: advance the Task, complete it, or file a
 // question. Errors: `forbidden` (not an admin), `no_runner`, `not_found` (no session on the
 // Task).
 //
@@ -16169,69 +17538,11 @@ func (c *ClientWithResponses) ListSkillVersionsWithResponse(ctx context.Context,
 	return ParseListSkillVersionsResponse(rsp)
 }
 
-// ListStatusesWithResponse List the Organisation's Statuses, in their order
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/statuses (the `ListStatuses` operationId).
-func (c *ClientWithResponses) ListStatusesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListStatusesResponse, error) {
-	rsp, err := c.ListStatuses(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListStatusesResponse(rsp)
-}
-
-// SetStatusesWithBodyWithResponse Replace the Organisation's list of Statuses (admin)
-//
-// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-// Names are unique, ignoring case. The list must keep at least one Status of each kind
-// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-// admin), `invalid`, `status_in_use`.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-func (c *ClientWithResponses) SetStatusesWithBodyWithResponse(ctx context.Context, params *SetStatusesParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error) {
-	rsp, err := c.SetStatusesWithBody(ctx, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSetStatusesResponse(rsp)
-}
-
-// SetStatusesWithResponse Replace the Organisation's list of Statuses (admin)
-//
-// Takes the whole list in its new order: a Status already in it carries its `id` and may be
-// renamed, moved or given another kind; a new one has no `id`; one left out is deleted.
-// Names are unique, ignoring case. The list must keep at least one Status of each kind
-// `todo`, `in_progress`, `done` and `dropped`, or it is refused with `invalid`. A deleted
-// Status that Tasks are in needs `moves` to say where they go, or it is refused with
-// `status_in_use`; so is a Status that Tasks are in changing between an open kind
-// (`backlog`, `todo`, `in_progress`), `done` and `dropped`, since a Task in a `done` or
-// `dropped` Status has ended. Records `statuses.changed`. Errors: `forbidden` (not an
-// admin), `invalid`, `status_in_use`.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /v1/statuses (the `SetStatuses` operationId).
-func (c *ClientWithResponses) SetStatusesWithResponse(ctx context.Context, params *SetStatusesParams, body SetStatusesJSONRequestBody, reqEditors ...RequestEditorFn) (*SetStatusesResponse, error) {
-	rsp, err := c.SetStatuses(ctx, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseSetStatusesResponse(rsp)
-}
-
 // ListTasksWithResponse List Tasks
 //
-// Ordered by Feature Rank, then by how long each Task has waited. Every parameter given
-// narrows the list, `filter` together with the others.
+// Ordered by Project, then Rank: a Task with no Parent by its own, each Subtask after its
+// Parent, by how long it has waited. Every parameter given narrows the list, `filter`
+// together with the others.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16244,19 +17555,57 @@ func (c *ClientWithResponses) ListTasksWithResponse(ctx context.Context, params 
 	return ParseListTasksResponse(rsp)
 }
 
-// FileTaskWithBodyWithResponse File a Task
+// FileTaskWithBodyWithResponse File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 //
-// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-// `not_found` (no such Workspace), `ended` (the Feature has
-// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
+// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+// question or Escalation; `project` may be given with the other two, and must then be theirs.
+//
+// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+// default Workspace, or none when the Project has no default.
+//
+// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+// blocked: remove the Blocking first.
+//
+// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+// while it is held, else its ownership or membership of its Project.
+//
+// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+// when they apply, in the same write.
+//
+// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+// Task; the blocked Task is a Parent), `cycle`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16269,19 +17618,57 @@ func (c *ClientWithResponses) FileTaskWithBodyWithResponse(ctx context.Context, 
 	return ParseFileTaskResponse(rsp)
 }
 
-// FileTaskWithResponse File a Task
+// FileTaskWithResponse File a Task, a Subtask under a Parent, or a question beside the Task it blocks
 //
-// A Task needs a Skill or is aimed at a Member by name, not both. Naming `blocks` files a
-// question or Escalation: the new Task joins the Feature of the Task it blocks (which must
-// then be the `feature` given, or `feature` may be left out) and blocks it in the same write,
-// even when that Feature has ended; the asker keeps their Claim. Blocking a Task needs its
-// Claim when it is held, else its Feature's ownership or membership of its Team. The Task
-// starts in `status`, or else the first `todo` Status. It names `workspaces`, or else its
-// Feature's Team's default Workspace, or none when the Team has no default. Errors:
-// `not_found` (no such Workspace), `ended` (the Feature has
-// ended and the Task blocks nothing, or the blocked Task has ended), `not_holder`,
-// `forbidden`, `cycle`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
+// Name `project` for a Task with no Parent, `parent` for a Subtask, or `blocks` for a
+// question or Escalation; `project` may be given with the other two, and must then be theirs.
+//
+// A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
+// the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
+// at the Workflow's first work Step: the first carrying a Skill other than those Darkory
+// files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
+// Build in the default Workflow; failing that, the first Step carrying any Skill; failing
+// that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
+// default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
+// Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
+// is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
+// <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
+// carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
+// `acceptance` default to the Project's. It names `workspaces`, or else the Project's
+// default Workspace, or none when the Project has no default.
+//
+// A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
+// and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
+// starts from its Parent's and merges into it. Its Parent must be open and have no Parent
+// of its own. Under a Task nobody holds, any Member of the Project or the Task's Owner may
+// file one; under a held Task only its holder, and the write ends their Claim (`split`) and
+// adds `note` to the Parent's Notes. The first Subtask makes the Task a Parent: it leaves its
+// Step, is aimed at no one, and is never claimed or takeable again. A Task that blocks or is
+// blocked by an open Task cannot become a Parent, since a Parent neither blocks nor is
+// blocked: remove the Blocking first.
+//
+// Naming `blocks` files a question or Escalation: the new Task joins the blocked Task's
+// Parent, even an ended one, or stands alone in its Project beside a Task with none, and
+// blocks it in the same write; the asker keeps their Claim. Blocking a Task needs its Claim
+// while it is held, else its ownership or membership of its Project.
+//
+// A Task filed by a Retrospective names it in `from_retrospective` and has no Parent: an
+// ended Parent takes no new Subtasks but questions, so a Retrospective files new work as
+// Tasks of the Project. Records `task.filed`, and `task.split` and `task.became_parent`
+// when they apply, in the same write.
+//
+// Errors: `forbidden` (not in the Project or the Owner; no authority over the blocked Task),
+// `not_found` (no such Project, Task, Step, Member, Label or Workspace), `invalid` (none of
+// `project`, `parent` and `blocks`; a `project` or `parent` other than the blocked Task's;
+// `step` with `aim`; `breakdown` with `step`, `aim`, `parent` or `blocks`; `auto_complete`,
+// `acceptance` or `from_retrospective` on a Subtask; `note` where no Claim ends; a Label of
+// another Project; `from_retrospective` naming a Task that is not a Retrospective),
+// `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
+// (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
+// nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
+// blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
+// a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
+// Task; the blocked Task is a Parent), `cycle`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16296,13 +17683,15 @@ func (c *ClientWithResponses) FileTaskWithResponse(ctx context.Context, params *
 
 // NextTaskWithBodyWithResponse Wait for a takeable Task and claim it
 //
-// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-// another come first). When none is takeable, holds the request open for up to
-// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default. A Member may have a limited number of `next` calls waiting at once
-// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+// has waited longest since it was filed or last reached its Step; among one Parent's
+// Subtasks, those that block another come first. When none is takeable, holds the request
+// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+// by default); one more is refused with `too_many_requests`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16317,13 +17706,15 @@ func (c *ClientWithResponses) NextTaskWithBodyWithResponse(ctx context.Context, 
 
 // NextTaskWithResponse Wait for a takeable Task and claim it
 //
-// Claims the first Task takeable by the caller, in Rank order across the caller's Teams
-// (a tie goes to the Task that has waited longest; within a Feature, Tasks that block
-// another come first). When none is takeable, holds the request open for up to
-// `wait_seconds` and claims one as soon as it becomes takeable; replies 204 when the wait
-// ends with nothing claimed. The Claim takes `heartbeat_timeout_seconds`, or else the
-// token's default. A Member may have a limited number of `next` calls waiting at once
-// (an Install setting, 16 by default); one more is refused with `too_many_requests`.
+// Claims the first Task takeable by the caller, in Rank order across the caller's Projects:
+// a Task with no Parent by its own Rank and a Subtask by its Parent's, so a Task ranked first
+// in any Project comes before one ranked second in any Project. A tie goes to the Task that
+// has waited longest since it was filed or last reached its Step; among one Parent's
+// Subtasks, those that block another come first. When none is takeable, holds the request
+// open for up to `wait_seconds` and claims one as soon as it becomes takeable; replies 204
+// when the wait ends with nothing claimed. The Claim is made as `claimTask` makes it. A
+// Member may have a limited number of `next` calls waiting at once (an Install setting, 16
+// by default); one more is refused with `too_many_requests`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16349,7 +17740,7 @@ func (c *ClientWithResponses) ListTakeableTasksWithResponse(ctx context.Context,
 	return ParseListTakeableTasksResponse(rsp)
 }
 
-// GetTaskWithResponse Get a Task with its Claims, Notes, Evidence, blockers and Observations
+// GetTaskWithResponse Get a Task with its Parent, Subtasks, Step and outcomes, Labels, Claims, Notes, Evidence, Blocking and Observations
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16362,9 +17753,70 @@ func (c *ClientWithResponses) GetTaskWithResponse(ctx context.Context, task Task
 	return ParseGetTaskResponse(rsp)
 }
 
+// AdvanceTaskWithBodyWithResponse End the caller's work on a Task along a Connector out of its Step
+//
+// By the Member holding the Task. The Connector is the one out of the Task's Step named
+// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+// Claim, so its context goes with it to the next Step.
+//
+// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+//
+// Along a Connector into Done, the Task completes, with everything `completeTask` says
+// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+// and `forbidden` and `proposal_stale` as on `completeTask`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+func (c *ClientWithResponses) AdvanceTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *AdvanceTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdvanceTaskResponse, error) {
+	rsp, err := c.AdvanceTaskWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdvanceTaskResponse(rsp)
+}
+
+// AdvanceTaskWithResponse End the caller's work on a Task along a Connector out of its Step
+//
+// By the Member holding the Task. The Connector is the one out of the Task's Step named
+// `outcome`, ignoring case, or the only one when the Step has exactly one and `outcome` is
+// left out; otherwise the request is refused with `no_connector`, whose `details.outcomes`
+// lists the Step's outcomes. A Task aimed at a Member is at no Step and has no outcomes:
+// it is completed instead. `note` is added to the Task's Notes first, under the Skill of the
+// Claim, so its context goes with it to the next Step.
+//
+// Along a Connector to a Step, the Claim ends `advanced` and the Task waits at that Step,
+// from now, for whoever has its Skill; a Member who has held it under one Skill can take it
+// again only under that Skill. Records `task.advanced` with `from`, `to` and `outcome`.
+//
+// Along a Connector into Done, the Task completes, with everything `completeTask` says
+// follows: proposals published from a Step carrying `skill-review`, an Acceptance filed or
+// its Parent auto-completed, a Retrospective filed. Errors: `not_holder`, `no_connector`,
+// and `forbidden` and `proposal_stale` as on `completeTask`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/advance (the `AdvanceTask` operationId).
+func (c *ClientWithResponses) AdvanceTaskWithResponse(ctx context.Context, task TaskRef, params *AdvanceTaskParams, body AdvanceTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*AdvanceTaskResponse, error) {
+	rsp, err := c.AdvanceTask(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdvanceTaskResponse(rsp)
+}
+
 // RemoveBlockerWithResponse Stop one Task blocking another
 //
-// Needs the same authority as adding the blocker. An open question on an ended Feature must keep blocking an open Task, so removing its last such edge is refused with `ended`: complete or drop the question instead. Errors: `forbidden`, `not_holder`, `ended`.
+// Needs the same authority as adding the blocker. An open question under an ended Parent
+// must keep blocking an open Task, so removing its last such edge is refused with `ended`:
+// complete or drop the question instead. Records `task.blocker_removed`. Errors:
+// `forbidden`, `not_holder`, `ended`.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16380,9 +17832,11 @@ func (c *ClientWithResponses) RemoveBlockerWithResponse(ctx context.Context, tas
 // AddBlockerWithResponse Let one Task block another
 //
 // `{blocker}` blocks `{task}`: `{task}` is not takeable until `{blocker}` has ended. The two
-// may be in different Features. Needs `{task}`'s Claim when it is held, else its Feature's
-// ownership or membership of its Team. Errors: `forbidden`, `not_holder`, `ended`, `cycle`
-// (`{task}` already blocks `{blocker}`, directly or through other Tasks).
+// may be under different Parents. A Parent neither blocks nor is blocked. Needs `{task}`'s
+// Claim when it is held, else its ownership or membership of its Project. Records
+// `task.blocker_added`. Errors: `forbidden`, `not_holder`, `ended`, `conflict` (either is a
+// Parent), `cycle` (`{task}` already blocks `{blocker}`, directly or through other Tasks, or
+// they are the same Task).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16397,11 +17851,19 @@ func (c *ClientWithResponses) AddBlockerWithResponse(ctx context.Context, task T
 
 // ClaimTaskWithBodyWithResponse Claim a Task
 //
-// One conditional write: it succeeds only when the Task is takeable by the caller. The
-// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-// than retry), `not_takeable`.
+// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+// Member who has held the Task under one Skill can take it again only under that Skill. The
+// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+// a blocked or ended Task, or one the caller may not take).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16416,11 +17878,19 @@ func (c *ClientWithResponses) ClaimTaskWithBodyWithResponse(ctx context.Context,
 
 // ClaimTaskWithResponse Claim a Task
 //
-// One conditional write: it succeeds only when the Task is takeable by the caller. The
-// Claim takes `heartbeat_timeout_seconds`, or else the token's default; with a timeout it is
-// bound to the calling Session, without one to the Member. A Task in a `todo` Status moves
-// to the first `in_progress` one. Errors: `already_claimed` (someone holds it; stop rather
-// than retry), `not_takeable`.
+// One conditional write: it succeeds only when the Task is takeable by the caller. It is
+// takeable when it is open, has no Subtasks, is not blocked and nobody holds it, and one of
+// these holds: it is aimed at the caller; it is at a Step whose Skill the caller has, in one
+// of the caller's Projects; it is at a Step carrying `skill-review`, which the caller has,
+// in any Project; or the caller owns it and no Member could take it by its Step's Skill
+// (none in its Project has that Skill, or, for `skill-review`, none in the Organisation). A
+// Member who has held the Task under one Skill can take it again only under that Skill. The
+// Claim records the Step's Skill and that Skill's current version (none for a Task aimed at
+// the caller), and takes `heartbeat_timeout_seconds`, or else the token's default; with a
+// timeout it is bound to the calling Session, without one to the Member. Claiming moves
+// nothing: the Task stays at its Step. Records `task.claimed`. Errors: `already_claimed`
+// (someone holds it; stop rather than retry), `not_takeable` (a Parent, a Task at a hold,
+// a blocked or ended Task, or one the caller may not take).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16433,16 +17903,37 @@ func (c *ClientWithResponses) ClaimTaskWithResponse(ctx context.Context, task Ta
 	return ParseClaimTaskResponse(rsp)
 }
 
-// CompleteTaskWithBodyWithResponse Complete a Task the caller holds
+// CompleteTaskWithBodyWithResponse Complete a Task the caller holds, or a Parent the caller owns
 //
-// Ends the Task done, in the first `done` Status. Completing a Task that needs
-// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-// (the version the proposal was written against is no longer current; nothing changes, and
-// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+// completed by the Member holding it, along the one Connector out of its Step into Done;
+// when its Step has none or several, the request is refused with `use_advance`, whose
+// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+// Acceptance included). `note` is added to the Task's Notes first.
+//
+// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+// the Task as its Skill's next version. When the version one was written against is no
+// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+// nothing is published, and the Task is advanced back along the Connector named "needs
+// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+// write is made and the refusal is the reply. A proposal is never published by its author
+// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+// reviewed by it.
+//
+// A Subtask ending done may finish its Parent. When the Parent is open and every other
+// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+// in the same write. A Parent that ends, done or dropped, files its Retrospective
+// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+// `proposal_stale`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16455,16 +17946,37 @@ func (c *ClientWithResponses) CompleteTaskWithBodyWithResponse(ctx context.Conte
 	return ParseCompleteTaskResponse(rsp)
 }
 
-// CompleteTaskWithResponse Complete a Task the caller holds
+// CompleteTaskWithResponse Complete a Task the caller holds, or a Parent the caller owns
 //
-// Ends the Task done, in the first `done` Status. Completing a Task that needs
-// `skill-review` and carries a pending proposal publishes it as the Skill's next version;
-// completing a Retrospective marks its Feature's unreviewed Observations reviewed by it.
-// Completing the last open Task of an open Feature with `ship_when_done` ships the Feature
-// in the same write (`feature.shipped` with `ship_when_done: true` in its payload), filing
-// its Retrospective unless it is quick. Errors: `not_holder`, `proposal_stale`
-// (the version the proposal was written against is no longer current; nothing changes, and
-// the Task is handed back to `retro`), `forbidden` (the caller wrote the proposal).
+// Ends the Task done: `done`, at no Step, with `ended_at`. A Task with no Subtasks is
+// completed by the Member holding it, along the one Connector out of its Step into Done;
+// when its Step has none or several, the request is refused with `use_advance`, whose
+// `details.outcomes` lists the Step's outcomes. A Task aimed at a Member, at no Step,
+// completes as it is. The Claim ends `completed`. A Parent is completed by its Owner, who
+// needs no Claim, once every Subtask has ended (`tasks_open` while one is open, an
+// Acceptance included). `note` is added to the Task's Notes first.
+//
+// Completing from a Step carrying `skill-review` publishes every pending Skill proposal on
+// the Task as its Skill's next version. When the version one was written against is no
+// longer current, the request is refused with `proposal_stale` naming the stale proposals,
+// nothing is published, and the Task is advanced back along the Connector named "needs
+// changes" (or else the first that leads to a Step) with the refusal as its Note; that
+// write is made and the refusal is the reply. A proposal is never published by its author
+// (`forbidden`). Completing a Retrospective marks its Parent's unreviewed Observations
+// reviewed by it.
+//
+// A Subtask ending done may finish its Parent. When the Parent is open and every other
+// Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+// `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
+// ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
+// Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
+// in the same write. A Parent that ends, done or dropped, files its Retrospective
+// ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
+// carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
+// neither rule. Records `task.completed`, and the Parent's entries in the same write.
+// Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
+// Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
+// `proposal_stale`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16477,9 +17989,13 @@ func (c *ClientWithResponses) CompleteTaskWithResponse(ctx context.Context, task
 	return ParseCompleteTaskResponse(rsp)
 }
 
-// DropTaskWithBodyWithResponse Drop a Task (Feature owner)
+// DropTaskWithBodyWithResponse Drop a Task (Owner)
 //
-// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16492,9 +18008,13 @@ func (c *ClientWithResponses) DropTaskWithBodyWithResponse(ctx context.Context, 
 	return ParseDropTaskResponse(rsp)
 }
 
-// DropTaskWithResponse Drop a Task (Feature owner)
+// DropTaskWithResponse Drop a Task (Owner)
 //
-// Ends the Task dropped, in the first `dropped` Status, and ends any Claim on it. Errors: `forbidden` (not the owner), `ended`.
+// Ends the Task dropped, at no Step, and ends any Claim on it, even one another Member
+// holds. Dropping a Parent drops its open Subtasks and ends their Claims, and files its
+// Retrospective as completing does. A Subtask that ends dropped files no Acceptance and
+// completes no Parent; an Acceptance that ends dropped files nothing more. Records
+// `task.dropped`. Errors: `forbidden` (not the Owner), `ended`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16511,7 +18031,8 @@ func (c *ClientWithResponses) DropTaskWithResponse(ctx context.Context, task Tas
 //
 // The request body is the file itself, sent with its own `Content-Type` and a
 // `Content-Length`; the Install's limit is 100 MiB unless set otherwise. Needs the Task's
-// Claim while it is held, else its Feature's ownership or membership of its Team. Errors:
+// Claim while it is held, else its ownership or membership of its Project. Evidence about a
+// Parent as a whole is attached to the Parent. Records `task.evidence_attached`. Errors:
 // `not_holder`, `forbidden`, `too_large`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -16523,44 +18044,6 @@ func (c *ClientWithResponses) AttachTaskEvidenceWithBodyWithResponse(ctx context
 		return nil, err
 	}
 	return ParseAttachTaskEvidenceResponse(rsp)
-}
-
-// HandoverTaskWithBodyWithResponse End the caller's Claim and set the Skill the Task needs next
-//
-// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. The Status stays as it is unless `status` names another.
-// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-func (c *ClientWithResponses) HandoverTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *HandoverTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*HandoverTaskResponse, error) {
-	rsp, err := c.HandoverTaskWithBody(ctx, task, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseHandoverTaskResponse(rsp)
-}
-
-// HandoverTaskWithResponse End the caller's Claim and set the Skill the Task needs next
-//
-// The Task then waits for a Member with that Skill, from the moment of the Handover; it is
-// no longer aimed at a Member. A Member who has held the Task under one Skill can take it
-// again only under that Skill. The Status stays as it is unless `status` names another.
-// Errors: `not_holder`, `use_complete` and `use_drop` (`status` is of kind `done` or
-// `dropped`).
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/tasks/{task}/handover (the `HandoverTask` operationId).
-func (c *ClientWithResponses) HandoverTaskWithResponse(ctx context.Context, task TaskRef, params *HandoverTaskParams, body HandoverTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*HandoverTaskResponse, error) {
-	rsp, err := c.HandoverTask(ctx, task, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseHandoverTaskResponse(rsp)
 }
 
 // HeartbeatWithResponse Tell Darkory the caller is still working a Task
@@ -16582,12 +18065,51 @@ func (c *ClientWithResponses) HeartbeatWithResponse(ctx context.Context, task Ta
 	return ParseHeartbeatResponse(rsp)
 }
 
+// SetTaskLabelsWithBodyWithResponse Set the Labels a Task carries
+//
+// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+// such Label), `invalid` (another Project's Label).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+func (c *ClientWithResponses) SetTaskLabelsWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskLabelsResponse, error) {
+	rsp, err := c.SetTaskLabelsWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTaskLabelsResponse(rsp)
+}
+
+// SetTaskLabelsWithResponse Set the Labels a Task carries
+//
+// Replaces the Labels the Task carries with `labels`; an empty list clears them. Each is the
+// Task's Project's own or the Organisation's. By a Member of the Project or the Task's
+// Owner, open or ended, whoever holds it: Darkory's rules never read a Label. Records
+// `task.labels_set` with the Labels added and removed. Errors: `forbidden`, `not_found` (no
+// such Label), `invalid` (another Project's Label).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/tasks/{task}/labels (the `SetTaskLabels` operationId).
+func (c *ClientWithResponses) SetTaskLabelsWithResponse(ctx context.Context, task TaskRef, params *SetTaskLabelsParams, body SetTaskLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskLabelsResponse, error) {
+	rsp, err := c.SetTaskLabels(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetTaskLabelsResponse(rsp)
+}
+
 // AddNoteWithBodyWithResponse Add a Note to a Task's running log
 //
 // On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+// Task), `forbidden`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16603,9 +18125,10 @@ func (c *ClientWithResponses) AddNoteWithBodyWithResponse(ctx context.Context, t
 // AddNoteWithResponse Add a Note to a Task's running log
 //
 // On a held Task, by the Member holding it, the Note recording the Skill of their Claim. On
-// a Task nobody holds, open or ended, by its Feature's owner or a Member of its Feature's
-// Team, the Note recording no Skill: such as the Runner noting a merge on a review it has
-// just seen completed. Errors: `not_holder` (another Member holds the Task), `forbidden`.
+// a Task nobody holds, open or ended, by its Owner or a Member of its Project, the Note
+// recording no Skill: such as the Runner noting a merge on a Task it has just seen
+// completed. Records `task.note_added`. Errors: `not_holder` (another Member holds the
+// Task), `forbidden`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16618,10 +18141,27 @@ func (c *ClientWithResponses) AddNoteWithResponse(ctx context.Context, task Task
 	return ParseAddNoteResponse(rsp)
 }
 
+// ListTaskObservationsWithResponse List the Observations recorded on a Task and, for a Parent, on its Subtasks
+//
+// What a Retrospective reads about its Parent: the Parent's Observations are those recorded
+// on its Subtasks.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/tasks/{task}/observations (the `ListTaskObservations` operationId).
+func (c *ClientWithResponses) ListTaskObservationsWithResponse(ctx context.Context, task TaskRef, params *ListTaskObservationsParams, reqEditors ...RequestEditorFn) (*ListTaskObservationsResponse, error) {
+	rsp, err := c.ListTaskObservations(ctx, task, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTaskObservationsResponse(rsp)
+}
+
 // ObserveWithBodyWithResponse Record an Observation on a Task
 //
-// By the Member holding the Task; the Observation records the Skill they hold it under.
-// Errors: `not_holder`.
+// By the Member holding the Task; the Observation records the Skill they hold it under. It
+// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+// `not_holder`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16636,8 +18176,9 @@ func (c *ClientWithResponses) ObserveWithBodyWithResponse(ctx context.Context, t
 
 // ObserveWithResponse Record an Observation on a Task
 //
-// By the Member holding the Task; the Observation records the Skill they hold it under.
-// Errors: `not_holder`.
+// By the Member holding the Task; the Observation records the Skill they hold it under. It
+// feeds the Retrospective of the Task's Parent. Records `task.observed`. Errors:
+// `not_holder`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16650,9 +18191,82 @@ func (c *ClientWithResponses) ObserveWithResponse(ctx context.Context, task Task
 	return ParseObserveResponse(rsp)
 }
 
-// ReleaseTaskWithBodyWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
+// PassOwnershipWithBodyWithResponse Pass a Task's ownership, with its Subtasks', to another Member
 //
-// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+func (c *ClientWithResponses) PassOwnershipWithBodyWithResponse(ctx context.Context, task TaskRef, params *PassOwnershipParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PassOwnershipResponse, error) {
+	rsp, err := c.PassOwnershipWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePassOwnershipResponse(rsp)
+}
+
+// PassOwnershipWithResponse Pass a Task's ownership, with its Subtasks', to another Member
+//
+// Makes the Member the Owner of a Task with no Parent and of every Subtask under it, in one
+// write. By the Owner, or by a Member on the Owner's Reporting line. Ownership is not a
+// Claim: Claims on the Tasks stay as they are. Records `task.owner_passed`. Errors:
+// `forbidden`, `use_parent` (a Subtask, whose Owner is its Parent's).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/owner (the `PassOwnership` operationId).
+func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, task TaskRef, params *PassOwnershipParams, body PassOwnershipJSONRequestBody, reqEditors ...RequestEditorFn) (*PassOwnershipResponse, error) {
+	rsp, err := c.PassOwnership(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePassOwnershipResponse(rsp)
+}
+
+// RankTaskWithBodyWithResponse Move a Task to a position in its Project's Rank
+//
+// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+// position past the end moves the Task last. Ended Tasks keep their places and count as
+// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+// Errors: `forbidden`, `use_parent` (a Subtask).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+func (c *ClientWithResponses) RankTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *RankTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RankTaskResponse, error) {
+	rsp, err := c.RankTaskWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRankTaskResponse(rsp)
+}
+
+// RankTaskWithResponse Move a Task to a position in its Project's Rank
+//
+// For a Task with no Parent; a Subtask sorts by its Parent's. Position 1 is first. A
+// position past the end moves the Task last. Ended Tasks keep their places and count as
+// positions. By a Member of the Project or the Task's Owner. Records `task.ranked`.
+// Errors: `forbidden`, `use_parent` (a Subtask).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/rank (the `RankTask` operationId).
+func (c *ClientWithResponses) RankTaskWithResponse(ctx context.Context, task TaskRef, params *RankTaskParams, body RankTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*RankTaskResponse, error) {
+	rsp, err := c.RankTask(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRankTaskResponse(rsp)
+}
+
+// ReleaseTaskWithBodyWithResponse Give up the caller's Claim, leaving the Task at its Step
+//
+// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16665,9 +18279,10 @@ func (c *ClientWithResponses) ReleaseTaskWithBodyWithResponse(ctx context.Contex
 	return ParseReleaseTaskResponse(rsp)
 }
 
-// ReleaseTaskWithResponse Give up the caller's Claim, leaving the Task needing the same Skill
+// ReleaseTaskWithResponse Give up the caller's Claim, leaving the Task at its Step
 //
-// A Task in an `in_progress` Status moves to the first `todo` one. Errors: `not_holder`.
+// The Task stays at its Step, takeable again by whoever has the Step's Skill; `note` is
+// added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16680,12 +18295,16 @@ func (c *ClientWithResponses) ReleaseTaskWithResponse(ctx context.Context, task 
 	return ParseReleaseTaskResponse(rsp)
 }
 
-// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Task the caller holds
+// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the current version, for a company
-// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// Written against `based_on_version`, which must be the Skill's current version, for a
+// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+// Member with `skill-review`, other than the author, publishes the proposals by advancing
+// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 // company Skill).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -16699,12 +18318,16 @@ func (c *ClientWithResponses) ProposeSkillVersionWithBodyWithResponse(ctx contex
 	return ParseProposeSkillVersionResponse(rsp)
 }
 
-// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Task the caller holds
+// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
 //
-// Written against `based_on_version`, which must be the current version, for a company
-// Skill, on a Retrospective the caller holds. The caller then hands the Task over to
-// `skill-review`. A Task carries one pending proposal; a new one supersedes it. Errors:
-// `not_holder`, `forbidden` (not a Retrospective), `proposal_stale`, `invalid` (not a
+// Written against `based_on_version`, which must be the Skill's current version, for a
+// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
+// Member with `skill-review`, other than the author, publishes the proposals by advancing
+// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
+// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
+// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
+// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
 // company Skill).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -16718,55 +18341,57 @@ func (c *ClientWithResponses) ProposeSkillVersionWithResponse(ctx context.Contex
 	return ParseProposeSkillVersionResponse(rsp)
 }
 
-// SetTaskStatusWithBodyWithResponse Move a Task to another Status
+// MoveTaskWithBodyWithResponse Move a Task to a Step of its Workflow by hand
 //
-// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-// `dropped` Status).
+// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+// a move rather than an advance; it is the only way out of a hold. By any Member of the
+// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-func (c *ClientWithResponses) SetTaskStatusWithBodyWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error) {
-	rsp, err := c.SetTaskStatusWithBody(ctx, task, params, contentType, body, reqEditors...)
+// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+func (c *ClientWithResponses) MoveTaskWithBodyWithResponse(ctx context.Context, task TaskRef, params *MoveTaskParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*MoveTaskResponse, error) {
+	rsp, err := c.MoveTaskWithBody(ctx, task, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSetTaskStatusResponse(rsp)
+	return ParseMoveTaskResponse(rsp)
 }
 
-// SetTaskStatusWithResponse Move a Task to another Status
+// MoveTaskWithResponse Move a Task to a Step of its Workflow by hand
 //
-// By any Member of the Feature's Team, the Feature's owner, or the Member holding the Task
-// (who may be from another Team, as a reviewer or the Member a question is aimed at is),
-// whether or not someone holds it: the Status is where the Task is in its workflow, and the
-// Claim stays as it is. Only an open kind (`backlog`, `todo`, `in_progress`) can be named; a
-// Task reaches `done` and `dropped` by being completed or dropped. Naming the Status the
-// Task is in changes nothing. Records `task.status_set`. Errors: `forbidden` (none of
-// those), `ended` (the Task has ended), `use_complete` (a `done` Status), `use_drop` (a
-// `dropped` Status).
+// Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
+// a move rather than an advance; it is the only way out of a hold. By any Member of the
+// Project or the Task's Owner. A held Task may be moved only by whoever may take it back
+// (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+// `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
+// waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
+// Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
+// and `to`. Errors: `forbidden` (not in the Project, not the Owner), `held`, `ended`,
+// `conflict` (a Parent, which is at no Step), `not_found` (no such Step).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /v1/tasks/{task}/status (the `SetTaskStatus` operationId).
-func (c *ClientWithResponses) SetTaskStatusWithResponse(ctx context.Context, task TaskRef, params *SetTaskStatusParams, body SetTaskStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*SetTaskStatusResponse, error) {
-	rsp, err := c.SetTaskStatus(ctx, task, params, body, reqEditors...)
+// Corresponds with POST /v1/tasks/{task}/step (the `MoveTask` operationId).
+func (c *ClientWithResponses) MoveTaskWithResponse(ctx context.Context, task TaskRef, params *MoveTaskParams, body MoveTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*MoveTaskResponse, error) {
+	rsp, err := c.MoveTask(ctx, task, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseSetTaskStatusResponse(rsp)
+	return ParseMoveTaskResponse(rsp)
 }
 
 // TakeBackTaskWithBodyWithResponse End another Member's Claim on a Task
 //
-// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-// `forbidden`, `not_holder` (nobody holds it).
+// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16781,9 +18406,9 @@ func (c *ClientWithResponses) TakeBackTaskWithBodyWithResponse(ctx context.Conte
 
 // TakeBackTaskWithResponse End another Member's Claim on a Task
 //
-// By a Member on the holder's Reporting line, or by the Feature owner. The Task becomes
-// takeable again; in an `in_progress` Status it moves to the first `todo` one. Errors:
-// `forbidden`, `not_holder` (nobody holds it).
+// By a Member on the holder's Reporting line, or by the Task's Owner. The Task stays at its
+// Step and is takeable again; the holder's next Heartbeat reports `taken_back`. Records
+// `task.taken_back`. Errors: `forbidden`, `not_holder` (nobody holds it).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16794,128 +18419,6 @@ func (c *ClientWithResponses) TakeBackTaskWithResponse(ctx context.Context, task
 		return nil, err
 	}
 	return ParseTakeBackTaskResponse(rsp)
-}
-
-// ListTeamsWithResponse List the Organisation's Teams
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/teams (the `ListTeams` operationId).
-func (c *ClientWithResponses) ListTeamsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListTeamsResponse, error) {
-	rsp, err := c.ListTeams(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListTeamsResponse(rsp)
-}
-
-// CreateTeamWithBodyWithResponse Create a Team (admin)
-//
-// Errors: `forbidden`, `conflict` (key or name taken).
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-func (c *ClientWithResponses) CreateTeamWithBodyWithResponse(ctx context.Context, params *CreateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateTeamResponse, error) {
-	rsp, err := c.CreateTeamWithBody(ctx, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateTeamResponse(rsp)
-}
-
-// CreateTeamWithResponse Create a Team (admin)
-//
-// Errors: `forbidden`, `conflict` (key or name taken).
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /v1/teams (the `CreateTeam` operationId).
-func (c *ClientWithResponses) CreateTeamWithResponse(ctx context.Context, params *CreateTeamParams, body CreateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateTeamResponse, error) {
-	rsp, err := c.CreateTeam(ctx, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateTeamResponse(rsp)
-}
-
-// GetTeamWithResponse Get a Team and its Members
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /v1/teams/{team} (the `GetTeam` operationId).
-func (c *ClientWithResponses) GetTeamWithResponse(ctx context.Context, team TeamRef, reqEditors ...RequestEditorFn) (*GetTeamResponse, error) {
-	rsp, err := c.GetTeam(ctx, team, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetTeamResponse(rsp)
-}
-
-// UpdateTeamWithBodyWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
-//
-// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-// Workspace).
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-func (c *ClientWithResponses) UpdateTeamWithBodyWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error) {
-	rsp, err := c.UpdateTeamWithBody(ctx, team, params, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateTeamResponse(rsp)
-}
-
-// UpdateTeamWithResponse Change a Team's name, default Workspace or Ship-when-done default (admin)
-//
-// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
-// A Task filed naming no Workspace takes the Team's default; a Feature filed without
-// `ship_when_done` takes the Team's. Records `team.changed` with the fields that changed.
-// Errors: `forbidden` (not an admin), `conflict` (name taken), `not_found` (no such
-// Workspace).
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PATCH /v1/teams/{team} (the `UpdateTeam` operationId).
-func (c *ClientWithResponses) UpdateTeamWithResponse(ctx context.Context, team TeamRef, params *UpdateTeamParams, body UpdateTeamJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateTeamResponse, error) {
-	rsp, err := c.UpdateTeam(ctx, team, params, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateTeamResponse(rsp)
-}
-
-// RemoveTeamMemberWithResponse Remove a Member from a Team (admin)
-//
-// Claims the Member holds on the Team's Tasks are not ended.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with DELETE /v1/teams/{team}/members/{member} (the `RemoveTeamMember` operationId).
-func (c *ClientWithResponses) RemoveTeamMemberWithResponse(ctx context.Context, team TeamRef, member MemberRef, params *RemoveTeamMemberParams, reqEditors ...RequestEditorFn) (*RemoveTeamMemberResponse, error) {
-	rsp, err := c.RemoveTeamMember(ctx, team, member, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseRemoveTeamMemberResponse(rsp)
-}
-
-// AddTeamMemberWithResponse Add a Member to a Team (admin)
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with PUT /v1/teams/{team}/members/{member} (the `AddTeamMember` operationId).
-func (c *ClientWithResponses) AddTeamMemberWithResponse(ctx context.Context, team TeamRef, member MemberRef, params *AddTeamMemberParams, reqEditors ...RequestEditorFn) (*AddTeamMemberResponse, error) {
-	rsp, err := c.AddTeamMember(ctx, team, member, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseAddTeamMemberResponse(rsp)
 }
 
 // RevokeTokenWithResponse Revoke a token
@@ -16952,10 +18455,10 @@ func (c *ClientWithResponses) ListViewsWithResponse(ctx context.Context, params 
 
 // CreateViewWithBodyWithResponse Save a View
 //
-// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-// as the list checks them. A View is a Member's preference, not the record: saving,
-// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+// checks them. A View is a Member's preference, not the record: saving, changing or
+// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16970,10 +18473,10 @@ func (c *ClientWithResponses) CreateViewWithBodyWithResponse(ctx context.Context
 
 // CreateViewWithResponse Save a View
 //
-// `filters` are `filter` tokens of the entity's list (`listTasks`, `listFeatures`), checked
-// as the list checks them. A View is a Member's preference, not the record: saving,
-// changing or deleting one records no Activity. Errors: `conflict` (the caller has a View
-// of that name for the same list, ignoring case), `not_found` (no such Team), `invalid`.
+// `filters` are `filter` tokens of the entity's list (`listTasks`), checked as the list
+// checks them. A View is a Member's preference, not the record: saving, changing or
+// deleting one records no Activity. Errors: `conflict` (the caller has a View of that name
+// for the same list, ignoring case), `not_found` (no such Project), `invalid`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17004,7 +18507,7 @@ func (c *ClientWithResponses) DeleteViewWithResponse(ctx context.Context, view V
 // UpdateViewWithBodyWithResponse Change one of the caller's Views
 //
 // Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 // caller's with that id), `conflict` (name taken), `invalid`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -17021,7 +18524,7 @@ func (c *ClientWithResponses) UpdateViewWithBodyWithResponse(ctx context.Context
 // UpdateViewWithResponse Change one of the caller's Views
 //
 // Replaces the fields given and keeps the others; `sort: ""` clears the sort. The list a
-// View is of (entity and Team) never changes. Errors: `not_found` (no View of the
+// View is of (entity and Project) never changes. Errors: `not_found` (no View of the
 // caller's with that id), `conflict` (name taken), `invalid`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -17085,7 +18588,7 @@ func (c *ClientWithResponses) CreateWorkspaceWithResponse(ctx context.Context, p
 // RemoveWorkspaceWithResponse Remove a Workspace (admin)
 //
 // Refused with `conflict` while any Task, open or ended, names it: the record keeps where
-// its work was done. A Team whose default it was has no default afterwards. Records
+// its work was done. A Project whose default it was has no default afterwards. Records
 // `workspace.removed`. Errors: `forbidden` (not an admin), `conflict`.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17271,303 +18774,6 @@ func ParseDownloadEvidenceResponse(rsp *http.Response) (*DownloadEvidenceRespons
 	return response, nil
 }
 
-// ParseListFeaturesResponse parses an HTTP response from a ListFeaturesWithResponse call
-func ParseListFeaturesResponse(rsp *http.Response) (*ListFeaturesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListFeaturesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest FeatureList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseFileFeatureResponse parses an HTTP response from a FileFeatureWithResponse call
-func ParseFileFeatureResponse(rsp *http.Response) (*FileFeatureResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &FileFeatureResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest FeatureDetail
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetFeatureResponse parses an HTTP response from a GetFeatureWithResponse call
-func ParseGetFeatureResponse(rsp *http.Response) (*GetFeatureResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetFeatureResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest FeatureDetail
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDropFeatureResponse parses an HTTP response from a DropFeatureWithResponse call
-func ParseDropFeatureResponse(rsp *http.Response) (*DropFeatureResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DropFeatureResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest FeatureDetail
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseAttachFeatureEvidenceResponse parses an HTTP response from a AttachFeatureEvidenceWithResponse call
-func ParseAttachFeatureEvidenceResponse(rsp *http.Response) (*AttachFeatureEvidenceResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &AttachFeatureEvidenceResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest Evidence
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListFeatureObservationsResponse parses an HTTP response from a ListFeatureObservationsWithResponse call
-func ParseListFeatureObservationsResponse(rsp *http.Response) (*ListFeatureObservationsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListFeatureObservationsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ObservationList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePassFeatureOwnershipResponse parses an HTTP response from a PassFeatureOwnershipWithResponse call
-func ParsePassFeatureOwnershipResponse(rsp *http.Response) (*PassFeatureOwnershipResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PassFeatureOwnershipResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Feature
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseRankFeatureResponse parses an HTTP response from a RankFeatureWithResponse call
-func ParseRankFeatureResponse(rsp *http.Response) (*RankFeatureResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &RankFeatureResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Feature
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseShipFeatureResponse parses an HTTP response from a ShipFeatureWithResponse call
-func ParseShipFeatureResponse(rsp *http.Response) (*ShipFeatureResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ShipFeatureResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest FeatureDetail
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17584,6 +18790,134 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Health
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListLabelsResponse parses an HTTP response from a ListLabelsWithResponse call
+func ParseListLabelsResponse(rsp *http.Response) (*ListLabelsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLabelsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LabelList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateLabelResponse parses an HTTP response from a CreateLabelWithResponse call
+func ParseCreateLabelResponse(rsp *http.Response) (*CreateLabelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateLabelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Label
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteLabelResponse parses an HTTP response from a DeleteLabelWithResponse call
+func ParseDeleteLabelResponse(rsp *http.Response) (*DeleteLabelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteLabelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateLabelResponse parses an HTTP response from a UpdateLabelWithResponse call
+func ParseUpdateLabelResponse(rsp *http.Response) (*UpdateLabelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateLabelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Label
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18263,6 +19597,328 @@ func ParseIssueTokenResponse(rsp *http.Response) (*IssueTokenResponse, error) {
 	return response, nil
 }
 
+// ParseListProjectsResponse parses an HTTP response from a ListProjectsWithResponse call
+func ParseListProjectsResponse(rsp *http.Response) (*ListProjectsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListProjectsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProjectList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateProjectResponse parses an HTTP response from a CreateProjectWithResponse call
+func ParseCreateProjectResponse(rsp *http.Response) (*CreateProjectResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateProjectResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest ProjectDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetProjectResponse parses an HTTP response from a GetProjectWithResponse call
+func ParseGetProjectResponse(rsp *http.Response) (*GetProjectResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProjectResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProjectDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateProjectResponse parses an HTTP response from a UpdateProjectWithResponse call
+func ParseUpdateProjectResponse(rsp *http.Response) (*UpdateProjectResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateProjectResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Project
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListProjectLabelsResponse parses an HTTP response from a ListProjectLabelsWithResponse call
+func ParseListProjectLabelsResponse(rsp *http.Response) (*ListProjectLabelsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListProjectLabelsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LabelList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateProjectLabelResponse parses an HTTP response from a CreateProjectLabelWithResponse call
+func ParseCreateProjectLabelResponse(rsp *http.Response) (*CreateProjectLabelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateProjectLabelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Label
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRemoveProjectMemberResponse parses an HTTP response from a RemoveProjectMemberWithResponse call
+func ParseRemoveProjectMemberResponse(rsp *http.Response) (*RemoveProjectMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveProjectMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAddProjectMemberResponse parses an HTTP response from a AddProjectMemberWithResponse call
+func ParseAddProjectMemberResponse(rsp *http.Response) (*AddProjectMemberResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AddProjectMemberResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetWorkflowResponse parses an HTTP response from a GetWorkflowWithResponse call
+func ParseGetWorkflowResponse(rsp *http.Response) (*GetWorkflowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetWorkflowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Workflow
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetWorkflowResponse parses an HTTP response from a SetWorkflowWithResponse call
+func ParseSetWorkflowResponse(rsp *http.Response) (*SetWorkflowResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetWorkflowResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Workflow
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListRunnerSessionsResponse parses an HTTP response from a ListRunnerSessionsWithResponse call
 func ParseListRunnerSessionsResponse(rsp *http.Response) (*ListRunnerSessionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18610,72 +20266,6 @@ func ParseListSkillVersionsResponse(rsp *http.Response) (*ListSkillVersionsRespo
 	return response, nil
 }
 
-// ParseListStatusesResponse parses an HTTP response from a ListStatusesWithResponse call
-func ParseListStatusesResponse(rsp *http.Response) (*ListStatusesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListStatusesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest StatusList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseSetStatusesResponse parses an HTTP response from a SetStatusesWithResponse call
-func ParseSetStatusesResponse(rsp *http.Response) (*SetStatusesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &SetStatusesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest StatusList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseListTasksResponse parses an HTTP response from a ListTasksWithResponse call
 func ParseListTasksResponse(rsp *http.Response) (*ListTasksResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18827,6 +20417,39 @@ func ParseGetTaskResponse(rsp *http.Response) (*GetTaskResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest TaskDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdvanceTaskResponse parses an HTTP response from a AdvanceTaskWithResponse call
+func ParseAdvanceTaskResponse(rsp *http.Response) (*AdvanceTaskResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdvanceTaskResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Task
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19034,22 +20657,22 @@ func ParseAttachTaskEvidenceResponse(rsp *http.Response) (*AttachTaskEvidenceRes
 	return response, nil
 }
 
-// ParseHandoverTaskResponse parses an HTTP response from a HandoverTaskWithResponse call
-func ParseHandoverTaskResponse(rsp *http.Response) (*HandoverTaskResponse, error) {
+// ParseHeartbeatResponse parses an HTTP response from a HeartbeatWithResponse call
+func ParseHeartbeatResponse(rsp *http.Response) (*HeartbeatResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &HandoverTaskResponse{
+	response := &HeartbeatResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Task
+		var dest HeartbeatReply
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19067,22 +20690,22 @@ func ParseHandoverTaskResponse(rsp *http.Response) (*HandoverTaskResponse, error
 	return response, nil
 }
 
-// ParseHeartbeatResponse parses an HTTP response from a HeartbeatWithResponse call
-func ParseHeartbeatResponse(rsp *http.Response) (*HeartbeatResponse, error) {
+// ParseSetTaskLabelsResponse parses an HTTP response from a SetTaskLabelsWithResponse call
+func ParseSetTaskLabelsResponse(rsp *http.Response) (*SetTaskLabelsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &HeartbeatResponse{
+	response := &SetTaskLabelsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest HeartbeatReply
+		var dest Task
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19133,6 +20756,39 @@ func ParseAddNoteResponse(rsp *http.Response) (*AddNoteResponse, error) {
 	return response, nil
 }
 
+// ParseListTaskObservationsResponse parses an HTTP response from a ListTaskObservationsWithResponse call
+func ParseListTaskObservationsResponse(rsp *http.Response) (*ListTaskObservationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTaskObservationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ObservationList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseObserveResponse parses an HTTP response from a ObserveWithResponse call
 func ParseObserveResponse(rsp *http.Response) (*ObserveResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -19153,6 +20809,72 @@ func ParseObserveResponse(rsp *http.Response) (*ObserveResponse, error) {
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePassOwnershipResponse parses an HTTP response from a PassOwnershipWithResponse call
+func ParsePassOwnershipResponse(rsp *http.Response) (*PassOwnershipResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PassOwnershipResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Task
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRankTaskResponse parses an HTTP response from a RankTaskWithResponse call
+func ParseRankTaskResponse(rsp *http.Response) (*RankTaskResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RankTaskResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Task
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error
@@ -19232,15 +20954,15 @@ func ParseProposeSkillVersionResponse(rsp *http.Response) (*ProposeSkillVersionR
 	return response, nil
 }
 
-// ParseSetTaskStatusResponse parses an HTTP response from a SetTaskStatusWithResponse call
-func ParseSetTaskStatusResponse(rsp *http.Response) (*SetTaskStatusResponse, error) {
+// ParseMoveTaskResponse parses an HTTP response from a MoveTaskWithResponse call
+func ParseMoveTaskResponse(rsp *http.Response) (*MoveTaskResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &SetTaskStatusResponse{
+	response := &MoveTaskResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -19285,196 +21007,6 @@ func ParseTakeBackTaskResponse(rsp *http.Response) (*TakeBackTaskResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListTeamsResponse parses an HTTP response from a ListTeamsWithResponse call
-func ParseListTeamsResponse(rsp *http.Response) (*ListTeamsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListTeamsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TeamList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateTeamResponse parses an HTTP response from a CreateTeamWithResponse call
-func ParseCreateTeamResponse(rsp *http.Response) (*CreateTeamResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateTeamResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest Team
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetTeamResponse parses an HTTP response from a GetTeamWithResponse call
-func ParseGetTeamResponse(rsp *http.Response) (*GetTeamResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetTeamResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest TeamDetail
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpdateTeamResponse parses an HTTP response from a UpdateTeamWithResponse call
-func ParseUpdateTeamResponse(rsp *http.Response) (*UpdateTeamResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpdateTeamResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Team
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseRemoveTeamMemberResponse parses an HTTP response from a RemoveTeamMemberWithResponse call
-func ParseRemoveTeamMemberResponse(rsp *http.Response) (*RemoveTeamMemberResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &RemoveTeamMemberResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseAddTeamMemberResponse parses an HTTP response from a AddTeamMemberWithResponse call
-func ParseAddTeamMemberResponse(rsp *http.Response) (*AddTeamMemberResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &AddTeamMemberResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

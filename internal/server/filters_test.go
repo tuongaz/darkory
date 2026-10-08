@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/server/gen"
 	"github.com/tuongaz/darkory/internal/store"
@@ -42,12 +41,12 @@ func TestFilterParameter(t *testing.T) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
 		got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "b"})).
 			want(t, http.StatusCreated)
 		bob, bobID := h.member("bob", client.Agent, "WEB", "engineer")
-		f := h.seed(h.secrets["bob"], core.NewTask{Project: ptrStr("WEB"), Title: "Checkout", Breakdown: true})
-		cart := h.seed(h.secrets["bob"], core.NewTask{Parent: &f.Task.Key, Title: "Cart page: totals, then tax: 10% + fees", Step: ptrStr("Build")})
+		f := h.file(bob, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout", Breakdown: ptrBool(true)})
+		cart := h.file(bob, client.FileTaskBody{Parent: &f.Task.Key, Title: "Cart page: totals, then tax: 10% + fees", Step: ptrStr("Build")})
 		got(bob.ClaimTaskWithResponse(ctx, cart.Task.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{ModelLabel: ptrStr("opus, fast: +1")})).
 			want(t, http.StatusOK)
 
@@ -89,7 +88,7 @@ func TestFilterParameter(t *testing.T) {
 
 		// By hand: two filter parameters, each token query-encoded once more.
 		res := h.getAs("/v1/tasks?filter=" + url.QueryEscape("q:contains:"+component("10%")) + "&filter=" +
-			url.QueryEscape("filed_at:lte:"+component(later)) + "&feature=WEB-1")
+			url.QueryEscape("filed_at:lte:"+component(later)) + "&parent=WEB-1")
 		var page gen.TaskList
 		decode(t, res, &page)
 		if res.StatusCode != http.StatusOK || len(page.Items) != 1 || page.Items[0].Key != "WEB-3" {

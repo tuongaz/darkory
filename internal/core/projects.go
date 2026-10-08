@@ -34,17 +34,17 @@ type NewProject struct {
 	Acceptance       *bool
 }
 
-// CreateProject creates a Project (admin) with its first Workflow, its settings and its Members.
-// Its key prefixes the display keys of its Tasks.
-func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProject, idem Idem) (Project, error) {
+// CreateProject creates a Project (admin) with its first Workflow, its settings and its Members,
+// and returns it with its Members. Its key prefixes the display keys of its Tasks.
+func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProject, idem Idem) (ProjectDetail, error) {
 	if err := mustAdmin(c); err != nil {
-		return Project{}, err
+		return ProjectDetail{}, err
 	}
 	if !projectKey.MatchString(np.Key) {
-		return Project{}, refuse(CodeInvalid, "a Project key is 2 to 10 capital letters or digits, starting with a letter, such as WEB")
+		return ProjectDetail{}, refuse(CodeInvalid, "a Project key is 2 to 10 capital letters or digits, starting with a letter, such as WEB")
 	}
 	if err := validName("name", np.Name); err != nil {
-		return Project{}, err
+		return ProjectDetail{}, err
 	}
 	switch np.Workflow {
 	case "":
@@ -52,13 +52,13 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 	case WorkflowDefault, WorkflowEmpty:
 	case WorkflowCopy:
 		if np.CopyFrom == nil {
-			return Project{}, refuse(CodeInvalid, "a Project whose Workflow is a copy names the Project to copy in copy_from")
+			return ProjectDetail{}, refuse(CodeInvalid, "a Project whose Workflow is a copy names the Project to copy in copy_from")
 		}
 	default:
-		return Project{}, refuse(CodeInvalid, "a new Project's Workflow is default, empty or copy, not %q", np.Workflow)
+		return ProjectDetail{}, refuse(CodeInvalid, "a new Project's Workflow is default, empty or copy, not %q", np.Workflow)
 	}
 	if np.Workflow != WorkflowCopy && np.CopyFrom != nil {
-		return Project{}, refuse(CodeInvalid, "copy_from names the Project whose Workflow is copied; this Workflow is %s", np.Workflow)
+		return ProjectDetail{}, refuse(CodeInvalid, "copy_from names the Project whose Workflow is copied; this Workflow is %s", np.Workflow)
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		row := projectRow{key: np.Key, name: np.Name, workflow: np.Workflow}
@@ -95,12 +95,12 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 				return nil, err
 			}
 		}
-		return getProject(ctx, t, c.OrgID, id)
+		return getProjectDetail(ctx, t, c.OrgID, id)
 	})
 	if err != nil {
-		return Project{}, err
+		return ProjectDetail{}, err
 	}
-	return res.(Project), nil
+	return res.(ProjectDetail), nil
 }
 
 // projectRow is a Project to insert: from is the Project whose Workflow a copy copies.
@@ -113,13 +113,8 @@ type projectRow struct {
 // createProject creates a Project and its first Workflow inside a write, recording
 // project.created and workflow.changed.
 func createProject(t *tx, r projectRow) (string, error) {
-	var n int
-	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND (key_prefix = $2 OR name = $3)`,
-		t.caller.OrgID, r.key, r.name).Scan(&n); err != nil {
+	if err := projectNameFree(t, "", r.key, r.name); err != nil {
 		return "", err
-	}
-	if n > 0 {
-		return "", refuse(CodeConflict, "a Project already has the key %s or the name %q", r.key, r.name)
 	}
 	id := newID()
 	if _, err := t.Exec(t.ctx, `INSERT INTO projects (id, org_id, key_prefix, name, last_number, default_workspace_id, auto_complete, acceptance, created_at)
@@ -137,6 +132,25 @@ VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8)`, id, t.caller.OrgID, r.key, r.name, 
 		return "", err
 	}
 	return id, seedWorkflow(t, id, r.workflow, r.from)
+}
+
+// projectNameFree refuses a key or a name another Project (not except) has, ignoring case; key ""
+// checks the name alone. It compares in Go, since lower() differs between the engines.
+func projectNameFree(t *tx, except, key, name string) error {
+	taken, err := collect(t.ctx, t, scanProject, `SELECT `+projectCols+` FROM projects pr WHERE pr.org_id = $1`, t.caller.OrgID)
+	if err != nil {
+		return err
+	}
+	for _, p := range taken {
+		switch {
+		case p.ID == except:
+		case key != "" && strings.EqualFold(p.Key, key):
+			return refuse(CodeConflict, "a Project already has the key %s", p.Key)
+		case strings.EqualFold(p.Name, name):
+			return refuse(CodeConflict, "a Project is already named %q", p.Name)
+		}
+	}
+	return nil
 }
 
 // ProjectChange is what UpdateProject changes; nil fields stay as they are. DefaultWorkspace
@@ -170,12 +184,8 @@ func (s *Service) UpdateProject(ctx context.Context, c *auth.Caller, ref string,
 		}
 		payload := map[string]any{}
 		if ch.Name != nil && *ch.Name != p.Name {
-			var n int
-			if err := t.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND name = $2 AND id <> $3`, c.OrgID, *ch.Name, id).Scan(&n); err != nil {
+			if err := projectNameFree(t, id, "", *ch.Name); err != nil {
 				return nil, err
-			}
-			if n > 0 {
-				return nil, refuse(CodeConflict, "a Project is already named %q", *ch.Name)
 			}
 			p.Name, payload["name"] = *ch.Name, *ch.Name
 		}

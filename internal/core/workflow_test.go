@@ -110,13 +110,17 @@ func TestNewProjectsWorkflow(t *testing.T) {
 		bea := f.member("bea", nil, nil)
 		ops, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "OPS", Name: "Ops", Members: []string{"bea", bea.MemberID},
 			DefaultWorkspace: ptrStr("tax"), AutoComplete: ptrBool(true), Acceptance: ptrBool(true)}, core.Idem{})
-		if err != nil || ops.DefaultWorkspaceID == nil || *ops.DefaultWorkspaceID != ws.ID || !ops.AutoComplete || !ops.Acceptance {
+		if err != nil || ops.Project.DefaultWorkspaceID == nil || *ops.Project.DefaultWorkspaceID != ws.ID || !ops.Project.AutoComplete || !ops.Project.Acceptance {
 			t.Fatalf("created %+v, %v", ops, err)
+		}
+		// The reply carries the Members it was created with, as the spec's ProjectDetail does.
+		if len(ops.Members) != 1 || ops.Members[0].ID != bea.MemberID {
+			t.Fatalf("created with Members %+v", ops.Members)
 		}
 		if d, err := f.svc.GetProject(ctx, f.admin, "OPS"); err != nil || len(d.Members) != 1 || d.Members[0].ID != bea.MemberID {
 			t.Fatalf("its Members: %+v, %v", d.Members, err)
 		}
-		if got := f.kinds(ops.ID); got != "project.created workflow.changed project.member_added" {
+		if got := f.kinds(ops.Project.ID); got != "project.created workflow.changed project.member_added" {
 			t.Fatalf("Activity: %s", got)
 		}
 		if d, _ := f.svc.GetProject(ctx, f.admin, "TAX"); len(d.Members) != 0 {

@@ -69,7 +69,7 @@ func (f *fixture) project(key string) string {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return p.ID
+	return p.Project.ID
 }
 
 // chain replaces the Project's Workflow with steps, each a name and a Skill ("" for a hold), in

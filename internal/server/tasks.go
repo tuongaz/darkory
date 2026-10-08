@@ -4,24 +4,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
-
-// Features are Tasks now (ADR 0015). model v2: replaced by /v1/tasks with parent and breakdown
-// (M1b).
-
-func (s *Server) FileFeature(w http.ResponseWriter, r *http.Request, params gen.FileFeatureParams) {
-	replaced(w, "a Feature is a Task filed with Break down, its Tasks its Subtasks")
-}
-
-func (s *Server) ListFeatures(w http.ResponseWriter, r *http.Request, params gen.ListFeaturesParams) {
-	replaced(w, "a Feature is a Task with Subtasks; list Tasks with top:is:true")
-}
-
-func (s *Server) GetFeature(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef) {
-	replaced(w, "a Feature is a Task with Subtasks; read the Task")
-}
 
 func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.FileTaskParams) {
 	var body gen.FileTaskBody
@@ -30,34 +16,29 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 	if !ok {
 		return
 	}
-	// model v2: a Task is filed at a Step, not needing a Skill or in a Status; its Feature is its
-	// Parent (M1b rebuilds this body).
-	if body.Skill != nil || body.Status != nil {
-		replaced(w, "a Task is filed at a Step of its Project's Workflow, which carries the Skill")
-		return
-	}
-	nt := core.NewTask{Parent: body.Feature, Title: body.Title, AimedAt: body.AimedAt, Blocks: body.Blocks, Workspaces: body.Workspaces}
+	nt := core.NewTask{Project: body.Project, Parent: body.Parent, Title: body.Title, Owner: body.Owner, Step: body.Step,
+		AutoComplete: body.AutoComplete, Acceptance: body.Acceptance, Workspaces: body.Workspaces, AimedAt: body.Aim,
+		Blocks: body.Blocks, Note: body.Note, FromRetrospective: body.FromRetrospective}
 	if body.Description != nil {
 		nt.Description = *body.Description
+	}
+	if body.Breakdown != nil {
+		nt.Breakdown = *body.Breakdown
+	}
+	if body.Labels != nil {
+		nt.Labels = *body.Labels
 	}
 	d, err := s.core.FileTask(r.Context(), c, nt, idem)
 	s.respond(w, r, out, d, err)
 }
 
+// ListTasks lists Tasks by Project and Rank. `claim:is:session` reads the sessions the Runner
+// beside this server runs now.
 func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.ListTasksParams) {
-	// model v2: a Feature is a Parent, a Team a Project; a Status is a Step (M1b).
-	if params.Status != nil {
-		replaced(w, "a Task's Status is its Step; filter by step")
-		return
-	}
-	tf := core.TaskFilter{Parent: params.Feature, Project: params.Team, State: (*string)(params.State),
+	tf := core.TaskFilter{Project: params.Project, Parent: params.Parent, State: (*string)(params.State), Step: params.Step,
 		AimedAt: params.AimedAt, Holder: params.Holder}
-	// model v2: the skill parameter goes; the skill: filter token is the Step's Skill (M1b).
-	if params.Skill != nil {
-		tf.Filters = append(tf.Filters, "skill:is:"+*params.Skill)
-	}
 	if params.Filter != nil {
-		tf.Filters = append(tf.Filters, *params.Filter...)
+		tf.Filters = *params.Filter
 		if run := s.theRunner(); run != nil {
 			for _, sess := range run.Sessions() {
 				tf.SessionTasks = append(tf.SessionTasks, sess.TaskID)
@@ -188,4 +169,47 @@ func (s *Server) CompleteTask(w http.ResponseWriter, r *http.Request, task gen.T
 	}
 	t, err := s.core.Complete(r.Context(), c, task, body.Note, idem)
 	s.respond(w, r, out, t, err)
+}
+
+// taskWrite runs a write on one Task that answers with the Task: decode the body, set up the
+// Idempotency-Key, call op, respond.
+func taskWrite[B any](s *Server, w http.ResponseWriter, r *http.Request, key *string, op func(c *auth.Caller, body B, idem core.Idem) (core.Task, error)) {
+	var body B
+	out := as(http.StatusOK, func(t core.Task) any { return taskOut(t) })
+	c, idem, ok := s.begin(w, r, key, &body, out)
+	if !ok {
+		return
+	}
+	t, err := op(c, body, idem)
+	s.respond(w, r, out, t, err)
+}
+
+func (s *Server) AdvanceTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.AdvanceTaskParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.AdvanceTaskBody, idem core.Idem) (core.Task, error) {
+		return s.core.Advance(r.Context(), c, task, deref(body.Outcome), body.Note, idem)
+	})
+}
+
+func (s *Server) MoveTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.MoveTaskParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.MoveTaskBody, idem core.Idem) (core.Task, error) {
+		return s.core.MoveTask(r.Context(), c, task, body.Step, body.Note, idem)
+	})
+}
+
+func (s *Server) RankTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.RankTaskParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.RankTaskBody, idem core.Idem) (core.Task, error) {
+		return s.core.RankTask(r.Context(), c, task, body.Position, idem)
+	})
+}
+
+func (s *Server) PassOwnership(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.PassOwnershipParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.PassOwnershipBody, idem core.Idem) (core.Task, error) {
+		return s.core.PassOwnership(r.Context(), c, task, body.Owner, idem)
+	})
+}
+
+func (s *Server) SetTaskLabels(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.SetTaskLabelsParams) {
+	taskWrite(s, w, r, params.IdempotencyKey, func(c *auth.Caller, body gen.SetTaskLabelsBody, idem core.Idem) (core.Task, error) {
+		return s.core.SetTaskLabels(r.Context(), c, task, body.Labels, idem)
+	})
 }

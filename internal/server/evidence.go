@@ -29,12 +29,6 @@ func (s *Server) AttachTaskEvidence(w http.ResponseWriter, r *http.Request, task
 	s.attachEvidence(w, r, core.EvidenceTarget{Task: task}, params.Filename, params.IdempotencyKey)
 }
 
-// AttachFeatureEvidence: Evidence on a Parent is Evidence on the Task it is. model v2: replaced by
-// /v1/tasks/{task}/evidence (M1b).
-func (s *Server) AttachFeatureEvidence(w http.ResponseWriter, r *http.Request, feature gen.FeatureRef, params gen.AttachFeatureEvidenceParams) {
-	replaced(w, "a Feature is a Task with Subtasks; attach Evidence to the Task")
-}
-
 func (s *Server) attachEvidence(w http.ResponseWriter, r *http.Request, target core.EvidenceTarget, filename string, key *string) {
 	ctx, c := r.Context(), caller(r)
 	if s.blobs == nil {

@@ -102,6 +102,12 @@ func TestMembersProjectsAndSkills(t *testing.T) {
 		wantCode(t, err, core.CodeConflict)
 		_, err = f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "web", Name: "Lower"}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
+		// A name is taken whatever its case, on create and on rename.
+		_, err = f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "OPS", Name: "project web"}, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
+		f.project("OPS")
+		_, err = f.svc.UpdateProject(ctx, f.admin, "OPS", core.ProjectChange{Name: ptrStr("PROJECT WEB")}, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
 
 		email := "bob@example.com"
 		bob, err := f.svc.CreateMember(ctx, f.admin, core.NewMember{Name: "bob", Kind: "human", Email: &email}, core.Idem{})

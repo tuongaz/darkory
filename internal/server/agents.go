@@ -12,7 +12,7 @@ import (
 	"github.com/tuongaz/darkory/internal/server/gen"
 )
 
-// Workspaces, Team settings, agent settings and the Runner's sessions (docs/build/agents-plan.md).
+// Workspaces, agent settings and the Runner's sessions (docs/build/agents-plan.md).
 
 func (s *Server) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	ws, err := s.core.ListWorkspaces(r.Context(), caller(r))
@@ -62,20 +62,6 @@ func (s *Server) RemoveWorkspace(w http.ResponseWriter, r *http.Request, workspa
 		return
 	}
 	s.respond(w, r, noContent, nil, s.core.RemoveWorkspace(r.Context(), c, workspace, idem))
-}
-
-// UpdateTeam changes a Project, its ship_when_done being the Project's auto_complete. model v2:
-// replaced by PATCH /v1/projects/{project} (M1b).
-func (s *Server) UpdateTeam(w http.ResponseWriter, r *http.Request, team gen.TeamRef, params gen.UpdateTeamParams) {
-	var body gen.UpdateTeamBody
-	out := as(http.StatusOK, func(p core.Project) any { return teamOut(p) })
-	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
-	if !ok {
-		return
-	}
-	p, err := s.core.UpdateProject(r.Context(), c, team, core.ProjectChange{Name: body.Name, DefaultWorkspace: body.DefaultWorkspace,
-		AutoComplete: body.ShipWhenDone}, idem)
-	s.respond(w, r, out, p, err)
 }
 
 func (s *Server) SetAgentSettings(w http.ResponseWriter, r *http.Request, member gen.MemberRef, params gen.SetAgentSettingsParams) {

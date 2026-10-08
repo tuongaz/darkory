@@ -13,21 +13,20 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/tuongaz/darkory/client"
-	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/runnerapi"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// Workspaces, Team defaults, quick and ship-when-done Features and agent settings through the
+// Workspaces, a Project's defaults, the Workspaces a Task names and agent settings through the
 // generated client on both engines, with the codes and statuses of their refusals.
 func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
-		got(ada.AddTeamMemberWithResponse(ctx, "WEB", "ada", &client.AddTeamMemberParams{})).want(t, http.StatusNoContent)
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
 		got(ada.CreateSkillWithResponse(ctx, &client.CreateSkillParams{}, client.CreateSkillBody{Name: "build", Kind: client.Generic, Body: "b"})).
 			want(t, http.StatusCreated)
 		bob, _ := h.member("bob", client.Agent, "WEB", "build")
@@ -66,27 +65,28 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 			t.Fatalf("listed %+v", list)
 		}
 
-		team := got(ada.UpdateTeamWithResponse(ctx, "WEB", &client.UpdateTeamParams{}, client.UpdateTeamBody{DefaultWorkspace: ptrStr("web"),
-			ShipWhenDone: ptrBool(true)})).want(t, http.StatusOK).JSON200
-		if team.DefaultWorkspaceID == nil || *team.DefaultWorkspaceID != web.ID || !team.ShipWhenDone {
-			t.Fatalf("WEB %+v", team)
+		project := got(ada.UpdateProjectWithResponse(ctx, "WEB", &client.UpdateProjectParams{}, client.UpdateProjectBody{DefaultWorkspace: ptrStr("web"),
+			AutoComplete: ptrBool(true)})).want(t, http.StatusOK).JSON200
+		if project.DefaultWorkspaceID == nil || *project.DefaultWorkspaceID != web.ID || !project.AutoComplete || project.Acceptance {
+			t.Fatalf("WEB %+v", project)
 		}
-		got(bob.UpdateTeamWithResponse(ctx, "WEB", &client.UpdateTeamParams{}, client.UpdateTeamBody{ShipWhenDone: ptrBool(false)})).
+		got(bob.UpdateProjectWithResponse(ctx, "WEB", &client.UpdateProjectParams{}, client.UpdateProjectBody{AutoComplete: ptrBool(false)})).
 			want(t, http.StatusForbidden)
 
-		// A Task filed with Break down takes the Project's auto_complete (the Team's ship_when_done
-		// until M1b), and it and its Breakdown the Project's Workspace.
-		f := h.seed(h.adminSecret, core.NewTask{Project: ptrStr("WEB"), Title: "Checkout", Breakdown: true})
-		if !f.Task.AutoComplete || len(f.Subtasks[0].WorkspaceIDs) != 1 || f.Subtasks[0].WorkspaceIDs[0] != web.ID {
-			t.Fatalf("filed %+v with %+v", f.Task, f.Subtasks[0])
+		// A Task filed with Break down takes the Project's auto_complete, and it and its Breakdown
+		// the Project's Workspace.
+		f := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Breakdown: ptrBool(true)})).want(t, http.StatusCreated).JSON201
+		if !f.Task.AutoComplete || len(f.Subtasks) != 1 || f.Subtasks[0].WorkspaceIds == nil || (*f.Subtasks[0].WorkspaceIds)[0] != web.ID {
+			t.Fatalf("filed %+v with %+v", f.Task, f.Subtasks)
 		}
-		task := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Task.Key, Title: "Pay",
+		task := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key, Title: "Pay",
 			Workspaces: &[]string{"WEB"}})).want(t, http.StatusCreated).JSON201
 		if len(task.Workspaces) != 1 || task.Workspaces[0].Name != "web" || task.Workspaces[0].Path != "/src/web" {
 			t.Fatalf("the Task's Workspaces %+v", task.Workspaces)
 		}
-		none := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Task.Key, Title: "Ask",
-			AimedAt: ptrStr("ada"), Workspaces: &[]string{}})).want(t, http.StatusCreated).JSON201
+		none := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key, Title: "Ask",
+			Aim: ptrStr("ada"), Workspaces: &[]string{}})).want(t, http.StatusCreated).JSON201
 		if none.Task.WorkspaceIds != nil || len(none.Workspaces) != 0 {
 			t.Fatalf("named none, got %v %+v", none.Task.WorkspaceIds, none.Workspaces)
 		}
@@ -94,7 +94,7 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 			strings.Contains(raw, "workspace_ids") {
 			t.Fatalf("a Task naming none reads %s", raw)
 		}
-		missing := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Task.Key, Title: "Lost",
+		missing := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key, Title: "Lost",
 			Workspaces: &[]string{"nowhere"}})).want(t, http.StatusNotFound)
 		if missing.JSONDefault.Code != client.ErrorCodeNotFound {
 			t.Fatalf("refused with %s", missing.Body)
@@ -118,8 +118,8 @@ func TestWorkspacesAndAgentsThroughTheClient(t *testing.T) {
 				t.Fatalf("%s listed with settings %+v", mm.Name, mm.Agent)
 			}
 		}
-		// model v2: the API's team.changed is project.changed until M1b writes the spec's new kinds.
-		kinds := []client.ActivityKind{client.ActivityKindMemberAgentChanged, client.ActivityKindWorkspaceAdded, client.ActivityKindWorkspaceChanged, "project.changed"}
+		kinds := []client.ActivityKind{client.ActivityKindMemberAgentChanged, client.ActivityKindWorkspaceAdded, client.ActivityKindWorkspaceChanged,
+			client.ActivityKindProjectChanged}
 		page := got(ada.ListActivityWithResponse(ctx, &client.ListActivityParams{Kind: &kinds})).want(t, http.StatusOK).JSON200
 		var seen []string
 		for _, a := range page.Items {
@@ -199,12 +199,13 @@ func TestRunnerSessions(t *testing.T) {
 		h := newHarness(t, st)
 		ctx := t.Context()
 		ada := h.admin
-		got(ada.CreateTeamWithResponse(ctx, &client.CreateTeamParams{}, client.CreateTeamBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
-		got(ada.AddTeamMemberWithResponse(ctx, "WEB", "ada", &client.AddTeamMemberParams{})).want(t, http.StatusNoContent)
+		got(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web"})).want(t, http.StatusCreated)
+		got(ada.AddProjectMemberWithResponse(ctx, "WEB", "ada", &client.AddProjectMemberParams{})).want(t, http.StatusNoContent)
 		bob, bobID := h.member("bob", client.Agent, "WEB")
-		f := h.seed(h.adminSecret, core.NewTask{Project: ptrStr("WEB"), Title: "Checkout", Breakdown: true})
-		held, other := f.Subtasks[0], got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Feature: &f.Task.Key,
-			Title: "Other", AimedAt: ptrStr("bob")})).want(t, http.StatusCreated).JSON201.Task
+		f := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Checkout",
+			Breakdown: ptrBool(true)})).want(t, http.StatusCreated).JSON201
+		held, other := f.Subtasks[0], got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &f.Task.Key,
+			Title: "Other", Aim: ptrStr("bob")})).want(t, http.StatusCreated).JSON201.Task
 
 		// No Runner attached.
 		got(ada.NudgeRunnerSessionWithResponse(ctx, held.Key, &client.NudgeRunnerSessionParams{})).want(t, http.StatusConflict)

@@ -415,7 +415,10 @@ Chosen while building M1's record and core rules (M1a):
 - **A Subtask filed without `workspaces` names its Parent's, even when its Parent names none; a top-level Task, the Project's default.** Why: its branch starts from the Parent's and merges back.
 - **A Label's name is unique across a Project's own Labels and the Organisation's, both ways (`conflict`), and Task bodies name Labels by id or name, any case; a Project Label's Activity carries its `project_id`, which is how the Project's Activity finds it, a deleted one's included.** Why: a name must always mean one Label; a deleted Label leaves no row to join.
 - **`CreateProject` takes `copy_from`, `members` (the creator is not added unless named), `default_workspace`, `auto_complete` and `acceptance` in its one write, recording `project.member_added` for each Member.** Why: "+ New Project" sets a Project up in one step, and the admin creating it is often not one of its workers.
-- **Until M1b rebuilds `/v1`, the Team routes act on Projects (a Team's `ship_when_done` is the Project's `auto_complete`), filing a Task with `feature` files a Subtask of that Task, and the Feature, Status and Handover routes answer 501 `not_implemented` saying what replaced them.** Why: the server must compile against the untouched spec, and nothing should pretend to keep a removed rule.
+
+Chosen while building M1's `/v1` server, CLI, MCP server, bots and e2e suites (M1b):
+
+- **`CreateProject` answers with the Project and its Members (`ProjectDetail`), read in the same write; a Project's key and name are each taken ignoring case, on create and on rename, compared in Go.** Why: the spec's reply and its "ignoring case"; the core first returned the bare Project and compared names exactly.
 
 ### W0 — marks, the Workflow canvas and the Subtask graph (2026-10-07)
 
