@@ -9,6 +9,7 @@ import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { useCurrentMe } from "@/me";
 import { EditingWorkflow } from "./Editing";
 import { addStep } from "./edits";
+import { useBlockingCount } from "@/components/workflow/blocking";
 import { useLineData } from "@/components/workflowLine";
 import { taskPath as taskPagePath } from "@/screens/task/format";
 import { LiveWorkflow } from "./Live";
@@ -31,12 +32,13 @@ export function WorkflowPage() {
   const [view, setView] = useLineView();
   const [scope, setScope] = useScopeParam();
   const { data } = useLineData(project.key, scope);
+  const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined);
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
       <TopBar
         crumbs={[projectCrumb(project), { label: "Workflow" }, ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : [])]}
-        view={<LineViewSwitch view={view} onChange={setView} blocking={data?.blocking ?? 0} />}
+        view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
         actions={
           <>
             {data && data.scoped.hiddenTotal > 0 && data.scope.kind !== "all" && (

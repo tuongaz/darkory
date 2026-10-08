@@ -6,6 +6,7 @@ import { useMembers } from "@/api/queries";
 import { peekParam } from "@/app/peek";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { BlockingView } from "@/components/workflow/blocking";
 import { useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
 import { useNow } from "@/clock";
@@ -13,7 +14,7 @@ import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
 import { lineText, trailLine, type FlowContext } from "./flowEvents";
 import { LineText } from "./LineText";
 import type { LineView } from "./lineView";
-import { NeedsYouPanel, StoriesPanel } from "./panels";
+import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from "./panels";
 import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
 
 /**
@@ -38,21 +39,22 @@ export function LiveWorkflow({ project, view, scope, onView }: { project: Projec
   );
   const [selected, setSelected] = useState<string | null>(null);
   const [ringed, setRinged] = useState<string | null>(null);
+  const quiet = useStoriesQuiet(project);
 
   if (error) return <Refusal error={error} className="m-6" />;
   if (!data) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
 
-  const keyOf = (id: string) => data.all.find((t) => t.id === id)?.key;
   const panels = {
-    needs: <NeedsYouPanel project={project.key} onHover={setRinged} />,
-    stories: <StoriesPanel project={project.key} onHover={setRinged} onOpen={(id) => keyOf(id) && openTask(keyOf(id)!)} />,
+    needs: <NeedsYouPanel project={project} onHover={setRinged} />,
+    // A story opened into its path selects its token on the line, as F2 draws it.
+    stories: <StoriesPanel project={project} onHover={setRinged} onOpen={setSelected} />,
   };
 
   if (view === "blocking") {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         <BlockingView
-          project={project.key}
+          project={project}
           scope={data.scope.kind === "parent" ? data.scope.id : undefined}
           onShowOnLine={(id) => {
             setSelected(id);
@@ -71,14 +73,16 @@ export function LiveWorkflow({ project, view, scope, onView }: { project: Projec
   }
   return (
     // A phone reads it top to bottom: Needs you, the line, What's happening. Wider, the line sits
-    // on top and the panels side by side under it.
+    // on top and the panels side by side under it; when nothing has happened lately What's
+    // happening folds to one line over Needs you, which takes the full width.
     <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:grid lg:grid-rows-[auto_minmax(280px,1fr)] lg:overflow-hidden">
       <div className="order-2 flex-none px-2 pt-2 sm:px-5 lg:order-none lg:max-h-full lg:overflow-y-auto lg:px-5">
         <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} />
       </div>
-      <div className="contents lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_440px] lg:border-t">
-        <div className="order-1 border-b lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-b-0">{panels.needs}</div>
-        <div className="order-3 border-t lg:order-none lg:min-h-0 lg:overflow-y-auto lg:border-t-0 lg:border-l">{panels.stories}</div>
+      {/* One tree whether quiet or not, so neither panel remounts when What's happening folds. */}
+      <div className={cn("contents lg:grid lg:min-h-0 lg:border-t", quiet ? "lg:grid-cols-1 lg:grid-rows-[auto_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_440px]")}>
+        <div className={cn("order-1 border-b lg:min-h-0 lg:border-b-0", quiet ? "lg:order-2" : "lg:order-none")}>{panels.needs}</div>
+        <div className={cn("order-3 border-t lg:min-h-0 lg:border-t-0", quiet ? "lg:order-1 lg:border-b" : "lg:order-none")}>{panels.stories}</div>
       </div>
     </div>
   );

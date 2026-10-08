@@ -319,6 +319,8 @@ export async function mockLine(page: Page) {
     const url = new URL(req.url());
     const path = url.pathname;
     if (path === "/v1/activity/stream") return route.fulfill({ status: 200, contentType: "text/event-stream", body: ": idle\n\n" });
+    // The seen mark the panels keep: "Since you looked · 10:25".
+    if (path.endsWith("/seen")) return json(route, { seq: activity.filter((e) => Date.parse(e.at) <= Date.parse(t(10, 25))).at(-1)!.seq, at: t(10, 25) });
     if (req.method() !== "GET") return json(route, { code: "invalid", message: `${req.method()} ${path} is not mocked` }, 400);
     if (path === "/v1/health") return json(route, { status: "ok", version: "v2.0.0", sign_in_modes: ["printed_link"] });
     if (path === "/v1/me")

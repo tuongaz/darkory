@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
  * Line | Blocking (N) | Text, the live page's view switcher. Blocking shows how many Blockings
  * stand among the Project's open Tasks, and is left out when there are none.
  */
-export function LineViewSwitch({ view, onChange, blocking }: { view: LineView; onChange: (v: LineView) => void; blocking: number }) {
+export function LineViewSwitch({ view, onChange, blocking }: { view: LineView; onChange: (v: LineView) => void; blocking: number | undefined }) {
   const option = (v: LineView, label: string, count?: number) => (
     <button
       type="button"
@@ -23,7 +23,7 @@ export function LineViewSwitch({ view, onChange, blocking }: { view: LineView; o
   return (
     <div role="group" aria-label="View" className="flex items-center gap-0.5 rounded-md bg-muted p-0.5">
       {option("line", "Line")}
-      {(blocking > 0 || view === "blocking") && option("blocking", "Blocking", blocking)}
+      {(blocking !== 0 || view === "blocking") && option("blocking", "Blocking", blocking)}
       {option("text", "Text")}
     </div>
   );

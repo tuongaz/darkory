@@ -5,7 +5,8 @@ import { GitForkIcon, ListIcon, ListPlusIcon, WorkflowIcon } from "lucide-react"
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Task, TaskDetail } from "@/api/client";
-import { useDirectory, useRunnerSessions } from "@/api/queries";
+import { useDirectory, useProjects, useRunnerSessions } from "@/api/queries";
+import { findProject } from "@/app/currentProject";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -119,12 +120,19 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
       {view === "line" ? (
         <ParentLine detail={detail} />
       ) : view === "blocking" ? (
-        <BlockingView project={detail.task.project_id} scope={detail.task.id} onShowOnLine={() => setView("line")} />
+        <ParentBlocking detail={detail} onShowOnLine={() => setView("line")} />
       ) : (
         <List subtasks={subtasks} />
       )}
     </section>
   );
+}
+
+/** The Blocking among the Parent's Subtasks, and what crosses into or out of it. */
+function ParentBlocking({ detail, onShowOnLine }: { detail: TaskDetail; onShowOnLine: () => void }) {
+  const project = findProject(useProjects().data ?? [], detail.task.project_id);
+  if (!project) return null;
+  return <BlockingView project={project} scope={detail.task.id} onShowOnLine={onShowOnLine} />;
 }
 
 /**
