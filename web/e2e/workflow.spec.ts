@@ -153,11 +153,13 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(board.page.getByText("Build", { exact: true }).first()).toBeVisible();
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
-  // C1: the Steps as text, where New Tasks start open in the panel.
+  // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
   const { page, errors, ctx } = await open(browser, "/settings/projects/MAIN/workflow");
   const list = page.getByRole("list", { name: "Steps" });
-  await expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
   await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
+  await list.getByRole("button", { name: "3. Build" }).click();
+  await expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
   await page.screenshot({ path: `${shots}6-02-editing.png`, animations: "disabled" });
 
   // Rename Build to Make: nothing is sent yet, the board keeps Build.
@@ -207,6 +209,8 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.screenshot({ path: `${shots}6-06-delete-asks.png`, animations: "disabled" });
   await dialog.getByRole("button", { name: "Delete Review" }).click();
   await expect(list.getByRole("listitem", { name: /Review$/ })).toHaveCount(0);
+  // Review was the last Step on the line: the panel moves to QA above it, not to Retro after a Parent.
+  await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toHaveValue("QA");
   // The changes, listed from the header.
   const chip = page.getByRole("button", { name: /^Editing · \d+ changes: list them$/ });
   await chip.click();
@@ -347,4 +351,23 @@ test("the software Workflow at 1440×900: its line and the whole Loops list show
   await page.screenshot({ path: `${liveShots}software-loops-1440.png`, animations: "disabled" });
   expect(errors).toEqual([]);
   await ctx.close();
+});
+
+test("the software Workflow down a phone and a 1024 window: every loop back's track keeps the gutter at the line's left edge", async ({ browser }) => {
+  for (const size of [{ width: 390, height: 844 }, { width: 1024, height: 900 }]) {
+    const { page, errors, ctx } = await open(browser, "/projects/SWL/workflow", size);
+    const line = page.getByRole("region", { name: "Workflow" });
+    await expect(line).toHaveAttribute("data-orientation", "vertical");
+    const tracks = line.locator("path[data-track]");
+    await expect(tracks.first()).toBeAttached();
+    // Each track's left edge, from the line's own left edge, in the page as drawn.
+    const gaps = await line.evaluate((el) => {
+      const left = el.getBoundingClientRect().left;
+      return [...el.querySelectorAll("path[data-track]")].map((p) => Math.round(p.getBoundingClientRect().left - left));
+    });
+    expect(Math.min(...gaps), `${size.width}: ${gaps}`).toBeGreaterThanOrEqual(12);
+    await page.screenshot({ path: `${liveShots}software-tracks-${size.width}.png`, animations: "disabled" });
+    expect(errors).toEqual([]);
+    await ctx.close();
+  }
 });

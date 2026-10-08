@@ -70,6 +70,10 @@ describe("Settings › a Project › General", () => {
     const api = mockApi(routes());
     renderApp("/settings/projects/WEB/general");
     const colours = await screen.findByRole("radiogroup", { name: "Colour of Web" });
+    // The help says what the colour is for, and claims nothing dark mode does not keep: dark draws a lighter tint.
+    const form = screen.getByRole("group", { name: "General settings of Web" });
+    expect(form).toHaveTextContent("The colour of its mark beside its name.");
+    expect(form).not.toHaveTextContent(/light and dark/);
     const swatches = within(colours).getAllByRole("radio");
     expect(swatches).toHaveLength(12);
     // Web stores 0, red; Ops has 6, cyan.
