@@ -72,7 +72,8 @@ e2e-pg:
 
 ## dev: work on the server and the web app without rebuilding by hand. The web app runs on 7357
 ## (Vite: changes show on save) and proxies /v1 to the server on 7358, which is rebuilt and
-## restarted when Go code changes. Ctrl-C stops both. The Install lives in $(DEV_DATA).
+## restarted when Go code changes. Ctrl-C stops both. The Install lives in $(DEV_DATA). An earlier
+## run of this checkout that is still going is stopped first.
 dev: dev-init
 	@test web/node_modules/.package-lock.json -nt web/package-lock.json || (cd web && npm ci)
 	@trap 'kill 0' INT TERM; \
@@ -85,12 +86,14 @@ dev: dev-init
 ## every rebuild is a start).
 DEV_BROWSER ?= 1
 dev-api: dev-init
+	@scripts/dev-stop.sh api
 	DARKORY_PUBLIC_URL='$(PUBLIC_URL)' DARKORY_NO_UPDATE_CHECK=1 \
 		$(GO) run ./tools/devrun -o $(DEV_DATA)/bin/darkory -pkg ./cmd/darkory -- \
 		serve --data $(DEV_DATA) --listen 127.0.0.1:7358 $(if $(filter 0,$(DEV_BROWSER)),--no-browser)
 
 ## dev-web: the web app alone on 7357, proxying /v1 to the server on 7358
 dev-web:
+	@scripts/dev-stop.sh web
 	cd web && VITE_PORT=7357 DARKORY_URL=http://127.0.0.1:7358 npm run dev
 
 ## dev-init: create the Install in $(DEV_DATA) once; its token and first login link are kept in $(DEV_DATA)/init.txt
