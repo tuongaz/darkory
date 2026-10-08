@@ -232,6 +232,8 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 			method: "PUT", path: "/v1/tasks/WEB-3/labels", body: `{"labels":[]}`},
 		{name: "activity filtered", args: []string{"activity", "--member", "bob", "--kind", "task.claimed,task.lapsed", "--project", "WEB"},
 			method: "GET", path: "/v1/activity", query: "before=9007199254740991&member=bob&kind=task.claimed&kind=task.lapsed&project=WEB"},
+		{name: "activity of a Task", args: []string{"activity", "--task", "WEB-1"},
+			method: "GET", path: "/v1/activity", query: "before=9007199254740991&task=WEB-1"},
 		{name: "login by email", args: []string{"login", "--email", "ada@example.com"},
 			method: "POST", path: "/v1/sign-in/email", body: `{"email":"ada@example.com"}`},
 	} {

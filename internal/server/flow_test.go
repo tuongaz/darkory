@@ -269,3 +269,47 @@ func TestEvidence(t *testing.T) {
 func ptrStr(s string) *string { return &s }
 
 func ptr64(n int64) *int64 { return &n }
+
+// task keeps the entries about one Task, and for a Parent its Subtasks' too, together with the
+// other filters.
+func TestActivityOfATask(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		h := newHarness(t, st)
+		ctx := t.Context()
+		members := []string{"ada"}
+		got(h.admin.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "WEB", Name: "Web", Members: &members})).
+			want(t, http.StatusCreated)
+		web := "WEB"
+		parent := h.file(h.admin, client.FileTaskBody{Project: &web, Title: "Search", Breakdown: ptrBool(true)})
+		other := h.file(h.admin, client.FileTaskBody{Project: &web, Title: "Elsewhere"})
+		sub := h.file(h.admin, client.FileTaskBody{Parent: &parent.Task.Key, Title: "Index"})
+		got(h.admin.AddNoteWithResponse(ctx, sub.Task.Key, &client.AddNoteParams{}, client.AddNoteBody{Body: "started"})).want(t, http.StatusCreated)
+		got(h.admin.AddNoteWithResponse(ctx, other.Task.Key, &client.AddNoteParams{}, client.AddNoteBody{Body: "elsewhere"})).want(t, http.StatusCreated)
+
+		subjects := func(p client.ListActivityParams) map[string][]string {
+			t.Helper()
+			out := map[string][]string{}
+			for _, a := range got(h.admin.ListActivityWithResponse(ctx, &p)).want(t, http.StatusOK).JSON200.Items {
+				out[a.SubjectID] = append(out[a.SubjectID], string(a.Kind))
+			}
+			return out
+		}
+		// The Parent's: its own entries, its Breakdown's and its Subtask's; nothing of the other Task.
+		byParent := subjects(client.ListActivityParams{Task: &parent.Task.Key})
+		if len(byParent[parent.Task.ID]) == 0 || len(byParent[parent.Subtasks[0].ID]) == 0 || len(byParent[sub.Task.ID]) != 2 ||
+			len(byParent[other.Task.ID]) != 0 || len(byParent) != 3 {
+			t.Fatalf("a Parent's Activity: %v", byParent)
+		}
+		// A Subtask's, by id: its own alone; with kind, only the Note.
+		if bySub := subjects(client.ListActivityParams{Task: &sub.Task.ID}); len(bySub) != 1 || len(bySub[sub.Task.ID]) != 2 {
+			t.Fatalf("a Subtask's Activity: %v", bySub)
+		}
+		kinds := []client.ActivityKind{client.ActivityKindTaskNoteAdded}
+		if notes := subjects(client.ListActivityParams{Task: &parent.Task.Key, Kind: &kinds, Project: &web}); len(notes) != 1 ||
+			len(notes[sub.Task.ID]) != 1 || notes[sub.Task.ID][0] != "task.note_added" {
+			t.Fatalf("a Parent's Notes: %v", notes)
+		}
+		missing := "WEB-99"
+		got(h.admin.ListActivityWithResponse(ctx, &client.ListActivityParams{Task: &missing})).want(t, http.StatusNotFound)
+	})
+}

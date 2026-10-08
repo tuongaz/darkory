@@ -1349,8 +1349,8 @@ export interface paths {
          *     `after` to read the next. To read backwards, pass `before`: the page holds the `limit`
          *     entries numbered just below it, still in sequence order, and its `first_seq` is the
          *     `before` of the page before it. A `before` past the newest entry (such as
-         *     9007199254740991) reads the latest page. `member`, `kind` and `project` keep only the
-         *     matching entries; the page is then the `limit` matching entries after `after` or just
+         *     9007199254740991) reads the latest page. `member`, `kind`, `project` and `task` keep only
+         *     the matching entries, all of them together; the page is then the `limit` matching entries after `after` or just
          *     below `before`, and its `first_seq` and `last_seq` are theirs.
          */
         get: operations["listActivity"];
@@ -4943,6 +4943,12 @@ export interface operations {
                  *     Labels, or a Task of it.
                  */
                 project?: string;
+                /**
+                 * @description Only entries about this Task (id or key): those whose subject is the Task, and for a
+                 *     Parent its Subtasks' too, the ones filed after the request included. Errors:
+                 *     `not_found` (no such Task).
+                 */
+                task?: string;
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
             };
