@@ -1,11 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { initials, tintOf } from "@/lib/members";
+import { markHues, projectHue } from "@/lib/projectHue";
 import { SessionId } from "./CopyValue";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
@@ -250,9 +252,30 @@ describe("ProjectMark", () => {
     const [a, b] = document.querySelectorAll("[aria-hidden]");
     expect(a).toHaveTextContent("W");
     expect(b).toHaveTextContent("S");
-    const fill = (el: Element) => [...el.classList].find((c) => c.startsWith("bg-chart-"));
-    expect(fill(a)).toBeDefined();
-    expect(fill(a)).toBe(fill(b));
+    expect(a.getAttribute("data-hue")).toBe(String(projectHue("WEB")));
+    expect((a as HTMLElement).style.backgroundColor).toBe((b as HTMLElement).style.backgroundColor);
+  });
+
+  it("gives the Projects distinct hues from a palette of distinct hues", () => {
+    // The sample Install's Projects and the tests' own.
+    const keys = ["BIG", "MAIN", "SAM", "SW", "WEB", "OPS"];
+    expect(new Set(keys.map(projectHue)).size).toBe(keys.length);
+    const gaps = markHues.map((h, i) => (markHues[(i + 1) % markHues.length] - h + 360) % 360);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(30);
+  });
+
+  it("keeps a Project's hue in light and dark: the theme sets only lightness and strength", () => {
+    render(<ProjectMark project={{ key: "SAM", name: "Sample" }} />);
+    const fill = (document.querySelector("[aria-hidden]") as HTMLElement).style.backgroundColor;
+    expect(fill).toBe(`oklch(var(--mark-l) var(--mark-c) ${projectHue("SAM")})`);
+    const css = readFileSync("src/globals.css", "utf8") // vitest runs in web/;
+    // The rule blocks that set the mark's tokens: one per theme, lightness and strength only.
+    const blocks = [...css.matchAll(/^([^\s{}/*][^{}\n]*) \{([^{}]*)\}/gm)].filter(([, , body]) => /--mark-[lc]:/.test(body));
+    expect(blocks.map(([, selector]) => selector)).toEqual([":root", ".dark"]);
+    const value = (body: string, token: string) => body.match(new RegExp(`--mark-${token}: ([\\d.]+);`))?.[1];
+    for (const [, , body] of blocks) expect([value(body, "l"), value(body, "c")]).not.toContain(undefined);
+    expect(value(blocks[0][2], "l")).not.toBe(value(blocks[1][2], "l"));
+    expect(css).not.toMatch(/--mark-h\b/);
   });
 });
 

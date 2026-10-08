@@ -190,6 +190,10 @@
 /* Values the kit (kit.css) writes inline, named here so components use tokens only. */
 :root {
   --on-solid: oklch(0.985 0 0); /* text on a solid state fill: a Done glyph, the New tag */
+  /* A Project's mark: its hue is the Project's own (ProjectMark), the same in both themes; the
+     theme sets only how light and how strong, so each hue reads under on-solid text. */
+  --mark-l: 0.6;
+  --mark-c: 0.16;
   --shadow-soft-color: oklch(0 0 0 / 0.04);
   --shadow-pop-color: oklch(0 0 0 / 0.12);
   --scrim: oklch(0 0 0 / 0.3);
@@ -255,6 +259,8 @@
   --human: oklch(0.985 0 0);
 
   --on-solid: oklch(0.145 0 0);
+  --mark-l: 0.74;
+  --mark-c: 0.14;
   --shadow-soft-color: oklch(0 0 0 / 0.3);
   --shadow-pop-color: oklch(0 0 0 / 0.5);
   --scrim: oklch(0 0 0 / 0.6);
