@@ -15,7 +15,7 @@ export type RecordEntry = { at: string } & (
   | { kind: "evidence"; evidence: Evidence }
   | { kind: "question"; question: Task }
   | { kind: "proposal"; proposal: SkillProposal }
-  | { kind: "ended"; state: "done" | "dropped"; by?: string; auto?: boolean }
+  | { kind: "ended"; state: "done" | "dropped"; by?: string; auto?: boolean; after?: string }
 );
 
 const time = (at: string) => Date.parse(at);
@@ -28,8 +28,10 @@ const str = (v: unknown) => (typeof v === "string" ? v : undefined);
  * Entries at the same instant keep the order a write makes them in: a Note written with an
  * advance comes before it.
  */
-export function taskRecord(detail: TaskDetail, path: readonly Activity[] = []): RecordEntry[] {
+export function taskRecord(detail: TaskDetail, entries: readonly Activity[] = []): RecordEntry[] {
   const { task, claims } = detail;
+  // A Parent's trail carries its Subtasks' entries too: the record is of the Task's own.
+  const path = entries.filter((e) => e.subject_id === task.id);
   const out: RecordEntry[] = [{ kind: "filed", at: task.created_at, by: task.filed_by }];
   const advances = path.filter((e) => e.kind === "task.advanced");
   for (const claim of claims) out.push({ kind: "claimed", at: claim.started_at, claim });
@@ -61,8 +63,16 @@ export function taskRecord(detail: TaskDetail, path: readonly Activity[] = []): 
   // A Task its holder completed says so with the Claim's end.
   if (task.state !== "open" && task.ended_at && !(task.state === "done" && claims.some((c) => c.how_ended === "completed"))) {
     const end = path.find((e) => e.kind === (task.state === "done" ? "task.completed" : "task.dropped"));
-    // A Parent with Auto-complete completed itself; the entry's actor ended its last Subtask.
-    if (end?.payload.auto_complete === true) out.push({ kind: "ended", at: task.ended_at, state: task.state, auto: true });
+    // A Parent with Auto-complete completed itself when its last Subtask ended Done; the entry's
+    // actor is whoever ended that Subtask.
+    if (end?.payload.auto_complete === true) {
+      const ended = time(task.ended_at);
+      const subtasks = new Map(detail.subtasks.map((t) => [t.id, t.key]));
+      const last = entries
+        .filter((e) => e.kind === "task.completed" && subtasks.has(e.subject_id) && time(e.at) <= ended)
+        .reduce<Activity | undefined>((a, e) => (!a || e.seq > a.seq ? e : a), undefined);
+      out.push({ kind: "ended", at: task.ended_at, state: task.state, auto: true, after: last && subtasks.get(last.subject_id) });
+    }
     else out.push({ kind: "ended", at: task.ended_at, state: task.state, by: end?.actor_id });
   }
   // A stable sort on the instant keeps the insertion order above for ties.

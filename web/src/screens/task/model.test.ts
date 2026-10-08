@@ -103,17 +103,31 @@ describe("the actions by role", () => {
 
 describe("the record's end", () => {
   const ended = { state: "done" as const, ended_at: new Date(now).toISOString() };
-  const completed = (payload: Record<string, unknown>): Activity => ({ seq: 9, at: new Date(now).toISOString(), kind: "task.completed", subject_type: "task", subject_id: "t-1", actor_id: ada.id, payload });
-
-  it("names who completed a Parent by hand", () => {
-    const p = parentTask(1, { open: 0, working: 0, done: 2, dropped: 0 }, ended);
-    expect(taskRecord(detail(p), [{ ...completed({}), subject_id: p.id }]).at(-1)).toMatchObject({ kind: "ended", by: ada.id });
+  const completed = (seq: number, subject: string, actor: string, payload: Record<string, unknown> = {}): Activity => ({
+    seq,
+    at: new Date(now - (10 - seq) * 1000).toISOString(),
+    kind: "task.completed",
+    subject_type: "task",
+    subject_id: subject,
+    actor_id: actor,
+    payload,
   });
 
-  it("says a Parent with Auto-complete completed itself, not that the last Subtask's holder did", () => {
+  it("names who completed a Parent by hand, not who completed a Subtask in its trail", () => {
     const p = parentTask(1, { open: 0, working: 0, done: 2, dropped: 0 }, ended);
-    const end = taskRecord(detail(p), [{ ...completed({ auto_complete: true }), subject_id: p.id }]).at(-1);
-    expect(end).toMatchObject({ kind: "ended", auto: true });
+    const sub = subtask(2, p, { state: "done" });
+    // The Parent's trail (GET /v1/activity?task=) carries its Subtasks' entries too.
+    const trail = [completed(5, sub.id, builder.id), completed(9, p.id, ada.id)];
+    expect(taskRecord(detail(p, { subtasks: [sub] }), trail).at(-1)).toMatchObject({ kind: "ended", by: ada.id });
+  });
+
+  it("says a Parent with Auto-complete completed itself when its last Subtask ended, not who ended it", () => {
+    const p = parentTask(1, { open: 0, working: 0, done: 2, dropped: 0 }, ended);
+    const breakdown = subtask(2, p, { kind: "breakdown", state: "done" });
+    const acceptance = subtask(5, p, { kind: "acceptance", state: "done" });
+    const trail = [completed(3, breakdown.id, builder.id), completed(9, acceptance.id, bob.id), completed(9, p.id, bob.id, { auto_complete: true })];
+    const end = taskRecord(detail(p, { subtasks: [breakdown, acceptance] }), trail).at(-1);
+    expect(end).toMatchObject({ kind: "ended", auto: true, after: acceptance.key });
     expect(end).not.toHaveProperty("by");
   });
 });
