@@ -199,16 +199,17 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
     await expect(page).toHaveURL(`${base}/projects/WEB/tasks`);
   });
 
-  await test.step("the Organisation menu opens Settings, Invite and manage Members, and the Profile", async () => {
+  await test.step("the Organisation menu opens Settings, Invite and manage Members, and Account settings", async () => {
     const organisation = orgButton(page);
     await organisation.click();
     await shot(page, "14-door-organisation-menu");
+    // An admin's Settings opens on the Organisation.
     await page.getByRole("menuitem", { name: /^Settings/ }).click();
-    await expect(page).toHaveURL(`${base}/settings/account`);
+    await expect(page).toHaveURL(`${base}/settings/organisation/members`);
     await page.getByRole("link", { name: "Back" }).click();
     await organisation.click();
     await page.getByRole("menuitem", { name: /^Switch Organisation/ }).press("ArrowRight");
-    await page.getByRole("menuitem", { name: "Profile" }).click();
+    await page.getByRole("menuitem", { name: "Account settings" }).click();
     await expect(page).toHaveURL(`${base}/settings/account`);
     await page.getByRole("link", { name: "Back" }).click();
     await organisation.click();
@@ -335,7 +336,7 @@ test("an agent: its token shown once; deactivating it ends its live Claim and it
 
   await test.step("Account: my token, this browser, the CLI line", async () => {
     await page.goto(`${base}/settings/account`);
-    await expect(page.getByRole("listitem", { name: "This browser" }).getByRole("button", { name: "Sign out" })).toBeVisible();
+    await expect(page.getByRole("listitem", { name: "This browser" }).getByRole("button", { name: "Log out" })).toBeVisible();
     await expect(page.getByRole("button", { name: /^More for token / }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(0);
     await expect(page.getByText("darkory login ada")).toBeVisible();

@@ -198,22 +198,23 @@ describe("the Organisation menu", () => {
       "Switch OrganisationO then W",
       expect.stringMatching(/^Log out(⌥⇧Q|Alt Shift Q)$/),
     ]);
-    expect(within(menu).getByRole("menuitem", { name: /^Settings/ })).toHaveAttribute("href", "/settings");
+    // An admin's Settings opens on the Organisation.
+    expect(within(menu).getByRole("menuitem", { name: /^Settings/ })).toHaveAttribute("href", "/settings/organisation/members");
     expect(within(menu).getByRole("menuitem", { name: "Invite and manage Members" })).toHaveAttribute("href", "/settings/organisation/members");
     await userEvent.click(within(menu).getByRole("menuitem", { name: /^Settings/ }));
-    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Members"));
   });
 
-  it("Switch Organisation names the sign-in, lists the one Organisation on Local ticked, and leads to the Profile", async () => {
+  it("Switch Organisation names the sign-in, lists the one Organisation on Local ticked, and leads to Account settings", async () => {
     mockApi({ ...signedIn(), "GET /v1/me": me({ ...ada, email: "ada@acme.example" }) });
     renderApp("/inbox");
     const sub = await openSwitch(await openOrganisationMenu());
-    expect(sub).toHaveTextContent(/^ada@acme\.exampleAAcmeAccountProfile$/);
-    const [acme, profile] = within(sub).getAllByRole("menuitem");
+    expect(sub).toHaveTextContent(/^ada@acme\.exampleAAcmeAccount settings$/);
+    const [acme, account] = within(sub).getAllByRole("menuitem");
     expect(acme).toHaveAttribute("aria-current", "true");
     expect(acme).not.toHaveAttribute("aria-disabled");
-    expect(profile).toHaveAttribute("href", "/settings/account");
-    await userEvent.click(profile);
+    expect(account).toHaveAttribute("href", "/settings/account");
+    await userEvent.click(account);
     await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
   });
 
@@ -234,13 +235,14 @@ describe("the Organisation menu", () => {
     await screen.findByRole("heading", { name: "My work" });
     await userEvent.keyboard("ow");
     await waitFor(() => expect(screen.getAllByRole("menu")).toHaveLength(2));
-    expect(screen.getAllByRole("menu")[1]).toHaveTextContent("Profile");
+    expect(screen.getAllByRole("menu")[1]).toHaveTextContent("Account settings");
   });
 
-  it("gives a Member who is not an admin no Invite", async () => {
+  it("gives a Member who is not an admin no Invite, and Settings on their Account", async () => {
     mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
     renderApp("/inbox");
     const menu = await openOrganisationMenu();
+    expect(within(menu).getByRole("menuitem", { name: /^Settings/ })).toHaveAttribute("href", "/settings/account");
     expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.replace(/(G then S|O then W|⌥⇧Q|Alt Shift Q)$/, ""))).toEqual([
       "Settings",
       "Switch Organisation",
@@ -601,7 +603,7 @@ describe("keys", () => {
       ["ga", "Ops/Agents"],
       ["gm", "My work"],
       ["gi", "Inbox"],
-      ["gs", "Settings/Account"],
+      ["gs", "Settings/Members"],
     ]) {
       await userEvent.keyboard(keys);
       await waitFor(() => expect(crumbs()).toHaveTextContent(to));

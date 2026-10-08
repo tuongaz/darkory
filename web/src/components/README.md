@@ -38,11 +38,12 @@ and so on. What their R3 phase added (`docs/build/agents-plan.md`) carries over 
   dot beside it for the Activity stream (green Connected, amber Connecting… / Reconnecting…, grey
   Offline; the words on hover and in its `role="status"`), then Search (opens ⌘K) and File a Task
   (the `file-task` intent for the current Project), as Linear's search and compose.
-- **The Organisation menu**: Settings (G then S, `/settings`), Invite and manage Members (admins,
+- **The Organisation menu**: Settings (G then S: an admin's Organisation,
+  `/settings/organisation/members`; anyone else's Account), Invite and manage Members (admins,
   `/settings/organisation/members`), Switch Organisation (O then W) and Log out (⌥⇧Q), each key
   in muted text at the right. Switch Organisation's submenu heads with the Member's email, lists
   `me.organisations` (Local, which leaves it out, shows the current one), the current one ticked and
-  the others disabled since /v1 has no switch; then Account › Profile (`/settings/account`).
+  the others disabled since /v1 has no switch; then, after a line, Account settings (`/settings/account`).
 - **Inbox, My work**, then **Projects**: the Projects the Member is in (`me.projects`), and the
   current Project when the Member is not in it, each a row (mark, name, chevron) unfolding onto
   Tasks, Workflow, Agents (its live count), Activity, Settings. The current Project unfolds whenever
@@ -107,7 +108,7 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 - **Keys** (`shortcutList` in `@/app/shortcuts`, which the ? sheet lists), and no others: ⌘K /
   Ctrl K search, C file a Task, G then P the current Project's row in the sidebar, G then I / M the
   Inbox and My work, G then T / B / W / A the current Project's Tasks, board, Workflow and Agents,
-  G then S Settings, O then W Switch Organisation, ⌥⇧Q (Alt Shift Q) Log out, ? the shortcuts;
+  G then S Settings (an admin's Organisation, anyone else's Account), O then W Switch Organisation, ⌥⇧Q (Alt Shift Q) Log out, ? the shortcuts;
   on a list of Tasks J / ↓ and K / ↑ move the ring, Enter opens the ringed Task's peek, Esc closes
   it and returns the focus to its row, and with the peek open J and K move it along the list. They
   are ignored while typing, while a dialog or a menu is open, and while a card is carried; the

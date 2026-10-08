@@ -287,10 +287,10 @@ test.describe("signing in and setting up an empty Install", () => {
       // The Organisation menu opens from the sheet and fits the phone.
       await sidebar(page).getByRole("button", { name: "E2E Organisation" }).click();
       await page.getByRole("menuitem", { name: /^Switch Organisation/ }).press("ArrowRight");
-      await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
       await noSidewaysScroll(page);
       await shot(page, "18-phone-organisation-menu");
-      await page.getByRole("menuitem", { name: "Profile" }).click();
+      await page.getByRole("menuitem", { name: "Account settings" }).click();
       await expect(page).toHaveURL(`${at}/settings/account`);
     });
 

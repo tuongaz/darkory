@@ -108,7 +108,7 @@ export function TokenRows({ tokens, sessions, held }: { tokens: Token[]; session
 
 /**
  * A Member's open Sessions: the id, what it holds, and Close Session in its ⋯, which asks first.
- * On Account, `current` marks this browser, whose row has Sign out instead.
+ * On Account, `current` marks this browser, whose row has Log out instead.
  */
 export function SessionRows({ member, sessions, held, current }: { member: Member; sessions: Session[]; held: Held[]; current?: string }) {
   const [closing, setClosing] = useState<Session | null>(null);
@@ -117,7 +117,7 @@ export function SessionRows({ member, sessions, held, current }: { member: Membe
     onSuccess: () => setClosing(null),
   });
   const qc = useQueryClient();
-  // Forget everything read as this Member; /v1/me then answers 401 and the shell signs out.
+  // Forget everything read as this Member; /v1/me then answers 401 and the shell logs out.
   const signOut = useMutation({ mutationFn: logout, onSuccess: () => qc.resetQueries() });
   if (sessions.length === 0) return <span className="text-muted-foreground">None open</span>;
   const ends = closing ? boundToSession(held, closing.id) : [];
@@ -131,11 +131,11 @@ export function SessionRows({ member, sessions, held, current }: { member: Membe
             label={here ? "This browser" : `Session ${s.id}`}
             icon={s.kind === "browser" ? <MonitorIcon /> : <ZapIcon />}
             action={
-              // This browser signs out; any other Session is closed from its ⋯, which asks first.
+              // This browser logs out; any other Session is closed from its ⋯, which asks first.
               here ? (
                 <Button variant="outline" size="xs" onClick={() => signOut.mutate()} disabled={signOut.isPending}>
                   <LogOutIcon />
-                  Sign out
+                  Log out
                 </Button>
               ) : (
                 <MoreMenu label={`More for Session ${s.id}`} size="icon-xs">

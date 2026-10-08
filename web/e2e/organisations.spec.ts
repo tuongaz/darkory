@@ -38,7 +38,7 @@ test("Switch Organisation lists Local's one Organisation, ticked; a sign-in reac
   const me = await page.evaluate(() => fetch("/v1/me").then((r) => r.json()));
   expect(me.organisations).toBeUndefined();
   let sub = await switchOrganisation(page);
-  await expect(sub.getByRole("menuitem")).toHaveText(["E2E Organisation", "Profile"].map((t) => new RegExp(t)));
+  await expect(sub.getByRole("menuitem")).toHaveText(["E2E Organisation", "Account settings"].map((t) => new RegExp(t)));
   await expect(sub.getByRole("menuitem", { name: "E2E Organisation" })).toHaveAttribute("aria-current", "true");
   await page.screenshot({ path: "e2e/screenshots/organisations/one.png", animations: "disabled" });
   await page.keyboard.press("Escape");

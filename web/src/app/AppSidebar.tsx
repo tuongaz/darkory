@@ -53,7 +53,7 @@ import { useCurrentMe } from "@/me";
 import { liveAgents } from "@/work";
 import { projectPath, projectSettingsPath, useCurrentProject, type ProjectArea } from "./currentProject";
 import { sendIntent, useIntent } from "./intents";
-import { logOutKeys, searchKeys } from "./shortcuts";
+import { logOutKeys, searchKeys, settingsHome } from "./shortcuts";
 
 /**
  * The app's sidebar, after Linear's: a top row with the Organisation menu (and whether live
@@ -138,7 +138,8 @@ function MenuKeys({ keys }: { keys: string[] }) {
 
 /**
  * The Organisation's mark and name, opening its menu: Settings, Invite and manage Members (admins),
- * Switch Organisation (the Organisations the sign-in reaches, and the Member's Profile), Log out.
+ * Switch Organisation (the Organisations the sign-in reaches, and the Member's Account settings),
+ * Log out.
  * O then W opens it on Switch Organisation.
  */
 function OrganisationMenu() {
@@ -183,7 +184,7 @@ function OrganisationMenu() {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4} className="w-72 max-w-[calc(100vw-2rem)]">
-        {link("/settings", "Settings", ["G", "S"])}
+        {link(settingsHome(me.member.admin), "Settings", ["G", "S"])}
         {me.member.admin && link("/settings/organisation/members", "Invite and manage Members")}
         <DropdownMenuSeparator />
         <DropdownMenuSub open={switchOpen} onOpenChange={setSwitchOpen}>
@@ -210,8 +211,8 @@ function OrganisationMenu() {
                 </DropdownMenuItem>
               );
             })}
-            <DropdownMenuLabel className="mt-1 font-normal text-muted-foreground">Account</DropdownMenuLabel>
-            {link("/settings/account", "Profile")}
+            <DropdownMenuSeparator />
+            {link("/settings/account", "Account settings")}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuItem onSelect={() => sendIntent({ kind: "log-out" })}>

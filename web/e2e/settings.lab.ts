@@ -303,7 +303,7 @@ for (const scheme of ["light", "dark"] as const) {
       await settled(page);
       await page.screenshot({ path: `e2e/screenshots/sidebar-menu-${size.name}-${scheme}.png` });
       await menu.getByRole("menuitem", { name: /^Switch Organisation/ }).press("ArrowRight");
-      await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
+      await expect(page.getByRole("menuitem", { name: "Account settings" })).toBeVisible();
       await settled(page);
       await expect(page.getByRole("menu").nth(1)).toBeInViewport({ ratio: 1 });
       const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));

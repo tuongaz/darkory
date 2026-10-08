@@ -16,7 +16,7 @@ import { memberPath } from "./paths";
 
 /**
  * Settings › Account: who the signed-in Member is, and what can sign in as them: their
- * tokens, their Sessions with this browser marked (Sign out on its row), and the CLI line for
+ * tokens, their Sessions with this browser marked (Log out on its row), and the CLI line for
  * another browser. An admin changes the facts on the Member's page under Organisation.
  */
 export function AccountPage() {
