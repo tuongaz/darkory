@@ -4,8 +4,9 @@
 // in the Session the runner gave it: a Note, a commit in the first Workspace, an Evidence file,
 // and then what FAKEAGENT_SCENARIO says:
 //
-//	complete  (default) complete the Task; a Break down first files the Tasks FAKEAGENT_BREAKDOWN lists
-//	handover  hand the Task over to review, Status In review
+//	advance   (default) advance the Task along the outcome FAKEAGENT_OUTCOME names, or along its
+//	          Step's one way out; a Breakdown first files the Subtasks FAKEAGENT_BREAKDOWN lists
+//	complete  complete the Task, which its Step allows when it has one way into Done
 //	question  file a question aimed at the manager the prompt names, blocking the Task, and exit
 //	silent    end the turn without a decision (TURN_ENDED), and answer every nudge the same way
 //	hang      stop writing progress and sleep, deaf to /exit
@@ -67,7 +68,7 @@ func run() error {
 	}
 	scenario := os.Getenv("FAKEAGENT_SCENARIO")
 	if scenario == "" {
-		scenario = "complete"
+		scenario = "advance"
 	}
 	if err := firstRun(os.Getenv("FAKEAGENT_PROMPT")); err != nil {
 		return err
@@ -108,17 +109,21 @@ func run() error {
 	}
 
 	switch scenario {
-	case "complete":
+	case "advance":
 		if a.kind == "breakdown" {
 			if err := a.breakDown(); err != nil {
 				return err
 			}
 		}
-		if err := a.cli("complete", a.key, "--note", "fakeagent: done"); err != nil {
+		args := []string{"advance", a.key}
+		if o := os.Getenv("FAKEAGENT_OUTCOME"); o != "" {
+			args = append(args, o)
+		}
+		if err := a.cli(append(args, "--note", "fakeagent: done")...); err != nil {
 			return err
 		}
-	case "handover":
-		if err := a.cli("handover", a.key, "--skill", "review", "--status", "In review", "--note", "fakeagent: built; please review"); err != nil {
+	case "complete":
+		if err := a.cli("complete", a.key, "--note", "fakeagent: done"); err != nil {
 			return err
 		}
 	case "question":
@@ -286,6 +291,7 @@ func lateDialog() error {
 var (
 	titleLine   = regexp.MustCompile(`(?m)^# ([A-Z][A-Z0-9]*-[0-9]+): `)
 	kindLine    = regexp.MustCompile(`(?m)^- Kind: (\S+)$`)
+	// model v2: the prompt names the Task's Parent under "Its Feature" until M3.
 	featureLine = regexp.MustCompile(`(?m)^## Its Feature\n\n- Key: (\S+)$`)
 	skillLine   = regexp.MustCompile(`(?m)^- Needs the Skill: (\S+)$`)
 	aimLine     = regexp.MustCompile("--aim (\\S+) --title")
@@ -315,27 +321,34 @@ func (a *agent) read() error {
 	for _, m := range checkout.FindAllStringSubmatch(a.prompt, -1) {
 		a.dirs = append(a.dirs, strings.TrimSuffix(m[1], ","))
 	}
-	for _, want := range []string{"## Working rules", "## How this session ends", "darkory handover " + a.key} {
+	for _, want := range []string{"## Working rules", "## How this session ends"} {
 		if !strings.Contains(a.prompt, want) {
 			return fmt.Errorf("the prompt does not say %q", want)
 		}
 	}
+	if !strings.Contains(a.prompt, "darkory advance "+a.key) && !strings.Contains(a.prompt, "darkory complete "+a.key) {
+		return fmt.Errorf("the prompt says neither darkory advance %s nor darkory complete %s", a.key, a.key)
+	}
 	return nil
 }
 
-// breakDown files the Tasks FAKEAGENT_BREAKDOWN lists, as skill:title;skill:title (one engineer
-// Task by default), each naming the Workspaces FAKEAGENT_WORKSPACES lists, comma-separated.
+// breakDown files the Subtasks FAKEAGENT_BREAKDOWN lists under the Breakdown's Parent, as
+// step:title;step:title (step may be empty for the Project's first work Step; one Subtask "Build
+// it" there by default), each naming the Workspaces FAKEAGENT_WORKSPACES lists, comma-separated.
 func (a *agent) breakDown() error {
 	plan := os.Getenv("FAKEAGENT_BREAKDOWN")
 	if plan == "" {
-		plan = "engineer:Build it"
+		plan = ":Build it"
 	}
 	for item := range strings.SplitSeq(plan, ";") {
-		skill, title, ok := strings.Cut(item, ":")
+		step, title, ok := strings.Cut(item, ":")
 		if !ok {
-			return fmt.Errorf("FAKEAGENT_BREAKDOWN: %q is not skill:title", item)
+			return fmt.Errorf("FAKEAGENT_BREAKDOWN: %q is not step:title", item)
 		}
-		args := []string{"file", "--feature", a.feature, "--skill", skill, "--title", title}
+		args := []string{"file", "--parent", a.feature, "--title", title}
+		if step != "" {
+			args = append(args, "--step", step)
+		}
 		for ws := range strings.SplitSeq(os.Getenv("FAKEAGENT_WORKSPACES"), ",") {
 			if ws != "" {
 				args = append(args, "--workspace", ws)

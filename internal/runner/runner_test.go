@@ -87,7 +87,7 @@ func fakeAgent(t *testing.T) string {
 var testTimings = Timings{Wait: time.Second, ClaimTimeout: 3 * time.Second, Tick: 100 * time.Millisecond, Stale: 1500 * time.Millisecond,
 	Nudge: 400 * time.Millisecond, Exit: 2 * time.Second, Poll: 200 * time.Millisecond, Retry: 200 * time.Millisecond}
 
-// fixture is an Install with a git repository as Team WEB's default Workspace, ada as its human
+// fixture is an Install with a git repository as Project WEB's default Workspace, ada as its human
 // admin, and the agents the runner runs, set up through /v1 as a person would.
 type fixture struct {
 	t        *testing.T
@@ -119,12 +119,11 @@ func newFixture(t *testing.T, st *store.Store) *fixture {
 	t.Cleanup(ts.Close)
 	f := &fixture{t: t, srv: srv, ts: ts, timings: testTimings, tokens: map[string]string{"ada": init.Token.Secret}, ids: map[string]string{"ada": init.Member.ID},
 		repo: gitRepo(t), data: t.TempDir(), progress: t.TempDir(), log: &lockedBuffer{}, gh: &fakeGitHub{}}
-	f.ok("ada", "team", "create", "WEB", "Web")
-	f.ok("ada", "team", "add", "WEB", "ada")
+	f.ok("ada", "project", "create", "WEB", "Web", "--member", "ada")
 	f.ok("ada", "skill", "create", "build", "--kind", "generic", "--body", "Build it, with tests.")
 	f.ok("ada", "skill", "create", "review", "--kind", "generic", "--body", "Review it.")
 	f.ok("ada", "workspace", "add", "web", "--path", f.repo)
-	f.ok("ada", "team", "set", "WEB", "--default-workspace", "web")
+	f.ok("ada", "project", "set", "WEB", "--workspace", "web")
 	return f
 }
 
@@ -134,7 +133,7 @@ func (f *fixture) agent(name, scenario string, skills ...string) {
 	f.t.Helper()
 	var m client.Member
 	f.json(&m, "ada", "member", "create", name, "--kind", "agent")
-	f.ok("ada", "team", "add", "WEB", name)
+	f.ok("ada", "project", "add", "WEB", name)
 	f.ok("ada", "report-to", name, "ada")
 	for _, s := range skills {
 		f.ok("ada", "grant", name, s)
@@ -233,12 +232,8 @@ func (f *fixture) task(key string) client.TaskDetail {
 	return d
 }
 
-func (f *fixture) feature(key string) client.FeatureDetail {
-	f.t.Helper()
-	var d client.FeatureDetail
-	f.json(&d, "ada", "feature", "show", key)
-	return d
-}
+// parent reads a Parent, with its Subtasks and its own Evidence.
+func (f *fixture) parent(key string) client.TaskDetail { return f.task(key) }
 
 func notesOf(d client.TaskDetail) string {
 	var b strings.Builder

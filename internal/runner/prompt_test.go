@@ -18,7 +18,7 @@ func TestBuildPrompt(t *testing.T) {
 	p := Prompt{
 		Agent: "builder", Manager: "ada",
 		Task: PromptTask{Key: "WEB-12", Title: "Cart page", Description: "Show the cart.\nTotals at the bottom.",
-			Status: "In progress", Skill: "build", Kind: "work"},
+			Status: "Build", Skill: "build", Kind: "work", Outcomes: []PromptOutcome{{Name: "pass"}}},
 		Feature: PromptFeature{Key: "WEB-1", Title: "Checkout", Description: "People can pay.", Owner: "ada"},
 		Skills: []PromptSkill{
 			{Name: "build-acme", Version: 3, Company: true, Body: "Run make check before you hand over.\n"},
@@ -50,20 +50,20 @@ func TestBuildPrompt(t *testing.T) {
 	if strings.Contains(got, "\x1b") {
 		t.Error("the prompt carries a raw escape")
 	}
-	// A build Task is handed over, never completed by its builder; its review completes it.
-	if !strings.Contains(got, "Never `darkory complete` this Task") || strings.Contains(got, "darkory complete WEB-12") {
-		t.Error("the build Task's prompt lets its builder complete it")
+	// A Task at Build ends by advancing along its Step's outcomes, never by complete.
+	if !strings.Contains(got, "`darkory advance WEB-12 <outcome> --note") || !strings.Contains(got, "one of `pass`:") || strings.Contains(got, "darkory complete WEB-12") {
+		t.Error("the build Task's prompt does not end it by advance")
 	}
 	review := p
 	review.Task.Skill, review.Task.Review = "review", true
-	if got := BuildPrompt(review); !strings.Contains(got, "`darkory complete WEB-12 --note <what you checked>` when the work passes your review") ||
-		strings.Contains(got, "Never `darkory complete`") {
-		t.Error("the review Task's prompt does not say to complete it")
+	review.Task.Outcomes = []PromptOutcome{{Name: "pass", Done: true}, {Name: "needs changes"}}
+	if got := BuildPrompt(review); !strings.Contains(got, "one of `pass` (into Done), `needs changes`:") {
+		t.Error("the review Task's prompt does not list its outcomes")
 	}
 
-	// A quick Feature's Task with no Workspace and nothing on its record yet.
+	// A Task with no Parent, aimed at the agent, with no Workspace and nothing on its record yet.
 	p = Prompt{Agent: "builder", Manager: "ada", Dir: "/d/workspaces/WEB-30", Rules: remote.Rules,
-		Task:    PromptTask{Key: "WEB-30", Title: "Fix the typo", Status: "In progress"},
+		Task:    PromptTask{Key: "WEB-30", Title: "Fix the typo", Status: ""},
 		Feature: PromptFeature{Key: "WEB-29", Title: "Typo", Owner: "ada", Quick: true}}
 	golden(t, "prompt-quick.golden", BuildPrompt(p))
 }

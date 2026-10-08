@@ -30,9 +30,18 @@ type Prompt struct {
 
 // PromptTask is the Task a session works.
 type PromptTask struct {
+	// Status is the name of the Step the Task is at. model v2: named for the Step in M3.
 	Key, Title, Description, Status, Skill, Kind string
 	// Review says Skill is review, or a company Skill built on it.
 	Review bool
+	// Outcomes are the Connectors out of the Task's Step, in order: the ways its holder ends it.
+	Outcomes []PromptOutcome
+}
+
+// PromptOutcome is one way out of a Task's Step: Name, into Done when Done.
+type PromptOutcome struct {
+	Name string
+	Done bool
 }
 
 // PromptFeature is the Task's Feature.
@@ -63,7 +72,7 @@ type PromptEvidence struct {
 }
 
 // Nudge is what the runner types into a session whose turn ended while it still holds the Task.
-const Nudge = "You stopped without ending the Task: complete it, hand it over, or file a question."
+const Nudge = "You stopped without ending the Task: advance it, complete it, or file a question."
 
 // BuildPrompt writes the prompt file's text.
 func BuildPrompt(p Prompt) string {
@@ -87,7 +96,7 @@ func BuildPrompt(p Prompt) string {
 	}
 
 	w("## The Task\n\n")
-	w("- Key: %s\n- Title: %s\n- Status: %s\n", t.Key, line(t.Title), line(t.Status))
+	w("- Key: %s\n- Title: %s\n- Step: %s\n", t.Key, line(t.Title), line(t.Status))
 	if t.Skill != "" {
 		w("- Needs the Skill: %s\n", line(t.Skill))
 	}
@@ -161,7 +170,7 @@ func BuildPrompt(p Prompt) string {
 	}
 	for _, c := range p.Checkouts {
 		if c.Workspace.Mode == ModePullRequest {
-			step("%s is merged through pull requests: before you hand over to review, push your branch (`git push -u origin %s`) "+
+			step("%s is merged through pull requests: before you advance to review, push your branch (`git push -u origin %s`) "+
 				"and open a pull request into %s whose title starts with %s (`gh pr create --base %s --title \"%s: …\"`). "+
 				"The pull request's merge completes the review.", line(c.Workspace.Name), c.Branch, c.Base, t.Key, c.Base, t.Key)
 		}
@@ -170,24 +179,23 @@ func BuildPrompt(p Prompt) string {
 	step("Attach the log of your tests as Evidence (`darkory attach %s <file>`).", t.Key)
 	stuck := "   - when you are stuck or unsure, `darkory file --blocks %[1]s --aim %[2]s --title <your question>`, then stop: " +
 		"the runner releases the Task, and it comes back once the question is answered."
-	switch {
-	case t.Skill != "" && !t.Review && (t.Kind == "" || t.Kind == "work"):
-		// A build Task: its builder never completes it, so its branch is merged after a review.
+	if len(t.Outcomes) == 0 {
 		step("End the Task yourself, in one of these ways, and then stop:\n"+
-			"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done. "+
-			"Never `darkory complete` this Task: it needs the Skill %[3]s, and whoever builds a Task hands it over to review; "+
-			"its reviewer completes it, and that merges its branch;\n"+stuck, t.Key, line(p.Manager), line(t.Skill))
-	case t.Review:
+			"   - `darkory complete %[1]s --note <what you did>` when it is done;\n"+stuck, t.Key, line(p.Manager))
+	} else {
+		var outs []string
+		for _, o := range t.Outcomes {
+			if o.Done {
+				outs = append(outs, fmt.Sprintf("`%s` (into Done)", line(o.Name)))
+			} else {
+				outs = append(outs, fmt.Sprintf("`%s`", line(o.Name)))
+			}
+		}
 		step("End the Task yourself, in one of these ways, and then stop:\n"+
-			"   - `darkory complete %[1]s --note <what you checked>` when the work passes your review: your Complete merges its branch;\n"+
-			"   - `darkory handover %[1]s --skill <the Skill that built it> --note <what to fix>` when it needs more work;\n"+stuck,
-			t.Key, line(p.Manager))
-	default:
-		step("End the Task yourself, in one of these ways, and then stop:\n"+
-			"   - `darkory complete %[1]s --note <what you did>` when it is done and no further Skill is needed;\n"+
-			"   - `darkory handover %[1]s --skill review --status \"In review\" --note <what to review>` when your part is done and it needs review; "+
-			"a reviewer who wants more work hands it back to the Skill that built it with a Note saying what to fix;\n"+stuck,
-			t.Key, line(p.Manager))
+			"   - `darkory advance %[1]s <outcome> --note <what you did, or what to fix>` when your part is done, where the "+
+			"outcome is one of %[3]s: it goes on to the next Step for whoever has its Skill, and into Done completes it, "+
+			"which merges its branch. Choose the outcome your work earned; never skip a review;\n"+stuck,
+			t.Key, line(p.Manager), strings.Join(outs, ", "))
 	}
 	step("Do not run `next`, `claim`, `heartbeat`, `release` or `session close`, and do not work any other Task: the runner does that.")
 	w("\nIf you stop without ending the Task, the runner says so (%q) twice, and then releases the Task with a Note.\n", Nudge)

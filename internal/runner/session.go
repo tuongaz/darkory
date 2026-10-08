@@ -20,10 +20,10 @@ import (
 )
 
 // silentPrefix starts the Note of every release for a session that ended without a decision, so
-// the runner can count them on the Task (three file a question to the Feature owner).
+// the runner can count them on the Task (three file a question to the Task's Owner).
 const silentPrefix = "Session ended without a decision"
 
-// silentLimit is how many releases without a decision file a question to the Feature owner.
+// silentLimit is how many releases without a decision file a question to the Task's Owner.
 const silentLimit = 3
 
 // maxLog is the most of a session's log attached as Evidence: its end.
@@ -151,7 +151,7 @@ func (s *session) run(ctx context.Context) bool {
 		close(s.over)
 		s.cleanUp(context.WithoutCancel(ctx))
 	}()
-	s.log.Info("took a Task", "title", s.d.Task.Title, "status", s.d.Status.Name, "session", s.rec.Session())
+	s.log.Info("took a Task", "title", s.d.Task.Title, "step", stepName(s.d), "session", s.rec.Session())
 	err := s.waitForEarlier(ctx)
 	if err == nil {
 		err = s.start(ctx)
@@ -209,9 +209,9 @@ func (s *session) start(ctx context.Context) error {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	f, err := s.rec.Feature(ctx, s.d.Feature.Key)
+	f, err := s.rec.Feature(ctx, s.key)
 	if err != nil {
-		return fmt.Errorf("reading Feature %s: %w", s.d.Feature.Key, err)
+		return fmt.Errorf("reading the Parent of %s: %w", s.key, err)
 	}
 	wss, err := s.rec.Workspaces(ctx, s.d)
 	if err != nil {
@@ -307,6 +307,7 @@ func (s *session) writeMCPConfig(path, evidenceRoot string) error {
 }
 
 // prompt gathers what the prompt says from the record.
+// model v2: the prompt still says "Its Feature" for the Task's Parent and lists no outcomes (M3).
 func (s *session) prompt(ctx context.Context, f *FeatureInfo, checkouts []Checkout) (Prompt, error) {
 	members, err := s.rec.Members(ctx)
 	if err != nil {
@@ -322,7 +323,7 @@ func (s *session) prompt(ctx context.Context, f *FeatureInfo, checkouts []Checko
 	}
 	d := s.d
 	p := Prompt{Agent: s.a.name(), Manager: manager, Dir: TaskDir(s.r.cfg.Data, s.key), Checkouts: checkouts, Rules: remote.Rules,
-		Task:    PromptTask{Key: d.Task.Key, Title: d.Task.Title, Description: d.Task.Description, Status: d.Status.Name, Kind: string(d.Task.Kind)},
+		Task:    PromptTask{Key: d.Task.Key, Title: d.Task.Title, Description: d.Task.Description, Status: stepName(d), Kind: string(d.Task.Kind), Outcomes: outcomes(d)},
 		Feature: PromptFeature{Key: f.Key, Title: f.Title, Description: f.Description, Owner: f.Owner, Quick: f.Quick}}
 	if id := d.Task.SkillID; id != nil {
 		sk, err := s.rec.Skill(ctx, *id)
@@ -359,7 +360,7 @@ func (s *session) prompt(ctx context.Context, f *FeatureInfo, checkouts []Checko
 		p.Notes = append(p.Notes, pn)
 	}
 	for _, e := range d.Evidence {
-		if e.TaskID != nil && *e.TaskID == d.Task.ID {
+		if e.TaskID == d.Task.ID {
 			p.Evidence = append(p.Evidence, PromptEvidence{ID: e.ID, Filename: e.Filename, ContentType: e.ContentType,
 				AttachedBy: or(names[e.AttachedBy], e.AttachedBy), Size: e.Size})
 		}
@@ -629,7 +630,7 @@ func (s *session) end(ctx context.Context, note string) {
 }
 
 // giveUp releases a Task whose session ended without a decision, with a Note saying how, and on
-// every third such release files a question to the Feature owner that blocks the Task. why says
+// every third such release files a question to the Task's Owner that blocks the Task. why says
 // what happened when the command did not run at all.
 func (s *session) giveUp(ctx context.Context, why string) bool {
 	s.setState(StateEnding)
@@ -673,7 +674,7 @@ func (s *session) giveUp(ctx context.Context, why string) bool {
 	return true
 }
 
-// escalate files a question aimed at the Feature owner that blocks the Task, after the runner has
+// escalate files a question aimed at the Task's Owner that blocks the Task, after the runner has
 // released it n times without a decision. It is filed while the session still holds the Task, so
 // nobody takes it in between.
 func (s *session) escalate(ctx context.Context, d *client.TaskDetail, n int) {
@@ -684,13 +685,14 @@ func (s *session) escalate(ctx context.Context, d *client.TaskDetail, n int) {
 	body := fmt.Sprintf("Sessions of %s ended %d times without completing %s, handing it over or asking a question; "+
 		"its Notes say how each ended. Answer here what the agent should do (or drop the Task), then complete this "+
 		"question: %s stays blocked until then.", s.a.name(), n, s.key, s.key)
-	owner := d.Feature.OwnerID
-	q, err := s.rec.File(ctx, client.FileTaskBody{Title: title, Description: &body, AimedAt: &owner, Blocks: &s.key})
+	// model v2: ADR 0013's question goes to the manager as a Subtask of the Task's Parent (M3).
+	owner := d.Task.OwnerID
+	q, err := s.rec.File(ctx, client.FileTaskBody{Title: title, Description: &body, Aim: &owner, Blocks: &s.key})
 	if err != nil {
-		s.log.Error("could not file the question to the Feature owner", "err", err)
+		s.log.Error("could not file the question to the Task's Owner", "err", err)
 		return
 	}
-	s.log.Info("filed a question to the Feature owner", "question", q.Key, "releases", n)
+	s.log.Info("filed a question to the Task's Owner", "question", q.Key, "releases", n)
 }
 
 // release gives the Task up with note; a Claim that has ended already is no error.
@@ -752,7 +754,7 @@ func (s *session) shutdown(ctx context.Context) {
 	s.attachLog(bctx)
 }
 
-// attachLog attaches the session's log as Evidence, on the Task, or on its Feature when someone
+// attachLog attaches the session's log as Evidence, on the Task, or on its Parent when someone
 // else holds the Task by now. It is named for the Task, the agent and the time the session began
 // (UTC), so the builder's and the reviewer's logs of one Task tell apart.
 func (s *session) attachLog(ctx context.Context) {
@@ -764,12 +766,12 @@ func (s *session) attachLog(ctx context.Context) {
 		return
 	}
 	name := SessionLogName(s.key, s.a.name(), s.started)
-	onFeature, err := s.rec.Attach(ctx, s.key, s.d.Feature.Key, name, b)
+	onFeature, err := s.rec.Attach(ctx, s.key, parentKey(s.d), name, b)
 	switch {
 	case err != nil:
 		s.log.Error("could not attach the session's log", "err", err)
 	case onFeature:
-		s.log.Info("attached the session's log to the Feature; the Task is held by someone else", "feature", s.d.Feature.Key, "evidence", name)
+		s.log.Info("attached the session's log to the Parent; the Task is held by someone else", "parent", parentKey(s.d), "evidence", name)
 	default:
 		s.log.Info("attached the session's log", "evidence", name, "bytes", len(b))
 	}
@@ -808,4 +810,29 @@ func (s *session) cleanUp(ctx context.Context) {
 		return
 	}
 	s.r.RemoveCheckouts(cctx, s.key)
+}
+
+// stepName names the Step a Task is at; "" when it is at none.
+func stepName(d *client.TaskDetail) string {
+	if d.Step == nil {
+		return ""
+	}
+	return d.Step.Name
+}
+
+// parentKey is a Task's Parent's key, or "" when it has none.
+func parentKey(d *client.TaskDetail) string {
+	if d.Parent == nil {
+		return ""
+	}
+	return d.Parent.Key
+}
+
+// outcomes are the ways out of a Task's Step, in order.
+func outcomes(d *client.TaskDetail) []PromptOutcome {
+	var out []PromptOutcome
+	for _, k := range d.Connectors {
+		out = append(out, PromptOutcome{Name: k.Name, Done: k.ToStepID == nil})
+	}
+	return out
 }
