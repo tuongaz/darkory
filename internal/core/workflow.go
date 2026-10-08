@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -33,6 +34,7 @@ func scanStep(row interface{ Scan(...any) error }) (Step, error) {
 }
 
 func getStep(ctx context.Context, r store.Reader, orgID, id string) (Step, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	s, err := scanStep(r.QueryRow(ctx, `SELECT `+stepCols+` FROM steps st WHERE st.org_id = $1 AND st.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, refuse(CodeNotFound, "no Step %s", id)
@@ -74,7 +76,7 @@ WHERE k.org_id = $1 AND k.project_id = $2 ORDER BY st.position, k.position, k.id
 func (w Workflow) find(ref string) (Step, bool) {
 	ref = strings.TrimSpace(ref)
 	for _, s := range w.Steps {
-		if s.ID == ref {
+		if s.ID == shortid.Canonical(ref) {
 			return s, true
 		}
 	}
@@ -629,7 +631,8 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 	})
 
 	out.moves = map[string]string{}
-	for from, to := range w.Moves {
+	for given, to := range w.Moves {
+		from := shortid.Canonical(given) // either form (ADR 0017)
 		if ids[from] || !slices.ContainsFunc(current.Steps, func(s Step) bool { return s.ID == from }) {
 			return out, refuse(CodeInvalid, "moves names %s, which is not a Step being deleted", from)
 		}

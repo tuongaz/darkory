@@ -35,6 +35,7 @@ import { StepList, type RowTags } from "./edit/StepList";
 import { StepPanel, type PanelActions } from "./edit/StepPanel";
 import type { DraftEditor } from "./edit/useDraft";
 import { stepParam } from "./StepPeek";
+import { toShort } from "@/lib/shortid";
 
 /**
  * Settings › a Project › Workflow: the line on top (behind a toggle on a phone), then the Steps as
@@ -70,7 +71,9 @@ export function EditingWorkflow({
 
   // The picked Step: from the address, else where New Tasks start, else the first.
   const [params, setParams] = useSearchParams();
-  const asked = params.get(stepParam) ?? focusStep;
+  // A Step id from an old link may be a UUID's long text: the API writes it short (ADR 0017).
+  const fromAddress = params.get(stepParam);
+  const asked = (fromAddress && toShort(fromAddress)) ?? focusStep;
   const [opened, setOpened] = useState(!!focusStep);
   const topology = useMemo(() => (draft ? lineTopology(asLine(draft.wf, skillMap)) : undefined), [draft, skillMap]);
   const order = useMemo(() => (draft ? inOrder(draft.wf.steps) : []), [draft]);

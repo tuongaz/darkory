@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -309,8 +309,10 @@ func (s *Service) Next(ctx context.Context, c *auth.Caller, wait time.Duration, 
 // through the Session that made the Claim, before it expires. A late Heartbeat is refused: the
 // reply says lapsed, and the lapse is recorded if nobody has yet (ADR 0003).
 func (s *Service) Heartbeat(ctx context.Context, c *auth.Caller, ref string) (HeartbeatReply, error) {
-	taskID := ref
-	if _, err := uuid.Parse(ref); err != nil {
+	// An id is used as it is, without a read; a display key is resolved.
+	taskID, isID := shortid.Parse(ref)
+	if !isID {
+		var err error
 		if taskID, err = resolveTask(ctx, s.store, c.OrgID, ref); err != nil {
 			return HeartbeatReply{}, err
 		}

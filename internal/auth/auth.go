@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/tuongaz/darkory/internal/clock"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -192,7 +193,7 @@ WHERE t.secret_hash = $1 AND t.revoked_at IS NULL AND m.deactivated_at IS NULL`,
 		// Present but unusable: say why, rather than that the header is missing.
 		return nil, fmt.Errorf("%w: a Session id is 1 to %d printable characters with no spaces", ErrSessionRequired, MaxSessionIDLength)
 	}
-	c.ChosenID = cr.Session
+	c.ChosenID = shortid.Canonical(cr.Session) // either form names one Session (ADR 0017)
 	now := a.clock.Now()
 	if !lastUsed.Valid || now.Sub(time.UnixMilli(lastUsed.Int64)) >= TouchEvery {
 		if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{

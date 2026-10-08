@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 var values = Values{PromptFile: "/d/sessions/WEB-12/prompt.md", Workspace: "/d/workspaces/WEB-12/web",
@@ -28,6 +30,13 @@ func TestRenderTheDefaultCommand(t *testing.T) {
 		"--mcp-config", "{mcp_config}", "--append-system-prompt-file", "{prompt_file}"}, true, values)
 	if err != nil || !slices.Equal(got, want) {
 		t.Fatalf("stored defaults: got %q, %v", got, err)
+	}
+	// A Session id in its short form still reaches Claude Code as the UUID it needs (ADR 0017).
+	short := values
+	short.SessionID = "1Cfp1Ug9sXaWafTTUodsq2"
+	got, err = Render("", nil, true, short)
+	if err != nil || got[2] != shortid.Canonical(short.SessionID) || !shortid.IsUUID(got[2]) {
+		t.Fatalf("a short Session id rendered as %q, %v", got[2], err)
 	}
 	// Arguments that name the Task already get no first message.
 	got, err = Render("claude", []string{"-p", "do {task}"}, true, values)

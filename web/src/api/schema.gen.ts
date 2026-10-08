@@ -1688,6 +1688,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Format: id
+         * @description An id as a response writes it, and what `format: id` means wherever it appears: a UUID in
+         *     its short form, 22 characters of base58 (Bitcoin alphabet, in ASCII order), the UUID's
+         *     128 bits as one number left-padded with `1`. A request may send either this or the
+         *     UUID's canonical 36-character text. The one exception is a Session's id, which its
+         *     running copy chose: written short when it is a UUID, unchanged otherwise.
+         * @example 1CTuJUrXDEC71Dv55PHKrq
+         */
+        ID: string;
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description For people; may change between releases. */
@@ -1746,6 +1756,7 @@ export interface components {
          */
         SignInMode: "printed_link" | "email_link";
         Organisation: {
+            /** Format: id */
             id: string;
             name: string;
             /** Format: date-time */
@@ -1753,6 +1764,7 @@ export interface components {
         };
         /** @description An Organisation named by its id and name. */
         OrganisationBrief: {
+            /** Format: id */
             id: string;
             name: string;
         };
@@ -1770,11 +1782,18 @@ export interface components {
             organisations?: components["schemas"]["OrganisationBrief"][];
         };
         Session: {
-            /** @description The id the running copy chose. */
+            /**
+             * Format: id
+             * @description The id the running copy chose.
+             */
             id: string;
+            /** Format: id */
             member_id: string;
             kind: components["schemas"]["SessionKind"];
-            /** @description The token the Session presents. Absent for browser Sessions. */
+            /**
+             * Format: id
+             * @description The token the Session presents. Absent for browser Sessions.
+             */
             token_id?: string;
             /** Format: date-time */
             started_at: string;
@@ -1832,7 +1851,9 @@ export interface components {
             email: string;
         };
         Token: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             member_id: string;
             name: string;
             /** @description The first characters of the secret, to tell tokens apart. */
@@ -1859,13 +1880,17 @@ export interface components {
             default_heartbeat_timeout_seconds?: number;
         };
         Member: {
+            /** Format: id */
             id: string;
             name: string;
             kind: components["schemas"]["MemberKind"];
             email?: string;
             /** @description Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links. */
             admin: boolean;
-            /** @description The Member who directs this one. Absent when there is no Reporting line. */
+            /**
+             * Format: id
+             * @description The Member who directs this one. Absent when there is no Reporting line.
+             */
             manager_id?: string;
             /** Format: date-time */
             created_at: string;
@@ -1876,6 +1901,7 @@ export interface components {
             deactivated_at?: string;
             agent?: components["schemas"]["AgentSettings"];
             /**
+             * Format: id
              * @description The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
              *     at most 256 pixels square. Absent when the Member has none.
              */
@@ -1906,7 +1932,10 @@ export interface components {
             /** Format: email */
             email?: string;
             admin?: boolean;
-            /** @description A file uploaded with `purpose=avatar`; `""` removes the avatar. */
+            /**
+             * Format: id
+             * @description A file uploaded with `purpose=avatar`; `""` removes the avatar.
+             */
             avatar_file_id?: string;
         };
         /**
@@ -1967,11 +1996,13 @@ export interface components {
          *     default Workspace. Every Task belongs to exactly one Project.
          */
         Project: {
+            /** Format: id */
             id: string;
             /** @description The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`. */
             key: string;
             name: string;
             /**
+             * Format: id
              * @description The Workspace a Task with no Parent filed in the Project names when it names none.
              *     Absent when the Project has none.
              */
@@ -2026,6 +2057,7 @@ export interface components {
          *     the Steps in this order, then Done.
          */
         Workflow: {
+            /** Format: id */
             project_id: string;
             /** @description The Steps, by `position`, each with what is happening at it now. */
             steps: components["schemas"]["WorkflowStep"][];
@@ -2038,10 +2070,14 @@ export interface components {
          *     moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
          */
         Step: {
+            /** Format: id */
             id: string;
             /** @description Unique in its Workflow, ignoring case. */
             name: string;
-            /** @description The Skill a Member needs to take a Task at the Step. Absent on a hold. */
+            /**
+             * Format: id
+             * @description The Skill a Member needs to take a Task at the Step. Absent on a hold.
+             */
             skill_id?: string;
             /**
              * Format: int64
@@ -2081,6 +2117,7 @@ export interface components {
         };
         /** @description A Member who holds a Step's Skill. */
         Taker: {
+            /** Format: id */
             id: string;
             name: string;
             kind: components["schemas"]["MemberKind"];
@@ -2091,9 +2128,14 @@ export interface components {
          *     Connector.
          */
         Connector: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             from_step_id: string;
-            /** @description The Step it leads to. Absent when it leads into Done. */
+            /**
+             * Format: id
+             * @description The Step it leads to. Absent when it leads into Done.
+             */
             to_step_id?: string;
             /** @description The outcome, such as `pass` or `needs changes`; unique among the Connectors out of its Step, ignoring case. */
             name: string;
@@ -2120,7 +2162,10 @@ export interface components {
             };
         };
         StepInput: {
-            /** @description The id of a Step in the Workflow now; left out for a new one. */
+            /**
+             * Format: id
+             * @description The id of a Step in the Workflow now; left out for a new one.
+             */
             id?: string;
             name: string;
             /** @description Skill id or name the Step carries. Left out, the Step is a hold. */
@@ -2143,6 +2188,7 @@ export interface components {
         };
         ConnectorInput: {
             /**
+             * Format: id
              * @description The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
              *     with the same name, ignoring case, keeps its id; any other is new.
              */
@@ -2163,8 +2209,12 @@ export interface components {
          *     Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
          */
         Label: {
+            /** Format: id */
             id: string;
-            /** @description The Project that defined it for itself. Absent for the Organisation's. */
+            /**
+             * Format: id
+             * @description The Project that defined it for itself. Absent for the Organisation's.
+             */
             project_id?: string;
             /** @description Unique among the Labels a Task of its Project can carry, ignoring case. */
             name: string;
@@ -2191,6 +2241,7 @@ export interface components {
          *     instead of merges by the Runner.
          */
         Workspace: {
+            /** Format: id */
             id: string;
             /** @description Unique on the Install, ignoring case; it names the session's checkout directory. */
             name: string;
@@ -2234,10 +2285,14 @@ export interface components {
             default_branch?: string;
         };
         Skill: {
+            /** Format: id */
             id: string;
             name: string;
             kind: components["schemas"]["SkillKind"];
-            /** @description The generic Skill a company Skill builds on. */
+            /**
+             * Format: id
+             * @description The generic Skill a company Skill builds on.
+             */
             base_skill_id?: string;
             /** @description True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on. */
             builtin: boolean;
@@ -2249,13 +2304,20 @@ export interface components {
         /** @enum {string} */
         SkillKind: "generic" | "company";
         SkillVersion: {
+            /** Format: id */
             skill_id: string;
             /** Format: int64 */
             version: number;
             body: string;
-            /** @description The proposal this version was published from. Absent for version 1. */
+            /**
+             * Format: id
+             * @description The proposal this version was published from. Absent for version 1.
+             */
             proposal_id?: string;
-            /** @description The Member who completed the review, or who created the Skill. */
+            /**
+             * Format: id
+             * @description The Member who completed the review, or who created the Skill.
+             */
             published_by?: string;
             /** Format: date-time */
             published_at: string;
@@ -2279,12 +2341,16 @@ export interface components {
             body: string;
         };
         SkillProposal: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             skill_id: string;
+            /** Format: id */
             task_id: string;
             /** Format: int64 */
             based_on_version: number;
             body: string;
+            /** Format: id */
             author_id: string;
             state: components["schemas"]["ProposalState"];
             /**
@@ -2322,17 +2388,25 @@ export interface components {
          *     Blocking and are not stored.
          */
         Task: {
+            /** Format: id */
             id: string;
             /** @description Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence. */
             key: string;
+            /** Format: id */
             project_id: string;
-            /** @description The Parent of a Subtask. Absent on a Task with no Parent. */
+            /**
+             * Format: id
+             * @description The Parent of a Subtask. Absent on a Task with no Parent.
+             */
             parent_id?: string;
             kind: components["schemas"]["TaskKind"];
             title: string;
             description: string;
             state: components["schemas"]["TaskState"];
-            /** @description The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's. */
+            /**
+             * Format: id
+             * @description The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's.
+             */
             owner_id: string;
             /**
              * Format: int64
@@ -2341,6 +2415,7 @@ export interface components {
              */
             rank?: number;
             /**
+             * Format: id
              * @description The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
              *     ended Task.
              */
@@ -2351,11 +2426,15 @@ export interface components {
              */
             step_since?: string;
             /**
+             * Format: id
              * @description The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
              *     wherever `step_id` is.
              */
             skill_id?: string;
-            /** @description The Member the Task is aimed at by name, who may take it at no Step. */
+            /**
+             * Format: id
+             * @description The Member the Task is aimed at by name, who may take it at no Step.
+             */
             aimed_at_id?: string;
             /** @description The ids of the Labels it carries, by name. Absent when it carries none. */
             labels?: string[];
@@ -2372,7 +2451,10 @@ export interface components {
              *     false on a Subtask.
              */
             acceptance: boolean;
-            /** @description The Retrospective that filed this Task. */
+            /**
+             * Format: id
+             * @description The Retrospective that filed this Task.
+             */
             from_retrospective_task_id?: string;
             claim?: components["schemas"]["Claim"];
             /** @description True while any Task blocking this one is open. Always false on a Parent. */
@@ -2382,6 +2464,7 @@ export interface components {
             /** @description The Workspaces the Task names, in the order named. Absent when it names none. */
             workspace_ids?: string[];
             /**
+             * Format: id
              * @description The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
              *     Acceptance, a Retrospective.
              */
@@ -2411,6 +2494,7 @@ export interface components {
         };
         /** @description A Task named by its id, display key and title. */
         TaskBrief: {
+            /** Format: id */
             id: string;
             /** @description Display key, such as `MAIN-42`. */
             key: string;
@@ -2429,12 +2513,21 @@ export interface components {
          */
         TaskKind: "work" | "breakdown" | "acceptance" | "retrospective";
         Claim: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
+            /** Format: id */
             holder_id: string;
-            /** @description The Session that made the Claim. */
+            /**
+             * Format: id
+             * @description The Session that made the Claim.
+             */
             session_id: string;
-            /** @description The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member. */
+            /**
+             * Format: id
+             * @description The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member.
+             */
             skill_id?: string;
             /**
              * Format: int64
@@ -2613,10 +2706,16 @@ export interface components {
             labels: string[];
         };
         Note: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
+            /** Format: id */
             author_id: string;
-            /** @description The Skill the author was working under. */
+            /**
+             * Format: id
+             * @description The Skill the author was working under.
+             */
             skill_id?: string;
             body: string;
             /** Format: date-time */
@@ -2631,16 +2730,25 @@ export interface components {
          *     reviewed.
          */
         Observation: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
+            /** Format: id */
             author_id: string;
-            /** @description The Skill the author was working under. */
+            /**
+             * Format: id
+             * @description The Skill the author was working under.
+             */
             skill_id?: string;
             outcome: components["schemas"]["ObservationOutcome"];
             body: string;
             /** Format: date-time */
             created_at: string;
-            /** @description The Retrospective that reviewed it. Absent until reviewed. */
+            /**
+             * Format: id
+             * @description The Retrospective that reviewed it. Absent until reviewed.
+             */
             reviewed_by_task_id?: string;
             /** Format: date-time */
             reviewed_at?: string;
@@ -2659,13 +2767,16 @@ export interface components {
          *     about a Parent as a whole is attached to the Parent.
          */
         Evidence: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
             filename: string;
             content_type: string;
             /** Format: int64 */
             size: number;
             sha256: string;
+            /** Format: id */
             attached_by: string;
             /** Format: date-time */
             created_at: string;
@@ -2675,6 +2786,7 @@ export interface components {
          *     at `/v1/files/{id}/content`.
          */
         File: {
+            /** Format: id */
             id: string;
             name: string;
             /** @description The type the server found by reading the bytes. */
@@ -2683,7 +2795,10 @@ export interface components {
             size: number;
             sha256: string;
             purpose: components["schemas"]["FilePurpose"];
-            /** @description The Member who uploaded it. */
+            /**
+             * Format: id
+             * @description The Member who uploaded it.
+             */
             created_by: string;
             /** Format: date-time */
             created_at: string;
@@ -2702,11 +2817,17 @@ export interface components {
             seq: number;
             /** Format: date-time */
             at: string;
-            /** @description The Member who acted. Absent when Darkory acted, as when recording a lapse. */
+            /**
+             * Format: id
+             * @description The Member who acted. Absent when Darkory acted, as when recording a lapse.
+             */
             actor_id?: string;
             kind: components["schemas"]["ActivityKind"];
             subject_type: components["schemas"]["SubjectType"];
-            /** @description The id of the record the entry is about, of `subject_type`. */
+            /**
+             * Format: id
+             * @description The id of the record the entry is about, of `subject_type`.
+             */
             subject_id: string;
             payload: {
                 [key: string]: unknown;
@@ -2754,10 +2875,17 @@ export interface components {
          *     record: it lives as long as the session.
          */
         RunnerSession: {
+            /** Format: id */
             task_id: string;
-            /** @description The agent whose session it is. */
+            /**
+             * Format: id
+             * @description The agent whose session it is.
+             */
             member_id: string;
-            /** @description The Darkory Session the Runner holds the Claim through, which is also the agent's own session id. */
+            /**
+             * Format: id
+             * @description The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
+             */
             session_id: string;
             /** @description The machine the session runs on. */
             host: string;
@@ -2826,9 +2954,13 @@ export interface components {
         };
         /** @description A saved set of filters, sort and display for a list, kept by one Member for themselves. */
         View: {
+            /** Format: id */
             id: string;
             entity: components["schemas"]["ViewEntity"];
-            /** @description The Project whose list it is; absent for a list across Projects. */
+            /**
+             * Format: id
+             * @description The Project whose list it is; absent for a list across Projects.
+             */
             project_id?: string;
             name: string;
             /** @description The list's `filter` tokens, in the order saved. */
@@ -2922,8 +3054,8 @@ export interface components {
          *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
          *     percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
          *     `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-         *     query-encoded as usual. References are ids, not names; an id that names nothing matches
-         *     nothing.
+         *     query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+         *     that names nothing matches nothing. A View's saved filters come back with short ids.
          *
          *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
          *     boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
@@ -4387,8 +4519,8 @@ export interface operations {
                  *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
                  *     percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
                  *     `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-                 *     query-encoded as usual. References are ids, not names; an id that names nothing matches
-                 *     nothing.
+                 *     query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+                 *     that names nothing matches nothing. A View's saved filters come back with short ids.
                  *
                  *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
                  *     boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);

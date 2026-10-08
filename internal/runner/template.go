@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // DefaultCommand is the agent command when an agent's settings name none: Claude Code, run
@@ -50,7 +52,9 @@ func (v Values) lookup(name string) (string, bool) {
 	case "workspace":
 		return v.Workspace, true
 	case "session_id":
-		return v.SessionID, true
+		// Claude Code's --session-id takes a UUID: the canonical text, whichever form the id
+		// came in (ADR 0017).
+		return shortid.Canonical(v.SessionID), true
 	case "model":
 		return v.Model, true
 	case "mcp_config":

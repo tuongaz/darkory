@@ -8,3 +8,11 @@ generate:
   std-http-server: true
 output-options:
   name-normalizer: ToCamelCaseWithInitialisms
+  # An id (format: id) is a shortid.ID on the server: it reads either form and writes the short
+  # one (ADR 0017). The Go client keeps plain strings: it passes ids through as the API wrote them.
+  type-mapping:
+    string:
+      formats:
+        id:
+          type: shortid.ID
+          import: github.com/tuongaz/darkory/internal/shortid

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // Filters narrow a list by tokens `field:op:v1,v2…`, the grammar of the `filter` parameter of
@@ -330,6 +332,9 @@ func parseFilters(entity string, tokens []string) ([]filter, error) {
 			if err := checkValue(f, op, v); err != nil {
 				return nil, refuse(CodeInvalid, "filter %q: %s", tok, err.Message)
 			}
+			if f.kind == idField {
+				v = shortid.Canonical(v) // either form (ADR 0017); a word such as none stays
+			}
 			vals[i] = v
 		}
 		if op == "btw" && dateOf(vals[0]).After(dateOf(vals[1])) {
@@ -338,6 +343,38 @@ func parseFilters(entity string, tokens []string) ([]filter, error) {
 		out = append(out, filter{token: tok, field: f, op: op, values: vals})
 	}
 	return out, nil
+}
+
+// FilterIDs is tokens with each id value of entity's list written by conv: shortid.Short for a
+// reply, shortid.Canonical for storage (ADR 0017). Words such as none, other fields' values, and
+// a token that does not parse stay as they are.
+func FilterIDs(entity string, tokens []string, conv func(string) string) []string {
+	if tokens == nil {
+		return nil
+	}
+	fields := fieldsOf[entity]
+	out := make([]string, len(tokens))
+	for i, tok := range tokens {
+		out[i] = tok
+		name, rest, ok := strings.Cut(tok, ":")
+		f, known := fields.byName[name]
+		if !ok || !known || f.kind != idField {
+			continue
+		}
+		op, raw, ok := strings.Cut(rest, ":")
+		if !ok {
+			continue
+		}
+		parts := strings.Split(raw, ",")
+		for j, p := range parts {
+			// An id has no character that percent-encoding changes, so it is its own encoding.
+			if _, isID := shortid.Parse(p); isID {
+				parts[j] = conv(p)
+			}
+		}
+		out[i] = name + ":" + op + ":" + strings.Join(parts, ",")
+	}
+	return out
 }
 
 // checkValue checks one decoded value of a token for field f under op.

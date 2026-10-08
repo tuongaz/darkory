@@ -5,6 +5,7 @@ import (
 
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // GetMe returns the caller, their Projects and Skills, and the Session making the request; the
@@ -13,12 +14,14 @@ func (s *Server) GetMe(w http.ResponseWriter, r *http.Request) {
 	me, err := s.core.GetMe(r.Context(), caller(r))
 	s.respond(w, r, as(http.StatusOK, func(me core.Me) any {
 		out := gen.Me{
-			Organisation: gen.Organisation{ID: me.Organisation.ID, Name: me.Organisation.Name, CreatedAt: me.Organisation.CreatedAt},
+			Organisation: gen.Organisation{ID: shortid.Of(me.Organisation.ID), Name: me.Organisation.Name, CreatedAt: me.Organisation.CreatedAt},
 			Member:       memberOut(me.Member), Projects: each(me.Projects, projectOut), Skills: each(me.Skills, skillOut),
 			Session: sessionOut(me.Session),
 		}
 		if me.Organisations != nil {
-			orgs := each(me.Organisations, func(o core.Organisation) gen.OrganisationBrief { return gen.OrganisationBrief{ID: o.ID, Name: o.Name} })
+			orgs := each(me.Organisations, func(o core.Organisation) gen.OrganisationBrief {
+				return gen.OrganisationBrief{ID: shortid.Of(o.ID), Name: o.Name}
+			})
 			out.Organisations = &orgs
 		}
 		return out
@@ -78,7 +81,7 @@ func (s *Server) UpdateMember(w http.ResponseWriter, r *http.Request, member gen
 		return
 	}
 	m, err := s.core.UpdateMember(r.Context(), c, member, core.MemberChange{Name: body.Name, Email: (*string)(body.Email), Admin: body.Admin,
-		AvatarFileID: body.AvatarFileID}, idem)
+		AvatarFileID: shortid.StringPtr(body.AvatarFileID)}, idem)
 	if err == nil && body.AvatarFileID != nil {
 		// An avatar file the Member stopped showing was deleted with the change.
 		s.purgeFiles(r.Context(), c)

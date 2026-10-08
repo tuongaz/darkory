@@ -3,6 +3,7 @@ package gen_test
 import (
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -74,6 +75,45 @@ func TestSpecKeepsTheConventions(t *testing.T) {
 				t.Fatalf("top-level security %v, want %v", doc.Security, want)
 			}
 		}
+	}
+}
+
+// refs are the properties named as ids that take a reference (an id, or a name or key), which the
+// core resolves; they stay plain strings. Every other id is `format: id` (ADR 0017).
+var refs = map[string]bool{"FileTaskBody.labels": true, "SetTaskLabelsBody.labels": true}
+
+// Every id the spec carries says `format: id`, so the server writes it short and reads either
+// form: a property named id, *_id or *_ids, or one of the few named otherwise.
+func TestIDsSayFormatID(t *testing.T) {
+	doc, err := openapi3.NewLoader().LoadFromFile("../../../api/openapi.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherNames := map[string]bool{"labels": true, "filed_by": true, "published_by": true, "attached_by": true, "created_by": true}
+	ids := 0
+	for name, s := range doc.Components.Schemas {
+		for prop, ps := range s.Value.Properties {
+			if !(prop == "id" || strings.HasSuffix(prop, "_id") || strings.HasSuffix(prop, "_ids") || otherNames[prop]) || refs[name+"."+prop] {
+				continue
+			}
+			v := ps.Value
+			if v.Type.Is("array") {
+				if v.Items.Ref != "" {
+					continue // a list of records, such as TaskDetail.labels
+				}
+				v = v.Items.Value
+			}
+			if v.Format != "id" {
+				t.Errorf("%s.%s is an id without format: id", name, prop)
+			}
+			ids++
+		}
+	}
+	if ids < 60 {
+		t.Errorf("only %d ids found; the walk is broken", ids)
+	}
+	if p := doc.Components.Schemas["ID"].Value; p.Format != "id" || p.Pattern == "" {
+		t.Errorf("the ID schema defines format id with its pattern")
 	}
 }
 

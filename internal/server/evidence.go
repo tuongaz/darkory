@@ -149,7 +149,7 @@ func evidenceType(header string) (string, bool) {
 }
 
 func (s *Server) GetEvidence(w http.ResponseWriter, r *http.Request, evidence gen.EvidenceID) {
-	e, err := s.core.GetEvidence(r.Context(), caller(r), evidence)
+	e, err := s.core.GetEvidence(r.Context(), caller(r), string(evidence))
 	s.respond(w, r, as(http.StatusOK, func(e core.Evidence) any { return evidenceOut(e) }), e, err)
 }
 
@@ -157,7 +157,7 @@ func (s *Server) GetEvidence(w http.ResponseWriter, r *http.Request, evidence ge
 // always as an attachment and never sniffed, so an uploaded page cannot run as the Install's own.
 func (s *Server) DownloadEvidence(w http.ResponseWriter, r *http.Request, evidence gen.EvidenceID) {
 	ctx := r.Context()
-	e, err := s.core.GetEvidence(ctx, caller(r), evidence)
+	e, err := s.core.GetEvidence(ctx, caller(r), string(evidence))
 	if err != nil {
 		s.fail(w, r, err)
 		return

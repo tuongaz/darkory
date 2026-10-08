@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // What a session leaves behind for later, in <data>/sessions/<TASK-KEY>: the logs it could not
@@ -84,7 +85,7 @@ func (r *Runner) attachKeptOnce(ctx context.Context) {
 		}
 		var a *agent
 		for _, x := range r.agents {
-			if x.me.Member.ID == k.Agent {
+			if shortid.Canonical(x.me.Member.ID) == shortid.Canonical(k.Agent) { // a log kept before ids were short has the long form
 				a = x
 			}
 		}

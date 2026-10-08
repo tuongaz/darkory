@@ -36,11 +36,3 @@ export function memberSettingsPath(member: Pick<Member, "name" | "kind">): strin
   const area = member.kind === "agent" ? "agents" : "members";
   return `/settings/organisation/${area}/${encodeURIComponent(member.name)}`;
 }
-
-/**
- * A Session id as rows show it: its last 8 characters after "…". Ids are UUIDv7, so Sessions
- * started the same day share their first characters and differ at the end.
- */
-export function shortSessionId(id: string): string {
-  return id.length <= 9 ? id : `…${id.slice(-8)}`;
-}

@@ -15,6 +15,7 @@ import (
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/clock"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -313,7 +314,7 @@ func TestBrowserSessionsEndAndMembersDeactivate(t *testing.T) {
 // builder0 is the key the builder's long requests are counted under.
 func builder0(t *testing.T, h *harness) string {
 	me := got(h.client(h.secrets["builder"], "builder-1").GetMeWithResponse(t.Context())).want(t, http.StatusOK).JSON200
-	return me.Organisation.ID + "/" + me.Member.ID
+	return shortid.Canonical(me.Organisation.ID) + "/" + shortid.Canonical(me.Member.ID) // the server keys by canonical ids
 }
 
 // A Member may hold only so many Activity streams and waiting `next` calls at once; one more is
@@ -400,7 +401,7 @@ func TestDeactivationEndsEverythingAndReactivationRevivesNothing(t *testing.T) {
 		link := got(h.admin.IssueLoginLinkWithResponse(ctx, "bob", &client.IssueLoginLinkParams{})).want(t, http.StatusCreated).JSON201
 		key := func() string {
 			me := got(bob.GetMeWithResponse(ctx)).want(t, http.StatusOK).JSON200
-			return me.Organisation.ID + "/" + me.Member.ID
+			return shortid.Canonical(me.Organisation.ID) + "/" + shortid.Canonical(me.Member.ID) // the server keys by canonical ids
 		}()
 		stream := h.openStreamAs(t, h.secrets["bob"], "bob-stream", "")
 		waiting := make(chan int, 1)

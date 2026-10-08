@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/google/uuid"
+	"github.com/tuongaz/darkory/internal/shortid"
 
 	"github.com/tuongaz/darkory/internal/auth"
 )
@@ -19,11 +19,11 @@ func validName(what, name string) error {
 	return nil
 }
 
-// looksLikeID reports whether a name is spelled as an id is, which would make a reference to it
-// ambiguous: references take an id or a name (decisions.md).
+// looksLikeID reports whether a name is spelled as an id is, in either form (ADR 0017), which
+// would make a reference to it ambiguous: references take an id or a name (decisions.md).
 func looksLikeID(name string) bool {
-	u, err := uuid.Parse(name)
-	return err == nil && u.String() == name
+	_, ok := shortid.Parse(name)
+	return ok
 }
 
 // validMemberName is validName, refusing a name spelled as an id.

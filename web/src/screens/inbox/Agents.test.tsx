@@ -115,9 +115,9 @@ describe("a Project's Agents", () => {
   });
 
   it("lists the agent's Sessions in a table: full ids that copy, the Runner's state on the Session it works through, ended ones on request", async () => {
-    const reader = "01a11b2b-acc2-7854-bf88-edcaa71f4218";
-    const worker = "01a11b2b-acc8-7d90-bf1c-5b0a842120d6";
-    const gone = "01a119a8-a8b8-7d94-9853-d4737e9effdc";
+    const reader = "1CfpetKjfB4XEtcbSpu599";
+    const worker = "1CfpetKm9mF5bergWMAmtH";
+    const gone = "1Cfp6eg2SL6edHPrxot6y1";
     const { calls, routes } = agentsApi({ sessions: [session("waiting", { session_id: worker, state_since: minutes(-3) })] });
     routes["GET /v1/members/:member/sessions"] = ({ query }) =>
       query.get("state") === "ended"
