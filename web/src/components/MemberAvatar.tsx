@@ -1,7 +1,9 @@
-import type { Member } from "@/api/client";
+import { useState } from "react";
+import { fileURL, type Member } from "@/api/client";
 import { initials, tintOf } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import type { Working } from "@/lib/work";
+import { useAvatarFile } from "./avatars";
 
 export type AvatarSize = "sm" | "md" | "lg";
 
@@ -28,6 +30,10 @@ const workingWords: Record<Working, string> = {
  * that its Member works, where a row's glyph would: an agent's ring turns while its session runs
  * and stops amber (`waiting`), red (`stalled`) or grey (`ending`); `held` is a human's live Claim,
  * a still ring. Reduced motion stops the turning.
+ *
+ * A Member with an Avatar shows it inside the same ring, cut round; the initials
+ * stand in when the image cannot load. A brief shape of a Member (a holder, a taker) finds its
+ * Avatar by id (`avatars.ts`).
  */
 export function MemberAvatar({
   member,
@@ -35,12 +41,15 @@ export function MemberAvatar({
   working,
   className,
 }: {
-  member: Pick<Member, "name" | "kind">;
+  member: Pick<Member, "name" | "kind"> & { id?: string; avatar_file_id?: string };
   size?: AvatarSize;
   working?: Working;
   className?: string;
 }) {
   const tint = tintOf(member.name);
+  const file = useAvatarFile(member);
+  const [broken, setBroken] = useState<string>();
+  const image = file && broken !== file ? file : undefined;
   const name = member.kind === "agent" ? `${member.name} (agent)` : member.name;
   return (
     <span
@@ -50,6 +59,7 @@ export function MemberAvatar({
       data-kind={member.kind}
       data-tint={tint}
       data-working={working}
+      data-avatar={image ? "image" : undefined}
       className={cn(
         "avatar-tint inline-grid flex-none place-items-center rounded-full font-semibold leading-none select-none",
         `tint-${tint}`,
@@ -57,7 +67,11 @@ export function MemberAvatar({
         className,
       )}
     >
-      {initials(member)}
+      {image ? (
+        <img src={fileURL(image)} alt="" draggable={false} onError={() => setBroken(image)} className="size-full rounded-full object-cover" />
+      ) : (
+        initials(member)
+      )}
     </span>
   );
 }
