@@ -8,7 +8,7 @@ The words used here (Member, Project, Task, Subtask, Step, Claim, advance, Takea
 
 ```sh
 make build                 # or: go build -o bin/darkory ./cmd/darkory   (Go 1.26.8 downloads itself)
-bin/darkory init           # creates the Organisation and you, Project MAIN and its agents; prints your token and a login link
+bin/darkory init           # creates the Organisation and you, Project MAIN and its agents (--no-agents: MAIN alone); prints your token and a login link
 bin/darkory serve          # listens on 0.0.0.0:7357, prints a fresh login link and opens it
 ```
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
+	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 	"github.com/tuongaz/darkory/internal/wake"
 )
@@ -118,4 +119,44 @@ func TestFreshInit(t *testing.T) {
 			f.checkActivity()
 		})
 	}
+}
+
+// Without the roster (`darkory init --no-agents`) InitWith still seeds Project MAIN on the default
+// Workflow, holding the first Member alone: no agents, no Workspace.
+func TestInitSeedsProjectMainWithoutTheRoster(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := &fixture{t: t, st: st, clock: clockAt(epoch), secrets: map[string]string{}}
+		f.svc = core.New(st, f.clock, wake.New(), nil)
+		f.auth = auth.New(st, f.clock)
+		ctx := t.Context()
+		out, err := f.svc.InitWith(ctx, "Acme", "ada", core.InitOptions{Project: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out.Project == nil || out.Project.Key != "MAIN" || out.Project.Name != "Main" || out.Workspace != nil || len(out.Agents) != 0 {
+			t.Fatalf("seeded %+v, Workspace %+v, %d agents", out.Project, out.Workspace, len(out.Agents))
+		}
+		f.secrets[out.Member.ID] = out.Token.Secret
+		f.admin = f.session(out.Member.ID, "ada-1")
+		p, err := f.svc.GetProject(ctx, f.admin, "MAIN")
+		if err != nil || len(p.Members) != 1 || p.Members[0].Name != "ada" || p.Project.DefaultWorkspaceID != nil {
+			t.Fatalf("MAIN %+v holds %+v, %v", p.Project, p.Members, err)
+		}
+		agents, err := f.svc.ListMembers(ctx, f.admin, nil, ptrStr("agent"))
+		if err != nil || len(agents) != 0 {
+			t.Fatalf("agents %+v, %v", agents, err)
+		}
+		skills, err := f.svc.ListSkills(ctx, f.admin, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w, err := f.svc.GetWorkflow(ctx, f.admin, "MAIN")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := workflowText(skills, w.Workflow); got != defaultWorkflowText {
+			t.Fatalf("MAIN's Workflow:\n%s", got)
+		}
+		f.checkActivity()
+	})
 }
