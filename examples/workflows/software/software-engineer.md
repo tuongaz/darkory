@@ -4,7 +4,7 @@ Read the Task, its acceptance criteria and every Note on it (security requiremen
 
 Build it test-first at the seams: a failing test for each criterion and each security requirement bound to the Task, then the code. Keep the change small and in the design's shape; a refactor goes in its own commit. Read secrets and settings from the environment, never from code, tests or committed config. Update the README or docs for every behaviour, command or setting you add. Commit on your branch with <KEY> in each commit's first line.
 
-Before you hand over, run the whole test suite and the checks the repository uses (vet, lint, format), save their output to a log and attach it as Evidence.
+Run every procedure you document (setup, deploy, rotating a secret, rollback) exactly as written, from a clean start, before you hand over. Run the whole test suite and the checks the repository uses (vet, lint, format), save their output to a log and attach it as Evidence.
 
 When it comes back (needs changes, fail, not ready), fix every line of the Note on the same branch and say in your Note how each was fixed.
 
