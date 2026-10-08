@@ -164,7 +164,7 @@ describe("File a Task", () => {
     mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": wf }));
     const dialog = await openDialog();
     await within(dialog).findByRole("switch", { name: "Acceptance" });
-    expect(dialog).toHaveTextContent("Confirmed as a whole at the Acceptance Step before it is done");
+    expect(dialog).toHaveTextContent("Acceptance runs before it completes");
     expect(dialog).not.toHaveTextContent("Acceptance at Acceptance");
   });
 
@@ -181,7 +181,7 @@ describe("File a Task", () => {
     const dialog = await openDialog();
     expect(await within(dialog).findByRole("switch", { name: "Acceptance" })).toBeChecked();
     expect(within(dialog).getByRole("switch", { name: "Auto-complete" })).toBeChecked();
-    expect(dialog).toHaveTextContent("Acceptance runs at the Accept Step before it is done");
+    expect(dialog).toHaveTextContent("Runs at the Accept Step");
     await userEvent.click(within(dialog).getByRole("switch", { name: "Acceptance" }));
     await userEvent.type(within(dialog).getByLabelText("Title"), "Refunds");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));

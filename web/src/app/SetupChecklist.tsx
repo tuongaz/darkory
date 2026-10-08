@@ -12,8 +12,8 @@ import { Content, TopBar } from "./TopBar";
 /**
  * The three things that set up an Install, shown in the Inbox until the Organisation has a Task:
  * with none, the Inbox would be empty. `darkory init` always makes MAIN, with or without agents, so
- * on a fresh Install the first is done, and the list offers no first Project once one exists (more
- * are made from the switcher or Settings). It never says Step: that word is a Workflow's.
+ * on a fresh Install the first is done and names it ("Project: Main"); New Project beside it makes
+ * another. It never says Step of its items: that word is a Workflow's.
  */
 export function SetupChecklist() {
   const me = useCurrentMe();
@@ -39,10 +39,15 @@ export function SetupChecklist() {
             <p className="text-muted-foreground">Three things to set up, then agents can pull work.</p>
           </div>
           <ol className="flex flex-col">
-            <Item n={1} done={hasProject} title="Create a Project" help="Its key starts every Task key: MAIN-1. It comes with a Workflow.">
-              {admin && !hasProject && (
-                <Button onClick={() => sendIntent({ kind: "new-project" })}>
-                  Create Project
+            <Item
+              n={1}
+              done={hasProject}
+              title={project ? `Project: ${project.name}` : "A Project"}
+              help={project ? `${project.key} starts every Task key: ${project.key}-1. It comes with a Workflow.` : "Its key starts every Task key: MAIN-1. It comes with a Workflow."}
+            >
+              {admin && (
+                <Button variant={next === 1 ? "default" : "outline"} onClick={() => sendIntent({ kind: "new-project" })}>
+                  New Project
                 </Button>
               )}
             </Item>

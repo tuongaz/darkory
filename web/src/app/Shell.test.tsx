@@ -282,14 +282,14 @@ describe("the signed-in Member's menu", () => {
 });
 
 describe("the Install checklist", () => {
-  it("appears in the Inbox with no Project, and Create Project opens New Project", async () => {
+  it("appears in the Inbox with no Project, and its New Project opens the dialog", async () => {
     mockApi({ ...signedIn(), "GET /v1/projects": { items: [] }, "GET /v1/me": me(ada, { projects: [] }), "GET /v1/members": { items: [ada] } });
     renderApp("/inbox");
 
     const setup = await screen.findByRole("region", { name: "Set up Acme" });
     expect(within(setup).getByRole("button", { name: "Add Member" })).toBeDisabled();
     expect(within(setup).getByRole("button", { name: "File Task" })).toBeDisabled();
-    await userEvent.click(within(setup).getByRole("button", { name: "Create Project" }));
+    await userEvent.click(within(setup).getByRole("button", { name: "New Project" }));
     expect(await screen.findByRole("dialog", { name: "New Project" })).toBeInTheDocument();
   });
 
@@ -300,8 +300,10 @@ describe("the Install checklist", () => {
     const setup = await screen.findByRole("region", { name: "Set up Acme" });
     expect(within(setup).getByLabelText("1 of 3, done")).toBeInTheDocument();
     expect(within(setup).getByLabelText("2 of 3, done")).toBeInTheDocument();
-    // A Project exists: the list offers no first one. Its items are not "steps": Step is a
-    // Workflow's word, which only item 3's help uses, for one.
+    // The Project there is named, done; New Project makes another. Its items are not "steps":
+    // Step is a Workflow's word, which only item 3's help uses, for one.
+    expect(setup).toHaveTextContent("Project: Web");
+    expect(within(setup).getByRole("button", { name: "New Project" })).toBeInTheDocument();
     expect(within(setup).queryByRole("button", { name: "Create Project" })).not.toBeInTheDocument();
     expect(setup).not.toHaveTextContent(/\bsteps\b|step \d/i);
     expect(within(setup).queryAllByLabelText(/step/i)).toEqual([]);

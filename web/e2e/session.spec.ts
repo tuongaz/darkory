@@ -136,8 +136,9 @@ test.describe("signing in and setting up an empty Install", () => {
       await expect(setup).toBeVisible();
       await expect(setup.getByLabel("1 of 3, done")).toBeVisible();
       await expect(setup.getByLabel("2 of 3, done")).toHaveCount(0);
-      // MAIN exists, so the list offers no first Project.
-      await expect(setup.getByRole("button", { name: "Create Project" })).toHaveCount(0);
+      // MAIN is there, named; New Project beside it makes another.
+      await expect(setup).toContainText("Project: Main");
+      await expect(setup.getByRole("button", { name: "New Project" })).toBeVisible();
       await expect(setup.getByRole("button", { name: "File Task" })).toBeDisabled();
       await expect(page.getByRole("button", { name: "Project: Main" })).toBeVisible();
       await shot(page, "03-checklist-fresh");

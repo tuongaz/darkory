@@ -399,8 +399,8 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
                 help={
                   // "An Acceptance at Acceptance" says the word twice when the Step is named for it.
                   acceptanceStep.name.trim().toLowerCase() === "acceptance"
-                    ? "Confirmed as a whole at the Acceptance Step before it is done"
-                    : `Acceptance runs at the ${acceptanceStep.name} Step before it is done`
+                    ? "Acceptance runs before it completes"
+                    : `Runs at the ${acceptanceStep.name} Step`
                 }
               />
             )}
