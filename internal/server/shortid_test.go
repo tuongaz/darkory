@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -25,8 +24,6 @@ func longID(t *testing.T, short string) string {
 	long, _ := shortid.Parse(short)
 	return long
 }
-
-var uuidText = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 
 // noUUIDs fails when a reply spells any id as a UUID.
 func noUUIDs(t *testing.T, what string, body []byte) {
@@ -173,6 +170,14 @@ func TestShortIDsOutAndBothFormsIn(t *testing.T) {
 			t.Fatalf("the Session chosen as %s is %s and %s", chosen, me1.Session.ID, me2.Session.ID)
 		}
 		got(h.admin.CloseSessionWithResponse(ctx, chosen, &client.CloseSessionParams{})).want(t, http.StatusOK)
+
+		// A refusal names an id short too, whichever form the request used.
+		const nothing = "0199c2a0-7b3e-7c41-9f12-842120d6a1b2"
+		status, body = h.send(http.MethodPatch, "/v1/labels/"+nothing, `{"name":"x"}`)
+		if status != http.StatusNotFound || !strings.Contains(string(body), shortid.Short(nothing)) {
+			t.Fatalf("PATCH a Label that is not: %d %s", status, body)
+		}
+		noUUIDs(t, "a refusal", body)
 
 		// Not ids: a Task title spelled as a UUID is kept as written, in the reply and in Activity.
 		titled := h.file(h.admin, client.FileTaskBody{Project: ptrStr("WEB"), Title: longTask})

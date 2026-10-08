@@ -1,6 +1,7 @@
 package server
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/tuongaz/darkory/internal/core"
@@ -224,6 +225,13 @@ func shortIDs(m map[string]any) map[string]any {
 	}
 	return out
 }
+
+// uuidText finds a UUID's canonical text inside prose.
+var uuidText = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
+
+// shortIDsInText is a refusal's message with every id in it short, as the rest of the reply
+// writes them: "no Workspace 1CTu…" whichever form the request named it by.
+func shortIDsInText(s string) string { return uuidText.ReplaceAllStringFunc(s, shortid.Short) }
 
 func shortIDsIn(v any) any {
 	switch v := v.(type) {
