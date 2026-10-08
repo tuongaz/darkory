@@ -144,7 +144,7 @@ export function NewMemberDialog({
         )}
         {kind === "human" && (
           <FormRow label="Email" htmlFor="member-email">
-            <Input id="member-email" type="email" placeholder="Optional" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="member-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </FormRow>
         )}
         {kind === "agent" && (

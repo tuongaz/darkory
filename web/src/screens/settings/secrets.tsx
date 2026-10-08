@@ -100,7 +100,7 @@ export function IssueTokenDialog({ member, onClose }: { member: Member; onClose:
         <FormRow label="Name" htmlFor="token-name">
           <Input id="token-name" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         </FormRow>
-        <FormRow label="Heartbeat timeout" htmlFor="token-timeout" info="For Claims made with this token. Empty: none.">
+        <FormRow label="Heartbeat timeout" htmlFor="token-timeout" info="For Claims made with this token.">
           <div className="flex items-center gap-2">
             <Input
               id="token-timeout"
@@ -108,7 +108,7 @@ export function IssueTokenDialog({ member, onClose }: { member: Member; onClose:
               inputMode="numeric"
               min={1}
               max={86400}
-              placeholder="Optional"
+              placeholder="None"
               value={timeout}
               onChange={(e) => setTimeoutSeconds(e.target.value)}
               className="w-32"
