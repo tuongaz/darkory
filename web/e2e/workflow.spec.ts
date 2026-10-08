@@ -89,7 +89,7 @@ test("scenario 6: rename a step while the board is open, delete one with Tasks, 
   const name = page.getByRole("textbox", { name: "Name of Build" });
   await name.fill("Make");
   await name.press("Enter");
-  await expect(page.getByRole("status")).toHaveText(/Saved/);
+  await expect(page.getByRole("status", { name: /^(Saving…|Saved)$/ })).toHaveText(/Saved/);
   await expect(board.page.getByText("Make", { exact: true }).first()).toBeVisible();
   await expect(board.page.getByText("Build", { exact: true })).toHaveCount(0);
 

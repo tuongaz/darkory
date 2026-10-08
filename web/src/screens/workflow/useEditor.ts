@@ -36,6 +36,8 @@ export function useWorkflowEditor(project: string) {
   // A new Step's `new:…` id, once /v1 has given it one: a selection follows it.
   const [aliases, setAliases] = useState<Map<string, string>>(() => new Map());
   const [saving, setSaving] = useState(false);
+  // Whether this page has changed the Workflow: "Saved" says nothing before.
+  const [touched, setTouched] = useState(false);
   // What /v1 would refuse, in words, not sent; and what it did refuse.
   const [problemText, setProblem] = useState<string | undefined>();
   const [refused, setRefused] = useState<unknown>();
@@ -110,6 +112,7 @@ export function useWorkflowEditor(project: string) {
     if (!run.current.sending) run.current.accepted = qc.getQueryData<WorkflowRecord>(key);
     run.current.moves = { ...run.current.moves, ...change.moves };
     setDraft(change.next);
+    setTouched(true);
     last.current = { label: change.label, before: wf, undoNote: change.undoNote };
     const thisChange = last.current;
     toast(change.label, {
@@ -138,6 +141,7 @@ export function useWorkflowEditor(project: string) {
     apply,
     resolve,
     saving,
+    touched,
     problem: problemText,
     refused,
     clear: () => {

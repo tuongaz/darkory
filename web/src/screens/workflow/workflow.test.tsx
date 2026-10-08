@@ -262,7 +262,7 @@ describe("Settings › Workflow", () => {
     await waitFor(() => expect(puts).toHaveLength(2));
     expect(puts[0].steps.at(-1)).toEqual({ name: "New step", position: 7, x: 896, y: 0 });
     expect(puts[1].steps.at(-1)).toEqual({ id: "st-made-1", name: "Docs", position: 7, x: 896, y: 0 });
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
+    await waitFor(() => expect(screen.getByRole("status", { name: /^(Saving…|Saved)$/ })).toHaveTextContent("Saved"));
   });
 
   it("says in words what /v1 would refuse, and sends nothing", async () => {

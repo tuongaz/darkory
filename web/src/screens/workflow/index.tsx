@@ -96,8 +96,8 @@ function EditingPage({ view, setView }: { view: WorkflowView; setView: (v: Workf
         crumbs={settingsCrumbs(project.name)}
         view={<ViewSwitch view={view} onChange={setView} />}
         actions={
-          editor.workflow && (
-            <span role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
+          (editor.saving || editor.touched) && (
+            <span role="status" aria-label={editor.saving ? "Saving…" : "Saved"} className="flex items-center gap-1 text-xs text-muted-foreground">
               {editor.saving ? <LoaderIcon aria-hidden className="size-3.5 animate-spin" /> : <CheckIcon aria-hidden className="size-3.5" />}
               <span className="sr-only sm:not-sr-only">{editor.saving ? "Saving…" : "Saved"}</span>
             </span>
