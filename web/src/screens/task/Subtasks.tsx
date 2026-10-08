@@ -4,7 +4,7 @@ import { ListIcon, ListPlusIcon, WorkflowIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Task, TaskDetail } from "@/api/client";
-import { useDirectory, useRunnerSessions } from "@/api/queries";
+import { useDirectory, useOpenTasks, useRunnerSessions } from "@/api/queries";
 import { usePeekLink } from "@/app/peek";
 import { useSelectedTask } from "@/app/selection";
 import { useNow } from "@/clock";
@@ -121,13 +121,15 @@ function Graph({ detail }: { detail: TaskDetail }) {
   const now = useNow();
   const { steps } = useTaskWorkflow(detail.task.project_id);
   const runner = useRunnerSessions().data?.items;
+  // The Organisation's open Tasks: which of them a Subtask blocks from outside the Parent.
+  const open = useOpenTasks().data;
   const navigate = useNavigate();
   const peek = usePeekLink();
   const sessions = useMemo(() => new Map((runner ?? []).map((s) => [s.task_id, s])), [runner]);
   const columns = useMemo(() => graphSteps(steps, skills), [steps, skills]);
   // Live: the clock moves a lapse, the Runner a session's state.
-  const nodes = useMemo(() => graphSubtasks(detail.subtasks, { members, now, sessions }), [detail.subtasks, members, now, sessions]);
-  const keyOf = new Map(detail.subtasks.map((s) => [s.id, s.key]));
+  const nodes = useMemo(() => graphSubtasks(detail.subtasks, { members, now, sessions, open }), [detail.subtasks, members, now, sessions, open]);
+  const keyOf = new Map(nodes.flatMap((n) => [[n.id, n.key] as const, ...(n.outside ?? []).map((o) => [o.id, o.key] as const)]));
   return <SubtaskGraph steps={columns} subtasks={nodes} onOpen={(id) => keyOf.get(id) && navigate(peek(keyOf.get(id)!))} className="rounded-md border" />;
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COLUMN_GAP, layoutSubtasks, NODE_H, NODE_W, PAD, takeableNow, type GraphSubtask } from "./graph";
+import { COLUMN_GAP, layoutSubtasks, NODE_H, NODE_W, PAD, STUB_GAP, STUB_H, takeableNow, type GraphSubtask } from "./graph";
 import { crosses } from "./route";
 import { sampleSteps, sampleSubtasks } from "./samples";
 
@@ -81,6 +81,33 @@ describe("layoutSubtasks", () => {
     expect(node("MAIN-12").glyph).toEqual({ glyph: "dropped" });
     const atHold = layoutSubtasks(sampleSteps, [{ id: "h", key: "MAIN-1", title: "h", stepId: "s-backlog", state: "open", blockedBy: [], kind: "work" }]);
     expect(atHold.nodes[0].glyph).toEqual({ glyph: "hold" });
+  });
+
+  it("draws a Blocking that crosses the Parent as a stub under its Subtask, and grows the row to hold it", () => {
+    const outside = sampleSubtasks.map((s) =>
+      s.key === "MAIN-6"
+        ? { ...s, outside: [{ direction: "out" as const, id: "t-19", key: "MAIN-19", title: "Export reactions" }, { direction: "in" as const, id: "t-12x", key: "MAIN-13", title: "Which format?" }] }
+        : s,
+    );
+    const grown = layoutSubtasks(sampleSteps, outside);
+    const n6 = grown.nodes.find((n) => n.subtask.key === "MAIN-6")!;
+    // Blockers first, each under the node, one under the other.
+    expect(n6.stubs.map((s) => [s.direction, s.key])).toEqual([
+      ["in", "MAIN-13"],
+      ["out", "MAIN-19"],
+    ]);
+    expect(n6.stubs[0].y).toBe(n6.y + NODE_H + STUB_GAP);
+    expect(n6.stubs[1].y).toBe(n6.stubs[0].y + STUB_H);
+    // The next row starts below the stubs, and the graph is taller by them.
+    const below = grown.nodes.filter((n) => n.row === n6.row + 1);
+    expect(below.length).toBeGreaterThan(0);
+    for (const n of below) expect(n.y).toBeGreaterThanOrEqual(n6.stubs[1].y + STUB_H);
+    expect(grown.height).toBe(layout.height + STUB_GAP + 2 * STUB_H);
+    // No arrow runs through a stub.
+    const stubs = grown.nodes.flatMap((n) => n.stubs.map((s) => ({ x: n.x, y: s.y, w: NODE_W, h: STUB_H })));
+    for (const e of grown.edges) expect(crosses(e.points, stubs), e.id).toBe(false);
+    // The arrows inside the Parent are the same ones.
+    expect(grown.edges.map((e) => e.id).sort()).toEqual(layout.edges.map((e) => e.id).sort());
   });
 
   it("lays out nothing for a Parent without Subtasks", () => {

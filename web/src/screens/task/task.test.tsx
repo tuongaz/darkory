@@ -219,6 +219,23 @@ describe("a Parent's page", () => {
     expect(await screen.findByRole("region", { name: "Subtasks, graph" })).toBeInTheDocument();
   });
 
+  it("draws a Blocking that crosses the Parent as a stub under its Subtask, linking to that Task", async () => {
+    const asks: Task = { ...copy, id: "t-q", key: "WEB-9", title: "Which card brands?", state: "open" };
+    const waits: Task = { ...copy, id: "t-w", key: "WEB-20", title: "Export receipts", state: "open", blocked: true, open_blockers: [{ id: receipt.id, key: receipt.key, title: receipt.title }] };
+    const blockedPayment: Task = { ...payment, blocked: true, open_blockers: [{ id: asks.id, key: asks.key, title: asks.title }] };
+    details["WEB-3"] = detail(checkout, { subtasks: [blockedPayment, receipt, basket] });
+    try {
+      mockApi(taskRoutes({ "GET /v1/tasks": { items: [checkout, blockedPayment, receipt, basket, asks, waits] } }));
+      renderApp("/tasks/WEB-3?view=graph");
+      const graph = await screen.findByRole("region", { name: "Subtasks, graph" });
+      expect(await within(graph).findByRole("button", { name: "Blocked by WEB-9 Which card brands?, outside this Parent" })).toHaveTextContent("WEB-9");
+      await userEvent.click(await within(graph).findByRole("button", { name: "Blocks WEB-20 Export receipts, outside this Parent" }));
+      expect(await screen.findByRole("dialog", { name: "Task WEB-20" })).toBeInTheDocument();
+    } finally {
+      details["WEB-3"] = detail(checkout, { subtasks: [payment, receipt, basket] });
+    }
+  });
+
   it("draws a Subtask Darkory filed without its kind's pill when its title already says it", async () => {
     const retro: Task = { ...basket, id: "t-retro", key: "WEB-9", kind: "retrospective", title: "Retrospective: Checkout", state: "open", step_id: step.retro };
     const accept: Task = { ...basket, id: "t-acc", key: "WEB-10", kind: "acceptance", title: "Check it all", state: "open", step_id: step.review };
