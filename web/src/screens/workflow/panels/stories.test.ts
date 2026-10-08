@@ -56,7 +56,7 @@ function morning() {
   const tasks = new Map([t10, t9, t12, p7, s18, q13, t6, t2].map((t) => [t.id, t]));
   const members = new Map([ada, bob, builder].map((m) => [m.id, m]));
   const ctx: FlowContext = { projectId: web.id, workflow: model, task: (id) => tasks.get(id), member: (id) => members.get(id) };
-  const sessions: RunnerSession[] = [{ task_id: t6.id, member_id: builder.id, session_id: "s", host: "h", started_at: at("10:20:00"), state: "waiting", log_path: "/l" }];
+  const sessions: RunnerSession[] = [{ task_id: t6.id, member_id: builder.id, session_id: "s", host: "h", started_at: at("10:20:00"), state: "waiting", state_since: at("10:39:00"), log_path: "/l" }];
   const input: StoriesInput = { entries, tasks, ctx, exclude: new Set([q13.id]), sessions, now, from: startOfToday, seenSeq };
   return { input, t9, ctx };
 }

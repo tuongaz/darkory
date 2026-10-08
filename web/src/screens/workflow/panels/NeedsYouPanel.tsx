@@ -160,7 +160,8 @@ function AgentRow({ need, onHover }: { need: AgentNeed; onHover: Hover }) {
   const peek = usePeekLink();
   const takeBack = useTakeBack(need.task, need.agent);
   const actions = useAgentActions(need.agent);
-  const since = need.task.claim?.started_at ?? need.session.started_at;
+  // How long the session has stood waiting (or stalled): since it entered that state.
+  const since = need.session.state_since ?? need.task.claim?.started_at ?? need.session.started_at;
   const waiting = need.session.state === "waiting";
   return (
     <div
@@ -175,10 +176,10 @@ function AgentRow({ need, onHover }: { need: AgentNeed; onHover: Hover }) {
         <span className="text-muted-foreground">
           {" "}
           · {waiting ? "waiting on" : "stalled on"} <Key to={peek(need.task.key)}>{need.task.key}</Key>
-          {waiting && " · nudged"}
+          {need.nudgedAt !== undefined && ` · nudged ${clockText(need.nudgedAt)}`}
         </span>
       </span>
-      <span title="Held for" className="text-xs font-semibold tabular-nums">
+      <span title={waiting ? "Waiting for" : "Stalled for"} className="text-xs font-semibold tabular-nums">
         {ageText(now - Date.parse(since))}
       </span>
       {need.canTakeBack ? (
@@ -253,4 +254,9 @@ function PhoneMore({ items, agents, onHover, onAnswered }: { items: NeedItem[]; 
       </Sheet>
     </>
   );
+}
+
+const hhmm = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+function clockText(ms: number): string {
+  return hhmm.format(new Date(ms));
 }

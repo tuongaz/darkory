@@ -53,6 +53,8 @@ export type AgentNeed = {
   canTakeBack: boolean;
   /** An admin may stop the session. */
   canStop: boolean;
+  /** When the Runner last nudged the agent on it (`task.nudged`), in Unix ms. */
+  nudgedAt?: number;
 };
 
 export type NeedsInput = {
@@ -73,6 +75,8 @@ export type NeedsInput = {
   sessions: RunnerSession[];
   /** Recent lapses, any order: the why of a Task I must take myself. */
   lapses: Activity[];
+  /** Recent nudges by the Runner (`task.nudged`), any order. */
+  nudges?: Activity[];
 };
 
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -264,7 +268,7 @@ export function needsOf(input: NeedsInput): NeedItem[] {
  * with what the caller may do: take the Claim back (its Owner, or someone on the agent's Reporting
  * line) and stop the session (an admin).
  */
-export function agentNeedsOf(input: Pick<NeedsInput, "me" | "open" | "projectId" | "members" | "sessions">): AgentNeed[] {
+export function agentNeedsOf(input: Pick<NeedsInput, "me" | "open" | "projectId" | "members" | "sessions" | "nudges">): AgentNeed[] {
   const { me, open, projectId, members, sessions } = input;
   const out: AgentNeed[] = [];
   for (const s of sessions) {
@@ -278,7 +282,19 @@ export function agentNeedsOf(input: Pick<NeedsInput, "me" | "open" | "projectId"
       session: s,
       canTakeBack: task.owner_id === me.id || (agent.id !== me.id && isOnReportingLine(members, me.id, agent.id)),
       canStop: me.admin,
+      nudgedAt: lastNudge(input.nudges ?? [], task.id, Date.parse(task.claim?.started_at ?? s.started_at)),
     });
   }
-  return out.sort((a, b) => Date.parse(a.session.started_at) - Date.parse(b.session.started_at));
+  // The longest in its state first: a session waiting since 10:39 before one stalled at 10:41.
+  return out.sort((a, b) => Date.parse(a.session.state_since) - Date.parse(b.session.state_since));
+}
+
+/** The latest nudge on a Task since its Claim began. */
+function lastNudge(nudges: Activity[], taskId: string, since: number): number | undefined {
+  let at: number | undefined;
+  for (const e of nudges) {
+    const t = Date.parse(e.at);
+    if (e.kind === "task.nudged" && e.subject_id === taskId && t >= since && (at === undefined || t > at)) at = t;
+  }
+  return at;
 }

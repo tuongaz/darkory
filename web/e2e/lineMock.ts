@@ -229,8 +229,8 @@ export function bigTasks(): Rec[] {
   );
 }
 
-const sessionOf = (n: number, member: string, state: string, started: string) => ({ task_id: `k-${n}`, member_id: member, session_id: `sess-${n}`, host: "mac-mini", tmux: `dk-MAIN-${n}`, started_at: started, state, log_path: `/tmp/MAIN-${n}.log` });
-const sessions = [sessionOf(10, "m-bu", "running", t(10, 41, 50)), sessionOf(9, "m-qa", "running", t(10, 36, 50)), sessionOf(6, "m-rv", "waiting", t(10, 20, 3))];
+const sessionOf = (n: number, member: string, state: string, started: string, since = started) => ({ task_id: `k-${n}`, member_id: member, session_id: `sess-${n}`, host: "mac-mini", tmux: `dk-MAIN-${n}`, started_at: started, state, state_since: since, log_path: `/tmp/MAIN-${n}.log` });
+const sessions = [sessionOf(10, "m-bu", "running", t(10, 41, 50)), sessionOf(9, "m-qa", "running", t(10, 36, 50)), sessionOf(6, "m-rv", "waiting", t(10, 20, 3), t(10, 39))];
 
 let seq = 0;
 const entry = (kind: string, subject: string, actor: string | undefined, payload: Record<string, unknown>, when: string) => ({
@@ -262,6 +262,7 @@ export const activity = [
   entry("task.filed", "k-19", "m-tu", { key: "MAIN-19", project_id: MAIN.id, step_id: "build" }, t(10, 34, 51)),
   entry("task.advanced", "k-12", "m-qa", { from: "qa", to: "review", outcome: "pass", since: Date.parse(t(10, 21, 15)) }, t(10, 36, 40)),
   entry("task.claimed", "k-9", "m-qa", { step_id: "qa" }, t(10, 36, 50)),
+  entry("task.nudged", "k-6", undefined, { claim_id: "cl-6-m-rv", holder_id: "m-rv", nudge: 1 }, t(10, 40, 12)),
   entry("task.claimed", "k-10", "m-bu", { step_id: "build" }, t(10, 42, 5)),
 ];
 

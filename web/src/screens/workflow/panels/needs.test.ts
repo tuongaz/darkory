@@ -144,7 +144,7 @@ describe("Needs you", () => {
 });
 
 describe("Agents need you", () => {
-  const session = (taskId: string, state: RunnerSession["state"]): RunnerSession => ({ task_id: taskId, member_id: builder.id, session_id: "s", host: "h", started_at: ago(3), state, log_path: "/l" });
+  const session = (taskId: string, state: RunnerSession["state"]): RunnerSession => ({ task_id: taskId, member_id: builder.id, session_id: "s", host: "h", started_at: ago(3), state, state_since: ago(3), log_path: "/l" });
 
   it("lists the sessions waiting or stalled on this Project's Tasks, with what I may do", () => {
     const t6 = task(6, { claim: { id: "c", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: ago(22) } });
@@ -158,6 +158,18 @@ describe("Agents need you", () => {
       ["WEB-7", "stalled", true, false],
     ]);
     expect(agentNeedsOf({ me: ada, open: [t6], projectId: web.id, members, sessions }).map((a) => [a.canTakeBack, a.canStop])).toEqual([[true, true]]);
+  });
+
+  it("says when the Runner last nudged the agent on the Task, since its Claim began, and puts the longest waiting first", () => {
+    const t6 = task(6, { claim: { id: "c", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: ago(22) } });
+    const t7 = task(7, { claim: { id: "c", task_id: "k-7", holder_id: builder.id, session_id: "s", started_at: ago(30) } });
+    const nudge = (subject: string, minutes: number) => ({ seq: minutes, at: ago(minutes), kind: "task.nudged" as const, subject_type: "task" as const, subject_id: subject, payload: { nudge: 1 } });
+    const sessions = [{ ...session(t6.id, "waiting"), state_since: ago(3) }, { ...session(t7.id, "waiting"), state_since: ago(9) }];
+    const out = agentNeedsOf({ me: ada, open: [t6, t7], projectId: web.id, members, sessions, nudges: [nudge("k-6", 2), nudge("k-6", 40), nudge("k-7", 1)] });
+    expect(out.map((a) => [a.task.key, a.nudgedAt])).toEqual([
+      ["WEB-7", Date.parse(ago(1))],
+      ["WEB-6", Date.parse(ago(2))],
+    ]);
   });
 });
 

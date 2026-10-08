@@ -49,6 +49,8 @@ export function useNeeds(project?: Project): Needs {
   const detailStamp = detailReads.map((q) => q.dataUpdatedAt).join();
   const projectStamp = projectReads.map((q) => q.dataUpdatedAt).join();
   const lapseStamp = lapses.entries.map((e: Activity) => e.seq).join();
+  const nudges = useRecentActivity({ kind: ["task.nudged"], ...(project ? { project: project.key } : {}) }, (e) => e.kind === "task.nudged");
+  const nudgeStamp = nudges.entries.map((e: Activity) => e.seq).join();
 
   return useMemo(() => {
     const details = new Map<string, TaskDetail>(detailReads.flatMap((q) => (q.data ? [[q.data.task.id, q.data] as const] : [])));
@@ -65,6 +67,7 @@ export function useNeeds(project?: Project): Needs {
       skills: dir.skills,
       sessions: sessions.data?.items ?? [],
       lapses: lapses.entries,
+      nudges: nudges.entries,
     };
     const items = needsOf(input);
     const agents = agentNeedsOf(input);
@@ -76,5 +79,5 @@ export function useNeeds(project?: Project): Needs {
       error: open.error,
     };
     // The reads' stamps stand for their arrays, which are new on every render.
-  }, [me, now, tasks, project?.id, workflows, dir.members, dir.skills, sessions.data, detailStamp, projectStamp, lapseStamp, open.isPending, open.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [me, now, tasks, project?.id, workflows, dir.members, dir.skills, sessions.data, detailStamp, projectStamp, lapseStamp, nudgeStamp, open.isPending, open.error]); // eslint-disable-line react-hooks/exhaustive-deps
 }
