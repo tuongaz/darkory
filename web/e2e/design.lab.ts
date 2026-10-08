@@ -84,7 +84,7 @@ test("the editing canvas: select, drag, connect, add and tidy, each a callback",
   await expect(log).toContainText("onSelect(Build)");
   await expect(canvas.getByRole("region", { name: "Selected" })).toContainText("Connectors out");
 
-  // Drag the step a little: one onMove, on the drop.
+  // Drag the Step a little: one onMove, on the drop.
   const box = (await build.boundingBox())!;
   await page.mouse.move(box.x + 40, box.y + 12);
   await page.mouse.down();
@@ -105,7 +105,7 @@ test("the editing canvas: select, drag, connect, add and tidy, each a callback",
   await expect(log).toContainText("onAddConnector(Docs → Done)");
 
   await docs.hover();
-  await canvas.getByRole("button", { name: "Add a step after Docs" }).click();
+  await canvas.getByRole("button", { name: "Add a Step after Docs" }).click();
   await expect(log).toContainText("onAddStep(Docs)");
 
   await canvas.getByRole("button", { name: "Tidy up" }).click();

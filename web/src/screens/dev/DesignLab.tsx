@@ -38,7 +38,7 @@ export default function DesignLab() {
       <Section title="Workflow canvas · a new Project" note="The default Workflow at the places darkory init stores: the board's order, ranks 448px apart, rows 128px.">
         <WorkflowCanvas workflow={defaultWorkflow} mode="live" className="h-[420px] rounded-lg border" />
       </Section>
-      <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a step, Tidy up.">
+      <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a Step, Tidy up.">
         <EditingCanvas />
       </Section>
       <Section title="Subtask graph" note="MAIN-2 Support emoji in names: its Subtasks over the Workflow, Blocking arrows, takeable ones highlighted.">
@@ -156,7 +156,7 @@ function GlyphSet() {
   );
 }
 
-// The sample with a step whose Skill no Member holds, to show its warning.
+// The sample with a Step whose Skill no Member holds, to show its warning.
 const editSample: Workflow = (() => {
   const docs: Step = { id: "s-docs", name: "Docs", skill: { id: "k-docs", name: "docs" }, position: 8, x: 0, y: 0, takers: [], tasks: 2, working: 0 };
   const w = { steps: [...sampleWorkflow.steps, docs], connectors: [...sampleWorkflow.connectors, { id: "c-docs-done", from: "s-docs", to: null, name: "done", position: 0 }] };

@@ -225,7 +225,7 @@ function StepEditor({ project, record, workflow, apply, onSelect, step }: PanelP
         actions={<OrderButtons what={step.name} first={at <= 0} last={at === order.length - 1} onMove={(by) => apply((wf) => reorderStep(wf, step.id, by))} />}
       >
         <p className="text-xs text-muted-foreground">
-          Step {at + 1} of {order.length}: the board shows the steps in this order.
+          Step {at + 1} of {order.length}: the board shows the Steps in this order.
         </p>
       </Section>
 
@@ -375,7 +375,7 @@ function TargetSelect({
 
 /**
  * Connect to…: a new Connector out of the Step, into a Step picked or Done, named by its outcome
- * (a free one offered). Dragging from a step's right side on the canvas does the same.
+ * (a free one offered). Dragging from a Step's right side on the canvas does the same.
  */
 function ConnectTo({ record, step, apply }: { record: WorkflowRecord; step: RecordStep; apply: Apply }) {
   const [open, setOpen] = useState(false);
@@ -405,7 +405,7 @@ function ConnectTo({ record, step, apply }: { record: WorkflowRecord; step: Reco
   };
   return (
     <form
-      aria-label={`Connect ${step.name} to a step`}
+      aria-label={`Connect ${step.name} to a Step`}
       className="flex flex-col gap-2 rounded-md border border-dashed p-2"
       onSubmit={(e) => {
         e.preventDefault();
@@ -448,7 +448,7 @@ function DeleteStepDialog({
       open
       onOpenChange={(o) => !o && onClose()}
       title={`Delete ${step.name}`}
-      description={`${countTasks(step.tasks)} ${step.tasks === 1 ? "is" : "are"} at ${step.name}. Say which step ${step.tasks === 1 ? "it moves" : "they move"} to; a Claim on ${step.tasks === 1 ? "it" : "them"} stays.`}
+      description={`${countTasks(step.tasks)} ${step.tasks === 1 ? "is" : "are"} at ${step.name}. Say which Step ${step.tasks === 1 ? "it moves" : "they move"} to; a Claim on ${step.tasks === 1 ? "it" : "them"} stays.`}
       submitLabel={`Delete ${step.name}`}
       destructive
       submitDisabled={!to}
@@ -462,7 +462,7 @@ function DeleteStepDialog({
         <FormRow label="Move them to">
           <Select value={to} onValueChange={setTo}>
             <SelectTrigger aria-label={`Step that receives the Tasks at ${step.name}`} className="w-full">
-              <SelectValue placeholder="Pick a step" />
+              <SelectValue placeholder="Pick a Step" />
             </SelectTrigger>
             <SelectContent position="popper" align="start">
               {others.map((s) => (

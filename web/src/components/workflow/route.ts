@@ -4,12 +4,12 @@ import type { Point } from "./model";
 export type Rect = { x: number; y: number; w: number; h: number };
 export type Side = "left" | "right" | "top" | "bottom";
 
-/** A Connector to route: `order` is its place among the Connectors out of its step. */
+/** A Connector to route: `order` is its place among the Connectors out of its Step. */
 export type RouteRequest = { id: string; from: string; to: string; label: string; order: number; terminal?: boolean };
 
 export type Route = {
   points: Point[];
-  /** Where its outcome's name sits: just past where it leaves its step, reading away from it. */
+  /** Where its outcome's name sits: just past where it leaves its Step, reading away from it. */
   label: Point & { align: "left" | "right" };
   exit: "left" | "right";
   entry: Side;
@@ -23,7 +23,7 @@ const STUB = 20;
 const LANE = 10;
 /** Between lines leaving or entering one side of a node. */
 const SPREAD = 20;
-/** A turn costs this many pixels of length; entering a step from the side it leaves by, more. */
+/** A turn costs this many pixels of length; entering a Step from the side it leaves by, more. */
 const BEND = 40;
 const SIDE_ENTRY = 600;
 
@@ -104,10 +104,10 @@ type Plan = {
 };
 
 /**
- * Routes a Workflow's Connectors at right angles round its nodes. Each leaves its step by the
- * side facing where it goes, its outcome's name beside the step, turns in the gutter past the
+ * Routes a Workflow's Connectors at right angles round its nodes. Each leaves its Step by the
+ * side facing where it goes, its outcome's name beside the Step, turns in the gutter past the
  * name, runs along a level line that passes no node, and enters its target: forward into the
- * left side, back (to a step left of its own) from below or above, so the line reads as going
+ * left side, back (to a Step left of its own) from below or above, so the line reads as going
  * back. Lines leaving or entering one side spread along it; lines sharing a gutter or a level
  * take lanes, ordered so that they do not cross near the nodes.
  */
@@ -226,8 +226,8 @@ export function routeConnectors(boxes: Map<string, Rect>, requests: RouteRequest
     }
   });
 
-  // Sharing a level: lanes across it. Into a step from below, the line entering further right
-  // runs nearer the step (from above, likewise), so neither crosses the other's last leg.
+  // Sharing a level: lanes across it. Into a Step from below, the line entering further right
+  // runs nearer the Step (from above, likewise), so neither crosses the other's last leg.
   const free = plans.filter((p) => p.channel.kind === "free");
   const along = (p: Plan) => (p.entry === "bottom" ? -p.end : p.entry === "top" ? p.end : Math.min(p.x1, p.x2));
   group(free, (p) => String(Math.round((p.channel as { y: number }).y / LANE))).forEach((list) => {

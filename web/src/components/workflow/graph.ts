@@ -1,7 +1,7 @@
 import { glyphFor, type MemberKind, type SessionState, type WorkGlyph, type Working } from "@/lib/work";
 import type { Point } from "./model";
 
-/** A step of the Project's Workflow, as the graph's columns need it. */
+/** A Step of the Project's Workflow, as the graph's columns need it. */
 export type GraphStep = { id: string; name: string; skill?: { id: string; name: string } };
 
 /** A Subtask as the graph draws it. M4 binds `TaskDetail.subtasks` to this. */
@@ -16,7 +16,7 @@ export type GraphSubtask = {
   holder?: { name: string; kind: MemberKind };
   /** What the holder's mark says: their Runner session's state, or `held` for a human. */
   working?: Working;
-  /** The Member it is aimed at by name: it waits with them, at no step. */
+  /** The Member it is aimed at by name: it waits with them, at no Step. */
   aimedAt?: { name: string; kind: MemberKind };
   /** Its open blockers' ids. A Blocking may cross Parents, so an id may name a Task not drawn. */
   blockedBy: string[];
@@ -29,7 +29,7 @@ export type GraphColumn = {
   id: string;
   kind: ColumnKind;
   title: string;
-  /** A step column's Skill; none on a hold. */
+  /** A Step column's Skill; none on a hold. */
   skill?: string;
   /** A "With <member>" column's Member. */
   member?: { name: string; kind: MemberKind };
@@ -45,7 +45,7 @@ export type GraphNode = {
   x: number;
   y: number;
   glyph: WorkGlyph;
-  /** Open, unheld, unblocked, and at a step with a Skill or aimed at a Member: someone can take it now. */
+  /** Open, unheld, unblocked, and at a Step with a Skill or aimed at a Member: someone can take it now. */
   takeable: boolean;
 };
 
@@ -69,7 +69,7 @@ const firstRowY = HEADER_H + 8;
 const rowY = (row: number) => firstRowY + row * (NODE_H + ROW_GAP);
 
 /**
- * Someone can take it now: open, nobody holds it, nothing open blocks it, and it is at a step
+ * Someone can take it now: open, nobody holds it, nothing open blocks it, and it is at a Step
  * whose Skill someone takes it under, or aimed at the Member who takes it (CONTEXT.md, Takeable).
  */
 export function takeableNow(s: GraphSubtask, steps: Map<string, GraphStep>): boolean {
@@ -89,7 +89,7 @@ function sessionOf(working?: Working): SessionState | undefined {
 /**
  * Lays a Parent's Subtasks over its Project's Workflow:
  *
- * - **Columns**: the steps that hold an open Subtask, in the Workflow's order; then one "With
+ * - **Columns**: the Steps that hold an open Subtask, in the Workflow's order; then one "With
  *   <member>" column per Member an open Subtask is aimed at; then one for the ended, done above
  *   dropped.
  * - **Layers**: inside a column, a Subtask stands one layer right of the deepest Subtask of the
@@ -120,7 +120,7 @@ export function layoutSubtasks(steps: GraphStep[], subtasks: GraphSubtask[]): Gr
     const name = s.aimedAt?.name ?? "";
     const id = `with:${name}`;
     if (!columns.some((c) => c.id === id)) {
-      columns.push(s.aimedAt ? { id, kind: "with", title: `With ${name}`, member: s.aimedAt } : { id, kind: "with", title: "At no step" });
+      columns.push(s.aimedAt ? { id, kind: "with", title: `With ${name}`, member: s.aimedAt } : { id, kind: "with", title: "At no Step" });
     }
     columnOf.set(s.id, id);
   }

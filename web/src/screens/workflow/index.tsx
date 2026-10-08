@@ -104,9 +104,9 @@ function EditingPage({ view, setView }: { view: WorkflowView; setView: (v: Workf
           )
         }
         primary={
-          <Button aria-label="Add step" disabled={!editor.workflow} onClick={add}>
+          <Button aria-label="Add Step" disabled={!editor.workflow} onClick={add}>
             <PlusIcon />
-            <span className="hidden sm:inline">Add step</span>
+            <span className="hidden sm:inline">Add Step</span>
           </Button>
         }
       />

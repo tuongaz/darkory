@@ -1,7 +1,7 @@
 import dagre from "@dagrejs/dagre";
 import type { Point, Workflow } from "./model";
 
-/** A step node's size on the canvas: Tidy up lays these out, so the node is drawn this size. */
+/** A Step node's size on the canvas: Tidy up lays these out, so the node is drawn this size. */
 export const STEP_W = 208;
 export const STEP_H = 88;
 /** Done and Dropped. */
@@ -16,11 +16,11 @@ const DONE = "\u0000done";
 const START = "\u0000start";
 
 /**
- * Tidy up: the steps laid out left to right by dagre, 240px between ranks, each as far left as
+ * Tidy up: the Steps laid out left to right by dagre, 240px between ranks, each as far left as
  * its Connectors allow, so a Workflow reads from where its Tasks start. A Connector into an
- * earlier step of the Workflow's order ("needs changes", "fail") is laid out as if it pointed
+ * earlier Step of the Workflow's order ("needs changes", "fail") is laid out as if it pointed
  * forward, so it runs back under the nodes rather than turning the Workflow round. Done takes
- * part, so the steps that lead into it sit before it, but it is not returned: the canvas places
+ * part, so the Steps that lead into it sit before it, but it is not returned: the canvas places
  * Done and Dropped itself. Positions are whole pixels from (0, 0).
  */
 export function tidy(workflow: Workflow): Record<string, Point> {
@@ -31,7 +31,7 @@ export function tidy(workflow: Workflow): Record<string, Point> {
   // few pixels off level and its Connectors jogging.
   g.setGraph({ rankdir: "LR", ranksep: RANK_GAP, nodesep: ROW_GAP, marginx: 0, marginy: 0, align: "UL" });
   g.setDefaultEdgeLabel(() => ({}));
-  // A start every step hangs from, pulling harder than a Connector does, so a step with nothing
+  // A start every Step hangs from, pulling harder than a Connector does, so a Step with nothing
   // leading into it (Plan, Retro) stands in the first rank instead of beside Done. In the
   // Workflow's order, which dagre's ordering starts from.
   g.setNode(START, { width: 1, height: 1 });
@@ -55,9 +55,9 @@ export function tidy(workflow: Workflow): Record<string, Point> {
 }
 
 /**
- * Where Done and Dropped stand: one rank right of the rightmost step. Done is level with the
+ * Where Done and Dropped stand: one rank right of the rightmost Step. Done is level with the
  * steps that lead into it (the middle of them all when none does); Dropped is under it, no
- * higher than the lowest step, so its dashed arrow from any step has room.
+ * higher than the lowest step, so its dashed arrow from any Step has room.
  */
 export function terminals(workflow: Workflow): { done: Point; dropped: Point } {
   const steps = workflow.steps;

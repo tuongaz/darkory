@@ -10,7 +10,7 @@ const pitch = STEP_W + RANK_GAP;
 describe("tidy", () => {
   const at = tidy(sampleWorkflow);
 
-  it("places every step, and only the steps, on whole pixels from (0, 0)", () => {
+  it("places every Step, and only the Steps, on whole pixels from (0, 0)", () => {
     expect(Object.keys(at).sort()).toEqual(sampleWorkflow.steps.map((s) => s.id).sort());
     for (const p of Object.values(at)) {
       expect(Number.isInteger(p.x) && Number.isInteger(p.y)).toBe(true);
@@ -26,11 +26,11 @@ describe("tidy", () => {
     for (const p of Object.values(at)) expect(p.x % pitch).toBe(0);
   });
 
-  it("stands a step nothing leads into in the first rank, not beside Done", () => {
+  it("stands a Step nothing leads into in the first rank, not beside Done", () => {
     for (const id of ["s-backlog", "s-plan", "s-build", "s-retro"]) expect(at[id].x).toBe(0);
   });
 
-  it("lays a Connector back into an earlier step as if it pointed forward", () => {
+  it("lays a Connector back into an earlier Step as if it pointed forward", () => {
     // Acceptance → Build "fail" would put Acceptance left of Build if laid as drawn.
     expect(at["s-acceptance"].x).toBeGreaterThan(at["s-build"].x);
     expect(at["s-review"].x).toBeGreaterThan(at["s-build"].x);
@@ -50,7 +50,7 @@ describe("tidy", () => {
 });
 
 describe("terminals", () => {
-  it("stands Done one rank right of the rightmost step, level with what leads into it, Dropped under it", () => {
+  it("stands Done one rank right of the rightmost Step, level with what leads into it, Dropped under it", () => {
     const { done, dropped } = terminals(sampleWorkflow);
     const rightmost = Math.max(...sampleWorkflow.steps.map((s) => s.x));
     expect(done.x).toBe(rightmost + pitch);
@@ -63,7 +63,7 @@ describe("terminals", () => {
 });
 
 describe("the Workflow's rules, in words before sending", () => {
-  it("knows a hold, a step nobody can take from, and what waits", () => {
+  it("knows a hold, a Step nobody can take from, and what waits", () => {
     expect(isHold(step("s-backlog"))).toBe(true);
     expect(isHold(step("s-build"))).toBe(false);
     expect(unstaffed(step("s-build"))).toBe(false);
@@ -73,18 +73,18 @@ describe("the Workflow's rules, in words before sending", () => {
     expect(outgoing(sampleWorkflow, "s-review").map((c) => c.name)).toEqual(["pass", "needs changes"]);
   });
 
-  it("refuses a Connector into Dropped, back into its own step, or to a step that is gone", () => {
+  it("refuses a Connector into Dropped, back into its own step, or to a Step that is gone", () => {
     expect(connectProblem(sampleWorkflow, { from: "s-build", to: "s-qa" })).toBeUndefined();
     expect(connectProblem(sampleWorkflow, { from: "s-build", to: null })).toBeUndefined();
-    expect(connectProblem(sampleWorkflow, { from: "s-build", to: "dropped" })).toBe("Dropped needs no Connector: a Task's Owner drops it from any step.");
-    expect(connectProblem(sampleWorkflow, { from: "s-build", to: "s-build" })).toBe("A Connector leads out of Build into another step or Done.");
+    expect(connectProblem(sampleWorkflow, { from: "s-build", to: "dropped" })).toBe("Dropped needs no Connector: a Task's Owner drops it from any Step.");
+    expect(connectProblem(sampleWorkflow, { from: "s-build", to: "s-build" })).toBe("A Connector leads out of Build into another Step or Done.");
     expect(connectProblem(sampleWorkflow, { from: "s-build", to: "s-gone" })).toBe("That step is gone.");
   });
 
   it("asks where a deleted step's Tasks go, as /v1 refuses step_in_use", () => {
     expect(deleteProblem(sampleWorkflow, step("s-retro"))).toBeUndefined();
-    expect(deleteProblem(sampleWorkflow, step("s-build"))).toBe("4 Tasks are at Build: say which step they move to.");
-    expect(deleteProblem(sampleWorkflow, step("s-build"), "s-build")).toBe("Pick another step of this Workflow.");
+    expect(deleteProblem(sampleWorkflow, step("s-build"))).toBe("4 Tasks are at Build: say which Step they move to.");
+    expect(deleteProblem(sampleWorkflow, step("s-build"), "s-build")).toBe("Pick another Step of this Workflow.");
     expect(deleteProblem(sampleWorkflow, step("s-build"), "s-qa")).toBeUndefined();
   });
 
@@ -96,7 +96,7 @@ describe("the Workflow's rules, in words before sending", () => {
 });
 
 describe("the canvas's nodes and edges", () => {
-  it("lists the steps in the Workflow's order, then Done and Dropped, which never move", () => {
+  it("lists the Steps in the Workflow's order, then Done and Dropped, which never move", () => {
     const nodes = toNodes(sampleWorkflow, "edit");
     expect(nodes.map((n) => n.id)).toEqual([...[...sampleWorkflow.steps].sort((a, b) => a.position - b.position).map((s) => s.id), DONE_NODE, DROPPED_NODE]);
     expect(nodes.filter((n) => n.type === "terminal").every((n) => n.draggable === false && n.selectable === false)).toBe(true);
@@ -104,7 +104,7 @@ describe("the canvas's nodes and edges", () => {
     expect(toNodes(sampleWorkflow, "live").every((n) => n.draggable === false && n.connectable === false)).toBe(true);
   });
 
-  it("names a step for a screen reader: its Skill, counts, and who takes it, or that nobody can", () => {
+  it("names a Step for a screen reader: its Skill, counts, and who takes it, or that nobody can", () => {
     expect(stepLabel(step("s-build"))).toBe("Build: Skill engineer; 2 waiting, 2 working; taken by builder-1 (agent), builder-2 (agent), Mai Tran");
     expect(stepLabel(step("s-backlog"))).toBe("Backlog: a hold, moved on by hand; 3 waiting, 0 working");
     const docs: Step = { ...step("s-build"), name: "Docs", skill: { id: "k-docs", name: "docs" }, takers: [], tasks: 0, working: 0 };

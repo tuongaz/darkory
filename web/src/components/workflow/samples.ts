@@ -67,7 +67,7 @@ export const sampleWorkflow: Workflow = laidOut({ steps, connectors });
 
 /**
  * The default Workflow a new Project starts with, at the places `darkory init` stores (decided
- * 2026-10-07): compact, in the board's order, one rank of 448 (a step's 208 + 240 between) and rows
+ * 2026-10-07): compact, in the board's order, one rank of 448 (a Step's 208 + 240 between) and rows
  * of 128. Backlog, Plan, Build and Retro down the first rank; Review beside Build, Skill review
  * beside Retro; Done is drawn at x 896. No Tasks yet; the roster's agents take it.
  */

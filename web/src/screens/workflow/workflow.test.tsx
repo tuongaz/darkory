@@ -13,7 +13,7 @@ import { renderApp } from "@/test/render";
 import { toBody, toCanvas } from "./bind";
 import { addConnector, addStep, deleteStep, layoutSteps, placeStep, removeConnector, renameConnector, renameStep, setStepSkill } from "./edits";
 
-// What the editing canvas hands React Flow, so a test can drop a step as a drag would.
+// What the editing canvas hands React Flow, so a test can drop a Step as a drag would.
 const flow = vi.hoisted(() => ({ props: undefined as unknown as ReactFlowProps<CanvasNode, ConnectorFlowEdge> }));
 vi.mock("@xyflow/react", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@xyflow/react")>();
@@ -140,7 +140,7 @@ describe("Settings › Workflow", () => {
     serve(workflow(), bob);
     renderApp("/settings/projects/WEB/workflow");
     expect(await screen.findByText(/Only an admin changes Web's Workflow/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add step" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add Step" })).toBeNull();
   });
 
   it("renames a Step: one PUT of the whole Workflow", async () => {
@@ -166,16 +166,16 @@ describe("Settings › Workflow", () => {
   it("adds a Step after one from its +, and selects it once /v1 has named it", async () => {
     const { puts } = serve();
     renderApp("/settings/projects/WEB/workflow");
-    await userEvent.click(await screen.findByRole("button", { name: "Add a step after Review", hidden: true }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add a Step after Review", hidden: true }));
     await waitFor(() => expect(puts).toHaveLength(1));
     const sent = puts[0];
     const expected = toBody(addStep(workflow(), step.review).next);
     expect(sent).toEqual(expected);
-    expect(sent.connectors.find((c) => c.to === "New step")).toEqual({ from: step.review, to: "New step", name: "next", position: 3 });
+    expect(sent.connectors.find((c) => c.to === "New Step")).toEqual({ from: step.review, to: "New Step", name: "next", position: 3 });
     const p = within(await panel());
-    expect(p.getByRole("textbox", { name: "Name of New step" })).toBeInTheDocument();
+    expect(p.getByRole("textbox", { name: "Name of New Step" })).toBeInTheDocument();
     // Renamed once /v1 has given it its id: sent by that id.
-    await userEvent.type(p.getByRole("textbox", { name: "Name of New step" }), "{Control>}a{/Control}Docs{Enter}");
+    await userEvent.type(p.getByRole("textbox", { name: "Name of New Step" }), "{Control>}a{/Control}Docs{Enter}");
     await waitFor(() => expect(puts).toHaveLength(2));
     expect(puts[1].steps.find((s) => s.name === "Docs")).toMatchObject({ id: "st-made-1" });
   });
@@ -251,16 +251,16 @@ describe("Settings › Workflow", () => {
       return first(c) as object;
     };
     renderApp("/settings/projects/WEB/workflow");
-    await userEvent.click(await screen.findByRole("button", { name: "Add step" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Add Step" }));
     const p = within(await panel());
-    const name = p.getByRole("textbox", { name: "Name of New step" });
+    const name = p.getByRole("textbox", { name: "Name of New Step" });
     await userEvent.type(name, "{Control>}a{/Control}Docs{Enter}");
     // Drawn at once, not sent yet.
     await waitFor(() => expect(stepNode("Docs")).toBeDefined());
     expect(puts).toHaveLength(0);
     release();
     await waitFor(() => expect(puts).toHaveLength(2));
-    expect(puts[0].steps.at(-1)).toEqual({ name: "New step", position: 7, x: 896, y: 0 });
+    expect(puts[0].steps.at(-1)).toEqual({ name: "New Step", position: 7, x: 896, y: 0 });
     expect(puts[1].steps.at(-1)).toEqual({ id: "st-made-1", name: "Docs", position: 7, x: 896, y: 0 });
     await waitFor(() => expect(screen.getByRole("status", { name: /^(Saving…|Saved)$/ })).toHaveTextContent("Saved"));
   });
@@ -271,7 +271,7 @@ describe("Settings › Workflow", () => {
     const name = p.getByRole("textbox", { name: "Name of Plan" });
     await userEvent.clear(name);
     await userEvent.type(name, "build{Enter}");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Two steps are called build: a name is used once in a Workflow, whatever its case.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Two Steps are called build: a name is used once in a Workflow, whatever its case.");
     expect(name).toHaveValue("Plan");
     expect(putsOf(api)).toHaveLength(0);
   });
