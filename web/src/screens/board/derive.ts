@@ -2,7 +2,8 @@
 // (a Step, with a Member, or ended), the order and grouping of the list, the board's columns, the
 // marks a row or card carries, who may move a Task by hand and what a refused move says. Pure, so
 // Vitest checks them without rendering.
-import type { Activity, Connector, Label, Member, Project, Task, TaskBrief, WorkflowStep } from "@/api/client";
+import type { Connector, Label, Member, Project, Task, TaskBrief, WorkflowStep } from "@/api/client";
+import type { ClaimTrail } from "@/components/filters/taskAxes";
 import { isOnReportingLine } from "@/me";
 import { kindLabel, liveClaim } from "@/work";
 
@@ -267,34 +268,6 @@ export function boardColumns(
   return columns;
 }
 
-/** What the Activity says about a Project's Tasks that a Task in a list does not carry. */
-export type Trail = {
-  /** When its last Claim lapsed, if nobody has claimed it since. */
-  lapsedAt?: string;
-  /** How much Evidence was attached to it, as far as the Activity read reaches. */
-  evidence: number;
-};
-
-/** The Activity kinds `taskTrails` reads. */
-export const trailKinds = ["task.claimed", "task.lapsed", "task.evidence_attached"] as const;
-
-/** Each Task's trail, read from Activity entries in any order, repeats included. */
-export function taskTrails(entries: readonly Activity[]): Map<string, Trail> {
-  const seen = new Set<number>();
-  const sorted = entries.filter((e) => !seen.has(e.seq) && seen.add(e.seq)).sort((a, b) => a.seq - b.seq);
-  const out = new Map<string, Trail>();
-  for (const e of sorted) {
-    if (e.subject_type !== "task") continue;
-    const t = out.get(e.subject_id) ?? { evidence: 0 };
-    if (e.kind === "task.claimed") t.lapsedAt = undefined;
-    else if (e.kind === "task.lapsed") t.lapsedAt = e.at;
-    else if (e.kind === "task.evidence_attached") t.evidence++;
-    else continue;
-    out.set(e.subject_id, t);
-  }
-  return out;
-}
-
 /** The open Tasks each Task blocks, read off the `open_blockers` of the Tasks in view. */
 export function blocking(tasks: readonly Task[]): Map<string, TaskBrief[]> {
   const out = new Map<string, TaskBrief[]>();
@@ -313,7 +286,7 @@ export function blocking(tasks: readonly Task[]): Map<string, TaskBrief[]> {
 export type Mark = { kind: "blocked"; by: string } | { kind: "lapsed"; at: string } | { kind: "task-kind"; label: string };
 
 /** The marks a Task carries, most pressing first: a card shows the first, a row all of them. */
-export function marksOf(task: Task, trail: Trail | undefined, now: number): Mark[] {
+export function marksOf(task: Task, trail: ClaimTrail | undefined, now: number): Mark[] {
   const marks: Mark[] = [];
   if (task.state === "open" && task.blocked) marks.push({ kind: "blocked", by: task.open_blockers?.[0]?.key ?? "" });
   if (task.state === "open" && !liveClaim(task, now) && trail?.lapsedAt) marks.push({ kind: "lapsed", at: trail.lapsedAt });

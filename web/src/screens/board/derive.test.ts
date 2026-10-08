@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Task } from "@/api/client";
+import { claimTrails } from "@/components/filters/taskAxes";
 import { ada, bob, builder, bug, clientX, parentTask, skills, step, subtask, task, workflow } from "@/test/fixtures";
 import {
   boardColumns,
@@ -16,7 +17,6 @@ import {
   progressText,
   rankFinder,
   stepWithSkill,
-  taskTrails,
 } from "./derive";
 
 const skillName = (id: string) => skills.find((s) => s.id === id)?.name;
@@ -180,30 +180,21 @@ describe("moving by hand", () => {
   });
 });
 
-describe("trails", () => {
-  const entry = (seq: number, kind: Activity["kind"], subject: string, at = "2026-10-01T09:00:00Z"): Activity => ({
-    seq,
-    at,
-    kind,
-    subject_type: "task",
-    subject_id: subject,
-    payload: {},
-  });
-
-  it("reads a lapse until the next claim, and counts Evidence", () => {
-    const trails = taskTrails([
-      entry(3, "task.lapsed", "k-1", "2026-10-01T09:30:00Z"),
-      entry(1, "task.claimed", "k-1"),
-      entry(4, "task.evidence_attached", "k-2"),
-      entry(5, "task.evidence_attached", "k-2"),
-      entry(5, "task.evidence_attached", "k-2"),
-    ]);
-    expect(trails.get("k-1")).toEqual({ lapsedAt: "2026-10-01T09:30:00Z", evidence: 0 });
-    expect(trails.get("k-2")?.evidence).toBe(2);
-    const marks = marksOf(task(1, { blocked: true, open_blockers: [{ id: "k-9", key: "WEB-9", title: "Q" }] }), trails.get("k-1"), Date.now());
+describe("marks", () => {
+  it("reads blocked first, then a lapse since the last Claim", () => {
+    const marks = marksOf(task(1, { blocked: true, open_blockers: [{ id: "k-9", key: "WEB-9", title: "Q" }] }), { lapsedAt: "2026-10-01T09:30:00Z" }, Date.now());
     expect(marks).toEqual([
       { kind: "blocked", by: "WEB-9" },
       { kind: "lapsed", at: "2026-10-01T09:30:00Z" },
     ]);
+  });
+});
+
+describe("the Claim trail the list shares with the Filter", () => {
+  it("counts each Task's Evidence once per entry", () => {
+    const e = (seq: number, subject: string): Activity => ({ seq, at: "2026-10-01T09:00:00Z", kind: "task.evidence_attached", subject_type: "task", subject_id: subject, payload: {} });
+    const trails = claimTrails([e(1, "k-2"), e(2, "k-2"), e(2, "k-2"), e(3, "k-3")]);
+    expect(trails.get("k-2")?.evidence).toBe(2);
+    expect(trails.get("k-3")?.evidence).toBe(1);
   });
 });

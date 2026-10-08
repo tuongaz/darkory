@@ -41,7 +41,7 @@ export function TasksPage() {
   const projects = useMemo(() => [project], [project]);
   // Reset leaves an applied View too: the Views' clear, which needs the Filter's pills first.
   const clear = useRef<() => void>(() => {});
-  const filter = useTaskFilter({ projects, tasks: all, onClearAll: () => clear.current() });
+  const filter = useTaskFilter({ projects, tasks: all, trails: model.trails, onClearAll: () => clear.current() });
   // A View keeps the pills, the order as its sort, and the Display with the layout; applying one
   // sets all three.
   const savedViews = useSavedViews({

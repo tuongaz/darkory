@@ -2,11 +2,12 @@ import { useMemo } from "react";
 import type { Label, Member, Project, RunnerSession, Task, WorkflowStep } from "@/api/client";
 import { useDirectory, useLabels, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { useNow } from "@/clock";
+import { useClaimTrails } from "@/components/filters/useTaskFilter";
 import { useCurrentMe } from "@/me";
 import { liveClaim, taskWorkGlyph } from "@/work";
 import type { WorkGlyph } from "@/lib/work";
 import { blocking, childrenOf, moveProblem, stepsInOrder } from "./derive";
-import { useProjectTasks, useTaskTrails } from "./queries";
+import { useProjectTasks } from "./queries";
 
 /** Everything a Project's Tasks views read, joined: the records, lookups by id, and who is looking. */
 export type TasksModel = ReturnType<typeof useTasksModel>;
@@ -15,7 +16,8 @@ export function useTasksModel(project: Project) {
   const tasks = useProjectTasks(project.key);
   const workflow = useWorkflow(project.key);
   const labels = useLabels(project.key);
-  const trails = useTaskTrails(project.key);
+  // The Project's one Claim trail read: the Filter's Lapsed, the rows' Lapsed and Evidence.
+  const trails = useClaimTrails(project.key);
   const dir = useDirectory();
   const me = useCurrentMe();
   const now = useNow();

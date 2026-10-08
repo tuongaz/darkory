@@ -253,10 +253,12 @@ export type ClaimTrail = {
   lastLapseAt?: string;
   /** Who completed it. */
   completedBy?: string;
+  /** How much Evidence was attached to it, as far as the read reaches. */
+  evidence?: number;
 };
 
 /** The Activity kinds `claimTrails` reads. */
-export const trailKinds = ["task.claimed", "task.lapsed", "task.completed"] as const satisfies Activity["kind"][];
+export const trailKinds = ["task.claimed", "task.lapsed", "task.completed", "task.evidence_attached"] as const satisfies Activity["kind"][];
 
 /**
  * Reads each Task's Claim history from the Activity, since `/v1/tasks` gives a Task's Claim only
@@ -272,6 +274,7 @@ export function claimTrails(entries: readonly Activity[]): Map<string, ClaimTrai
     if (e.kind === "task.claimed") t.lapsedAt = undefined;
     else if (e.kind === "task.lapsed") t.lapsedAt = t.lastLapseAt = e.at;
     else if (e.kind === "task.completed") t.completedBy = e.actor_id;
+    else if (e.kind === "task.evidence_attached") t.evidence = (t.evidence ?? 0) + 1;
     else continue;
     out.set(e.subject_id, t);
   }

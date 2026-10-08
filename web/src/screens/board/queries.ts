@@ -1,36 +1,14 @@
-// The Tasks screens' reads and writes. Keys sit under the shell's roots ("tasks", "activity"), so
-// they share the cache and an Activity entry refetches them; Activity history is never refetched,
-// so the trail joins what the stream has brought since.
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+// The Tasks screens' reads and writes. Keys sit under the shell's roots ("tasks"), so they share
+// the cache and an Activity entry refetches them. The Claim trail is the Filter's (useClaimTrails).
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, call, type Task } from "@/api/client";
-import { useLiveEntries } from "@/api/live";
-import { keys, newestActivity, useTasks } from "@/api/queries";
-import { taskTrails, trailKinds } from "./derive";
+import { keys, useTasks } from "@/api/queries";
 
 /** The query every Tasks screen of a Project reads: its whole list, open and ended. */
 export const projectTasksQuery = (project: string) => ({ project });
 
 export function useProjectTasks(project: string) {
   return useTasks(projectTasksQuery(project));
-}
-
-/**
- * Each of a Project's Tasks' trail (a lapse since its last Claim, its Evidence count): the newest
- * 500 such entries of the Project's Activity, with what the stream has brought since. `/v1/tasks`
- * carries neither.
- */
-export function useTaskTrails(project: string) {
-  const query = { project, kind: [...trailKinds], limit: 500 };
-  const history = useQuery({
-    queryKey: keys.activity(query),
-    queryFn: () => call(api.GET("/v1/activity", { params: { query: { ...query, before: newestActivity } } })).then((r) => r.items),
-  });
-  const live = useLiveEntries();
-  return useMemo(() => {
-    const kinds: readonly string[] = trailKinds;
-    return taskTrails([...(history.data ?? []), ...live.filter((e) => kinds.includes(e.kind))]);
-  }, [history.data, live]);
 }
 
 /**
