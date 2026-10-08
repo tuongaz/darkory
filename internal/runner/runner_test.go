@@ -507,7 +507,8 @@ func TestRunnerAttachesALogKeptBeforeItStarted(t *testing.T) {
 }
 
 // A session says what it is doing: running while its progress moves, waiting once its turn ended
-// without a decision, stalled once its progress went stale and Heartbeats stopped.
+// without a decision, stalled once its progress went stale and Heartbeats stopped; and since
+// when: its start until its state first changes, then the moment of each change.
 func TestRunnerSessionStates(t *testing.T) {
 	f := newFixture(t, storetest.Open(t, store.SQLite))
 	f.agent("stuck", "hang", "engineer")
@@ -517,9 +518,20 @@ func TestRunnerSessionStates(t *testing.T) {
 	r := f.run("stuck", "quiet")
 
 	seen := map[string][]string{}
+	since := map[string]time.Time{}
 	eventually(t, 20*time.Second, "WEB-1 stalled and WEB-2 waiting", func() bool {
 		for _, s := range r.Running() {
-			if l := seen[s.Task]; len(l) == 0 || l[len(l)-1] != s.State {
+			l := seen[s.Task]
+			switch {
+			case len(l) == 0 && s.State == StateRunning && !s.StateSince.Equal(s.StartedAt):
+				t.Fatalf("%s running since %v, started %v", s.Task, s.StateSince, s.StartedAt)
+			case len(l) > 0 && l[len(l)-1] == s.State && !s.StateSince.Equal(since[s.Task]):
+				t.Fatalf("%s still %s, since %v then %v", s.Task, s.State, since[s.Task], s.StateSince)
+			case len(l) > 0 && l[len(l)-1] != s.State && !s.StateSince.After(since[s.Task]):
+				t.Fatalf("%s became %s since %v, not after %v", s.Task, s.State, s.StateSince, since[s.Task])
+			}
+			since[s.Task] = s.StateSince
+			if len(l) == 0 || l[len(l)-1] != s.State {
 				seen[s.Task] = append(l, s.State)
 			}
 		}
@@ -571,6 +583,20 @@ func TestRunnerReleasesASilentSession(t *testing.T) {
 			}
 			if got := ptrValue(q.Task.ParentID); (c.parent == "") != (got == "") || c.parent != "" && got != f.task(c.parent).Task.ID {
 				t.Fatalf("%s's question is under %q, want %q", c.task, got, c.parent)
+			}
+			// Each of the three sessions was nudged twice before its release, each nudge recorded
+			// with no actor, naming the agent.
+			var page client.ActivityPage
+			f.json(&page, "ada", "activity", "--kind", "task.nudged", "--task", c.task, "--limit", "100")
+			var nudges []float64
+			for _, a := range page.Items {
+				if a.ActorID != nil || a.Payload["holder_id"] != f.ids[c.agent] || a.Payload["claim_id"] == nil {
+					t.Fatalf("%s's nudge %+v", c.task, a)
+				}
+				nudges = append(nudges, a.Payload["nudge"].(float64))
+			}
+			if !slices.Equal(nudges, []float64{1, 2, 1, 2, 1, 2}) {
+				t.Fatalf("%s's nudges: %v", c.task, nudges)
 			}
 			// Each session's log went with its release.
 			eventually(t, 10*time.Second, "three session logs", func() bool {

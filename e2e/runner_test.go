@@ -378,6 +378,17 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 	if !strings.Contains(notes(d), `fakeagent: read "You stopped without ending the Task: advance it, complete it, or file a question."`) {
 		t.Errorf("the nudge is not in the last lines:\n%s", notes(d))
 	}
+	// Each of the three sessions was nudged twice, each nudge recorded with no actor.
+	var nudged client.ActivityPage
+	ada.json(&nudged, "activity", "--kind", "task.nudged", "--task", "MAIN-3", "--limit", "100")
+	if len(nudged.Items) != 6 {
+		t.Errorf("%d nudges recorded on MAIN-3, want 6: %+v", len(nudged.Items), nudged.Items)
+	}
+	for i, a := range nudged.Items {
+		if a.ActorID != nil || a.Payload["nudge"] != float64(i%2+1) {
+			t.Errorf("nudge %d: %+v", i, a)
+		}
+	}
 	q := ri.task((*d.Task.OpenBlockers)[0].Key)
 	if q.Task.Title != "The runner released MAIN-3 three times without a decision" || q.Task.AimedAtID == nil || *q.Task.AimedAtID != ada.id {
 		t.Errorf("the question: %+v", q.Task)
@@ -392,7 +403,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		var list client.RunnerSessionList
 		ada.json(&list, "sessions")
 		return slices.ContainsFunc(list.Items, func(s client.RunnerSession) bool {
-			return s.TaskID == ri.task("MAIN-4").Task.ID && s.State == client.RunnerSessionStalled
+			return s.TaskID == ri.task("MAIN-4").Task.ID && s.State == client.RunnerSessionStalled && s.StateSince.After(s.StartedAt)
 		})
 	})
 	ri.wait(30*time.Second, "MAIN-4's Claim to lapse", func() bool {

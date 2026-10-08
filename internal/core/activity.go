@@ -11,7 +11,7 @@ import (
 // ActivityKinds lists every kind of Activity entry Darkory writes; the API's ActivityKind enum
 // lists the same. The part before the dot names the subject's type (SubjectTypes).
 var ActivityKinds = []string{
-	"task.filed", "task.claimed", "task.lapsed", "task.released", "task.advanced", "task.moved", "task.completed", "task.dropped",
+	"task.filed", "task.claimed", "task.lapsed", "task.nudged", "task.released", "task.advanced", "task.moved", "task.completed", "task.dropped",
 	"task.taken_back", "task.claim_ended", "task.split", "task.became_parent", "task.note_added", "task.observed",
 	"task.blocker_added", "task.blocker_removed", "task.evidence_attached", "task.skill_proposed", "task.ranked",
 	"task.owner_passed", "task.labels_set",
