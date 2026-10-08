@@ -1,5 +1,5 @@
 import type { RunnerSession, Schemas, Skill, Task, Workflow as WorkflowRecord } from "@/api/client";
-import type { Connector, Step, Taker, Workflow } from "@/components/workflow/model";
+import type { Connector, Step, Taker, TaskChip, Workflow } from "@/components/workflow/model";
 import { workingOf, type MemberKind, type Working } from "@/lib/work";
 import { liveClaim } from "@/work";
 import type { Change } from "./edits";
@@ -45,11 +45,49 @@ export function workingAt(tasks: Task[], sessions: RunnerSession[], kindOf: (id:
 const rank: Record<Working, number> = { running: 0, held: 1, waiting: 2, stalled: 3, ending: 4 };
 
 /**
- * The record as the canvas draws it: each Step with its Skill's name, its takers (ringed by how
- * they work there, when `working` is given), its counts and median; each Connector with `to` null
- * into Done.
+ * The open Tasks at each Step as their chips say them, in the order `tasks` lists them with the
+ * held ones first: each with its Parent's key when it is a Subtask, and its holder ringed by how
+ * they work there when a live Claim holds it. A Parent, and a Task aimed at a Member, are at no
+ * Step and have no chip.
  */
-export function toCanvas(record: WorkflowRecord, skills: Map<string, Pick<Skill, "id" | "name">>, working?: Map<string, Map<string, Working>>): Workflow {
+export function chipsAt(
+  tasks: Task[],
+  sessions: RunnerSession[],
+  memberOf: (id: string) => Pick<Taker, "name" | "kind"> | undefined,
+  now: number,
+): Map<string, TaskChip[]> {
+  const keyOf = new Map(tasks.map((t) => [t.id, t.key]));
+  const held: [string, TaskChip][] = [];
+  const waiting: [string, TaskChip][] = [];
+  for (const t of tasks) {
+    if (!t.step_id || t.state !== "open") continue;
+    const chip: TaskChip = { id: t.id, key: t.key, title: t.title };
+    if (t.parent_id && keyOf.has(t.parent_id)) chip.parentKey = keyOf.get(t.parent_id);
+    const claim = liveClaim(t, now);
+    if (claim) {
+      const m = memberOf(claim.holder_id);
+      const kind = m?.kind ?? "human";
+      const session = sessions.find((s) => s.task_id === t.id && s.member_id === claim.holder_id)?.state;
+      chip.holder = { id: claim.holder_id, name: m?.name ?? "a Member", kind, working: workingOf(kind, session) };
+      held.push([t.step_id, chip]);
+    } else waiting.push([t.step_id, chip]);
+  }
+  const at = new Map<string, TaskChip[]>();
+  for (const [step, chip] of [...held, ...waiting]) at.set(step, [...(at.get(step) ?? []), chip]);
+  return at;
+}
+
+/**
+ * The record as the canvas draws it: each Step with its Skill's name, its takers (ringed by how
+ * they work there, when `working` is given), its counts and median, and live its Tasks' chips;
+ * each Connector with `to` null into Done.
+ */
+export function toCanvas(
+  record: WorkflowRecord,
+  skills: Map<string, Pick<Skill, "id" | "name">>,
+  working?: Map<string, Map<string, Working>>,
+  chips?: Map<string, TaskChip[]>,
+): Workflow {
   const steps: Step[] = record.steps.map((s) => {
     const skill = s.skill_id ? skills.get(s.skill_id) : undefined;
     const ringed = working?.get(s.id);
@@ -65,6 +103,7 @@ export function toCanvas(record: WorkflowRecord, skills: Map<string, Pick<Skill,
       tasks: s.tasks,
       working: s.working,
       medianMs: s.median_ms,
+      ...(chips ? { chips: chips.get(s.id) ?? [] } : {}),
     };
   });
   const connectors: Connector[] = record.connectors.map((c) => ({

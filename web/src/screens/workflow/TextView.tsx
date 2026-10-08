@@ -7,8 +7,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * The Workflow as a list, for a screen reader and a phone: each Step in order with its Skill (or
- * that it is a hold), who takes its Tasks, its counts and median, and the Connectors out of it by
- * outcome. Live, a Step opens its peek; editing, a Step or a Connector is selected for the panel.
+ * that it is a hold), who takes its Tasks, its counts and median, live the Tasks at it (each opens
+ * its peek), and the Connectors out of it by outcome. Live, a Step opens its peek; editing, a Step
+ * or a Connector is selected for the panel.
  */
 export function TextView({
   workflow,
@@ -16,12 +17,15 @@ export function TextView({
   selection,
   onStep,
   onConnector,
+  onTask,
 }: {
   workflow: Workflow;
   mode: "live" | "edit";
   selection?: CanvasSelection;
   onStep: (step: Step) => void;
   onConnector?: (id: string) => void;
+  /** Live, a Task at a Step was chosen: open its peek. */
+  onTask?: (key: string) => void;
 }) {
   const steps = stepsInOrder(workflow);
   return (
@@ -67,6 +71,30 @@ export function TextView({
                   {s.medianMs !== undefined && <span>Median {durationText(s.medianMs)}</span>}
                 </span>
               </button>
+              {mode === "live" && s.chips && s.chips.length > 0 && (
+                <ul aria-label={`Tasks at ${s.name}`} className="flex flex-col border-t px-1.5 py-1">
+                  {s.chips.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => onTask?.(c.key)}
+                        aria-label={`${c.key} ${c.title}, ${c.holder ? `held by ${c.holder.name}` : "waiting"}`}
+                        className="flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-1.5 text-left text-xs hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+                      >
+                        {c.holder ? (
+                          <MemberAvatar member={c.holder} working={c.holder.working} />
+                        ) : (
+                          <span aria-hidden className="size-5 flex-none rounded-full border border-dashed border-muted-foreground/60" />
+                        )}
+                        {c.parentKey && <span className="flex-none font-mono text-[11px] text-muted-foreground/80">{c.parentKey} ›</span>}
+                        <span className="flex-none font-mono text-[11.5px] font-medium">{c.key}</span>
+                        <span className="min-w-0 truncate">{c.title}</span>
+                        {c.holder && <span className="ml-auto flex-none text-muted-foreground">{c.holder.name}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <ul aria-label={`Connectors out of ${s.name}`} className="flex flex-col border-t px-3 py-1.5">
                 {out.length === 0 &&
                   (s.skill ? (

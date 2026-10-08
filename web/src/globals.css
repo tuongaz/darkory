@@ -80,6 +80,11 @@
 .workflow-canvas[data-mode="edit"] .canvas-handle.connectingto.valid {
   --xy-handle-background-color: var(--foreground);
 }
+/* Live, the Connector a token runs along (ConnectorEdge): unlayered, as base.css is, to win over its stroke. */
+.react-flow__edge-path.flow-lit {
+  stroke: var(--foreground);
+  stroke-width: 2;
+}
 .canvas-handle-hidden {
   opacity: 0;
   pointer-events: none;
@@ -273,6 +278,69 @@
     --spin: 360deg;
   }
 }
+/* The live Workflow's moments (components/workflow/live.ts). */
+@keyframes chip-pulse {
+  50% {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--moment, var(--agent)) 30%, transparent);
+  }
+}
+@keyframes chip-arrive {
+  from {
+    opacity: 0;
+    background-color: var(--accent);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--foreground) 25%, transparent);
+  }
+  20% {
+    opacity: 1;
+  }
+}
+@keyframes glow-fade {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes callout-life {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  5%,
+  85% {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes callout-fade {
+  from {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes trail-fresh {
+  from {
+    background-color: color-mix(in oklch, var(--agent) 14%, transparent);
+  }
+}
+@keyframes token-travel {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
 
 /* An avatar's tint (MemberAvatar): one of eight muted hues, chosen by a hash of the Member's name,
    so two Members with the same initials look apart. The theme sets the tone, the tint-N class the
@@ -366,6 +434,97 @@
     .avatar-tint[data-working="running"],
     .work-ring {
       animation: none;
+    }
+  }
+
+  /* The live Workflow (components/workflow/live.ts). A moment's colour, by its tone: a pickup in
+     the holder's (the AI gradient for an agent, the human ink for a human), a let-go grey, a lapse
+     amber, a take-back red, a filing blue. */
+  .flow-callout[data-tone="human"], .flow-chip[data-live="human"], .flow-step[data-glow="human"] { --moment: var(--human); }
+  .flow-callout[data-tone="neutral"], .flow-chip[data-live="neutral"], .flow-step[data-glow="neutral"] { --moment: var(--muted-foreground); }
+  .flow-callout[data-tone="lapsed"], .flow-chip[data-live="lapsed"], .flow-step[data-glow="lapsed"] { --moment: var(--state-claimed); }
+  .flow-callout[data-tone="back"], .flow-chip[data-live="back"], .flow-step[data-glow="back"] { --moment: var(--state-blocked); }
+  .flow-callout[data-tone="filed"], .flow-chip[data-live="filed"], .flow-step[data-glow="filed"] { --moment: var(--state-waiting); }
+
+  /* A Task's chip on its Step. Just picked up (or let go of, lapsed, taken back), it pulses in its
+     moment's colour for a few seconds, an agent's in the turning AI gradient; just arrived, it is
+     highlighted a moment; lit by a hovered trail row, ringed. */
+  .flow-chip[data-live] {
+    border: 1.5px solid transparent;
+    background:
+      linear-gradient(var(--background) 0 0) padding-box,
+      linear-gradient(var(--moment) 0 0) border-box;
+    animation: chip-pulse 1.2s ease-in-out 5;
+  }
+  .flow-chip[data-live="agent"] {
+    background:
+      linear-gradient(var(--background) 0 0) padding-box,
+      conic-gradient(from var(--spin), var(--agent-stops)) border-box;
+    animation: mark-spin 1.6s linear infinite, chip-pulse 1.2s ease-in-out 5;
+  }
+  .flow-chip[data-arrived] {
+    animation: chip-arrive 2s ease-out;
+  }
+  .flow-chip[data-focus] {
+    border-color: var(--foreground);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--ring) 40%, transparent);
+  }
+
+  /* A Step's node outlined a moment when a Task there is picked up: a ring round it in the
+     moment's colour, an agent's the turning AI gradient, fading out. */
+  .flow-step[data-glow]::after {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: calc(var(--radius-lg) + 4px);
+    padding: 2px;
+    background: var(--moment);
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    pointer-events: none;
+    animation: glow-fade 2.4s ease-out forwards;
+  }
+  .flow-step[data-glow="agent"]::after {
+    background: conic-gradient(from var(--spin), var(--agent-stops));
+    animation: mark-spin 1.6s linear infinite, glow-fade 2.4s ease-out forwards;
+  }
+
+  /* A callout above a Step: in, held, then out. Its border in the moment's colour. */
+  .flow-callout {
+    border-color: var(--moment, var(--border));
+    animation: callout-life 6s ease-out forwards;
+  }
+  .flow-callout[data-tone="agent"] {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--popover) 0 0) padding-box,
+      conic-gradient(var(--agent-stops)) border-box;
+  }
+
+  /* A token: a Task's key travelling its Connector's drawn line. */
+  .flow-token {
+    offset-rotate: 0deg;
+    offset-anchor: center;
+    animation: token-travel 1.2s cubic-bezier(0.45, 0, 0.25, 1) forwards;
+  }
+  .flow-lit-label {
+    box-shadow: var(--shadow-pop);
+  }
+
+  /* A trail row that has just arrived. */
+  .flow-trail-row[data-fresh] {
+    animation: trail-fresh 4s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-chip[data-live],
+    .flow-chip[data-live="agent"],
+    .flow-chip[data-arrived],
+    .flow-step[data-glow]::after,
+    .flow-step[data-glow="agent"]::after {
+      animation: none;
+    }
+    .flow-callout {
+      animation: callout-fade 6s linear forwards;
     }
   }
 

@@ -10,6 +10,12 @@ export type Workflow = { steps: Step[]; connectors: Connector[] };
 /** A Member of the Project holding a Step's Skill. `working` rings their mark (MemberAvatar). */
 export type Taker = { id: string; name: string; kind: MemberKind; working?: Working };
 
+/**
+ * Live, an open Task at a Step as its chip says it: its key and title, its Parent's key when it is
+ * a Subtask, and who holds it (ringed by how they work there) when a live Claim does.
+ */
+export type TaskChip = { id: string; key: string; title: string; parentKey?: string; holder?: Taker };
+
 export type Step = {
   id: string;
   name: string;
@@ -26,6 +32,8 @@ export type Step = {
   working: number;
   /** The median time a Task spent at it over the last 30 days. */
   medianMs?: number;
+  /** Live, the open Tasks at it, held ones first: the chips its node shows. */
+  chips?: TaskChip[];
 };
 
 /** A named way out of a Step, into another Step or into Done (`to: null`). */
