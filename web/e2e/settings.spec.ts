@@ -419,7 +419,9 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
 
     await card.getByLabel("Model").fill("claude-haiku-4-5-20251001");
     await page.keyboard.press("Enter");
-    await expect(card).toContainText("Darkory starts this agent's command on this machine whenever it has a Task to take.");
+    // The Install runs --runner=off: the setting is In use, and nothing runs the agent now.
+    await expect(card).toContainText("In use");
+    await expect(card).toContainText("Not running: no Runner runs beside this server, so nothing starts this agent's command until one does.");
     const stop = page.getByRole("region", { name: "Pause and deactivate" });
     await stop.getByRole("switch", { name: "Paused" }).click();
     await expect(stop.getByRole("switch", { name: "Paused" })).toBeChecked();

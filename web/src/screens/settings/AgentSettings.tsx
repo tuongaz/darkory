@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { ApiError, type AgentSettings, type Member } from "@/api/client";
+import { useRunnerSessions } from "@/api/queries";
 import type { components } from "@/api/schema.gen";
 import { clearAgentSettings, setAgentSettings } from "@/api/writes";
 import { InfoPopover } from "@/components/InfoPopover";
@@ -11,7 +12,7 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { argsOf, argsText, envOf, envText, knownModels, placeholders } from "./agent";
+import { argsOf, argsText, envOf, envText, knownModels, placeholders, runnerNow } from "./agent";
 import { count } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, SettingsForm, SettingsRow, SettingsSection, w320 } from "./parts";
 
@@ -47,13 +48,13 @@ export function AgentCard({ member }: { member: Member }) {
   );
 }
 
-/** What the Runner is, in a line under the Runner row; ⓘ says what it does with the Task. */
-export const runnerLine = "Darkory starts this agent's command on this machine whenever it has a Task to take.";
+/** What using the Runner means, under the row that offers it; ⓘ says what it does with the Task. */
+export const runnerLine = "In use, the Runner beside this server starts the agent's command whenever it has a Task to take.";
 
-function AboutRunner() {
+function AboutRunner({ children = runnerLine }: { children?: ReactNode }) {
   return (
     <span className="flex flex-wrap items-center gap-1">
-      {runnerLine}
+      {children}
       <InfoPopover label="About the Runner" className="w-[320px]">
         <p>
           It takes the Task through <code className="font-mono text-[11.5px]">next</code> as this agent, prepares its Workspace, and ends the
@@ -127,10 +128,12 @@ function NotRun({ member }: { member: Member }) {
 }
 
 function AgentForm({ member, settings: s }: { member: Member; settings: AgentSettings }) {
+  const sessions = useRunnerSessions().data;
+  const now = runnerNow({ runner: sessions?.runner, session: sessions?.items.find((x) => x.member_id === member.id), paused: s.paused });
   // Each row is keyed by its saved value, so a change made elsewhere replaces what the field shows.
   return (
     <SettingsForm label={`Agent settings of ${member.name}`}>
-      <SettingsRow label="Runner" help={<AboutRunner />}>
+      <SettingsRow label="Runner" help={<AboutRunner>{now}</AboutRunner>}>
         <span>In use</span>
       </SettingsRow>
       <TextSetting
