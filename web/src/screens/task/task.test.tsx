@@ -176,6 +176,21 @@ describe("a Parent's page", () => {
     }
   });
 
+  it("says why nobody holds a Parent or an ended Task, so its Properties are never empty", async () => {
+    mockApi(taskRoutes());
+    const parent = renderApp("/tasks/WEB-3");
+    expect(await screen.findByRole("complementary", { name: "Properties" })).toHaveTextContent("Held byNobody: a Parent is never claimed");
+    parent.unmount();
+
+    details["WEB-1"] = detail({ ...copy, state: "dropped", step_id: undefined, claim: undefined });
+    try {
+      renderApp("/tasks/WEB-1");
+      expect(await screen.findByRole("complementary", { name: "Properties" })).toHaveTextContent("Held byNobody: it ended Dropped");
+    } finally {
+      details["WEB-1"] = detail(copy);
+    }
+  });
+
   it("lists its Subtasks, and draws them over the Workflow as a graph, remembered", async () => {
     mockApi(taskRoutes());
     const first = renderApp("/tasks/WEB-3");
@@ -193,6 +208,22 @@ describe("a Parent's page", () => {
 
     renderApp("/tasks/WEB-3");
     expect(await screen.findByRole("region", { name: "Subtasks, graph" })).toBeInTheDocument();
+  });
+
+  it("draws a Subtask Darkory filed without its kind's pill when its title already says it", async () => {
+    const retro: Task = { ...basket, id: "t-retro", key: "WEB-9", kind: "retrospective", title: "Retrospective: Checkout", state: "open", step_id: step.retro };
+    const accept: Task = { ...basket, id: "t-acc", key: "WEB-10", kind: "acceptance", title: "Check it all", state: "open", step_id: step.review };
+    details["WEB-3"] = detail(checkout, { subtasks: [payment, retro, accept] });
+    try {
+      mockApi(taskRoutes());
+      renderApp("/tasks/WEB-3?view=graph");
+      const graph = await screen.findByRole("region", { name: "Subtasks, graph" });
+      const node = (key: string) => within(graph).getByRole("button", { name: new RegExp(`^${key} `) });
+      expect(within(await waitFor(() => node("WEB-9"))).queryByText("Retrospective", { exact: true })).toBeNull();
+      expect(within(node("WEB-10")).getByText("Acceptance", { exact: true })).toBeInTheDocument();
+    } finally {
+      details["WEB-3"] = detail(checkout, { subtasks: [payment, receipt, basket] });
+    }
   });
 
   it("offers Add Subtask to a Member of its Project", async () => {

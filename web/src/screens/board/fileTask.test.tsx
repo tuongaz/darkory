@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Workspace } from "@/api/client";
 import { mockApi, refuse, type Call } from "@/test/api";
-import { acceptance, ada, bob, builder, detail, step, task, web, workflow } from "@/test/fixtures";
+import { acceptance, ada, bob, builder, detail, me, ops, step, task, web, workflow } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { openFileTask } from "./state";
 import { cart, routes } from "./testData";
@@ -53,6 +53,33 @@ describe("File a Task", () => {
       labels: ["l-client-x"],
     });
     expect(await screen.findByText("Filed WEB-11")).toBeInTheDocument();
+  });
+
+  it("opened by C before the Projects load, files in the Project of the address, not the Member's first", async () => {
+    let loaded!: () => void;
+    const loading = new Promise<void>((resolve) => (loaded = resolve));
+    const api = mockApi(
+      routes({
+        ...answer(),
+        "GET /v1/me": { ...me(ada), projects: [ops, web] },
+        "GET /v1/projects": async () => {
+          await loading;
+          return { items: [ops, web] };
+        },
+      }),
+    );
+    renderApp("/projects/WEB/tasks");
+    await waitFor(() => expect(api.calls.some((c) => c.path === "/v1/projects")).toBe(true));
+    await userEvent.keyboard("c");
+    loaded();
+    const dialog = await screen.findByRole("dialog", { name: "File a Task" });
+    await waitFor(() => expect(dialog).toHaveTextContent("In WEB."));
+    await userEvent.type(within(dialog).getByLabelText("Title"), "Gift wrapping");
+    await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
+    await waitFor(() => expect(filed(api)).toBeDefined());
+    expect(filed(api)!.body).toMatchObject({ project: "WEB" });
+    // Nothing asked of /v1 for a Project not known yet.
+    expect(api.calls.filter((c) => c.path === "/v1/tasks" && c.query.get("project") === "")).toEqual([]);
   });
 
   it("refuses a blank title before asking /v1", async () => {

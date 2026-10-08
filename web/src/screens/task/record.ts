@@ -15,7 +15,7 @@ export type RecordEntry = { at: string } & (
   | { kind: "evidence"; evidence: Evidence }
   | { kind: "question"; question: Task }
   | { kind: "proposal"; proposal: SkillProposal }
-  | { kind: "ended"; state: "done" | "dropped"; by?: string }
+  | { kind: "ended"; state: "done" | "dropped"; by?: string; auto?: boolean }
 );
 
 const time = (at: string) => Date.parse(at);
@@ -61,7 +61,9 @@ export function taskRecord(detail: TaskDetail, path: readonly Activity[] = []): 
   // A Task its holder completed says so with the Claim's end.
   if (task.state !== "open" && task.ended_at && !(task.state === "done" && claims.some((c) => c.how_ended === "completed"))) {
     const end = path.find((e) => e.kind === (task.state === "done" ? "task.completed" : "task.dropped"));
-    out.push({ kind: "ended", at: task.ended_at, state: task.state, by: end?.actor_id });
+    // A Parent with Auto-complete completed itself; the entry's actor ended its last Subtask.
+    if (end?.payload.auto_complete === true) out.push({ kind: "ended", at: task.ended_at, state: task.state, auto: true });
+    else out.push({ kind: "ended", at: task.ended_at, state: task.state, by: end?.actor_id });
   }
   // A stable sort on the instant keeps the insertion order above for ties.
   return out

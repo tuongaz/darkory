@@ -10,8 +10,8 @@ export type Stay = {
   since: number;
   /** Unix ms; absent while the Task is still there. */
   until?: number;
-  /** How it left: along a Connector (its outcome), moved by hand, or ended there. */
-  left?: { by: "advanced"; outcome: string } | { by: "moved" } | { by: "parent" } | { by: "completed" } | { by: "dropped" };
+  /** How it left: along a Connector (its outcome), moved by hand, or ended there (into Done along one). */
+  left?: { by: "advanced"; outcome: string } | { by: "moved" } | { by: "parent" } | { by: "completed"; outcome?: string } | { by: "dropped" };
 };
 
 /** Where the path ends, once it has: Done, Dropped, or a Parent's Subtasks. */
@@ -76,7 +76,8 @@ export function taskPath(task: Pick<Task, "id" | "state" | "step_id" | "step_sin
       case "task.completed":
       case "task.dropped": {
         const kind = e.kind === "task.completed" ? "done" : "dropped";
-        leave(str(p.from), num(p.since), at, { by: kind === "done" ? "completed" : "dropped" });
+        const outcome = str(p.outcome);
+        leave(str(p.from), num(p.since), at, kind === "dropped" ? { by: "dropped" } : outcome ? { by: "completed", outcome } : { by: "completed" });
         end = { kind, at };
         break;
       }

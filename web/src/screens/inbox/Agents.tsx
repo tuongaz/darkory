@@ -134,7 +134,7 @@ export function AgentsPage() {
             ) : (
               // On a phone the table keeps Agent and Holds, and fits the screen; the rest is in the
               // agent's peek.
-              <table className="w-full table-fixed border-collapse md:min-w-[1080px]">
+              <table className="w-full table-fixed border-collapse md:min-w-[1024px]">
                 <thead>
                   <tr className="h-9 border-b text-left text-xs font-medium text-muted-foreground [&>th]:px-2.5 [&>th]:font-medium [&>th:first-child]:pl-4 md:[&>th:first-child]:pl-6">
                     <th className="w-[132px] md:w-[168px]">Agent</th>
@@ -292,7 +292,8 @@ function AgentTableRow({
           </span>
         </span>
       </td>
-      <td>
+      {/* Short of room, what it holds is cut at its column's edge, never over the Session beside it. */}
+      <td className="overflow-hidden">
         {claim ? (
           <span className="flex min-w-0 flex-col gap-0.5">
             <span className="flex min-w-0 items-center gap-1.5">

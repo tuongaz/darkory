@@ -2,6 +2,7 @@ import type { RunnerSession, Schemas, Skill, Task, Workflow as WorkflowRecord } 
 import type { Connector, Step, Taker, Workflow } from "@/components/workflow/model";
 import { workingOf, type MemberKind, type Working } from "@/lib/work";
 import { liveClaim } from "@/work";
+import type { Change } from "./edits";
 
 /*
  * The Project's Workflow as `/v1` serves it (`WorkflowRecord`, `GET …/workflow`) bound to the shapes the
@@ -154,6 +155,18 @@ export function adoptIds(draft: WorkflowRecord, ids: Map<string, string>): Workf
       to_step_id: c.to_step_id ? id(c.to_step_id) : undefined,
     })),
   };
+}
+
+/**
+ * `make` applied to `wf` as a caller saw it before `/v1` named its new Steps (`renamed`, `new:…`
+ * id to the record's): the change names them by their `new:…` ids, and comes back by `wf`'s.
+ */
+export function changeAcross(wf: WorkflowRecord, renamed: Map<string, string>, make: (wf: WorkflowRecord) => Change): Change {
+  if (renamed.size === 0) return make(wf);
+  const change = make(adoptIds(wf, new Map([...renamed].map(([was, now]) => [now, was]))));
+  const id = (x: string) => renamed.get(x) ?? x;
+  const moves = change.moves && Object.fromEntries(Object.entries(change.moves).map(([from, to]) => [id(from), id(to)]));
+  return { ...change, next: adoptIds(change.next, renamed), moves };
 }
 
 /** Names compare as `/v1` compares them: ignoring case. */

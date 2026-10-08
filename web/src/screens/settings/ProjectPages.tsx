@@ -350,6 +350,7 @@ function ProjectMemberRow({
             {s.name}
           </Pill>
         ))}
+        {detail?.skills.length === 0 && <span className="text-muted-foreground">None</span>}
       </span>
       <span role="cell" className={cn(wide, "min-w-0")}>
         {manager ? <MemberName member={manager} /> : <span className="text-muted-foreground">No one</span>}

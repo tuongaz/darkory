@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { tidy } from "@/components/workflow/layout";
 import { ada, bob, builder, engineer, review, skills, step, task, workflow } from "@/test/fixtures";
-import { adoptIds, isNew, newIds, toBody, toCanvas, workingAt } from "./bind";
+import { adoptIds, changeAcross, isNew, newIds, toBody, toCanvas, workingAt } from "./bind";
 import {
   addConnector,
   addStep,
@@ -205,5 +205,21 @@ describe("undo and new ids", () => {
     const adopted = adoptIds(renamed, newIds(c.next, reply));
     expect(adopted.steps.find((s) => s.name === "Docs")!.id).toBe("st-new");
     expect(adopted.connectors.find((x) => x.name === "next")).toMatchObject({ id: "c-new", to_step_id: "st-new" });
+  });
+
+  it("applies a change made by a new Step's new:… id after /v1 named it, by the id it has now", () => {
+    const c = addStep(wf(), step.build);
+    const was = c.select!;
+    const reply = adoptIds(c.next, newIds(c.next, { ...c.next, steps: c.next.steps.map((s) => (s.id === was ? { ...s, id: "st-new" } : s)) }));
+    const renamed = new Map([[was, "st-new"]]);
+    // Enter in its name as the reply lands: the field still knows it as new:….
+    const change = changeAcross(reply, renamed, (w) => renameStep(w, was, "QA"));
+    expect(change.next.steps.find((s) => s.id === "st-new")).toMatchObject({ name: "QA" });
+    expect(change.next.steps.some((s) => isNew(s.id))).toBe(false);
+    // Moves name Steps by the record's ids too.
+    const gone = changeAcross(reply, renamed, (w) => deleteStep(w, was, step.review));
+    expect(gone.next.steps.some((s) => s.id === "st-new")).toBe(false);
+    // With nothing renamed, the change is made as it is.
+    expect(changeAcross(wf(), new Map(), (w) => renameStep(w, step.build, "Make")).next.steps.find((s) => s.id === step.build)!.name).toBe("Make");
   });
 });

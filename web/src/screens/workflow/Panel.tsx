@@ -36,6 +36,11 @@ type PanelProps = {
   record: WorkflowRecord;
   workflow: Workflow;
   selection: NonNullable<CanvasSelection>;
+  /**
+   * The selection as picked: a new Step by its `new:…` id. The editor is keyed by it, so what is
+   * typed in a new Step's fields survives /v1 giving the Step its id.
+   */
+  picked: string;
   apply: Apply;
   onSelect: (selection: CanvasSelection) => void;
 };
@@ -45,10 +50,10 @@ export function EditPanel(props: PanelProps) {
   const { record, selection } = props;
   if (selection.kind === "step") {
     const step = record.steps.find((s) => s.id === selection.id);
-    return step ? <StepEditor key={step.id} {...props} step={step} /> : null;
+    return step ? <StepEditor key={props.picked} {...props} step={step} /> : null;
   }
   const connector = record.connectors.find((c) => c.id === selection.id);
-  return connector ? <ConnectorEditor key={connector.id} {...props} connector={connector} /> : null;
+  return connector ? <ConnectorEditor key={props.picked} {...props} connector={connector} /> : null;
 }
 
 const DONE = "@done";

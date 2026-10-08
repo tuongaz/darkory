@@ -186,6 +186,8 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
             <>
               <b>{name(entry.by)}</b> {entry.state === "done" ? "completed it" : "dropped it"}
             </>
+          ) : entry.auto ? (
+            "Completed itself, its last Subtask done (Auto-complete)"
           ) : entry.state === "done" ? (
             "Completed"
           ) : (

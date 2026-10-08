@@ -164,8 +164,12 @@ WHERE t.secret_hash = $1 AND t.revoked_at IS NULL AND m.deactivated_at IS NULL`,
 	if timeout.Valid {
 		c.DefaultTimeout = time.Duration(timeout.Int64) * time.Millisecond
 	}
-	if !validSessionID(cr.Session) {
+	if cr.Session == "" {
 		return nil, ErrSessionRequired
+	}
+	if !validSessionID(cr.Session) {
+		// Present but unusable: say why, rather than that the header is missing.
+		return nil, fmt.Errorf("%w: a Session id is 1 to %d printable characters with no spaces", ErrSessionRequired, MaxSessionIDLength)
 	}
 	c.ChosenID = cr.Session
 	now := a.clock.Now()

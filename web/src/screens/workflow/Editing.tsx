@@ -44,7 +44,7 @@ export function EditingWorkflow({
   if (!record || !workflow) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
 
   const panel = selection && (
-    <EditPanel project={project} record={record} workflow={workflow} selection={selection} apply={apply} onSelect={setPicked} />
+    <EditPanel project={project} record={record} workflow={workflow} selection={selection} picked={picked?.id ?? selection.id} apply={apply} onSelect={setPicked} />
   );
   const said = (editor.problem || !!editor.refused) && (
     <div className="pointer-events-auto max-w-[min(560px,calc(100%-96px))] rounded-md border border-danger-border bg-background px-3 py-2 shadow-soft">

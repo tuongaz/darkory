@@ -35,7 +35,9 @@ function SubtaskNode({ data: { node } }: NodeProps<SubtaskFlowNode>) {
   const open = useContext(OpenContext);
   const s = node.subtask;
   const worked = !!s.holder && s.state === "open";
-  const kind = s.kind === "work" ? undefined : kindNames[s.kind];
+  // The kind's pill, unless the title already says it ("Retrospective: Checkout").
+  const named = s.kind === "work" ? undefined : kindNames[s.kind];
+  const kind = named && !s.title.toLowerCase().startsWith(`${named.toLowerCase()}:`) ? named : undefined;
   return (
     <button
       type="button"
@@ -56,8 +58,8 @@ function SubtaskNode({ data: { node } }: NodeProps<SubtaskFlowNode>) {
             <WorkGlyph glyph={node.glyph} />
           </span>
         )}
-        <span className="font-mono text-xs text-muted-foreground">{s.key}</span>
-        <span className="ml-auto flex min-w-0 gap-1">
+        <span className="flex-none font-mono text-xs whitespace-nowrap text-muted-foreground">{s.key}</span>
+        <span className="ml-auto flex min-w-0 gap-1 overflow-hidden">
           {kind && <Pill className="h-4 px-1.5 text-2xs">{kind}</Pill>}
           {node.takeable && (
             <Pill tone="waiting" className="h-4 px-1.5 text-2xs">
