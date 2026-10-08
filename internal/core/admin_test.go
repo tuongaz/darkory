@@ -3,6 +3,7 @@ package core_test
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -230,8 +231,13 @@ func TestSessionsAreStartedOnFirstSight(t *testing.T) {
 			t.Fatalf("second token's Session %+v, %v", c, err)
 		}
 		for _, bad := range []string{"", "has space", string(make([]byte, 300))} {
-			if _, err := f.auth.Authenticate(ctx, auth.Credentials{Bearer: tok.Secret, Session: bad}); !errors.Is(err, auth.ErrSessionRequired) {
+			_, err := f.auth.Authenticate(ctx, auth.Credentials{Bearer: tok.Secret, Session: bad})
+			if !errors.Is(err, auth.ErrSessionRequired) {
 				t.Errorf("Session id %q: %v", bad, err)
+			}
+			// A missing id is said to be missing; one given but unusable says why.
+			if why := strings.Contains(err.Error(), "no spaces"); why != (bad != "") {
+				t.Errorf("Session id %q refused as %q", bad, err)
 			}
 		}
 		if _, err := f.auth.Authenticate(ctx, auth.Credentials{}); !errors.Is(err, auth.ErrUnauthenticated) {
