@@ -155,6 +155,9 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
     expect(breakdown.step_id).toBe(stepId("Plan"));
     await page.goto(`${base}/tasks/${parent.key}`);
     await expect(page.getByRole("region", { name: "Subtasks" })).toContainText("Plan");
+    // An open Parent's head says Open; its Subtasks' progress is their section's alone.
+    await expect(page.getByRole("heading", { level: 1 }).locator("..")).toContainText("Open");
+    await expect(page.getByText(/Its Subtasks/)).toHaveCount(0);
     await shot(page, "1-02-parent-with-breakdown");
   });
 
@@ -245,6 +248,9 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
     await page.goto(`${base}/tasks/${parent.key}`);
     await expect(page.getByRole("heading", { level: 1 }).locator("..")).toContainText("Done");
     await expect(subtasks.getByRole("link", { name: /Retrospective/ })).toContainText("Retro");
+    // It completed itself; ada completed only the Acceptance, the planner only the Breakdown.
+    await expect(page.getByText(`Completed itself (Auto-complete) when ${acceptance.key} ended`)).toBeVisible();
+    await expect(page.getByText(/(planner|ada) completed it$/)).toHaveCount(0);
     await shot(page, "1-10-parent-done-retro-filed");
     await page.goto(`${base}/tasks/${parent.key}?view=graph`);
     await expect(page.getByRole("region", { name: "Subtasks, graph" })).toBeVisible();
