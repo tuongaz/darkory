@@ -17,7 +17,8 @@ Decided on 2026-10-09 with the owner, after separating two readings of "several 
 
 ## Consequences
 
-- The Workflow editor, the board, `workflow show`, `workflow set` and `PUT …/workflow` work per Workflow. A Project's existing Steps and Connectors become its one Workflow, named by the migration, and Step ids keep Tasks in flight where they are.
+- The write stays the Project's whole graph: `PUT …/workflow` carries the Workflows and every Step with its Workflow, so a crossing Connector and the Step it reaches land in one write. The editor edits one Workflow at a time and saves whole; the board and `workflow show` read one at a time.
+- A Workflow has a position, and a Project's Steps are ordered by Workflow position, then Step position: "the first Step" (a filed Task's default entry) and the Steps carrying `breakdown`, `acceptance` and `retro` read that order, so they keep their meaning with no new fact.
+- An ended Task keeps the Step it ended at (`last_step_id`), so its card lands on the board of the Workflow it ended in; the Task is still at no Step.
 - A Connector into another Workflow's Step is drawn on both canvases: as an exit naming its target on the one it leaves, as an entry on the one it reaches.
-- Today "the first Step" is the first by position across the Project, and a Workflow saved alone can no longer keep that order meaningful across Workflows. The Project needs a stated order of its Workflows, or an explicit default-entry Step and explicitly named builtin Steps; which one is a decision for the build, recorded in `docs/build/decisions.md`.
-- Which Workflow a board opens on, how the switcher reads, and the migration's name for the existing Workflow are decisions for the build, recorded in `docs/build/decisions.md`.
+- Which Workflow a board opens on and how the switcher reads are decisions for the build, recorded in `docs/build/decisions.md`.
