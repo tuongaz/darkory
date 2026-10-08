@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { emit, mockV1 } from "./workflowMock";
 
 // The Workflow screens under `vite dev` with a mocked /v1 (`npm run lab`): the live canvas and a
-// Step's peek, the editing canvas with its panel, and the text view, at desktop and phone sizes in
+// Step's peek, the text view, and the list editor (F5a–c of frag-d), at desktop and phone sizes in
 // light and dark, shot into e2e/screenshots/ for a person to look at. No console error, no
 // sideways scroll.
 
@@ -57,26 +57,55 @@ for (const scheme of ["light", "dark"] as const) {
       await noSidewaysScroll(page);
       await shot(page, `live-text-${tag}`);
 
-      // Editing, a Step selected.
-      await page.goto("/settings/projects/WEB/workflow?step=st-build");
-      const edit = page.getByRole("region", { name: "Workflow, editing" });
-      await expect(edit.locator(".react-flow__edge").first()).toBeVisible();
-      await expect(page.getByRole("region", { name: "Step Build" })).toBeVisible();
-      await page.waitForTimeout(400);
+      // Editing: the list with the line above (on a phone, the line behind its toggle).
+      await page.goto("/settings/projects/WEB/workflow");
+      await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+      await page.waitForTimeout(300);
       await noSidewaysScroll(page);
       await shot(page, `edit-${tag}`);
+      if (size.name === "phone") {
+        await page.getByRole("button", { name: "Show the line" }).click();
+        await shot(page, `edit-line-${tag}`);
+      }
 
-      // A Connector selected, then nothing; then the text view.
-      await page.goto("/settings/projects/WEB/workflow");
-      await expect(edit.locator(".react-flow__edge").first()).toBeVisible();
-      await page.waitForTimeout(300);
-      await shot(page, `edit-none-${tag}`);
-      await page.getByRole("button", { name: "Text" }).click();
-      await page.getByRole("button", { name: /^Edit fail, QA to Build/ }).click();
-      await expect(page.getByRole("region", { name: "Connector fail" })).toBeVisible();
-      await page.waitForTimeout(300);
+      // F5a: a Step inserted after Review, named, its Skill picker open on a Skill that does not exist.
+      await page.getByRole("button", { name: "Add a Step after Review" }).click();
+      await page.getByRole("textbox", { name: "Name of Step 6" }).fill("Security review");
+      await page.getByRole("combobox", { name: "Skill of Security review" }).click();
+      await page.getByPlaceholder("Find or name a Skill").fill("security");
+      await page.waitForTimeout(200);
       await noSidewaysScroll(page);
-      await shot(page, `edit-text-connector-${tag}`);
+      await shot(page, `edit-insert-${tag}`);
+      await page.getByRole("option", { name: /New Skill “security”/ }).click();
+      const sheet = page.getByRole("dialog", { name: "New Skill “security”" });
+      await sheet.getByRole("textbox", { name: "Text" }).fill("Look for the holes an attacker would use.");
+      await shot(page, `edit-new-skill-${tag}`);
+      await sheet.getByRole("button", { name: "Use this Skill" }).click();
+
+      // F5b: an outcome added out of it, back to Build.
+      await page.getByRole("button", { name: "Add an outcome out of Security review" }).click();
+      await page.getByRole("textbox", { name: "Outcome out of Security review" }).last().fill("fail");
+      await page.getByRole("combobox", { name: "Where fail out of Security review leads" }).click();
+      await page.getByRole("option", { name: "Build" }).click();
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(200);
+      await noSidewaysScroll(page);
+      await shot(page, `edit-outcome-${tag}`);
+
+      // A refusal in words: a Step with no name.
+      await page.getByRole("button", { name: "Add a Step after Build" }).click();
+      await page.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByRole("alert")).toContainText("A Step needs a name.");
+      await shot(page, `edit-refused-${tag}`);
+      await page.keyboard.press("Escape");
+      await page.locator("body").click({ position: { x: 1, y: 1 } });
+      await page.keyboard.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+
+      // F5c: saved, the live Workflow.
+      await page.getByRole("button", { name: "Save" }).click();
+      await expect(page.getByRole("button", { name: "Save" })).toHaveCount(0);
+      await page.waitForTimeout(500);
+      await shot(page, `edit-saved-${tag}`);
 
       expect(errors).toEqual([]);
       await context.close();
@@ -84,28 +113,39 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
-test("editing: rename, add a Step, undo, each one PUT", async ({ page }) => {
+test("editing: nothing is sent until Save; then the new Skill, then one PUT", async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockV1(page);
-  const puts: unknown[] = [];
-  page.on("request", (r) => r.method() === "PUT" && puts.push(r.postDataJSON()));
+  const writes: string[] = [];
+  page.on("request", (r) => r.method() !== "GET" && r.url().includes("/v1/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
   await page.goto("/settings/projects/WEB/workflow?step=st-qa");
-  const name = page.getByRole("textbox", { name: "Name of QA" });
+  const name = page.getByRole("textbox", { name: "Name of Step 4" });
+  await expect(name).toBeFocused();
   await name.fill("Test");
-  await name.press("Enter");
-  await expect(page.locator(".react-flow__node").filter({ hasText: "Test" }).first()).toBeVisible();
-  await expect.poll(() => puts.length).toBe(1);
-  await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator(".react-flow__node").filter({ hasText: "QA" }).first()).toBeVisible();
-  await expect.poll(() => puts.length).toBe(2);
-
-  const qa = page.locator(".react-flow__node").filter({ hasText: "QA" }).first();
-  await qa.hover();
-  await page.getByRole("button", { name: "Add a Step after QA" }).click();
-  await expect(page.getByRole("region", { name: "Step New Step" })).toBeVisible();
-  await page.waitForTimeout(400);
-  await shot(page, "edit-added");
+  await expect(page.getByText("Editing · 1 change")).toBeVisible();
+  // Alt+↓ moves it after Review, and keeps the focus.
+  await name.press("Alt+ArrowDown");
+  await expect(page.getByRole("listitem", { name: "5. Test" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Name of Step 5" })).toBeFocused();
+  await page.getByRole("combobox", { name: "Skill of Test" }).click();
+  await page.getByPlaceholder("Find or name a Skill").fill("testing");
+  await page.getByRole("option", { name: /New Skill “testing”/ }).click();
+  await page.getByRole("dialog").getByRole("textbox", { name: "Text" }).fill("Test it.");
+  await page.getByRole("dialog").getByRole("button", { name: "Use this Skill" }).click();
+  // Its grip dragged onto Build's row: it lands in Build's place.
+  const grip = await page.getByRole("button", { name: /^Reorder Test/ }).boundingBox();
+  const build = await page.getByRole("listitem", { name: "3. Build" }).boundingBox();
+  await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip!.x + 4, grip!.y - 10, { steps: 4 });
+  await page.mouse.move(grip!.x + 4, build!.y + 6, { steps: 12 });
+  await page.mouse.up();
+  await expect(page.getByRole("listitem", { name: "3. Test" })).toBeVisible();
+  await expect(page.getByRole("listitem", { name: "4. Build" })).toBeVisible();
+  expect(writes).toEqual([]);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => writes).toEqual(["POST /v1/skills", "PUT /v1/projects/WEB/workflow"]);
   expect(errors).toEqual([]);
 });
 

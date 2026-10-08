@@ -39,6 +39,8 @@ export type HorizontalProps = {
   actionFor?: (first: Chain["first"]) => ReactNode;
   /** Station heads as names only, with "+N": a single Task's line. */
   compactHeads?: boolean;
+  /** Connectors an edit changed: amber, dashed. */
+  highlight?: ReadonlySet<string>;
   /** A loop lit from the Loops list. */
   litLoop?: string | null;
   noBranch?: boolean;
@@ -125,7 +127,7 @@ export function HorizontalLine(props: HorizontalProps) {
   // A selection fades the loops and skips; the main line stays (`main`).
   const routeTone = (ids: string[], main = false): "trace" | "next" | "lit" | "dim" | "plain" => {
     if (ids.some((id) => traversed.has(id))) return "trace";
-    if (ids.some((id) => next.has(id))) return "next";
+    if (ids.some((id) => next.has(id) || !!props.highlight?.has(id))) return "next";
     if (ids.some((id) => lit.has(id)) || loopLit(ids)) return "lit";
     return (main ? !!trace : dimRoutes) || props.fold || props.litLoop ? "dim" : "plain";
   };

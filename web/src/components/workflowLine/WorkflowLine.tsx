@@ -31,6 +31,8 @@ export type WorkflowLineProps = {
   fold?: boolean;
   /** Tasks that reached Done today: "1 today" under Done. */
   doneToday?: number;
+  /** Connectors drawn amber and dashed, the rest as they are: what an edit changed. */
+  highlight?: ReadonlySet<string>;
   /** One Task's path: traced on the line, its next outcomes dashed. */
   trace?: Trace;
   /** What plays on the line as it happens (useLiveFlow). */
@@ -161,6 +163,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
           actionFor={props.actionFor}
           compactHeads={props.compactHeads}
           litLoop={litLoop}
+          highlight={props.highlight}
           noBranch={props.noBranch}
         />
       )}
