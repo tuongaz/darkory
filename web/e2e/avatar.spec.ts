@@ -122,6 +122,14 @@ test("an admin uploads an agent's Avatar; the Agents table and the Workflow line
     await shot(page, "05-workflow-line");
   });
 
+  await test.step("hovering builder's mark opens its card, whose large mark shows the Avatar", async () => {
+    await page.getByRole("img", { name: /^builder \(agent\)/ }).first().hover();
+    const card = page.locator('[data-slot="hover-card-content"]');
+    await expect(card).toBeVisible();
+    await loaded(card.getByRole("img", { name: /^builder \(agent\)/ }).first());
+    await shot(page, "06-hover-card");
+  });
+
   await test.step("Remove goes back to initials", async () => {
     await page.goto(`${base}/settings/organisation/agents/builder`);
     await page.getByRole("button", { name: "Change the Avatar of builder" }).click();
