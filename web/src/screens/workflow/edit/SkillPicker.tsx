@@ -80,9 +80,9 @@ export function SkillPicker({
               className,
             )}
           >
-            <span className="min-w-0 truncate">{current ? current.name : "hold · no Skill"}</span>
+            <span className="min-w-0 truncate">{current ? current.name : "Hold · pick a Skill"}</span>
             {current?.fresh && <span className="flex-none font-sans text-[10.5px] text-state-claimed">new</span>}
-            {current && <ChevronDownIcon aria-hidden className="size-3 flex-none text-muted-foreground" />}
+            <ChevronDownIcon aria-hidden className="size-3 flex-none text-muted-foreground" />
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-0">
