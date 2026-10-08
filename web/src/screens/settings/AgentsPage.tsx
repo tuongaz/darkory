@@ -106,6 +106,7 @@ function AgentRow({ member, detail, loading }: { member: Member; detail?: Member
             {s.name}
           </Pill>
         ))}
+        {detail?.skills.length === 0 && <span className="text-muted-foreground">None</span>}
       </span>
     </div>
   );

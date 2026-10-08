@@ -125,6 +125,8 @@ describe("Settings › a Project › Members", () => {
     expect(within(table).getByRole("rowheader", { name: "Agents 1" })).toBeInTheDocument();
     const b = within(table).getByRole("row", { name: "bob" });
     expect(await within(b).findByText("review")).toBeInTheDocument();
+    // A Member with no Skill says so.
+    expect(await within(within(table).getByRole("row", { name: "builder" })).findByText("None")).toBeInTheDocument();
     expect(within(within(table).getByRole("row", { name: "builder" })).getByText("Agent")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Add Member" }));
