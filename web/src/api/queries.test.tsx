@@ -22,6 +22,7 @@ describe("live invalidation", () => {
     expect(affectedBy("member.skill_granted")).toEqual(expect.arrayContaining(["members", "me", "workflow"]));
     expect(affectedBy("token.revoked")).toEqual(expect.arrayContaining(["tokens", "task"]));
     expect(affectedBy("login_link.redeemed")).toEqual([]);
+    expect(affectedBy("task.nudged")).toEqual([]);
     expect(affectedBy("member.agent_changed")).toContain("runner");
     // A Workspace added, changed or removed refetches the list, the Projects that name it and the Tasks.
     expect(affectedBy("workspace.added")).toEqual(expect.arrayContaining(["workspaces", "projects", "task"]));
@@ -106,6 +107,7 @@ describe("the Runner's sessions", () => {
     host: "mac-mini",
     tmux: "dk-WEB-12",
     started_at: "2026-10-07T04:25:00Z",
+    state_since: "2026-10-07T04:25:00Z",
     state: "running",
     log_path: "/data/sessions/WEB-12/pane.log",
   };

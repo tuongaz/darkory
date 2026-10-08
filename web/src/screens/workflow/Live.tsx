@@ -1,99 +1,182 @@
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import type { Project } from "@/api/client";
-import { useMembers, useWorkflow } from "@/api/queries";
+import type { Project, Task } from "@/api/client";
+import { useLiveEntries } from "@/api/live";
+import { useMembers } from "@/api/queries";
 import { peekParam } from "@/app/peek";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { LiveCanvas } from "@/components/workflow/live";
-import type { Workflow } from "@/components/workflow/model";
-import { WorkflowCanvas } from "@/components/workflow/WorkflowCanvas";
-import { useTaskMap } from "@/screens/inbox/queries";
-import { useLiveCanvas } from "./canvasData";
-import { lineText, type FlowContext } from "./flowEvents";
-import { StepPeek, stepParam } from "./StepPeek";
-import { TextView } from "./TextView";
-import { Trail } from "./Trail";
-import { useTrail, type TrailFocus } from "./useTrail";
+import { cn } from "@/lib/utils";
+import { BlockingView } from "@/components/workflow/blocking";
+import { useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
+import { useNow } from "@/clock";
+import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
+import { lineText, trailLine, type FlowContext } from "./flowEvents";
+import { LineText } from "./LineText";
+import type { LineView } from "./lineView";
+import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from "./panels";
 import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
-import type { WorkflowView } from "./view";
-
-const none: Workflow = { steps: [], connectors: [] };
-
-/** The Workflow with the chips a token carries drawn nowhere until it lands. */
-function withoutTransit(workflow: Workflow, transit: Set<string>): Workflow {
-  if (transit.size === 0) return workflow;
-  return { ...workflow, steps: workflow.steps.map((s) => (s.chips?.some((c) => transit.has(c.id)) ? { ...s, chips: s.chips.filter((c) => !transit.has(c.id)) } : s)) };
-}
 
 /**
- * The Project's Workflow as it stands, read-only, and as it moves: the canvas (or its list) with
- * each Step's Tasks as chips and its takers ringed while they work there; each pickup, let-go,
- * lapse and take-back called out above its Step as it happens, each move a token travelling its
- * Connector; and beside it the trail of those moves, newest first. A Step opens its peek
- * (`?step=<id>`), a chip or a key its Task's (`?task=<key>`). Fills the page's Content.
+ * The Project's Workflow as it stands and as it moves (Direction D): the line on top, every open
+ * Task in the scope a token at its Step, a pickup tagged "now" and a move travelling its
+ * Connector; under it Needs you (left) and What's happening (right), whose rows ring their Task's
+ * token. Selecting a token draws its Blocking chain. The Blocking view and the Text view take the
+ * line's place. Fills the page's Content.
  */
-export function LiveWorkflow({ project, view }: { project: Project; view: WorkflowView }) {
-  const record = useWorkflow(project.key);
-  const drawn = useLiveCanvas(project.key, record.data);
-  const tasks = useTaskMap(project.key);
-  const members = useMembers();
-  const reduced = useReducedMotion();
-  const [params, setParams] = useSearchParams();
-  const open = params.get(stepParam);
-  const setOpen = (id: string | null) =>
-    setParams((p) => {
-      const next = new URLSearchParams(p);
-      if (id) next.set(stepParam, id);
-      else next.delete(stepParam);
-      return next;
-    });
+export function LiveWorkflow({
+  project,
+  view,
+  scope,
+  onView,
+  filter,
+}: {
+  project: Project;
+  view: LineView;
+  scope: string | null;
+  onView?: (v: LineView) => void;
+  /** The Filter bar's test: Tasks it leaves out leave the line, counted into their Step's "+N". */
+  filter?: (task: Task) => boolean;
+}) {
+  const { data, error } = useLineData(project.key, scope, filter);
+  const now = useNow();
+  const [, setParams] = useSearchParams();
   const openTask = useCallback(
     (key: string) =>
       setParams((p) => {
         const next = new URLSearchParams(p);
-        next.delete(stepParam);
         next.set(peekParam, key);
         return next;
       }),
     [setParams],
   );
+  const [selected, setSelected] = useState<string | null>(null);
+  const [ringed, setRinged] = useState<string | null>(null);
+  const quiet = useStoriesQuiet(project);
 
-  const ctx = useMemo<FlowContext>(() => {
-    const byId = new Map((members.data ?? []).map((m) => [m.id, m]));
-    return {
-      projectId: project.id,
-      workflow: drawn ?? none,
-      task: (id) => tasks.get(id),
-      member: (id) => byId.get(id),
-    };
-  }, [project.id, drawn, tasks, members.data]);
-  const flow = useLiveFlow(ctx, reduced);
-  const trail = useTrail(project, ctx);
-  const [focus, setFocus] = useState<TrailFocus | undefined>();
-  const live = useMemo<LiveCanvas>(() => ({ ...flow, focus, onOpenTask: openTask }), [flow, focus, openTask]);
-  const workflow = useMemo(() => drawn && withoutTransit(drawn, flow.transit), [drawn, flow.transit]);
-  const working = drawn?.steps.reduce((n, s) => n + (s.chips?.filter((c) => c.holder).length ?? 0), 0) ?? 0;
+  if (error) return <Refusal error={error} className="m-6" />;
+  if (!data) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
 
-  if (record.isError) return <Refusal error={record.error} className="m-6" />;
-  if (!workflow) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
-  const step = workflow.steps.find((s) => s.id === open);
-  const newest = trail.lines[0];
-  return (
-    <div className="relative flex min-h-0 flex-1">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
-        {view === "text" ? (
-          <TextView workflow={workflow} mode="live" onStep={(s) => setOpen(s.id)} onTask={openTask} />
-        ) : (
-          <WorkflowCanvas workflow={workflow} mode="live" live={live} onOpenStep={(s) => setOpen(s.id)} className="min-h-0 flex-1" />
-        )}
+  const panels = {
+    needs: <NeedsYouPanel project={project} onHover={setRinged} />,
+    // A story opened into its path selects its token on the line, as F2 draws it.
+    stories: <StoriesPanel project={project} onHover={setRinged} onOpen={setSelected} />,
+  };
+
+  if (view === "blocking") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-4 py-4 sm:px-6">
+        <BlockingView
+          project={project}
+          scope={data.scope.kind === "parent" ? data.scope.id : undefined}
+          onShowOnLine={(id) => {
+            setSelected(id);
+            onView?.("line");
+          }}
+        />
       </div>
-      {/* The callouts are drawn for the eye; a screen reader hears each move as it arrives. */}
-      <p role="status" className="sr-only">
-        {newest && trail.fresh.has(newest.seq) ? lineText(newest) : ""}
-      </p>
-      <Trail trail={trail} working={working} onFocus={setFocus} onOpenTask={openTask} />
-      {step && <StepPeek project={project} workflow={workflow} step={step} onClose={() => setOpen(null)} />}
+    );
+  }
+  if (view === "text") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+        <LineText data={data} now={now} onTask={openTask} />
+      </div>
+    );
+  }
+  return (
+    // A phone reads it top to bottom: Needs you, the line, What's happening. Wider, the line sits
+    // on top and the panels side by side under it; when nothing has happened lately What's
+    // happening folds to one line over Needs you, which takes the full width.
+    <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:grid lg:grid-rows-[auto_minmax(280px,1fr)] lg:overflow-hidden">
+      <div className="order-2 flex-none px-2 pt-2 sm:px-5 lg:order-none lg:max-h-full lg:overflow-y-auto lg:px-5">
+        <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} />
+      </div>
+      {/* One tree whether quiet or not, so neither panel remounts when What's happening folds. */}
+      <div className={cn("contents lg:grid lg:min-h-0 lg:border-t", quiet ? "lg:grid-cols-1 lg:grid-rows-[auto_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_440px]")}>
+        <div className={cn("order-1 border-b lg:min-h-0 lg:border-b-0", quiet ? "lg:order-2" : "lg:order-none")}>{panels.needs}</div>
+        <div className={cn("order-3 border-t lg:min-h-0 lg:border-t-0", quiet ? "lg:order-1 lg:border-b" : "lg:order-none")}>{panels.stories}</div>
+      </div>
     </div>
   );
+}
+
+/** The line with the moments playing on it: each Activity entry about this Project's Tasks as it arrives. */
+function LiveLine({
+  project,
+  data,
+  now,
+  selected,
+  onSelect,
+  ringed,
+  onOpenTask,
+}: {
+  project: Project;
+  data: LineData;
+  now: number;
+  selected: string | null;
+  onSelect: (id: string | null) => void;
+  ringed: string | null;
+  onOpenTask: (key: string) => void;
+}) {
+  const members = useMembers();
+  const reduced = useReducedMotion();
+  const ctx = useMemo<FlowContext>(() => {
+    const byId = new Map((members.data ?? []).map((m) => [m.id, m]));
+    const tasks = new Map(data.records.map((t) => [t.id, t]));
+    return { projectId: project.id, workflow: data.facts, task: (id) => tasks.get(id), member: (id) => byId.get(id) };
+  }, [project.id, data.facts, data.records, members.data]);
+  const flow = useLiveFlow(ctx, reduced);
+  const announced = useAnnouncement(ctx);
+  const recordOf = useMemo(() => new Map<string, Task>(data.records.map((t) => [t.id, t])), [data.records]);
+  const actionFor = (first: Chain["first"]) => {
+    if (first.kind === "none") return null;
+    const task = recordOf.get(first.task.id);
+    if (!task) return null;
+    return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
+  };
+  const s = data.scoped;
+  return (
+    <>
+      <WorkflowLine
+        label="Workflow"
+        workflow={data.facts}
+        tasks={s.drawn}
+        all={data.all}
+        hidden={s.hidden}
+        done={s.done}
+        ghosts={s.ghosts}
+        branchLabel={s.branchLabel}
+        fold={s.fold}
+        doneToday={data.doneToday}
+        trace={data.trace}
+        compactHeads={!!data.trace}
+        noBranch={!!data.trace && !data.trace.stays.some((st) => data.facts.steps.some((x) => x.id === st.stepId && ["acceptance", "retro", "skill-review"].includes(x.skill?.name ?? "")))}
+        flow={flow}
+        now={now}
+        selected={selected}
+        onSelect={onSelect}
+        ringed={ringed}
+        onOpenTask={onOpenTask}
+        me={data.me}
+        actionFor={actionFor}
+      />
+      {/* The tags are drawn for the eye; a screen reader hears each move as it arrives. */}
+      <p role="status" className="sr-only">
+        {announced}
+      </p>
+    </>
+  );
+}
+
+/** The newest flow entry that arrived since the page opened, in the trail's words. */
+function useAnnouncement(ctx: FlowContext): string {
+  const live = useLiveEntries();
+  const [opened] = useState(() => live[0]?.seq ?? 0);
+  for (const e of live) {
+    if (e.seq <= opened) break;
+    const line = trailLine(e, ctx);
+    if (line) return lineText(line);
+  }
+  return "";
 }

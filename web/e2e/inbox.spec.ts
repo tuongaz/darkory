@@ -102,10 +102,10 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
 
   const question = await v1<TaskDetail>(agent, "POST", "/v1/tasks", { title: "Stripe keys for staging?", aim: "ada", blocks: cart.key });
   const key = question.task.key;
-  const aimed = page.getByRole("region", { name: "Aimed at you" });
+  const aimed = page.getByRole("region", { name: "Needs you" });
   const row = aimed.locator(`[data-task="${key}"]`);
   await expect(row).toContainText("Stripe keys for staging?");
-  await expect(row).toContainText(`blocks ${cart.key}`);
+  await expect(row).toContainText(`unblocks ${cart.key}`);
   await expect(row).toContainText("inbox-builder");
   await expect(row).toContainText("With you");
   await expect(row.getByTitle("Inbox", { exact: true })).toBeVisible();
@@ -129,7 +129,7 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
 
   // Scenario 5, from a Subtask: the question is a Subtask of the same Parent, and blocks the cart page.
   expect(question.task.parent_id).toBe(checkout.id);
-  await page.goto(`${base()}/tasks/${checkout.key}`);
+  await page.goto(`${base()}/tasks/${checkout.key}?view=list`);
   const subtasks = page.getByRole("region", { name: "Subtasks" });
   await expect(subtasks.getByRole("link", { name: /Stripe keys for staging\?/ })).toBeVisible();
   await expect(subtasks.getByRole("link", { name: /Build the cart page/ })).toContainText("Blocked");
@@ -140,7 +140,7 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
 test("marks: an agent's gradient ring turns while its session runs, stops in its colour, and a human's is plain (scenario 9)", async ({ page }) => {
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
-  const session = { task_id: cart.id, member_id: "", session_id: "sess-inbox-builder", host: "e2e-host", tmux: `dk-${cart.key}`, started_at: new Date().toISOString(), log_path: "/tmp/x" };
+  const session = { task_id: cart.id, member_id: "", session_id: "sess-inbox-builder", host: "e2e-host", tmux: `dk-${cart.key}`, started_at: new Date().toISOString(), state_since: new Date().toISOString(), log_path: "/tmp/x" };
   const members = await v1<{ items: { id: string; name: string }[] }>(admin, "GET", "/v1/members");
   session.member_id = members.items.find((m) => m.name === "inbox-builder")!.id;
   await runnerSays(page, [{ ...session, state: "running" }]);
@@ -202,17 +202,19 @@ test("the agent's peek: its session, the Steps it takes, and Pause from the ⋯ 
   expect(errors).toEqual([]);
 });
 
-test("a lapse on my Task shows in the Inbox; Activity words it and an advance, and narrows by Kind and Task", async ({ page }) => {
+test("a lapse on my Task that its Step's agent can take up clears itself; Activity words it and an advance, and narrows by Kind and Task", async ({ page }) => {
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
   // The agent advances the cart page along pass to Review, then lets a 2 s Claim on Discount codes lapse.
   await v1(agent, "POST", `/v1/tasks/${cart.key}/advance`, { outcome: "pass" });
   await v1(agent, "POST", `/v1/tasks/${discount.key}/claim`, { heartbeat_timeout_seconds: 2 });
+  await page.goto(`${base()}/projects/INB/activity`);
+  await expect(activityRows(page).filter({ hasText: "Darkory" }).first()).toContainText("held by inbox-builder", { timeout: 15_000 });
+  // inbox-builder can take Discount codes up again, so the Inbox does not list the lapse (Needs you's rule).
   await page.goto(`${base()}/inbox`);
-  const lapsed = page.getByRole("region", { name: "Lapsed on your Tasks" }).locator(`[data-task="${discount.key}"]`);
-  await expect(lapsed).toContainText("Lapsed", { timeout: 15_000 });
-  await expect(lapsed).toContainText("inbox-builder");
-  await shot(page, "inbox-lapsed");
+  await expect(page.getByRole("heading", { name: "Inbox" })).toBeAttached();
+  await expect(page.locator(`[data-task="${discount.key}"]`).filter({ hasText: "Lapsed" })).toHaveCount(0);
+  await shot(page, "inbox-after-lapse");
 
   await page.goto(`${base()}/projects/INB/activity`);
   await expect(page.getByText("Live", { exact: true })).toBeVisible();
@@ -242,7 +244,7 @@ test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll"
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
   const screens = [
-    { path: "/inbox", ready: () => page.getByRole("region", { name: "Lapsed on your Tasks" }) },
+    { path: "/inbox", ready: () => page.getByRole("region", { name: "Needs you" }).or(page.getByRole("region", { name: "Takeable by you" })).or(page.getByRole("heading", { name: "Nothing needs you" })).first() },
     { path: "/my-work", ready: () => page.getByRole("region", { name: "You own" }) },
     { path: "/projects/INB/agents", ready: () => page.getByRole("link", { name: "inbox-builder", exact: true }) },
     { path: "/projects/INB/activity", ready: () => page.getByRole("list", { name: "Activity" }) },

@@ -93,7 +93,7 @@ func noRunner(w http.ResponseWriter) {
 
 func runnerSessionOut(rs runnerapi.Session) gen.RunnerSession {
 	return gen.RunnerSession{TaskID: rs.TaskID, MemberID: rs.MemberID, SessionID: rs.SessionID, Host: rs.Host, Tmux: optional(rs.Tmux),
-		StartedAt: rs.StartedAt, State: gen.RunnerSessionState(rs.State), LogPath: rs.LogPath}
+		StartedAt: rs.StartedAt, State: gen.RunnerSessionState(rs.State), StateSince: rs.StateSince, LogPath: rs.LogPath}
 }
 
 // ListRunnerSessions lists what the Runner runs now, or says none is attached: a page polls it,

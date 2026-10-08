@@ -186,7 +186,7 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
   const row = (title: string) => subtasks.getByRole("link", { name: new RegExp(title) });
 
   await test.step("the builder advances each pass to QA; qa fails one back to Build with a Note", async () => {
-    await page.goto(`${base}/tasks/${parent.key}`);
+    await page.goto(`${base}/tasks/${parent.key}?view=list`);
     await markLoaded(page);
     for (const title of ["Card vault client", "Saved cards list"]) {
       const t = await subtask(title);
@@ -214,7 +214,7 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
     // No one judges their own work: the builder holds it again under engineer, as before.
     await call(builder, "POST", `/v1/tasks/${vault.id}/claim`, hb);
     await call(builder, "POST", `/v1/tasks/${vault.id}/advance`, { outcome: "pass", note: "Expired cards filtered" });
-    await page.goto(`${base}/tasks/${parent.key}`);
+    await page.goto(`${base}/tasks/${parent.key}?view=list`);
     await markLoaded(page);
     for (const title of ["Card vault client", "Saved cards list"]) {
       const t = await subtask(title);
@@ -245,16 +245,16 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
     const retro = after.subtasks.find((t) => t.kind === "retrospective")!;
     expect(retro.state).toBe("open");
     expect(retro.step_id).toBe(stepId("Retro"));
-    await page.goto(`${base}/tasks/${parent.key}`);
+    await page.goto(`${base}/tasks/${parent.key}?view=list`);
     await expect(page.getByRole("heading", { level: 1 }).locator("..")).toContainText("Done");
     await expect(subtasks.getByRole("link", { name: /Retrospective/ })).toContainText("Retro");
     // It completed itself; ada completed only the Acceptance, the planner only the Breakdown.
     await expect(page.getByText(`Completed itself (Auto-complete) when ${acceptance.key} ended`)).toBeVisible();
     await expect(page.getByText(/(planner|ada) completed it$/)).toHaveCount(0);
     await shot(page, "1-10-parent-done-retro-filed");
-    await page.goto(`${base}/tasks/${parent.key}?view=graph`);
-    await expect(page.getByRole("region", { name: "Subtasks, graph" })).toBeVisible();
-    await shot(page, "1-11-graph");
+    await page.goto(`${base}/tasks/${parent.key}?view=line`);
+    await expect(page.getByRole("region", { name: "Subtask line" })).toBeVisible();
+    await shot(page, "1-11-line");
   });
 
   expect(errors).toEqual([]);

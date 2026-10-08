@@ -1,0 +1,50 @@
+{
+  "page": [
+    "Kept: keys read SAM-n and times are seconds-to-minutes old, because the seed ran just now; the mockup's clock is 10:42:05 with yesterday's work.",
+    "Kept: Done reads '3 today' (the Card vault Subtask, the Breakdown, and the done Parent itself, all completed by the seed); the fixture has 1.",
+    "Kept: the agent row under Needs you is absent: with --runner=off no Runner session exists, so no session waits on SAM-4 (the fixture's reviewer nudged at 10:40).",
+    "Kept: the line band is about 30px taller than the mockup's, so the panels get about 300px instead of 334 and scroll inside.",
+    "Kept: medians read in seconds (the seed's Tasks left their Steps within seconds).",
+    "Fixed: medians read 'median now' for spans under 15s; a span that has ended now reads in seconds, never 'now'.",
+    "Fixed: the admin showed as a taker at every Step, because the seed granted them Big's Skills; Big's Tasks are now held by a human of Big alone.",
+    "Fixed: an Acceptance appeared under the Parent the moment its Breakdown ended (it was its only Subtask then); the seed now files the Subtasks first, as the fixture's story has it."
+  ],
+  "selected": [
+    "Kept: SAM-12 reads 'Waiting', not 'Takeable': in this Install the admin has no review Skill, so Review's Tasks are not theirs to take (the fixture made tuongaz able to).",
+    "Kept: the callout sits under Review's tokens and over the line's right half, as in the mockup; it is narrower because the pills are tighter."
+  ],
+  "blocking": [
+    "Fixed: the Blocking view had no page padding inside the Workflow page (its own lab supplies one); the page now pads it.",
+    "Kept: the Blocking view is the Blocking builder's (DEP-2); the comparison of its inner layout is theirs to report."
+  ],
+  "big-line": [
+    "Kept: the Loops list sits under the line, not in the right panel as d-11 draws it, because the right panel is What's happening now.",
+    "Kept: Big's Workflow has a Connector Backlog pass → Triage (the brief's list gives every Step a pass), so Backlog's segment is solid, not dotted."
+  ],
+  "big-blocking": [
+    "Kept: as for the Sample Blocking view."
+  ],
+  "scope-menu": [
+    "Kept: Parents list SAM-1 (done, its Retrospective open) and SAM-7 with their open counts; Find a Task… lists Tasks only while typing."
+  ],
+  "parent-line": [
+    "Fixed: a branch Step's chip ('done → Done') ran past the box's left edge when the row was pushed left; it now drops below its Step when it cannot fit.",
+    "Kept: 1/6 done (the Breakdown) where the fixture says 1/5, because the seed also files 'Reaction analytics' under the Parent (the deps round's MAIN-18)."
+  ],
+  "subtask-peek": [
+    "Kept: the past token at Build reads seconds worked, the seed's real time."
+  ],
+  "standalone": [
+    "Kept: the Acceptance pill on the standalone Task is the Project's default (Sample files Tasks with Acceptance on)."
+  ],
+  "editor": [
+    "Kept: the preview draws the line with Steps by name only; the mockup's dashed new Station appears only while a Step is being added."
+  ],
+  "inbox": [
+    "No mockup. Reads as expected for this data: the question with its Answer, the paused retro's Retrospective, Big's held Backlog Tasks."
+  ],
+  "phone": [
+    "Fixed: the Line | Blocking | Text switch squeezed the breadcrumb to 'M / Wo…'; on a phone it is now one compact menu ('Line ▾').",
+    "Kept: '+1 more · SAM-3' where the mockup has '+2 more · MAIN-5, MAIN-14 · 1 agent waiting': no hold Task, no Runner session in this data."
+  ]
+}

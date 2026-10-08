@@ -43,7 +43,11 @@ export type FlowEffect = {
 /** What the Workflow knows to name an entry's ids. */
 export type FlowContext = {
   projectId: string;
-  workflow: Workflow;
+  /** The Steps and Connectors the entries name: the canvas's Workflow or the line's. */
+  workflow: {
+    steps: readonly Pick<Workflow["steps"][number], "id" | "name" | "position">[];
+    connectors: readonly Pick<Workflow["connectors"][number], "id" | "from" | "to" | "name">[];
+  };
   task: (id: string) => { key: string; step_id?: string; project_id?: string } | undefined;
   member: (id: string) => Who | undefined;
 };
@@ -261,4 +265,49 @@ export function lineText(l: TrailLine): string {
     out += out === "" || word.startsWith("'") ? word : ` ${word}`;
   }
   return l.detail ? `${out} · ${l.detail}` : out;
+}
+
+/**
+ * A story row's latest change in the trail's words, without the Task's own key (the row names it)
+ * or the Step it reached (the row's path shows it): "builder picked up", "qa advanced along pass",
+ * "qa sent back along fail", "qa's Claim lapsed", "tuongaz filed". `sub` is a Subtask whose filing
+ * or end folds into its Parent's row, and is named: "tuongaz filed MAIN-18", "builder completed
+ * MAIN-21". Null for an entry the trail does not list.
+ */
+export function storyVerb(e: Activity, ctx: FlowContext, sub?: string): string | null {
+  if (!isFlowKind(e.kind)) return null;
+  const p = e.payload;
+  const by = someone(e.actor_id, ctx)?.name ?? "Darkory";
+  const outcome = text(p, "outcome");
+  switch (e.kind) {
+    case "task.filed":
+      return sub ? `${by} filed ${sub}` : `${by} filed it`;
+    case "task.claimed":
+      return `${by} picked up`;
+    case "task.released":
+      return `${by} let go of it`;
+    case "task.lapsed": {
+      const holder = someone(text(p, "holder_id"), ctx);
+      return holder ? `${holder.name}'s Claim lapsed` : "Claim lapsed";
+    }
+    case "task.taken_back": {
+      const holder = someone(text(p, "holder_id"), ctx);
+      return `${by} took it back${holder ? ` from ${holder.name}` : ""}`;
+    }
+    case "task.advanced":
+      return leadsBack(ctx, text(p, "from"), text(p, "to")) ? `${by} sent back along ${outcome ?? ""}`.trim() : `${by} advanced along ${outcome ?? ""}`.trim();
+    case "task.moved":
+      return `${by} moved it`;
+    case "task.completed":
+      if (sub) return `${e.actor_id ? by : "Darkory"} completed ${sub}`;
+      return e.actor_id ? `${by} completed it` : "completed";
+    case "task.dropped":
+      return sub ? `${by} dropped ${sub}` : `${by} dropped it`;
+    case "task.split":
+      return `${by} split it into Subtasks`;
+    case "task.became_parent":
+      return "became a Parent";
+    default:
+      return null;
+  }
 }

@@ -32,7 +32,7 @@ describe("the graph's binding", () => {
       subtask(4, p, { step_id: undefined, aimed_at_id: bob.id, blocked: true, open_blockers: [{ id: "k-9", key: "WEB-9", title: "x" }] }),
       subtask(5, p, { state: "done", step_id: undefined, kind: "acceptance" }),
     ];
-    const sessions = new Map<string, RunnerSession>([["k-2", { task_id: "k-2", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled", log_path: "" }]]);
+    const sessions = new Map<string, RunnerSession>([["k-2", { task_id: "k-2", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled", state_since: "", log_path: "" }]]);
     const nodes = graphSubtasks(subs, { members, now, sessions });
     expect(nodes.map((n) => [n.key, n.stepId, n.holder?.name, n.working, n.aimedAt?.name, n.blockedBy, n.kind])).toEqual([
       ["WEB-2", step.build, "builder", "stalled", undefined, [], "work"],
@@ -42,6 +42,24 @@ describe("the graph's binding", () => {
     ]);
     // An agent's live Claim with no Runner session counts as running.
     expect(graphSubtasks([subs[0]], { members, now, sessions: new Map() })[0].working).toBe("running");
+  });
+
+  it("names the open Tasks outside the Parent a Subtask is joined to by a Blocking, either way", () => {
+    const p = parentTask(1, { open: 2, working: 0, done: 0, dropped: 0 });
+    const subs = [
+      subtask(2, p, { blocked: true, open_blockers: [{ id: "k-3", key: "WEB-3", title: "inside" }, { id: "k-12", key: "WEB-12", title: "Admin can remove a reaction" }] }),
+      subtask(3, p),
+      subtask(4, p, { state: "done", step_id: undefined, open_blockers: [{ id: "k-12", key: "WEB-12", title: "x" }] }),
+    ];
+    // Outside: WEB-19 is blocked by WEB-3; WEB-20 by nothing here; WEB-2 is inside.
+    const open = [...subs, task(19, { blocked: true, open_blockers: [{ id: "k-3", key: "WEB-3", title: "inside" }] }), task(20)];
+    const nodes = graphSubtasks(subs, { members, now, sessions: new Map(), open });
+    expect(nodes.map((n) => n.outside)).toEqual([
+      [{ direction: "in", id: "k-12", key: "WEB-12", title: "Admin can remove a reaction" }],
+      [{ direction: "out", id: "k-19", key: "WEB-19", title: task(19).title }],
+      // An ended Subtask carries no stub.
+      [],
+    ]);
   });
 });
 

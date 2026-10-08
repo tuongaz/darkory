@@ -43,8 +43,8 @@ for (const scheme of ["light", "dark"] as const) {
       await noSideways(page);
       await shot("board");
 
-      await page.goto("/tasks/WEB-7?view=graph");
-      await expect(page.getByRole("region", { name: "Subtasks, graph" }).locator(".react-flow__edge").first()).toBeAttached();
+      await page.goto("/tasks/WEB-7?view=line");
+      await expect(page.getByRole("region", { name: "Subtask line" }).locator("button[data-task]").first()).toBeAttached();
       await noSideways(page);
       await shot("parent");
 

@@ -55,6 +55,7 @@ const (
 	ActivityKindTaskLapsed            ActivityKind = "task.lapsed"
 	ActivityKindTaskMoved             ActivityKind = "task.moved"
 	ActivityKindTaskNoteAdded         ActivityKind = "task.note_added"
+	ActivityKindTaskNudged            ActivityKind = "task.nudged"
 	ActivityKindTaskObserved          ActivityKind = "task.observed"
 	ActivityKindTaskOwnerPassed       ActivityKind = "task.owner_passed"
 	ActivityKindTaskRanked            ActivityKind = "task.ranked"
@@ -142,6 +143,8 @@ func (e ActivityKind) Valid() bool {
 	case ActivityKindTaskMoved:
 		return true
 	case ActivityKindTaskNoteAdded:
+		return true
+	case ActivityKindTaskNudged:
 		return true
 	case ActivityKindTaskObserved:
 		return true
@@ -654,6 +657,8 @@ type Activity struct {
 	// `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
 	// when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
 	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+	// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+	// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
 	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
@@ -680,6 +685,8 @@ type Activity struct {
 // `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
 // when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
 // itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
 type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
@@ -1316,6 +1323,16 @@ type ProjectList struct {
 	Items []Project `json:"items"`
 }
 
+// ProjectSeen How far a Member has seen a Project's Activity. Both fields are null until the Member
+// first sets it.
+type ProjectSeen struct {
+	// At When the Member last moved it forward.
+	At *time.Time `json:"at"`
+
+	// Seq The `seq` of the newest Activity entry the Member has seen in the Project.
+	Seq *int64 `json:"seq"`
+}
+
 // ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
 // not be published, because a newer proposal for the same Skill replaced it on its Task, or
 // its Task ended without publishing it.
@@ -1333,6 +1350,12 @@ type ProposeSkillVersionBody struct {
 // RankTaskBody defines model for RankTaskBody.
 type RankTaskBody struct {
 	Position int64 `json:"position"`
+}
+
+// RecordNudgeBody defines model for RecordNudgeBody.
+type RecordNudgeBody struct {
+	// Nudge Which of the Runner's two nudges it was.
+	Nudge int `json:"nudge"`
 }
 
 // ReleaseTaskBody defines model for ReleaseTaskBody.
@@ -1364,8 +1387,11 @@ type RunnerSession struct {
 	// its progress has not moved for the Runner's stale window, so the Runner sends no more
 	// Heartbeats and the Claim lapses unless it moves again. `ending`: the Claim has ended and
 	// the session is closing.
-	State  RunnerSessionState `json:"state"`
-	TaskID string             `json:"task_id"`
+	State RunnerSessionState `json:"state"`
+
+	// StateSince When the session entered its current state; `started_at` until it first changed.
+	StateSince time.Time `json:"state_since"`
+	TaskID     string    `json:"task_id"`
 
 	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
@@ -1436,6 +1462,13 @@ type SetAgentSettingsBody struct {
 type SetManagerBody struct {
 	// Manager Member id or name.
 	Manager string `json:"manager"`
+}
+
+// SetProjectSeenBody defines model for SetProjectSeenBody.
+type SetProjectSeenBody struct {
+	// Seq The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+	// there is none yet.
+	Seq int64 `json:"seq"`
 }
 
 // SetTaskLabelsBody defines model for SetTaskLabelsBody.
@@ -2227,6 +2260,13 @@ type AddProjectMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetProjectSeenParams defines parameters for SetProjectSeen.
+type SetProjectSeenParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // SetWorkflowParams defines parameters for SetWorkflow.
 type SetWorkflowParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2448,6 +2488,13 @@ type AddNoteParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// RecordNudgeParams defines parameters for RecordNudge.
+type RecordNudgeParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // ListTaskObservationsParams defines parameters for ListTaskObservations.
 type ListTaskObservationsParams struct {
 	// Reviewed Omitted or false: only the Observations no Retrospective has reviewed yet. True: every
@@ -2592,6 +2639,9 @@ type UpdateProjectJSONRequestBody = UpdateProjectBody
 // CreateProjectLabelJSONRequestBody defines body for CreateProjectLabel for application/json ContentType.
 type CreateProjectLabelJSONRequestBody = CreateLabelBody
 
+// SetProjectSeenJSONRequestBody defines body for SetProjectSeen for application/json ContentType.
+type SetProjectSeenJSONRequestBody = SetProjectSeenBody
+
 // SetWorkflowJSONRequestBody defines body for SetWorkflow for application/json ContentType.
 type SetWorkflowJSONRequestBody = SetWorkflowBody
 
@@ -2624,6 +2674,9 @@ type SetTaskLabelsJSONRequestBody = SetTaskLabelsBody
 
 // AddNoteJSONRequestBody defines body for AddNote for application/json ContentType.
 type AddNoteJSONRequestBody = AddNoteBody
+
+// RecordNudgeJSONRequestBody defines body for RecordNudge for application/json ContentType.
+type RecordNudgeJSONRequestBody = RecordNudgeBody
 
 // ObserveJSONRequestBody defines body for Observe for application/json ContentType.
 type ObserveJSONRequestBody = ObserveBody
@@ -3188,6 +3241,42 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
 	AddProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetProjectSeen Read how far the caller has seen a Project's Activity
+	//
+	// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+	// show what happened there since they looked, and when they set it. Both are null until the
+	// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+	// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+	//
+	// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+	GetProjectSeen(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetProjectSeenWithBody Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeenWithBody(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetProjectSeen Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeen(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkflow Get a Project's Workflow with what is happening at each Step now
 	//
@@ -3816,6 +3905,32 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 	AddNote(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RecordNudgeWithBody Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudgeWithBody(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RecordNudge Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudge(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTaskObservations List the Observations recorded on a Task and, for a Parent, on its Subtasks
 	//
@@ -5060,6 +5175,72 @@ func (c *Client) AddProjectMember(ctx context.Context, project ProjectRef, membe
 	return c.Client.Do(req)
 }
 
+// GetProjectSeen Read how far the caller has seen a Project's Activity
+//
+// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+// show what happened there since they looked, and when they set it. Both are null until the
+// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+//
+// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+func (c *Client) GetProjectSeen(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProjectSeenRequest(c.Server, project)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetProjectSeenWithBody Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *Client) SetProjectSeenWithBody(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetProjectSeenRequestWithBody(c.Server, project, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetProjectSeen Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *Client) SetProjectSeen(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetProjectSeenRequest(c.Server, project, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetWorkflow Get a Project's Workflow with what is happening at each Step now
 //
 // The Steps in their order and the Connectors out of each, with each Step's live facts: the
@@ -6068,6 +6249,52 @@ func (c *Client) AddNoteWithBody(ctx context.Context, task TaskRef, params *AddN
 // Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 func (c *Client) AddNote(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAddNoteRequest(c.Server, task, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RecordNudgeWithBody Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *Client) RecordNudgeWithBody(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordNudgeRequestWithBody(c.Server, task, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RecordNudge Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *Client) RecordNudge(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRecordNudgeRequest(c.Server, task, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8561,6 +8788,102 @@ func NewAddProjectMemberRequest(server string, project ProjectRef, member Member
 	return req, nil
 }
 
+// NewGetProjectSeenRequest constructs an http.Request for the GetProjectSeen method
+func NewGetProjectSeenRequest(server string, project ProjectRef) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/seen", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetProjectSeenRequest calls the generic SetProjectSeen builder with application/json body
+func NewSetProjectSeenRequest(server string, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetProjectSeenRequestWithBody(server, project, params, "application/json", bodyReader)
+}
+
+// NewSetProjectSeenRequestWithBody constructs an http.Request for the SetProjectSeen method, with any body, and a specified content type
+func NewSetProjectSeenRequestWithBody(server string, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/seen", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetWorkflowRequest constructs an http.Request for the GetWorkflow method
 func NewGetWorkflowRequest(server string, project ProjectRef) (*http.Request, error) {
 	var err error
@@ -10140,6 +10463,68 @@ func NewAddNoteRequestWithBody(server string, task TaskRef, params *AddNoteParam
 	return req, nil
 }
 
+// NewRecordNudgeRequest calls the generic RecordNudge builder with application/json body
+func NewRecordNudgeRequest(server string, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRecordNudgeRequestWithBody(server, task, params, "application/json", bodyReader)
+}
+
+// NewRecordNudgeRequestWithBody constructs an http.Request for the RecordNudge method, with any body, and a specified content type
+func NewRecordNudgeRequestWithBody(server string, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "task", task, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/tasks/%s/nudged", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListTaskObservationsRequest constructs an http.Request for the ListTaskObservations method
 func NewListTaskObservationsRequest(server string, task TaskRef, params *ListTaskObservationsParams) (*http.Request, error) {
 	var err error
@@ -11664,6 +12049,44 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
 	AddProjectMemberWithResponse(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*AddProjectMemberResponse, error)
 
+	// GetProjectSeenWithResponse Read how far the caller has seen a Project's Activity
+	//
+	// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+	// show what happened there since they looked, and when they set it. Both are null until the
+	// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+	// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+	GetProjectSeenWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectSeenResponse, error)
+
+	// SetProjectSeenWithBodyWithResponse Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeenWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error)
+
+	// SetProjectSeenWithResponse Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeenWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error)
+
 	// GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
 	//
 	// The Steps in their order and the Connectors out of each, with each Step's live facts: the
@@ -12323,6 +12746,32 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/tasks/{task}/notes (the `AddNote` operationId).
 	AddNoteWithResponse(ctx context.Context, task TaskRef, params *AddNoteParams, body AddNoteJSONRequestBody, reqEditors ...RequestEditorFn) (*AddNoteResponse, error)
+
+	// RecordNudgeWithBodyWithResponse Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudgeWithBodyWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error)
+
+	// RecordNudgeWithResponse Record that the Runner nudged the agent holding a Task
+	//
+	// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+	// its nudge into a session whose turn ended with the Task still held and no decision. It
+	// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+	// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+	// Claim), `invalid`.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+	RecordNudgeWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error)
 
 	// ListTaskObservationsWithResponse List the Observations recorded on a Task and, for a Parent, on its Subtasks
 	//
@@ -14367,6 +14816,102 @@ func (r AddProjectMemberResponse) ContentType() string {
 	return ""
 }
 
+type GetProjectSeenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProjectSeen
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetProjectSeenResponse) GetJSON200() *ProjectSeen {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetProjectSeenResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetProjectSeenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProjectSeenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProjectSeenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetProjectSeenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetProjectSeenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProjectSeen
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetProjectSeenResponse) GetJSON200() *ProjectSeen {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetProjectSeenResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetProjectSeenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetProjectSeenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetProjectSeenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetProjectSeenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetWorkflowResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15663,6 +16208,47 @@ func (r AddNoteResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AddNoteResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RecordNudgeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r RecordNudgeResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RecordNudgeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RecordNudgeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RecordNudgeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RecordNudgeResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17264,6 +17850,62 @@ func (c *ClientWithResponses) AddProjectMemberWithResponse(ctx context.Context, 
 	return ParseAddProjectMemberResponse(rsp)
 }
 
+// GetProjectSeenWithResponse Read how far the caller has seen a Project's Activity
+//
+// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+// show what happened there since they looked, and when they set it. Both are null until the
+// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+func (c *ClientWithResponses) GetProjectSeenWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectSeenResponse, error) {
+	rsp, err := c.GetProjectSeen(ctx, project, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProjectSeenResponse(rsp)
+}
+
+// SetProjectSeenWithBodyWithResponse Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *ClientWithResponses) SetProjectSeenWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error) {
+	rsp, err := c.SetProjectSeenWithBody(ctx, project, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetProjectSeenResponse(rsp)
+}
+
+// SetProjectSeenWithResponse Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *ClientWithResponses) SetProjectSeenWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error) {
+	rsp, err := c.SetProjectSeen(ctx, project, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetProjectSeenResponse(rsp)
+}
+
 // GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
 //
 // The Steps in their order and the Connectors out of each, with each Step's live facts: the
@@ -18156,6 +18798,44 @@ func (c *ClientWithResponses) AddNoteWithResponse(ctx context.Context, task Task
 		return nil, err
 	}
 	return ParseAddNoteResponse(rsp)
+}
+
+// RecordNudgeWithBodyWithResponse Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *ClientWithResponses) RecordNudgeWithBodyWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error) {
+	rsp, err := c.RecordNudgeWithBody(ctx, task, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRecordNudgeResponse(rsp)
+}
+
+// RecordNudgeWithResponse Record that the Runner nudged the agent holding a Task
+//
+// Called by the Runner, through the Session that holds the Task's Claim, after it typed
+// its nudge into a session whose turn ended with the Task still held and no decision. It
+// nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+// as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+// Claim), `invalid`.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/tasks/{task}/nudged (the `RecordNudge` operationId).
+func (c *ClientWithResponses) RecordNudgeWithResponse(ctx context.Context, task TaskRef, params *RecordNudgeParams, body RecordNudgeJSONRequestBody, reqEditors ...RequestEditorFn) (*RecordNudgeResponse, error) {
+	rsp, err := c.RecordNudge(ctx, task, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRecordNudgeResponse(rsp)
 }
 
 // ListTaskObservationsWithResponse List the Observations recorded on a Task and, for a Parent, on its Subtasks
@@ -19870,6 +20550,72 @@ func ParseAddProjectMemberResponse(rsp *http.Response) (*AddProjectMemberRespons
 	return response, nil
 }
 
+// ParseGetProjectSeenResponse parses an HTTP response from a GetProjectSeenWithResponse call
+func ParseGetProjectSeenResponse(rsp *http.Response) (*GetProjectSeenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProjectSeenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProjectSeen
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetProjectSeenResponse parses an HTTP response from a SetProjectSeenWithResponse call
+func ParseSetProjectSeenResponse(rsp *http.Response) (*SetProjectSeenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetProjectSeenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProjectSeen
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetWorkflowResponse parses an HTTP response from a GetWorkflowWithResponse call
 func ParseGetWorkflowResponse(rsp *http.Response) (*GetWorkflowResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20760,6 +21506,35 @@ func ParseAddNoteResponse(rsp *http.Response) (*AddNoteResponse, error) {
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRecordNudgeResponse parses an HTTP response from a RecordNudgeWithResponse call
+func ParseRecordNudgeResponse(rsp *http.Response) (*RecordNudgeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RecordNudgeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

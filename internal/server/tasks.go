@@ -160,6 +160,17 @@ func (s *Server) ReleaseTask(w http.ResponseWriter, r *http.Request, task gen.Ta
 	s.respond(w, r, out, t, err)
 }
 
+// RecordNudge is the Runner, through the Session holding a Task's Claim, recording that it nudged
+// the agent.
+func (s *Server) RecordNudge(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.RecordNudgeParams) {
+	var body gen.RecordNudgeBody
+	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, noContent)
+	if !ok {
+		return
+	}
+	s.respond(w, r, noContent, nil, s.core.RecordNudge(r.Context(), c, task, body.Nudge, idem))
+}
+
 func (s *Server) CompleteTask(w http.ResponseWriter, r *http.Request, task gen.TaskRef, params gen.CompleteTaskParams) {
 	var body gen.CompleteTaskBody
 	out := as(http.StatusOK, func(t core.Task) any { return taskOut(t) })

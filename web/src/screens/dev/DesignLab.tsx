@@ -3,6 +3,10 @@ import { useState, type ReactNode } from "react";
 import { MemberAvatar, type AvatarSize } from "@/components/MemberAvatar";
 import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
+import { BlockingBoard } from "@/components/workflow/blocking/BlockingBoard";
+import type { BlockingTask } from "@/components/workflow/blocking/layout";
+import { bigSteps, bigTasks, mainSteps, mainTasks, me, sampleNow } from "@/components/workflow/blocking/samples";
+import type { GraphStep } from "@/components/workflow/graph";
 import { STEP_W, RANK_GAP, tidy } from "@/components/workflow/layout";
 import type { Connector, Point, Step, Workflow } from "@/components/workflow/model";
 import { defaultWorkflow, sampleSteps, sampleSubtasks, sampleWorkflow } from "@/components/workflow/samples";
@@ -41,8 +45,17 @@ export default function DesignLab() {
       <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a Step, Tidy up.">
         <EditingCanvas />
       </Section>
-      <Section title="Subtask graph" note="MAIN-2 Support emoji in names: its Subtasks over the Workflow, Blocking arrows, takeable ones highlighted.">
+      <Section title="Subtask graph" note="MAIN-2 Support emoji in names: its Subtasks over the Workflow, Blocking arrows, takeable ones highlighted, a Blocking outside the Parent as a stub.">
         <GraphDemo />
+      </Section>
+      <Section title="Blocking · MAIN" note="The Blocking view of MAIN at 10:42:05: MAIN-7's Subtasks and the Tasks with no Parent, a Blocking across the bands, a double block.">
+        <BlockingDemo tasks={mainTasks} steps={mainSteps} projectId="p-main" />
+      </Section>
+      <Section title="Blocking · BIG" note="The heavy case: 9 Blockings, a 4-chain, a double block, 11 Tasks with no Blocking.">
+        <BlockingDemo tasks={bigTasks} steps={bigSteps} projectId="p-big" />
+      </Section>
+      <Section title="Blocking · MAIN-7" note="Scoped to a Parent: its Subtasks, and MAIN-19 outside it.">
+        <BlockingDemo tasks={mainTasks} steps={mainSteps} projectId="p-main" scope="main-7" />
       </Section>
     </main>
   );
@@ -242,11 +255,43 @@ function EditingCanvas() {
   );
 }
 
+const outsideSubtasks = sampleSubtasks.map((s) =>
+  s.key === "MAIN-5"
+    ? { ...s, outside: [{ direction: "out" as const, id: "t-19", key: "MAIN-19", title: "Export reactions" }] }
+    : s.key === "MAIN-11"
+      ? { ...s, outside: [{ direction: "in" as const, id: "t-13", key: "MAIN-13", title: "Which export format?" }] }
+      : s,
+);
+
+function BlockingDemo({ tasks, steps, projectId, scope }: { tasks: BlockingTask[]; steps: GraphStep[]; projectId: string; scope?: string }) {
+  const [said, setSaid] = useState<string>();
+  const keyOf = (id: string) => tasks.find((t) => t.id === id)?.key;
+  const parents = new Map(tasks.filter((t) => t.parent).map((t) => [t.id, { id: t.id, key: t.key, title: t.title, counts: { open: 5, working: 1, done: 1, dropped: 0 } }]));
+  return (
+    <div className="flex flex-col gap-2">
+      <BlockingBoard
+        tasks={tasks}
+        projectId={projectId}
+        scope={scope}
+        me={me.id}
+        now={sampleNow}
+        steps={new Map([[projectId, steps]])}
+        parents={parents}
+        projects={new Map()}
+        onOpen={(id) => setSaid(`onOpen(${keyOf(id)})`)}
+        onShowOnLine={(id) => setSaid(`onShowOnLine(${keyOf(id)})`)}
+        graphLink={(key) => `/tasks/${key}?view=graph`}
+      />
+      <p className="font-mono text-xs text-muted-foreground">{said ?? "Click a node, then Show on line or Open."}</p>
+    </div>
+  );
+}
+
 function GraphDemo() {
   const [opened, setOpened] = useState<string>();
   return (
     <div className="flex flex-col gap-2">
-      <SubtaskGraph steps={sampleSteps} subtasks={sampleSubtasks} onOpen={(id) => setOpened(sampleSubtasks.find((s) => s.id === id)?.key)} className="rounded-lg border p-2" />
+      <SubtaskGraph steps={sampleSteps} subtasks={outsideSubtasks} onOpen={(id) => setOpened(sampleSubtasks.find((s) => s.id === id)?.key)} className="rounded-lg border p-2" />
       <p className="font-mono text-xs text-muted-foreground">{opened ? `onOpen(${opened})` : "Click a Subtask."}</p>
     </div>
   );

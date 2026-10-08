@@ -44,6 +44,8 @@ type Session struct {
 	StartedAt time.Time
 	// State is StateRunning, StateWaiting, StateStalled or StateEnding.
 	State string
+	// StateSince is when the session entered State.
+	StateSince time.Time
 	// LogPath is where the session's terminal is logged on Host.
 	LogPath string
 }

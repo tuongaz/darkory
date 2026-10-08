@@ -474,6 +474,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read how far the caller has seen a Project's Activity
+         * @description The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+         *     show what happened there since they looked, and when they set it. Both are null until the
+         *     caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+         *     Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+         */
+        get: operations["getProjectSeen"];
+        /**
+         * Say how far the caller has seen a Project's Activity
+         * @description By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+         *     below the one kept changes nothing, and the response is the mark as kept, so a client
+         *     learns when its `seq` was behind. It is the caller's preference, not the record: setting
+         *     it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+         *     `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+         */
+        put: operations["setProjectSeen"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project}/workflow": {
         parameters: {
             query?: never;
@@ -931,6 +962,30 @@ export interface paths {
          *     added to its Notes in the same write. Records `task.released`. Errors: `not_holder`.
          */
         post: operations["releaseTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tasks/{task}/nudged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that the Runner nudged the agent holding a Task
+         * @description Called by the Runner, through the Session that holds the Task's Claim, after it typed
+         *     its nudge into a session whose turn ended with the Task still held and no decision. It
+         *     nudges twice, then releases the Task. Records `task.nudged`, with no actor: Darkory acted,
+         *     as with a lapse. Errors: `not_holder` (the caller's Session does not hold the Task's
+         *     Claim), `invalid`.
+         */
+        post: operations["recordNudge"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2528,9 +2583,11 @@ export interface components {
          *     `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
          *     when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
          *     itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
+         *     `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
+         *     had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
          * @enum {string}
          */
-        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
         /**
          * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
          *     whole; its `subject_id` is the Project's id.
@@ -2567,6 +2624,11 @@ export interface components {
             /** Format: date-time */
             started_at: string;
             state: components["schemas"]["RunnerSessionState"];
+            /**
+             * Format: date-time
+             * @description When the session entered its current state; `started_at` until it first changed.
+             */
+            state_since: string;
             /** @description Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends. */
             log_path: string;
         };
@@ -2581,6 +2643,10 @@ export interface components {
          * @enum {string}
          */
         RunnerSessionState: "running" | "waiting" | "stalled" | "ending";
+        RecordNudgeBody: {
+            /** @description Which of the Runner's two nudges it was. */
+            nudge: number;
+        };
         RunnerSessionList: {
             items: components["schemas"]["RunnerSession"][];
             /** @description Whether a Runner is attached to this server; false with no sessions when none is. */
@@ -2592,6 +2658,30 @@ export interface components {
          * @enum {string}
          */
         ViewEntity: "tasks";
+        /**
+         * @description How far a Member has seen a Project's Activity. Both fields are null until the Member
+         *     first sets it.
+         */
+        ProjectSeen: {
+            /**
+             * Format: int64
+             * @description The `seq` of the newest Activity entry the Member has seen in the Project.
+             */
+            seq: number | null;
+            /**
+             * Format: date-time
+             * @description When the Member last moved it forward.
+             */
+            at: string | null;
+        };
+        SetProjectSeenBody: {
+            /**
+             * Format: int64
+             * @description The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+             *     there is none yet.
+             */
+            seq: number;
+        };
         /** @description A saved set of filters, sort and display for a list, kept by one Member for themselves. */
         View: {
             id: string;
@@ -3604,6 +3694,64 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getProjectSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's mark. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSeen"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setProjectSeen: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProjectSeenBody"];
+            };
+        };
+        responses: {
+            /** @description The caller's mark as kept. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSeen"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getWorkflow: {
         parameters: {
             query?: never;
@@ -4369,6 +4517,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Task"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    recordNudge: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Task id or display key, such as `MAIN-42`. */
+                task: components["parameters"]["TaskRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordNudgeBody"];
+            };
+        };
+        responses: {
+            /** @description The nudge is recorded. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

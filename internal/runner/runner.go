@@ -123,9 +123,10 @@ type RunnerSession struct {
 	TmuxSession string
 	TmuxSocket  string
 	StartedAt   time.Time
-	// State is running, waiting, stalled or ending.
-	State   string
-	LogPath string
+	// State is running, waiting, stalled or ending, since StateSince.
+	State      string
+	StateSince time.Time
+	LogPath    string
 }
 
 // Session states.
@@ -376,7 +377,7 @@ func (r *Runner) Sessions() []runnerapi.Session {
 	out := make([]runnerapi.Session, len(running))
 	for i, s := range running {
 		out[i] = runnerapi.Session{TaskID: s.TaskID, MemberID: s.MemberID, SessionID: s.SessionID, Host: s.Host,
-			Tmux: s.TmuxSession, StartedAt: s.StartedAt, State: s.State, LogPath: s.LogPath}
+			Tmux: s.TmuxSession, StartedAt: s.StartedAt, State: s.State, StateSince: s.StateSince, LogPath: s.LogPath}
 	}
 	return out
 }

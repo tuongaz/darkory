@@ -59,6 +59,9 @@ describe("what an entry says", () => {
       "Darkory filed WEB-3 Build the cart at a Step · under WEB-1",
     );
     expect(words(entry(1, "task.lapsed", cart.id, { payload: { holder_id: builder.id } }))).toBe("Darkory Lapsed WEB-3 Build the cart · held by builder");
+    expect(words(entry(1, "task.nudged", cart.id, { payload: { holder_id: builder.id, nudge: 2 } }))).toBe(
+      "Darkory nudged the holder of WEB-3 Build the cart · held by builder · nudge 2 of 2",
+    );
   });
 });
 

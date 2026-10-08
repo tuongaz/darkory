@@ -609,6 +609,20 @@ func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note 
 	return res.(Task), nil
 }
 
+// RecordNudge records that the Runner nudged the agent holding a Task, nudge 1 or 2 of the two it
+// sends before releasing the Task. The caller is that agent's Session holding the Claim, through
+// which the Runner acts; the entry has no actor, since Darkory acted, as with a lapse.
+func (s *Service) RecordNudge(ctx context.Context, c *auth.Caller, ref string, nudge int, idem Idem) error {
+	if nudge != 1 && nudge != 2 {
+		return refuse(CodeInvalid, "nudge is 1 or 2, not %d", nudge)
+	}
+	_, err := s.heldWrite(ctx, c, ref, idem, heldOp{build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+		return nil, []store.Stmt{activityStmt(c.OrgID, nil, "task.nudged", pre.ID,
+			map[string]any{"claim_id": pre.Claim.ID, "holder_id": c.MemberID, "nudge": nudge}, now)}, nil
+	}})
+	return err
+}
+
 // nextSeqStmt takes the next number from the counter inside a batch, for a further Activity
 // entry (decisions.md).
 func nextSeqStmt(orgID string) store.Stmt {

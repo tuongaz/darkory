@@ -24,11 +24,8 @@ export function useLiveCanvas(project: string, record: WorkflowRecord | undefine
   }, [record, skills.data, members.data, tasks.data, sessions.data, now]);
 }
 
-/** The record as the editing canvas draws it: Skill names; no rings. */
+/** The record with its Skills' names and no rings: what names an Activity entry's Steps. */
 export function useEditingCanvas(record: WorkflowRecord | undefined): Workflow | undefined {
   const skills = useSkills();
-  return useMemo(
-    () => (record && skills.data ? toCanvas(record, new Map(skills.data.map((s) => [s.id, s]))) : undefined),
-    [record, skills.data],
-  );
+  return useMemo(() => (record && skills.data ? toCanvas(record, new Map(skills.data.map((s) => [s.id, s]))) : undefined), [record, skills.data]);
 }
