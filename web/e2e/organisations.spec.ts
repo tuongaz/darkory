@@ -1,9 +1,10 @@
 import { expect, request, test, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
-// Organisation switching (scenario 12) against the real binary. Local holds exactly one
-// Organisation, so /v1/me carries no `organisations` and the switcher has no Switch Organisation
-// row; a sign-in that reaches two (Cloud) is played by answering /v1/me with a second one added.
+// Organisation switching (scenario 12) against the real binary. The Organisation menu's Switch
+// Organisation always opens: on Local, which holds exactly one Organisation and whose /v1/me carries
+// no `organisations`, it lists that one, ticked; a sign-in that reaches two (Cloud) is played by
+// answering /v1/me with a second one added, which is listed but not opened (/v1 cannot switch).
 
 const base = () => process.env.DARKORY_E2E_BASE_URL!;
 
@@ -20,19 +21,25 @@ async function signIn(page: Page) {
   await expect(page).toHaveURL(`${base()}/inbox`);
 }
 
-async function switcher(page: Page) {
-  await page.getByRole("button", { name: /^Project: / }).click();
-  return page.getByRole("menu");
+/** Opens the Organisation menu on Switch Organisation, with O then W, and returns the submenu. */
+async function switchOrganisation(page: Page) {
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  await page.keyboard.press("o");
+  await page.keyboard.press("w");
+  const menus = page.getByRole("menu");
+  await expect(menus).toHaveCount(2);
+  return menus.nth(1);
 }
 
-test("Local's switcher has no Switch Organisation; a sign-in reaching two shows it", async ({ page }) => {
+test("Switch Organisation lists Local's one Organisation, ticked; a sign-in reaching two lists both", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await signIn(page);
   const me = await page.evaluate(() => fetch("/v1/me").then((r) => r.json()));
   expect(me.organisations).toBeUndefined();
-  let menu = await switcher(page);
-  await expect(menu.getByRole("menuitem", { name: /Switch Organisation/ })).toHaveCount(0);
+  let sub = await switchOrganisation(page);
+  await expect(sub.getByRole("menuitem")).toHaveText(["E2E Organisation", "Profile"].map((t) => new RegExp(t)));
+  await expect(sub.getByRole("menuitem", { name: "E2E Organisation" })).toHaveAttribute("aria-current", "true");
   await page.screenshot({ path: "e2e/screenshots/organisations/one.png", animations: "disabled" });
   await page.keyboard.press("Escape");
 
@@ -42,8 +49,8 @@ test("Local's switcher has no Switch Organisation; a sign-in reaching two shows 
     await route.fulfill({ response: res, json: { ...body, organisations: [body.organisation, { id: "o-other", name: "Other Co" }] } });
   });
   await page.reload();
-  menu = await switcher(page);
-  await expect(menu.getByRole("menuitem", { name: /Switch Organisation/ })).toBeVisible();
+  sub = await switchOrganisation(page);
+  await expect(sub.getByRole("menuitem", { name: "Other Co" })).toHaveAttribute("aria-disabled", "true");
   await page.screenshot({ path: "e2e/screenshots/organisations/two.png", animations: "disabled" });
   expect(errors).toEqual([]);
 });

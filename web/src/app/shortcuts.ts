@@ -11,6 +11,8 @@ const chordMs = 1000;
 /** "⌘K" on a Mac, "Ctrl K" elsewhere. */
 const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 export const searchKeys = mac ? "⌘K" : "Ctrl K";
+/** "⌥⇧Q" on a Mac, "Alt Shift Q" elsewhere: Log out. */
+export const logOutKeys = mac ? "⌥⇧Q" : "Alt Shift Q";
 
 /**
  * Every key the app answers, as the shortcuts sheet (?) lists them: each entry is one or more
@@ -22,13 +24,16 @@ export const shortcutList: { section: string; keys: { label: string; ways: strin
     keys: [
       { label: "Search", ways: [[searchKeys]] },
       { label: "File a Task", ways: [["C"]] },
-      { label: "Switch Project", ways: [["G", "P"]] },
+      { label: "Go to the Projects in the sidebar", ways: [["G", "P"]] },
       { label: "Go to Inbox", ways: [["G", "I"]] },
       { label: "Go to My work", ways: [["G", "M"]] },
       { label: "Go to Tasks", ways: [["G", "T"]] },
       { label: "Go to the board", ways: [["G", "B"]] },
       { label: "Go to Workflow", ways: [["G", "W"]] },
       { label: "Go to Agents", ways: [["G", "A"]] },
+      { label: "Go to Settings", ways: [["G", "S"]] },
+      { label: "Switch Organisation", ways: [["O", "W"]] },
+      { label: "Log out", ways: [[logOutKeys]] },
       { label: "Shortcuts", ways: [["?"]] },
     ],
   },
@@ -79,7 +84,8 @@ function inPeek(target: EventTarget | null): boolean {
  * The keys of `shortcutList`, none of them while a terminal has the focus. ⌘K (Ctrl K) toggles
  * search; the rest do nothing while typing or while a dialog or a menu is open. C files a Task in
  * the current Project; G then T, B, W or A goes to the current Project's Tasks, board, Workflow or
- * Agents, and G then P opens the Project switcher. J, K, ↓ and ↑ walk the Tasks the page lists
+ * Agents, G then S to Settings, and G then P to the current Project in the sidebar's Projects;
+ * O then W opens Switch Organisation, and ⌥⇧Q (Alt Shift Q) logs out, a menu open or not. J, K, ↓ and ↑ walk the Tasks the page lists
  * (its `[data-task]` rows), and with the peek open move the peek along them; Enter opens the
  * selected Task's peek. Esc, which closes the peek, is the peek's own.
  */
@@ -104,7 +110,8 @@ export function useShortcuts({
   });
 
   useEffect(() => {
-    let gAt = 0;
+    // The first key of a chord (G or O) and when it was pressed.
+    let prefix: { key: "g" | "o"; at: number } | null = null;
     const peekAt = (key: string, replace: boolean) => {
       const { navigate, location } = latest.current;
       const params = new URLSearchParams(location.search);
@@ -139,22 +146,37 @@ export function useShortcuts({
         setSearchOpen((open) => !open);
         return;
       }
-      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || keysTaken()) return;
-      if (key === "g" && !e.shiftKey) {
-        gAt = Date.now();
+      // ⌥⇧Q arrives as "Œ" on a Mac: read the key's place. The Organisation menu shows it, so it
+      // works with that menu open.
+      if (e.code === "KeyQ" && e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey && !typing(e.target)) {
+        e.preventDefault();
+        sendIntent({ kind: "log-out" });
         return;
       }
-      const chord = gAt > 0 && Date.now() - gAt <= chordMs;
-      gAt = 0;
-      if (chord) {
+      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target) || keysTaken()) return;
+      if ((key === "g" || key === "o") && !e.shiftKey) {
+        prefix = { key, at: Date.now() };
+        return;
+      }
+      const chord = prefix && Date.now() - prefix.at <= chordMs ? prefix.key : null;
+      prefix = null;
+      if (chord === "o") {
+        if (key === "w") {
+          e.preventDefault();
+          sendIntent({ kind: "switch-organisation" });
+        }
+        return;
+      }
+      if (chord === "g") {
         if (key === "p") {
           e.preventDefault();
-          sendIntent({ kind: "switch-project" });
+          sendIntent({ kind: "focus-projects" });
           return;
         }
         const to = {
           i: "/inbox",
           m: "/my-work",
+          s: "/settings",
           t: project && projectPath(project, "tasks"),
           b: project && projectPath(project, "tasks", "board"),
           w: project && projectPath(project, "workflow"),

@@ -10,51 +10,69 @@ import { sendIntent } from "./intents";
 
 const sidebar = () => screen.getByRole("navigation", { name: "Main" }).closest<HTMLElement>("[data-slot=sidebar]")!;
 const crumbs = () => screen.getByRole("navigation", { name: "Breadcrumb" });
-const switcher = () => within(sidebar()).getByRole("button", { name: /^Project:/ });
+const projectsNav = () => within(sidebar()).getByRole("navigation", { name: "Projects" });
+// The current Project is the one unfolded in the sidebar's Projects (each test starts with nothing folded by hand).
+const current = () => within(projectsNav()).getByRole("button", { expanded: true });
+const places = (name: string) => within(within(projectsNav()).getByRole("list", { name })).getAllByRole("link");
+const organisation = () => within(sidebar()).getByRole("button", { name: "Acme" });
 const inFuture = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
 const sweep = task(3, { key: "OPS-3", project_id: ops.id, title: "Sweep the logs" });
 
-// The Project last shown is remembered by the browser, and Settings' Back by the tab; each test
-// starts in a fresh one.
+// The Project last shown and the Projects folded are remembered by the browser, and Settings' Back
+// by the tab; each test starts in a fresh one.
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
 });
 
-async function openSwitcher() {
-  await userEvent.click(switcher());
+async function openOrganisationMenu() {
+  await userEvent.click(await screen.findByRole("button", { name: "Acme" }));
   return screen.findByRole("menu");
 }
 
+/** Opens Switch Organisation from the keyboard and returns the submenu. */
+async function openSwitch(menu: HTMLElement) {
+  within(menu).getByRole("menuitem", { name: /Switch Organisation/ }).focus();
+  await userEvent.keyboard("{ArrowRight}");
+  await waitFor(() => expect(screen.getAllByRole("menu")).toHaveLength(2));
+  return screen.getAllByRole("menu").find((m) => m !== menu)!;
+}
+
 describe("the shell", () => {
-  it("opens on the Inbox and draws the switcher, the places, the current Project's places and the signed-in Member", async () => {
+  it("opens on the Inbox and draws the top row, the places, and the Projects with the current one unfolded, and no footer", async () => {
     mockApi(signedIn());
     renderApp("/");
 
     const main = await screen.findByRole("navigation", { name: "Main" });
     expect(within(main).getAllByRole("link").map((l) => l.textContent)).toEqual(["Inbox", "My work"]);
     await waitFor(() => expect(within(main).getByRole("link", { name: "Inbox" })).toHaveAttribute("aria-current", "page"));
-    // The signed-in Member's first Project is current.
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Web"));
-    const project = within(sidebar()).getByRole("navigation", { name: "Project" });
-    expect(within(project).getAllByRole("link").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
+    // The top row: the Organisation, then Search and File a Task, as Linear's search and compose.
+    expect(organisation()).toHaveAttribute("aria-haspopup", "menu");
+    expect(within(sidebar()).getByRole("button", { name: "Search" })).toBeInTheDocument();
+    expect(within(sidebar()).getByRole("button", { name: "File a Task" })).toBeInTheDocument();
+    expect(within(sidebar()).queryByRole("button", { name: /Project:/ })).not.toBeInTheDocument();
+    // The signed-in Member's first Project is current, unfolded onto its places.
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
+    expect(places("Web").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Tasks", "/projects/WEB/tasks"],
       ["Workflow", "/projects/WEB/workflow"],
       ["Agents", "/projects/WEB/agents"],
       ["Activity", "/projects/WEB/activity"],
       ["Settings", "/settings/projects/WEB/general"],
     ]);
-    expect(within(sidebar()).getByRole("button", { name: "Account: ada" })).toBeInTheDocument();
-    // No caption saying what the Member is.
+    expect(within(projectsNav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
+    // Nothing at the foot: no Member row, no caption saying what the Member is.
+    expect(within(sidebar()).queryByRole("button", { name: /Account/ })).not.toBeInTheDocument();
+    expect(within(sidebar()).queryByText("ada")).not.toBeInTheDocument();
     expect(within(sidebar()).queryByText("Admin")).not.toBeInTheDocument();
   });
 
-  it("says Connected once the Activity stream opens", async () => {
+  it("says whether live updates arrive, as a dot beside the Organisation", async () => {
     mockApi(signedIn());
     renderApp("/inbox");
     await screen.findByRole("navigation", { name: "Main" });
     const status = within(sidebar()).getByRole("status");
-    expect(status).toHaveTextContent("Connecting");
+    expect(status).toHaveTextContent("Connecting…");
     act(() => FakeEventSource.latest().open());
     expect(status).toHaveTextContent("Connected");
   });
@@ -74,98 +92,183 @@ describe("the shell", () => {
     const elsewhere = task(5, { key: "OPS-5", project_id: ops.id, claim: { ...claim("c-3", "k-5", 15), holder_id: "m-other" } });
     mockApi({ ...signedIn(), "GET /v1/tasks": { items: [held, lapsed, elsewhere] } });
     renderApp("/projects/WEB/tasks");
-    const project = await within(await screen.findByRole("navigation", { name: "Project" })).findByText("1 live");
-    expect(project).toBeInTheDocument();
+    const agents = await within(await screen.findByRole("list", { name: "Web" })).findByRole("link", { name: /Agents/ });
+    await waitFor(() => expect(agents).toHaveTextContent("Agents1 live"));
   });
 
-  it("adds a Project to the switcher when the stream says one was created, without reloading", async () => {
+  it("adds a Project to the Projects when the stream says one was created with the Member in it, without reloading", async () => {
     const api = mockApi(signedIn());
     renderApp("/inbox");
     await screen.findByRole("navigation", { name: "Main" });
     act(() => FakeEventSource.latest().open());
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
 
     const platform: Project = { ...web, id: "p-api", key: "API", name: "Platform" };
     api.routes["GET /v1/projects"] = { items: [ops, platform, web] };
+    api.routes["GET /v1/me"] = me(ada, { projects: [platform, web] });
     const entry: Partial<Activity> = { seq: 7, kind: "project.created", subject_type: "project", subject_id: "p-api", at: web.created_at };
     act(() => FakeEventSource.latest().emit("activity", entry, 7));
 
-    const menu = await openSwitcher();
-    expect(await within(menu).findByRole("menuitem", { name: /Platform/ })).toBeInTheDocument();
+    expect(await within(projectsNav()).findByRole("button", { name: "Platform" })).toBeInTheDocument();
   });
 });
 
-describe("the Project switcher", () => {
-  it("heads with the Organisation, lists every Project with the current one ticked, and offers New Project to an admin", async () => {
-    mockApi(signedIn());
-    renderApp("/projects/WEB/workflow");
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Web"));
+describe("the Projects", () => {
+  it("lists the Projects the Member is in, by name, and the current one when the Member is not in it", async () => {
+    mockApi({ ...signedIn(), "GET /v1/me": me(ada, { projects: [web] }) });
+    const first = renderApp("/inbox");
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
+    expect(within(projectsNav()).getAllByRole("button").map((b) => b.textContent)).toEqual(["WWeb", "New Project"]);
+    first.unmount();
 
-    const menu = await openSwitcher();
-    expect(within(menu).getByRole("menuitem", { name: /Acme/ })).toHaveAttribute("href", "/settings/organisation");
-    const projects = within(within(menu).getByRole("group", { name: "Projects" })).getAllByRole("menuitem");
-    expect(projects.map((p) => [p.textContent, p.getAttribute("aria-current")])).toEqual([
-      ["OOpsOPS", null],
-      ["WWebWEB", "true"],
+    // An admin may open a Project they are not in: it shows while it is current.
+    renderApp("/projects/OPS/workflow");
+    await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
+    expect(within(projectsNav()).getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-expanded")])).toEqual([
+      ["OOps", "true"],
+      ["WWeb", "false"],
+      ["New Project", null],
     ]);
-    expect(within(menu).getByRole("menuitem", { name: "New Project" })).toBeInTheDocument();
-    expect(within(menu).queryByRole("menuitem", { name: /Switch Organisation/ })).not.toBeInTheDocument();
-
-    // A Project picked opens the same place in it.
-    await userEvent.click(projects[0]);
-    await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
-    expect(switcher()).toHaveAccessibleName("Project: Ops");
   });
 
-  it("shows a Member who is not an admin the Organisation's name and the Projects, and nothing to create", async () => {
+  it("unfolds and folds a Project, and this browser remembers it; becoming current unfolds one", async () => {
+    mockApi({ ...signedIn(), "GET /v1/me": me(ada, { projects: [ops, web] }) });
+    const first = renderApp("/projects/WEB/tasks");
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
+    const opsRow = within(projectsNav()).getByRole("button", { name: "Ops" });
+    expect(opsRow).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(opsRow);
+    expect(opsRow).toHaveAttribute("aria-expanded", "true");
+    expect(places("Ops").map((l) => l.textContent)).toEqual(["Tasks", "Workflow", "Agents", "Activity", "Settings"]);
+    // The current one folds too.
+    await userEvent.click(within(projectsNav()).getByRole("button", { name: "Web" }));
+    expect(within(projectsNav()).queryByRole("list", { name: "Web" })).not.toBeInTheDocument();
+    first.unmount();
+
+    // A new page load: Ops as it was left.
+    const second = renderApp("/projects/OPS/tasks");
+    await waitFor(() => expect(within(projectsNav()).getByRole("button", { name: "Ops" })).toHaveAttribute("aria-expanded", "true"));
+    expect(within(projectsNav()).getByRole("button", { name: "Web" })).toHaveAttribute("aria-expanded", "false");
+    second.unmount();
+
+    // Going to a folded Project unfolds it.
+    renderApp("/projects/WEB/tasks");
+    await waitFor(() => expect(within(projectsNav()).getByRole("button", { name: "Web" })).toHaveAttribute("aria-expanded", "true"));
+  });
+
+  it("gives a Member who is not an admin their Projects and nothing to create", async () => {
     mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
     renderApp("/inbox");
-    await screen.findByRole("button", { name: "Account: bob" });
-    const menu = await openSwitcher();
-    expect(within(menu).queryByRole("menuitem", { name: /Acme/ })).not.toBeInTheDocument();
-    expect(within(menu).getByText("Acme")).toBeInTheDocument();
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["OOpsOPS", "WWebWEB"]);
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
+    expect(within(projectsNav()).queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();
   });
 
-  it("shows Switch Organisation only when the sign-in reaches more than one, which Local never does", async () => {
-    const acme = { id: "o-1", name: "Acme" };
-    for (const [organisations, shown] of [
-      [undefined, false],
-      [[acme], false],
-      [[acme, { id: "o-2", name: "Globex" }], true],
-    ] as const) {
-      mockApi({ ...signedIn(), "GET /v1/me": me(ada, organisations ? { organisations: [...organisations] } : {}) });
-      const view = renderApp("/inbox");
-      await screen.findByRole("navigation", { name: "Main" });
-      const menu = await openSwitcher();
-      const item = within(menu).queryByRole("menuitem", { name: /Switch Organisation/ });
-      if (!shown) expect(item).not.toBeInTheDocument();
-      else {
-        item!.focus();
-        await userEvent.keyboard("{ArrowRight}");
-        await waitFor(() => expect(screen.getAllByRole("menu")).toHaveLength(2));
-        const sub = screen.getAllByRole("menu").find((m) => m !== menu)!;
-        const orgs = within(sub).getAllByRole("menuitem");
-        expect(orgs.map((i) => i.textContent)).toEqual(["AAcme", "GGlobex"]);
-        // /v1 has no operation that switches: the others are listed, not opened.
-        expect(orgs[1]).toHaveAttribute("aria-disabled", "true");
-      }
-      view.unmount();
-    }
+  it("New Project opens the dialog", async () => {
+    mockApi(signedIn());
+    renderApp("/inbox");
+    await userEvent.click(await within(await screen.findByRole("navigation", { name: "Projects" })).findByRole("button", { name: "New Project" }));
+    expect(await screen.findByRole("dialog", { name: "New Project" })).toBeInTheDocument();
   });
 
-  it("opens with G then P", async () => {
+  it("G then P focuses the current Project's row", async () => {
     mockApi(signedIn());
     renderApp("/my-work");
     await screen.findByRole("heading", { name: "My work" });
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
     await userEvent.keyboard("gp");
-    expect(await screen.findByRole("menu")).toHaveTextContent("Acme");
+    await waitFor(() => expect(current()).toHaveFocus());
   });
 
-  it("says there is no Project yet when the Organisation has none", async () => {
-    mockApi({ ...signedIn(), "GET /v1/projects": { items: [] }, "GET /v1/me": me(ada, { projects: [] }) });
+  it("says there is no Project yet when the Member has none", async () => {
+    mockApi({ ...signedIn(bob), "GET /v1/projects": { items: [] }, "GET /v1/me": me(bob, { projects: [] }) });
     renderApp("/inbox");
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: none yet"));
-    expect(within(sidebar()).queryByRole("navigation", { name: "Project" })).not.toBeInTheDocument();
+    expect(await within(await screen.findByRole("navigation", { name: "Projects" })).findByText("No Projects yet")).toBeInTheDocument();
+    expect(within(projectsNav()).queryAllByRole("button")).toEqual([]);
+  });
+});
+
+describe("the Organisation menu", () => {
+  it("offers Settings, Invite and manage Members, Switch Organisation and Log out, with their keys", async () => {
+    mockApi(signedIn());
+    renderApp("/inbox");
+    const menu = await openOrganisationMenu();
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "SettingsG then S",
+      "Invite and manage Members",
+      "Switch OrganisationO then W",
+      expect.stringMatching(/^Log out(⌥⇧Q|Alt Shift Q)$/),
+    ]);
+    expect(within(menu).getByRole("menuitem", { name: /^Settings/ })).toHaveAttribute("href", "/settings");
+    expect(within(menu).getByRole("menuitem", { name: "Invite and manage Members" })).toHaveAttribute("href", "/settings/organisation/members");
+    await userEvent.click(within(menu).getByRole("menuitem", { name: /^Settings/ }));
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
+  });
+
+  it("Switch Organisation names the sign-in, lists the one Organisation on Local ticked, and leads to the Profile", async () => {
+    mockApi({ ...signedIn(), "GET /v1/me": me({ ...ada, email: "ada@acme.example" }) });
+    renderApp("/inbox");
+    const sub = await openSwitch(await openOrganisationMenu());
+    expect(sub).toHaveTextContent(/^ada@acme\.exampleAAcmeAccountProfile$/);
+    const [acme, profile] = within(sub).getAllByRole("menuitem");
+    expect(acme).toHaveAttribute("aria-current", "true");
+    expect(acme).not.toHaveAttribute("aria-disabled");
+    expect(profile).toHaveAttribute("href", "/settings/account");
+    await userEvent.click(profile);
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
+  });
+
+  it("lists every Organisation the sign-in reaches, the others not opened, since /v1 cannot switch", async () => {
+    mockApi({ ...signedIn(), "GET /v1/me": me(ada, { organisations: [{ id: "o-1", name: "Acme" }, { id: "o-2", name: "Globex" }] }) });
+    renderApp("/inbox");
+    const sub = await openSwitch(await openOrganisationMenu());
+    const orgs = within(sub).getAllByRole("menuitem").slice(0, 2);
+    expect(orgs.map((i) => [i.textContent, i.getAttribute("aria-disabled")])).toEqual([
+      ["AAcme", null],
+      ["GGlobex", "true"],
+    ]);
+  });
+
+  it("O then W opens it on Switch Organisation", async () => {
+    mockApi(signedIn());
+    renderApp("/my-work");
+    await screen.findByRole("heading", { name: "My work" });
+    await userEvent.keyboard("ow");
+    await waitFor(() => expect(screen.getAllByRole("menu")).toHaveLength(2));
+    expect(screen.getAllByRole("menu")[1]).toHaveTextContent("Profile");
+  });
+
+  it("gives a Member who is not an admin no Invite", async () => {
+    mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
+    renderApp("/inbox");
+    const menu = await openOrganisationMenu();
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent?.replace(/(G then S|O then W|⌥⇧Q|Alt Shift Q)$/, ""))).toEqual([
+      "Settings",
+      "Switch Organisation",
+      "Log out",
+    ]);
+  });
+
+  it("logs out from the menu, and with ⌥⇧Q", async () => {
+    for (const how of ["menu", "keys"] as const) {
+      let signedOut = false;
+      const api = mockApi({
+        ...signedIn(),
+        "GET /v1/me": () => (signedOut ? refuse(401, "unauthenticated", "Sign in") : me()),
+        "POST /v1/logout": () => {
+          signedOut = true;
+          return undefined;
+        },
+      });
+      const view = renderApp("/inbox");
+      if (how === "menu") await userEvent.click(within(await openOrganisationMenu()).getByRole("menuitem", { name: /^Log out/ }));
+      else {
+        await screen.findByRole("navigation", { name: "Main" });
+        await userEvent.keyboard("{Alt>}{Shift>}Q{/Shift}{/Alt}");
+      }
+      expect(await screen.findByRole("heading", { name: "Sign in to Darkory" })).toBeInTheDocument();
+      expect(api.calls.some((c: Call) => c.method === "POST" && c.path === "/v1/logout")).toBe(true);
+      view.unmount();
+    }
   });
 });
 
@@ -179,22 +282,22 @@ describe("the current Project", () => {
   it("follows the address, and this browser remembers it", async () => {
     mockApi(records());
     const first = renderApp("/projects/OPS/activity");
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Ops"));
+    await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
     expect(crumbs()).toHaveTextContent("Ops/Activity");
     first.unmount();
 
     // A new page load: the Member's first Project is Web, but Ops was the last one shown.
     renderApp("/inbox");
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Ops"));
+    await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
   });
 
   it("follows the Task whose page is open, and marks its Tasks", async () => {
     mockApi(records());
     renderApp("/tasks/OPS-3");
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Ops"));
+    await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
     expect(await screen.findByRole("heading", { name: "Sweep the logs" })).toBeInTheDocument();
     expect(crumbs()).toHaveTextContent("Ops/Tasks/OPS-3");
-    const tasks = within(within(sidebar()).getByRole("navigation", { name: "Project" })).getByRole("link", { name: "Tasks" });
+    const tasks = places("Ops").find((l) => l.textContent === "Tasks")!;
     expect(tasks).toHaveAttribute("href", "/projects/OPS/tasks");
     expect(tasks).toHaveAttribute("data-active", "true");
   });
@@ -203,11 +306,11 @@ describe("the current Project", () => {
     mockApi(records());
     renderApp("/my-work?task=OPS-3");
     const peek = await screen.findByRole("dialog", { name: "Task OPS-3" });
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Ops"));
+    await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
     await userEvent.click(within(peek).getByRole("button", { name: "Close" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(screen.getByRole("heading", { name: "My work" })).toBeInTheDocument();
-    expect(switcher()).toHaveAccessibleName("Project: Ops");
+    expect(current()).toHaveAccessibleName("Ops");
   });
 
   it("finds a Project by its key in any case, and says so when no Project has it", async () => {
@@ -247,37 +350,6 @@ describe("the addresses before Projects", () => {
     renderApp("/features/WEB-1");
     expect(await screen.findByRole("heading", { name: "Checkout" })).toBeInTheDocument();
     expect(crumbs()).toHaveTextContent("Web/Tasks/WEB-1");
-  });
-});
-
-describe("the signed-in Member's menu", () => {
-  it("opens Account and Organisation settings, and signs out", async () => {
-    let signedOut = false;
-    const api = mockApi({
-      ...signedIn(),
-      "GET /v1/me": () => (signedOut ? refuse(401, "unauthenticated", "Sign in") : me()),
-      "POST /v1/logout": () => {
-        signedOut = true;
-        return undefined;
-      },
-    });
-    renderApp("/inbox");
-    await userEvent.click(await screen.findByRole("button", { name: "Account: ada" }));
-    const menu = await screen.findByRole("menu");
-    expect(within(menu).getByRole("menuitem", { name: "Account" })).toHaveAttribute("href", "/settings/account");
-    expect(within(menu).getByRole("menuitem", { name: "Organisation settings" })).toHaveAttribute("href", "/settings/organisation");
-
-    await userEvent.click(within(menu).getByRole("menuitem", { name: "Sign out" }));
-    expect(await screen.findByRole("heading", { name: "Sign in to Darkory" })).toBeInTheDocument();
-    expect(api.calls.some((c: Call) => c.method === "POST" && c.path === "/v1/logout")).toBe(true);
-  });
-
-  it("offers no Organisation settings to a Member who is not an admin", async () => {
-    mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
-    renderApp("/inbox");
-    await userEvent.click(await screen.findByRole("button", { name: "Account: bob" }));
-    const menu = await screen.findByRole("menu");
-    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Account", "Sign out"]);
   });
 });
 
@@ -426,8 +498,8 @@ describe("keys", () => {
     mockApi(records());
     renderApp("/inbox");
     await screen.findByRole("navigation", { name: "Main" });
-    await waitFor(() => expect(switcher()).toHaveAccessibleName("Project: Web"));
-    await userEvent.click(within(sidebar()).getByRole("button", { name: /Search/ }));
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "Search" }));
     const search = await screen.findByRole("dialog", { name: "Search" });
     // Each entry's words, without the keys that press it.
     const names = (group: string) =>
@@ -472,7 +544,7 @@ describe("keys", () => {
   it("⌘K offers no Organisation settings, no New Project and no human Members to a Member who is not an admin", async () => {
     mockApi({ ...records(), "GET /v1/me": me(bob) });
     renderApp("/inbox");
-    await screen.findByRole("button", { name: "Account: bob" });
+    await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
     await userEvent.keyboard("{Meta>}k{/Meta}");
     const search = await screen.findByRole("dialog", { name: "Search" });
     expect(within(search).queryByRole("option", { name: "New Project" })).not.toBeInTheDocument();
@@ -495,6 +567,14 @@ describe("keys", () => {
     expect(within(dialog).getByLabelText("Title")).toHaveValue("gift wrapping");
   });
 
+  it("the sidebar's File a Task files one in the current Project", async () => {
+    mockApi(records());
+    renderApp("/projects/OPS/activity");
+    await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "File a Task" }));
+    expect(await screen.findByRole("dialog", { name: "File a Task" })).toHaveTextContent("In OPS.");
+  });
+
   it("C files a Task in the current Project, and not while typing", async () => {
     mockApi(records());
     renderApp("/projects/OPS/activity");
@@ -510,7 +590,7 @@ describe("keys", () => {
     expect(screen.queryByRole("dialog", { name: "File a Task" })).not.toBeInTheDocument();
   });
 
-  it("G then T, B, W and A go to the current Project's places; G I and G M to the Inbox and My work; ? lists the keys", async () => {
+  it("G then T, B, W and A go to the current Project's places; G I, G M and G S to the Inbox, My work and Settings; ? lists the keys", async () => {
     mockApi(records());
     renderApp("/projects/OPS/activity");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Activity"));
@@ -521,6 +601,7 @@ describe("keys", () => {
       ["ga", "Ops/Agents"],
       ["gm", "My work"],
       ["gi", "Inbox"],
+      ["gs", "Settings/Account"],
     ]) {
       await userEvent.keyboard(keys);
       await waitFor(() => expect(crumbs()).toHaveTextContent(to));
@@ -531,13 +612,16 @@ describe("keys", () => {
     expect(within(sheet).getAllByRole("term").map((t) => t.textContent)).toEqual([
       "Search",
       "File a Task",
-      "Switch Project",
+      "Go to the Projects in the sidebar",
       "Go to Inbox",
       "Go to My work",
       "Go to Tasks",
       "Go to the board",
       "Go to Workflow",
       "Go to Agents",
+      "Go to Settings",
+      "Switch Organisation",
+      "Log out",
       "Shortcuts",
       "Next Task",
       "Previous Task",

@@ -251,6 +251,7 @@ describe("a Subtask's peek", () => {
     renderApp("/inbox?task=WEB-4");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-4" });
     expect(await within(peek).findByRole("link", { name: /Parent\s*WEB-3\s*Checkout/ })).toHaveAttribute("href", "/inbox?task=WEB-3");
-    await waitFor(() => expect(screen.getByRole("button", { name: "Project: Web" })).toBeInTheDocument());
+    // The sidebar unfolds the current Project onto its places.
+    await waitFor(() => expect(screen.getByRole("list", { name: "Web" })).toBeInTheDocument());
   });
 });

@@ -1,6 +1,8 @@
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Outlet, useLocation } from "react-router";
 import { useActivityStream } from "@/api/live";
+import { logout } from "@/api/writes";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,7 +19,7 @@ import { UpdateBanner } from "./UpdateBanner";
 
 /**
  * What every signed-in screen runs inside, the app and Settings alike: the Activity stream, the
- * shortcuts, and what opens over any page: ⌘K, the shortcuts sheet, the New Project dialog, the
+ * shortcuts, Log out (`log-out`), and what opens over any page: ⌘K, the shortcuts sheet, the New Project dialog, the
  * screens' global dialogs (`dialogs`), and the Task Peek for ?task=, which leaves the page under
  * it working. The routes inside draw a `Frame`: the app's sidebar (`AppFrame`) or Settings' own.
  */
@@ -28,6 +30,10 @@ export function Shell({ dialogs, peek }: { dialogs?: ReactNode; peek?: (taskKey:
   const [selected, setSelected] = useState<string | null>(null);
   useShortcuts({ setSearchOpen, setShortcutsOpen, selected, select: setSelected });
   useIntent("search", () => setSearchOpen(true));
+  const signOut = useMutation({ mutationFn: logout });
+  useIntent("log-out", () => {
+    if (!signOut.isPending) signOut.mutate();
+  });
   const { taskKey, close } = usePeek();
   // Closing the peek (Esc, ×) leaves its Task selected, and its row takes the focus back: the
   // sheet's own focus handling has nothing to return to.

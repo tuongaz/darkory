@@ -30,6 +30,28 @@ and so on. What their R3 phase added (`docs/build/agents-plan.md`) carries over 
 | File a Task (`BoardDialogs`) | Workspaces (`MultiCombobox`, chips), starting at the Project's default (a Subtask: its Parent's); not shown while the Install has none. |
 | A Task's properties (`task/`) | The Task's Workspaces and branch (`taskBranch` in `@/lib/branch`, `main-7-support-emoji`, the plan's name until M3's Runner lands). |
 
+## The sidebar
+
+`AppSidebar` (`src/app/`), after Linear's: no footer.
+
+- **Top row**: the Organisation's button (its mark, its name, ▾) opening the Organisation menu, a
+  dot beside it for the Activity stream (green Connected, amber Connecting… / Reconnecting…, grey
+  Offline; the words on hover and in its `role="status"`), then Search (opens ⌘K) and File a Task
+  (the `file-task` intent for the current Project), as Linear's search and compose.
+- **The Organisation menu**: Settings (G then S, `/settings`), Invite and manage Members (admins,
+  `/settings/organisation/members`), Switch Organisation (O then W) and Log out (⌥⇧Q), each key
+  in muted text at the right. Switch Organisation's submenu heads with the Member's email, lists
+  `me.organisations` (Local, which leaves it out, shows the current one), the current one ticked and
+  the others disabled since /v1 has no switch; then Account › Profile (`/settings/account`).
+- **Inbox, My work**, then **Projects**: the Projects the Member is in (`me.projects`), and the
+  current Project when the Member is not in it, each a row (mark, name, chevron) unfolding onto
+  Tasks, Workflow, Agents (its live count), Activity, Settings. The current Project unfolds whenever
+  it becomes current; what else is unfolded or folded is remembered by the browser
+  (`darkory.sidebar.projects`). "+ New Project" ends the group for admins. The address decides the
+  current Project; ⌘K lists every Project to switch to.
+- On a phone the same sidebar is the sheet the TopBar's button opens; a link followed in it, or in
+  its menus, closes it.
+
 ## Page frame
 
 Every page renders `TopBar` first, then `Content`, from `@/app/TopBar`. A Project's pages lead
@@ -69,10 +91,12 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
   - `{ kind: "file-task", project?, step?, parent?, title? }`: C, ⌘K and the Install checklist
     send it with the current Project's key; a board column's + adds `step` (a Step id), a Parent's
     "Add Subtask" `parent` (a key), ⌘K's unmatched words `title`. `BoardDialogs` answers it.
-  - `{ kind: "new-project" }`: the switcher, ⌘K, Settings and the checklist; the shell's New
-    Project dialog answers it.
-  - `{ kind: "switch-project" }` (G P), `{ kind: "search" }`, `{ kind: "filter" }` (F, a page's
-    Filters menu).
+  - `{ kind: "new-project" }`: "+ New Project" under the sidebar's Projects, ⌘K, Settings and the
+    checklist; the shell's New Project dialog answers it.
+  - `{ kind: "focus-projects" }` (G P: the current Project's row in the sidebar takes the focus),
+    `{ kind: "switch-organisation" }` (O W: the Organisation menu opens on Switch Organisation),
+    `{ kind: "log-out" }` (⌥⇧Q and the menu's Log out; the shell answers it), `{ kind: "search" }`
+    (the sidebar's Search button), `{ kind: "filter" }` (F, a page's Filters menu).
 - **Peek** (`@/app/peek`): `usePeekLink()(key)` is a `To` for the current page with `?task=key`
   added (other parameters stay); link a row to it. The shell mounts `TaskPeek` while the parameter
   is there; `usePeek()` gives `{ taskKey, close }`. A link with the hash `sessionAnchor`
@@ -81,8 +105,9 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 - **Toasts**: `import { toast } from "sonner"`; the shell mounts the Toaster. A refused drag is a
   toast naming the rule ("Only builder, or whoever may take it back, moves WEB-17").
 - **Keys** (`shortcutList` in `@/app/shortcuts`, which the ? sheet lists), and no others: ⌘K /
-  Ctrl K search, C file a Task, G then P the Project switcher, G then I / M the Inbox and My work,
-  G then T / B / W / A the current Project's Tasks, board, Workflow and Agents, ? the shortcuts;
+  Ctrl K search, C file a Task, G then P the current Project's row in the sidebar, G then I / M the
+  Inbox and My work, G then T / B / W / A the current Project's Tasks, board, Workflow and Agents,
+  G then S Settings, O then W Switch Organisation, ⌥⇧Q (Alt Shift Q) Log out, ? the shortcuts;
   on a list of Tasks J / ↓ and K / ↑ move the ring, Enter opens the ringed Task's peek, Esc closes
   it and returns the focus to its row, and with the peek open J and K move it along the list. They
   are ignored while typing, while a dialog or a menu is open, and while a card is carried; the
@@ -156,7 +181,7 @@ Skill with its version 1 included.
 | `WorkGlyph glyph label` | `.st` | A Task's derived state at 14px: `waiting` ○, `working` (an agent's AI-gradient ring turning while its session runs, stopped in the session's colour otherwise; a human's still ring with a dot), `blocked` ⊘, `hold` (dashed), `done` ✓, `dropped` ✕, `parent` (a progress ring: done green and dropped grey, of all its Subtasks). `glyphFor({state, held, holderKind, session, blocked, atHold, counts})` in `@/lib/work` picks it: ended, then Parent, then held, then blocked, then hold, then waiting; `taskWorkGlyph` in `@/work` reads it off a Task record. |
 | `Pill tone` | `.badge` | `waiting · claimed · blocked · done · dropped · agent` (ink on a tint), `outline` (a Skill name), `secondary` (a Task kind, a fact), `destructive`. At most two words; a dimmed row's pill says why. |
 | `Key to?` | `.key` | `WEB-3` in mono; a link with `to`. |
-| `ProjectMark project size` | `.team-dot` | A Project's lettered square, coloured by its key: `sm` 14px (rows, crumbs), `md` 20px (the switcher), `lg` 28px. |
+| `ProjectMark project size` | `.team-dot` | A Project's lettered square, coloured by its key: `sm` 14px (rows, crumbs), `md` 20px, `lg` 28px. |
 | `PageHeader title mark meta actions` | `.page-h1` | The head of a record page. `SectionHeader title count actions` heads a section. |
 | `PropertiesRail compact` + `Property label stack` + `PropertyButton` | `.props`, `.prop-btn` | A record's facts: label column, value column. `compact` for the 300px rail. |
 | `Peek open onOpenChange label heading menu actions` | `.sheet` | The 560px sheet from the right with the key, the ⋯ menu (pass `DropdownMenuItem`s as `menu`) and ×. Not modal: no scrim, the page beside it keeps working; Esc and × close it. |

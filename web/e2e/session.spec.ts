@@ -8,7 +8,7 @@ import { startInstall, startRunnerInstall, type Install, type RunnerInstall } fr
 //
 // - Signing in and setting up: the signed-out page, the startup login link, the Install
 //   checklist in an empty Inbox (init's MAIN done, Add Member, File Task; another Project made from
-//   the switcher), then the shell around the first Task: live updates, ⌘K, the keys, the peek, a
+//   the sidebar's New Project), then the shell around the first Task: live updates, ⌘K, the keys, the peek, a
 //   phone.
 // - The Session panel and the Agents page's Runner state (docs/build/agents-plan.md, R2). With no
 //   Runner (serve --runner=off) the panel must be absent, and the terminal is played by Playwright
@@ -79,6 +79,11 @@ function sidebar(page: Page) {
   return page.locator("[data-slot=sidebar]").filter({ has: page.getByRole("navigation", { name: "Main" }) });
 }
 
+/** A row of the sidebar's Projects: a Project by name, or New Project. */
+function projectRow(page: Page, name: string) {
+  return sidebar(page).getByRole("navigation", { name: "Projects" }).getByRole("button", { name, exact: true });
+}
+
 /** A page signed in as ada, collecting what it logs as an error (a CSP refusal shows there). */
 async function open(browser: Browser) {
   const ctx = await browser.newContext({ storageState: signedIn });
@@ -128,7 +133,8 @@ test.describe("signing in and setting up an empty Install", () => {
       await shot(page, "02-login-link");
       await page.getByRole("button", { name: /^Sign in as / }).click();
       await expect(page).toHaveURL(`${at}/inbox`);
-      await expect(sidebar(page).getByText("Connected", { exact: true })).toBeVisible();
+      // Live updates arriving: the dot beside the Organisation says so.
+      await expect(sidebar(page).getByRole("status")).toHaveText("Connected");
     });
 
     const setup = page.getByRole("region", { name: "Set up E2E Organisation" });
@@ -140,13 +146,12 @@ test.describe("signing in and setting up an empty Install", () => {
       await expect(setup).toContainText("Project: Main");
       await expect(setup.getByRole("button", { name: "New Project" })).toBeVisible();
       await expect(setup.getByRole("button", { name: "File Task" })).toBeDisabled();
-      await expect(page.getByRole("button", { name: "Project: Main" })).toBeVisible();
+      await expect(projectRow(page, "Main")).toHaveAttribute("aria-expanded", "true");
       await shot(page, "03-checklist-fresh");
     });
 
-    await test.step("another Project, Web, from the switcher's New Project", async () => {
-      await page.getByRole("button", { name: "Project: Main" }).click();
-      await page.getByRole("menuitem", { name: "New Project" }).click();
+    await test.step("another Project, Web, from New Project under the sidebar's Projects", async () => {
+      await projectRow(page, "New Project").click();
       const dialog = page.getByRole("dialog", { name: "New Project" });
       await dialog.getByLabel("Name").fill("Web");
       await expect(dialog.getByLabel("Key")).toHaveValue("WEB");
@@ -155,7 +160,9 @@ test.describe("signing in and setting up an empty Install", () => {
       await expect(dialog).toHaveCount(0);
       await expect(page).toHaveURL(new RegExp(`${at}/projects/WEB/`));
       await page.goto(`${at}/inbox`);
-      await expect(page.getByRole("button", { name: "Project: Web" })).toBeVisible();
+      // Web, last shown, is current: unfolded; Main folds.
+      await expect(projectRow(page, "Web")).toHaveAttribute("aria-expanded", "true");
+      await expect(projectRow(page, "Main")).toHaveAttribute("aria-expanded", "false");
       await shot(page, "05-web-made");
     });
 
@@ -274,8 +281,17 @@ test.describe("signing in and setting up an empty Install", () => {
       await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
       await page.getByRole("button", { name: "Toggle Sidebar" }).click();
       await expect(sidebar(page)).toBeVisible();
+      await expect(projectRow(page, "Web")).toHaveAttribute("aria-expanded", "true");
       await noSidewaysScroll(page);
       await shot(page, "17-phone-sidebar");
+      // The Organisation menu opens from the sheet and fits the phone.
+      await sidebar(page).getByRole("button", { name: "E2E Organisation" }).click();
+      await page.getByRole("menuitem", { name: /^Switch Organisation/ }).press("ArrowRight");
+      await expect(page.getByRole("menuitem", { name: "Profile" })).toBeVisible();
+      await noSidewaysScroll(page);
+      await shot(page, "18-phone-organisation-menu");
+      await page.getByRole("menuitem", { name: "Profile" }).click();
+      await expect(page).toHaveURL(`${at}/settings/account`);
     });
 
     // Nothing the Install's CSP refuses, and no other error.

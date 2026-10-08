@@ -18,7 +18,7 @@ const sizes = {
 
 /**
  * A Project's square mark: the first letter of its name on its colour. `sm` 14px (rows, crumbs),
- * `md` 20px (the sidebar's switcher), `lg` 28px (a page head).
+ * `md` 20px, `lg` 28px (a page head).
  */
 export function ProjectMark({
   project,
