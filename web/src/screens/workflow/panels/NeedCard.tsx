@@ -59,7 +59,7 @@ export function NeedCard({
       aria-label={`${t.key} ${t.title}`}
       {...hover}
       className={cn(
-        "grid grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 rounded-lg border bg-card px-3 py-2 text-card-foreground max-sm:grid-cols-[44px_minmax(0,1fr)_auto] max-sm:px-2.5",
+        "grid grid-cols-[60px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 rounded-lg border bg-card px-3 py-2 text-card-foreground max-sm:grid-cols-[56px_minmax(0,1fr)_auto] max-sm:px-2.5",
         className,
       )}
     >

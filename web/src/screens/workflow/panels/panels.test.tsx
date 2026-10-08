@@ -200,7 +200,9 @@ describe("What's happening", () => {
     const { tasks, entries } = storyDay(true);
     const api = recordApi({ tasks, activity: entries, extra: { "GET /v1/projects/:project/seen": { seq: 1, at: minutes(-60) }, "PUT /v1/projects/:project/seen": ({ body }) => ({ ...(body as object), at: new Date().toISOString() }) } });
     const view = renderPanel(<StoriesPanel project={web} onHover={() => {}} />);
-    await screen.findByRole("separator");
+    await screen.findByRole("listitem", { name: /WEB-12/ });
+    // Nothing older than the mark: no divider with nothing under it.
+    expect(screen.queryByRole("separator")).toBeNull();
     view.unmount();
     await waitFor(() => expect(api.calls.find((c) => c.method === "PUT")).toMatchObject({ path: "/v1/projects/WEB/seen", body: { seq: 3 } }));
   });

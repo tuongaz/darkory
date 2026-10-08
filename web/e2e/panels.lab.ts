@@ -37,6 +37,13 @@ for (const scheme of ["light", "dark"] as const) {
         if (size.name === "phone") {
           await page.getByRole("region", { name: "What's happening" }).scrollIntoViewIfNeeded();
           await page.screenshot({ path: `${shot}-stories.png`, animations: "disabled" });
+          if (day !== "quiet") {
+            // "+N more · keys · 1 agent waiting" opens the rest as a sheet.
+            await page.getByRole("button", { name: /more/ }).filter({ hasText: "agent waiting" }).click();
+            await expect(page.getByRole("dialog", { name: "Needs you" })).toBeVisible();
+            await page.waitForTimeout(300);
+            await page.screenshot({ path: `${shot}-sheet.png`, animations: "disabled" });
+          }
         }
         if (day === "now" && size.name === "desktop") {
           // Following one Task: MAIN-9's row opened into its path.

@@ -98,6 +98,17 @@ describe("What's happening", () => {
     expect(stories[0]).toMatchObject({ key: "WEB-7", verb: "ada filed 3 Subtasks" });
   });
 
+  it("tells an ended Subtask's whole story on its Parent's row", () => {
+    const { input } = morning();
+    const p7 = [...input.tasks.values()].find((t) => t.key === "WEB-7")!;
+    const s20 = subtask(20, p7, { state: "done" });
+    input.tasks.set(s20.id, s20);
+    const more = [e("task.claimed", s20, "10:41:00", builder.id), e("task.completed", s20, "10:41:30", builder.id, { from: step.build, outcome: "pass" })];
+    const stories = storiesOf({ ...input, entries: [...input.entries, ...more] });
+    expect(stories.map((s) => s.key)).not.toContain("WEB-20");
+    expect(stories.find((s) => s.key === "WEB-7")).toMatchObject({ verb: "builder completed WEB-20" });
+  });
+
   it("goes quiet after an hour without a change, unless something changed since I looked", () => {
     const { input } = morning();
     const later = now + 61 * 60_000;

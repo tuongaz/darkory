@@ -227,8 +227,8 @@ function PhoneMore({ items, agents, onHover, onAnswered }: { items: NeedItem[]; 
       >
         {rest.length > 0 && (
           <>
-            <b className="font-medium text-foreground">+{rest.length} more</b>
-            <span className="truncate">· {rest.map((i) => i.task.key).join(", ")}</span>
+            <b className="font-medium whitespace-nowrap text-foreground">+{rest.length} more</b>
+            <span className="min-w-0 truncate">· {rest.map((i) => i.task.key).join(", ")}</span>
           </>
         )}
         {agents.length > 0 && (

@@ -70,11 +70,14 @@ function num(p: Record<string, unknown>, key: string): number | undefined {
   return typeof v === "number" ? v : undefined;
 }
 
-/** The row an entry belongs to: its Task's, or its Parent's for a Subtask's filing and end. */
+/**
+ * The row an entry belongs to: its Task's, or its Parent's for a Subtask's filing and end. An
+ * ended Subtask's whole story is its Parent's: only an open one, still on the line, keeps a row.
+ */
 export function rowOf(e: Activity, tasks: Map<string, Task>): { rowId: string; sub?: string } {
   const t = tasks.get(e.subject_id);
   const parent = t?.parent_id ?? str(e.payload, "parent_id");
-  if (parent && foldsIntoParent.has(e.kind)) return { rowId: parent, sub: t?.key ?? str(e.payload, "key") };
+  if (parent && (foldsIntoParent.has(e.kind) || (t && t.state !== "open"))) return { rowId: parent, sub: t?.key ?? str(e.payload, "key") };
   return { rowId: e.subject_id };
 }
 

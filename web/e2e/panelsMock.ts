@@ -205,13 +205,13 @@ export function dayOf(day: Day) {
       task(17, "Retrospective: Bulk invite coordinators", "st-retro", T("10:40:00", "2026-10-06"), { kind: "retrospective", filed_by: undefined }),
       task(15, "Refund email links the wrong order", "st-qa", T("07:55:00")),
     );
-    details["MAIN-16"] = {
-      subtasks: [
-        task(20, "Filter by site", undefined, T("08:00:00"), { parent_id: "k-16", state: "done", ended_at: T("08:40:00") }),
-        task(21, "Filter by shift", undefined, T("08:00:00"), { parent_id: "k-16", state: "done", ended_at: T("09:12:00") }),
-        task(22, "Filter by role", undefined, T("08:00:00"), { parent_id: "k-16", state: "dropped", ended_at: T("09:02:00") }),
-      ],
-    };
+    const ended = [
+      task(20, "Filter by site", undefined, T("08:00:00"), { parent_id: "k-16", rank: undefined, state: "done", ended_at: T("08:40:00") }),
+      task(21, "Filter by shift", undefined, T("08:00:00"), { parent_id: "k-16", rank: undefined, state: "done", ended_at: T("09:12:00") }),
+      task(22, "Filter by role", undefined, T("08:00:00"), { parent_id: "k-16", rank: undefined, state: "dropped", ended_at: T("09:02:00") }),
+    ];
+    tasks.push(...ended);
+    details["MAIN-16"] = { subtasks: ended };
     details["MAIN-17"] = {
       proposals: [{ id: "pr-1", skill_id: "s-engineer", task_id: "k-17", based_on_version: 1, body: "", author_id: "m-retro", state: "pending", created_at: T("10:40:00", "2026-10-06") }],
     };

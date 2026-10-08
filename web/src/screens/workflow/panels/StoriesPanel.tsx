@@ -115,7 +115,7 @@ export function StoriesPanel({ project, onHover, onOpen }: { project: Project; o
 
   const fresh = s.stories.filter((x) => x.fresh);
   const older = s.stories.filter((x) => !x.fresh);
-  const divider = s.seen?.seq != null && s.seen.at;
+  const divider = s.seen?.seq != null && s.seen.at && older.length > 0;
   const row = (x: Story, compact: boolean) =>
     opened === x.taskId ? (
       <OpenedStory key={x.taskId} project={project} story={x} ctx={s.ctx} tasks={s.tasks} onClose={() => open(null)} onHover={onHover} />
