@@ -645,6 +645,51 @@ paths:
           description: The Member is not in the Project.
         default: {$ref: "#/components/responses/Error"}
 
+  /v1/projects/{project}/seen:
+    get:
+      operationId: getProjectSeen
+      tags: [projects]
+      summary: Read how far the caller has seen a Project's Activity
+      description: |
+        The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+        show what happened there since they looked, and when they set it. Both are null until the
+        caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+        Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+      parameters:
+        - {$ref: "#/components/parameters/ProjectRef"}
+      responses:
+        "200":
+          description: The caller's mark.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProjectSeen"}
+        default: {$ref: "#/components/responses/Error"}
+    put:
+      operationId: setProjectSeen
+      tags: [projects]
+      summary: Say how far the caller has seen a Project's Activity
+      description: |
+        By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+        below the one kept changes nothing, and the response is the mark as kept, so a client
+        learns when its `seq` was behind. It is the caller's preference, not the record: setting
+        it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+        `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+      parameters:
+        - {$ref: "#/components/parameters/ProjectRef"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/SetProjectSeenBody"}
+      responses:
+        "200":
+          description: The caller's mark as kept.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProjectSeen"}
+        default: {$ref: "#/components/responses/Error"}
+
   /v1/projects/{project}/workflow:
     get:
       operationId: getWorkflow
@@ -3602,6 +3647,34 @@ components:
         more may be added within `/v1`.
       enum: [tasks]
       x-enum-varnames: [ViewEntityTasks]
+    ProjectSeen:
+      type: object
+      description: |
+        How far a Member has seen a Project's Activity. Both fields are null until the Member
+        first sets it.
+      required: [seq, at]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          nullable: true
+          description: The `seq` of the newest Activity entry the Member has seen in the Project.
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the Member last moved it forward.
+    SetProjectSeenBody:
+      type: object
+      required: [seq]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+            there is none yet.
     View:
       type: object
       description: |

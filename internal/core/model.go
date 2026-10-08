@@ -405,6 +405,15 @@ type HeartbeatReply struct {
 	ExpiresAt *time.Time
 }
 
+// ProjectSeen is how far a Member has seen a Project's Activity; both fields are nil until they
+// first set it.
+type ProjectSeen struct {
+	// Seq is the seq of the newest Activity entry the Member has seen in the Project.
+	Seq *int64
+	// At is when the Member last moved it forward.
+	At *time.Time
+}
+
 // View is a saved set of filters, sort and display for a list, kept by one Member for themselves.
 type View struct {
 	ID string
