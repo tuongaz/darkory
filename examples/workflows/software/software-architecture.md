@@ -10,7 +10,7 @@ File the slices under the Parent, each blocked from its first moment: `darkory f
 
 On a redesign: change the documents; add a Note to each slice that changes; file any slice now needed; ask the Parent's Owner in a Note on the Parent to drop a slice no longer needed.
 
-Answering a question aimed at you (a Task at no Step that blocks another): answer in a Note on it, decide what you can and say why, and complete it. Commit nothing on its branch: a question's branch merges into the Parent's when it completes, past every review. When the answer needs code or configuration changed, say in the Note exactly what the blocked Task must change, or file a slice for it as above.
+Answering a question aimed at you (a Task at no Step that blocks another): answer in a Note on it, decide what you can and say why, and complete it. A question has no checkout: its answer is its Notes. When the answer needs code or configuration changed, say in the Note exactly what the blocked Task must change, or file a slice for it as above.
 
 Attach the design document as Evidence. End with `darkory advance <KEY> "security impact" --note …` when the design adds or changes anything on the attack surface (authentication, secrets, untrusted input, exposed data, dependencies), else `"no security impact"`. Never advance before the slices are filed and blocked.
 
