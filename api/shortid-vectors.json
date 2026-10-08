@@ -1,0 +1,72 @@
+{
+  "_comment": "Test vectors for short ids (ADR 0017), read by internal/shortid and web/src/lib/shortid.ts. pairs: a UUID's canonical text and its short form. uppercase: a UUID in upper case reads as its canonical lower-case text. not_ids: text that is neither form, which reads as itself.",
+  "pairs": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000000",
+      "short": "1111111111111111111111"
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "short": "1111111111111111111112"
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-00000000003a",
+      "short": "1111111111111111111121"
+    },
+    {
+      "uuid": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+      "short": "YcVfxkQb6JRzqk5kF2tNLv"
+    },
+    {
+      "uuid": "0199c2a0-7b3e-7c41-9f12-842120d6a1b2",
+      "short": "1CTuJUrXDEC71Dv55PHKrq"
+    },
+    {
+      "uuid": "0199c2a0-7b3e-7c41-9f12-842120d6a1b3",
+      "short": "1CTuJUrXDEC71Dv55PHKrr"
+    },
+    {
+      "uuid": "0199c2a0-7b3f-7000-8000-000000000000",
+      "short": "1CTuJUrXSvSxgcG9DcJ7rw"
+    },
+    {
+      "uuid": "019a0000-0000-7000-8000-000000000000",
+      "short": "1CUHs8GNFDkpCyv8BGw3DZ"
+    },
+    {
+      "uuid": "123e4567-e89b-42d3-a456-426614174000",
+      "short": "3FfGK34vz4LH5KPfMqZLZM"
+    },
+    {
+      "uuid": "7fffffff-ffff-ffff-ffff-ffffffffffff",
+      "short": "GokLUsho3eiVvNYNd1wgfx"
+    },
+    {
+      "uuid": "80000000-0000-0000-0000-000000000000",
+      "short": "GokLUsho3eiVvNYNd1wgfy"
+    }
+  ],
+  "uppercase": {
+    "uuid": "0199C2A0-7B3E-7C41-9F12-842120D6A1B2",
+    "canonical": "0199c2a0-7b3e-7c41-9f12-842120d6a1b2",
+    "short": "1CTuJUrXDEC71Dv55PHKrq"
+  },
+  "not_ids": [
+    "",
+    "1111111111111111111110",
+    "111111111111111111111",
+    "11111111111111111111111",
+    "111111111111111111111I",
+    "111111111111111111111O",
+    "111111111111111111111l",
+    "zzzzzzzzzzzzzzzzzzzzzz",
+    "YcVfxkQb6JRzqk5kF2tNLw",
+    "0199c2a0-7b3e-7c41-9f12-842120d6a1b",
+    "0199c2a07b3e7c419f12842120d6a1b2",
+    "{0199c2a0-7b3e-7c41-9f12-842120d6a1b2}",
+    "0199c2a0-7b3e-7c41-9f12-842120d6a1bg",
+    "0199c2a0_7b3e-7c41-9f12-842120d6a1b2",
+    "SAM-12",
+    "alice"
+  ]
+}

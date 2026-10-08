@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { initials, shortSessionId, tintOf } from "@/lib/members";
-import { untilText } from "@/lib/time";
+import { initials, tintOf } from "@/lib/members";
+import { agoText, untilText } from "@/lib/time";
+import { SessionId } from "./CopyValue";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
 import { HeartbeatMeter } from "./HeartbeatMeter";
@@ -116,9 +117,10 @@ describe("MemberAvatar", () => {
 });
 
 describe("SessionId", () => {
-  it("shows the last 8 characters, where UUIDv7 ids of one day differ, and keeps a short id whole", () => {
-    expect(shortSessionId("01a11403-53a4-7b2e-9c1d-3b4dcbb772f3")).toBe("…cbb772f3");
-    expect(shortSessionId("sess-1")).toBe("sess-1");
+  it("shows the whole id, as the API writes it, in mono with a copy button", () => {
+    render(<SessionId id="1CfppqWvwQruvqjgSEtEQt" />);
+    expect(screen.getByText("1CfppqWvwQruvqjgSEtEQt")).toHaveClass("font-mono");
+    expect(screen.getByRole("button", { name: "Copy Session id" })).toBeInTheDocument();
   });
 });
 
@@ -147,6 +149,14 @@ describe("HeartbeatMeter", () => {
     expect(untilText(61_000)).toBe("2 min");
     expect(untilText(15 * 60_000)).toBe("15 min");
     expect(untilText(3 * 3600_000)).toBe("3 h");
+  });
+
+  it("says how long ago, short enough for a narrow column", () => {
+    expect(agoText(-200)).toBe("0 s ago");
+    expect(agoText(40_000)).toBe("40 s ago");
+    expect(agoText(3 * 60_000)).toBe("3 min ago");
+    expect(agoText(5 * 3600_000)).toBe("5 h ago");
+    expect(agoText(3 * 86400_000)).toBe("3 d ago");
   });
 });
 

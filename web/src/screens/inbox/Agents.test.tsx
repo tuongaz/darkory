@@ -100,7 +100,7 @@ describe("a Project's Agents", () => {
     const { calls } = agentsApi({ sessions: [session("waiting")] });
     renderApp("/projects/WEB/agents?agent=builder");
     const peek = await screen.findByRole("dialog", { name: "Agent builder" });
-    await waitFor(() => expect(within(peek).getByRole("region", { name: "Runner session" })).toHaveTextContent("dk-WEB-3"));
+    await waitFor(() => expect(within(peek).getByRole("region", { name: "Runner" })).toHaveTextContent("dk-WEB-3"));
     expect(within(peek).getByText("Steps in Web").nextSibling).toHaveTextContent("Build");
     expect(within(peek).getByRole("link", { name: /Settings/ })).toHaveAttribute("href", "/settings/organisation/agents/builder");
 
@@ -112,6 +112,52 @@ describe("a Project's Agents", () => {
     expect(calls.some((c) => c.path.endsWith("/stop"))).toBe(false);
     await userEvent.click(within(confirm).getByRole("button", { name: "Stop session" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/runner/sessions/WEB-3/stop")).toBe(true));
+  });
+
+  it("lists the agent's Sessions in a table: full ids that copy, the Runner's state on the Session it works through, ended ones on request", async () => {
+    const reader = "1CfpetKjfB4XEtcbSpu599";
+    const worker = "1CfpetKm9mF5bergWMAmtH";
+    const gone = "1Cfp6eg2SL6edHPrxot6y1";
+    const { calls, routes } = agentsApi({ sessions: [session("waiting", { session_id: worker, state_since: minutes(-3) })] });
+    routes["GET /v1/members/:member/sessions"] = ({ query }) =>
+      query.get("state") === "ended"
+        ? { items: [{ id: gone, member_id: builder.id, kind: "token", started_at: minutes(-300), last_seen_at: minutes(-200), closed_at: minutes(-185), ended_at: minutes(-185) }], open: 2, ended: 1 }
+        : {
+            items: [
+              { id: worker, member_id: builder.id, kind: "token", started_at: minutes(-20), last_seen_at: minutes(-1) },
+              { id: reader, member_id: builder.id, kind: "token", started_at: minutes(-60), last_seen_at: minutes(-2) },
+            ],
+            open: 2,
+            ended: 1,
+          };
+    // The Claim on WEB-3 was made through the worker's Session.
+    routes["GET /v1/tasks"] = {
+      items: [task(3, { title: "Payment form", claim: claim("k-3", builder.id, { session_id: worker, expires_at: minutes(10), heartbeat_timeout_seconds: 600 }) }), task(4, { title: "Cart" })],
+    };
+    renderApp("/projects/WEB/agents?agent=builder");
+    const peek = await screen.findByRole("dialog", { name: "Agent builder" });
+    const sessions = await within(peek).findByRole("region", { name: "Sessions" });
+    expect(sessions).toHaveTextContent("Sessions · 2");
+    const table = await within(sessions).findByRole("table", { name: "Sessions of builder" });
+    const working = within(table).getByRole("row", { name: `Session ${worker}` });
+    // The whole id, and a copy button for it.
+    expect(within(working).getByText(worker)).toBeInTheDocument();
+    expect(within(working).getByRole("button", { name: "Copy Session id" })).toBeInTheDocument();
+    expect(working).toHaveTextContent("Open");
+    expect(within(working).getByText("Waiting")).toBeInTheDocument();
+    expect(within(working).getByRole("link", { name: "WEB-3" })).toHaveAttribute("href", "/projects/WEB/agents?task=WEB-3");
+    const reading = within(table).getByRole("row", { name: `Session ${reader}` });
+    expect(within(reading).queryByText("Waiting")).not.toBeInTheDocument();
+    expect(within(reading).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(table).queryByText(gone)).not.toBeInTheDocument();
+
+    await userEvent.click(within(sessions).getByRole("button", { name: "Show ended (1)" }));
+    const ended = await within(table).findByRole("row", { name: `Session ${gone}` });
+    expect(ended).toHaveTextContent("Ended");
+    expect(within(ended).queryByRole("button", { name: /More for/ })).not.toBeInTheDocument();
+    expect(calls.some((c) => c.path === `/v1/members/${builder.id}/sessions` && c.query.get("state") === "ended")).toBe(true);
+    await userEvent.click(within(sessions).getByRole("button", { name: "Hide ended" }));
+    expect(within(table).queryByText(gone)).not.toBeInTheDocument();
   });
 
   it("pauses an agent from its ⋯ menu", async () => {
@@ -128,7 +174,7 @@ describe("a Project's Agents", () => {
     agentsApi({ sessions: [session("running")], member: bob });
     renderApp("/projects/WEB/agents?agent=builder");
     const peek = await screen.findByRole("dialog", { name: "Agent builder" });
-    await waitFor(() => expect(within(peek).getByRole("region", { name: "Runner session" })).toBeInTheDocument());
+    await waitFor(() => expect(within(peek).getByRole("region", { name: "Runner" })).toBeInTheDocument());
     expect(within(peek).queryByRole("button", { name: "Nudge" })).not.toBeInTheDocument();
     expect(within(peek).queryByRole("link", { name: /Settings/ })).not.toBeInTheDocument();
   });

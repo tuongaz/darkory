@@ -1,4 +1,5 @@
 import { useSearchParams } from "react-router";
+import { toShort } from "@/lib/shortid";
 
 /** The live Workflow page's views: the line, the Blocking among its Tasks, or a list. */
 export type LineView = "line" | "blocking" | "text";
@@ -31,5 +32,7 @@ export function useScopeParam(): [string | null, (s: string | null) => void] {
       else next.delete("scope");
       return next;
     });
-  return [params.get("scope"), set];
+  // A Task id from an old link may be a UUID's long text: the API writes it short (ADR 0017).
+  const scope = params.get("scope");
+  return [scope && toShort(scope), set];
 }

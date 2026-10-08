@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/tuongaz/darkory/internal/clock"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -71,27 +72,48 @@ func Hash(secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// BrowserLimits bound a browser Session's life on the server (security review M4): it expires
-// once unused for Idle, and at the latest Lifetime after it started. A token Session never
-// expires; it ends when closed or when its token is revoked.
-type BrowserLimits struct {
+// SessionLimits bound how long a Session lasts on the server without being closed. A browser
+// Session (security review M4) expires once unused for Idle, and at the latest Lifetime after it
+// started. A token Session ends once no request has come through it for TokenIdle, unless a Claim
+// bound to it is still live: the copy that chose its id has stopped, or crashed, without closing
+// it.
+type SessionLimits struct {
 	Idle, Lifetime time.Duration
+	TokenIdle      time.Duration
 }
 
-// DefaultBrowserLimits are the limits unless the Install sets others.
-var DefaultBrowserLimits = BrowserLimits{Idle: 30 * 24 * time.Hour, Lifetime: 90 * 24 * time.Hour}
+// DefaultTokenIdle is three times the Runner's Heartbeat timeout (5 minutes). Every Session the
+// Runner uses makes a request at least every minute — a waiting `next` is at most 60 s, a
+// Heartbeat every 30 s, an Activity stream's keep-alive every 15 s — so only a Session nothing
+// uses any more stays quiet that long, and a Claim it could have held without Heartbeats would
+// have lapsed three times over.
+const DefaultTokenIdle = 15 * time.Minute
 
-// LiveSessionSQL is the one condition, over a Session aliased s, that it has not expired. It binds
-// @idle_since and @started_since (Args).
-const LiveSessionSQL = `(s.kind <> 'browser' OR (s.last_seen_at > @idle_since AND s.created_at > @started_since))`
+// DefaultSessionLimits are the limits unless the Install sets others.
+var DefaultSessionLimits = SessionLimits{Idle: 30 * 24 * time.Hour, Lifetime: 90 * 24 * time.Hour, TokenIdle: DefaultTokenIdle}
 
-// Args binds LiveSessionSQL at now.
-func (l BrowserLimits) Args(now time.Time) map[string]any {
-	return map[string]any{"idle_since": now.Add(-l.Idle).UnixMilli(), "started_since": now.Add(-l.Lifetime).UnixMilli()}
+// liveTokenSQL is the condition, over a token Session named by %[1]s, that it is still in use: it
+// was seen within the idle limit, or a Claim bound to it is live.
+const liveTokenSQL = `(%[1]s.last_seen_at > @token_idle_since OR EXISTS (SELECT 1 FROM tasks lt WHERE lt.claim_session_id = %[1]s.id AND lt.claim_expires_at > @now))`
+
+// LiveSessionSQL is the one condition, over a Session aliased s, that it has not ended on its own:
+// a browser Session has not expired, a token Session has not gone idle. It binds the names Args
+// gives.
+var LiveSessionSQL = `((s.kind = 'browser' AND s.last_seen_at > @idle_since AND s.created_at > @started_since) OR (s.kind = 'token' AND ` +
+	fmt.Sprintf(liveTokenSQL, "s") + `))`
+
+// IdleTokenSQL is the condition, over an open row of the sessions table named in full, that it is
+// a token Session gone idle: what the sweep closes.
+var IdleTokenSQL = `sessions.kind = 'token' AND NOT ` + fmt.Sprintf(liveTokenSQL, "sessions")
+
+// Args binds LiveSessionSQL and IdleTokenSQL at now.
+func (l SessionLimits) Args(now time.Time) map[string]any {
+	return map[string]any{"idle_since": now.Add(-l.Idle).UnixMilli(), "started_since": now.Add(-l.Lifetime).UnixMilli(),
+		"token_idle_since": now.Add(-l.TokenIdle).UnixMilli(), "now": now.UnixMilli()}
 }
 
 // ExpiresAt is when a browser Session that started and was last seen at these times expires.
-func (l BrowserLimits) ExpiresAt(started, lastSeen time.Time) time.Time {
+func (l SessionLimits) ExpiresAt(started, lastSeen time.Time) time.Time {
 	idle, end := lastSeen.Add(l.Idle), started.Add(l.Lifetime)
 	if idle.Before(end) {
 		return idle
@@ -101,19 +123,19 @@ func (l BrowserLimits) ExpiresAt(started, lastSeen time.Time) time.Time {
 
 // Authenticator finds the Caller of a request.
 type Authenticator struct {
-	store   *store.Store
-	clock   clock.Clock
-	browser BrowserLimits
+	store  *store.Store
+	clock  clock.Clock
+	limits SessionLimits
 }
 
-// New returns an Authenticator over st, with DefaultBrowserLimits.
+// New returns an Authenticator over st, with DefaultSessionLimits.
 func New(st *store.Store, c clock.Clock) *Authenticator {
-	return &Authenticator{store: st, clock: c, browser: DefaultBrowserLimits}
+	return &Authenticator{store: st, clock: c, limits: DefaultSessionLimits}
 }
 
-// WithBrowserLimits sets how long browser Sessions last, and returns a.
-func (a *Authenticator) WithBrowserLimits(l BrowserLimits) *Authenticator {
-	a.browser = l
+// WithSessionLimits sets how long Sessions last without being closed, and returns a.
+func (a *Authenticator) WithSessionLimits(l SessionLimits) *Authenticator {
+	a.limits = l
 	return a
 }
 
@@ -127,8 +149,8 @@ type Credentials struct {
 	Cookie string
 }
 
-// touchEvery limits how often last-seen and last-used times are written.
-const touchEvery = time.Minute
+// TouchEvery limits how often last-seen and last-used times are written.
+const TouchEvery = time.Minute
 
 // MaxSessionIDLength bounds a chosen Session id.
 const MaxSessionIDLength = 200
@@ -171,9 +193,9 @@ WHERE t.secret_hash = $1 AND t.revoked_at IS NULL AND m.deactivated_at IS NULL`,
 		// Present but unusable: say why, rather than that the header is missing.
 		return nil, fmt.Errorf("%w: a Session id is 1 to %d printable characters with no spaces", ErrSessionRequired, MaxSessionIDLength)
 	}
-	c.ChosenID = cr.Session
+	c.ChosenID = shortid.Canonical(cr.Session) // either form names one Session (ADR 0017)
 	now := a.clock.Now()
-	if !lastUsed.Valid || now.Sub(time.UnixMilli(lastUsed.Int64)) >= touchEvery {
+	if !lastUsed.Valid || now.Sub(time.UnixMilli(lastUsed.Int64)) >= TouchEvery {
 		if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{
 			SQL:  `UPDATE tokens SET last_used_at = $1 WHERE org_id = $2 AND id = $3`,
 			Args: []any{now.UnixMilli(), c.OrgID, c.TokenID},
@@ -189,20 +211,34 @@ WHERE t.secret_hash = $1 AND t.revoked_at IS NULL AND m.deactivated_at IS NULL`,
 
 // session finds the open Session of the Member with the chosen id, or starts it. Starting a
 // Session records no Activity: it is presence, not a change to the work record, like a Heartbeat.
+// An open Session that has gone idle has ended, though the sweep may not have closed it yet: it is
+// closed here, as the sweep would, and the request starts a new one with the same id.
 func (a *Authenticator) session(ctx context.Context, c *Caller, now time.Time) error {
-	for range 2 {
+	args := a.limits.Args(now)
+	args["org"], args["member"], args["chosen"] = c.OrgID, c.MemberID, c.ChosenID
+	q, qa := store.Bind(`SELECT s.id, s.token_id, s.last_seen_at, CASE WHEN `+LiveSessionSQL+` THEN 1 ELSE 0 END FROM sessions s
+WHERE s.org_id = @org AND s.member_id = @member AND s.chosen_id = @chosen AND s.closed_at IS NULL`, args)
+	for range 3 {
 		var tokenID sql.NullString
 		var lastSeen int64
-		err := a.store.QueryRow(ctx, `SELECT id, token_id, last_seen_at FROM sessions
-WHERE org_id = $1 AND member_id = $2 AND chosen_id = $3 AND closed_at IS NULL`, c.OrgID, c.MemberID, c.ChosenID).
-			Scan(&c.SessionID, &tokenID, &lastSeen)
+		var live int
+		err := a.store.QueryRow(ctx, q, qa...).Scan(&c.SessionID, &tokenID, &lastSeen, &live)
 		switch {
+		case err == nil && live == 0:
+			if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{
+				SQL:  `UPDATE sessions SET closed_at = $1 WHERE org_id = $2 AND id = $3 AND closed_at IS NULL`,
+				Args: []any{now.UnixMilli(), c.OrgID, c.SessionID},
+			}); err != nil {
+				return fmt.Errorf("auth: close idle session: %w", err)
+			}
+			c.SessionID = ""
+			continue
 		case err == nil:
 			if tokenID.String != c.TokenID {
 				// Revoking a token ends the Claims of its Sessions, so one Session never mixes tokens.
 				return fmt.Errorf("%w: Session %q is open with another token; choose another id", ErrSessionRequired, c.ChosenID)
 			}
-			if now.Sub(time.UnixMilli(lastSeen)) >= touchEvery {
+			if now.Sub(time.UnixMilli(lastSeen)) >= TouchEvery {
 				return a.store.WriteBatchNoSeq(ctx, store.Stmt{
 					SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE org_id = $2 AND id = $3`,
 					Args: []any{now.UnixMilli(), c.OrgID, c.SessionID},
@@ -230,7 +266,7 @@ func (a *Authenticator) cookie(ctx context.Context, cookie string) (*Caller, err
 	var c Caller
 	var lastSeen int64
 	now := a.clock.Now()
-	args := a.browser.Args(now)
+	args := a.limits.Args(now)
 	args["hash"] = Hash(cookie)
 	q, qa := store.Bind(`SELECT s.id, s.chosen_id, s.org_id, s.member_id, s.last_seen_at, m.name, m.admin
 FROM sessions s JOIN members m ON m.id = s.member_id
@@ -242,7 +278,7 @@ WHERE s.cookie_hash = @hash AND s.kind = 'browser' AND s.closed_at IS NULL AND m
 	if err != nil {
 		return nil, fmt.Errorf("auth: cookie: %w", err)
 	}
-	if now.Sub(time.UnixMilli(lastSeen)) >= touchEvery {
+	if now.Sub(time.UnixMilli(lastSeen)) >= TouchEvery {
 		if err := a.store.WriteBatchNoSeq(ctx, store.Stmt{
 			SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE org_id = $2 AND id = $3`,
 			Args: []any{now.UnixMilli(), c.OrgID, c.SessionID},

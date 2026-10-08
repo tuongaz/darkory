@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // Projects with their Members and Workflows (ADR 0015, ADR 0016), and Labels.
@@ -426,7 +427,7 @@ func (c *call) labelID(ref, project string) (string, error) {
 		return "", err
 	}
 	for _, l := range ls {
-		if l.ID == ref || strings.EqualFold(l.Name, ref) {
+		if l.ID == shortid.Short(ref) || strings.EqualFold(l.Name, ref) { // an id in either form
 			return l.ID, nil
 		}
 	}

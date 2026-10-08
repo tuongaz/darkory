@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { aboutProject, count, groupByDay, matchesFilter, sizeText, type ActivityFilter } from "./derive";
 import { activityHistoryPage, useStepNames, useTaskMap } from "./queries";
 import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Part, type Sentence } from "./wording";
+import { toShort } from "@/lib/shortid";
 
 const pageSize = 100;
 
@@ -60,9 +61,10 @@ export function ActivityPage() {
   const memberRef = params.get("member") ?? undefined;
   const kindRef = params.get("kind") ?? undefined;
   const taskRef = params.get(aboutParam) ?? undefined;
-  const member = memberRef ? dir.memberList.find((m) => m.name === memberRef || m.id === memberRef) : undefined;
+  // An id from an old link may be a UUID's long text: the API writes it short (ADR 0017).
+  const member = memberRef ? dir.memberList.find((m) => m.name === memberRef || m.id === toShort(memberRef)) : undefined;
   const kind = kindRef && isKnown(kindRef) ? kindRef : undefined;
-  const task = taskRef ? [...tasks.values()].find((t) => t.key.toUpperCase() === taskRef.toUpperCase() || t.id === taskRef) : undefined;
+  const task = taskRef ? [...tasks.values()].find((t) => t.key.toUpperCase() === taskRef.toUpperCase() || t.id === toShort(taskRef)) : undefined;
   const filtered = !!(memberRef || kindRef || taskRef);
 
   const history = useInfiniteQuery({

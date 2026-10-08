@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // Progress is how the runner tells a session is working (ADR 0013): the modified time of a file
@@ -53,13 +55,14 @@ func TranscriptPath(claudeDir, cwd, id string) string {
 	if real, err := filepath.EvalSymlinks(cwd); err == nil {
 		cwd = real
 	}
-	return filepath.Join(claudeDir, "projects", ProjectSlug(cwd), id+".jsonl")
+	// Claude Code names the transcript after the session's UUID (ADR 0017).
+	return filepath.Join(claudeDir, "projects", ProjectSlug(cwd), shortid.Canonical(id)+".jsonl")
 }
 
 // findTranscript looks for session id's transcript in any project, for when the slug the runner
 // computed is not the one Claude Code used.
 func findTranscript(claudeDir, id string) string {
-	found, _ := filepath.Glob(filepath.Join(claudeDir, "projects", "*", id+".jsonl"))
+	found, _ := filepath.Glob(filepath.Join(claudeDir, "projects", "*", shortid.Canonical(id)+".jsonl"))
 	if len(found) == 0 {
 		return ""
 	}

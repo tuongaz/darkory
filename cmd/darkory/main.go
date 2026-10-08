@@ -39,7 +39,8 @@ Usage:
   darkory init [--org name] [--name member] [--data dir] [--db dsn] [--no-agents]
                                                                        create the Organisation, its first Member and its agents
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
-                [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n] [--proxy-hops n]
+                [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n]
+                [--files dir|s3://bucket/prefix] [--files-max-mb n] [--proxy-hops n]
                 [--no-update-check] [--runner auto|on|off]
                                                                        run the server, and the Runner beside it
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
@@ -263,6 +264,14 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	if cfg.Evidence.S3 != nil {
 		log.Info("Evidence is kept in S3-compatible storage", "bucket", cfg.Evidence.S3.String())
 	}
+	// Files, such as avatars, likewise: on disk by default, beside Evidence.
+	files, err := blob.Open(ctx, cfg.Files, nil)
+	if err != nil {
+		return err
+	}
+	if cfg.Files.S3 != nil {
+		log.Info("files are kept in S3-compatible storage", "bucket", cfg.Files.S3.String())
+	}
 
 	n := wake.New()
 	if st.Engine() == store.Postgres {
@@ -280,7 +289,8 @@ func serve(args []string, stdout, stderr io.Writer) error {
 	}
 	api := server.New(st, server.Options{Log: log, PublicURL: cfg.PublicURL, Wake: n, Mail: sender,
 		MailPerHour: cfg.SMTP.MaxPerHour, ProxyHops: cfg.ProxyHops, Blobs: blobs, MaxEvidenceSize: cfg.EvidenceMaxMB << 20,
-		BrowserSessions: auth.BrowserLimits{Idle: cfg.SessionIdle, Lifetime: cfg.SessionLifetime}, MaxWaiting: cfg.MaxWaiting})
+		Files: files, MaxFileSize: cfg.FilesMaxMB << 20,
+		Sessions: auth.SessionLimits{Idle: cfg.SessionIdle, Lifetime: cfg.SessionLifetime, TokenIdle: cfg.TokenSessionIdle}, MaxWaiting: cfg.MaxWaiting})
 	// Requests share a context that ends at shutdown, so Activity streams and waiting `next`
 	// calls return instead of holding the shutdown to its timeout.
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
@@ -486,8 +496,8 @@ var openBrowser = func(url string) error {
 }
 
 // housekeeping records the lapses of expired Claims every second, so the Task's Owner sees them
-// promptly — correctness never waits for it (ADR 0004) — and drops idempotency responses older
-// than a day, every hour.
+// promptly — correctness never waits for it (ADR 0004) — then closes the token Sessions gone idle,
+// and drops idempotency responses older than a day, every hour.
 func housekeeping(ctx context.Context, svc *core.Service, log *slog.Logger) {
 	sweep := time.NewTicker(sweepEvery)
 	defer sweep.Stop()
@@ -502,6 +512,12 @@ func housekeeping(ctx context.Context, svc *core.Service, log *slog.Logger) {
 				log.Error("sweeping lapsed Claims", "err", err)
 			} else if n > 0 {
 				log.Info("recorded lapsed Claims", "count", n)
+			}
+			// After the lapses, so a Session whose last Claim just lapsed is closed with it recorded.
+			if n, err := svc.SweepSessions(ctx); err != nil && ctx.Err() == nil {
+				log.Error("closing idle Sessions", "err", err)
+			} else if n > 0 {
+				log.Info("closed idle Sessions", "count", n)
 			}
 		case <-purge.C:
 			if err := svc.PurgeIdempotencyKeys(ctx); err != nil && ctx.Err() == nil {

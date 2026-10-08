@@ -7,7 +7,6 @@ import { projectPath, projectSettingsPath, useRouteProject } from "@/app/current
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { FormDialog } from "@/components/FormDialog";
-import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { useCurrentMe } from "@/me";
@@ -24,6 +23,8 @@ import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
 import { ScopeChip } from "./ScopeChip";
 import { stepParam } from "./StepPeek";
+import { ChangesChip } from "./edit/Changes";
+import { toShort } from "@/lib/shortid";
 
 /**
  * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; `?scope=`
@@ -113,7 +114,10 @@ function EditingPage() {
   const navigate = useNavigate();
   // `?step=<id>` opens with that Step's name in focus: Edit from the live page.
   const [params] = useSearchParams();
-  const [focusStep] = useState(() => params.get(stepParam) ?? undefined);
+  const [focusStep] = useState(() => {
+    const id = params.get(stepParam);
+    return id ? toShort(id) : undefined; // an old link's long id reads as the short one
+  });
   const [discarding, setDiscarding] = useState(false);
   const live = projectPath(project, "workflow");
   const save = async () => {
@@ -127,20 +131,7 @@ function EditingPage() {
     <>
       <TopBar
         crumbs={settingsCrumbs(project.name)}
-        view={
-          <span role="status" aria-label="Editing">
-            <Pill tone={n > 0 ? "claimed" : "outline"} className="font-normal">
-              {n > 0 ? (
-                <>
-                  <span className="max-sm:sr-only">Editing · </span>
-                  {n} {n === 1 ? "change" : "changes"}
-                </>
-              ) : (
-                "Editing"
-              )}
-            </Pill>
-          </span>
-        }
+        view={<ChangesChip editor={editor} />}
         actions={
           <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(live))}>
             Cancel

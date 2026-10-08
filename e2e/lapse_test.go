@@ -81,7 +81,7 @@ func TestLapseAndRecovery(t *testing.T) {
 	again := a1.sibling()
 	var reclaimed client.TaskDetail
 	again.json(&reclaimed, "claim", key)
-	if reclaimed.Task.Claim.SessionID != again.session || reclaimed.Task.Claim.HolderID != a1.id {
+	if reclaimed.Task.Claim.SessionID != short(again.session) || reclaimed.Task.Claim.HolderID != a1.id {
 		t.Fatalf("a1's other Session took %+v", reclaimed.Task.Claim)
 	}
 	again.ok("release", key, "--note", "picking up something else")

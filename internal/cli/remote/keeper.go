@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // Notice says what became of a Claim the Keeper was keeping alive: it lapsed, was taken back,
@@ -74,7 +75,7 @@ var ErrStopped = errors.New("the Install no longer accepts this token or Session
 // Track starts keeping t's Claim alive, if this Session made it with a heartbeat timeout.
 func (k *Keeper) Track(t client.Task) {
 	c := t.Claim
-	if c == nil || c.SessionID != k.Conn.Settings.Session || c.HeartbeatTimeoutSeconds == nil || *c.HeartbeatTimeoutSeconds <= 0 {
+	if c == nil || !sameSession(c.SessionID, k.Conn.Settings.Session) || c.HeartbeatTimeoutSeconds == nil || *c.HeartbeatTimeoutSeconds <= 0 {
 		return
 	}
 	k.mu.Lock()
@@ -251,7 +252,7 @@ func (k *Keeper) list(ctx context.Context) error {
 			return err
 		}
 		for _, t := range res.JSON200.Items {
-			if c := t.Claim; c != nil && c.SessionID == k.Conn.Settings.Session && c.HeartbeatTimeoutSeconds != nil && *c.HeartbeatTimeoutSeconds > 0 {
+			if c := t.Claim; c != nil && sameSession(c.SessionID, k.Conn.Settings.Session) && c.HeartbeatTimeoutSeconds != nil && *c.HeartbeatTimeoutSeconds > 0 {
 				found = append(found, t)
 				seen[t.ID] = true
 			}
@@ -366,3 +367,7 @@ func (k *Keeper) check(res Response, err error) error {
 	}
 	return err
 }
+
+// sameSession reports whether the Session id the API wrote (short, when it is a UUID) names the
+// one this copy chose (ADR 0017).
+func sameSession(api, chosen string) bool { return shortid.Canonical(api) == shortid.Canonical(chosen) }

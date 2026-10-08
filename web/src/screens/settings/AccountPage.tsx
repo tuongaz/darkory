@@ -1,16 +1,18 @@
 import { Link } from "react-router";
 import { useMemberSessions, useTokens } from "@/api/queries";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Loaded } from "@/components/Refusal";
 import { shellQuote } from "@/lib/shell";
 import { useCurrentMe } from "@/me";
-import { SessionRows, TokenRows } from "./credentials";
+import { taskPath } from "@/screens/task/format";
+import { AvatarControl } from "./AvatarControl";
+import { TokenRows } from "./credentials";
 import { SettingsFrame } from "./frame";
 import { heldClaims, liveTokens } from "./model";
 import { SettingsForm, SettingsRow } from "./parts";
+import { SessionsTable } from "./SessionsTable";
 import { useHeldTasks } from "./queries";
 import { memberPath } from "./paths";
 
@@ -30,7 +32,7 @@ export function AccountPage() {
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" card={false} />}
+          mark={<AvatarControl member={m} editable={m.admin || m.kind === "human"} />}
           meta={
             <>
               <span>{me.organisation.name}</span>
@@ -73,10 +75,12 @@ export function AccountPage() {
             )}
           </SettingsRow>
           <SettingsRow label="Tokens" count={tokens.data ? liveTokens(tokens.data).length : undefined}>
-            <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data ?? []} held={held} />}</Loaded>
+            <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data?.items ?? []} held={held} />}</Loaded>
           </SettingsRow>
-          <SettingsRow label="Sessions" count={sessions.data?.length}>
-            <Loaded query={sessions}>{(list) => <SessionRows member={m} sessions={list} held={held} current={me.session.id} />}</Loaded>
+          <SettingsRow label="Sessions" count={sessions.data?.open}>
+            <Loaded query={sessions}>
+              {(list) => <SessionsTable member={m} sessions={list} held={held} taskTo={taskPath} self current={me.session.id} canClose />}
+            </Loaded>
           </SettingsRow>
           <SettingsRow label="CLI">
             <span className="text-muted-foreground">Sign in another browser:</span>

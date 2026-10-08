@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -262,6 +263,7 @@ func (s *Service) RemoveWorkspace(ctx context.Context, c *auth.Caller, ref strin
 }
 
 func getWorkspace(ctx context.Context, r store.Reader, orgID, id string) (Workspace, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	w, err := scanWorkspace(r.QueryRow(ctx, `SELECT `+workspaceCols+` FROM workspaces w WHERE w.org_id = $1 AND w.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return w, refuse(CodeNotFound, "no Workspace %s", id)
@@ -271,7 +273,7 @@ func getWorkspace(ctx context.Context, r store.Reader, orgID, id string) (Worksp
 
 // resolveWorkspace finds a Workspace by id, or by name ignoring case.
 func resolveWorkspace(ctx context.Context, r store.Reader, orgID, ref string) (string, error) {
-	return resolve(ctx, r, "Workspace", `SELECT id FROM workspaces WHERE org_id = $1 AND (id = $2 OR lower(name) = lower($2))`, orgID, ref)
+	return resolve(ctx, r, "Workspace", `SELECT id FROM workspaces WHERE org_id = $1 AND (id = $3 OR lower(name) = lower($2))`, orgID, ref)
 }
 
 // taskWorkspaces resolves the Workspaces a Task to be filed in projectID names: refs when given,

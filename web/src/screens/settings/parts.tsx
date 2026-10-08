@@ -23,6 +23,45 @@ export function SettingsForm({ children, label }: { children: ReactNode; label: 
   );
 }
 
+/**
+ * A bordered section of a record page (Profile, Work, Access…): a heading, one line saying what
+ * it holds, then its settings form. The form's rows keep their lines between them; the last row's
+ * gives way to the card's edge. `actions` sit on the heading's right, for its rare ones (⋯).
+ */
+export function SettingsSection({
+  title,
+  description,
+  actions,
+  tone,
+  children,
+}: {
+  title: string;
+  description: ReactNode;
+  actions?: ReactNode;
+  tone?: "destructive";
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={title}
+      className={cn(
+        "min-w-0 rounded-lg border bg-card px-4 text-card-foreground sm:px-5",
+        "pb-0.5 [&>[role=group]>:nth-last-child(-n+2)]:border-b-0",
+        tone === "destructive" && "border-destructive/30",
+      )}
+    >
+      <header className="flex items-start gap-2 pt-3.5 pb-3">
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <h2 className="font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+        {actions && <div className="-mr-1.5 flex flex-none items-center gap-1">{actions}</div>}
+      </header>
+      {children}
+    </section>
+  );
+}
+
 /** One setting: its label, then its controls; `help` is a line under them. */
 export function SettingsRow({
   label,

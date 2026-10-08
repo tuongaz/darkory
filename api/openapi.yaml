@@ -23,6 +23,15 @@ info:
     Sessions, Views and Labels in a path are referenced by id only. Responses always carry ids,
     plus display keys where they exist.
 
+    **Ids.** Every id is a UUID, written in its short form (the `ID` schema, `format: id`): 22
+    characters of base58 in the Bitcoin alphabet, the UUID's 128 bits as one number, left-padded
+    with `1`, such as `1CTuJUrXDEC71Dv55PHKrq`. Short ids sort as their UUIDs do. Wherever an id
+    is read (a path, a query parameter, a filter value, a request body, the `Darkory-Session`
+    header) its UUID's canonical 36-character text is read too, now and later, so an old link
+    still works. Responses, Activity payloads and the stream write the short form. A Session's id
+    is the one its running copy chose: written short when it is a UUID, as it is otherwise.
+    Secrets (tokens, login-link codes, the cookie) and Task display keys are not ids.
+
     **Retries.** Every write accepts an `Idempotency-Key` header. The first response is kept for
     24 hours per Member and key; a retry with the same key returns it unchanged. Reusing a key
     for a different request is refused with `idempotency_key_reused`.
@@ -58,6 +67,7 @@ tags:
   - name: activity
   - name: runner
   - name: views
+  - name: files
 
 paths:
   # ---------------------------------------------------------------- install
@@ -226,13 +236,22 @@ paths:
     get:
       operationId: listSessions
       tags: [sign-in]
-      summary: List a Member's open Sessions
+      summary: List a Member's Sessions
       description: |
-        The Member's Sessions that are open and, for a browser Session, not yet expired, most
-        recently seen first. A Member may list their own; an admin anyone's. Close one with
-        `closeSession` and `member`, or close them all with `deactivateMember`.
+        The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+        ended instead, most recently ended first. A Session ends when it is closed, when its token
+        is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+        token Session when no request has come through it for the Install's idle limit (15
+        minutes unless set), but never while a Claim bound to it is live. Every page says how
+        many of the Member's Sessions are open and how many have ended. A Member may list their
+        own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+        `deactivateMember`.
       parameters:
         - {$ref: "#/components/parameters/MemberRef"}
+        - name: state
+          in: query
+          description: Which Sessions to list. Defaults to `open`.
+          schema: {$ref: "#/components/schemas/SessionState"}
         - {$ref: "#/components/parameters/Limit"}
         - {$ref: "#/components/parameters/Cursor"}
       responses:
@@ -359,8 +378,17 @@ paths:
     patch:
       operationId: updateMember
       tags: [members]
-      summary: Change a Member's name, email or admin mark (admin)
-      description: "Errors: `forbidden`, `conflict` (name or email taken; removing the last admin)."
+      summary: Change a Member's name, email, admin mark or avatar
+      description: |
+        An admin changes any of them. A human Member may change their own avatar, and only that;
+        an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+        Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+        `""` removes the avatar. The avatar file a Member stops showing is
+        deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+        for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+        file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+        `conflict` (name or email taken; removing the last
+        admin).
       parameters:
         - {$ref: "#/components/parameters/MemberRef"}
         - {$ref: "#/components/parameters/IdempotencyKey"}
@@ -1763,6 +1791,106 @@ paths:
               schema: {type: string, format: binary}
         default: {$ref: "#/components/responses/Error"}
 
+  # ---------------------------------------------------------------- files
+  /v1/files:
+    post:
+      operationId: uploadFile
+      tags: [files]
+      summary: Upload a file the Organisation keeps, such as an avatar
+      description: |
+        The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+        server finds the file's type by reading its bytes and keeps that, never the
+        `Content-Type` the request claims. Any Member may upload; the file belongs to the
+        caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+        unless set otherwise.
+
+        With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+        (never SVG or HTML, which can carry script); the server keeps the largest square in its
+        middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+        metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+        Errors: `too_large`, `invalid` (not an image an avatar can be).
+      parameters:
+        - {$ref: "#/components/parameters/FileName"}
+        - name: purpose
+          in: query
+          description: What the file is for; `general` unless said.
+          schema: {$ref: "#/components/schemas/FilePurpose"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      requestBody:
+        required: true
+        content:
+          "*/*":
+            schema: {type: string, format: binary}
+      responses:
+        "201":
+          description: The file's record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/File"}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/files/{file}:
+    get:
+      operationId: getFile
+      tags: [files]
+      summary: Get a file's record
+      description: Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+      parameters:
+        - {$ref: "#/components/parameters/FileID"}
+      responses:
+        "200":
+          description: The file's record.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/File"}
+        default: {$ref: "#/components/responses/Error"}
+    delete:
+      operationId: deleteFile
+      tags: [files]
+      summary: Delete a file (its uploader, or an admin)
+      description: |
+        Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+        `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+      parameters:
+        - {$ref: "#/components/parameters/FileID"}
+        - {$ref: "#/components/parameters/IdempotencyKey"}
+      responses:
+        "204": {description: Deleted.}
+        default: {$ref: "#/components/responses/Error"}
+
+  /v1/files/{file}/content:
+    get:
+      operationId: downloadFile
+      tags: [files]
+      summary: Download a file's bytes
+      description: |
+        Any Member of the file's Organisation. Served with the type the server found in the
+        bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+        so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+        change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+        a year; `If-None-Match` with that ETag answers 304.
+      parameters:
+        - {$ref: "#/components/parameters/FileID"}
+        - name: If-None-Match
+          in: header
+          schema: {type: string}
+      responses:
+        "200":
+          description: The bytes.
+          headers:
+            Content-Disposition:
+              description: "`inline` for an image, else `attachment`, with the file's name."
+              schema: {type: string}
+            ETag:
+              schema: {type: string}
+            X-Content-Type-Options:
+              schema: {type: string, enum: [nosniff]}
+          content:
+            "*/*":
+              schema: {type: string, format: binary}
+        "304": {description: The copy the client holds is current.}
+        default: {$ref: "#/components/responses/Error"}
+
   # ---------------------------------------------------------------- activity
   /v1/activity:
     get:
@@ -2076,7 +2204,7 @@ components:
       name: token
       in: path
       required: true
-      schema: {type: string}
+      schema: {type: string, format: id}
     WorkspaceRef:
       name: workspace
       in: path
@@ -2088,23 +2216,34 @@ components:
       in: path
       required: true
       description: Label id.
-      schema: {type: string}
+      schema: {type: string, format: id}
     EvidenceID:
       name: evidence
       in: path
       required: true
-      schema: {type: string}
+      schema: {type: string, format: id}
+    FileID:
+      name: file
+      in: path
+      required: true
+      schema: {type: string, format: id}
+    FileName:
+      name: name
+      in: query
+      required: true
+      description: The file's name, as it should be shown and downloaded.
+      schema: {type: string, minLength: 1, maxLength: 255}
     ProposalID:
       name: proposal
       in: path
       required: true
-      schema: {type: string}
+      schema: {type: string, format: id}
     SessionID:
       name: session
       in: path
       required: true
       description: The id the running copy chose for its Session.
-      schema: {type: string}
+      schema: {type: string, format: id}
     LoginCode:
       name: code
       in: path
@@ -2136,8 +2275,8 @@ components:
         with the other parameters; `in` and `nin` match any of their values (OR). Each value is
         percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
         `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-        query-encoded as usual. References are ids, not names; an id that names nothing matches
-        nothing.
+        query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+        that names nothing matches nothing. A View's saved filters come back with short ids.
 
         Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
         boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
@@ -2185,7 +2324,7 @@ components:
       name: view
       in: path
       required: true
-      schema: {type: string}
+      schema: {type: string, format: id}
 
   responses:
     Error:
@@ -2195,6 +2334,19 @@ components:
           schema: {$ref: "#/components/schemas/Error"}
 
   schemas:
+    # ------------------------------------------------------------ ids
+    ID:
+      type: string
+      format: id
+      pattern: "^[1-9A-HJ-NP-Za-km-z]{22}$"
+      description: |
+        An id as a response writes it, and what `format: id` means wherever it appears: a UUID in
+        its short form, 22 characters of base58 (Bitcoin alphabet, in ASCII order), the UUID's
+        128 bits as one number left-padded with `1`. A request may send either this or the
+        UUID's canonical 36-character text. The one exception is a Session's id, which its
+        running copy chose: written short when it is a UUID, unchanged otherwise.
+      example: 1CTuJUrXDEC71Dv55PHKrq
+
     # ------------------------------------------------------------ errors
     Error:
       type: object
@@ -2295,7 +2447,7 @@ components:
       type: object
       required: [id, name, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name: {type: string}
         created_at: {type: string, format: date-time}
     OrganisationBrief:
@@ -2303,7 +2455,7 @@ components:
       description: An Organisation named by its id and name.
       required: [id, name]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name: {type: string}
     Me:
       type: object
@@ -2333,11 +2485,13 @@ components:
       properties:
         id:
           type: string
+          format: id
           description: The id the running copy chose.
-        member_id: {type: string}
+        member_id: {type: string, format: id}
         kind: {$ref: "#/components/schemas/SessionKind"}
         token_id:
           type: string
+          format: id
           description: The token the Session presents. Absent for browser Sessions.
         started_at: {type: string, format: date-time}
         last_seen_at: {type: string, format: date-time}
@@ -2347,11 +2501,26 @@ components:
           description: |
             When an open browser Session ends unless it is used before: after a time unused, and
             at the latest a time after it started. Absent for token Sessions, which end when
-            closed or when their token is revoked.
-        closed_at: {type: string, format: date-time}
+            closed, when their token is revoked, or after the Install's idle limit without a
+            request (see `listSessions`).
+        closed_at:
+          type: string
+          format: date-time
+          description: When the Session was closed. Absent while it is open, and for a browser Session that expired.
+        ended_at:
+          type: string
+          format: date-time
+          description: |
+            When the Session ended, however it ended: `closed_at`, or the moment a browser
+            Session expired or a token Session reached the idle limit. Absent while it is open.
+    SessionState:
+      type: string
+      description: "`open`: the Session can still make requests. `ended`: it cannot; a request with its id starts a new Session."
+      enum: [open, ended]
+      x-enum-varnames: [SessionOpen, SessionEnded]
     SessionList:
       type: object
-      required: [items]
+      required: [items, open, ended]
       properties:
         items:
           type: array
@@ -2359,6 +2528,12 @@ components:
         next_cursor:
           type: string
           description: Pass as `cursor` for the next page. Absent on the last page.
+        open:
+          type: integer
+          description: How many of the Member's Sessions are open.
+        ended:
+          type: integer
+          description: How many of the Member's Sessions have ended.
     SessionKind:
       type: string
       enum: [token, browser]
@@ -2389,8 +2564,8 @@ components:
       type: object
       required: [id, member_id, name, prefix, created_at]
       properties:
-        id: {type: string}
-        member_id: {type: string}
+        id: {type: string, format: id}
+        member_id: {type: string, format: id}
         name: {type: string}
         prefix:
           type: string
@@ -2431,7 +2606,7 @@ components:
       type: object
       required: [id, name, kind, admin, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name: {type: string}
         kind: {$ref: "#/components/schemas/MemberKind"}
         email: {type: string}
@@ -2440,6 +2615,7 @@ components:
           description: Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links.
         manager_id:
           type: string
+          format: id
           description: The Member who directs this one. Absent when there is no Reporting line.
         created_at: {type: string, format: date-time}
         deactivated_at:
@@ -2448,6 +2624,12 @@ components:
           description: When an admin deactivated the Member. Absent while the Member is active.
         agent:
           $ref: "#/components/schemas/AgentSettings"
+        avatar_file_id:
+          type: string
+          format: id
+          description: |
+            The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+            at most 256 pixels square. Absent when the Member has none.
     MemberKind:
       type: string
       enum: [human, agent]
@@ -2488,6 +2670,10 @@ components:
         name: {type: string, minLength: 1, maxLength: 100}
         email: {type: string, format: email}
         admin: {type: boolean}
+        avatar_file_id:
+          type: string
+          format: id
+          description: A file uploaded with `purpose=avatar`; `""` removes the avatar.
     AgentSettings:
       type: object
       description: |
@@ -2564,13 +2750,14 @@ components:
         default Workspace. Every Task belongs to exactly one Project.
       required: [id, key, name, auto_complete, acceptance, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         key:
           type: string
           description: The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`.
         name: {type: string}
         default_workspace_id:
           type: string
+          format: id
           description: |
             The Workspace a Task with no Parent filed in the Project names when it names none.
             Absent when the Project has none.
@@ -2649,7 +2836,7 @@ components:
         the Steps in this order, then Done.
       required: [project_id, steps, connectors]
       properties:
-        project_id: {type: string}
+        project_id: {type: string, format: id}
         steps:
           type: array
           description: The Steps, by `position`, each with what is happening at it now.
@@ -2666,12 +2853,13 @@ components:
         moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
       required: [id, name, position, x, y]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name:
           type: string
           description: Unique in its Workflow, ignoring case.
         skill_id:
           type: string
+          format: id
           description: The Skill a Member needs to take a Task at the Step. Absent on a hold.
         position:
           type: integer
@@ -2718,7 +2906,7 @@ components:
       description: A Member who holds a Step's Skill.
       required: [id, name, kind]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name: {type: string}
         kind: {$ref: "#/components/schemas/MemberKind"}
     Connector:
@@ -2729,10 +2917,11 @@ components:
         Connector.
       required: [id, from_step_id, name, position]
       properties:
-        id: {type: string}
-        from_step_id: {type: string}
+        id: {type: string, format: id}
+        from_step_id: {type: string, format: id}
         to_step_id:
           type: string
+          format: id
           description: The Step it leads to. Absent when it leads into Done.
         name:
           type: string
@@ -2767,6 +2956,7 @@ components:
       properties:
         id:
           type: string
+          format: id
           description: The id of a Step in the Workflow now; left out for a new one.
         name: {type: string, minLength: 1, maxLength: 50}
         skill:
@@ -2791,6 +2981,7 @@ components:
       properties:
         id:
           type: string
+          format: id
           description: |
             The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
             with the same name, ignoring case, keeps its id; any other is new.
@@ -2815,9 +3006,10 @@ components:
         Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
       required: [id, name, color, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         project_id:
           type: string
+          format: id
           description: The Project that defined it for itself. Absent for the Organisation's.
         name:
           type: string
@@ -2859,7 +3051,7 @@ components:
         instead of merges by the Runner.
       required: [id, name, kind, path, mode, default_branch, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name:
           type: string
           description: Unique on the Install, ignoring case; it names the session's checkout directory.
@@ -2926,11 +3118,12 @@ components:
       type: object
       required: [id, name, kind, builtin, current_version, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         name: {type: string}
         kind: {$ref: "#/components/schemas/SkillKind"}
         base_skill_id:
           type: string
+          format: id
           description: The generic Skill a company Skill builds on.
         builtin:
           type: boolean
@@ -2946,16 +3139,18 @@ components:
       type: object
       required: [skill_id, version, body, published_at]
       properties:
-        skill_id: {type: string}
+        skill_id: {type: string, format: id}
         version:
           type: integer
           format: int64
         body: {type: string}
         proposal_id:
           type: string
+          format: id
           description: The proposal this version was published from. Absent for version 1.
         published_by:
           type: string
+          format: id
           description: The Member who completed the review, or who created the Skill.
         published_at: {type: string, format: date-time}
     SkillDetail:
@@ -2996,14 +3191,14 @@ components:
       type: object
       required: [id, skill_id, task_id, based_on_version, body, author_id, state, created_at]
       properties:
-        id: {type: string}
-        skill_id: {type: string}
-        task_id: {type: string}
+        id: {type: string, format: id}
+        skill_id: {type: string, format: id}
+        task_id: {type: string, format: id}
         based_on_version:
           type: integer
           format: int64
         body: {type: string}
-        author_id: {type: string}
+        author_id: {type: string, format: id}
         state: {$ref: "#/components/schemas/ProposalState"}
         published_version:
           type: integer
@@ -3044,13 +3239,14 @@ components:
         Blocking and are not stored.
       required: [id, key, project_id, kind, title, description, state, owner_id, breakdown, auto_complete, acceptance, blocked, waiting_since, created_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         key:
           type: string
           description: Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence.
-        project_id: {type: string}
+        project_id: {type: string, format: id}
         parent_id:
           type: string
+          format: id
           description: The Parent of a Subtask. Absent on a Task with no Parent.
         kind: {$ref: "#/components/schemas/TaskKind"}
         title: {type: string}
@@ -3058,6 +3254,7 @@ components:
         state: {$ref: "#/components/schemas/TaskState"}
         owner_id:
           type: string
+          format: id
           description: The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's.
         rank:
           type: integer
@@ -3067,6 +3264,7 @@ components:
             Subtask, which sorts by its Parent's.
         step_id:
           type: string
+          format: id
           description: |
             The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
             ended Task.
@@ -3076,16 +3274,18 @@ components:
           description: When the Task reached its Step. Absent when `step_id` is.
         skill_id:
           type: string
+          format: id
           description: |
             The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
             wherever `step_id` is.
         aimed_at_id:
           type: string
+          format: id
           description: The Member the Task is aimed at by name, who may take it at no Step.
         labels:
           type: array
           description: The ids of the Labels it carries, by name. Absent when it carries none.
-          items: {type: string}
+          items: {type: string, format: id}
         breakdown:
           type: boolean
           description: Filed with Break down on; its Breakdown Subtask was filed with it.
@@ -3102,6 +3302,7 @@ components:
             false on a Subtask.
         from_retrospective_task_id:
           type: string
+          format: id
           description: The Retrospective that filed this Task.
         claim:
           $ref: "#/components/schemas/Claim"
@@ -3115,9 +3316,10 @@ components:
         workspace_ids:
           type: array
           description: The Workspaces the Task names, in the order named. Absent when it names none.
-          items: {type: string}
+          items: {type: string, format: id}
         filed_by:
           type: string
+          format: id
           description: |
             The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
             Acceptance, a Retrospective.
@@ -3149,7 +3351,7 @@ components:
       description: A Task named by its id, display key and title.
       required: [id, key, title]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         key:
           type: string
           description: Display key, such as `MAIN-42`.
@@ -3169,14 +3371,16 @@ components:
       type: object
       required: [id, task_id, holder_id, session_id, started_at]
       properties:
-        id: {type: string}
-        task_id: {type: string}
-        holder_id: {type: string}
+        id: {type: string, format: id}
+        task_id: {type: string, format: id}
+        holder_id: {type: string, format: id}
         session_id:
           type: string
+          format: id
           description: The Session that made the Claim.
         skill_id:
           type: string
+          format: id
           description: The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member.
         skill_version:
           type: integer
@@ -3439,11 +3643,12 @@ components:
       type: object
       required: [id, task_id, author_id, body, created_at]
       properties:
-        id: {type: string}
-        task_id: {type: string}
-        author_id: {type: string}
+        id: {type: string, format: id}
+        task_id: {type: string, format: id}
+        author_id: {type: string, format: id}
         skill_id:
           type: string
+          format: id
           description: The Skill the author was working under.
         body: {type: string}
         created_at: {type: string, format: date-time}
@@ -3460,17 +3665,19 @@ components:
         reviewed.
       required: [id, task_id, author_id, outcome, body, created_at]
       properties:
-        id: {type: string}
-        task_id: {type: string}
-        author_id: {type: string}
+        id: {type: string, format: id}
+        task_id: {type: string, format: id}
+        author_id: {type: string, format: id}
         skill_id:
           type: string
+          format: id
           description: The Skill the author was working under.
         outcome: {$ref: "#/components/schemas/ObservationOutcome"}
         body: {type: string}
         created_at: {type: string, format: date-time}
         reviewed_by_task_id:
           type: string
+          format: id
           description: The Retrospective that reviewed it. Absent until reviewed.
         reviewed_at: {type: string, format: date-time}
     ObservationOutcome:
@@ -3496,16 +3703,47 @@ components:
         about a Parent as a whole is attached to the Parent.
       required: [id, task_id, filename, content_type, size, sha256, attached_by, created_at]
       properties:
-        id: {type: string}
-        task_id: {type: string}
+        id: {type: string, format: id}
+        task_id: {type: string, format: id}
         filename: {type: string}
         content_type: {type: string}
         size:
           type: integer
           format: int64
         sha256: {type: string}
-        attached_by: {type: string}
+        attached_by: {type: string, format: id}
         created_at: {type: string, format: date-time}
+
+    # ------------------------------------------------------------ files
+    File:
+      type: object
+      description: |
+        Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+        at `/v1/files/{id}/content`.
+      required: [id, name, content_type, size, sha256, purpose, created_by, created_at]
+      properties:
+        id: {type: string, format: id}
+        name: {type: string}
+        content_type:
+          type: string
+          description: The type the server found by reading the bytes.
+        size:
+          type: integer
+          format: int64
+        sha256: {type: string}
+        purpose: {$ref: "#/components/schemas/FilePurpose"}
+        created_by:
+          type: string
+          format: id
+          description: The Member who uploaded it.
+        created_at: {type: string, format: date-time}
+    FilePurpose:
+      type: string
+      description: |
+        What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+        most 256 pixels square, and only such a file can be set as a Member's avatar.
+      enum: [general, avatar]
+      x-enum-varnames: [FilePurposeGeneral, FilePurposeAvatar]
 
     # ------------------------------------------------------------ activity
     Activity:
@@ -3519,11 +3757,13 @@ components:
         at: {type: string, format: date-time}
         actor_id:
           type: string
+          format: id
           description: The Member who acted. Absent when Darkory acted, as when recording a lapse.
         kind: {$ref: "#/components/schemas/ActivityKind"}
         subject_type: {$ref: "#/components/schemas/SubjectType"}
         subject_id:
           type: string
+          format: id
           description: The id of the record the entry is about, of `subject_type`.
         payload:
           type: object
@@ -3595,12 +3835,14 @@ components:
         - session.closed
         - login_link.issued
         - login_link.redeemed
+        - file.uploaded
+        - file.deleted
     SubjectType:
       type: string
       description: |
         The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
         whole; its `subject_id` is the Project's id.
-      enum: [task, workflow, label, skill, member, project, token, session, login_link, workspace]
+      enum: [task, workflow, label, skill, member, project, token, session, login_link, workspace, file]
     ActivityPage:
       type: object
       required: [items, last_seq]
@@ -3625,12 +3867,14 @@ components:
         record: it lives as long as the session.
       required: [task_id, member_id, session_id, host, started_at, state, state_since, log_path]
       properties:
-        task_id: {type: string}
+        task_id: {type: string, format: id}
         member_id:
           type: string
+          format: id
           description: The agent whose session it is.
         session_id:
           type: string
+          format: id
           description: The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
         host:
           type: string
@@ -3721,10 +3965,11 @@ components:
         A saved set of filters, sort and display for a list, kept by one Member for themselves.
       required: [id, entity, name, filters, created_at, updated_at]
       properties:
-        id: {type: string}
+        id: {type: string, format: id}
         entity: {$ref: "#/components/schemas/ViewEntity"}
         project_id:
           type: string
+          format: id
           description: The Project whose list it is; absent for a list across Projects.
         name: {type: string}
         filters:

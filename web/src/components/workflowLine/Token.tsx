@@ -56,6 +56,7 @@ export function Token({
       {tag && (
         <span
           data-tag
+          data-box="tag"
           className={cn(
             "pointer-events-none absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 text-xs font-medium whitespace-nowrap",
             tagSide === "left" ? "right-full mr-1" : "left-full ml-1 flex-row-reverse",
@@ -67,6 +68,7 @@ export function Token({
       <button
         type="button"
         data-task={task.key}
+        data-box="token"
         data-state={state}
         data-now={picked && !past ? "" : undefined}
         data-pulse={pulse && pulse !== "filed" ? pulse : undefined}

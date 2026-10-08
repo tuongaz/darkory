@@ -60,6 +60,22 @@ describe("MemberCard", () => {
     expect(api.calls.filter((x) => x.path === `/v1/members/${builder.id}`)).toHaveLength(1);
   });
 
+  it("shows the Member's Avatar in the mark and in the card's large mark", async () => {
+    const withFace = { ...builderAgent, avatar_file_id: "f5" };
+    mockApi({
+      ...signedIn(ada),
+      "GET /v1/members": { items: [ada, bob, withFace] },
+      "GET /v1/members/:member": memberDetail(withFace, { skills: [engineer] }),
+    });
+    wrap(<MemberAvatar member={withFace} />);
+    expect(screen.getByRole("img", { name: /^builder \(agent\)$/ })).toHaveAttribute("data-avatar", "image");
+    const c = await openCard(/^builder \(agent\)$/);
+    await c.findByText("engineer");
+    const big = c.getByRole("img", { name: /^builder \(agent\)/ });
+    expect(big).toHaveAttribute("data-avatar", "image");
+    expect(big.querySelector("img")).toHaveAttribute("src", "/v1/files/f5/content");
+  });
+
   it("shows a human's reports and Admin, and no profile link for a non-admin", async () => {
     mockApi({
       ...signedIn(bob),

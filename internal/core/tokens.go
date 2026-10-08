@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -203,7 +204,7 @@ ORDER BY t.id`, t.caller.OrgID, arg)
 // the Activity stream, a waiting `next` — asks this before it acts, so a revocation, a close or a
 // deactivation stops it at once.
 func (s *Service) CallerValid(ctx context.Context, c *auth.Caller) (bool, error) {
-	args := s.browser.Args(s.clock.Now())
+	args := s.limits.Args(s.clock.Now())
 	args["org"], args["session"], args["member"] = c.OrgID, c.SessionID, c.MemberID
 	q, qa := store.Bind(`SELECT COUNT(*) FROM sessions s JOIN members m ON m.id = s.member_id LEFT JOIN tokens tk ON tk.id = s.token_id
 WHERE s.org_id = @org AND s.id = @session AND s.member_id = @member AND s.closed_at IS NULL
@@ -231,54 +232,135 @@ claim_skill_id = NULL, claim_timeout_ms = NULL, claim_expires_at = NULL`
 
 const sessionCols = `s.chosen_id, s.member_id, s.kind, s.token_id, s.created_at, s.last_seen_at, s.closed_at`
 
-func scanSession(row interface{ Scan(...any) error }) (Session, error) {
+// scanSession scans sessionCols, then more into more.
+func scanSession(row interface{ Scan(...any) error }, more ...any) (Session, error) {
 	var s Session
 	var token sql.NullString
 	var created, seen int64
 	var closed sql.NullInt64
-	err := row.Scan(&s.ID, &s.MemberID, &s.Kind, &token, &created, &seen, &closed)
+	err := row.Scan(append([]any{&s.ID, &s.MemberID, &s.Kind, &token, &created, &seen, &closed}, more...)...)
 	s.TokenID, s.StartedAt, s.LastSeenAt, s.ClosedAt = nullString(token), fromMS(created), fromMS(seen), nullTime(closed)
+	// A closed Session ended when it was closed; one that ended on its own says so in a list.
+	s.EndedAt = s.ClosedAt
 	return s, err
 }
 
 // expiry fills in when an open browser Session expires unless used.
 func (s *Service) expiry(sess *Session) {
-	if sess.Kind == "browser" && sess.ClosedAt == nil {
-		sess.ExpiresAt = ptr(s.browser.ExpiresAt(sess.StartedAt, sess.LastSeenAt).UTC())
+	if sess.Kind == "browser" && sess.EndedAt == nil {
+		sess.ExpiresAt = ptr(s.limits.ExpiresAt(sess.StartedAt, sess.LastSeenAt).UTC())
 	}
 }
 
-// ListSessions lists a Member's open Sessions that have not expired, most recently seen first. A
+// openSessionSQL is the condition, over a Session aliased s, that it is open: not closed, and not
+// ended on its own (auth.LiveSessionSQL).
+var openSessionSQL = `(s.closed_at IS NULL AND ` + auth.LiveSessionSQL + `)`
+
+// endedAtSQL is when a Session that is not open ended: when it was closed; else when a browser
+// Session expired, or a token Session reached the idle limit. It binds @idle_ms, @lifetime_ms and
+// @token_idle_ms (sessionArgs).
+const endedAtSQL = `COALESCE(s.closed_at, CASE WHEN s.kind = 'browser' THEN
+  CASE WHEN s.last_seen_at + @idle_ms < s.created_at + @lifetime_ms THEN s.last_seen_at + @idle_ms ELSE s.created_at + @lifetime_ms END
+  ELSE s.last_seen_at + @token_idle_ms END)`
+
+// sessionArgs binds openSessionSQL and endedAtSQL at now.
+func (s *Service) sessionArgs(now time.Time) map[string]any {
+	args := s.limits.Args(now)
+	args["idle_ms"], args["lifetime_ms"], args["token_idle_ms"] = s.limits.Idle.Milliseconds(), s.limits.Lifetime.Milliseconds(), s.limits.TokenIdle.Milliseconds()
+	return args
+}
+
+// ListSessions lists a Member's open Sessions, most recently seen first, or with state "ended"
+// those that have ended, most recently ended first; either way with how many of each there are. A
 // Member sees their own; an admin anyone's.
-func (s *Service) ListSessions(ctx context.Context, c *auth.Caller, memberRef string, limit int, cursor string) (Page[Session], error) {
+func (s *Service) ListSessions(ctx context.Context, c *auth.Caller, memberRef, state string, limit int, cursor string) (SessionPage, error) {
 	member, err := resolveMember(ctx, s.store, c.OrgID, memberRef)
 	if err != nil {
-		return Page[Session]{}, err
+		return SessionPage{}, err
 	}
 	if member != c.MemberID && !c.Admin {
-		return Page[Session]{}, refuse(CodeForbidden, "only an admin may list another Member's Sessions")
+		return SessionPage{}, refuse(CodeForbidden, "only an admin may list another Member's Sessions")
+	}
+	which, order := openSessionSQL, `s.last_seen_at DESC, s.id`
+	switch state {
+	case "", "open":
+	case "ended":
+		which, order = `NOT `+openSessionSQL, endedAtSQL+` DESC, s.id`
+	default:
+		return SessionPage{}, refuse(CodeInvalid, "state is open or ended, not %q", state)
 	}
 	offset, err := decodeCursor(cursor)
 	if err != nil {
-		return Page[Session]{}, err
+		return SessionPage{}, err
 	}
 	n := limitOf(limit)
-	args := s.browser.Args(s.clock.Now())
+	args := s.sessionArgs(s.clock.Now())
 	args["org"], args["member"], args["limit"], args["offset"] = c.OrgID, member, n+1, offset
-	q, qa := store.Bind(`SELECT `+sessionCols+` FROM sessions s
-WHERE s.org_id = @org AND s.member_id = @member AND s.closed_at IS NULL AND `+auth.LiveSessionSQL+`
-ORDER BY s.last_seen_at DESC, s.id LIMIT @limit OFFSET @offset`, args)
-	items, err := collect(ctx, s.store, scanSession, q, qa...)
+	var out SessionPage
+	q, qa := store.Bind(`SELECT COALESCE(SUM(CASE WHEN `+openSessionSQL+` THEN 1 ELSE 0 END), 0), COUNT(*) FROM sessions s
+WHERE s.org_id = @org AND s.member_id = @member`, args)
+	if err := s.store.QueryRow(ctx, q, qa...).Scan(&out.Open, &out.Ended); err != nil {
+		return SessionPage{}, err
+	}
+	out.Ended -= out.Open
+	q, qa = store.Bind(`SELECT `+sessionCols+`, CASE WHEN `+openSessionSQL+` THEN NULL ELSE `+endedAtSQL+` END FROM sessions s
+WHERE s.org_id = @org AND s.member_id = @member AND `+which+`
+ORDER BY `+order+` LIMIT @limit OFFSET @offset`, args)
+	items, err := collect(ctx, s.store, func(row interface{ Scan(...any) error }) (Session, error) {
+		var ended sql.NullInt64
+		sess, err := scanSession(row, &ended)
+		sess.EndedAt = nullTime(ended)
+		return sess, err
+	}, q, qa...)
 	if err != nil {
-		return Page[Session]{}, err
+		return SessionPage{}, err
 	}
 	for i := range items {
 		s.expiry(&items[i])
 	}
-	return page(items, offset, n), nil
+	out.Page = page(items, offset, n)
+	return out, nil
+}
+
+// SweepSessions closes the token Sessions that have gone idle: no request through them for the
+// idle limit, and no live Claim bound to them. They have ended already — every read treats them so
+// — and closing them only keeps the record tidy, as the lazy close in auth does when an idle
+// Session's id comes back. Like starting a Session, it records no Activity: no Claim ends with it.
+func (s *Service) SweepSessions(ctx context.Context) (int, error) {
+	now := s.clock.Now()
+	args := s.limits.Args(now)
+	// A read first, so a sweep that finds nothing — nearly every one — takes no write lock.
+	q, qa := store.Bind(`SELECT COUNT(*) FROM sessions WHERE closed_at IS NULL AND `+auth.IdleTokenSQL, args)
+	var idle int
+	if err := s.store.QueryRow(ctx, q, qa...).Scan(&idle); err != nil || idle == 0 {
+		return 0, err
+	}
+	q, qa = store.Bind(`UPDATE sessions SET closed_at = @now WHERE closed_at IS NULL AND `+auth.IdleTokenSQL, args)
+	var n int64
+	err := s.store.WriteNoSeq(ctx, func(tx store.Tx) error {
+		res, err := tx.Exec(ctx, q, qa...)
+		if err != nil {
+			return err
+		}
+		n, err = res.RowsAffected()
+		return err
+	})
+	return int(n), err
+}
+
+// TouchSession records that a long request — an Activity stream — is still coming through the
+// caller's Session, at most once a minute like a new request would, so a Session kept busy only
+// by a stream never goes idle.
+func (s *Service) TouchSession(ctx context.Context, c *auth.Caller) error {
+	now := s.clock.Now()
+	return s.store.WriteBatchNoSeq(ctx, store.Stmt{
+		SQL:  `UPDATE sessions SET last_seen_at = $1 WHERE org_id = $2 AND id = $3 AND closed_at IS NULL AND last_seen_at <= $4`,
+		Args: []any{now.UnixMilli(), c.OrgID, c.SessionID, now.Add(-auth.TouchEvery).UnixMilli()},
+	})
 }
 
 func getSession(ctx context.Context, r store.Reader, orgID, id string) (Session, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	s, err := scanSession(r.QueryRow(ctx, `SELECT `+sessionCols+` FROM sessions s WHERE s.org_id = $1 AND s.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, refuse(CodeNotFound, "no Session %s", id)
@@ -411,9 +493,11 @@ WHERE l.code_hash = $1 AND m.deactivated_at IS NULL`, auth.Hash(code)).
 		if n, _ := res.RowsAffected(); n == 0 {
 			return nil, refuse(CodeNotFound, "this login link is unknown, used or expired")
 		}
+		// A browser Session is known by its own id, a UUID like any, so it is shown short (ADR
+		// 0017); its kind says it is a browser's. Those made before were named browser-<UUID>.
 		sessionID := newID()
 		if _, err := t.Exec(ctx, `INSERT INTO sessions (id, org_id, member_id, chosen_id, kind, cookie_hash, created_at, last_seen_at)
-VALUES ($1, $2, $3, $4, 'browser', $5, $6, $6)`, sessionID, orgID, memberID, "browser-"+sessionID, hash, ms(t.now)); err != nil {
+VALUES ($1, $2, $3, $4, 'browser', $5, $6, $6)`, sessionID, orgID, memberID, sessionID, hash, ms(t.now)); err != nil {
 			return nil, err
 		}
 		return nil, t.recordByCaller("login_link.redeemed", linkID, map[string]any{"member_id": memberID})

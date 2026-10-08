@@ -5,6 +5,7 @@ import { LiveActivity, LiveActivityContext } from "@/api/live";
 import { useMe } from "@/api/queries";
 import { AppRoutes, DevScreens } from "@/app/routes";
 import { SignedOut } from "@/app/SignedOut";
+import { AvatarDirectory } from "@/components/avatarDirectory";
 import { Refusal } from "@/components/Refusal";
 import { MeContext } from "@/me";
 import { newQueryClient } from "@/queryClient";
@@ -48,7 +49,9 @@ export function Root() {
   }
   return (
     <MeContext.Provider value={me.data}>
-      <AppRoutes />
+      <AvatarDirectory>
+        <AppRoutes />
+      </AvatarDirectory>
     </MeContext.Provider>
   );
 }

@@ -250,9 +250,9 @@ func refusalOut(refusal *core.Error) (int, []byte, error) {
 	if !ok {
 		status = http.StatusConflict
 	}
-	out := gen.Error{Code: gen.ErrorCode(refusal.Code), Message: refusal.Message}
+	out := gen.Error{Code: gen.ErrorCode(refusal.Code), Message: shortIDsInText(refusal.Message)}
 	if len(refusal.Details) > 0 {
-		d := refusal.Details
+		d := shortIDs(refusal.Details)
 		out.Details = &d
 	}
 	b, err := json.Marshal(out)

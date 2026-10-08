@@ -81,7 +81,7 @@ func (s *Server) ProposeSkillVersion(w http.ResponseWriter, r *http.Request, tas
 }
 
 func (s *Server) GetSkillProposal(w http.ResponseWriter, r *http.Request, proposal gen.ProposalID) {
-	p, err := s.core.GetSkillProposal(r.Context(), caller(r), proposal)
+	p, err := s.core.GetSkillProposal(r.Context(), caller(r), string(proposal))
 	s.respond(w, r, as(http.StatusOK, func(p core.SkillProposal) any { return proposalOut(p) }), p, err)
 }
 

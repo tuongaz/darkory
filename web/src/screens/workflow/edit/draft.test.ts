@@ -6,10 +6,14 @@ import {
   countChanges,
   deadEndsAfterDelete,
   deleteStep,
+  describeChanges,
   firstOutcome,
   fromRecord,
   groupsOf,
+  inbound,
   insertStep,
+  makeMain,
+  outcomes,
   problem,
   removeOutcome,
   renameOutcome,
@@ -18,7 +22,6 @@ import {
   setSkill,
   setTarget,
   tasksAt,
-  wasTarget,
 } from "./draft";
 
 const skillMap = new Map(skills.map((s) => [s.id, s]));
@@ -54,54 +57,84 @@ describe("the groups follow the line's branch", () => {
 });
 
 describe("inserting a Step", () => {
-  it("re-points the Step before it, and leads on with pass to where that went", () => {
-    const { draft, id } = insertStep(d0(), step.build, groups);
+  it("places a hold with no outcome after the Step, and wires nothing", () => {
+    const { draft, id } = insertStep(d0(), step.build, "main");
     const wf = draft.wf;
     expect(wf.steps.map((s) => s.position)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(wf.steps.find((s) => s.id === id)).toMatchObject({ position: 4, name: "" });
     expect(wf.steps.find((s) => s.id === id)!.skill_id).toBeUndefined();
-    expect(firstOutcome(wf, step.build)).toMatchObject({ name: "pass", to_step_id: id });
-    expect(firstOutcome(wf, id)).toMatchObject({ name: "pass", to_step_id: step.review });
-    expect(wasTarget(base(), firstOutcome(wf, step.build)!)).toEqual({ to: step.review });
-    expect(countChanges(base(), wf)).toBe(2);
+    expect(firstOutcome(wf, id)).toBeUndefined();
+    expect(firstOutcome(wf, step.build)).toMatchObject({ name: "pass", to_step_id: step.review });
+    expect(wf.connectors).toEqual(base().connectors);
+    expect(describeChanges(base(), wf)).toEqual([{ kind: "Added", text: "New Step" }]);
   });
 
-  it("after a Step with no outcome, leads on to the next Step of its group", () => {
-    const { draft, id } = insertStep(d0(), step.backlog, groups);
-    expect(firstOutcome(draft.wf, step.backlog)).toBeUndefined();
-    expect(firstOutcome(draft.wf, id)).toMatchObject({ to_step_id: step.plan });
+  it("lists a new hold in the group of the Step it follows, until its Skill places it", () => {
+    const { draft, id } = insertStep(d0(), step.skillReview, "after");
+    const listed = (d: typeof draft) => groupsOf(d.wf, skillMap, d.placed)(d.wf.steps.find((s) => s.id === id)!);
+    expect(listed(draft)).toBe("after");
+    expect(listed(setSkill(draft, id, { id: engineer.id }))).toBe("main");
   });
 
-  it("after the last main Step into Done skips the Steps after a Parent", () => {
-    const wf = base();
-    wf.connectors = wf.connectors.filter((c) => c.from_step_id !== step.review);
-    const { draft, id } = insertStep(fromRecord(wf), step.review, groups);
-    expect(firstOutcome(draft.wf, id)!.to_step_id).toBeUndefined();
-  });
-
-  it("sends the new Step by name and its outcomes from it by name", () => {
-    const { draft, id } = insertStep(d0(), step.review, groups);
+  it("sends the new Step by name, with no outcome", () => {
+    const { draft, id } = insertStep(d0(), step.review, "main");
     const body = toBody(renameStep(draft, id, "Security review").wf);
     expect(body.steps[4]).toEqual({ name: "Security review", position: 5 });
-    expect(body.connectors.filter((c) => c.from === "Security review")).toEqual([{ from: "Security review", name: "pass", position: 1 }]);
-    expect(body.connectors.find((c) => c.id === `${step.review}-c3`)).toMatchObject({ to: "Security review" });
+    expect(body.connectors.filter((c) => c.from === "Security review")).toEqual([]);
+  });
+});
+
+describe("making an outcome the main way on", () => {
+  it("puts it first and keeps the others in order after it; counts it once", () => {
+    const d = makeMain(d0(), `${step.review}-c4`);
+    expect(outcomes(d.wf, step.review).map((c) => [c.name, c.position])).toEqual([
+      ["needs changes", 1],
+      ["pass", 2],
+    ]);
+    expect(describeChanges(base(), d.wf)).toEqual([{ kind: "Main", text: "Review · needs changes → Build" }]);
+    expect(makeMain(d, `${step.review}-c4`)).toBe(d);
+    expect(countChanges(base(), makeMain(d, `${step.review}-c3`).wf)).toBe(0);
   });
 });
 
 describe("deleting a Step", () => {
-  it("leads a first outcome into it on where its own first led; drops the others into it", () => {
+  it("removes every outcome into it unless asked to lead it elsewhere, and counts each one", () => {
+    // D8: Build's pass into Review was re-pointed, and other outcomes into it dropped, without a word.
     const d = deleteStep(d0(), step.review);
-    expect(firstOutcome(d.wf, step.build)).toMatchObject({ id: `${step.build}-c2` });
-    expect(firstOutcome(d.wf, step.build)!.to_step_id).toBeUndefined();
     expect(d.wf.connectors.some((c) => c.to_step_id === step.review || c.from_step_id === step.review)).toBe(false);
-    expect(countChanges(base(), d.wf)).toBe(2);
+    expect(firstOutcome(d.wf, step.build)).toBeUndefined();
+    expect(describeChanges(base(), d.wf)).toEqual([
+      { kind: "Deleted", text: "Review" },
+      { kind: "Removed", text: "Build · pass → Review" },
+    ]);
   });
 
-  it("drops a first outcome into a Step that had none, which strands its Step", () => {
+  it("leads an outcome into it where it is asked to, and counts that as the change", () => {
+    const d = deleteStep(d0(), step.build, undefined, { [`${step.review}-c4`]: { to: step.plan } });
+    expect(d.wf.connectors.find((c) => c.id === `${step.review}-c4`)).toMatchObject({ to_step_id: step.plan, position: 2 });
+    expect(describeChanges(base(), d.wf)).toEqual([
+      { kind: "Deleted", text: "Build" },
+      { kind: "Re-pointed", text: "Review · needs changes → Plan (was Build)" },
+    ]);
+    // Into Done.
+    expect(deleteStep(d0(), step.build, undefined, { [`${step.review}-c4`]: { to: undefined } }).wf.connectors.find((c) => c.id === `${step.review}-c4`)!.to_step_id).toBeUndefined();
+  });
+
+  it("lists the outcomes into it in the order of their Steps", () => {
     const wf = base();
-    wf.connectors = wf.connectors.filter((c) => c.from_step_id !== step.review);
-    expect(deadEndsAfterDelete(fromRecord(wf), step.review).map((s) => s.name)).toEqual(["Build"]);
-    expect(deleteStep(fromRecord(wf), step.review).wf.connectors.some((c) => c.from_step_id === step.build)).toBe(false);
+    wf.connectors.push({ id: "c-plan-build", from_step_id: step.plan, to_step_id: step.build, name: "ready", position: 2 });
+    expect(inbound(wf, step.build).map((c) => c.id)).toEqual(["c-plan-build", `${step.review}-c4`]);
+  });
+
+  it("says which Steps it leaves with no way out", () => {
+    expect(deadEndsAfterDelete(d0(), step.review).map((s) => s.name)).toEqual(["Build"]);
+    expect(deadEndsAfterDelete(d0(), step.review, { [`${step.build}-c2`]: { to: undefined } })).toEqual([]);
+  });
+
+  it("says where the Tasks of a deleted Step move", () => {
+    const record = workflow(undefined, { review: { tasks: 2 } });
+    const d = deleteStep(fromRecord(record), step.review, step.build);
+    expect(describeChanges(record, d.wf, d.moves)[0]).toEqual({ kind: "Deleted", text: "Review · its 2 Tasks move to Build" });
   });
 
   it("sends Tasks moved to a Step deleted after to where that Step's go", () => {
@@ -115,7 +148,7 @@ describe("deleting a Step", () => {
   });
 
   it("deletes a new Step without a move, and counts nothing left", () => {
-    const { draft, id } = insertStep(d0(), step.build, groups);
+    const { draft, id } = insertStep(d0(), step.build, "main");
     const d = deleteStep(draft, id);
     expect(d.moves).toEqual({});
     expect(firstOutcome(d.wf, step.build)!.to_step_id).toBe(step.review);
@@ -163,7 +196,7 @@ describe("outcomes and order", () => {
     expect(firstOutcome(d.wf, step.review)).toMatchObject({ name: "needs changes", position: 1 });
   });
 
-  it("counts a target put back as no change", () => {
+  it("counts a target put back as no change, and a Step moved and moved back as none", () => {
     const d = setTarget(setTarget(d0(), `${step.review}-c3`, step.plan), `${step.review}-c3`, undefined);
     expect(countChanges(base(), d.wf)).toBe(0);
   });
@@ -175,5 +208,6 @@ describe("outcomes and order", () => {
     d = reorderStep(d, step.backlog, 1, groups);
     expect(d.wf.steps.map((s) => s.name)).toEqual(["Plan", "Build", "Backlog", "Review", "Retro", "Skill review"]);
     expect(countChanges(base(), d.wf)).toBe(1);
+    expect(describeChanges(base(), d.wf)).toEqual([{ kind: "Moved", text: "Backlog" }]);
   });
 });

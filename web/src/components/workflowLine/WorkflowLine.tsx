@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { HorizontalLine } from "./Horizontal";
-import { densityFor, lineTopology, type Density, type Loop } from "./layout";
+import { densityFor, horizontal, lineTopology, type Density, type Loop } from "./layout";
+import { pageMeasure } from "./measure";
 import type { LineFacts, LineTask } from "./model";
 import { VerticalLine } from "./Vertical";
 
@@ -69,7 +70,8 @@ const nobody = { id: "", takeable: new Set<string>() };
  * back arced under it, forward skips dashed over it, the Steps Darkory files a Parent's own
  * Subtasks at on a branch "After a Parent"; every Task a token at its Step (beads past ~9 Steps or
  * narrow), a pickup tagged "now", a move travelling its Connector. Selecting a token draws its
- * Blocking chain and says what must end first. Below 640 px the line runs down the page.
+ * Blocking chain and says what must end first. Below 640 px, or wherever its heads
+ * and words could not all stand clear across the width, the line runs down the page.
  */
 export function WorkflowLine(props: WorkflowLineProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -87,8 +89,32 @@ export function WorkflowLine(props: WorkflowLineProps) {
   // Laid out before it is measured (and under a test's DOM) at the drawing's own width.
   const w = width || 1198;
   const topology = useMemo(() => lineTopology(props.workflow), [props.workflow]);
-  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && width < (props.verticalBelow ?? VERTICAL_BELOW));
-  const density: Density = props.density && props.density !== "auto" ? props.density : densityFor(topology, w);
+  // The words are measured in the page's fonts, again once they have loaded.
+  const [fonts, setFonts] = useState(0);
+  useEffect(() => {
+    let live = true;
+    document.fonts?.ready.then(() => live && setFonts((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const measure = useMemo(() => pageMeasure(fonts > 0), [fonts]);
+  // Tokens where they fit, else beads; and where even beads' heads and words would meet, the line
+  // runs down the page rather than cramming them.
+  const compact = !!(props.compactHeads || props.fold);
+  const fixed = props.density && props.density !== "auto" ? props.density : undefined;
+  const { density, fits } = useMemo(() => {
+    const fitsAt = (d: Density) => horizontal(topology, { width: w, density: d, heads: compact ? "compact" : d, column: 0, noBranch: true, measure }).fits;
+    const d = fixed ?? densityFor(topology, w, measure);
+    if (fitsAt(d)) return { density: d, fits: true };
+    if (!fixed && d === "tokens" && fitsAt("beads")) return { density: "beads" as const, fits: true };
+    return { density: d, fits: false };
+  }, [topology, w, measure, fixed, compact]);
+  // The drawing itself may find its heads and words meet once its Tasks are in (a name line
+  // carrying tokens): then it too runs down the page, at that width.
+  const [tight, setTight] = useState<{ width: number; topology: unknown } | null>(null);
+  const tooTight = !!tight && tight.width === w && tight.topology === topology;
+  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && (width < (props.verticalBelow ?? VERTICAL_BELOW) || !fits || tooTight));
   const flow = props.flow ?? quiet;
   const all = props.all ?? props.tasks;
   const me = props.me ?? nobody;
@@ -165,6 +191,8 @@ export function WorkflowLine(props: WorkflowLineProps) {
           litLoop={litLoop}
           highlight={props.highlight}
           noBranch={props.noBranch}
+          measure={measure}
+          onTight={() => setTight({ width: w, topology })}
         />
       )}
       {heavy && !vertical && <LoopsList loops={topology.loops} onHover={setLitLoop} />}

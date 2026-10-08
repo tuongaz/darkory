@@ -98,10 +98,10 @@ const task = (n: number, extra: object = {}) => ({
   ...extra,
 });
 const retro = task(31, { kind: "retrospective", title: "Retrospective: Checkout redesign", step_id: "st-retro", skill_id: "s-retro" });
-const heldSession = "0199a1f2-7c3e-7b1a-9d2e-5f4c3b2a1d0e";
+const heldSession = "1CThHfE2e5YpACtqBZbvM3";
 const held = task(42, {
   title: "Cart drawer keeps focus",
-  claim: { id: "c-42", task_id: "k-42", holder_id: "m-builder", session_id: "0199a1f2-7c3e-7b1a-9d2e-5f4c3b2a1d0e", started_at: ago(1), expires_at: soon(12), heartbeat_timeout_seconds: 900, model_label: "claude-sonnet-5-5" },
+  claim: { id: "c-42", task_id: "k-42", holder_id: "m-builder", session_id: "1CThHfE2e5YpACtqBZbvM3", started_at: ago(1), expires_at: soon(12), heartbeat_timeout_seconds: 900, model_label: "claude-sonnet-5-5" },
 });
 const tasks = [task(12, { skill_id: "s-web-engineer" }), held, retro];
 
@@ -143,7 +143,7 @@ const tokens = [
 const sessions = [
   { id: "browser-ada-1", member_id: "m-ada", kind: "browser", started_at: ago(5), last_seen_at: ago(0.1) },
   { id: "browser-ada-2", member_id: "m-ada", kind: "browser", started_at: ago(50), last_seen_at: ago(20) },
-  { id: "0199a1f2-7c3e-7b1a-9d2e-5f4c3b2a1d0e", member_id: "m-builder", kind: "token", token_id: "t-2", started_at: ago(1), last_seen_at: ago(0.05) },
+  { id: "1CThHfE2e5YpACtqBZbvM3", member_id: "m-builder", kind: "token", token_id: "t-2", started_at: ago(1), last_seen_at: ago(0.05) },
 ];
 
 const me = {
@@ -255,7 +255,7 @@ function watchErrors(page: Page): string[] {
 
 const pages: { slug: string; path: string; ready: (page: Page) => Promise<void> }[] = [
   { slug: "shell-inbox", path: "/inbox", ready: async (p) => void (await p.getByRole("navigation", { name: "Breadcrumb" }).waitFor({ state: "attached" })) },
-  { slug: "settings-account", path: "/settings/account", ready: async (p) => void (await p.getByRole("listitem", { name: "This browser" }).waitFor({ state: "attached" })) },
+  { slug: "settings-account", path: "/settings/account", ready: async (p) => void (await p.getByRole("row", { name: "This browser" }).waitFor({ state: "attached" })) },
   { slug: "settings-members", path: "/settings/organisation/members", ready: async (p) => void (await p.getByRole("row", { name: "priya.r" }).getByText("Bookkeeping").waitFor({ state: "attached" })) },
   { slug: "settings-member", path: "/settings/organisation/members/m-bob", ready: async (p) => void (await p.getByRole("heading", { name: "bob" }).waitFor({ state: "attached" })) },
   { slug: "settings-agents", path: "/settings/organisation/agents", ready: async (p) => void (await p.getByRole("table", { name: "Agents" }).waitFor({ state: "attached" })) },

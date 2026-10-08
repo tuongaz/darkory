@@ -52,7 +52,7 @@ for (const scheme of ["light", "dark"] as const) {
       await noSidewaysScroll(page);
       await shot(page, `live-text-${tag}`);
 
-      // Editing: the list with the line above (on a phone, the line behind its toggle).
+      // Editing: the list beside the picked Step's panel, the line above (on a phone, the line behind its toggle).
       await page.goto("/settings/projects/WEB/workflow");
       await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
       await page.waitForTimeout(300);
@@ -63,8 +63,10 @@ for (const scheme of ["light", "dark"] as const) {
         await shot(page, `edit-line-${tag}`);
       }
 
-      // F5a: a Step inserted after Review, named, its Skill picker open on a Skill that does not exist.
-      await page.getByRole("button", { name: "Add a Step after Review" }).click();
+      // F5a: a Step added after Review from its panel's menu, named, its Skill picker open on a Skill that does not exist.
+      await page.getByRole("list", { name: "Steps" }).getByRole("button", { name: /^\d+\. Review$/ }).click();
+      await page.getByRole("button", { name: "More for Review" }).click();
+      await page.getByRole("menuitem", { name: "Add Step after Review" }).click();
       await page.getByRole("textbox", { name: "Name of Step 6" }).fill("Security review");
       await page.getByRole("combobox", { name: "Skill of Security review" }).click();
       await page.getByPlaceholder("Find or name a Skill").fill("security");
@@ -88,7 +90,8 @@ for (const scheme of ["light", "dark"] as const) {
       await shot(page, `edit-outcome-${tag}`);
 
       // A refusal in words: a Step with no name.
-      await page.getByRole("button", { name: "Add a Step after Build" }).click();
+      await page.getByRole("button", { name: "More for Security review" }).click();
+      await page.getByRole("menuitem", { name: "Add Step after Security review" }).click();
       await page.getByRole("button", { name: "Save" }).click();
       await expect(page.getByRole("alert")).toContainText("A Step needs a name.");
       await shot(page, `edit-refused-${tag}`);
@@ -119,16 +122,17 @@ test("editing: nothing is sent until Save; then the new Skill, then one PUT", as
   await expect(name).toBeFocused();
   await name.fill("Test");
   await expect(page.getByText("Editing · 1 change")).toBeVisible();
-  // Alt+↓ moves it after Review, and keeps the focus.
-  await name.press("Alt+ArrowDown");
+  // Alt+↓ on its row moves it after Review, and keeps the focus.
+  await page.getByRole("button", { name: "4. Test" }).press("Alt+ArrowDown");
   await expect(page.getByRole("listitem", { name: "5. Test" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Name of Step 5" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "5. Test" })).toBeFocused();
   await page.getByRole("combobox", { name: "Skill of Test" }).click();
   await page.getByPlaceholder("Find or name a Skill").fill("testing");
   await page.getByRole("option", { name: /New Skill “testing”/ }).click();
   await page.getByRole("dialog").getByRole("textbox", { name: "Text" }).fill("Test it.");
   await page.getByRole("dialog").getByRole("button", { name: "Use this Skill" }).click();
   // Its grip dragged onto Build's row: it lands in Build's place.
+  await page.getByRole("listitem", { name: "5. Test" }).hover();
   const grip = await page.getByRole("button", { name: /^Reorder Test/ }).boundingBox();
   const build = await page.getByRole("listitem", { name: "3. Build" }).boundingBox();
   await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);

@@ -164,10 +164,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List a Member's open Sessions
-         * @description The Member's Sessions that are open and, for a browser Session, not yet expired, most
-         *     recently seen first. A Member may list their own; an admin anyone's. Close one with
-         *     `closeSession` and `member`, or close them all with `deactivateMember`.
+         * List a Member's Sessions
+         * @description The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+         *     ended instead, most recently ended first. A Session ends when it is closed, when its token
+         *     is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+         *     token Session when no request has come through it for the Install's idle limit (15
+         *     minutes unless set), but never while a Claim bound to it is live. Every page says how
+         *     many of the Member's Sessions are open and how many have ended. A Member may list their
+         *     own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+         *     `deactivateMember`.
          */
         get: operations["listSessions"];
         put?: never;
@@ -260,8 +265,16 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a Member's name, email or admin mark (admin)
-         * @description Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+         * Change a Member's name, email, admin mark or avatar
+         * @description An admin changes any of them. A human Member may change their own avatar, and only that;
+         *     an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+         *     Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+         *     `""` removes the avatar. The avatar file a Member stops showing is
+         *     deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+         *     for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+         *     file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+         *     `conflict` (name or email taken; removing the last
+         *     admin).
          */
         patch: operations["updateMember"];
         trace?: never;
@@ -1391,6 +1404,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file the Organisation keeps, such as an avatar
+         * @description The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+         *     server finds the file's type by reading its bytes and keeps that, never the
+         *     `Content-Type` the request claims. Any Member may upload; the file belongs to the
+         *     caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+         *     unless set otherwise.
+         *
+         *     With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+         *     (never SVG or HTML, which can carry script); the server keeps the largest square in its
+         *     middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+         *     metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+         *     Errors: `too_large`, `invalid` (not an image an avatar can be).
+         */
+        post: operations["uploadFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/files/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a file's record
+         * @description Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+         */
+        get: operations["getFile"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a file (its uploader, or an admin)
+         * @description Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+         *     `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+         */
+        delete: operations["deleteFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/files/{file}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a file's bytes
+         * @description Any Member of the file's Organisation. Served with the type the server found in the
+         *     bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+         *     so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+         *     change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+         *     a year; `If-None-Match` with that ETag answers 304.
+         */
+        get: operations["downloadFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/activity": {
         parameters: {
             query?: never;
@@ -1596,6 +1688,16 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * Format: id
+         * @description An id as a response writes it, and what `format: id` means wherever it appears: a UUID in
+         *     its short form, 22 characters of base58 (Bitcoin alphabet, in ASCII order), the UUID's
+         *     128 bits as one number left-padded with `1`. A request may send either this or the
+         *     UUID's canonical 36-character text. The one exception is a Session's id, which its
+         *     running copy chose: written short when it is a UUID, unchanged otherwise.
+         * @example 1CTuJUrXDEC71Dv55PHKrq
+         */
+        ID: string;
         Error: {
             code: components["schemas"]["ErrorCode"];
             /** @description For people; may change between releases. */
@@ -1654,6 +1756,7 @@ export interface components {
          */
         SignInMode: "printed_link" | "email_link";
         Organisation: {
+            /** Format: id */
             id: string;
             name: string;
             /** Format: date-time */
@@ -1661,6 +1764,7 @@ export interface components {
         };
         /** @description An Organisation named by its id and name. */
         OrganisationBrief: {
+            /** Format: id */
             id: string;
             name: string;
         };
@@ -1678,11 +1782,18 @@ export interface components {
             organisations?: components["schemas"]["OrganisationBrief"][];
         };
         Session: {
-            /** @description The id the running copy chose. */
+            /**
+             * Format: id
+             * @description The id the running copy chose.
+             */
             id: string;
+            /** Format: id */
             member_id: string;
             kind: components["schemas"]["SessionKind"];
-            /** @description The token the Session presents. Absent for browser Sessions. */
+            /**
+             * Format: id
+             * @description The token the Session presents. Absent for browser Sessions.
+             */
             token_id?: string;
             /** Format: date-time */
             started_at: string;
@@ -1692,16 +1803,35 @@ export interface components {
              * Format: date-time
              * @description When an open browser Session ends unless it is used before: after a time unused, and
              *     at the latest a time after it started. Absent for token Sessions, which end when
-             *     closed or when their token is revoked.
+             *     closed, when their token is revoked, or after the Install's idle limit without a
+             *     request (see `listSessions`).
              */
             expires_at?: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the Session was closed. Absent while it is open, and for a browser Session that expired.
+             */
             closed_at?: string;
+            /**
+             * Format: date-time
+             * @description When the Session ended, however it ended: `closed_at`, or the moment a browser
+             *     Session expired or a token Session reached the idle limit. Absent while it is open.
+             */
+            ended_at?: string;
         };
+        /**
+         * @description `open`: the Session can still make requests. `ended`: it cannot; a request with its id starts a new Session.
+         * @enum {string}
+         */
+        SessionState: "open" | "ended";
         SessionList: {
             items: components["schemas"]["Session"][];
             /** @description Pass as `cursor` for the next page. Absent on the last page. */
             next_cursor?: string;
+            /** @description How many of the Member's Sessions are open. */
+            open: number;
+            /** @description How many of the Member's Sessions have ended. */
+            ended: number;
         };
         /** @enum {string} */
         SessionKind: "token" | "browser";
@@ -1721,7 +1851,9 @@ export interface components {
             email: string;
         };
         Token: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             member_id: string;
             name: string;
             /** @description The first characters of the secret, to tell tokens apart. */
@@ -1748,13 +1880,17 @@ export interface components {
             default_heartbeat_timeout_seconds?: number;
         };
         Member: {
+            /** Format: id */
             id: string;
             name: string;
             kind: components["schemas"]["MemberKind"];
             email?: string;
             /** @description Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links. */
             admin: boolean;
-            /** @description The Member who directs this one. Absent when there is no Reporting line. */
+            /**
+             * Format: id
+             * @description The Member who directs this one. Absent when there is no Reporting line.
+             */
             manager_id?: string;
             /** Format: date-time */
             created_at: string;
@@ -1764,6 +1900,12 @@ export interface components {
              */
             deactivated_at?: string;
             agent?: components["schemas"]["AgentSettings"];
+            /**
+             * Format: id
+             * @description The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+             *     at most 256 pixels square. Absent when the Member has none.
+             */
+            avatar_file_id?: string;
         };
         /** @enum {string} */
         MemberKind: "human" | "agent";
@@ -1790,6 +1932,11 @@ export interface components {
             /** Format: email */
             email?: string;
             admin?: boolean;
+            /**
+             * Format: id
+             * @description A file uploaded with `purpose=avatar`; `""` removes the avatar.
+             */
+            avatar_file_id?: string;
         };
         /**
          * @description How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
@@ -1849,11 +1996,13 @@ export interface components {
          *     default Workspace. Every Task belongs to exactly one Project.
          */
         Project: {
+            /** Format: id */
             id: string;
             /** @description The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`. */
             key: string;
             name: string;
             /**
+             * Format: id
              * @description The Workspace a Task with no Parent filed in the Project names when it names none.
              *     Absent when the Project has none.
              */
@@ -1908,6 +2057,7 @@ export interface components {
          *     the Steps in this order, then Done.
          */
         Workflow: {
+            /** Format: id */
             project_id: string;
             /** @description The Steps, by `position`, each with what is happening at it now. */
             steps: components["schemas"]["WorkflowStep"][];
@@ -1920,10 +2070,14 @@ export interface components {
          *     moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
          */
         Step: {
+            /** Format: id */
             id: string;
             /** @description Unique in its Workflow, ignoring case. */
             name: string;
-            /** @description The Skill a Member needs to take a Task at the Step. Absent on a hold. */
+            /**
+             * Format: id
+             * @description The Skill a Member needs to take a Task at the Step. Absent on a hold.
+             */
             skill_id?: string;
             /**
              * Format: int64
@@ -1963,6 +2117,7 @@ export interface components {
         };
         /** @description A Member who holds a Step's Skill. */
         Taker: {
+            /** Format: id */
             id: string;
             name: string;
             kind: components["schemas"]["MemberKind"];
@@ -1973,9 +2128,14 @@ export interface components {
          *     Connector.
          */
         Connector: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             from_step_id: string;
-            /** @description The Step it leads to. Absent when it leads into Done. */
+            /**
+             * Format: id
+             * @description The Step it leads to. Absent when it leads into Done.
+             */
             to_step_id?: string;
             /** @description The outcome, such as `pass` or `needs changes`; unique among the Connectors out of its Step, ignoring case. */
             name: string;
@@ -2002,7 +2162,10 @@ export interface components {
             };
         };
         StepInput: {
-            /** @description The id of a Step in the Workflow now; left out for a new one. */
+            /**
+             * Format: id
+             * @description The id of a Step in the Workflow now; left out for a new one.
+             */
             id?: string;
             name: string;
             /** @description Skill id or name the Step carries. Left out, the Step is a hold. */
@@ -2025,6 +2188,7 @@ export interface components {
         };
         ConnectorInput: {
             /**
+             * Format: id
              * @description The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
              *     with the same name, ignoring case, keeps its id; any other is new.
              */
@@ -2045,8 +2209,12 @@ export interface components {
          *     Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
          */
         Label: {
+            /** Format: id */
             id: string;
-            /** @description The Project that defined it for itself. Absent for the Organisation's. */
+            /**
+             * Format: id
+             * @description The Project that defined it for itself. Absent for the Organisation's.
+             */
             project_id?: string;
             /** @description Unique among the Labels a Task of its Project can carry, ignoring case. */
             name: string;
@@ -2073,6 +2241,7 @@ export interface components {
          *     instead of merges by the Runner.
          */
         Workspace: {
+            /** Format: id */
             id: string;
             /** @description Unique on the Install, ignoring case; it names the session's checkout directory. */
             name: string;
@@ -2116,10 +2285,14 @@ export interface components {
             default_branch?: string;
         };
         Skill: {
+            /** Format: id */
             id: string;
             name: string;
             kind: components["schemas"]["SkillKind"];
-            /** @description The generic Skill a company Skill builds on. */
+            /**
+             * Format: id
+             * @description The generic Skill a company Skill builds on.
+             */
             base_skill_id?: string;
             /** @description True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on. */
             builtin: boolean;
@@ -2131,13 +2304,20 @@ export interface components {
         /** @enum {string} */
         SkillKind: "generic" | "company";
         SkillVersion: {
+            /** Format: id */
             skill_id: string;
             /** Format: int64 */
             version: number;
             body: string;
-            /** @description The proposal this version was published from. Absent for version 1. */
+            /**
+             * Format: id
+             * @description The proposal this version was published from. Absent for version 1.
+             */
             proposal_id?: string;
-            /** @description The Member who completed the review, or who created the Skill. */
+            /**
+             * Format: id
+             * @description The Member who completed the review, or who created the Skill.
+             */
             published_by?: string;
             /** Format: date-time */
             published_at: string;
@@ -2161,12 +2341,16 @@ export interface components {
             body: string;
         };
         SkillProposal: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             skill_id: string;
+            /** Format: id */
             task_id: string;
             /** Format: int64 */
             based_on_version: number;
             body: string;
+            /** Format: id */
             author_id: string;
             state: components["schemas"]["ProposalState"];
             /**
@@ -2204,17 +2388,25 @@ export interface components {
          *     Blocking and are not stored.
          */
         Task: {
+            /** Format: id */
             id: string;
             /** @description Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence. */
             key: string;
+            /** Format: id */
             project_id: string;
-            /** @description The Parent of a Subtask. Absent on a Task with no Parent. */
+            /**
+             * Format: id
+             * @description The Parent of a Subtask. Absent on a Task with no Parent.
+             */
             parent_id?: string;
             kind: components["schemas"]["TaskKind"];
             title: string;
             description: string;
             state: components["schemas"]["TaskState"];
-            /** @description The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's. */
+            /**
+             * Format: id
+             * @description The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's.
+             */
             owner_id: string;
             /**
              * Format: int64
@@ -2223,6 +2415,7 @@ export interface components {
              */
             rank?: number;
             /**
+             * Format: id
              * @description The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
              *     ended Task.
              */
@@ -2233,11 +2426,15 @@ export interface components {
              */
             step_since?: string;
             /**
+             * Format: id
              * @description The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
              *     wherever `step_id` is.
              */
             skill_id?: string;
-            /** @description The Member the Task is aimed at by name, who may take it at no Step. */
+            /**
+             * Format: id
+             * @description The Member the Task is aimed at by name, who may take it at no Step.
+             */
             aimed_at_id?: string;
             /** @description The ids of the Labels it carries, by name. Absent when it carries none. */
             labels?: string[];
@@ -2254,7 +2451,10 @@ export interface components {
              *     false on a Subtask.
              */
             acceptance: boolean;
-            /** @description The Retrospective that filed this Task. */
+            /**
+             * Format: id
+             * @description The Retrospective that filed this Task.
+             */
             from_retrospective_task_id?: string;
             claim?: components["schemas"]["Claim"];
             /** @description True while any Task blocking this one is open. Always false on a Parent. */
@@ -2264,6 +2464,7 @@ export interface components {
             /** @description The Workspaces the Task names, in the order named. Absent when it names none. */
             workspace_ids?: string[];
             /**
+             * Format: id
              * @description The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
              *     Acceptance, a Retrospective.
              */
@@ -2293,6 +2494,7 @@ export interface components {
         };
         /** @description A Task named by its id, display key and title. */
         TaskBrief: {
+            /** Format: id */
             id: string;
             /** @description Display key, such as `MAIN-42`. */
             key: string;
@@ -2311,12 +2513,21 @@ export interface components {
          */
         TaskKind: "work" | "breakdown" | "acceptance" | "retrospective";
         Claim: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
+            /** Format: id */
             holder_id: string;
-            /** @description The Session that made the Claim. */
+            /**
+             * Format: id
+             * @description The Session that made the Claim.
+             */
             session_id: string;
-            /** @description The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member. */
+            /**
+             * Format: id
+             * @description The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member.
+             */
             skill_id?: string;
             /**
              * Format: int64
@@ -2495,10 +2706,16 @@ export interface components {
             labels: string[];
         };
         Note: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
+            /** Format: id */
             author_id: string;
-            /** @description The Skill the author was working under. */
+            /**
+             * Format: id
+             * @description The Skill the author was working under.
+             */
             skill_id?: string;
             body: string;
             /** Format: date-time */
@@ -2513,16 +2730,25 @@ export interface components {
          *     reviewed.
          */
         Observation: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
+            /** Format: id */
             author_id: string;
-            /** @description The Skill the author was working under. */
+            /**
+             * Format: id
+             * @description The Skill the author was working under.
+             */
             skill_id?: string;
             outcome: components["schemas"]["ObservationOutcome"];
             body: string;
             /** Format: date-time */
             created_at: string;
-            /** @description The Retrospective that reviewed it. Absent until reviewed. */
+            /**
+             * Format: id
+             * @description The Retrospective that reviewed it. Absent until reviewed.
+             */
             reviewed_by_task_id?: string;
             /** Format: date-time */
             reviewed_at?: string;
@@ -2541,17 +2767,48 @@ export interface components {
          *     about a Parent as a whole is attached to the Parent.
          */
         Evidence: {
+            /** Format: id */
             id: string;
+            /** Format: id */
             task_id: string;
             filename: string;
             content_type: string;
             /** Format: int64 */
             size: number;
             sha256: string;
+            /** Format: id */
             attached_by: string;
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+         *     at `/v1/files/{id}/content`.
+         */
+        File: {
+            /** Format: id */
+            id: string;
+            name: string;
+            /** @description The type the server found by reading the bytes. */
+            content_type: string;
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            purpose: components["schemas"]["FilePurpose"];
+            /**
+             * Format: id
+             * @description The Member who uploaded it.
+             */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+         *     most 256 pixels square, and only such a file can be set as a Member's avatar.
+         * @enum {string}
+         */
+        FilePurpose: "general" | "avatar";
         Activity: {
             /**
              * Format: int64
@@ -2560,11 +2817,17 @@ export interface components {
             seq: number;
             /** Format: date-time */
             at: string;
-            /** @description The Member who acted. Absent when Darkory acted, as when recording a lapse. */
+            /**
+             * Format: id
+             * @description The Member who acted. Absent when Darkory acted, as when recording a lapse.
+             */
             actor_id?: string;
             kind: components["schemas"]["ActivityKind"];
             subject_type: components["schemas"]["SubjectType"];
-            /** @description The id of the record the entry is about, of `subject_type`. */
+            /**
+             * Format: id
+             * @description The id of the record the entry is about, of `subject_type`.
+             */
             subject_id: string;
             payload: {
                 [key: string]: unknown;
@@ -2587,13 +2850,13 @@ export interface components {
          *     had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
          * @enum {string}
          */
-        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed" | "file.uploaded" | "file.deleted";
         /**
          * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
          *     whole; its `subject_id` is the Project's id.
          * @enum {string}
          */
-        SubjectType: "task" | "workflow" | "label" | "skill" | "member" | "project" | "token" | "session" | "login_link" | "workspace";
+        SubjectType: "task" | "workflow" | "label" | "skill" | "member" | "project" | "token" | "session" | "login_link" | "workspace" | "file";
         ActivityPage: {
             items: components["schemas"]["Activity"][];
             /**
@@ -2612,10 +2875,17 @@ export interface components {
          *     record: it lives as long as the session.
          */
         RunnerSession: {
+            /** Format: id */
             task_id: string;
-            /** @description The agent whose session it is. */
+            /**
+             * Format: id
+             * @description The agent whose session it is.
+             */
             member_id: string;
-            /** @description The Darkory Session the Runner holds the Claim through, which is also the agent's own session id. */
+            /**
+             * Format: id
+             * @description The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
+             */
             session_id: string;
             /** @description The machine the session runs on. */
             host: string;
@@ -2684,9 +2954,13 @@ export interface components {
         };
         /** @description A saved set of filters, sort and display for a list, kept by one Member for themselves. */
         View: {
+            /** Format: id */
             id: string;
             entity: components["schemas"]["ViewEntity"];
-            /** @description The Project whose list it is; absent for a list across Projects. */
+            /**
+             * Format: id
+             * @description The Project whose list it is; absent for a list across Projects.
+             */
             project_id?: string;
             name: string;
             /** @description The list's `filter` tokens, in the order saved. */
@@ -2762,6 +3036,9 @@ export interface components {
         /** @description Label id. */
         LabelID: string;
         EvidenceID: string;
+        FileID: string;
+        /** @description The file's name, as it should be shown and downloaded. */
+        FileName: string;
         ProposalID: string;
         /** @description The id the running copy chose for its Session. */
         SessionID: string;
@@ -2777,8 +3054,8 @@ export interface components {
          *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
          *     percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
          *     `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-         *     query-encoded as usual. References are ids, not names; an id that names nothing matches
-         *     nothing.
+         *     query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+         *     that names nothing matches nothing. A View's saved filters come back with short ids.
          *
          *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
          *     boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
@@ -3053,6 +3330,8 @@ export interface operations {
     listSessions: {
         parameters: {
             query?: {
+                /** @description Which Sessions to list. Defaults to `open`. */
+                state?: components["schemas"]["SessionState"];
                 /** @description At most this many items. Defaults to 100. */
                 limit?: components["parameters"]["Limit"];
                 /** @description The `next_cursor` of the previous page. */
@@ -4240,8 +4519,8 @@ export interface operations {
                  *     with the other parameters; `in` and `nin` match any of their values (OR). Each value is
                  *     percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
                  *     `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-                 *     query-encoded as usual. References are ids, not names; an id that names nothing matches
-                 *     nothing.
+                 *     query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+                 *     that names nothing matches nothing. A View's saved filters come back with short ids.
                  *
                  *     Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
                  *     boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
@@ -5099,6 +5378,128 @@ export interface operations {
                 content: {
                     "*/*": string;
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadFile: {
+        parameters: {
+            query: {
+                /** @description The file's name, as it should be shown and downloaded. */
+                name: components["parameters"]["FileName"];
+                /** @description What the file is for; `general` unless said. */
+                purpose?: components["schemas"]["FilePurpose"];
+            };
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "*/*": string;
+            };
+        };
+        responses: {
+            /** @description The file's record. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file: components["parameters"]["FileID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file's record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                file: components["parameters"]["FileID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    downloadFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                file: components["parameters"]["FileID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bytes. */
+            200: {
+                headers: {
+                    /** @description `inline` for an image, else `attachment`, with the file's name. */
+                    "Content-Disposition"?: string;
+                    ETag?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The copy the client holds is current. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

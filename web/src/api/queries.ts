@@ -1,6 +1,6 @@
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { api, call, type ActivityKind, type Member, type Project, type RunnerSession, type Skill, type SubjectType, type Task, type ViewEntity } from "./client";
+import { api, call, type ActivityKind, type Member, type Project, type RunnerSession, type Session, type Skill, type SubjectType, type Task, type ViewEntity } from "./client";
 import { allPages } from "./pages";
 import type { paths } from "./schema.gen";
 
@@ -94,6 +94,9 @@ const affected: Record<SubjectType, Root[]> = {
   session: [...organisation, ...work, "runner"],
   login_link: [],
   workspace: [...organisation, ...work, "workspaces"],
+  // A file is shown only through what names it, such as a Member's avatar, whose change is a
+  // member.updated entry of its own.
+  file: [],
 };
 
 // Kinds that change less than their subject type says. A nudge records what the Runner typed into
@@ -160,12 +163,50 @@ export function useTokens(member: string) {
   });
 }
 
-/** A Member's open Sessions, most recently seen first: theirs, or any Member's for an admin. */
-export function useMemberSessions(member: string) {
+/** A Member's open Sessions, and how many are open and how many have ended. */
+export type MemberSessions = { items: Session[]; open: number; ended: number };
+
+// A token Session ends on its own after a time unused, which no Activity entry says: the lists
+// are read again every half minute while shown.
+const sessionsRefetch = 30_000;
+
+/**
+ * A Member's open Sessions, most recently seen first, with the counts of open and ended ones:
+ * theirs, or any Member's for an admin.
+ */
+export function useMemberSessions(member: string, enabled = true) {
   return useQuery({
     queryKey: keys.memberSessions(member),
-    queryFn: () =>
-      allPages((cursor) => call(api.GET("/v1/members/{member}/sessions", { params: { path: { member }, query: { limit: 500, cursor } } }))),
+    queryFn: async (): Promise<MemberSessions> => {
+      let counts = { open: 0, ended: 0 };
+      const items = await allPages(async (cursor) => {
+        const page = await call(api.GET("/v1/members/{member}/sessions", { params: { path: { member }, query: { limit: 500, cursor } } }));
+        if (!cursor) counts = { open: page.open, ended: page.ended };
+        return page;
+      });
+      return { items, ...counts };
+    },
+    enabled: enabled && !!member,
+    refetchInterval: sessionsRefetch,
+  });
+}
+
+/** How many ended Sessions a page of `useEndedSessions` reads. */
+export const endedPage = 50;
+
+/**
+ * A Member's ended Sessions, most recently ended first, a page at a time (they accumulate: a CLI
+ * command run without a Session makes one). Read only once `enabled`, when someone asks to see them.
+ */
+export function useEndedSessions(member: string, enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: [...keys.memberSessions(member), "ended"],
+    queryFn: ({ pageParam }) =>
+      call(api.GET("/v1/members/{member}/sessions", { params: { path: { member }, query: { state: "ended", limit: endedPage, cursor: pageParam } } })),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor,
+    enabled: enabled && !!member,
+    refetchInterval: sessionsRefetch,
   });
 }
 

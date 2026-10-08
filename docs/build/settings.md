@@ -51,6 +51,17 @@ darkory migrate --db "$DARKORY_DB"             # apply them and exit
 
 `serve` checks that the bucket can be reached before it starts. Each object is written with one streamed `PUT` of known length, so an upload is never held in memory. A failed upload leaves nothing behind. One object can be at most 5 GiB.
 
+## File store
+
+Files an Organisation keeps by id, such as Members' avatars (`/v1/files`), are kept the same way as Evidence, in a store of their own.
+
+| Variable | Flag | Default | Meaning |
+|---|---|---|---|
+| `DARKORY_FILES` | `--files` | `files` in the data directory; with Evidence in a bucket, that bucket under the Evidence prefix and `files/` | A directory for the disk store, or `s3://bucket` or `s3://bucket/prefix`, with the `DARKORY_S3_*` settings above. |
+| `DARKORY_FILES_MAX_MB` | `--files-max-mb` | `10` | The largest file, in MiB. An avatar is at most 2 MiB whatever this says. |
+
+`serve` checks that the bucket can be reached before it starts. A deleted file's bytes are removed after the write that deletes it; a removal that fails is tried again after the next deletion in the Organisation.
+
 ## Sign-in
 
 | Variable | Flag | Default | Meaning |
@@ -58,7 +69,8 @@ darkory migrate --db "$DARKORY_DB"             # apply them and exit
 | `DARKORY_NO_LOGIN_LINK` | `--no-login-link` | off | Do not issue or print the startup login link. Use it for a container whose output goes to logs that others read. An admin can still issue links through `/v1`. |
 | `DARKORY_NO_BROWSER` | `--no-browser` | off | Print the startup login link without opening a browser. |
 | `DARKORY_SESSION_IDLE` | `--session-idle` | `720h` (30 days) | A browser Session not used for this long ends, whatever its cookie says. A Go duration. |
-| `DARKORY_SESSION_LIFETIME` | `--session-lifetime` | `2160h` (90 days) | A browser Session ends this long after it started, used or not; its cookie is kept as long. Token Sessions end only when closed or when their token is revoked. |
+| `DARKORY_SESSION_LIFETIME` | `--session-lifetime` | `2160h` (90 days) | A browser Session ends this long after it started, used or not; its cookie is kept as long. |
+| `DARKORY_TOKEN_SESSION_IDLE` | `--token-session-idle` | `15m` | A token Session no request has come through for this long ends, unless a Claim bound to it is still live; a request with its id then starts a new Session. Three times the Runner's Heartbeat timeout: every Session in use makes a request at least once a minute. Token Sessions also end when closed, and when their token is revoked. A Go duration. |
 | `DARKORY_SMTP_URL` | (environment only) | none: email sign-in is off | The SMTP server that sends emailed login links: `smtp://user:pass@host:587` requires STARTTLS, `smtps://user:pass@host:465` uses TLS from the start, and `smtp://host:25?tls=none` sends plain text, for a relay on a trusted network only. Percent-encode the user and password. |
 | `DARKORY_SMTP_FROM` | (environment only) | none | The sender, such as `Darkory <darkory@example.com>`. Required with `DARKORY_SMTP_URL`. |
 | `DARKORY_SMTP_MAX_PER_HOUR` | (environment only) | `300` | The most sign-in emails a server process sends an hour. Over it, requests still answer 202 and nothing is sent until the cap refills; printed and admin-issued links keep working. |

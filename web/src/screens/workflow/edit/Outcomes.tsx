@@ -24,10 +24,10 @@ export function AddOutcome({ step, onAdd }: { step: RecordStep; onAdd: (from: st
       type="button"
       onClick={() => onAdd(step.id)}
       aria-label={`Add an outcome out of ${step.name.trim() || "the new Step"}`}
-      className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground opacity-0 outline-none group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 max-md:opacity-100"
+      className="inline-flex h-7 items-center gap-1 self-start rounded-md px-1.5 text-[13px] text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <PlusIcon aria-hidden className="size-3" />
-      outcome
+      <PlusIcon aria-hidden className="size-3.5" />
+      Add an outcome
     </button>
   );
 }
@@ -70,18 +70,17 @@ export function Outcome({
   }
   const empty = !c.name.trim();
   return (
-    <span className="flex min-w-0 flex-wrap items-center gap-2">
+    <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <input
         ref={nameRef(c.id)}
         value={c.name}
         placeholder="outcome"
         maxLength={nameMax}
-        size={Math.max(5, c.name.length + 1)}
         aria-label={`Outcome out of ${stepName}`}
         aria-invalid={(invalid && empty) || undefined}
         onChange={(e) => actions.rename(c.id, e.target.value)}
         onBlur={actions.settle}
-        className="h-[22px] max-w-[180px] min-w-0 rounded-full border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30"
+        className="h-6 w-[150px] min-w-0 rounded-full max-md:w-[110px] border border-border bg-background px-2 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30"
       />
       <ArrowRightIcon aria-hidden className="size-3 flex-none text-muted-foreground" />
       <Select value={toValue(c.to_step_id)} onValueChange={(v) => actions.target(c.id, fromValue(v))}>
@@ -89,7 +88,7 @@ export function Outcome({
           size="sm"
           aria-label={`Where ${c.name.trim() || "the outcome"} out of ${stepName} leads`}
           className={cn(
-            "h-6! gap-1 bg-background px-2 py-0 text-xs shadow-none data-[size=sm]:h-6 [&_svg]:size-3!",
+            "h-6! w-[180px] justify-between gap-1 bg-background px-2 py-0 text-xs shadow-none data-[size=sm]:h-6 max-md:w-[120px] [&_svg]:size-3!",
             (fresh || was) && "border-state-claimed bg-state-claimed-bg dark:bg-state-claimed-bg",
           )}
         >
@@ -127,7 +126,7 @@ export function Outcome({
         type="button"
         onClick={() => actions.remove(c.id)}
         aria-label={`Remove ${c.name.trim() || "the outcome"} out of ${stepName}`}
-        className="inline-flex size-5 items-center justify-center rounded-sm text-muted-foreground opacity-0 outline-none group-focus-within/out:opacity-100 group-hover/out:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 max-md:opacity-100"
+        className="inline-flex size-6 flex-none items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <XIcon aria-hidden className="size-3" />
       </button>

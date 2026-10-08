@@ -1,0 +1,28 @@
+{
+  "steps": [
+    {"name": "Backlog",      "position": 1, "x": 0,   "y": 0},
+    {"name": "Plan",         "skill": "breakdown",    "position": 2, "x": 0,   "y": 128},
+    {"name": "Build",        "skill": "engineer",     "position": 3, "x": 0,   "y": 256},
+    {"name": "QA",           "skill": "qa",           "position": 4, "x": 448, "y": 256},
+    {"name": "Review",       "skill": "review",       "position": 5, "x": 896, "y": 256},
+    {"name": "Acceptance",   "skill": "acceptance",   "position": 6, "x": 448, "y": 384},
+    {"name": "Retro",        "skill": "retro",        "position": 7, "x": 0,   "y": 512},
+    {"name": "Skill review", "skill": "skill-review", "position": 8, "x": 448, "y": 512}
+  ],
+  "connectors": [
+    {"from": "Plan",         "name": "done",          "position": 1},
+    {"from": "Build",        "to": "QA",     "name": "pass",          "position": 1},
+    {"from": "Build",        "to": "Review", "name": "no UI change",  "position": 2},
+    {"from": "QA",           "to": "Review", "name": "pass",          "position": 1},
+    {"from": "QA",           "to": "Build",  "name": "fail",          "position": 2},
+    {"from": "Review",       "name": "pass",          "position": 1},
+    {"from": "Review",       "to": "Build",  "name": "needs changes", "position": 2},
+    {"from": "Review",       "to": "QA",     "name": "needs QA",      "position": 3},
+    {"from": "Acceptance",   "name": "pass",          "position": 1},
+    {"from": "Acceptance",   "to": "Build",  "name": "fail",          "position": 2},
+    {"from": "Retro",        "name": "done",          "position": 1},
+    {"from": "Retro",        "to": "Skill review", "name": "propose", "position": 2},
+    {"from": "Skill review", "name": "publish",       "position": 1},
+    {"from": "Skill review", "to": "Retro",  "name": "needs changes", "position": 2}
+  ]
+}

@@ -13,6 +13,9 @@ export type Connector = Schemas["Connector"];
 export type ErrorBody = Schemas["Error"];
 export type ErrorCode = Schemas["ErrorCode"];
 export type Evidence = Schemas["Evidence"];
+/** A file the Organisation keeps (`/v1/files`); named so it does not shadow the DOM's File. */
+export type FileRecord = Schemas["File"];
+export type FilePurpose = Schemas["FilePurpose"];
 export type Health = Schemas["Health"];
 export type IssuedToken = Schemas["IssuedToken"];
 export type Label = Schemas["Label"];
@@ -144,6 +147,11 @@ export function fileBody(file: File) {
     bodySerializer: (b: unknown) => b,
     headers: { "Content-Type": file.type || "application/octet-stream" },
   };
+}
+
+/** Where a file's bytes are served; an image there is inline, so an <img> shows it. */
+export function fileURL(id: string): string {
+  return `/v1/files/${encodeURIComponent(id)}/content`;
 }
 
 export function evidenceURL(id: string): string {

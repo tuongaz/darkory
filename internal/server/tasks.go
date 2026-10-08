@@ -7,6 +7,7 @@ import (
 	"github.com/tuongaz/darkory/internal/auth"
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/server/gen"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.FileTaskParams) {
@@ -41,7 +42,7 @@ func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.Li
 		tf.Filters = *params.Filter
 		if run := s.theRunner(); run != nil {
 			for _, sess := range run.Sessions() {
-				tf.SessionTasks = append(tf.SessionTasks, sess.TaskID)
+				tf.SessionTasks = append(tf.SessionTasks, shortid.Canonical(sess.TaskID))
 			}
 		}
 	}

@@ -11,24 +11,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
 // Readers for each record. They take a store.Reader so a write can read inside its own
 // transaction and a read can run outside any.
 
-const memberCols = `m.id, m.name, m.kind, m.email, m.admin, m.created_at, r.manager_id, m.deactivated_at, m.agent`
+const memberCols = `m.id, m.name, m.kind, m.email, m.admin, m.created_at, r.manager_id, m.deactivated_at, m.agent, m.avatar_file_id`
 const memberFrom = `members m LEFT JOIN reporting_lines r ON r.member_id = m.id`
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
-	var email, manager, agent sql.NullString
+	var email, manager, agent, avatar sql.NullString
 	var created int64
 	var deactivated sql.NullInt64
-	if err := row.Scan(&m.ID, &m.Name, &m.Kind, &email, &m.Admin, &created, &manager, &deactivated, &agent); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Kind, &email, &m.Admin, &created, &manager, &deactivated, &agent, &avatar); err != nil {
 		return m, err
 	}
 	m.Email, m.ManagerID, m.CreatedAt, m.DeactivatedAt = nullString(email), nullString(manager), fromMS(created), nullTime(deactivated)
+	m.AvatarFileID = nullString(avatar)
 	if agent.Valid {
 		var a AgentSettings
 		if err := json.Unmarshal([]byte(agent.String), &a); err != nil {
@@ -122,6 +124,7 @@ func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) 
 }
 
 func getMember(ctx context.Context, r store.Reader, orgID, id string) (Member, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	m, err := scanMember(r.QueryRow(ctx, `SELECT `+memberCols+` FROM `+memberFrom+` WHERE m.org_id = $1 AND m.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return m, refuse(CodeNotFound, "no Member %s", id)
@@ -130,6 +133,7 @@ func getMember(ctx context.Context, r store.Reader, orgID, id string) (Member, e
 }
 
 func getProject(ctx context.Context, r store.Reader, orgID, id string) (Project, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	p, err := scanProject(r.QueryRow(ctx, `SELECT `+projectCols+` FROM projects pr WHERE pr.org_id = $1 AND pr.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, refuse(CodeNotFound, "no Project %s", id)
@@ -138,6 +142,7 @@ func getProject(ctx context.Context, r store.Reader, orgID, id string) (Project,
 }
 
 func getSkill(ctx context.Context, r store.Reader, orgID, id string) (Skill, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	s, err := scanSkill(r.QueryRow(ctx, `SELECT `+skillCols+` FROM skills sk WHERE sk.org_id = $1 AND sk.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return s, refuse(CodeNotFound, "no Skill %s", id)
@@ -146,6 +151,7 @@ func getSkill(ctx context.Context, r store.Reader, orgID, id string) (Skill, err
 }
 
 func getTask(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (Task, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	t, err := scanTask(r.QueryRow(ctx, `SELECT `+taskCols+` FROM `+taskFrom+` WHERE t.org_id = $1 AND t.id = $2`, orgID, id), now)
 	if errors.Is(err, sql.ErrNoRows) {
 		return t, refuse(CodeNotFound, "no Task %s", id)
@@ -333,6 +339,7 @@ WHERE sk.org_id = $1 AND x.member_id = $2 ORDER BY sk.name`, orgID, memberID)
 }
 
 func getMemberDetail(ctx context.Context, r store.Reader, orgID, id string) (MemberDetail, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	var d MemberDetail
 	var err error
 	if d.Member, err = getMember(ctx, r, orgID, id); err != nil {
@@ -350,6 +357,7 @@ WHERE m.org_id = $1 AND r.manager_id = $2 ORDER BY m.name`, orgID, id)
 }
 
 func getProjectDetail(ctx context.Context, r store.Reader, orgID, id string) (ProjectDetail, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	var d ProjectDetail
 	var err error
 	if d.Project, err = getProject(ctx, r, orgID, id); err != nil {
@@ -381,6 +389,7 @@ func scanSkillVersion(row interface{ Scan(...any) error }) (SkillVersion, error)
 }
 
 func getSkillDetail(ctx context.Context, r store.Reader, orgID, id string) (SkillDetail, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	var d SkillDetail
 	var err error
 	if d.Skill, err = getSkill(ctx, r, orgID, id); err != nil {
@@ -434,6 +443,7 @@ WHERE c.org_id = $1 AND c.task_id = $2 ORDER BY c.started_at, c.id`, orgID, task
 }
 
 func getTaskDetail(ctx context.Context, r store.Reader, orgID, id string, now time.Time) (TaskDetail, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	var d TaskDetail
 	var err error
 	if d.Task, err = getTask(ctx, r, orgID, id, now); err != nil {
@@ -538,6 +548,7 @@ func scanProposal(row interface{ Scan(...any) error }) (SkillProposal, error) {
 }
 
 func getProposal(ctx context.Context, r store.Reader, orgID, id string) (SkillProposal, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	p, err := scanProposal(r.QueryRow(ctx, `SELECT `+proposalCols+` FROM skill_proposals p WHERE p.org_id = $1 AND p.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, refuse(CodeNotFound, "no Skill proposal %s", id)

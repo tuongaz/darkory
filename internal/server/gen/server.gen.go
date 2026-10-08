@@ -13,10 +13,13 @@ import (
 
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // Defines values for ActivityKind.
 const (
+	ActivityKindFileDeleted           ActivityKind = "file.deleted"
+	ActivityKindFileUploaded          ActivityKind = "file.uploaded"
 	ActivityKindLabelChanged          ActivityKind = "label.changed"
 	ActivityKindLabelCreated          ActivityKind = "label.created"
 	ActivityKindLabelDeleted          ActivityKind = "label.deleted"
@@ -71,6 +74,10 @@ const (
 // Valid indicates whether the value is a known member of the ActivityKind enum.
 func (e ActivityKind) Valid() bool {
 	switch e {
+	case ActivityKindFileDeleted:
+		return true
+	case ActivityKindFileUploaded:
+		return true
 	case ActivityKindLabelChanged:
 		return true
 	case ActivityKindLabelCreated:
@@ -306,6 +313,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for FilePurpose.
+const (
+	FilePurposeAvatar  FilePurpose = "avatar"
+	FilePurposeGeneral FilePurpose = "general"
+)
+
+// Valid indicates whether the value is a known member of the FilePurpose enum.
+func (e FilePurpose) Valid() bool {
+	switch e {
+	case FilePurposeAvatar:
+		return true
+	case FilePurposeGeneral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	HealthStatusOk HealthStatus = "ok"
@@ -465,6 +490,24 @@ func (e SessionKind) Valid() bool {
 	}
 }
 
+// Defines values for SessionState.
+const (
+	SessionEnded SessionState = "ended"
+	SessionOpen  SessionState = "open"
+)
+
+// Valid indicates whether the value is a known member of the SessionState enum.
+func (e SessionState) Valid() bool {
+	switch e {
+	case SessionEnded:
+		return true
+	case SessionOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SignInMode.
 const (
 	SignInEmailLink   SignInMode = "email_link"
@@ -503,6 +546,7 @@ func (e SkillKind) Valid() bool {
 
 // Defines values for SubjectType.
 const (
+	SubjectTypeFile      SubjectType = "file"
 	SubjectTypeLabel     SubjectType = "label"
 	SubjectTypeLoginLink SubjectType = "login_link"
 	SubjectTypeMember    SubjectType = "member"
@@ -518,6 +562,8 @@ const (
 // Valid indicates whether the value is a known member of the SubjectType enum.
 func (e SubjectType) Valid() bool {
 	switch e {
+	case SubjectTypeFile:
+		return true
 	case SubjectTypeLabel:
 		return true
 	case SubjectTypeLoginLink:
@@ -639,8 +685,8 @@ func (e WorkspaceMode) Valid() bool {
 // Activity defines model for Activity.
 type Activity struct {
 	// ActorID The Member who acted. Absent when Darkory acted, as when recording a lapse.
-	ActorID *string   `json:"actor_id,omitempty"`
-	At      time.Time `json:"at"`
+	ActorID *shortid.ID `json:"actor_id,omitempty"`
+	At      time.Time   `json:"at"`
 
 	// Kind What happened. The part before the dot is the `subject_type`. New kinds may be added
 	// within `/v1`; a client should skip a kind it does not know.
@@ -663,7 +709,7 @@ type Activity struct {
 	Seq int64 `json:"seq"`
 
 	// SubjectID The id of the record the entry is about, of `subject_type`.
-	SubjectID string `json:"subject_id"`
+	SubjectID shortid.ID `json:"subject_id"`
 
 	// SubjectType The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
 	// whole; its `subject_id` is the Project's id.
@@ -756,29 +802,29 @@ type Claim struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// HeartbeatTimeoutSeconds Absent when the Claim never lapses on its own.
-	HeartbeatTimeoutSeconds *int   `json:"heartbeat_timeout_seconds,omitempty"`
-	HolderID                string `json:"holder_id"`
+	HeartbeatTimeoutSeconds *int       `json:"heartbeat_timeout_seconds,omitempty"`
+	HolderID                shortid.ID `json:"holder_id"`
 
 	// HowEnded How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
 	// holder filed a Subtask under the Task, which became a Parent. `completed`: the Task ended
 	// done. `taken_back`: someone on the holder's Reporting line or the Task's Owner took it
 	// back, or moved the Task. The rest are named for what ended it.
-	HowEnded *ClaimEnd `json:"how_ended,omitempty"`
-	ID       string    `json:"id"`
+	HowEnded *ClaimEnd  `json:"how_ended,omitempty"`
+	ID       shortid.ID `json:"id"`
 
 	// ModelLabel The AI model the holder said it used. Stored, never interpreted.
 	ModelLabel *string `json:"model_label,omitempty"`
 
 	// SessionID The Session that made the Claim.
-	SessionID string `json:"session_id"`
+	SessionID shortid.ID `json:"session_id"`
 
 	// SkillID The Skill of the Step the Task was taken at. Absent for a Task aimed at a Member.
-	SkillID *string `json:"skill_id,omitempty"`
+	SkillID *shortid.ID `json:"skill_id,omitempty"`
 
 	// SkillVersion The version of the Skill the Claim was worked under.
-	SkillVersion *int64    `json:"skill_version,omitempty"`
-	StartedAt    time.Time `json:"started_at"`
-	TaskID       string    `json:"task_id"`
+	SkillVersion *int64     `json:"skill_version,omitempty"`
+	StartedAt    time.Time  `json:"started_at"`
+	TaskID       shortid.ID `json:"task_id"`
 }
 
 // ClaimEnd How a Claim ended. `advanced`: its holder advanced the Task to another Step. `split`: its
@@ -811,8 +857,8 @@ type CompleteTaskBody struct {
 // when they advance the Task. Advancing into Done completes the Task; dropping needs no
 // Connector.
 type Connector struct {
-	FromStepID string `json:"from_step_id"`
-	ID         string `json:"id"`
+	FromStepID shortid.ID `json:"from_step_id"`
+	ID         shortid.ID `json:"id"`
 
 	// Name The outcome, such as `pass` or `needs changes`; unique among the Connectors out of its Step, ignoring case.
 	Name string `json:"name"`
@@ -821,7 +867,7 @@ type Connector struct {
 	Position int64 `json:"position"`
 
 	// ToStepID The Step it leads to. Absent when it leads into Done.
-	ToStepID *string `json:"to_step_id,omitempty"`
+	ToStepID *shortid.ID `json:"to_step_id,omitempty"`
 }
 
 // ConnectorInput defines model for ConnectorInput.
@@ -831,8 +877,8 @@ type ConnectorInput struct {
 
 	// ID The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
 	// with the same name, ignoring case, keeps its id; any other is new.
-	ID   *string `json:"id,omitempty"`
-	Name string  `json:"name"`
+	ID   *shortid.ID `json:"id,omitempty"`
+	Name string      `json:"name"`
 
 	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
 	Position int64 `json:"position"`
@@ -993,15 +1039,38 @@ type ErrorCode string
 // Evidence A report, screenshot or log attached to a Task, recording who attached it; Evidence
 // about a Parent as a whole is attached to the Parent.
 type Evidence struct {
-	AttachedBy  string    `json:"attached_by"`
+	AttachedBy  shortid.ID `json:"attached_by"`
+	ContentType string     `json:"content_type"`
+	CreatedAt   time.Time  `json:"created_at"`
+	Filename    string     `json:"filename"`
+	ID          shortid.ID `json:"id"`
+	Sha256      string     `json:"sha256"`
+	Size        int64      `json:"size"`
+	TaskID      shortid.ID `json:"task_id"`
+}
+
+// File Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+// at `/v1/files/{id}/content`.
+type File struct {
+	// ContentType The type the server found by reading the bytes.
 	ContentType string    `json:"content_type"`
 	CreatedAt   time.Time `json:"created_at"`
-	Filename    string    `json:"filename"`
-	ID          string    `json:"id"`
-	Sha256      string    `json:"sha256"`
-	Size        int64     `json:"size"`
-	TaskID      string    `json:"task_id"`
+
+	// CreatedBy The Member who uploaded it.
+	CreatedBy shortid.ID `json:"created_by"`
+	ID        shortid.ID `json:"id"`
+	Name      string     `json:"name"`
+
+	// Purpose What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+	// most 256 pixels square, and only such a file can be set as a Member's avatar.
+	Purpose FilePurpose `json:"purpose"`
+	Sha256  string      `json:"sha256"`
+	Size    int64       `json:"size"`
 }
+
+// FilePurpose What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+// most 256 pixels square, and only such a file can be set as a Member's avatar.
+type FilePurpose string
 
 // FileTaskBody defines model for FileTaskBody.
 type FileTaskBody struct {
@@ -1106,15 +1175,15 @@ type IssuedToken struct {
 // Organisation's for every Project. Filters and Views read it; Darkory's rules never do.
 type Label struct {
 	// Color `#rrggbb`.
-	Color     string    `json:"color"`
-	CreatedAt time.Time `json:"created_at"`
-	ID        string    `json:"id"`
+	Color     string     `json:"color"`
+	CreatedAt time.Time  `json:"created_at"`
+	ID        shortid.ID `json:"id"`
 
 	// Name Unique among the Labels a Task of its Project can carry, ignoring case.
 	Name string `json:"name"`
 
 	// ProjectID The Project that defined it for itself. Absent for the Organisation's.
-	ProjectID *string `json:"project_id,omitempty"`
+	ProjectID *shortid.ID `json:"project_id,omitempty"`
 }
 
 // LabelList defines model for LabelList.
@@ -1162,18 +1231,22 @@ type Member struct {
 	// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
 	// and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
 	// `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
-	Agent     *AgentSettings `json:"agent,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
+	Agent *AgentSettings `json:"agent,omitempty"`
+
+	// AvatarFileID The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+	// at most 256 pixels square. Absent when the Member has none.
+	AvatarFileID *shortid.ID `json:"avatar_file_id,omitempty"`
+	CreatedAt    time.Time   `json:"created_at"`
 
 	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
 	Email         *string    `json:"email,omitempty"`
-	ID            string     `json:"id"`
+	ID            shortid.ID `json:"id"`
 	Kind          MemberKind `json:"kind"`
 
 	// ManagerID The Member who directs this one. Absent when there is no Reporting line.
-	ManagerID *string `json:"manager_id,omitempty"`
-	Name      string  `json:"name"`
+	ManagerID *shortid.ID `json:"manager_id,omitempty"`
+	Name      string      `json:"name"`
 }
 
 // MemberDetail defines model for MemberDetail.
@@ -1223,33 +1296,33 @@ type NextTaskBody struct {
 
 // Note defines model for Note.
 type Note struct {
-	AuthorID  string    `json:"author_id"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
-	ID        string    `json:"id"`
+	AuthorID  shortid.ID `json:"author_id"`
+	Body      string     `json:"body"`
+	CreatedAt time.Time  `json:"created_at"`
+	ID        shortid.ID `json:"id"`
 
 	// SkillID The Skill the author was working under.
-	SkillID *string `json:"skill_id,omitempty"`
-	TaskID  string  `json:"task_id"`
+	SkillID *shortid.ID `json:"skill_id,omitempty"`
+	TaskID  shortid.ID  `json:"task_id"`
 }
 
 // Observation An entry on a Task, marked worked or didn't work, recording who wrote it and the Skill
 // they worked under. It feeds the Retrospective of the Task's Parent, which marks it
 // reviewed.
 type Observation struct {
-	AuthorID   string             `json:"author_id"`
+	AuthorID   shortid.ID         `json:"author_id"`
 	Body       string             `json:"body"`
 	CreatedAt  time.Time          `json:"created_at"`
-	ID         string             `json:"id"`
+	ID         shortid.ID         `json:"id"`
 	Outcome    ObservationOutcome `json:"outcome"`
 	ReviewedAt *time.Time         `json:"reviewed_at,omitempty"`
 
 	// ReviewedByTaskID The Retrospective that reviewed it. Absent until reviewed.
-	ReviewedByTaskID *string `json:"reviewed_by_task_id,omitempty"`
+	ReviewedByTaskID *shortid.ID `json:"reviewed_by_task_id,omitempty"`
 
 	// SkillID The Skill the author was working under.
-	SkillID *string `json:"skill_id,omitempty"`
-	TaskID  string  `json:"task_id"`
+	SkillID *shortid.ID `json:"skill_id,omitempty"`
+	TaskID  shortid.ID  `json:"task_id"`
 }
 
 // ObservationList defines model for ObservationList.
@@ -1268,15 +1341,15 @@ type ObserveBody struct {
 
 // Organisation defines model for Organisation.
 type Organisation struct {
-	CreatedAt time.Time `json:"created_at"`
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
+	CreatedAt time.Time  `json:"created_at"`
+	ID        shortid.ID `json:"id"`
+	Name      string     `json:"name"`
 }
 
 // OrganisationBrief An Organisation named by its id and name.
 type OrganisationBrief struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID   shortid.ID `json:"id"`
+	Name string     `json:"name"`
 }
 
 // PassOwnershipBody defines model for PassOwnershipBody.
@@ -1297,8 +1370,8 @@ type Project struct {
 
 	// DefaultWorkspaceID The Workspace a Task with no Parent filed in the Project names when it names none.
 	// Absent when the Project has none.
-	DefaultWorkspaceID *string `json:"default_workspace_id,omitempty"`
-	ID                 string  `json:"id"`
+	DefaultWorkspaceID *shortid.ID `json:"default_workspace_id,omitempty"`
+	ID                 shortid.ID  `json:"id"`
 
 	// Key The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`.
 	Key  string `json:"key"`
@@ -1371,11 +1444,11 @@ type RunnerSession struct {
 	LogPath string `json:"log_path"`
 
 	// MemberID The agent whose session it is.
-	MemberID string `json:"member_id"`
+	MemberID shortid.ID `json:"member_id"`
 
 	// SessionID The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
-	SessionID string    `json:"session_id"`
-	StartedAt time.Time `json:"started_at"`
+	SessionID shortid.ID `json:"session_id"`
+	StartedAt time.Time  `json:"started_at"`
 
 	// State `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
 	// turn ended with the Task still held and no decision, and the Runner nudges it to end the
@@ -1387,8 +1460,8 @@ type RunnerSession struct {
 	State RunnerSessionState `json:"state"`
 
 	// StateSince When the session entered its current state; `started_at` until it first changed.
-	StateSince time.Time `json:"state_since"`
-	TaskID     string    `json:"task_id"`
+	StateSince time.Time  `json:"state_since"`
+	TaskID     shortid.ID `json:"task_id"`
 
 	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
@@ -1413,22 +1486,28 @@ type RunnerSessionState string
 
 // Session defines model for Session.
 type Session struct {
+	// ClosedAt When the Session was closed. Absent while it is open, and for a browser Session that expired.
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
+
+	// EndedAt When the Session ended, however it ended: `closed_at`, or the moment a browser
+	// Session expired or a token Session reached the idle limit. Absent while it is open.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
 
 	// ExpiresAt When an open browser Session ends unless it is used before: after a time unused, and
 	// at the latest a time after it started. Absent for token Sessions, which end when
-	// closed or when their token is revoked.
+	// closed, when their token is revoked, or after the Install's idle limit without a
+	// request (see `listSessions`).
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// ID The id the running copy chose.
-	ID         string      `json:"id"`
+	ID         shortid.ID  `json:"id"`
 	Kind       SessionKind `json:"kind"`
 	LastSeenAt time.Time   `json:"last_seen_at"`
-	MemberID   string      `json:"member_id"`
+	MemberID   shortid.ID  `json:"member_id"`
 	StartedAt  time.Time   `json:"started_at"`
 
 	// TokenID The token the Session presents. Absent for browser Sessions.
-	TokenID *string `json:"token_id,omitempty"`
+	TokenID *shortid.ID `json:"token_id,omitempty"`
 }
 
 // SessionKind defines model for SessionKind.
@@ -1436,11 +1515,19 @@ type SessionKind string
 
 // SessionList defines model for SessionList.
 type SessionList struct {
+	// Ended How many of the Member's Sessions have ended.
+	Ended int       `json:"ended"`
 	Items []Session `json:"items"`
 
 	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
 	NextCursor *string `json:"next_cursor,omitempty"`
+
+	// Open How many of the Member's Sessions are open.
+	Open int `json:"open"`
 }
+
+// SessionState `open`: the Session can still make requests. `ended`: it cannot; a request with its id starts a new Session.
+type SessionState string
 
 // SetAgentSettingsBody The settings to change; those left out stay as they are. `progress_file` set to `""` clears it.
 type SetAgentSettingsBody struct {
@@ -1495,15 +1582,15 @@ type SignInMode string
 // Skill defines model for Skill.
 type Skill struct {
 	// BaseSkillID The generic Skill a company Skill builds on.
-	BaseSkillID *string `json:"base_skill_id,omitempty"`
+	BaseSkillID *shortid.ID `json:"base_skill_id,omitempty"`
 
 	// Builtin True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on.
-	Builtin        bool      `json:"builtin"`
-	CreatedAt      time.Time `json:"created_at"`
-	CurrentVersion int64     `json:"current_version"`
-	ID             string    `json:"id"`
-	Kind           SkillKind `json:"kind"`
-	Name           string    `json:"name"`
+	Builtin        bool       `json:"builtin"`
+	CreatedAt      time.Time  `json:"created_at"`
+	CurrentVersion int64      `json:"current_version"`
+	ID             shortid.ID `json:"id"`
+	Kind           SkillKind  `json:"kind"`
+	Name           string     `json:"name"`
 }
 
 // SkillDetail defines model for SkillDetail.
@@ -1522,24 +1609,24 @@ type SkillList struct {
 
 // SkillProposal defines model for SkillProposal.
 type SkillProposal struct {
-	AuthorID       string    `json:"author_id"`
-	BasedOnVersion int64     `json:"based_on_version"`
-	Body           string    `json:"body"`
-	CreatedAt      time.Time `json:"created_at"`
+	AuthorID       shortid.ID `json:"author_id"`
+	BasedOnVersion int64      `json:"based_on_version"`
+	Body           string     `json:"body"`
+	CreatedAt      time.Time  `json:"created_at"`
 
 	// DecidedAt When it was published or superseded.
 	DecidedAt *time.Time `json:"decided_at,omitempty"`
-	ID        string     `json:"id"`
+	ID        shortid.ID `json:"id"`
 
 	// PublishedVersion The version publishing it made. Absent unless `state` is `published`.
-	PublishedVersion *int64 `json:"published_version,omitempty"`
-	SkillID          string `json:"skill_id"`
+	PublishedVersion *int64     `json:"published_version,omitempty"`
+	SkillID          shortid.ID `json:"skill_id"`
 
 	// State `pending`: waiting for review. `published`: a review published it. `superseded`: it will
 	// not be published, because a newer proposal for the same Skill replaced it on its Task, or
 	// its Task ended without publishing it.
 	State  ProposalState `json:"state"`
-	TaskID string        `json:"task_id"`
+	TaskID shortid.ID    `json:"task_id"`
 }
 
 // SkillVersion defines model for SkillVersion.
@@ -1547,13 +1634,13 @@ type SkillVersion struct {
 	Body string `json:"body"`
 
 	// ProposalID The proposal this version was published from. Absent for version 1.
-	ProposalID  *string   `json:"proposal_id,omitempty"`
-	PublishedAt time.Time `json:"published_at"`
+	ProposalID  *shortid.ID `json:"proposal_id,omitempty"`
+	PublishedAt time.Time   `json:"published_at"`
 
 	// PublishedBy The Member who completed the review, or who created the Skill.
-	PublishedBy *string `json:"published_by,omitempty"`
-	SkillID     string  `json:"skill_id"`
-	Version     int64   `json:"version"`
+	PublishedBy *shortid.ID `json:"published_by,omitempty"`
+	SkillID     shortid.ID  `json:"skill_id"`
+	Version     int64       `json:"version"`
 }
 
 // SkillVersionList defines model for SkillVersionList.
@@ -1565,7 +1652,7 @@ type SkillVersionList struct {
 // that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human
 // moves it on. Whether a Task at it is waiting or being worked follows from its Claim.
 type Step struct {
-	ID string `json:"id"`
+	ID shortid.ID `json:"id"`
 
 	// Name Unique in its Workflow, ignoring case.
 	Name string `json:"name"`
@@ -1574,7 +1661,7 @@ type Step struct {
 	Position int64 `json:"position"`
 
 	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
-	SkillID *string `json:"skill_id,omitempty"`
+	SkillID *shortid.ID `json:"skill_id,omitempty"`
 
 	// X Where the canvas draws it, in pixels from the left.
 	X int64 `json:"x"`
@@ -1604,8 +1691,8 @@ type StepFacts struct {
 // StepInput defines model for StepInput.
 type StepInput struct {
 	// ID The id of a Step in the Workflow now; left out for a new one.
-	ID   *string `json:"id,omitempty"`
-	Name string  `json:"name"`
+	ID   *shortid.ID `json:"id,omitempty"`
+	Name string      `json:"name"`
 
 	// Position The Step's place in the Workflow; distinct among the Steps, and the Workflow numbers them 1, 2, 3… in this order.
 	Position int64 `json:"position"`
@@ -1643,7 +1730,7 @@ type TakeBackTaskBody struct {
 
 // Taker A Member who holds a Step's Skill.
 type Taker struct {
-	ID   string     `json:"id"`
+	ID   shortid.ID `json:"id"`
 	Kind MemberKind `json:"kind"`
 	Name string     `json:"name"`
 }
@@ -1660,7 +1747,7 @@ type Task struct {
 	Acceptance bool `json:"acceptance"`
 
 	// AimedAtID The Member the Task is aimed at by name, who may take it at no Step.
-	AimedAtID *string `json:"aimed_at_id,omitempty"`
+	AimedAtID *shortid.ID `json:"aimed_at_id,omitempty"`
 
 	// AutoComplete A Parent completes itself when its last open Subtask ends done and no Acceptance is
 	// due. Always false on a Subtask.
@@ -1680,11 +1767,11 @@ type Task struct {
 
 	// FiledBy The Member who filed it. Absent on the Subtasks Darkory files itself: a Breakdown, an
 	// Acceptance, a Retrospective.
-	FiledBy *string `json:"filed_by,omitempty"`
+	FiledBy *shortid.ID `json:"filed_by,omitempty"`
 
 	// FromRetrospectiveTaskID The Retrospective that filed this Task.
-	FromRetrospectiveTaskID *string `json:"from_retrospective_task_id,omitempty"`
-	ID                      string  `json:"id"`
+	FromRetrospectiveTaskID *shortid.ID `json:"from_retrospective_task_id,omitempty"`
+	ID                      shortid.ID  `json:"id"`
 
 	// Key Display key, such as `MAIN-42`; Tasks and Subtasks share the Project's sequence.
 	Key string `json:"key"`
@@ -1695,17 +1782,17 @@ type Task struct {
 	Kind TaskKind `json:"kind"`
 
 	// Labels The ids of the Labels it carries, by name. Absent when it carries none.
-	Labels *[]string `json:"labels,omitempty"`
+	Labels *[]shortid.ID `json:"labels,omitempty"`
 
 	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
 	OpenBlockers *[]TaskBrief `json:"open_blockers,omitempty"`
 
 	// OwnerID The Member with authority over the Task and its Subtasks. A Subtask's is its Parent's.
-	OwnerID string `json:"owner_id"`
+	OwnerID shortid.ID `json:"owner_id"`
 
 	// ParentID The Parent of a Subtask. Absent on a Task with no Parent.
-	ParentID  *string `json:"parent_id,omitempty"`
-	ProjectID string  `json:"project_id"`
+	ParentID  *shortid.ID `json:"parent_id,omitempty"`
+	ProjectID shortid.ID  `json:"project_id"`
 
 	// Rank Position in the Project's Rank, 1 first; an ended Task keeps its place. Absent on a
 	// Subtask, which sorts by its Parent's.
@@ -1713,14 +1800,14 @@ type Task struct {
 
 	// SkillID The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
 	// wherever `step_id` is.
-	SkillID *string `json:"skill_id,omitempty"`
+	SkillID *shortid.ID `json:"skill_id,omitempty"`
 
 	// State Claimed, lapsed, waiting and blocked are not states; they follow from the Task's Claim and Blocking.
 	State TaskState `json:"state"`
 
 	// StepID The Step the Task is at. Absent on a Parent, on a Task aimed at a Member, and on an
 	// ended Task.
-	StepID *string `json:"step_id,omitempty"`
+	StepID *shortid.ID `json:"step_id,omitempty"`
 
 	// StepSince When the Task reached its Step. Absent when `step_id` is.
 	StepSince *time.Time `json:"step_since,omitempty"`
@@ -1733,12 +1820,12 @@ type Task struct {
 	WaitingSince time.Time `json:"waiting_since"`
 
 	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
-	WorkspaceIds *[]string `json:"workspace_ids,omitempty"`
+	WorkspaceIds *[]shortid.ID `json:"workspace_ids,omitempty"`
 }
 
 // TaskBrief A Task named by its id, display key and title.
 type TaskBrief struct {
-	ID string `json:"id"`
+	ID shortid.ID `json:"id"`
 
 	// Key Display key, such as `MAIN-42`.
 	Key   string `json:"key"`
@@ -1818,9 +1905,9 @@ type Token struct {
 
 	// DefaultHeartbeatTimeoutSeconds The heartbeat timeout `claim` and `next` use when the call names none. Absent when Claims have none by default.
 	DefaultHeartbeatTimeoutSeconds *int       `json:"default_heartbeat_timeout_seconds,omitempty"`
-	ID                             string     `json:"id"`
+	ID                             shortid.ID `json:"id"`
 	LastUsedAt                     *time.Time `json:"last_used_at,omitempty"`
-	MemberID                       string     `json:"member_id"`
+	MemberID                       shortid.ID `json:"member_id"`
 	Name                           string     `json:"name"`
 
 	// Prefix The first characters of the secret, to tell tokens apart.
@@ -1841,9 +1928,12 @@ type UpdateLabelBody struct {
 
 // UpdateMemberBody defines model for UpdateMemberBody.
 type UpdateMemberBody struct {
-	Admin *bool                `json:"admin,omitempty"`
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	Admin *bool `json:"admin,omitempty"`
+
+	// AvatarFileID A file uploaded with `purpose=avatar`; `""` removes the avatar.
+	AvatarFileID *shortid.ID          `json:"avatar_file_id,omitempty"`
+	Email        *openapi_types.Email `json:"email,omitempty"`
+	Name         *string              `json:"name,omitempty"`
 }
 
 // UpdateProjectBody defines model for UpdateProjectBody.
@@ -1891,12 +1981,12 @@ type View struct {
 	Entity ViewEntity `json:"entity"`
 
 	// Filters The list's `filter` tokens, in the order saved.
-	Filters []string `json:"filters"`
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
+	Filters []string   `json:"filters"`
+	ID      shortid.ID `json:"id"`
+	Name    string     `json:"name"`
 
 	// ProjectID The Project whose list it is; absent for a list across Projects.
-	ProjectID *string `json:"project_id,omitempty"`
+	ProjectID *shortid.ID `json:"project_id,omitempty"`
 
 	// Sort How the list is sorted, as the client wrote it; the server does not read it.
 	Sort      *string   `json:"sort,omitempty"`
@@ -1917,7 +2007,7 @@ type ViewList struct {
 type Workflow struct {
 	// Connectors Every Connector, by its Step's `position`, then its own.
 	Connectors []Connector `json:"connectors"`
-	ProjectID  string      `json:"project_id"`
+	ProjectID  shortid.ID  `json:"project_id"`
 
 	// Steps The Steps, by `position`, each with what is happening at it now.
 	Steps []WorkflowStep `json:"steps"`
@@ -1925,7 +2015,7 @@ type Workflow struct {
 
 // WorkflowStep A Step with what is happening at it now.
 type WorkflowStep struct {
-	ID string `json:"id"`
+	ID shortid.ID `json:"id"`
 
 	// MedianMs The median time Tasks that left the Step in the last 30 days spent at it, by advance,
 	// move, Complete or drop. Absent when none left it.
@@ -1938,7 +2028,7 @@ type WorkflowStep struct {
 	Position int64 `json:"position"`
 
 	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
-	SkillID *string `json:"skill_id,omitempty"`
+	SkillID *shortid.ID `json:"skill_id,omitempty"`
 
 	// Takers The active Members who could take a Task at the Step by its Skill: the Project's
 	// Members holding it, or for `skill-review` the Organisation's, by name. None on a hold;
@@ -1966,8 +2056,8 @@ type Workspace struct {
 	CreatedAt time.Time `json:"created_at"`
 
 	// DefaultBranch The branch work lands on, such as `main`.
-	DefaultBranch string `json:"default_branch"`
-	ID            string `json:"id"`
+	DefaultBranch string     `json:"default_branch"`
+	ID            shortid.ID `json:"id"`
 
 	// Kind The kind of place. Only `git` for now; more may be added within `/v1`.
 	Kind WorkspaceKind `json:"kind"`
@@ -2007,13 +2097,19 @@ type Cursor = string
 type EvidenceFilename = string
 
 // EvidenceID defines model for EvidenceID.
-type EvidenceID = string
+type EvidenceID = shortid.ID
+
+// FileID defines model for FileID.
+type FileID = shortid.ID
+
+// FileName defines model for FileName.
+type FileName = string
 
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
 // LabelID defines model for LabelID.
-type LabelID = string
+type LabelID = shortid.ID
 
 // Limit defines model for Limit.
 type Limit = int
@@ -2028,10 +2124,10 @@ type MemberRef = string
 type ProjectRef = string
 
 // ProposalID defines model for ProposalID.
-type ProposalID = string
+type ProposalID = shortid.ID
 
 // SessionID defines model for SessionID.
-type SessionID = string
+type SessionID = shortid.ID
 
 // SkillRef defines model for SkillRef.
 type SkillRef = string
@@ -2043,10 +2139,10 @@ type TaskFilter = []string
 type TaskRef = string
 
 // TokenID defines model for TokenID.
-type TokenID = string
+type TokenID = shortid.ID
 
 // ViewID defines model for ViewID.
-type ViewID = string
+type ViewID = shortid.ID
 
 // WorkspaceRef defines model for WorkspaceRef.
 type WorkspaceRef = string
@@ -2085,6 +2181,31 @@ type StreamActivityParams struct {
 	// After Used when `Last-Event-ID` is absent.
 	After       *int64 `form:"after,omitempty" json:"after,omitempty"`
 	LastEventID *int64 `json:"Last-Event-ID,omitempty"`
+}
+
+// UploadFileParams defines parameters for UploadFile.
+type UploadFileParams struct {
+	// Name The file's name, as it should be shown and downloaded.
+	Name FileName `form:"name" json:"name"`
+
+	// Purpose What the file is for; `general` unless said.
+	Purpose *FilePurpose `form:"purpose,omitempty" json:"purpose,omitempty"`
+
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteFileParams defines parameters for DeleteFile.
+type DeleteFileParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DownloadFileParams defines parameters for DownloadFile.
+type DownloadFileParams struct {
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
 // CreateLabelParams defines parameters for CreateLabel.
@@ -2194,6 +2315,9 @@ type ReactivateMemberParams struct {
 
 // ListSessionsParams defines parameters for ListSessions.
 type ListSessionsParams struct {
+	// State Which Sessions to list. Defaults to `open`.
+	State *SessionState `form:"state,omitempty" json:"state,omitempty"`
+
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
@@ -2342,8 +2466,8 @@ type ListTasksParams struct {
 	// with the other parameters; `in` and `nin` match any of their values (OR). Each value is
 	// percent-encoded on its own before the values are joined with `,` (so `,`, `:`, `%` and
 	// `+` inside a value travel as `%2C`, `%3A`, `%25` and `%2B`), and the token is then
-	// query-encoded as usual. References are ids, not names; an id that names nothing matches
-	// nothing.
+	// query-encoded as usual. References are ids, not names, in either form (see Ids); an id
+	// that names nothing matches nothing. A View's saved filters come back with short ids.
 	//
 	// Operators: `is`, `not` (one value), `in`, `nin` (one or more) on enum, reference and
 	// boolean fields; on numbers those and `lte`, `gte` (one value, both ends included);
@@ -2722,6 +2846,18 @@ type ServerInterface interface {
 	// DownloadEvidence Download an Evidence file
 	// (GET /v1/evidence/{evidence}/content)
 	DownloadEvidence(w http.ResponseWriter, r *http.Request, evidence EvidenceID)
+	// UploadFile Upload a file the Organisation keeps, such as an avatar
+	// (POST /v1/files)
+	UploadFile(w http.ResponseWriter, r *http.Request, params UploadFileParams)
+	// DeleteFile Delete a file (its uploader, or an admin)
+	// (DELETE /v1/files/{file})
+	DeleteFile(w http.ResponseWriter, r *http.Request, file FileID, params DeleteFileParams)
+	// GetFile Get a file's record
+	// (GET /v1/files/{file})
+	GetFile(w http.ResponseWriter, r *http.Request, file FileID)
+	// DownloadFile Download a file's bytes
+	// (GET /v1/files/{file}/content)
+	DownloadFile(w http.ResponseWriter, r *http.Request, file FileID, params DownloadFileParams)
 	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	// (GET /v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -2758,7 +2894,7 @@ type ServerInterface interface {
 	// GetMember Get a Member with their Projects, Skills and Reporting line
 	// (GET /v1/members/{member})
 	GetMember(w http.ResponseWriter, r *http.Request, member MemberRef)
-	// UpdateMember Change a Member's name, email or admin mark (admin)
+	// UpdateMember Change a Member's name, email, admin mark or avatar
 	// (PATCH /v1/members/{member})
 	UpdateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params UpdateMemberParams)
 	// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no session for it (admin)
@@ -2782,7 +2918,7 @@ type ServerInterface interface {
 	// ReactivateMember Reactivate a deactivated Member (admin)
 	// (POST /v1/members/{member}/reactivate)
 	ReactivateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params ReactivateMemberParams)
-	// ListSessions List a Member's open Sessions
+	// ListSessions List a Member's Sessions
 	// (GET /v1/members/{member}/sessions)
 	ListSessions(w http.ResponseWriter, r *http.Request, member MemberRef, params ListSessionsParams)
 	// RevokeSkill Take a Skill away from a Member (admin)
@@ -3150,7 +3286,7 @@ func (siw *ServerInterfaceWrapper) GetEvidence(w http.ResponseWriter, r *http.Re
 	// ------------- Path parameter "evidence" -------------
 	var evidence EvidenceID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "evidence", r.PathValue("evidence"), &evidence, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "evidence", r.PathValue("evidence"), &evidence, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "evidence", Err: err})
 		return
@@ -3176,7 +3312,7 @@ func (siw *ServerInterfaceWrapper) DownloadEvidence(w http.ResponseWriter, r *ht
 	// ------------- Path parameter "evidence" -------------
 	var evidence EvidenceID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "evidence", r.PathValue("evidence"), &evidence, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "evidence", r.PathValue("evidence"), &evidence, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "evidence", Err: err})
 		return
@@ -3184,6 +3320,199 @@ func (siw *ServerInterfaceWrapper) DownloadEvidence(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DownloadEvidence(w, r, evidence)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadFile operation middleware
+func (siw *ServerInterfaceWrapper) UploadFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadFileParams
+
+	// ------------- Required query parameter "name" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "name", r.URL.Query(), &params.Name, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "name"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "purpose" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "purpose", r.URL.Query(), &params.Purpose, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "purpose"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "purpose", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadFile(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteFile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "file" -------------
+	var file FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "file", r.PathValue("file"), &file, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "file", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteFileParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteFile(w, r, file, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFile operation middleware
+func (siw *ServerInterfaceWrapper) GetFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "file" -------------
+	var file FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "file", r.PathValue("file"), &file, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "file", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFile(w, r, file)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadFile operation middleware
+func (siw *ServerInterfaceWrapper) DownloadFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "file" -------------
+	var file FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "file", r.PathValue("file"), &file, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "file", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DownloadFileParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadFile(w, r, file, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3271,7 +3600,7 @@ func (siw *ServerInterfaceWrapper) DeleteLabel(w http.ResponseWriter, r *http.Re
 	// ------------- Path parameter "label" -------------
 	var label LabelID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &label, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &label, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
 		return
@@ -3321,7 +3650,7 @@ func (siw *ServerInterfaceWrapper) UpdateLabel(w http.ResponseWriter, r *http.Re
 	// ------------- Path parameter "label" -------------
 	var label LabelID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &label, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &label, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
 		return
@@ -4023,6 +4352,19 @@ func (siw *ServerInterfaceWrapper) ListSessions(w http.ResponseWriter, r *http.R
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListSessionsParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
 
 	// ------------- Optional query parameter "limit" -------------
 
@@ -4897,7 +5239,7 @@ func (siw *ServerInterfaceWrapper) CloseSession(w http.ResponseWriter, r *http.R
 	// ------------- Path parameter "session" -------------
 	var session SessionID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "session", r.PathValue("session"), &session, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "session", r.PathValue("session"), &session, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "session", Err: err})
 		return
@@ -5001,7 +5343,7 @@ func (siw *ServerInterfaceWrapper) GetSkillProposal(w http.ResponseWriter, r *ht
 	// ------------- Path parameter "proposal" -------------
 	var proposal ProposalID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "proposal", r.PathValue("proposal"), &proposal, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "proposal", r.PathValue("proposal"), &proposal, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "proposal", Err: err})
 		return
@@ -6404,7 +6746,7 @@ func (siw *ServerInterfaceWrapper) RevokeToken(w http.ResponseWriter, r *http.Re
 	// ------------- Path parameter "token" -------------
 	var token TokenID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "token", r.PathValue("token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "token", r.PathValue("token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
 		return
@@ -6541,7 +6883,7 @@ func (siw *ServerInterfaceWrapper) DeleteView(w http.ResponseWriter, r *http.Req
 	// ------------- Path parameter "view" -------------
 	var view ViewID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "view", r.PathValue("view"), &view, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "view", r.PathValue("view"), &view, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
 		return
@@ -6591,7 +6933,7 @@ func (siw *ServerInterfaceWrapper) UpdateView(w http.ResponseWriter, r *http.Req
 	// ------------- Path parameter "view" -------------
 	var view ViewID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "view", r.PathValue("view"), &view, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "view", r.PathValue("view"), &view, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "id", ValueIsUnescaped: true})
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
 		return
@@ -6982,6 +7324,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/evidence", wrapper.AttachTaskEvidence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/evidence/{evidence}", wrapper.GetEvidence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/evidence/{evidence}/content", wrapper.DownloadEvidence)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/files", wrapper.UploadFile)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/files/{file}", wrapper.DeleteFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/files/{file}", wrapper.GetFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/files/{file}/content", wrapper.DownloadFile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.ListActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity/stream", wrapper.StreamActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/runner/sessions", wrapper.ListRunnerSessions)

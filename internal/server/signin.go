@@ -126,9 +126,13 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request, member gen
 	if params.Cursor != nil {
 		cursor = *params.Cursor
 	}
-	p, err := s.core.ListSessions(r.Context(), caller(r), member, limit, cursor)
-	s.respond(w, r, as(http.StatusOK, func(p core.Page[core.Session]) any {
-		return gen.SessionList{Items: each(p.Items, sessionOut), NextCursor: pageCursor(p.NextCursor)}
+	var state string
+	if params.State != nil {
+		state = string(*params.State)
+	}
+	p, err := s.core.ListSessions(r.Context(), caller(r), member, state, limit, cursor)
+	s.respond(w, r, as(http.StatusOK, func(p core.SessionPage) any {
+		return gen.SessionList{Items: each(p.Items, sessionOut), NextCursor: pageCursor(p.NextCursor), Open: p.Open, Ended: p.Ended}
 	}), p, err)
 }
 
@@ -153,7 +157,7 @@ func (s *Server) CloseSession(w http.ResponseWriter, r *http.Request, session ge
 	if !ok {
 		return
 	}
-	cs, err := s.core.CloseSession(r.Context(), c, session, params.Member, idem)
+	cs, err := s.core.CloseSession(r.Context(), c, string(session), params.Member, idem)
 	s.respond(w, r, out, cs, err)
 }
 
@@ -190,7 +194,7 @@ func (s *Server) RevokeToken(w http.ResponseWriter, r *http.Request, token gen.T
 	if !ok {
 		return
 	}
-	t, err := s.core.RevokeToken(r.Context(), c, token, idem)
+	t, err := s.core.RevokeToken(r.Context(), c, string(token), idem)
 	s.respond(w, r, out, t, err)
 }
 

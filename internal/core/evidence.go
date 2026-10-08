@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tuongaz/darkory/internal/auth"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 )
 
@@ -84,6 +85,7 @@ func (s *Service) GetEvidence(ctx context.Context, c *auth.Caller, id string) (E
 }
 
 func getEvidence(ctx context.Context, r store.Reader, orgID, id string) (Evidence, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
 	e, err := scanEvidence(r.QueryRow(ctx, `SELECT `+evidenceCols+` FROM evidence e WHERE e.org_id = $1 AND e.id = $2`, orgID, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return e, refuse(CodeNotFound, "no Evidence %s", id)

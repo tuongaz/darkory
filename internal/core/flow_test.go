@@ -114,7 +114,9 @@ func TestAdvanceKeepsNoSelfReview(t *testing.T) {
 			t.Fatalf("the ways out of QA: %+v", d.Connectors)
 		}
 
-		// The builder has qa but held the Task under build: the QA Step is not theirs to take.
+		// The builder has qa but held the Task under build: the QA Step is not theirs to take. An
+		// hour on, their next request comes in a new Session: the one above has gone idle.
+		builder = f.session(builder.MemberID, builder.ChosenID)
 		if f.takeable(builder)[task.ID] {
 			t.Fatal("the builder can take the QA Step of their own Task")
 		}

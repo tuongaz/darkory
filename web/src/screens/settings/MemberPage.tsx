@@ -4,29 +4,29 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import { toast } from "sonner";
 import type { Member, MemberDetail } from "@/api/client";
-import { useDirectory, useMember, useMemberSessions, useProjects, useSkills, useTokens } from "@/api/queries";
+import { useDirectory, useMember, useMemberSessions, useProjects, useRunnerSessions, useSkills, useTokens } from "@/api/queries";
+import { taskPath } from "@/screens/task/format";
 import { addProjectMember, removeProjectMember } from "@/api/writes";
 import type { Crumb } from "@/app/TopBar";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Loaded, Refusal } from "@/components/Refusal";
 import { Time } from "@/components/Time";
 import { Button } from "@/components/ui/button";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { shortSessionId } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { AgentCard } from "./AgentSettings";
-import { SessionRows, TokenRows } from "./credentials";
+import { AgentCard, PausedRow } from "./AgentSettings";
+import { AvatarControl } from "./AvatarControl";
+import { TokenRows } from "./credentials";
+import { SessionsTable } from "./SessionsTable";
 import { LoadingFrame, SettingsFrame } from "./frame";
 import { count, deactivateSummary, heldClaims, liveTokens } from "./model";
-import { Chip, ConfirmDialog, Fact, Facts, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
+import { Chip, ConfirmDialog, Fact, Facts, MemberName, Picker, SettingsForm, SettingsRow, SettingsSection, w320 } from "./parts";
 import { agentsPath, membersPath } from "./paths";
 import { useHeldTasks } from "./queries";
 import { IssueTokenDialog, SignInLinkDialog } from "./secrets";
@@ -55,8 +55,16 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
   const m = detail.member;
   const self = m.id === me.member.id;
   const active = !m.deactivated_at;
+  const agent = m.kind === "agent";
+  // The last card: Paused while the Runner starts the agent, Deactivate (never one's own), Reactivate.
+  const pausable = !!m.agent;
+  const canDeactivate = active && !self;
+  const acts = [pausable && "pause", canDeactivate && "deactivate", !active && "reactivate"].filter((a) => !!a).join(" and ");
+  const stopTitle = acts.charAt(0).toUpperCase() + acts.slice(1);
+  const they = agent ? { s: "it", do: "it does", its: "its" } : { s: "they", do: "they do", its: "their" };
   const tokens = useTokens(m.id);
   const sessions = useMemberSessions(m.id);
+  const runner = useRunnerSessions().data?.items.find((s) => s.member_id === m.id);
   const held = useHeldTasks(m.id);
   const heldNow = heldClaims(held.data ?? []);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -68,19 +76,6 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
   return (
     <SettingsFrame
       crumbs={[list, { label: m.name }]}
-      actions={
-        (active ? !self : true) && (
-          <MoreMenu label={`More for ${m.name}`}>
-            {active ? (
-              <DropdownMenuItem variant="destructive" onSelect={() => setDialog("deactivate")}>
-                Deactivate
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onSelect={() => reactivate.mutate()}>Reactivate</DropdownMenuItem>
-            )}
-          </MoreMenu>
-        )
-      }
       primary={
         active && (
           <Button onClick={() => setDialog("token")}>
@@ -93,7 +88,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" card={false} />}
+          mark={<AvatarControl member={m} editable={me.member.admin || (self && m.kind === "human")} />}
           meta={
             <>
               {m.kind === "agent" ? <Pill tone="agent">Agent</Pill> : <Pill>Human</Pill>}
@@ -105,32 +100,97 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
             </>
           }
         />
-        <Refusal error={reactivate.error} className="mb-3" />
-        <SettingsForm label={`Settings of ${m.name}`}>
-          {/* Keyed by the saved value, so an edit made elsewhere replaces the field's. */}
-          <NameRow key={m.name} member={m} />
-          {m.kind === "human" && <EmailRow key={m.email ?? ""} member={m} />}
-          <AdminRow member={m} />
-          <ManagerRow member={m} />
-          <ProjectsRow detail={detail} />
-          <SkillsRow detail={detail} />
-          <SettingsRow label="Tokens" count={tokens.data ? liveTokens(tokens.data).length : undefined}>
-            <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data ?? []} held={heldNow} />}</Loaded>
-          </SettingsRow>
-          <SettingsRow label="Sessions" count={sessions.data?.length}>
-            <Loaded query={sessions}>
-              {(list) => <SessionRows member={m} sessions={list} held={heldNow} current={self ? me.session.id : undefined} />}
-            </Loaded>
-          </SettingsRow>
-          {m.kind === "human" && active && (
-            <SettingsRow label="Sign-in link">
-              <Button variant="outline" size="xs" onClick={() => setDialog("link")}>
-                Issue link
-              </Button>
-            </SettingsRow>
+        {/* By what an admin does most: an agent's Runner settings, then its work, its access,
+            its profile; pausing and deactivating last. */}
+        <div className="flex flex-col gap-5">
+          {agent && <AgentCard member={m} />}
+          <SettingsSection
+            title="Work"
+            description={`Who directs ${agent ? "it" : "them"}, the Projects ${agent ? "it works" : "they work"} in and the Skills ${agent ? "it holds" : "they hold"}.`}
+          >
+            <SettingsForm label={`Work of ${m.name}`}>
+              <ManagerRow member={m} />
+              <ProjectsRow detail={detail} />
+              <SkillsRow detail={detail} />
+            </SettingsForm>
+          </SettingsSection>
+          <SettingsSection
+            title="Access"
+            description={agent ? "The tokens it works through, and its Sessions." : "How they sign in, the tokens they work through, and their Sessions."}
+          >
+            <SettingsForm label={`Access of ${m.name}`}>
+              <SettingsRow label="Tokens" count={tokens.data ? liveTokens(tokens.data).length : undefined}>
+                <Loaded query={tokens}>{(list) => <TokenRows tokens={liveTokens(list)} sessions={sessions.data?.items ?? []} held={heldNow} />}</Loaded>
+              </SettingsRow>
+              <SettingsRow label="Sessions" count={sessions.data?.open}>
+                <Loaded query={sessions}>
+                  {(list) => (
+                    <SessionsTable
+                      member={m}
+                      sessions={list}
+                      held={heldNow}
+                      runner={runner}
+                      taskTo={taskPath}
+                      self={self}
+                      current={self ? me.session.id : undefined}
+                      canClose={me.member.admin || self}
+                    />
+                  )}
+                </Loaded>
+              </SettingsRow>
+              {!agent && active && (
+                <SettingsRow label="Sign-in link">
+                  <Button variant="outline" size="xs" onClick={() => setDialog("link")}>
+                    Issue link
+                  </Button>
+                </SettingsRow>
+              )}
+            </SettingsForm>
+          </SettingsSection>
+          <SettingsSection
+            title="Profile"
+            description={agent ? "Its name, and whether it is an admin." : "Their name, email, and whether they are an admin."}
+          >
+            <SettingsForm label={`Settings of ${m.name}`}>
+              {/* Keyed by the saved value, so an edit made elsewhere replaces the field's. */}
+              <NameRow key={m.name} member={m} />
+              {!agent && <EmailRow key={m.email ?? ""} member={m} />}
+              <AdminRow member={m} />
+            </SettingsForm>
+          </SettingsSection>
+          {acts && (
+            <SettingsSection
+              title={stopTitle}
+              tone={canDeactivate ? "destructive" : undefined}
+              description={[
+                pausable && "Pausing stops new sessions.",
+                canDeactivate && `Deactivating revokes ${they.its} tokens, closes ${they.its} Sessions and ends ${they.its} Claims.`,
+                !active && `Deactivated: ${they.do} no work until reactivated.`,
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <SettingsForm label={`${stopTitle} ${m.name}`}>
+                {pausable && m.agent && <PausedRow member={m} settings={m.agent} />}
+                {canDeactivate && (
+                  <SettingsRow label="Deactivate" help={`Asks first, and counts what it stops.`}>
+                    <Button variant="outline" size="xs" className="text-destructive" onClick={() => setDialog("deactivate")}>
+                      Deactivate {m.name}
+                    </Button>
+                  </SettingsRow>
+                )}
+                {!active && (
+                  <SettingsRow label="Reactivate">
+                    <Button variant="outline" size="xs" onClick={() => reactivate.mutate()} disabled={reactivate.isPending}>
+                      Reactivate {m.name}
+                    </Button>
+                    <Refusal error={reactivate.error} />
+                  </SettingsRow>
+                )}
+              </SettingsForm>
+            </SettingsSection>
           )}
-        </SettingsForm>
-        {m.kind === "agent" && <AgentCard member={m} />}
+        </div>
       </div>
 
       {dialog === "token" && <IssueTokenDialog member={m} onClose={() => setDialog(null)} />}
@@ -139,7 +199,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
         <DeactivateDialog
           member={m}
           loaded={!!tokens.data && !!sessions.data && !!held.data}
-          summary={deactivateSummary(tokens.data ?? [], sessions.data ?? [], heldNow)}
+          summary={deactivateSummary(tokens.data ?? [], sessions.data?.items ?? [], heldNow)}
           onClose={() => setDialog(null)}
         />
       )}
@@ -199,8 +259,8 @@ function DeactivateDialog({
             <Fact label="Closes">
               {count(sessions.length, "Session")}
               {sessions.map((s) => (
-                <code key={s.id} title={s.id} className="font-mono text-[11.5px] font-normal text-muted-foreground">
-                  {shortSessionId(s.id)}
+                <code key={s.id} className="font-mono text-[11.5px] font-normal text-muted-foreground">
+                  {s.id}
                 </code>
               ))}
             </Fact>
