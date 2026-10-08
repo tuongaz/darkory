@@ -92,6 +92,19 @@ func (s *Server) SetWorkflow(w http.ResponseWriter, r *http.Request, project gen
 	if body.Moves != nil {
 		in.Moves = *body.Moves
 	}
+	grant := func(g gen.SkillGrantInput) core.SkillGrant { return core.SkillGrant{Member: g.Member, Skill: g.Skill} }
+	if body.Skills != nil {
+		in.Skills = each(*body.Skills, func(k gen.WorkflowSkillInput) core.WorkflowSkill { return core.WorkflowSkill{Name: k.Name, Body: k.Body} })
+	}
+	if body.Joins != nil {
+		in.Joins = *body.Joins
+	}
+	if body.Grants != nil {
+		in.Grants = each(*body.Grants, grant)
+	}
+	if body.Revokes != nil {
+		in.Revokes = each(*body.Revokes, grant)
+	}
 	d, err := s.core.SetWorkflow(r.Context(), c, project, in, idem)
 	s.respond(w, r, out, d, err)
 }

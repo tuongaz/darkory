@@ -355,16 +355,22 @@ func (s *Service) RevokeSkill(ctx context.Context, c *auth.Caller, memberRef, sk
 		if err != nil {
 			return nil, err
 		}
-		res, err := t.Exec(ctx, `DELETE FROM member_skills WHERE org_id = $1 AND member_id = $2 AND skill_id = $3`, c.OrgID, member, skill)
-		if err != nil {
-			return nil, err
-		}
-		if n, _ := res.RowsAffected(); n == 0 {
-			return nil, nil
-		}
-		return nil, t.recordByCaller("member.skill_revoked", member, map[string]any{"skill_id": skill})
+		return nil, revokeSkill(t, member, skill)
 	})
 	return err
+}
+
+// revokeSkill takes a Skill away from a Member inside a write, recording member.skill_revoked; a
+// Skill the Member lacks changes nothing.
+func revokeSkill(t *tx, member, skill string) error {
+	res, err := t.Exec(t.ctx, `DELETE FROM member_skills WHERE org_id = $1 AND member_id = $2 AND skill_id = $3`, t.caller.OrgID, member, skill)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil
+	}
+	return t.recordByCaller("member.skill_revoked", member, map[string]any{"skill_id": skill})
 }
 
 // otherActiveAdmins counts the active admins other than except into n.

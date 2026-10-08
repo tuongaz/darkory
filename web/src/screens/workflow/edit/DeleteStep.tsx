@@ -137,7 +137,6 @@ export function DeleteStepDialog({
               );
             })}
           </div>
-          <span className="text-xs text-muted-foreground">Or lead each to another Step.</span>
         </section>
       )}
       {also.length > 0 && (
@@ -154,8 +153,7 @@ export function DeleteStepDialog({
         <p role="note" className="flex items-start gap-1.5 text-xs font-medium text-state-claimed">
           <TriangleAlertIcon aria-hidden className="mt-px size-3.5 flex-none" />
           <span>
-            {andList(stranded.map((s) => s.name))} {stranded.length === 1 ? "leads" : "lead"} out only into {name}: without it,{" "}
-            {stranded.length === 1 ? "it has" : "they have"} no way out, and {stranded.length === 1 ? "its" : "their"} Tasks can only be moved by hand.
+            Without {name}, {andList(stranded.map((s) => s.name))} {stranded.length === 1 ? "has" : "have"} no way out.
           </span>
         </p>
       )}

@@ -65,7 +65,7 @@ export function ChangesChip({ editor }: { editor: DraftEditor }) {
             ))}
           </ul>
           <p className="mt-2.5 border-t pt-2 text-xs text-muted-foreground">
-            {start !== undefined && (start ? `New Tasks will start at ${start}. ` : "No Step is left where New Tasks start. ")}⌘Z undoes the last change.
+            {start !== undefined && (start ? `New Tasks will start at ${start}. ` : "No Step is left where New Tasks start. ")}Undo: ⌘Z
           </p>
         </PopoverContent>
       </Popover>
