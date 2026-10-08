@@ -24,7 +24,7 @@ describe("the line down a phone", () => {
     render(<WorkflowLine workflow={BIG} tasks={[]} now={0} orientation="vertical" />);
     const rail = screen.getByRole("list", { name: "Steps on the line" });
     const mark = rail.querySelector("[data-entry-mark]");
-    expect(mark).toHaveTextContent("New Tasks start here ↓");
+    expect(mark).toHaveTextContent("New Tasks start here, at Triage");
     expect(mark?.closest("li")).toHaveTextContent(/Triage/);
   });
 });

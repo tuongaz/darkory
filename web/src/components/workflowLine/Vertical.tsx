@@ -129,11 +129,6 @@ export function VerticalLine({
           }}
           className="absolute top-[3px] left-[25px] size-[14px]"
         />
-        {!trace && !entry && id === t.start && (
-          <span title={entryHint(s?.name ?? "")} data-entry-mark className="mb-0.5 inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium">
-            {ENTRY_LABEL} ↓
-          </span>
-        )}
         <div className="flex min-w-0 items-baseline gap-1.5">
           <span className="truncate font-semibold">{terminal ? "Done" : s?.name}</span>
           {s?.skill && <span className="truncate font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
@@ -152,6 +147,11 @@ export function VerticalLine({
             </span>
           )}
         </div>
+        {!trace && !entry && id === t.start && (
+          <span title={entryHint(s?.name ?? "")} data-entry-mark className="mt-1 inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium">
+            New Tasks start here, at {s?.name}
+          </span>
+        )}
         {!trace && (list.length > 0 || n > 0 || (terminal && (done?.length ?? 0) > 0)) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {list.map(token)}
