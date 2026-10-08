@@ -9,35 +9,57 @@ import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { useCurrentMe } from "@/me";
 import { EditingWorkflow } from "./Editing";
 import { addStep } from "./edits";
+import { useLineData } from "@/components/workflowLine";
+import { taskPath as taskPagePath } from "@/screens/task/format";
 import { LiveWorkflow } from "./Live";
+import { useLineView, useScopeParam } from "./lineView";
+import { LineViewSwitch } from "./LineViewSwitch";
+import { ScopeChip } from "./ScopeChip";
 import { stepParam } from "./StepPeek";
 import { useWorkflowEditor } from "./useEditor";
 import { useWorkflowView, type WorkflowView } from "./view";
 import { ViewSwitch } from "./ViewSwitch";
 
-/** /projects/:key/workflow: the Project's Workflow, live and read-only; a Step opens its peek. */
+/**
+ * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; `?scope=`
+ * narrows it to the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the
+ * line for the Blocking among its Tasks or a list.
+ */
 export function WorkflowPage() {
   const project = useRouteProject();
   const admin = useCurrentMe().member.admin;
-  const [view, setView] = useWorkflowView();
+  const [view, setView] = useLineView();
+  const [scope, setScope] = useScopeParam();
+  const { data } = useLineData(project.key, scope);
+  const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
       <TopBar
-        crumbs={[projectCrumb(project), { label: "Workflow" }]}
-        view={<ViewSwitch view={view} onChange={setView} />}
+        crumbs={[projectCrumb(project), { label: "Workflow" }, ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : [])]}
+        view={<LineViewSwitch view={view} onChange={setView} blocking={data?.blocking ?? 0} />}
         actions={
-          admin && (
-            <Button asChild variant="outline">
-              <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
-                <PencilIcon />
-                <span className="hidden sm:inline">Edit</span>
-              </Link>
-            </Button>
-          )
+          <>
+            {data && data.scoped.hiddenTotal > 0 && data.scope.kind !== "all" && (
+              <span className="hidden text-xs text-muted-foreground tabular-nums lg:inline">{data.scoped.hiddenTotal} hidden</span>
+            )}
+            {named && named.key !== "…" && (
+              <Button asChild variant="outline" className="hidden sm:inline-flex">
+                <Link to={taskPagePath(named.key)}>Open {named.key}</Link>
+              </Button>
+            )}
+            {admin && (
+              <Button asChild variant="outline">
+                <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
+                  <PencilIcon />
+                  <span className="hidden sm:inline">Edit</span>
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <LiveWorkflow project={project} view={view} />
+        <LiveWorkflow project={project} view={view} scope={scope} onView={setView} />
       </Content>
     </>
   );
@@ -64,7 +86,7 @@ export function WorkflowSettingsPage() {
           </Link>
         </p>
         <Content className="flex flex-col overflow-hidden">
-          <LiveWorkflow project={project} view={view} />
+          <LiveWorkflow project={project} view={view === "text" ? "text" : "line"} scope={null} />
         </Content>
       </>
     );

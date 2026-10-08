@@ -19,7 +19,7 @@ export type Travel = { from: string; to: string; connectorId?: string };
 export const DONE = "done";
 export const DROPPED = "dropped";
 
-export type Callout = { id: number; tone: Tone; who?: Who; text: string };
+export type Callout = { id: number; tone: Tone; who?: Who; text: string; taskId?: string };
 export type Token = { id: number; key: string; travel: Travel };
 
 /** The moments playing on the canvas now. */

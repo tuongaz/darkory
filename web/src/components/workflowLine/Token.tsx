@@ -1,0 +1,121 @@
+import type { ReactNode } from "react";
+import { MemberAvatar } from "@/components/MemberAvatar";
+import type { Tone } from "@/components/workflow/live";
+import { cn } from "@/lib/utils";
+import { blockedBy, PICKUP_MS, tokenLabel, tokenState, tokenTime, type LineTask } from "./model";
+
+/**
+ * A Task at its Step: its holder's mark (ringed while it works) or a ring in its state's colour,
+ * its key, its time there, and when blocked who it waits on. Just picked up it reads "now" with a
+ * halo; a live moment pulses it in that moment's colour.
+ */
+export function Token({
+  task,
+  hold,
+  now,
+  selected,
+  ringed,
+  dim,
+  pulse,
+  arrived,
+  tag,
+  past,
+  onClick,
+  onHover,
+  compact,
+  noKey,
+  tagSide = "left",
+}: {
+  task: LineTask;
+  hold: boolean;
+  now: number;
+  selected?: boolean;
+  ringed?: boolean;
+  dim?: boolean;
+  pulse?: Tone;
+  arrived?: boolean;
+  /** A note hung off the token's left side: "now · builder picked up · waited 43m". */
+  tag?: ReactNode;
+  /** A past stay on a single Task's path: dashed, the time it was worked there. */
+  past?: { text: string };
+  onClick?: () => void;
+  onHover?: (on: boolean) => void;
+  /** Key and mark only: the line is too narrow for times. */
+  compact?: boolean;
+  /** Mark and time only: the page around it is already about this Task. */
+  noKey?: boolean;
+  tagSide?: "left" | "right";
+}) {
+  const state = tokenState(task, hold);
+  const picked = task.heldSince !== undefined && now - task.heldSince < PICKUP_MS;
+  const since = task.holder ? task.heldSince : task.since;
+  const time = past ? past.text : picked ? "now" : since !== undefined ? tokenTime(now - since) : undefined;
+  const by = blockedBy(task);
+  return (
+    <span className={cn("relative inline-flex", dim && "wl-dim")}>
+      {tag && (
+        <span
+          data-tag
+          className={cn(
+            "pointer-events-none absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1.5 text-xs font-medium whitespace-nowrap",
+            tagSide === "left" ? "right-full mr-1" : "left-full ml-1 flex-row-reverse",
+          )}
+        >
+          {tag}
+        </span>
+      )}
+      <button
+        type="button"
+        data-task={task.key}
+        data-state={state}
+        data-now={picked && !past ? "" : undefined}
+        data-pulse={pulse && pulse !== "filed" ? pulse : undefined}
+        data-arrived={arrived ? "" : undefined}
+        data-selected={selected ? "" : undefined}
+        data-ringed={ringed && !selected ? "" : undefined}
+        data-past={past ? "" : undefined}
+        aria-label={tokenLabel(task, state)}
+        aria-pressed={onClick ? !!selected : undefined}
+        onClick={onClick}
+        onMouseEnter={onHover && (() => onHover(true))}
+        onMouseLeave={onHover && (() => onHover(false))}
+        className={cn(
+          "wl-token inline-flex h-[30px] items-center gap-1.5 rounded-full border-[1.5px] bg-background pr-2.5 pl-1.5 text-xs whitespace-nowrap data-[past]:border-dashed data-[state=hold]:border-dashed data-[state=idle]:border-dashed",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+          !onClick && "cursor-default",
+        )}
+      >
+        {task.holder ? <MemberAvatar member={task.holder} working={task.holder.working} /> : <span aria-hidden className="wl-ring mx-0.5 size-3.5 flex-none rounded-full" />}
+        {!noKey && <span className="font-mono text-[11.5px] text-foreground">{task.key}</span>}
+        {!compact && time && (
+          <span className={cn("tabular-nums", picked && !past ? "font-medium text-state-claimed" : "text-muted-foreground")}>{time}</span>
+        )}
+        {by && <span className="text-[10.5px] font-semibold text-state-blocked">{by}</span>}
+      </button>
+    </span>
+  );
+}
+
+/** A Subtask still to come on a Parent's line: a dashed ghost saying when it will be filed. */
+export function GhostToken({ text, label }: { text: string; label: string }) {
+  return (
+    <span data-ghost aria-label={`${label} ${text}`} className="wl-token inline-flex h-[24px] items-center rounded-full border-[1.5px] border-dashed px-2.5 text-xs whitespace-nowrap">
+      {text}
+    </span>
+  );
+}
+
+/** A Task as a bead on a crowded line: filled amber held, hollow blue waiting, red blocked, dashed in the hold. */
+export function Bead({ task, hold, dim }: { task: LineTask; hold: boolean; dim?: boolean }) {
+  const state = tokenState(task, hold);
+  return <span data-task={task.key} data-state={state} aria-label={tokenLabel(task, state)} role="img" className={cn("wl-bead size-3 rounded-full", dim && "wl-dim")} />;
+}
+
+/** The faint count a narrowed line leaves on a Step: "+1". */
+export function HiddenCount({ n }: { n: number }) {
+  return (
+    <span aria-label={`${n} more ${n === 1 ? "Task" : "Tasks"} outside this scope`} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+      +{n}
+    </span>
+  );
+}

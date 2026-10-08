@@ -43,7 +43,11 @@ export type FlowEffect = {
 /** What the Workflow knows to name an entry's ids. */
 export type FlowContext = {
   projectId: string;
-  workflow: Workflow;
+  /** The Steps and Connectors the entries name: the canvas's Workflow or the line's. */
+  workflow: {
+    steps: readonly Pick<Workflow["steps"][number], "id" | "name" | "position">[];
+    connectors: readonly Pick<Workflow["connectors"][number], "id" | "from" | "to" | "name">[];
+  };
   task: (id: string) => { key: string; step_id?: string; project_id?: string } | undefined;
   member: (id: string) => Who | undefined;
 };

@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { NodeChange, ReactFlowProps } from "@xyflow/react";
 import type { ComponentProps } from "react";
@@ -7,7 +7,7 @@ import type { Schemas, Workflow } from "@/api/client";
 import type { CanvasNode, ConnectorFlowEdge } from "@/components/workflow/flow";
 import { tidy } from "@/components/workflow/layout";
 import { mockApi, refuse, type Call } from "@/test/api";
-import { ada, bob, builder, engineer, review, skills, step, task, web, workflow } from "@/test/fixtures";
+import { ada, bob, builder, engineer, review, skills, step, web, workflow } from "@/test/fixtures";
 import { signedIn } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { toBody, toCanvas } from "./bind";
@@ -79,74 +79,6 @@ async function openEditing(path = "/settings/projects/WEB/workflow?step=st-build
   renderApp(path);
   return within(await panel());
 }
-
-describe("the live Workflow", () => {
-  it("draws the record: each Step's counts and takers, a working taker ringed", async () => {
-    const claim = { id: "c1", task_id: "k-1", holder_id: builder.id, session_id: "s", started_at: "2026-10-08T09:00:00Z" };
-    serve(workflow(web, { build: { tasks: 2, working: 1 } }), ada, { "GET /v1/tasks": { items: [task(1, { claim }), task(2)] } });
-    renderApp("/projects/WEB/workflow");
-    await waitFor(() => expect(stepNode("Build")).toHaveAttribute("aria-label", "Build: Skill engineer; 1 waiting, 1 working; taken by builder (agent)"));
-    expect(stepNode("Plan").getAttribute("aria-label")).toContain("no Member has breakdown");
-    expect(screen.getAllByRole("img", { name: "builder (agent), working", hidden: true })[0]).toHaveAttribute("data-working", "running");
-    expect(screen.queryByRole("button", { name: "Tidy up", hidden: true })).toBeNull();
-  });
-
-  it("opens a Step's peek from the canvas: its Tasks, takers, median and outcomes, and Edit in Settings for an admin", async () => {
-    serve(workflow(web, { build: { tasks: 1, median_ms: 2 * 3_600_000 } }), ada, { "GET /v1/tasks": { items: [task(7, { title: "Store names as NFC" })] } });
-    renderApp("/projects/WEB/workflow");
-    await waitFor(() => expect(stepNode("Build")).toBeDefined());
-    act(() => stepNode("Build").focus());
-    fireEvent.keyDown(stepNode("Build"), { key: "Enter" });
-    const peek = within(await screen.findByRole("dialog", { name: "Step Build" }));
-    expect(peek.getByText("2 h")).toBeInTheDocument();
-    expect(peek.getByRole("list", { name: "Takers at Build" })).toHaveTextContent("builder");
-    expect(peek.getByRole("list", { name: "Outcomes out of Build" })).toHaveTextContent("passReview");
-    const row = await peek.findByRole("link", { name: /^WEB-7 Store names as NFC/ });
-    // Opening a Task closes the Step's peek: the Task's takes its place.
-    expect(row.getAttribute("href")).toBe("/projects/WEB/workflow?task=WEB-7");
-    expect(peek.getByRole("link", { name: "Edit in Settings" })).toHaveAttribute("href", `/settings/projects/WEB/workflow?step=${step.build}`);
-  });
-
-  it("says in the live canvas and a Step's peek when the Step has no way out", async () => {
-    const record = workflow();
-    record.connectors = record.connectors.filter((c) => c.from_step_id !== step.build);
-    serve(record);
-    renderApp("/projects/WEB/workflow");
-    await waitFor(() => expect(stepNode("Build")).toBeDefined());
-    expect(within(stepNode("Build")).getByText("No way out")).toBeInTheDocument();
-    act(() => stepNode("Build").focus());
-    fireEvent.keyDown(stepNode("Build"), { key: "Enter" });
-    const peek = within(await screen.findByRole("dialog", { name: "Step Build" }));
-    expect(peek.getByText("No way out: Tasks here can only be moved by hand.")).toBeInTheDocument();
-  });
-
-  it("asks the Tasks at the Step by its id, and offers a Member who is not an admin no Edit", async () => {
-    const { api } = serve(workflow(), bob);
-    renderApp(`/projects/WEB/workflow?view=text`);
-    await userEvent.click(await screen.findByRole("button", { name: "Open Review" }));
-    const peek = within(await screen.findByRole("dialog", { name: "Step Review" }));
-    await peek.findByText("No Task is at Review.");
-    expect(api.calls.some((c) => c.path === "/v1/tasks" && c.query.get("step") === step.review && c.query.get("state") === "open")).toBe(true);
-    expect(peek.queryByRole("link", { name: "Edit in Settings" })).toBeNull();
-    expect(screen.queryByRole("link", { name: /Edit/ })).toBeNull();
-  });
-
-  it("lists the Steps and their Connectors in the text view", async () => {
-    serve();
-    renderApp("/projects/WEB/workflow?view=text");
-    const steps = await screen.findByRole("list", { name: "Steps" });
-    expect(within(steps).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
-      "Open Backlog",
-      "Open Plan",
-      "Open Build",
-      "Open Review",
-      "Open Retro",
-      "Open Skill review",
-    ]);
-    expect(screen.getByRole("list", { name: "Connectors out of Review" })).toHaveTextContent(/pass.*Done.*needs changes.*Build/);
-    expect(screen.getByText("No Member has breakdown", { exact: false })).toBeInTheDocument();
-  });
-});
 
 describe("Settings › Workflow", () => {
   it("shows a Member who is not an admin the Workflow live, saying only an admin changes it", async () => {

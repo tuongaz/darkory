@@ -333,6 +333,14 @@
     background-color: color-mix(in oklch, var(--agent) 14%, transparent);
   }
 }
+@keyframes wl-draw {
+  from {
+    stroke-dashoffset: 2000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 @keyframes token-travel {
   from {
     offset-distance: 0%;
@@ -530,6 +538,53 @@
     }
     .flow-callout {
       animation: callout-fade 6s linear forwards;
+    }
+  }
+
+  /* The Workflow line (components/workflowLine). A token's colour by how its Task stands. */
+  .wl-token { --tone: var(--state-waiting); border-color: var(--tone); }
+  .wl-token[data-state="held"],
+  .wl-token[data-state="idle"] { --tone: var(--state-claimed); background: var(--state-claimed-bg); }
+  .wl-token[data-state="idle"] { border-style: dashed; }
+  .wl-token[data-state="blocked"] { --tone: var(--state-blocked); }
+  .wl-token[data-state="hold"] { --tone: var(--muted-foreground); border-style: dashed; }
+  .wl-token[data-state="done"] { --tone: var(--state-done); background: var(--state-done-bg); }
+  .wl-token[data-ghost] { --tone: var(--border); border-style: dashed; background: transparent; color: var(--muted-foreground); }
+  .wl-token[data-past] { --tone: var(--state-claimed); border-style: dashed; background: transparent; }
+  /* Just picked up: a halo in the holder's colour while it reads "now"; it pulses as it happens. */
+  .wl-token[data-now] { box-shadow: 0 0 0 4px var(--state-claimed-bg), 0 0 0 5.5px var(--state-claimed); }
+  .wl-token[data-pulse] { --moment: var(--state-claimed); animation: chip-pulse 1.2s ease-in-out 2; }
+  .wl-token[data-pulse="neutral"] { --moment: var(--muted-foreground); }
+  .wl-token[data-pulse="lapsed"] { --moment: var(--state-claimed); }
+  .wl-token[data-pulse="back"] { --moment: var(--state-blocked); }
+  .wl-token[data-arrived] { animation: chip-arrive 2s ease-out; }
+  .wl-token[data-selected] { box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--foreground); }
+  .wl-token[data-ringed] { box-shadow: 0 0 0 3px var(--background), 0 0 0 5px var(--ring); }
+  .wl-ring { border: 1.5px solid var(--tone); }
+  .wl-token[data-state="hold"] .wl-ring { border-style: dashed; }
+  .wl-token[data-state="blocked"] .wl-ring { background: linear-gradient(135deg, transparent 43%, var(--tone) 43% 60%, transparent 60%); }
+  .wl-token[data-state="done"] .wl-ring { background: var(--tone); }
+  .wl-bead { border: 2px solid var(--state-waiting); background: var(--background); }
+  .wl-bead[data-state="held"],
+  .wl-bead[data-state="idle"] { border-color: var(--state-claimed); background: var(--state-claimed); }
+  .wl-bead[data-state="blocked"] { border-color: var(--state-blocked); background: var(--state-blocked-bg); }
+  .wl-bead[data-state="hold"] { border-style: dashed; border-color: var(--muted-foreground); }
+  .wl-bead[data-state="done"] { border-color: var(--state-done); background: var(--state-done); }
+  .wl-dim { opacity: 0.3; transition: opacity 200ms; }
+  .wl-chain { stroke-dasharray: 2000; animation: wl-draw 200ms ease-out; }
+  .wl-travel {
+    offset-rotate: 0deg;
+    offset-anchor: center;
+    animation: token-travel 1.2s cubic-bezier(0.45, 0, 0.25, 1) forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wl-token[data-pulse],
+    .wl-token[data-arrived],
+    .wl-chain,
+    .wl-dim {
+      animation: none;
+      transition: none;
     }
   }
 

@@ -32,7 +32,7 @@ export function flowState(active: Active[], now: number, reduced: boolean): Flow
     if (age < 0) continue;
     if (e.callout && age < CALLOUT_MS) {
       const list = s.callouts.get(e.callout.stepId) ?? [];
-      s.callouts.set(e.callout.stepId, [{ id: e.seq, tone: e.callout.tone, who: e.callout.who, text: e.callout.text }, ...list].slice(0, SHOWN_CALLOUTS));
+      s.callouts.set(e.callout.stepId, [{ id: e.seq, tone: e.callout.tone, who: e.callout.who, text: e.callout.text, taskId: e.taskId }, ...list].slice(0, SHOWN_CALLOUTS));
     }
     if (e.pulse && age < CALLOUT_MS) s.pulses.set(e.taskId, e.pulse.tone);
     if (e.pulse && age < GLOW_MS) s.glows.set(e.pulse.stepId, e.pulse.tone);
