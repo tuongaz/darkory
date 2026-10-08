@@ -18,7 +18,7 @@ import type { Activity, Member, Project, RunnerSession, Task } from "@/api/clien
 import { useDirectory, useMember, useOpenTasks, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { projectPath } from "@/app/currentProject";
 import { useNow } from "@/clock";
-import { Copy } from "@/components/Copy";
+import { SessionId } from "@/components/CopyValue";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -195,9 +195,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
           // Only an admin may list another Member's Sessions; anyone sees the one holding the Claim.
           <Property label="Session">
             {live ? (
-              <Copy value={live.session_id} label="Session id" className="min-w-0">
-                <span className="font-mono text-[11.5px] [overflow-wrap:anywhere]">{live.session_id}</span>
-              </Copy>
+              <SessionId id={live.session_id} className="min-w-0" />
             ) : (
               <span className="text-muted-foreground">None holding a Claim</span>
             )}

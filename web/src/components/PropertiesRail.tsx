@@ -3,7 +3,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * A label/value grid, as the Task peek and the page's right rail show a record's facts (kit
- * `.props`). `compact` narrows the label column for the 300px rail.
+ * `.props`). `compact` narrows the label column for the 320px rail, leaving a
+ * Session id room for all 22 characters and its copy button on one line.
  */
 export function PropertiesRail({ children, compact, className, ...props }: ComponentProps<"dl"> & { compact?: boolean }) {
   return (

@@ -38,11 +38,17 @@ export function CopyValue({ value, what, children, className }: { value: string;
   );
 }
 
-/** A Session id, whole, in mono, with a copy button after it. */
+/**
+ * A Session id, whole, in mono, with a copy button after it. An id never breaks across lines: the
+ * places that show one leave it room for all 22 characters, and only a container narrower still
+ * cuts it, with the whole id on hover and on Copy.
+ */
 export function SessionId({ id, className }: { id: string; className?: string }) {
   return (
     <Copy value={id} label="Session id" className={className}>
-      <span className="font-mono text-xs break-all">{id}</span>
+      <span className="block truncate font-mono text-xs whitespace-nowrap" title={id}>
+        {id}
+      </span>
     </Copy>
   );
 }

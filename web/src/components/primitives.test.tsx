@@ -121,6 +121,14 @@ describe("SessionId", () => {
     expect(screen.getByText("1CfppqWvwQruvqjgSEtEQt")).toHaveClass("font-mono");
     expect(screen.getByRole("button", { name: "Copy Session id" })).toBeInTheDocument();
   });
+
+  it("never breaks an id across lines; cut short only where it cannot fit, whole on hover", () => {
+    render(<SessionId id="1CfppqWvwQruvqjgSEtEQt" />);
+    const id = screen.getByText("1CfppqWvwQruvqjgSEtEQt");
+    expect(id).toHaveClass("whitespace-nowrap", "truncate");
+    expect(id).not.toHaveClass("break-all");
+    expect(id).toHaveAttribute("title", "1CfppqWvwQruvqjgSEtEQt");
+  });
 });
 
 describe("HeartbeatMeter", () => {

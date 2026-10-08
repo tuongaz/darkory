@@ -225,3 +225,21 @@ test("5 · a question from a standalone Task stands alone in the Project and blo
   expect(errors).toEqual([]);
   expect(bob.errors).toEqual([]);
 });
+
+test("the Claim's Session id reads on one line in the rail at 1440, its 22 characters whole", async ({ browser }) => {
+  const filed = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "Session id on one line" });
+  // A Session id the copy chose as a UUID: the API names it by its 22-character short form.
+  await v1({ ...as.builder, session: randomUUID() }, "POST", `/v1/tasks/${filed.task.id}/claim`, { heartbeat_timeout_seconds: 0 });
+  const { page, errors } = await open(browser);
+  await page.goto(`${base()}/tasks/${filed.task.key}`);
+  const claim = page.getByRole("complementary", { name: "Properties" }).getByRole("region", { name: "Claim" });
+  const id = claim.getByText(/^[1-9A-HJ-NP-Za-km-z]{22}$/);
+  await expect(id).toBeVisible();
+  const fit = await id.evaluate((el) => {
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+    return { lines: Math.round(el.getBoundingClientRect().height / lineHeight), cut: el.scrollWidth > el.clientWidth };
+  });
+  expect(fit).toEqual({ lines: 1, cut: false });
+  await shot(page, "session-id-one-line");
+  expect(errors).toEqual([]);
+});
