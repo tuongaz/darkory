@@ -174,9 +174,10 @@ func takeBack(t *tx, task Task, reason *string) error {
 // MoveTask moves an open Task that is not a Parent to a Step of its Project's Workflow by hand
 // (ADR 0016), which is the only way out of a hold: by any Member of the Project or its Owner. A
 // held Task may be moved only by whoever may take it back, and the move ends the Claim
-// taken_back first. A Task aimed at a Member then waits at the Step instead. Naming the Step it
-// is at writes nothing.
-func (s *Service) MoveTask(ctx context.Context, c *auth.Caller, ref, stepRef string, idem Idem) (Task, error) {
+// taken_back first; anyone else in the Project is refused held, and anyone outside it forbidden.
+// A Task aimed at a Member then waits at the Step instead. A Note, when given, is the mover's,
+// under no Skill. Naming the Step it is at writes nothing.
+func (s *Service) MoveTask(ctx context.Context, c *auth.Caller, ref, stepRef string, note *string, idem Idem) (Task, error) {
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		task, err := taskOf(t, ref)
 		if err != nil {
@@ -189,7 +190,14 @@ func (s *Service) MoveTask(ctx context.Context, c *auth.Caller, ref, stepRef str
 			return nil, refuse(CodeConflict, "%s is a Parent, at no Step: its Subtasks are moved instead", task.Key)
 		}
 		if task.Claim != nil {
-			if err := mayTakeBack(ctx, t, c, task, "move"); err != nil {
+			if err := mayTakeBack(ctx, t, c, task, "move"); codeOf(err) == CodeForbidden {
+				// Someone who may move it once it is free is told it is held; anyone else, that
+				// they may not move it at all.
+				if err := inProjectOrOwner(ctx, t, c, task, "move"); err != nil {
+					return nil, err
+				}
+				return nil, refuse(CodeHeld, "Task %s is held; only its Owner or someone above its holder on their Reporting line may move it while it is held, and its holder advances it", task.Key)
+			} else if err != nil {
 				return nil, err
 			}
 		} else if err := inProjectOrOwner(ctx, t, c, task, "move"); err != nil {
@@ -204,6 +212,11 @@ func (s *Service) MoveTask(ctx context.Context, c *auth.Caller, ref, stepRef str
 		}
 		if task.Claim != nil {
 			if err := takeBack(t, task, ptr("moved to "+st.Name)); err != nil {
+				return nil, err
+			}
+		}
+		if note != nil && strings.TrimSpace(*note) != "" {
+			if err := addNote(t, task.ID, nil, *note); err != nil {
 				return nil, err
 			}
 		}

@@ -273,6 +273,7 @@ var taskFields = fieldMap(
 	}},
 	filterField{name: "filed_at", kind: dateField, cols: []string{"t.created_at"}},
 	filterField{name: "completed_at", kind: dateField, cols: []string{"CASE WHEN t.state = 'done' THEN t.ended_at END"}},
+	filterField{name: "ended_at", kind: dateField, cols: []string{"t.ended_at"}},
 	filterField{name: "q", kind: textField, cols: []string{"t.display_key", "t.title"}},
 )
 

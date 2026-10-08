@@ -78,7 +78,7 @@ func (f *fixture) chain(project string, steps ...[2]string) core.Workflow {
 	f.t.Helper()
 	var in core.WorkflowInput
 	for i, st := range steps {
-		si := core.StepInput{Name: st[0], X: int64(i * 240)}
+		si := core.StepInput{Name: st[0], Position: int64(i + 1)}
 		if st[1] != "" {
 			si.Skill = ptrStr(st[1])
 		}
@@ -93,7 +93,7 @@ func (f *fixture) chain(project string, steps ...[2]string) core.Workflow {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return w
+	return w.Workflow
 }
 
 // step is the id of the Project's Step named name.
@@ -263,6 +263,15 @@ func codeOf(err error) core.Code {
 	return ""
 }
 
+// wantDetail checks a refusal's Details[key], as fmt prints it.
+func wantDetail(t *testing.T, err error, key, want string) {
+	t.Helper()
+	var e *core.Error
+	if !errors.As(err, &e) || fmt.Sprint(e.Details[key]) != want {
+		t.Fatalf("the refusal %v carries %s %v, want %s", err, key, e.Details[key], want)
+	}
+}
+
 func wantCode(t *testing.T, err error, code core.Code) {
 	t.Helper()
 	if codeOf(err) != code {
@@ -344,5 +353,7 @@ func name(prefix string, i int) string { return fmt.Sprintf("%s%02d", prefix, i)
 func ptrStr(s string) *string { return &s }
 
 func ptrBool(b bool) *bool { return &b }
+
+func ptrInt(n int64) *int64 { return &n }
 
 func ptrDur(d time.Duration) *time.Duration { return &d }

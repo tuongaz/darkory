@@ -26,8 +26,9 @@ func (f *fixture) actorOf(kind, subject string) string {
 }
 
 // Filing a Task with no Parent: in a Project its filer is in, at the Step named, or by default
-// the first Step that carries a Skill (CONTEXT.md), or the first Step when none does; aimed at a
-// Member it is at no Step. It goes to the bottom of the Project's Rank, owned by its filer unless
+// the first Step whose Skill is the Project's own work rather than breakdown, acceptance, retro or
+// skill-review (CONTEXT.md, Workflow), else the first Step that carries a Skill, else the first
+// Step; aimed at a Member it is at no Step. It goes to the bottom of the Project's Rank, owned by its filer unless
 // another is named, and takes the Project's auto_complete and acceptance unless the filer says.
 func TestFilingTasks(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
@@ -41,7 +42,7 @@ func TestFilingTasks(t *testing.T) {
 		wantCode(t, err, core.CodeForbidden)
 
 		first := f.fileTask(lead, core.NewTask{Project: ptrStr("WEB"), Title: "First"})
-		if first.Task.Key != "WEB-1" || first.Task.Rank == nil || *first.Task.Rank != 1 || first.Step == nil || first.Step.Name != "Plan" ||
+		if first.Task.Key != "WEB-1" || first.Task.Rank == nil || *first.Task.Rank != 1 || first.Step == nil || first.Step.Name != "Build" ||
 			first.Task.OwnerID != lead.MemberID || first.Task.FiledBy == nil || *first.Task.FiledBy != lead.MemberID || first.Task.ParentID != nil ||
 			first.Task.AutoComplete || first.Task.Acceptance || first.Task.Breakdown || first.Parent != nil || len(first.Subtasks) != 0 {
 			t.Fatalf("filed by default %+v at %+v", first.Task, first.Step)
@@ -90,20 +91,25 @@ func TestFilingTasks(t *testing.T) {
 		_, err = f.svc.FileTask(ctx, lead, core.NewTask{Project: ptrStr("WEB"), Title: "x", Step: ptrStr("Nowhere")}, core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
 
-		// With no Step carrying a Skill, a Task starts at the first Step; with no Step, nowhere.
-		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "TAX", Name: "Tax", Workflow: core.WorkflowEmpty}, core.Idem{}); err != nil {
-			t.Fatal(err)
-		}
-		if err := f.svc.AddProjectMember(ctx, f.admin, "TAX", "lead", core.Idem{}); err != nil {
-			t.Fatal(err)
+		// With only Darkory's own Skills, a Task starts at the first Step carrying one; with no Step
+		// carrying a Skill, at the first Step; with no Step, nowhere.
+		for _, key := range []string{"TAX", "OWN", "NIL"} {
+			if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: key, Name: key, Workflow: core.WorkflowEmpty,
+				Members: []string{"lead"}}, core.Idem{}); err != nil {
+				t.Fatal(err)
+			}
 		}
 		if got := f.fileTask(lead, core.NewTask{Project: ptrStr("TAX"), Title: "Return"}); got.Step == nil || got.Step.Name != "Backlog" {
 			t.Fatalf("filed in an empty Workflow at %+v", got.Step)
 		}
-		f.exec(`DELETE FROM connectors WHERE project_id = (SELECT id FROM projects WHERE key_prefix = 'TAX')`)
-		f.exec(`UPDATE tasks SET step_id = NULL WHERE project_id = (SELECT id FROM projects WHERE key_prefix = 'TAX')`)
-		f.exec(`DELETE FROM steps WHERE project_id = (SELECT id FROM projects WHERE key_prefix = 'TAX')`)
-		_, err = f.svc.FileTask(ctx, lead, core.NewTask{Project: ptrStr("TAX"), Title: "Lost"}, core.Idem{})
+		f.chain("OWN", [2]string{"Parked", ""}, [2]string{"Retro", core.SkillRetro}, [2]string{"Plan", core.SkillBreakdown})
+		if got := f.fileTask(lead, core.NewTask{Project: ptrStr("OWN"), Title: "Look back"}); got.Step == nil || got.Step.Name != "Retro" {
+			t.Fatalf("filed among Darkory's own Steps at %+v", got.Step)
+		}
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "NIL", core.WorkflowInput{}, core.Idem{}); err != nil {
+			t.Fatalf("a Workflow of no Steps: %v", err)
+		}
+		_, err = f.svc.FileTask(ctx, lead, core.NewTask{Project: ptrStr("NIL"), Title: "Lost"}, core.Idem{})
 		wantCode(t, err, core.CodeNoStep)
 
 		// Listed by Rank, a page at a time.

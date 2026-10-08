@@ -73,25 +73,30 @@ func mayLabel(ctx context.Context, r store.Reader, c *auth.Caller, project *stri
 	return nil
 }
 
-// labelNameFree refuses a name another Label (not except) where project says has, ignoring case.
-// It compares in Go, since lower() differs between the engines.
+// labelNameFree refuses a name another Label (not except) has where it would mean two Labels,
+// ignoring case: a Project's Label shares no name with the Project's other Labels or the
+// Organisation's, and an Organisation's Label none with any Label at all, so that a name always
+// names one Label. It compares in Go, since lower() differs between the engines.
 func labelNameFree(t *tx, except string, project *string, name string) error {
-	q := `SELECT id, name FROM labels WHERE org_id = $1 AND project_id IS NULL`
-	args := []any{t.caller.OrgID}
+	q, args := `SELECT `+labelCols+` FROM labels l WHERE l.org_id = $1`, []any{t.caller.OrgID}
 	if project != nil {
-		q, args = `SELECT id, name FROM labels WHERE org_id = $1 AND project_id = $2`, append(args, *project)
+		q, args = q+` AND (l.project_id IS NULL OR l.project_id = $2)`, append(args, *project)
 	}
-	taken, err := collect(t.ctx, t, func(row interface{ Scan(...any) error }) ([2]string, error) {
-		var v [2]string
-		return v, row.Scan(&v[0], &v[1])
-	}, q, args...)
+	taken, err := collect(t.ctx, t, scanLabel, q, args...)
 	if err != nil {
 		return err
 	}
 	for _, l := range taken {
-		if l[0] != except && strings.EqualFold(l[1], name) {
-			return refuse(CodeConflict, "a Label is already named %q there", l[1])
+		if l.ID == except || !strings.EqualFold(l.Name, name) {
+			continue
 		}
+		if l.ProjectID == nil {
+			return refuse(CodeConflict, "the Organisation has a Label named %q", l.Name)
+		}
+		if project == nil {
+			return refuse(CodeConflict, "a Project has a Label named %q; an Organisation's Label shares no name with a Project's", l.Name)
+		}
+		return refuse(CodeConflict, "the Project has a Label named %q", l.Name)
 	}
 	return nil
 }
@@ -196,6 +201,9 @@ func (s *Service) UpdateLabel(ctx context.Context, c *auth.Caller, id string, ch
 		if _, err := t.Exec(ctx, `UPDATE labels SET name = $1, color = $2 WHERE org_id = $3 AND id = $4`, l.Name, l.Color, c.OrgID, l.ID); err != nil {
 			return nil, err
 		}
+		if l.ProjectID != nil {
+			payload["project_id"] = *l.ProjectID
+		}
 		return l, t.recordByCaller("label.changed", l.ID, payload)
 	})
 	if err != nil {
@@ -222,7 +230,11 @@ func (s *Service) DeleteLabel(ctx context.Context, c *auth.Caller, id string, id
 		if _, err := t.Exec(ctx, `DELETE FROM labels WHERE org_id = $1 AND id = $2`, c.OrgID, l.ID); err != nil {
 			return nil, err
 		}
-		return nil, t.recordByCaller("label.deleted", l.ID, map[string]any{"name": l.Name, "tasks": n})
+		payload := map[string]any{"name": l.Name, "tasks": n}
+		if l.ProjectID != nil {
+			payload["project_id"] = *l.ProjectID
+		}
+		return nil, t.recordByCaller("label.deleted", l.ID, payload)
 	})
 	return err
 }
@@ -281,22 +293,30 @@ func (s *Service) SetTaskLabels(ctx context.Context, c *auth.Caller, ref string,
 }
 
 // taskLabels resolves the Labels a Task of projectID is to carry, each once: the Project's or the
-// Organisation's.
+// Organisation's, named by id or by name in any case, since a name names one Label among them.
 func taskLabels(t *tx, projectID string, refs []string) ([]string, error) {
 	out := []string{}
+	if len(refs) == 0 {
+		return out, nil
+	}
+	usable, err := collect(t.ctx, t, scanLabel, `SELECT `+labelCols+` FROM labels l
+WHERE l.org_id = $1 AND (l.project_id IS NULL OR l.project_id = $2) ORDER BY l.id`, t.caller.OrgID, projectID)
+	if err != nil {
+		return nil, err
+	}
 	for _, ref := range refs {
-		id, err := resolveLabel(t.ctx, t, t.caller.OrgID, ref)
-		if err != nil {
-			return nil, err
+		ref = strings.TrimSpace(ref)
+		i := slices.IndexFunc(usable, func(l Label) bool { return l.ID == ref })
+		if i < 0 {
+			i = slices.IndexFunc(usable, func(l Label) bool { return strings.EqualFold(l.Name, ref) })
 		}
-		l, err := getLabel(t.ctx, t, t.caller.OrgID, id)
-		if err != nil {
-			return nil, err
+		if i < 0 {
+			if l, err := getLabel(t.ctx, t, t.caller.OrgID, ref); err == nil {
+				return nil, refuse(CodeInvalid, "Label %s is another Project's; a Task carries its own Project's Labels and the Organisation's", l.Name)
+			}
+			return nil, refuse(CodeNotFound, "no Label %q in the Project or the Organisation", ref)
 		}
-		if l.ProjectID != nil && *l.ProjectID != projectID {
-			return nil, refuse(CodeInvalid, "Label %s is another Project's; a Task carries its own Project's Labels and the Organisation's", l.Name)
-		}
-		if !slices.Contains(out, id) {
+		if id := usable[i].ID; !slices.Contains(out, id) {
 			out = append(out, id)
 		}
 	}

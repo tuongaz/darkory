@@ -10,8 +10,6 @@ import (
 
 // ActivityKinds lists every kind of Activity entry Darkory writes; the API's ActivityKind enum
 // lists the same. The part before the dot names the subject's type (SubjectTypes).
-// Entries written before model v2 keep the kinds they were written with (feature.*, team.*,
-// task.handed_over, task.status_set, statuses.changed): Activity is the trail of what happened.
 var ActivityKinds = []string{
 	"task.filed", "task.claimed", "task.lapsed", "task.released", "task.advanced", "task.moved", "task.completed", "task.dropped",
 	"task.taken_back", "task.claim_ended", "task.split", "task.became_parent", "task.note_added", "task.observed",
@@ -44,7 +42,8 @@ type ActivityQuery struct {
 	Member string
 	// Kinds keeps the entries of these kinds.
 	Kinds []string
-	// Project keeps the entries about a Project (id or key), its Workflow, or a Task of it.
+	// Project keeps the entries about a Project (id or key), its Workflow, its own Labels, or a
+	// Task of it.
 	Project string
 }
 
@@ -54,10 +53,6 @@ type ActivityQuery struct {
 func (s *Service) ListActivity(ctx context.Context, c *auth.Caller, q ActivityQuery) (ActivityPage, error) {
 	where := []string{"a.org_id = $1", "a.seq > $2"}
 	args := []any{c.OrgID, q.After}
-	add := func(cond string, v any) {
-		args = append(args, v)
-		where = append(where, strings.ReplaceAll(cond, "?", "$"+itoa(len(args))))
-	}
 	if q.Member != "" {
 		id, err := resolveMember(ctx, s.store, c.OrgID, q.Member)
 		if err != nil {
@@ -85,7 +80,12 @@ func (s *Service) ListActivity(ctx context.Context, c *auth.Caller, q ActivityQu
 		if err != nil {
 			return ActivityPage{}, err
 		}
-		add(`(a.subject_id = ? OR EXISTS (SELECT 1 FROM tasks ft WHERE ft.org_id = a.org_id AND ft.id = a.subject_id AND ft.project_id = ?))`, id)
+		// About the Project, its Workflow (whose entries name the Project), a Task of it, or one of
+		// its own Labels, whose entries name the Project in the payload, a deleted one's included.
+		args = append(args, id, `%"project_id":"`+id+`"%`)
+		p, like := "$"+itoa(len(args)-1), "$"+itoa(len(args))
+		where = append(where, `(a.subject_id = `+p+` OR EXISTS (SELECT 1 FROM tasks ft WHERE ft.org_id = a.org_id AND ft.id = a.subject_id AND ft.project_id = `+p+`)
+	OR (a.kind IN ('label.created', 'label.changed', 'label.deleted') AND a.payload LIKE `+like+`))`)
 	}
 	query := `SELECT a.seq, a.at, a.actor_id, a.kind, a.subject_id, a.payload FROM activity a WHERE ` + strings.Join(where, " AND ")
 	var items []Activity

@@ -115,8 +115,8 @@ func TestSkillVersionPublishes(t *testing.T) {
 		}
 		r.advance(r.retro, key, "propose")
 		d := r.get(key)
-		if d.Proposal == nil || d.Proposal.ID != p.ID || d.Proposal.Body != p.Body || d.Step.Name != "Skill review" {
-			t.Fatalf("the Task carries %+v at %+v", d.Proposal, d.Step)
+		if len(d.Proposals) != 1 || d.Proposals[0].ID != p.ID || d.Proposals[0].Body != p.Body || d.Step.Name != "Skill review" {
+			t.Fatalf("the Task carries %+v at %+v", d.Proposals, d.Step)
 		}
 
 		// The author has skill-review too, and still cannot take the review of their own proposal.
@@ -189,7 +189,7 @@ func TestProposingNeedsAWayToSkillReview(t *testing.T) {
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name
-			in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, X: s.X, Y: s.Y})
+			in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
 		}
 		for _, k := range w.Connectors {
 			if k.Name == "propose" {
@@ -242,9 +242,9 @@ func TestStaleProposalIsSentBack(t *testing.T) {
 			t.Fatal("a stale review published")
 		}
 		d := r.get(second.Key)
-		if d.Task.State != "open" || d.Task.Claim != nil || d.Proposal.State != "pending" || d.Step.Name != "Retro" ||
+		if d.Task.State != "open" || d.Task.Claim != nil || len(d.Proposals) != 1 || d.Proposals[0].State != "pending" || d.Step.Name != "Retro" ||
 			*d.Claims[len(d.Claims)-1].HowEnded != "advanced" {
-			t.Fatalf("after the refusal %+v at %+v, proposal %+v", d.Task, d.Step, d.Proposal)
+			t.Fatalf("after the refusal %+v at %+v, proposals %+v", d.Task, d.Step, d.Proposals)
 		}
 		if n := d.Notes[len(d.Notes)-1]; n.AuthorID != r.reviewer.MemberID || !strings.Contains(n.Body, "version 1") {
 			t.Fatalf("the Note sent back with it: %+v", n)
@@ -268,6 +268,85 @@ func TestStaleProposalIsSentBack(t *testing.T) {
 		}
 		if n := r.count(`SELECT COUNT(*) FROM skill_proposals WHERE task_id = $1 AND state = 'superseded'`, second.ID); n != 1 {
 			t.Fatalf("%d superseded proposals", n)
+		}
+		r.checkActivity()
+	})
+}
+
+// A Retrospective carries one pending proposal per Skill: a new one for a Skill supersedes only
+// that Skill's. Advancing it into Done from Skill review publishes them all, or, when any has gone
+// stale, none: the Task goes back to Retro, refused proposal_stale naming the stale ones in its
+// Details, and the current ones wait for the next review.
+func TestProposalsPerSkill(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		r := newRetroFixture(t, st)
+		ctx := t.Context()
+		if _, err := r.svc.CreateSkill(ctx, r.admin, core.NewSkill{Name: "build-acme", Kind: "company", BaseSkill: ptrStr(core.SkillEngineer),
+			Body: "Build it."}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		key := r.retrospective.Key
+		propose := func(c *auth.Caller, task, skill string, base int64, body string) core.SkillProposal {
+			t.Helper()
+			p, err := r.svc.ProposeSkillVersion(ctx, c, task, skill, base, body, core.Idem{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return p
+		}
+		r.claim(r.retro, key, noTimeout)
+		qa := propose(r.retro, key, "qa-acme", 1, "Test an empty basket.")
+		build := propose(r.retro, key, "build-acme", 1, "Build it, with tests.")
+		qa2 := propose(r.retro, key, "qa-acme", 1, "Test the happy path and an empty basket.")
+		if p, _ := r.svc.GetSkillProposal(ctx, r.admin, qa.ID); p.State != "superseded" {
+			t.Fatalf("the first qa-acme proposal is %s", p.State)
+		}
+		if p, _ := r.svc.GetSkillProposal(ctx, r.admin, build.ID); p.State != "pending" {
+			t.Fatalf("the build-acme proposal is %s", p.State)
+		}
+		if d := r.get(key); len(d.Proposals) != 2 || d.Proposals[0].ID != build.ID || d.Proposals[1].ID != qa2.ID {
+			t.Fatalf("the Task carries %+v", d.Proposals)
+		}
+		r.advance(r.retro, key, "propose")
+
+		// Another Retrospective's review publishes build-acme version 2 first.
+		other := r.endedParent("Wishlist", false)
+		subs := r.get(other.Key).Subtasks
+		second := subs[len(subs)-1].Key
+		r.claim(r.retro2, second, noTimeout)
+		propose(r.retro2, second, "build-acme", 1, "Build it fast.")
+		r.advance(r.retro2, second, "propose")
+		r.claim(r.reviewer, second, noTimeout)
+		r.complete(r.reviewer, second)
+
+		r.claim(r.reviewer, key, noTimeout)
+		_, err := r.svc.Complete(ctx, r.reviewer, key, nil, core.Idem{})
+		wantCode(t, err, core.CodeProposalStale)
+		wantDetail(t, err, "proposals", "["+build.ID+"]")
+		if r.version("qa-acme") != 1 || r.version("build-acme") != 2 || r.at(key) != "Retro" {
+			t.Fatalf("after the refusal: qa-acme v%d, build-acme v%d, at %s", r.version("qa-acme"), r.version("build-acme"), r.at(key))
+		}
+		if d := r.get(key); d.Proposals[0].State != "pending" || d.Proposals[1].State != "pending" ||
+			!strings.Contains(d.Notes[len(d.Notes)-1].Body, "build-acme") {
+			t.Fatalf("after the refusal %+v, Note %+v", d.Proposals, d.Notes)
+		}
+
+		// Rewritten against build-acme's version 2, both publish in one review.
+		r.claim(r.retro, key, noTimeout)
+		build2 := propose(r.retro, key, "build-acme", 2, "Build it fast, with tests.")
+		r.advance(r.retro, key, "propose")
+		r.claim(r.reviewer, key, noTimeout)
+		r.complete(r.reviewer, key)
+		if r.version("qa-acme") != 2 || r.version("build-acme") != 3 {
+			t.Fatalf("published: qa-acme v%d, build-acme v%d", r.version("qa-acme"), r.version("build-acme"))
+		}
+		d := r.get(key)
+		if len(d.Proposals) != 2 || d.Proposals[0].ID != qa2.ID || d.Proposals[1].ID != build2.ID ||
+			d.Proposals[0].State != "published" || d.Proposals[1].State != "published" {
+			t.Fatalf("the Task carries %+v", d.Proposals)
+		}
+		if n := len(r.activity("skill.version_published")); n != 3 {
+			t.Fatalf("%d versions published", n)
 		}
 		r.checkActivity()
 	})
@@ -349,7 +428,7 @@ func TestOnlyAReviewerPublishesWhileTheOrganisationHasOne(t *testing.T) {
 		wantCode(t, err, core.CodeForbidden)
 
 		// Moved to Skill review anyway, by its Owner, the Task is the reviewer's, not the Owner's.
-		if _, err := r.svc.MoveTask(ctx, owner, work.Key, "Skill review", core.Idem{}); err != nil {
+		if _, err := r.svc.MoveTask(ctx, owner, work.Key, "Skill review", nil, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		if r.takeable(owner)[work.ID] {
