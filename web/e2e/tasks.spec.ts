@@ -189,3 +189,35 @@ test("8 · the Subtask graph: columns, a Blocking arrow, the next one highlighte
   await shot(page, "8-graph-peek");
   expect(errors).toEqual([]);
 });
+
+test("5 · a question from a standalone Task stands alone in the Project and blocks it", async ({ browser }) => {
+  const standalone = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "Price rounding" });
+  const { page, errors } = await open(browser);
+  await page.goto(`${base()}/tasks/${standalone.task.key}`);
+  await page.getByRole("button", { name: "More" }).click();
+  await page.getByRole("menuitem", { name: "Ask a question" }).click();
+  const dialog = page.getByRole("dialog", { name: "File a Task" });
+  await expect(dialog.getByRole("combobox", { name: "Blocks" })).toContainText(standalone.task.key);
+  await dialog.getByRole("combobox", { name: "Aim at" }).click();
+  await page.getByRole("option", { name: "tsk-bob" }).click();
+  await dialog.getByLabel("Title").fill("Round half up or to even?");
+  await shot(page, "5-ask");
+  await dialog.getByRole("button", { name: "File Task" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  const question = (await v1<{ items: Task[] }>(as.ada, "GET", "/v1/tasks?project=TSK")).items.find((t) => t.title === "Round half up or to even?")!;
+  // Beside nothing: no Parent, and at no Step, with bob.
+  expect(question.parent_id).toBeUndefined();
+  expect(question.step_id).toBeUndefined();
+  const properties = page.getByRole("complementary", { name: "Properties" });
+  await expect(properties).toContainText("Blocked by");
+  await expect(properties).toContainText(question.key);
+  await shot(page, "5-blocked");
+  // bob sees it aimed at him.
+  const bob = await open(browser, bobState);
+  await bob.page.goto(`${base()}/inbox`);
+  await expect(bob.page.getByRole("region", { name: "Aimed at you" }).locator(`[data-task="${question.key}"]`)).toContainText(`blocks ${standalone.task.key}`);
+  await shot(bob.page, "5-bob-inbox");
+  expect(errors).toEqual([]);
+  expect(bob.errors).toEqual([]);
+});
