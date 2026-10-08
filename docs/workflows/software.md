@@ -138,3 +138,20 @@ Running it again keeps everything that is already there. Steps keep their ids by
 Restart `darkory serve` (or start `darkory runner`) once the tokens exist, so the Runner starts the agents. File work with `darkory file --project WEB --title …`, which starts at Triage, or add `--breakdown` for a Parent, which starts at Plan.
 
 Keep the Install's data directory outside any repository that has a `CLAUDE.md`. Sessions run in `<data>/workspaces/…`, and Claude Code reads every `CLAUDE.md` from there up to the root.
+
+## The proof run (2026-10-08)
+
+The preset ran on a scratch Install, with the Runner starting real Claude Code sessions under the owner's own configuration, against a small Go service (`linkshort`). The run used two Tasks and nobody touched it while it ran.
+
+- **Fast path.** LS-3 ("a short code that does not exist should say 'link not found'") went Triage → Build → Code review → QA → Release → Done in 3 minutes, with no design and no security Steps.
+- **Design path.** LS-1 ("only callers with an API key can create short links, with rate limiting, a health check, and shipped as a container with CI") was filed with Break down.
+  - Plan wrote the acceptance criteria.
+  - A `Design: …` Subtask went Design → Threat model → Design review. It produced a design document, three ADRs, and a STRIDE threat model with 19 security requirements.
+  - Four slices followed: health check, API keys, rate limit, and container + CI + deploy notes. The keys, rate-limit and container slices went through Security review; the health-check slice was taken before it was blocked and skipped it.
+  - Two questions went to the architect.
+  - The container slice went back to Build five times, four of them from Code review, each round finding one more flaw in the operator procedures.
+  - Then Acceptance → Release, Auto-complete, the Retrospective, and a Skill review that sent one proposal back before publishing four new Skill versions.
+- **Totals.** 52 sessions and 84 minutes of work, from 12:19 to 13:37 UTC. No Claim lapsed and no session needed a nudge.
+- **Landing on main.** The Parent's merge into main conflicted with LS-3. The Retrospective filed LS-13 to land it, and the agents carried it to Done.
+
+The run found three Runner defects, each now fixed with a test: reviewed work was noted "without review" when a Step after the review completed it; a re-taken Task's branch was stale; a session could start before its sibling's merge. It also showed that a Parent's conflicting merge filed nothing to resolve it, which is fixed too. The Skill-text changes it led to are in the preset.
