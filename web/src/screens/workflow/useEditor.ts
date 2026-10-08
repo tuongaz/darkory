@@ -1,10 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { invalidateAll, keys, useWorkflow } from "@/api/queries";
 import { setWorkflow } from "@/api/writes";
-import { adoptIds, newIds, toBody, type WorkflowRecord } from "./bind";
+import { adoptIds, changeAcross, newIds, toBody, type WorkflowRecord } from "./bind";
 import { problem, restore, type Change } from "./edits";
 
 /** The toast every change shows, replaced by the next: the last change, with its Undo. */
@@ -34,7 +34,19 @@ export function useWorkflowEditor(project: string) {
   const run = useRef({ sending: false, again: false, moves: {} as Record<string, string>, accepted: undefined as WorkflowRecord | undefined });
   const last = useRef<Last | undefined>(undefined);
   // A new Step's `new:…` id, once /v1 has given it one: a selection follows it.
-  const [aliases, setAliases] = useState<Map<string, string>>(() => new Map());
+  const [aliases, setAliasesState] = useState<Map<string, string>>(() => new Map());
+  // The same, as soon as the Workflow being edited takes them, and as of the last drawing: a change
+  // made in between (Enter in a new Step's name as the reply lands) names it by its `new:…` id.
+  const named = useRef<Map<string, string>>(new Map());
+  const drawn = useRef<Map<string, string>>(aliases);
+  useLayoutEffect(() => {
+    drawn.current = aliases;
+  }, [aliases]);
+  const setAliases = (ids: Map<string, string>) => {
+    if (ids.size === 0) return;
+    named.current = new Map([...named.current, ...ids]);
+    setAliasesState(named.current);
+  };
   const [saving, setSaving] = useState(false);
   // Whether this page has changed the Workflow: "Saved" says nothing before.
   const [touched, setTouched] = useState(false);
@@ -76,15 +88,17 @@ export function useWorkflowEditor(project: string) {
           return;
         }
         r.accepted = reply;
-        const named = newIds(sent, reply);
-        if (named.size > 0) setAliases((prev) => new Map([...prev, ...named]));
-        if (last.current) last.current.before = adoptIds(last.current.before, named);
+        const ids = newIds(sent, reply);
+        if (last.current) last.current.before = adoptIds(last.current.before, ids);
         if (r.again) {
           // More was drawn on top while this was on its way: it takes the new ids and goes next.
-          setDraft(adoptIds(draftRef.current!, named));
+          setAliases(ids);
+          setDraft(adoptIds(draftRef.current!, ids));
           continue;
         }
         await qc.cancelQueries({ queryKey: key });
+        // The ids and the Workflow that has them, together: a selection is never of a Step missing.
+        setAliases(ids);
         qc.setQueryData(key, reply);
         setDraft(undefined);
         break;
@@ -104,7 +118,9 @@ export function useWorkflowEditor(project: string) {
   function apply(make: Change | ((wf: WorkflowRecord) => Change)): string | undefined {
     const wf = current();
     if (!wf) return undefined;
-    const change = typeof make === "function" ? make(wf) : make;
+    // A change made before the page drew the ids /v1 gave names a new Step by its `new:…` id still.
+    const unseen = new Map([...named.current].filter(([id]) => !drawn.current.has(id)));
+    const change = typeof make === "function" ? changeAcross(wf, unseen, make) : make;
     const p = problem(change.next, wf, change.moves);
     setProblem(p);
     setRefused(undefined);
