@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiError } from "@/api/client";
 import { invalidateAll, keys, useWorkflow } from "@/api/queries";
-import { adoptIds, toBody, type WorkflowRecord } from "./bind";
+import { adoptIds, newIds, toBody, type WorkflowRecord } from "./bind";
 import { problem, restore, type Change } from "./edits";
 import { setWorkflow } from "./writes";
 
@@ -74,15 +74,12 @@ export function useWorkflowEditor(project: string) {
           return;
         }
         r.accepted = reply;
-        const adopted = adoptIds(sent, reply);
-        const named = new Map<string, string>();
-        sent.steps.forEach((s, i) => adopted.steps[i].id !== s.id && named.set(s.id, adopted.steps[i].id));
-        sent.connectors.forEach((c, i) => adopted.connectors[i].id !== c.id && named.set(c.id, adopted.connectors[i].id));
+        const named = newIds(sent, reply);
         if (named.size > 0) setAliases((prev) => new Map([...prev, ...named]));
-        if (last.current) last.current.before = adoptIds(last.current.before, reply);
+        if (last.current) last.current.before = adoptIds(last.current.before, named);
         if (r.again) {
           // More was drawn on top while this was on its way: it takes the new ids and goes next.
-          setDraft(adoptIds(draftRef.current!, reply));
+          setDraft(adoptIds(draftRef.current!, named));
           continue;
         }
         await qc.cancelQueries({ queryKey: key });

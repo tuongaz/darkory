@@ -1,5 +1,3 @@
-import { useState } from "react";
-import { useSearchParams } from "react-router";
 import type { Project } from "@/api/client";
 import { Refusal } from "@/components/Refusal";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -9,7 +7,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { addConnector, addStep, layoutSteps, placeStep, reconnect, removeConnector } from "./edits";
 import { useEditingCanvas } from "./canvasData";
 import { EditPanel } from "./Panel";
-import { stepParam } from "./StepPeek";
 import { TextView } from "./TextView";
 import type { useWorkflowEditor } from "./useEditor";
 import type { WorkflowView } from "./view";
@@ -17,18 +14,25 @@ import type { WorkflowView } from "./view";
 /**
  * Settings › a Project › Workflow, for an admin: the canvas (or its list) editing, the selected
  * Step or Connector's panel beside it (a sheet on a phone), and under the canvas what `/v1`
- * would refuse, in words, or did refuse. `?step=<id>` opens with that Step selected (Edit in
- * Settings from the live canvas).
+ * would refuse, in words, or did refuse.
  */
-export function EditingWorkflow({ project, view, editor }: { project: Project; view: WorkflowView; editor: ReturnType<typeof useWorkflowEditor> }) {
+export function EditingWorkflow({
+  project,
+  view,
+  editor,
+  picked,
+  setPicked,
+}: {
+  project: Project;
+  view: WorkflowView;
+  editor: ReturnType<typeof useWorkflowEditor>;
+  /** What is selected, as picked: a new Step by its `new:…` id until /v1 names it. */
+  picked: CanvasSelection;
+  setPicked: (s: CanvasSelection) => void;
+}) {
   const { workflow: record, apply, resolve } = editor;
   const workflow = useEditingCanvas(record);
   const phone = useIsMobile();
-  const [params] = useSearchParams();
-  const [picked, setPicked] = useState<CanvasSelection>(() => {
-    const id = params.get(stepParam);
-    return id ? { kind: "step", id } : null;
-  });
   // A new Step or Connector keeps its selection once /v1 gives it its id.
   const resolved = picked && { ...picked, id: resolve(picked.id) };
   const exists =

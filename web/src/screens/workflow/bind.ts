@@ -121,26 +121,39 @@ function positionOf(steps: RecordStep[], id: string): number {
 }
 
 /**
- * After `/v1` has answered a body sent from `sent`, the Steps and Connectors drawn since with ids
- * of their own take the ids `/v1` gave them, matched by name (a Step) or by their Step and name (a
- * Connector), so later edits name them as the record does.
+ * The ids `/v1` gave the Steps and Connectors `sent` drew without one: a Step by its name in the
+ * reply, a Connector by its Step and name. Read from what was sent, so a Step renamed since keeps
+ * its new id.
  */
-export function adoptIds(draft: WorkflowRecord, reply: WorkflowRecord): WorkflowRecord {
-  const stepId = new Map<string, string>();
-  for (const s of draft.steps) {
+export function newIds(sent: WorkflowRecord, reply: WorkflowRecord): Map<string, string> {
+  const ids = new Map<string, string>();
+  for (const s of sent.steps) {
     if (!isNew(s.id)) continue;
     const got = reply.steps.find((r) => same(r.name, s.name));
-    if (got) stepId.set(s.id, got.id);
+    if (got) ids.set(s.id, got.id);
   }
-  const sid = (id: string) => stepId.get(id) ?? id;
-  const steps = draft.steps.map((s) => (stepId.has(s.id) ? { ...s, id: stepId.get(s.id)! } : s));
-  const connectors = draft.connectors.map((c) => {
-    const from = sid(c.from_step_id);
-    const to = c.to_step_id ? sid(c.to_step_id) : undefined;
-    const id = isNew(c.id) ? (reply.connectors.find((r) => r.from_step_id === from && same(r.name, c.name))?.id ?? c.id) : c.id;
-    return { ...c, id, from_step_id: from, to_step_id: to };
-  });
-  return { ...draft, steps, connectors };
+  const sid = (id: string) => ids.get(id) ?? id;
+  for (const c of sent.connectors) {
+    if (!isNew(c.id)) continue;
+    const got = reply.connectors.find((r) => r.from_step_id === sid(c.from_step_id) && same(r.name, c.name));
+    if (got) ids.set(c.id, got.id);
+  }
+  return ids;
+}
+
+/** `draft` with the new ids in place of its `new:…` ones, so later edits name them as the record does. */
+export function adoptIds(draft: WorkflowRecord, ids: Map<string, string>): WorkflowRecord {
+  const id = (x: string) => ids.get(x) ?? x;
+  return {
+    ...draft,
+    steps: draft.steps.map((s) => (ids.has(s.id) ? { ...s, id: id(s.id) } : s)),
+    connectors: draft.connectors.map((c) => ({
+      ...c,
+      id: id(c.id),
+      from_step_id: id(c.from_step_id),
+      to_step_id: c.to_step_id ? id(c.to_step_id) : undefined,
+    })),
+  };
 }
 
 /** Names compare as `/v1` compares them: ignoring case. */

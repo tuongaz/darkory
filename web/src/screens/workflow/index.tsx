@@ -1,13 +1,16 @@
 import { CheckIcon, LoaderIcon, PencilIcon, PlusIcon } from "lucide-react";
-import { Link } from "react-router";
+import { useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { Button } from "@/components/ui/button";
+import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { useCurrentMe } from "@/me";
 import { EditingWorkflow } from "./Editing";
 import { addStep } from "./edits";
 import { LiveWorkflow } from "./Live";
+import { stepParam } from "./StepPeek";
 import { useWorkflowEditor } from "./useEditor";
 import { useWorkflowView, type WorkflowView } from "./view";
 import { ViewSwitch } from "./ViewSwitch";
@@ -25,10 +28,9 @@ export function WorkflowPage() {
         actions={
           admin && (
             <Button asChild variant="outline">
-              <Link to={projectSettingsPath(project, "workflow")}>
+              <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
                 <PencilIcon />
                 <span className="hidden sm:inline">Edit</span>
-                <span className="sr-only sm:hidden">Edit the Workflow</span>
               </Link>
             </Button>
           )
@@ -73,6 +75,21 @@ export function WorkflowSettingsPage() {
 function EditingPage({ view, setView }: { view: WorkflowView; setView: (v: WorkflowView) => void }) {
   const project = useRouteProject();
   const editor = useWorkflowEditor(project.key);
+  // `?step=<id>` opens with that Step selected: Edit in Settings from the live canvas.
+  const [params] = useSearchParams();
+  const [picked, setPicked] = useState<CanvasSelection>(() => {
+    const id = params.get(stepParam);
+    return id ? { kind: "step", id } : null;
+  });
+  const add = () => {
+    let made: string | undefined;
+    editor.apply((wf) => {
+      const change = addStep(wf);
+      made = change.select;
+      return change;
+    });
+    if (made) setPicked({ kind: "step", id: made });
+  };
   return (
     <>
       <TopBar
@@ -82,21 +99,19 @@ function EditingPage({ view, setView }: { view: WorkflowView; setView: (v: Workf
           editor.workflow && (
             <span role="status" className="flex items-center gap-1 text-xs text-muted-foreground">
               {editor.saving ? <LoaderIcon aria-hidden className="size-3.5 animate-spin" /> : <CheckIcon aria-hidden className="size-3.5" />}
-              <span className="hidden sm:inline">{editor.saving ? "Saving…" : "Saved"}</span>
-              <span className="sr-only sm:hidden">{editor.saving ? "Saving…" : "Saved"}</span>
+              <span className="sr-only sm:not-sr-only">{editor.saving ? "Saving…" : "Saved"}</span>
             </span>
           )
         }
         primary={
-          <Button disabled={!editor.workflow} onClick={() => editor.apply((wf) => addStep(wf))}>
+          <Button aria-label="Add step" disabled={!editor.workflow} onClick={add}>
             <PlusIcon />
             <span className="hidden sm:inline">Add step</span>
-            <span className="sr-only sm:hidden">Add step</span>
           </Button>
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <EditingWorkflow project={project} view={view} editor={editor} />
+        <EditingWorkflow project={project} view={view} editor={editor} picked={picked} setPicked={setPicked} />
       </Content>
     </>
   );
