@@ -316,3 +316,63 @@ func TestRaceOppositeBlockEdges(t *testing.T) {
 		f.checkActivity()
 	})
 }
+
+// A Task filed with blocked_by is blocked from its first moment, in the filing's write, so it is
+// never takeable before its blockers end; a Parent cannot block or be filed blocked, and a blocker
+// that the new Task would itself block, directly or through others, is refused as a loop.
+func TestFileBlocked(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		f.skill("build")
+		f.chain("WEB", [2]string{"Backlog", ""}, [2]string{"Build", "build"})
+		owner := f.member("owner", []string{"WEB"}, nil)
+		builder := f.member("builder", []string{"WEB"}, []string{"build"})
+		p := f.task(owner, "WEB", "Checkout", "Build")
+		design := f.subtask(owner, p.ID, "Design", "Build")
+		keys := f.subtask(owner, p.ID, "Keys", "Build")
+
+		build := "Build"
+		before := f.checkActivity()
+		slice := f.fileTask(owner, core.NewTask{Parent: &p.ID, Title: "Limits", Step: &build, BlockedBy: []string{design.Key, keys.ID, design.Key}})
+		if !slice.Task.Blocked || len(slice.Task.OpenBlockers) != 2 {
+			t.Fatalf("filed with blockers: %+v", slice.Task.OpenBlockers)
+		}
+		if f.takeable(builder)[slice.Task.ID] {
+			t.Fatal("a Task filed blocked is takeable")
+		}
+		if got := f.checkActivity() - before; got != 3 {
+			t.Fatalf("Activity entries for the filing: %d, want task.filed and two task.blocker_added", got)
+		}
+
+		// Once its blockers end, it is takeable.
+		for _, b := range []core.Task{design, keys} {
+			if _, err := f.svc.DropTask(ctx, owner, b.Key, nil, core.Idem{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if !f.takeable(builder)[slice.Task.ID] {
+			t.Fatal("still not takeable after its blockers ended")
+		}
+
+		// A Parent neither blocks nor is filed blocked.
+		web := "WEB"
+		_, err := f.svc.FileTask(ctx, owner, core.NewTask{Project: &web, Title: "Under a Parent", Step: &build, BlockedBy: []string{p.Key}}, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
+		_, err = f.svc.FileTask(ctx, owner, core.NewTask{Project: &web, Title: "Broken down", Breakdown: true, BlockedBy: []string{slice.Task.Key}}, core.Idem{})
+		wantCode(t, err, core.CodeInvalid)
+
+		// A question that blocks a Task cannot also be blocked by it, nor by what that Task blocks.
+		a := f.task(owner, "WEB", "A", "Build")
+		b := f.task(owner, "WEB", "B", "Build")
+		if err := f.svc.AddBlocker(ctx, owner, b.Key, a.Key, core.Idem{}); err != nil { // A blocks B
+			t.Fatal(err)
+		}
+		member := "owner"
+		_, err = f.svc.FileTask(ctx, owner, core.NewTask{Title: "Question", Blocks: &a.Key, AimedAt: &member, BlockedBy: []string{a.Key}}, core.Idem{})
+		wantCode(t, err, core.CodeCycle)
+		_, err = f.svc.FileTask(ctx, owner, core.NewTask{Title: "Question", Blocks: &a.Key, AimedAt: &member, BlockedBy: []string{b.Key}}, core.Idem{})
+		wantCode(t, err, core.CodeCycle)
+	})
+}

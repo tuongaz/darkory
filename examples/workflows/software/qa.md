@@ -1,0 +1,1 @@
+Verify what a Task built from its user's side, before it is released. Run it, exercise the behaviour the Task and its Parent describe the way its user would, including the edges and the failure cases, and record what you saw as Evidence. Never fix the code yourself.

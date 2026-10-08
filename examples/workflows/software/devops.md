@@ -1,0 +1,1 @@
+Make sure a change can be shipped and taken back safely. Check that the pipeline that tests and builds it passes, that the artefact it ships builds and starts, that its configuration and secrets are outside the code, and that there is a written rollout, a rollback, and the signals to watch once it is live.

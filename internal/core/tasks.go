@@ -43,6 +43,9 @@ type NewTask struct {
 	// Project beside a Task with none, and blocks it in the same write; the asker keeps their
 	// Claim.
 	Blocks *string
+	// BlockedBy names Tasks that block the new one from its first moment, so it is never takeable
+	// before they end: a worked Task, never a Parent, in any Project of the Organisation.
+	BlockedBy []string
 	// Note is written on the Parent when filing a Subtask under a Task the filer holds, whose
 	// Claim the filing ends.
 	Note *string
@@ -61,6 +64,8 @@ func (nt NewTask) validate() error {
 		return refuse(CodeInvalid, "a Task aimed at a Member waits with them, at no Step; name a Step or a Member, not both")
 	case nt.Breakdown && (nt.Parent != nil || nt.Blocks != nil):
 		return refuse(CodeInvalid, "a Subtask has no Subtasks of its own, so it cannot be broken down")
+	case nt.Breakdown && len(nt.BlockedBy) > 0:
+		return refuse(CodeInvalid, "a Task filed with Break down is a Parent from its first moment, and a Parent is never blocked: block its Subtasks")
 	case nt.Breakdown && (nt.AimedAt != nil || nt.Step != nil):
 		return refuse(CodeInvalid, "a Task filed with Break down is a Parent, at no Step and aimed at no one")
 	case nt.Parent != nil && nt.Owner != nil:
@@ -233,6 +238,11 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 			return nil, err
 		}
 
+		blockers, err := newBlockers(t, nt.BlockedBy, blocked)
+		if err != nil {
+			return nil, err
+		}
+
 		// A Task becomes a Parent with its first Subtask; its holder's split ends their Claim.
 		if parent != nil && blocked == nil {
 			if err := becomeParent(t, *parent, nt.Note); err != nil {
@@ -270,6 +280,13 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 		if blocked != nil {
 			payload["blocks"] = blocked.ID
 		}
+		if len(blockers) > 0 {
+			ids := make([]string, len(blockers))
+			for i, b := range blockers {
+				ids[i] = b.ID
+			}
+			payload["blocked_by"] = ids
+		}
 		if row.fromRetro != nil {
 			payload["from_retrospective_task_id"] = *row.fromRetro
 		}
@@ -294,12 +311,55 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 				return nil, err
 			}
 		}
+		for _, b := range blockers {
+			if _, err := t.Exec(ctx, `INSERT INTO blocks (org_id, task_id, blocker_task_id, added_by, added_at) VALUES ($1, $2, $3, $4, $5)`,
+				c.OrgID, id, b.ID, c.MemberID, ms(t.now)); err != nil {
+				return nil, err
+			}
+			if err := t.recordByCaller("task.blocker_added", id, map[string]any{"blocker_id": b.ID, "blocker_key": b.Key}); err != nil {
+				return nil, err
+			}
+		}
 		return getTaskDetail(ctx, t, c.OrgID, id, t.now)
 	})
 	if err != nil {
 		return TaskDetail{}, err
 	}
 	return res.(TaskDetail), nil
+}
+
+// newBlockers resolves the Tasks a Task being filed is blocked by, once each: none may be a
+// Parent, which neither blocks nor is blocked, nor the Task the new one itself blocks or one that
+// Task blocks, which would close a loop.
+func newBlockers(t *tx, refs []string, blocks *Task) ([]Task, error) {
+	var out []Task
+	seen := map[string]bool{}
+	for _, ref := range refs {
+		b, err := taskOf(t, ref)
+		if err != nil {
+			return nil, err
+		}
+		switch {
+		case seen[b.ID]:
+			continue
+		case b.SubtaskCounts != nil:
+			return nil, refuse(CodeConflict, "%s is a Parent, and a Parent neither blocks nor is blocked: name one of its Subtasks", b.Key)
+		case blocks != nil && b.ID == blocks.ID:
+			return nil, refuse(CodeCycle, "the new Task blocks %s, so %s cannot block it", b.Key, b.Key)
+		}
+		if blocks != nil {
+			loops, err := blocksTransitively(t, blocks.ID, b.ID)
+			if err != nil {
+				return nil, err
+			}
+			if loops {
+				return nil, refuse(CodeCycle, "the new Task blocks %s, which already blocks %s, so %s cannot block it", blocks.Key, b.Key, b.Key)
+			}
+		}
+		seen[b.ID] = true
+		out = append(out, b)
+	}
+	return out, nil
 }
 
 // mayFileUnder refuses filing a Subtask under p by the caller: p must be open and have no Parent

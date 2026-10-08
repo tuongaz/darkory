@@ -435,6 +435,149 @@ func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
 	})
 }
 
+// A completed Parent whose branch conflicts with the default branch stays done, and a Task standing
+// alone in its Project is filed to carry the work there, as for a Subtask's conflicting merge.
+func TestRunnerParentMergeConflictFilesAResolvingTask(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "complete", "engineer")
+	f.setScenario("builder", "complete", "FAKEAGENT_DELAY=3s")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Checkout", "--auto-complete")
+	f.ok("ada", "file", "--parent", "WEB-1", "--title", "Cart page")
+	f.run("builder")
+	// main moves on after the Parent's branch is made from it, while the Subtask is worked.
+	eventually(t, 30*time.Second, "the Parent's branch", func() bool { return branchExists(t.Context(), f.repo, "web-1") })
+	commitFile(t, f.repo, "fakeagent-WEB-2.txt", "main's own\n", "main moves on")
+
+	var resolve client.Task
+	eventually(t, 30*time.Second, "a Task resolving the Parent's merge", func() bool {
+		var list client.TaskList
+		f.json(&list, "ada", "tasks", "--project", "WEB")
+		for _, x := range list.Items {
+			if x.Title == "Resolve the merge of web-1 into main" {
+				resolve = x
+				return true
+			}
+		}
+		return false
+	})
+	if resolve.ParentID != nil || !strings.Contains(resolve.Description, "WEB-1 was completed, but merging its branch web-1 into main") ||
+		!strings.Contains(resolve.Description, "CONFLICT") {
+		t.Fatalf("the resolving Task: %+v\n%s", resolve, resolve.Description)
+	}
+	eventually(t, 10*time.Second, "the Parent's Note", func() bool {
+		return strings.Contains(notesOf(f.task("WEB-1")), "web: merging web-1 into main conflicted, so nothing was merged. Filed "+resolve.Key+" to resolve it.")
+	})
+	if d := f.task("WEB-1"); d.Task.State != client.TaskStateDone {
+		t.Fatalf("the Parent is %s", d.Task.State)
+	}
+}
+
+// reviewThenRelease is a Workflow whose review is not its last Step: Build, Review, then Release,
+// whose holder advances the Task into Done.
+const reviewThenRelease = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1},
+  {"name": "Review", "skill": "review", "position": 2}, {"name": "Release", "skill": "devops", "position": 3}],
+ "connectors": [{"from": "Build", "to": "Review", "name": "built", "position": 1},
+  {"from": "Review", "to": "Release", "name": "pass", "position": 1}, {"from": "Release", "name": "released", "position": 1}]}`
+
+// A Task reviewed at an earlier Step and completed by a later one merges as reviewed work only
+// when its branch is the very commit the review was shown, which a Note by the reviewer records as
+// its session starts. A commit after that, however it is dated, an amend, and the reviewer's own
+// commit are not reviewed work.
+func TestRunnerMergeNoteReadsAnEarlierReview(t *testing.T) {
+	backdated := []string{"GIT_COMMITTER_DATE=2001-01-01T00:00:00Z", "GIT_AUTHOR_DATE=2001-01-01T00:00:00Z"}
+	changed := " (web); completed by devops under devops, and its branch changed after reviewer's review."
+	for _, tc := range []struct {
+		name           string
+		reviewer       []string
+		devops         []string
+		want           string
+		reviewerRecord bool
+	}{
+		{"nothing committed after the review", nil, []string{"FAKEAGENT_NO_COMMIT=1"}, " (web).", true},
+		{"a commit after the review", nil, nil, changed, true},
+		{"a commit after the review dated before it", nil, backdated, changed, true},
+		{"the reviewed commit amended, dated before the review", nil, append([]string{"FAKEAGENT_AMEND=1"}, backdated...), changed, true},
+		{"the reviewer committing to what it reviewed", []string{}, []string{"FAKEAGENT_NO_COMMIT=1"}, changed, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, storetest.Open(t, store.SQLite))
+			f.ok("ada", "skill", "create", "devops", "--kind", "generic", "--body", "Release it.")
+			f.workflow(reviewThenRelease)
+			f.agent("builder", "advance", "engineer")
+			f.agent("reviewer", "advance", "review")
+			reviewer := []string{"FAKEAGENT_OUTCOME=pass", "FAKEAGENT_NO_COMMIT=1"}
+			if tc.reviewer != nil {
+				reviewer = append([]string{"FAKEAGENT_OUTCOME=pass"}, tc.reviewer...)
+			}
+			f.setScenario("reviewer", "advance", reviewer...)
+			f.agent("devops", "advance", "devops")
+			f.setScenario("devops", "advance", tc.devops...)
+			f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+			f.run("builder", "reviewer", "devops")
+
+			eventually(t, 60*time.Second, "WEB-1's merge noted", func() bool { return strings.Contains(notesOf(f.task("WEB-1")), "Merged web-1-") })
+			web1 := f.task("WEB-1")
+			if !slices.ContainsFunc(web1.Notes, func(n client.Note) bool {
+				return strings.HasPrefix(n.Body, "Merged web-1-cart-page into main at ") && strings.HasSuffix(n.Body, tc.want)
+			}) {
+				t.Fatalf("WEB-1's Notes, wanting one ending %q:\n%s", tc.want, notesOf(web1))
+			}
+			recorded := slices.ContainsFunc(web1.Notes, func(n client.Note) bool {
+				return n.AuthorID == f.ids["reviewer"] && reviewedLine.MatchString(n.Body)
+			})
+			if recorded != tc.reviewerRecord {
+				t.Fatalf("the reviewer's record of the commit it saw: %v, want %v\n%s", recorded, tc.reviewerRecord, notesOf(web1))
+			}
+		})
+	}
+}
+
+// A question aimed at a Member is answered in Notes: its session has no checkout, no branch is
+// made for it, and its completion merges nothing.
+func TestRunnerGivesAQuestionNoBranch(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("lead", "complete")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+	f.ok("ada", "file", "--blocks", "WEB-1", "--aim", "lead", "--title", "Which cart?")
+	f.run("lead")
+
+	eventually(t, 30*time.Second, "the question answered", func() bool { return f.task("WEB-2").Task.State == client.TaskStateDone })
+	if branches, _ := branchesWithPrefix(t.Context(), f.repo, taskPrefix("WEB-2")); len(branches) != 0 {
+		t.Fatalf("a branch was made for the question: %v", branches)
+	}
+	if b, err := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-2", "pane.log")); err != nil || strings.Contains(string(b), "git ") ||
+		!strings.Contains(string(b), "as complete in []") {
+		t.Fatalf("the question's session, which should have had no checkout: %v\n%s", err, b)
+	}
+	if n := notesOf(f.task("WEB-2")); strings.Contains(n, "Merged") || strings.Contains(n, "merged into") {
+		t.Fatalf("the question's completion merged:\n%s", n)
+	}
+}
+
+// An agent paused while next waits starts no session: the Task next took is released with a
+// Note, unworked.
+func TestRunnerStartsNoSessionForAnAgentPausedWhileWaiting(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Wait = 10 * time.Second
+	f.workflow(buildOnly)
+	f.agent("builder", "complete", "engineer")
+	f.run("builder")
+	time.Sleep(500 * time.Millisecond) // the runner is waiting in next
+	f.ok("ada", "agent", "set", "builder", "--paused")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+
+	eventually(t, 15*time.Second, "WEB-1 released unworked", func() bool { return strings.Contains(notesOf(f.task("WEB-1")), "The agent was paused while it waited") })
+	d := f.task("WEB-1")
+	if d.Task.Claim != nil || d.Task.State != client.TaskStateOpen {
+		t.Fatalf("WEB-1 after the release: %+v", d.Task)
+	}
+	if _, err := os.Stat(filepath.Join(f.data, "sessions", "WEB-1", "pane.log")); err == nil {
+		t.Fatal("a session started for a paused agent")
+	}
+}
+
 // A Task with no Parent works on a branch from main, and its advance into Done merges it into
 // main; no Parent's branch is made.
 func TestRunnerMergesATaskStandingAlone(t *testing.T) {
@@ -925,5 +1068,45 @@ func TestRunnerMergeConflict(t *testing.T) {
 				t.Fatalf("%s's work reached main despite the conflict", conflicted)
 			}
 		})
+	}
+}
+
+// The commit a review was shown is read from the first Note its holder wrote during the Claim; a
+// later Note of the agent's, a Note by anyone else and one outside the Claim change nothing, and a
+// reviewer who held the Task under another Skill reviewed its own work.
+func TestReviewAttestation(t *testing.T) {
+	at := func(m int) time.Time { return time.Date(2026, 10, 9, 1, m, 0, 0, time.UTC) }
+	sha := func(c byte) string { return strings.Repeat(string(c), 40) }
+	ended := at(10)
+	c := &client.Claim{HolderID: "rev", StartedAt: at(1), EndedAt: &ended}
+	note := func(by string, m int, body string) client.Note {
+		return client.Note{AuthorID: by, CreatedAt: at(m), Body: body}
+	}
+	d := &client.TaskDetail{Notes: []client.Note{
+		note("rev", 9, "Reviewing web-1-x at "+sha('b')+" in web."), // the agent's own, later
+		note("dev", 2, "Reviewing web-1-x at "+sha('c')+" in web."), // someone else's
+		note("rev", 0, "Reviewing web-1-x at "+sha('d')+" in web."), // before the Claim
+		note("rev", 2, "Reviewing web-1-x at "+sha('a')+" in web."), // the runner's, first in the Claim
+	}}
+	saw := attested(d, c)
+	if got := saw["web\x00web-1-x"]; got != sha('a') {
+		t.Fatalf("attested %q, want the first Note of the Claim", got)
+	}
+	rv := &reviewed{completed: "completed by devops under devops", reviewer: "rev", saw: saw}
+	if v := rv.verdict("web", "web-1-x", sha('a')); v != "" {
+		t.Fatalf("the commit reviewed: %q", v)
+	}
+	if v := rv.verdict("web", "web-1-x", sha('b')); !strings.HasSuffix(v, "changed after rev's review") {
+		t.Fatalf("another commit: %q", v)
+	}
+	if v := rv.verdict("web", "web-1-x", ""); !strings.HasSuffix(v, "its branch could not be read to check it against rev's review") {
+		t.Fatalf("an unreadable branch: %q", v)
+	}
+	if v := rv.verdict("web", "other", sha('a')); !strings.HasSuffix(v, "nothing records the commit rev's review saw") {
+		t.Fatalf("a branch no Note names: %q", v)
+	}
+	rv.built = true
+	if v := rv.verdict("web", "web-1-x", sha('a')); !strings.HasSuffix(v, "rev reviewed work it had built itself") {
+		t.Fatalf("its own work: %q", v)
 	}
 }

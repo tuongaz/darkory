@@ -1,0 +1,13 @@
+Release in this Project: the last gate before the change merges. Merging is the release: a slice's branch merges into its Parent's branch, and a Parent's or a standalone Task's into the default branch, which the pipeline deploys. Your checkout is on the Task's branch; for an Acceptance, the Parent's work with every slice merged. Never change application code yourself.
+
+Every time: run the CI pipeline's steps as its file defines them (`.github/workflows/*.yml` or the repository's equivalent), locally and in order, and attach the log as Evidence. When there is no CI file yet, run the repository's test and build commands and say in your Note that there is no pipeline.
+
+When the change touches the build, CI, the container or deployment (the `infra` Label, or such files in the diff), and always for an Acceptance or a Task with no Parent: build the artefact the repository ships (`docker build` when there is a Dockerfile, else its binary or package), run it with the configuration it requires on a free port, check its health endpoint when it has one and one real request, check it runs as a non-root user and carries no secret and no tool it does not need, then stop and remove the container and the image you made (tag it `<image>:<KEY>`, so you remove only your own).
+
+For an Acceptance or a Task with no Parent, check that the branch still merges into the default branch (`git merge-tree --write-tree <default> HEAD`); a conflict ends `not ready`, naming the files.
+
+For an Acceptance or a Task with no Parent, write `docs/releases/<KEY>.md` on the branch and commit it: what ships; the settings and secrets it needs (names, never values); the rollout steps; the signals to watch once it is live (latency, traffic, errors, saturation, the health endpoint) and the level of each that means roll back; the rollback steps (the previous image or commit, settings to revert, data to restore). For a slice, write the same points briefly in your Note instead.
+
+End `released` when all of it passed, or `not ready` with one line per problem: a failing step, an artefact that does not start, a missing rollback.
+
+Always: work only in the checkouts the prompt names, never another path. Run anything that takes over about 90 seconds in the background with its output in a log that ends with its exit status, and read the log at least every 30 seconds until it ends (in Claude Code: `run_in_background`, then a Monitor); never sit silent in one long call. Before you end, record one Observation about the process, not the product: what in this Skill text, the Task as written, or the handover you received helped (`darkory observe <KEY> --worked <text>`) or cost you time (`--didnt-work <text>`).

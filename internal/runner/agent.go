@@ -18,6 +18,9 @@ type agent struct {
 
 func (a *agent) name() string { return a.me.Member.Name }
 
+// pausedNote is the Note of a Task released because its agent was paused while next waited.
+const pausedNote = "The agent was paused while it waited for this Task, so the runner released it without starting a session."
+
 // run pulls Tasks through next and works each in a session, until ctx ends. A paused agent takes
 // no work; its settings are read again before every next.
 func (a *agent) run(ctx context.Context) {
@@ -83,6 +86,15 @@ func (a *agent) run(ctx context.Context) {
 		}
 		rec := pull
 		pull = nil
+		// next may have waited a while: an agent paused meanwhile starts no session.
+		if now, ok, err := a.rec.Agent(ctx, a.me.Member.ID); err == nil && (!ok || now.Paused) {
+			log.Info("the agent was paused while it waited for a Task; releasing it unworked", "task", d.Task.Key)
+			if err := rec.Release(context.WithoutCancel(ctx), d.Task.Key, pausedNote); err != nil {
+				log.Warn("releasing a Task taken while the agent was being paused", "task", d.Task.Key, "err", err)
+			}
+			r.closeSession(ctx, rec, "the Session that took a Task while the agent was being paused", "task", d.Task.Key)
+			continue
+		}
 		if !newSession(a, rec, d, set).run(ctx) {
 			// The same failure would meet the next Task: pause before taking one.
 			sleep(ctx, r.t.Nudge)

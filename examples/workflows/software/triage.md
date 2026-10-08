@@ -1,0 +1,1 @@
+Decide what a newly filed Task needs before anyone builds it. Read it, make its outcome checkable, judge its risk, and send it on the shortest path that is still safe: straight to building when the change is small and clear, through a design first when it is not.

@@ -1,0 +1,1 @@
+Design a change before it is built: write down the problem, the goals and non-goals, the design with the alternatives considered and why they lost, the risks, and how it is rolled out and rolled back. Record each decision that is hard to reverse as an Architecture Decision Record. Cut the work into small slices that can each be built, reviewed and released on their own.

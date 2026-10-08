@@ -3522,6 +3522,14 @@ components:
         blocks:
           type: string
           description: Id or display key of a Task the new one blocks (a question or Escalation).
+        blocked_by:
+          type: array
+          description: |
+            Ids or display keys of Tasks that block the new one from its first moment, in the same
+            write, so it is never takeable before they end. Each a worked Task, never a Parent;
+            not with `breakdown`, since a Parent is never blocked. Refused `cycle` when one is the
+            Task the new one blocks, or blocked by it.
+          items: {type: string}
         note:
           type: string
           description: |

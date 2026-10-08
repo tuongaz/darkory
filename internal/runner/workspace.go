@@ -2,11 +2,13 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -90,14 +92,55 @@ func dirName(name string) string {
 	return s
 }
 
-// TaskDir is a Task's directory under data.
+// TaskDir is a Task's directory where it was before the Workspaces root could be set, under data;
+// it is also where the Workspaces root defaults to for a data directory outside any checkout.
 func TaskDir(data, task string) string { return filepath.Join(data, "workspaces", task) }
 
-// PlanCheckouts says where each git Workspace of a Task goes and on which branches: from its
-// Parent's branch when parent names one, else from the default branch. Workspaces of other kinds
-// are left out. The default branch of a Workspace that names none is main here; Prepare asks the
-// repository.
-func PlanCheckouts(data, task, title, parent string, workspaces []Workspace) []Checkout {
+// DefaultWorkspaces is where Task directories go for the data directory data: <data>/workspaces,
+// unless data is inside a git checkout or under a directory holding a CLAUDE.md. A session works
+// in its Task's directory, and Claude Code reads every CLAUDE.md from there up to the root, so a
+// session under another project would take that project's rules for its own. There it is
+// ~/.darkory/workspaces/<data's name>-<a hash of data's path>, one per data directory.
+func DefaultWorkspaces(data string) string {
+	inside := false
+	if out, err := exec.Command("git", "-C", data, "rev-parse", "--is-inside-work-tree").Output(); err == nil && strings.TrimSpace(string(out)) == "true" {
+		inside = true
+	}
+	for dir := data; !inside; {
+		if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err == nil {
+			inside = true
+		}
+		up := filepath.Dir(dir)
+		if up == dir {
+			break
+		}
+		dir = up
+	}
+	home, err := os.UserHomeDir()
+	if !inside || err != nil {
+		return filepath.Join(data, "workspaces")
+	}
+	sum := sha256.Sum256([]byte(data))
+	return filepath.Join(home, ".darkory", "workspaces", fmt.Sprintf("%s-%x", dirName(filepath.Base(data)), sum[:4]))
+}
+
+// taskDir is a Task's directory, holding its checkouts and the session's working directory: under
+// the Workspaces root, or under <data>/workspaces when an earlier session left its worktrees there,
+// so a Task begun before the root moved keeps working where it was until it ends.
+func (r *Runner) taskDir(task string) string {
+	if old := TaskDir(r.cfg.Data, task); old != filepath.Join(r.cfg.Workspaces, task) {
+		if _, err := os.Stat(filepath.Join(old, checkoutsFile)); err == nil {
+			return old
+		}
+	}
+	return filepath.Join(r.cfg.Workspaces, task)
+}
+
+// PlanCheckouts says where each git Workspace of a Task goes, in its directory dir, and on which
+// branches: from its Parent's branch when parent names one, else from the default branch.
+// Workspaces of other kinds are left out. The default branch of a Workspace that names none is
+// main here; Prepare asks the repository.
+func PlanCheckouts(dir, task, title, parent string, workspaces []Workspace) []Checkout {
 	var out []Checkout
 	seen := map[string]bool{}
 	for _, ws := range workspaces {
@@ -113,7 +156,7 @@ func PlanCheckouts(data, task, title, parent string, workspaces []Workspace) []C
 		if parent != "" {
 			base = ParentBranch(parent)
 		}
-		out = append(out, Checkout{Workspace: ws, Dir: filepath.Join(TaskDir(data, task), name), Branch: TaskBranch(task, title), Base: base})
+		out = append(out, Checkout{Workspace: ws, Dir: filepath.Join(dir, name), Branch: TaskBranch(task, title), Base: base})
 	}
 	return out
 }
@@ -216,7 +259,10 @@ const checkoutsFile = "checkouts.json"
 // worktree, or its branch. The Parent's branch is made when it is missing (makeParentBranch). It
 // refuses a Task branch the runner did not make.
 func (r *Runner) Prepare(ctx context.Context, task, parent string, plan []Checkout) ([]Checkout, error) {
-	dir := TaskDir(r.cfg.Data, task)
+	dir := r.taskDir(task)
+	if len(plan) > 0 {
+		dir = filepath.Dir(plan[0].Dir) // the Task's directory the plan was made for
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -268,6 +314,7 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 		// An earlier session's worktree, kept while the Task is open.
 		if branch, err := runGit(ctx, c.Dir, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil && strings.HasPrefix(branch, taskPrefix(task)) {
 			c.Branch = branch
+			r.catchUp(ctx, task, c)
 			return nil
 		}
 		return fmt.Errorf("%s exists and is not on a branch of %s; remove it to start again", c.Dir, task)
@@ -286,7 +333,11 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 			return fmt.Errorf("the branch %s in %s was not made by the runner; it will not work on it", existing[0], repo)
 		}
 		c.Branch = existing[0]
-		return addWorktree(ctx, repo, c.Dir, c.Branch)
+		if err := addWorktree(ctx, repo, c.Dir, c.Branch); err != nil {
+			return err
+		}
+		r.catchUp(ctx, task, c)
+		return nil
 	}
 	if !branchExists(ctx, repo, c.Base) {
 		if parent == "" || c.Base != ParentBranch(parent) {
@@ -305,6 +356,96 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 		return err
 	}
 	return addWorktree(ctx, repo, c.Dir, c.Branch)
+}
+
+// mergeWait is how long a session's start waits for the merges of its Parent's done Subtasks.
+const mergeWait = 30 * time.Second
+
+// awaitMerges waits, at most mergeWait, until the branch of each Subtask of parent that ended
+// Done is in the Parent's branch, in each Workspace the runner merges itself, or the merger has
+// tried it and could not. A Subtask a sibling blocked is takeable the moment the sibling ends,
+// while the merger may not yet have merged it; started then, the session's branch would start
+// from the Parent's branch without the very work it waited for.
+func (r *Runner) awaitMerges(ctx context.Context, task string, parent *ParentInfo, wss []Workspace) {
+	if parent == nil || len(parent.Done) == 0 {
+		return
+	}
+	pending := func() []string {
+		var out []string
+		for _, ws := range wss {
+			if ws.Mode == ModePullRequest {
+				continue
+			}
+			base := ParentBranch(parent.Key)
+			for _, key := range parent.Done {
+				r.mu.Lock()
+				tried := r.tried[key]
+				r.mu.Unlock()
+				if tried {
+					continue
+				}
+				made, err := r.ledger.find(ws.Path, func(m Made) bool { return m.Task == key && strings.HasPrefix(m.Branch, taskPrefix(key)) })
+				if err != nil || len(made) == 0 {
+					continue
+				}
+				if branchExists(ctx, ws.Path, base) && isAncestor(ctx, ws.Path, "refs/heads/"+made[0].Branch, "refs/heads/"+base) {
+					continue
+				}
+				out = append(out, key)
+			}
+		}
+		return out
+	}
+	waiting := pending()
+	if len(waiting) == 0 {
+		return
+	}
+	r.log.Info("waiting for done Subtasks to merge into the Parent's branch", "task", task, "parent", parent.Key, "subtasks", waiting)
+	deadline := time.Now().Add(mergeWait)
+	for len(waiting) > 0 {
+		if time.Now().After(deadline) {
+			r.log.Warn("done Subtasks are not in the Parent's branch yet; starting without them", "task", task, "subtasks", waiting)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(250 * time.Millisecond):
+		}
+		waiting = pending()
+	}
+}
+
+// catchUp brings a Task branch an earlier session left up to its base, in the checkout c: a Task
+// released and taken again later, such as one that waited on a question, or one sent back, would
+// otherwise be worked on its base as it was, without the work merged into it since (a sibling
+// Subtask's, a design's). A branch with no commits of its own moves to the base; one with its
+// own commits takes the base in a merge, and keeps its old start when that conflicts, which the
+// merge into the base then meets as any conflict.
+func (r *Runner) catchUp(ctx context.Context, task string, c *Checkout) {
+	base := startPoint(ctx, c.Workspace, c.Base)
+	if _, err := runGit(ctx, c.Dir, "rev-parse", "--verify", "--quiet", base+"^{commit}"); err != nil {
+		return
+	}
+	if isAncestor(ctx, c.Dir, base, "HEAD") {
+		return
+	}
+	how := "fast-forwarded"
+	if isAncestor(ctx, c.Dir, "HEAD", base) {
+		if _, err := runGit(ctx, c.Dir, "merge", "--ff-only", base); err != nil {
+			r.log.Warn("could not bring a Task's branch up to its base", "task", task, "branch", c.Branch, "base", base, "err", err)
+			return
+		}
+	} else {
+		how = "merged"
+		msg := fmt.Sprintf("Merge %s into %s\n\n%s: taken again, it takes what landed on %s since", base, c.Branch, task, c.Base)
+		if _, _, err := gitOutput(ctx, c.Dir, identity(ctx, c.Workspace.Path), "merge", "--no-ff", "--no-edit", "-m", msg, base); err != nil {
+			runGit(ctx, c.Dir, "merge", "--abort")
+			r.log.Warn("a Task's branch conflicts with its base; it is worked as it was", "task", task, "branch", c.Branch, "base", base, "err", err)
+			return
+		}
+	}
+	r.log.Info("brought a Task's branch up to its base", "task", task, "branch", c.Branch, "base", base, "how", how)
 }
 
 // startPoint is where a new branch from base starts: base itself, or in a Workspace merged through
@@ -359,7 +500,7 @@ func (r *Runner) makeParentBranch(ctx context.Context, ws Workspace, parent stri
 // RemoveCheckouts removes a Task's worktrees, keeping their branches. A worktree with uncommitted
 // changes stays, and so does the directory holding it.
 func (r *Runner) RemoveCheckouts(ctx context.Context, task string) {
-	dir := TaskDir(r.cfg.Data, task)
+	dir := r.taskDir(task)
 	b, err := os.ReadFile(filepath.Join(dir, checkoutsFile))
 	if errors.Is(err, fs.ErrNotExist) {
 		os.Remove(dir)

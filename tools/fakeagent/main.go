@@ -18,7 +18,9 @@
 //	crash     exit 1
 //
 // The commit is of fakeagent-<KEY>.txt, or of the file FAKEAGENT_FILE names, so two Tasks can
-// make a conflict. FAKEAGENT_PROMPT has it ask Claude Code's first-run questions before anything
+// make a conflict; FAKEAGENT_NO_COMMIT leaves it out, as a reviewer commits nothing, and
+// FAKEAGENT_DELAY (a duration) waits before it, and FAKEAGENT_AMEND amends the branch's last
+// commit instead of adding one. GIT_COMMITTER_DATE and GIT_AUTHOR_DATE in its environment date it. FAKEAGENT_PROMPT has it ask Claude Code's first-run questions before anything
 // else (see firstRun), to test how the runner meets them.
 // Like Claude Code it then waits at its prompt until the runner types /exit. It imports nothing
 // under internal/.
@@ -83,7 +85,14 @@ func run() error {
 	if err := a.cli("note", a.key, "fakeagent: read the prompt; starting "+scenario); err != nil {
 		return err
 	}
-	if len(a.dirs) > 0 {
+	if v := os.Getenv("FAKEAGENT_DELAY"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("FAKEAGENT_DELAY: %w", err)
+		}
+		time.Sleep(d)
+	}
+	if len(a.dirs) > 0 && os.Getenv("FAKEAGENT_NO_COMMIT") == "" {
 		dir := a.dirs[0]
 		name := "fakeagent-" + a.key + ".txt"
 		if f := os.Getenv("FAKEAGENT_FILE"); f != "" {
@@ -96,7 +105,11 @@ func run() error {
 		if err := a.git(dir, "add", name); err != nil {
 			return err
 		}
-		if err := a.git(dir, "-c", "user.name=fakeagent", "-c", "user.email=fakeagent@darkory.invalid", "commit", "-q", "-m", a.key+": fake work"); err != nil {
+		commit := []string{"-c", "user.name=fakeagent", "-c", "user.email=fakeagent@darkory.invalid", "commit", "-q", "-m", a.key + ": fake work"}
+		if os.Getenv("FAKEAGENT_AMEND") != "" {
+			commit = append(commit, "--amend")
+		}
+		if err := a.git(dir, commit...); err != nil {
 			return err
 		}
 	}

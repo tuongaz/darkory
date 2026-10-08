@@ -41,11 +41,11 @@ Usage:
   darkory serve [--listen addr] [--data dir] [--db dsn] [--public-url url] [--no-browser] [--no-login-link]
                 [--migrate] [--evidence dir|s3://bucket/prefix] [--evidence-max-mb n]
                 [--files dir|s3://bucket/prefix] [--files-max-mb n] [--proxy-hops n]
-                [--no-update-check] [--runner auto|on|off]
+                [--no-update-check] [--runner auto|on|off] [--workspaces dir]
                                                                        run the server, and the Runner beside it
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
   darkory mcp                                                          serve the agent operations to an MCP client over stdio
-  darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]…
+  darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]… [--workspaces dir]
                                                                        run the Runner alone: agent sessions for the agents' tokens
   darkory join <task> [--readonly] [--data dir]                        join the tmux session the Runner runs for a Task
   darkory update [--check] [--version v]                               replace this binary with a newer release
@@ -376,7 +376,7 @@ func serveRunner(cfg config.Serve, listen string, log *slog.Logger) (*runner.Run
 		}
 		return nil, nil
 	}
-	return newRunner(config.BaseURL("", listen), cfg.DataDir, tokens, nil, or(os.Getenv("DARKORY_RUNNER_TMUX"), "auto"), log)
+	return newRunner(config.BaseURL("", listen), cfg.DataDir, cfg.Workspaces, tokens, nil, or(os.Getenv("DARKORY_RUNNER_TMUX"), "auto"), log)
 }
 
 // openDatabase opens the record cfg names, creating the data directory for SQLite.

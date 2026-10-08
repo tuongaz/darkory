@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSlug(t *testing.T) {
@@ -50,7 +51,7 @@ func TestPlanCheckouts(t *testing.T) {
 	ledger := Workspace{ID: "w3", Name: "books", Kind: "ledger", Path: "/books"}
 	twin := Workspace{ID: "w4", Name: "web", Kind: "git", Path: "/src/web2"}
 
-	got := PlanCheckouts("/d", "WEB-12", "Cart page", "WEB-1", []Workspace{web, api, ledger, twin})
+	got := PlanCheckouts("/d/workspaces/WEB-12", "WEB-12", "Cart page", "WEB-1", []Workspace{web, api, ledger, twin})
 	want := []Checkout{
 		{Workspace: web, Dir: "/d/workspaces/WEB-12/web", Branch: "web-12-cart-page", Base: "web-1"},
 		{Workspace: api, Dir: "/d/workspaces/WEB-12/api-server", Branch: "web-12-cart-page", Base: "web-1"},
@@ -60,7 +61,7 @@ func TestPlanCheckouts(t *testing.T) {
 		t.Fatalf("got  %+v\nwant %+v", got, want)
 	}
 	// A Task with no Parent branches from the default branch.
-	got = PlanCheckouts("/d", "WEB-30", "Fix the typo", "", []Workspace{web, api})
+	got = PlanCheckouts("/d/workspaces/WEB-30", "WEB-30", "Fix the typo", "", []Workspace{web, api})
 	if got[0].Base != "trunk" || got[1].Base != "main" || got[0].Branch != "web-30-fix-the-typo" {
 		t.Fatalf("no Parent: %+v", got)
 	}
@@ -126,7 +127,7 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	ctx := t.Context()
 
 	// A Parent's first Subtask, its Breakdown, makes the Parent's branch from the default branch.
-	plan := PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws})
+	plan := PlanCheckouts(r.taskDir("WEB-2"), "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws})
 	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", plan)
 	if err != nil {
 		t.Fatal(err)
@@ -148,7 +149,7 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 
 	// Another Subtask works on its own branch from the Parent's.
 	commitFile(t, got[0].Dir, "plan.txt", "plan\n", "plan") // on WEB-2's branch, not the Parent's
-	plan = PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page", "WEB-1", []Workspace{ws})
+	plan = PlanCheckouts(r.taskDir("WEB-3"), "WEB-3", "Cart page", "WEB-1", []Workspace{ws})
 	got, err = r.Prepare(ctx, "WEB-3", "WEB-1", plan)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +160,7 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	commitFile(t, got[0].Dir, "cart.txt", "cart\n", "cart")
 
 	// The review's session finds the worktree its builder left.
-	again, err := r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page, renamed", "WEB-1", []Workspace{ws}))
+	again, err := r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.taskDir("WEB-3"), "WEB-3", "Cart page, renamed", "WEB-1", []Workspace{ws}))
 	if err != nil || again[0].Branch != "web-3-cart-page" || again[0].Dir != got[0].Dir {
 		t.Fatalf("again: %+v, %v", again, err)
 	}
@@ -171,7 +172,7 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	if !branchExists(ctx, repo, "web-3-cart-page") {
 		t.Fatal("removing the worktree removed the branch")
 	}
-	again, err = r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-3", "Cart page, renamed", "WEB-1", []Workspace{ws}))
+	again, err = r.Prepare(ctx, "WEB-3", "WEB-1", PlanCheckouts(r.taskDir("WEB-3"), "WEB-3", "Cart page, renamed", "WEB-1", []Workspace{ws}))
 	if err != nil || again[0].Branch != "web-3-cart-page" {
 		t.Fatalf("after removal: %+v, %v", again, err)
 	}
@@ -188,13 +189,13 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 
 	// A branch with a Task's key that the runner did not make is left alone.
 	mustGit(t, repo, "branch", "web-4-mine", "main")
-	_, err = r.Prepare(ctx, "WEB-4", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-4", "Theirs", "WEB-1", []Workspace{ws}))
+	_, err = r.Prepare(ctx, "WEB-4", "WEB-1", PlanCheckouts(r.taskDir("WEB-4"), "WEB-4", "Theirs", "WEB-1", []Workspace{ws}))
 	if err == nil || !strings.Contains(err.Error(), "web-4-mine") || !strings.Contains(err.Error(), "not made by the runner") {
 		t.Fatalf("a person's branch: %v", err)
 	}
 
 	// A Task with no Parent branches from main, and no Parent's branch is made.
-	got, err = r.Prepare(ctx, "WEB-6", "", PlanCheckouts(r.cfg.Data, "WEB-6", "Typo", "", []Workspace{ws}))
+	got, err = r.Prepare(ctx, "WEB-6", "", PlanCheckouts(r.taskDir("WEB-6"), "WEB-6", "Typo", "", []Workspace{ws}))
 	if err != nil || got[0].Base != "main" || got[0].Branch != "web-6-typo" || branchExists(ctx, repo, "web-6") {
 		t.Fatalf("no Parent: %+v, %v", got, err)
 	}
@@ -203,12 +204,121 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	// branch, so what it did before the split is kept.
 	commitFile(t, got[0].Dir, "typo.txt", "fixed half\n", "half the typo")
 	r.RemoveCheckouts(ctx, "WEB-6")
-	sub, err := r.Prepare(ctx, "WEB-7", "WEB-6", PlanCheckouts(r.cfg.Data, "WEB-7", "The other half", "WEB-6", []Workspace{ws}))
+	sub, err := r.Prepare(ctx, "WEB-7", "WEB-6", PlanCheckouts(r.taskDir("WEB-7"), "WEB-7", "The other half", "WEB-6", []Workspace{ws}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if b, err := os.ReadFile(filepath.Join(sub[0].Dir, "typo.txt")); err != nil || string(b) != "fixed half\n" {
 		t.Fatalf("the split Task's work is not on its Parent's branch: %q, %v", b, err)
+	}
+}
+
+// A Task branch an earlier session left is brought up to its base when the Task is taken again:
+// moved to it when it has no commits of its own, the base merged into it when it has, and left
+// as it was when that merge conflicts.
+func TestPrepareBringsATaskBranchUpToItsBase(t *testing.T) {
+	repo := gitRepo(t)
+	r := newTestRunner(t)
+	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
+	ctx := t.Context()
+	prepare := func(task, title string) Checkout {
+		t.Helper()
+		got, err := r.Prepare(ctx, task, "WEB-1", PlanCheckouts(r.taskDir(task), task, title, "WEB-1", []Workspace{ws}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got[0]
+	}
+	land := func(task, title, file, content string) { // a sibling's work merged into the Parent's branch
+		t.Helper()
+		c := prepare(task, title)
+		commitFile(t, c.Dir, file, content, task)
+		if res, err := mergeBranch(ctx, repo, c.Branch, "web-1", "merge "+task); err != nil || res.Conflict != "" {
+			t.Fatalf("merging %s: %+v, %v", task, res, err)
+		}
+		r.RemoveCheckouts(ctx, task)
+	}
+	has := func(c Checkout, file, want string) {
+		t.Helper()
+		if b, err := os.ReadFile(filepath.Join(c.Dir, file)); err != nil || string(b) != want {
+			t.Fatalf("%s's %s: %q, %v", c.Branch, file, b, err)
+		}
+	}
+
+	// Taken, then released with nothing done (a question), while the design lands on the Parent's
+	// branch: taken again, its branch is the Parent's.
+	prepare("WEB-2", "Keys")
+	r.RemoveCheckouts(ctx, "WEB-2")
+	land("WEB-3", "Design", "design.txt", "design\n")
+	c := prepare("WEB-2", "Keys")
+	has(c, "design.txt", "design\n")
+	if mustGit(t, repo, "rev-parse", c.Branch) != mustGit(t, repo, "rev-parse", "web-1") {
+		t.Fatal("a branch with no commits of its own was not moved to its base")
+	}
+
+	// With work of its own, in a worktree kept between sessions: the base is merged in.
+	commitFile(t, c.Dir, "keys.txt", "keys\n", "keys")
+	land("WEB-4", "Health", "health.txt", "health\n")
+	c = prepare("WEB-2", "Keys")
+	has(c, "health.txt", "health\n")
+	has(c, "keys.txt", "keys\n")
+
+	// A merge that conflicts leaves the branch as it was, with nothing half-merged.
+	commitFile(t, c.Dir, "a.txt", "mine\n", "mine")
+	tip := mustGit(t, repo, "rev-parse", c.Branch)
+	land("WEB-5", "Theirs", "a.txt", "theirs\n")
+	c = prepare("WEB-2", "Keys")
+	if got := mustGit(t, repo, "rev-parse", c.Branch); got != tip {
+		t.Fatalf("a conflicting merge moved the branch to %s", got)
+	}
+	if st := mustGit(t, c.Dir, "status", "--porcelain"); st != "" {
+		t.Fatalf("the worktree after a conflicting merge: %q", st)
+	}
+	has(c, "a.txt", "mine\n")
+}
+
+// A session of a Subtask starts once its done siblings are in the Parent's branch: it waits for
+// a merge still to come, and not for one the merger tried and could not make.
+func TestAwaitMergesWaitsForDoneSiblings(t *testing.T) {
+	repo := gitRepo(t)
+	r := newTestRunner(t)
+	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
+	ctx := t.Context()
+	sibling := func(task, title string) string {
+		t.Helper()
+		got, err := r.Prepare(ctx, task, "WEB-1", PlanCheckouts(r.taskDir(task), task, title, "WEB-1", []Workspace{ws}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		commitFile(t, got[0].Dir, task+".txt", task+"\n", task)
+		return got[0].Branch
+	}
+	keys := sibling("WEB-2", "Keys")
+	parent := &ParentInfo{Key: "WEB-1", Done: []string{"WEB-2"}}
+
+	done := make(chan struct{})
+	go func() { r.awaitMerges(ctx, "WEB-3", parent, []Workspace{ws}); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("started before the done sibling merged")
+	case <-time.After(600 * time.Millisecond):
+	}
+	if res, err := mergeBranch(ctx, repo, keys, "web-1", "merge WEB-2"); err != nil || res.Conflict != "" {
+		t.Fatalf("merge: %+v, %v", res, err)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("still waiting after the merge")
+	}
+
+	// A sibling whose merge the merger tried, such as one that conflicted, is not waited for.
+	sibling("WEB-4", "Limits")
+	r.tried["WEB-4"] = true
+	start := time.Now()
+	r.awaitMerges(ctx, "WEB-5", &ParentInfo{Key: "WEB-1", Done: []string{"WEB-2", "WEB-4"}}, []Workspace{ws})
+	if waited := time.Since(start); waited > time.Second {
+		t.Fatalf("waited %v for a merge already tried", waited)
 	}
 }
 
@@ -228,7 +338,7 @@ func TestLedgerReadsEntriesFromBeforeModelV2(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustGit(t, repo, "branch", "feature/MAIN-1", "main")
-	got, err := r.Prepare(t.Context(), "MAIN-3", "MAIN-1", PlanCheckouts(r.cfg.Data, "MAIN-3", "Totals", "MAIN-1", []Workspace{{Name: "web", Kind: "git", Path: repo}}))
+	got, err := r.Prepare(t.Context(), "MAIN-3", "MAIN-1", PlanCheckouts(r.taskDir("MAIN-3"), "MAIN-3", "Totals", "MAIN-1", []Workspace{{Name: "web", Kind: "git", Path: repo}}))
 	if err != nil || got[0].Base != "main-1" || got[0].Branch != "main-3-totals" {
 		t.Fatalf("prepared %+v, %v", got, err)
 	}
@@ -264,7 +374,7 @@ func TestPrepareGivesAWorktreeTheRepositorysFilterKeys(t *testing.T) {
 
 	r := newTestRunner(t)
 	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
-	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws}))
+	got, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.taskDir("WEB-2"), "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +393,7 @@ func TestPrepareGivesAWorktreeTheRepositorysFilterKeys(t *testing.T) {
 
 	// The worktree of an existing branch of the Task takes the same path.
 	r.RemoveCheckouts(ctx, "WEB-2")
-	again, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.cfg.Data, "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws}))
+	again, err := r.Prepare(ctx, "WEB-2", "WEB-1", PlanCheckouts(r.taskDir("WEB-2"), "WEB-2", "Break down: Checkout", "WEB-1", []Workspace{ws}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,5 +487,83 @@ func TestDefaultBranch(t *testing.T) {
 	mustGit(t, repo, "branch", "-m", "main", "trunk")
 	if got := defaultBranch(ctx, repo); got != "trunk" {
 		t.Fatalf("a repository on trunk: %s", got)
+	}
+}
+
+// Task directories go under the data directory unless it is inside a git checkout or under a
+// CLAUDE.md, where a session would read another project's rules: then under ~/.darkory, one
+// directory per data directory.
+func TestDefaultWorkspaces(t *testing.T) {
+	isolateGit(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	plain := t.TempDir()
+	if got := DefaultWorkspaces(plain); got != filepath.Join(plain, "workspaces") {
+		t.Fatalf("a data directory outside any checkout: %s", got)
+	}
+
+	repo := t.TempDir()
+	mustGit(t, repo, "init", "-q", "-b", "main")
+	inRepo := filepath.Join(repo, ".dev")
+	if err := os.MkdirAll(inRepo, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got := DefaultWorkspaces(inRepo)
+	if !strings.HasPrefix(got, filepath.Join(home, ".darkory", "workspaces", "dev-")) {
+		t.Fatalf("a data directory inside a checkout: %s", got)
+	}
+	if other := DefaultWorkspaces(filepath.Join(repo, ".dev2")); other == got {
+		t.Fatal("two data directories share a Workspaces root")
+	}
+
+	project := t.TempDir()
+	writeTestFile(t, filepath.Join(project, "CLAUDE.md"), "Another project's rules.\n")
+	underRules := filepath.Join(project, "deep", "data")
+	if got := DefaultWorkspaces(underRules); !strings.HasPrefix(got, filepath.Join(home, ".darkory", "workspaces", "data-")) {
+		t.Fatalf("a data directory under a CLAUDE.md: %s", got)
+	}
+}
+
+// With a Workspaces root of its own, a Task's checkouts go under it; a Task an earlier session
+// left worktrees for under <data>/workspaces keeps working there.
+func TestWorkspacesRoot(t *testing.T) {
+	repo := gitRepo(t)
+	root := t.TempDir()
+	r, err := New(Config{Data: t.TempDir(), Workspaces: root, Host: childHost{}, Darkory: "darkory"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
+	ctx := t.Context()
+
+	// A Task begun before the root moved: its worktree is under <data>/workspaces.
+	legacy := TaskDir(r.cfg.Data, "WEB-2")
+	old, err := r.Prepare(ctx, "WEB-2", "", PlanCheckouts(legacy, "WEB-2", "Cart", "", []Workspace{ws}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.taskDir("WEB-2"); got != legacy {
+		t.Fatalf("a Task with worktrees under the data directory: %s, want %s", got, legacy)
+	}
+	again, err := r.Prepare(ctx, "WEB-2", "", PlanCheckouts(r.taskDir("WEB-2"), "WEB-2", "Cart", "", []Workspace{ws}))
+	if err != nil || again[0].Dir != old[0].Dir {
+		t.Fatalf("taken again: %+v, %v", again, err)
+	}
+
+	// A new Task goes under the root.
+	if got := r.taskDir("WEB-3"); got != filepath.Join(root, "WEB-3") {
+		t.Fatalf("a new Task's directory: %s", got)
+	}
+	got, err := r.Prepare(ctx, "WEB-3", "", PlanCheckouts(r.taskDir("WEB-3"), "WEB-3", "Typo", "", []Workspace{ws}))
+	if err != nil || got[0].Dir != filepath.Join(root, "WEB-3", "web") {
+		t.Fatalf("prepared under the root: %+v, %v", got, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(got[0].Dir, "a.txt")); err != nil || string(b) != "one\ntwo\nthree\n" {
+		t.Fatalf("the worktree under the root holds %q, %v", b, err)
+	}
+	r.RemoveCheckouts(ctx, "WEB-3")
+	if _, err := os.Stat(filepath.Join(root, "WEB-3")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the Task's directory under the root was not removed: %v", err)
 	}
 }

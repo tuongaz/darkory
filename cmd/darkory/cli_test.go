@@ -33,6 +33,11 @@ func TestUsageListsEveryCommand(t *testing.T) {
 			t.Errorf("darkory %v: exit %d, want 2", args, code)
 		}
 	}
+	// A group's name alone reaches internal/cli too, which names its commands.
+	var group bytes.Buffer
+	if code := exitCode(run([]string{"label"}, io.Discard, &group)); code != 2 || !strings.Contains(group.String(), "darkory label set <task>") {
+		t.Errorf("darkory label: exit %d, %q", code, group.String())
+	}
 	// A CLI command reaches internal/cli, with global flags before it.
 	var errw bytes.Buffer
 	err := run([]string{"--json", "claim"}, io.Discard, &errw)

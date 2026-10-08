@@ -122,6 +122,9 @@ func (s *session) setState(st string) {
 	s.mu.Unlock()
 }
 
+// errPaused is a session that did not start because its agent was paused meanwhile.
+var errPaused = errors.New("the agent was paused")
+
 // claimEnded is told by the Activity stream that the session's Claim ended, and how.
 func (s *session) claimEnded(kind string) {
 	select {
@@ -173,6 +176,11 @@ func (s *session) run(ctx context.Context) bool {
 		defer cancel()
 		if ctx.Err() != nil {
 			s.release(bctx, "The runner stopped before the session started.")
+			return true
+		}
+		if errors.Is(err, errPaused) {
+			s.log.Info("the agent was paused before its session started; releasing the Task unworked")
+			s.release(bctx, pausedNote)
 			return true
 		}
 		s.log.Error("could not start the session", "err", err)
@@ -229,11 +237,16 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reading the Task's Workspaces: %w", err)
 	}
-	checkouts, err := r.Prepare(ctx, s.key, parentKey(s.d), PlanCheckouts(r.cfg.Data, s.key, s.d.Task.Title, parentKey(s.d), wss))
+	if s.d.Task.AimedAtID != nil {
+		// A question aimed at a Member is answered in Notes: no checkout, no branch, nothing to merge.
+		wss = nil
+	}
+	r.awaitMerges(ctx, s.key, parent, wss)
+	checkouts, err := r.Prepare(ctx, s.key, parentKey(s.d), PlanCheckouts(r.taskDir(s.key), s.key, s.d.Task.Title, parentKey(s.d), wss))
 	if err != nil {
 		return fmt.Errorf("preparing the Workspaces: %w", err)
 	}
-	cwd := TaskDir(r.cfg.Data, s.key)
+	cwd := r.taskDir(s.key)
 	if len(checkouts) > 0 {
 		cwd = checkouts[0].Dir
 	}
@@ -242,6 +255,7 @@ func (s *session) start(ctx context.Context) error {
 	}
 	s.checkouts = checkouts
 	s.tips = tips(ctx, checkouts)
+	s.noteReviewing(ctx)
 	p, err := s.prompt(ctx, parent, checkouts)
 	if err != nil {
 		return err
@@ -258,7 +272,7 @@ func (s *session) start(ctx context.Context) error {
 	env = setEnv(env, remote.EnvToken, s.a.token)
 	env = setEnv(env, remote.EnvSession, s.rec.Session())
 	mcpFile := filepath.Join(s.dir, "mcp.json")
-	if err := s.writeMCPConfig(mcpFile, TaskDir(r.cfg.Data, s.key)); err != nil {
+	if err := s.writeMCPConfig(mcpFile, r.taskDir(s.key)); err != nil {
 		return err
 	}
 	v := Values{PromptFile: promptFile, Workspace: cwd, SessionID: s.rec.Session(), Model: s.set.Model, MCPConfig: mcpFile, Task: s.key,
@@ -293,6 +307,10 @@ func (s *session) start(ctx context.Context) error {
 	case s.claude:
 		s.claudeDir = ClaudeDir(env)
 		s.progress, s.transcript = TranscriptPath(s.claudeDir, cwd, s.rec.Session()), true
+	}
+	// The last moment to see a pause set while the Task was prepared: no command starts after it.
+	if set, ok, err := s.a.rec.Agent(ctx, s.a.me.Member.ID); err == nil && (!ok || set.Paused) {
+		return errPaused
 	}
 	proc, err := r.host.Start(ctx, Spec{Name: TmuxName(s.key), Argv: argv, Dir: cwd, Env: env, SessionDir: s.dir, Log: s.logPath})
 	if err != nil {
@@ -331,7 +349,7 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 		names[m.ID] = m.Name
 	}
 	d := s.d
-	p := Prompt{Agent: s.a.name(), Manager: names[s.manager(d)], Dir: TaskDir(s.r.cfg.Data, s.key), Checkouts: checkouts, Rules: remote.Rules,
+	p := Prompt{Agent: s.a.name(), Manager: names[s.manager(d)], Dir: s.r.taskDir(s.key), Checkouts: checkouts, Rules: remote.Rules,
 		Task: PromptTask{Key: d.Task.Key, Title: d.Task.Title, Description: d.Task.Description, Step: stepName(d), Kind: string(d.Task.Kind),
 			Outcomes: outcomes(d)}}
 	if parent != nil {

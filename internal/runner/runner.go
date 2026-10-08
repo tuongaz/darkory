@@ -87,8 +87,12 @@ type Token struct {
 type Config struct {
 	// URL is the Install's /v1 base URL.
 	URL string
-	// Data is the Install's data directory: <data>/workspaces and <data>/sessions are the runner's.
+	// Data is the Install's data directory: <data>/sessions is the runner's, and <data>/workspaces
+	// holds its ledger of branches.
 	Data string
+	// Workspaces is where each Task's directory, with its checkouts, goes: <Workspaces>/<KEY>. Empty
+	// is DefaultWorkspaces(Data).
+	Workspaces string
 	// Tokens are the agent Members' tokens; Members limits the runner to the agents of these names.
 	Tokens  []Token
 	Members []string
@@ -164,6 +168,8 @@ type Runner struct {
 	skills map[string]client.Skill
 	// repos are the locks on the repositories the runner changes, by path.
 	repos map[string]*sync.Mutex
+	// tried are the Tasks whose branches the merger has tried to merge, by key, merged or not.
+	tried map[string]bool
 }
 
 // New returns a Runner; nothing runs until Run.
@@ -182,10 +188,16 @@ func New(cfg Config) (*Runner, error) {
 		return nil, err
 	}
 	cfg.Data = data
+	if cfg.Workspaces == "" {
+		cfg.Workspaces = DefaultWorkspaces(data)
+	}
+	if cfg.Workspaces, err = filepath.Abs(cfg.Workspaces); err != nil {
+		return nil, err
+	}
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
 		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), kept: make(chan struct{}, 1), skills: map[string]client.Skill{},
-		repos: map[string]*sync.Mutex{}}
+		repos: map[string]*sync.Mutex{}, tried: map[string]bool{}}
 	if r.host == nil {
 		switch cfg.Tmux {
 		case "", "auto":
@@ -266,7 +278,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	for i, a := range r.agents {
 		names[i] = a.me.Member.Name
 	}
-	r.log.Info("the runner is running agents", "agents", names, "host", r.hostName(), "url", r.cfg.URL)
+	r.log.Info("the runner is running agents", "agents", names, "host", r.hostName(), "url", r.cfg.URL, "workspaces", r.cfg.Workspaces)
 
 	var wg sync.WaitGroup
 	after, err := retry(ctx, r.t.Retry, func() (int64, error) { return r.reader.LastSeq(ctx) })

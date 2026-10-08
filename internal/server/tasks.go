@@ -26,6 +26,9 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 	if body.Breakdown != nil {
 		nt.Breakdown = *body.Breakdown
 	}
+	if body.BlockedBy != nil {
+		nt.BlockedBy = *body.BlockedBy
+	}
 	if body.Labels != nil {
 		nt.Labels = *body.Labels
 	}

@@ -1085,6 +1085,12 @@ type FileTaskBody struct {
 	// AutoComplete Defaults to the Project's. Not on a Subtask.
 	AutoComplete *bool `json:"auto_complete,omitempty"`
 
+	// BlockedBy Ids or display keys of Tasks that block the new one from its first moment, in the same
+	// write, so it is never takeable before they end. Each a worked Task, never a Parent;
+	// not with `breakdown`, since a Parent is never blocked. Refused `cycle` when one is the
+	// Task the new one blocks, or blocked by it.
+	BlockedBy *[]string `json:"blocked_by,omitempty"`
+
 	// Blocks Id or display key of a Task the new one blocks (a question or Escalation).
 	Blocks *string `json:"blocks,omitempty"`
 
