@@ -7,13 +7,15 @@ import { arrowhead } from "./draw";
 import { brackets, type LineTopology } from "./layout";
 import { DONE_STATION, isHoldStep, spanTime, type LineFacts, type LineTask } from "./model";
 import { GhostToken, HiddenCount, Token } from "./Token";
+import { BREAKDOWN_BRANCH, entryHint, ENTRY_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint, HOLD_NOTE } from "./words";
 
 const RAIL = 32;
 
 /**
  * The line turned to run down a phone: stations as rows, a Step's tokens wrapping beside its name,
  * loops back as brackets left of the rail, forward skips and side exits as chips; the branch
- * "After a Parent" as rows of its own below.
+ * "After a Parent" as rows of its own below. Above the rail, where Tasks enter: the branch
+ * "Break down", the parked holds, and "New Tasks start here" into the start Step.
  */
 export function VerticalLine({
   topology: t,
@@ -87,7 +89,10 @@ export function VerticalLine({
   const chipsAt = (id: string) => [
     ...t.over.filter((a) => !a.back && a.connector.from === id).map((a) => `${a.connector.name} → ${name(a.connector.to)}`),
     ...t.chips.filter((c) => c.stepId === id).map((c) => c.text),
+    // Neighbours no Connector joins: a human moves a Task on.
+    ...t.segments.filter((s) => s.from === id && !s.connector).map((s) => `${HAND_LABEL} → ${name(s.to === DONE_STATION ? null : s.to)}`),
   ];
+  const entry = t.start !== undefined && t.main[0] === t.start;
   const stays = new Map((trace?.stays ?? []).filter((s) => s.until !== undefined).map((s) => [s.stepId, s]));
 
   const token = (task: LineTask) => (
@@ -142,6 +147,11 @@ export function VerticalLine({
             </span>
           )}
         </div>
+        {!trace && !entry && id === t.start && (
+          <span title={entryHint(s?.name ?? "")} data-entry-mark className="mt-1 inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium">
+            New Tasks start here, at {s?.name}
+          </span>
+        )}
         {!trace && (list.length > 0 || n > 0 || (terminal && (done?.length ?? 0) > 0)) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {list.map(token)}
@@ -238,8 +248,64 @@ export function VerticalLine({
     </section>
   );
 
+  // Where Tasks enter, above the rail: the branch Break down, the parked holds, and the entry into the start Step.
+  const sideRow = (id: string, hold: boolean) => {
+    const s = steps.get(id);
+    if (!s) return null;
+    const list = at.get(id) ?? [];
+    const takers = s.takers ?? [];
+    const n = hidden?.get(id) ?? 0;
+    return (
+      <li key={id} title={hold ? holdHint(s.name) : undefined} className="flex min-h-8 flex-wrap items-center gap-1.5 py-0.5">
+        <span aria-hidden className={cn("size-3.5 rounded-full border-[1.5px] border-foreground", hold && "border-dashed")} />
+        <b className="font-semibold">{s.name}</b>
+        {hold ? <span className="text-[11px] text-muted-foreground">{HOLD_NOTE}</span> : s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
+        {!hold && takers.slice(0, 1).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          {!trace && list.map(token)}
+          {!compactHeads && n > 0 && <HiddenCount n={n} />}
+        </span>
+      </li>
+    );
+  };
+  const before = t.before;
+  const start = t.start !== undefined ? name(t.start) : undefined;
+  const enter = (before || t.holds.length > 0 || entry) && (
+    <section aria-label="Where Tasks enter" className="flex flex-col gap-1 border-b px-3.5 pt-2 pb-2.5">
+      {before && (
+        <div>
+          <div className="text-[11px] text-muted-foreground">{BREAKDOWN_BRANCH}</div>
+          <ul className="flex flex-col">{sideRow(before, false)}</ul>
+          <div title={filesHint(name(before), start)} className="flex flex-wrap gap-1 pl-5">
+            {start && (
+              <span className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+                {FILES_LABEL} → {start}
+              </span>
+            )}
+            {t.chips
+              .filter((c) => c.stepId === before)
+              .map((c) => (
+                <span key={c.connector.id} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+                  {c.text}
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
+      {t.holds.length > 0 && <ul className="flex flex-col">{t.holds.map((id) => sideRow(id, true))}</ul>}
+      {entry && start && (
+        <div title={entryHint(start)} data-entry className="flex items-center gap-1.5 pt-0.5 text-[11.5px] font-medium">
+          {ENTRY_LABEL}
+          <span aria-hidden className="text-muted-foreground">↓</span>
+          <span className="text-muted-foreground">{start}</span>
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <div className="flex flex-col">
+      {enter}
       <div ref={box} className="relative pt-3">
         <svg aria-hidden className="pointer-events-none absolute top-0 left-0 overflow-visible" width={1} height={Math.max(1, height)}>
           {segs}

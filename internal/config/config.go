@@ -74,6 +74,12 @@ type Serve struct {
 	SMTP SMTP
 	// EvidenceMaxMB bounds one Evidence file, in MiB (DARKORY_EVIDENCE_MAX_MB, --evidence-max-mb).
 	EvidenceMaxMB int64
+	// Files is where the Organisations' files, such as avatars, are kept (DARKORY_FILES, --files;
+	// DARKORY_S3_*). Unset, they follow Evidence: files in the data directory beside evidence, or
+	// the same bucket under the Evidence prefix and files/.
+	Files blob.Settings
+	// FilesMaxMB bounds one file, in MiB (DARKORY_FILES_MAX_MB, --files-max-mb).
+	FilesMaxMB int64
 	// SessionIdle ends a browser Session unused for this long (DARKORY_SESSION_IDLE,
 	// --session-idle); SessionLifetime ends one this long after it started, used or not
 	// (DARKORY_SESSION_LIFETIME, --session-lifetime). Token Sessions are not affected.
@@ -144,6 +150,9 @@ func (c Serve) SignInModes() []string { return SignInModes(c.SMTP.URL != "") }
 // DefaultEvidenceMaxMB is the largest Evidence file, in MiB, unless set otherwise.
 const DefaultEvidenceMaxMB = 100
 
+// DefaultFilesMaxMB is the largest file, in MiB, unless set otherwise.
+const DefaultFilesMaxMB = 10
+
 // Init holds the settings of `darkory init`.
 type Init struct {
 	Store
@@ -206,6 +215,13 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 		return Serve{}, fmt.Errorf("DARKORY_EVIDENCE_MAX_MB: %w", err)
 	}
 	fs.Int64Var(&c.EvidenceMaxMB, "evidence-max-mb", maxMB, "largest Evidence file in MiB (DARKORY_EVIDENCE_MAX_MB)")
+	var files string
+	fs.StringVar(&files, "files", getenv("DARKORY_FILES"), "directory for files such as avatars, or s3://bucket/prefix; default files beside Evidence (DARKORY_FILES)")
+	filesMB, err := strconv.ParseInt(or(getenv("DARKORY_FILES_MAX_MB"), strconv.Itoa(DefaultFilesMaxMB)), 10, 64)
+	if err != nil {
+		return Serve{}, fmt.Errorf("DARKORY_FILES_MAX_MB: %w", err)
+	}
+	fs.Int64Var(&c.FilesMaxMB, "files-max-mb", filesMB, "largest file in MiB (DARKORY_FILES_MAX_MB)")
 	for _, d := range []struct {
 		flag, env, usage string
 		into             *time.Duration
@@ -252,6 +268,9 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	if c.EvidenceMaxMB < 1 {
 		return Serve{}, fmt.Errorf("--evidence-max-mb is 1 or more, got %d", c.EvidenceMaxMB)
 	}
+	if c.FilesMaxMB < 1 {
+		return Serve{}, fmt.Errorf("--files-max-mb is 1 or more, got %d", c.FilesMaxMB)
+	}
 	if fs.NArg() > 0 {
 		return Serve{}, fmt.Errorf("serve takes no arguments, got %q", fs.Args())
 	}
@@ -261,6 +280,9 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	c.finish()
 	c.DatabaseListen = getenv("DARKORY_DB_LISTEN")
 	if c.Evidence, err = loadEvidence(evidence, c.DataDir, getenv); err != nil {
+		return Serve{}, err
+	}
+	if c.Files, err = loadFiles(files, c.DataDir, c.Evidence, getenv); err != nil {
 		return Serve{}, err
 	}
 	c.SMTP = SMTP{URL: getenv("DARKORY_SMTP_URL"), From: getenv("DARKORY_SMTP_FROM"), MaxPerHour: DefaultSMTPMaxPerHour}
@@ -316,6 +338,26 @@ func loadEvidence(location, dataDir string, getenv func(string) string) (blob.Se
 		return blob.Settings{}, fmt.Errorf("DARKORY_S3_ENDPOINT needs http:// or https://, got %q", s3.Endpoint)
 	}
 	return blob.Settings{S3: s3}, nil
+}
+
+// loadFiles reads where files are kept: a directory or an S3-compatible bucket, named as
+// DARKORY_EVIDENCE names one. Unset, files follow Evidence: the files directory in the data
+// directory when Evidence is on disk, or Evidence's bucket under its prefix and files/, so one
+// bucket serves a Cloud Install. Evidence keys start with an Organisation's id, never "files".
+func loadFiles(location, dataDir string, evidence blob.Settings, getenv func(string) string) (blob.Settings, error) {
+	if location == "" {
+		if evidence.S3 == nil {
+			return blob.Settings{Dir: filepath.Join(dataDir, "files")}, nil
+		}
+		s3 := *evidence.S3
+		s3.Prefix = strings.TrimPrefix(s3.Prefix+"/files", "/")
+		return blob.Settings{S3: &s3}, nil
+	}
+	set, err := loadEvidence(location, dataDir, getenv)
+	if err != nil {
+		return blob.Settings{}, fmt.Errorf("%s", strings.ReplaceAll(err.Error(), "DARKORY_EVIDENCE", "DARKORY_FILES"))
+	}
+	return set, nil
 }
 
 // Migrate holds the settings of `darkory migrate`.

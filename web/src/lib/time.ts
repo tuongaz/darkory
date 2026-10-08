@@ -7,6 +7,16 @@ export function untilText(ms: number): string {
   return `${Math.round(m / 60)} h`;
 }
 
+/** "40 s", "4 min", "2 h": how long something has lasted, rounded down, at least a second. */
+export function lastedText(ms: number): string {
+  const s = Math.max(1, Math.floor(ms / 1000));
+  if (s < 60) return `${s} s`;
+  const m = Math.floor(s / 60);
+  if (m < 120) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `${h} h` : `${Math.floor(h / 24)} d`;
+}
+
 const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
 const dayYear = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });

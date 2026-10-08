@@ -23,6 +23,8 @@ type Member struct {
 	// Agent is how the Runner starts the Member's sessions; nil for humans and for agents it
 	// does not start.
 	Agent *AgentSettings
+	// AvatarFileID is the file shown in place of the Member's initials; nil for none.
+	AvatarFileID *string
 }
 
 // AgentSettings are how the Runner starts an agent's sessions (ADR 0013). Command and each of
@@ -320,6 +322,25 @@ type Evidence struct {
 	AttachedBy  string
 	CreatedAt   time.Time
 	// BlobKey is where the Evidence store keeps the file; it is not shown.
+	BlobKey string
+}
+
+// File is bytes an Organisation keeps, referenced by id: a Member's avatar, or any file a later
+// feature keeps. The bytes are in the file store under BlobKey; this is what describes them.
+type File struct {
+	ID   string
+	Name string
+	// ContentType is what the server found by reading the bytes, never what the uploader said.
+	ContentType string
+	Size        int64
+	SHA256      string
+	// Purpose is what the file was uploaded as: FileGeneral or FileAvatar.
+	Purpose   string
+	CreatedBy string
+	CreatedAt time.Time
+	// DeletedAt is when the file was deleted; its bytes are gone and only this record stays.
+	DeletedAt *time.Time
+	// BlobKey is where the file store keeps the bytes; it is not shown.
 	BlobKey string
 }
 

@@ -288,7 +288,7 @@ export function memberOptions(members: Iterable<Member>, me: string): FilterOpti
   return [...members]
     .filter((m) => !m.deactivated_at)
     .sort((a, b) => Number(b.id === me) - Number(a.id === me) || a.name.localeCompare(b.name))
-    .map((m) => ({ value: m.id, label: m.name, icon: <MemberAvatar member={m} />, hint: m.id === me ? "Me" : undefined }));
+    .map((m) => ({ value: m.id, label: m.name, icon: <MemberAvatar member={m} card={false} />, hint: m.id === me ? "Me" : undefined }));
 }
 
 const claimOptions: FilterOption[] = [

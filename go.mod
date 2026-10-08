@@ -16,6 +16,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/oapi-codegen/runtime v1.7.0
+	golang.org/x/image v0.44.0
 	golang.org/x/mod v0.41.0
 	modernc.org/sqlite v1.60.1
 )

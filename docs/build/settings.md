@@ -51,6 +51,17 @@ darkory migrate --db "$DARKORY_DB"             # apply them and exit
 
 `serve` checks that the bucket can be reached before it starts. Each object is written with one streamed `PUT` of known length, so an upload is never held in memory. A failed upload leaves nothing behind. One object can be at most 5 GiB.
 
+## File store
+
+Files an Organisation keeps by id, such as Members' avatars (`/v1/files`), are kept the same way as Evidence, in a store of their own.
+
+| Variable | Flag | Default | Meaning |
+|---|---|---|---|
+| `DARKORY_FILES` | `--files` | `files` in the data directory; with Evidence in a bucket, that bucket under the Evidence prefix and `files/` | A directory for the disk store, or `s3://bucket` or `s3://bucket/prefix`, with the `DARKORY_S3_*` settings above. |
+| `DARKORY_FILES_MAX_MB` | `--files-max-mb` | `10` | The largest file, in MiB. An avatar is at most 2 MiB whatever this says. |
+
+`serve` checks that the bucket can be reached before it starts. A deleted file's bytes are removed after the write that deletes it; a removal that fails is tried again after the next deletion in the Organisation.
+
 ## Sign-in
 
 | Variable | Flag | Default | Meaning |

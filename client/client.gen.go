@@ -20,6 +20,8 @@ import (
 
 // Defines values for ActivityKind.
 const (
+	ActivityKindFileDeleted           ActivityKind = "file.deleted"
+	ActivityKindFileUploaded          ActivityKind = "file.uploaded"
 	ActivityKindLabelChanged          ActivityKind = "label.changed"
 	ActivityKindLabelCreated          ActivityKind = "label.created"
 	ActivityKindLabelDeleted          ActivityKind = "label.deleted"
@@ -74,6 +76,10 @@ const (
 // Valid indicates whether the value is a known member of the ActivityKind enum.
 func (e ActivityKind) Valid() bool {
 	switch e {
+	case ActivityKindFileDeleted:
+		return true
+	case ActivityKindFileUploaded:
+		return true
 	case ActivityKindLabelChanged:
 		return true
 	case ActivityKindLabelCreated:
@@ -309,6 +315,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for FilePurpose.
+const (
+	FilePurposeAvatar  FilePurpose = "avatar"
+	FilePurposeGeneral FilePurpose = "general"
+)
+
+// Valid indicates whether the value is a known member of the FilePurpose enum.
+func (e FilePurpose) Valid() bool {
+	switch e {
+	case FilePurposeAvatar:
+		return true
+	case FilePurposeGeneral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	HealthStatusOk HealthStatus = "ok"
@@ -524,6 +548,7 @@ func (e SkillKind) Valid() bool {
 
 // Defines values for SubjectType.
 const (
+	SubjectTypeFile      SubjectType = "file"
 	SubjectTypeLabel     SubjectType = "label"
 	SubjectTypeLoginLink SubjectType = "login_link"
 	SubjectTypeMember    SubjectType = "member"
@@ -539,6 +564,8 @@ const (
 // Valid indicates whether the value is a known member of the SubjectType enum.
 func (e SubjectType) Valid() bool {
 	switch e {
+	case SubjectTypeFile:
+		return true
 	case SubjectTypeLabel:
 		return true
 	case SubjectTypeLoginLink:
@@ -1024,6 +1051,29 @@ type Evidence struct {
 	TaskID      string    `json:"task_id"`
 }
 
+// File Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+// at `/v1/files/{id}/content`.
+type File struct {
+	// ContentType The type the server found by reading the bytes.
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
+
+	// CreatedBy The Member who uploaded it.
+	CreatedBy string `json:"created_by"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+
+	// Purpose What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+	// most 256 pixels square, and only such a file can be set as a Member's avatar.
+	Purpose FilePurpose `json:"purpose"`
+	Sha256  string      `json:"sha256"`
+	Size    int64       `json:"size"`
+}
+
+// FilePurpose What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+// most 256 pixels square, and only such a file can be set as a Member's avatar.
+type FilePurpose string
+
 // FileTaskBody defines model for FileTaskBody.
 type FileTaskBody struct {
 	// Acceptance Defaults to the Project's. Not on a Subtask.
@@ -1183,8 +1233,12 @@ type Member struct {
 	// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
 	// and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
 	// `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
-	Agent     *AgentSettings `json:"agent,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
+	Agent *AgentSettings `json:"agent,omitempty"`
+
+	// AvatarFileID The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+	// at most 256 pixels square. Absent when the Member has none.
+	AvatarFileID *string   `json:"avatar_file_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 
 	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
@@ -1876,9 +1930,12 @@ type UpdateLabelBody struct {
 
 // UpdateMemberBody defines model for UpdateMemberBody.
 type UpdateMemberBody struct {
-	Admin *bool                `json:"admin,omitempty"`
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	Admin *bool `json:"admin,omitempty"`
+
+	// AvatarFileID A file uploaded with `purpose=avatar`; `""` removes the avatar.
+	AvatarFileID *string              `json:"avatar_file_id,omitempty"`
+	Email        *openapi_types.Email `json:"email,omitempty"`
+	Name         *string              `json:"name,omitempty"`
 }
 
 // UpdateProjectBody defines model for UpdateProjectBody.
@@ -2044,6 +2101,12 @@ type EvidenceFilename = string
 // EvidenceID defines model for EvidenceID.
 type EvidenceID = string
 
+// FileID defines model for FileID.
+type FileID = string
+
+// FileName defines model for FileName.
+type FileName = string
+
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
@@ -2120,6 +2183,31 @@ type StreamActivityParams struct {
 	// After Used when `Last-Event-ID` is absent.
 	After       *int64 `form:"after,omitempty" json:"after,omitempty"`
 	LastEventID *int64 `json:"Last-Event-ID,omitempty"`
+}
+
+// UploadFileParams defines parameters for UploadFile.
+type UploadFileParams struct {
+	// Name The file's name, as it should be shown and downloaded.
+	Name FileName `form:"name" json:"name"`
+
+	// Purpose What the file is for; `general` unless said.
+	Purpose *FilePurpose `form:"purpose,omitempty" json:"purpose,omitempty"`
+
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteFileParams defines parameters for DeleteFile.
+type DeleteFileParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DownloadFileParams defines parameters for DownloadFile.
+type DownloadFileParams struct {
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
 // CreateLabelParams defines parameters for CreateLabel.
@@ -2859,6 +2947,51 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/evidence/{evidence}/content (the `DownloadEvidence` operationId).
 	DownloadEvidence(ctx context.Context, evidence EvidenceID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UploadFileWithBody Upload a file the Organisation keeps, such as an avatar
+	//
+	// The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+	// server finds the file's type by reading its bytes and keeps that, never the
+	// `Content-Type` the request claims. Any Member may upload; the file belongs to the
+	// caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+	// unless set otherwise.
+	//
+	// With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+	// (never SVG or HTML, which can carry script); the server keeps the largest square in its
+	// middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+	// metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+	// Errors: `too_large`, `invalid` (not an image an avatar can be).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/files (the `UploadFile` operationId).
+	UploadFileWithBody(ctx context.Context, params *UploadFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteFile Delete a file (its uploader, or an admin)
+	//
+	// Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+	// `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+	//
+	// Corresponds with DELETE /v1/files/{file} (the `DeleteFile` operationId).
+	DeleteFile(ctx context.Context, file FileID, params *DeleteFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetFile Get a file's record
+	//
+	// Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+	//
+	// Corresponds with GET /v1/files/{file} (the `GetFile` operationId).
+	GetFile(ctx context.Context, file FileID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadFile Download a file's bytes
+	//
+	// Any Member of the file's Organisation. Served with the type the server found in the
+	// bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+	// so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+	// change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+	// a year; `If-None-Match` with that ETag answers 304.
+	//
+	// Corresponds with GET /v1/files/{file}/content (the `DownloadFile` operationId).
+	DownloadFile(ctx context.Context, file FileID, params *DownloadFileParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	//
 	// Corresponds with GET /v1/health (the `GetHealth` operationId).
@@ -2990,18 +3123,34 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/members/{member} (the `GetMember` operationId).
 	GetMember(ctx context.Context, member MemberRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateMemberWithBody Change a Member's name, email or admin mark (admin)
+	// UpdateMemberWithBody Change a Member's name, email, admin mark or avatar
 	//
-	// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+	// An admin changes any of them. A human Member may change their own avatar, and only that;
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
+	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
+	// admin).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMemberWithBody(ctx context.Context, member MemberRef, params *UpdateMemberParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateMember Change a Member's name, email or admin mark (admin)
+	// UpdateMember Change a Member's name, email, admin mark or avatar
 	//
-	// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+	// An admin changes any of them. A human Member may change their own avatar, and only that;
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
+	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
+	// admin).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4367,6 +4516,91 @@ func (c *Client) DownloadEvidence(ctx context.Context, evidence EvidenceID, reqE
 	return c.Client.Do(req)
 }
 
+// UploadFileWithBody Upload a file the Organisation keeps, such as an avatar
+//
+// The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+// server finds the file's type by reading its bytes and keeps that, never the
+// `Content-Type` the request claims. Any Member may upload; the file belongs to the
+// caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+// unless set otherwise.
+//
+// With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+// (never SVG or HTML, which can carry script); the server keeps the largest square in its
+// middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+// metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+// Errors: `too_large`, `invalid` (not an image an avatar can be).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/files (the `UploadFile` operationId).
+func (c *Client) UploadFileWithBody(ctx context.Context, params *UploadFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadFileRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteFile Delete a file (its uploader, or an admin)
+//
+// Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+// `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+//
+// Corresponds with DELETE /v1/files/{file} (the `DeleteFile` operationId).
+func (c *Client) DeleteFile(ctx context.Context, file FileID, params *DeleteFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteFileRequest(c.Server, file, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetFile Get a file's record
+//
+// Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+//
+// Corresponds with GET /v1/files/{file} (the `GetFile` operationId).
+func (c *Client) GetFile(ctx context.Context, file FileID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetFileRequest(c.Server, file)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DownloadFile Download a file's bytes
+//
+// Any Member of the file's Organisation. Served with the type the server found in the
+// bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+// so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+// change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+// a year; `If-None-Match` with that ETag answers 304.
+//
+// Corresponds with GET /v1/files/{file}/content (the `DownloadFile` operationId).
+func (c *Client) DownloadFile(ctx context.Context, file FileID, params *DownloadFileParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadFileRequest(c.Server, file, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 //
 // Corresponds with GET /v1/health (the `GetHealth` operationId).
@@ -4648,9 +4882,17 @@ func (c *Client) GetMember(ctx context.Context, member MemberRef, reqEditors ...
 	return c.Client.Do(req)
 }
 
-// UpdateMemberWithBody Change a Member's name, email or admin mark (admin)
+// UpdateMemberWithBody Change a Member's name, email, admin mark or avatar
 //
-// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+// An admin changes any of them. A human Member may change their own avatar, and only that;
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
+// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
+// admin).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4667,9 +4909,17 @@ func (c *Client) UpdateMemberWithBody(ctx context.Context, member MemberRef, par
 	return c.Client.Do(req)
 }
 
-// UpdateMember Change a Member's name, email or admin mark (admin)
+// UpdateMember Change a Member's name, email, admin mark or avatar
 //
-// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+// An admin changes any of them. A human Member may change their own avatar, and only that;
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
+// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
+// admin).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7203,6 +7453,217 @@ func NewDownloadEvidenceRequest(server string, evidence EvidenceID) (*http.Reque
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUploadFileRequestWithBody constructs an http.Request for the UploadFile method, with any body, and a specified content type
+func NewUploadFileRequestWithBody(server string, params *UploadFileParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/files")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "name", params.Name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Purpose != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "purpose", *params.Purpose, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewDeleteFileRequest constructs an http.Request for the DeleteFile method
+func NewDeleteFileRequest(server string, file FileID, params *DeleteFileParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/files/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewGetFileRequest constructs an http.Request for the GetFile method
+func NewGetFileRequest(server string, file FileID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/files/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDownloadFileRequest constructs an http.Request for the DownloadFile method
+func NewDownloadFileRequest(server string, file FileID, params *DownloadFileParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "file", file, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/files/%s/content", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
 	}
 
 	return req, nil
@@ -11642,6 +12103,57 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/evidence/{evidence}/content (the `DownloadEvidence` operationId).
 	DownloadEvidenceWithResponse(ctx context.Context, evidence EvidenceID, reqEditors ...RequestEditorFn) (*DownloadEvidenceResponse, error)
 
+	// UploadFileWithBodyWithResponse Upload a file the Organisation keeps, such as an avatar
+	//
+	// The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+	// server finds the file's type by reading its bytes and keeps that, never the
+	// `Content-Type` the request claims. Any Member may upload; the file belongs to the
+	// caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+	// unless set otherwise.
+	//
+	// With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+	// (never SVG or HTML, which can carry script); the server keeps the largest square in its
+	// middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+	// metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+	// Errors: `too_large`, `invalid` (not an image an avatar can be).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/files (the `UploadFile` operationId).
+	UploadFileWithBodyWithResponse(ctx context.Context, params *UploadFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileResponse, error)
+
+	// DeleteFileWithResponse Delete a file (its uploader, or an admin)
+	//
+	// Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+	// `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/files/{file} (the `DeleteFile` operationId).
+	DeleteFileWithResponse(ctx context.Context, file FileID, params *DeleteFileParams, reqEditors ...RequestEditorFn) (*DeleteFileResponse, error)
+
+	// GetFileWithResponse Get a file's record
+	//
+	// Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/files/{file} (the `GetFile` operationId).
+	GetFileWithResponse(ctx context.Context, file FileID, reqEditors ...RequestEditorFn) (*GetFileResponse, error)
+
+	// DownloadFileWithResponse Download a file's bytes
+	//
+	// Any Member of the file's Organisation. Served with the type the server found in the
+	// bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+	// so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+	// change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+	// a year; `If-None-Match` with that ETag answers 304.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/files/{file}/content (the `DownloadFile` operationId).
+	DownloadFileWithResponse(ctx context.Context, file FileID, params *DownloadFileParams, reqEditors ...RequestEditorFn) (*DownloadFileResponse, error)
+
 	// GetHealthWithResponse Report that the Install is up, how Members sign in, and whether a newer release exists
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -11791,18 +12303,34 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/members/{member} (the `GetMember` operationId).
 	GetMemberWithResponse(ctx context.Context, member MemberRef, reqEditors ...RequestEditorFn) (*GetMemberResponse, error)
 
-	// UpdateMemberWithBodyWithResponse Change a Member's name, email or admin mark (admin)
+	// UpdateMemberWithBodyWithResponse Change a Member's name, email, admin mark or avatar
 	//
-	// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+	// An admin changes any of them. A human Member may change their own avatar, and only that;
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
+	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
+	// admin).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/members/{member} (the `UpdateMember` operationId).
 	UpdateMemberWithBodyWithResponse(ctx context.Context, member MemberRef, params *UpdateMemberParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMemberResponse, error)
 
-	// UpdateMemberWithResponse Change a Member's name, email or admin mark (admin)
+	// UpdateMemberWithResponse Change a Member's name, email, admin mark or avatar
 	//
-	// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+	// An admin changes any of them. A human Member may change their own avatar, and only that;
+	// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+	// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+	// `""` removes the avatar. The avatar file a Member stops showing is
+	// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+	// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+	// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+	// `conflict` (name or email taken; removing the last
+	// admin).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13343,6 +13871,193 @@ func (r DownloadEvidenceResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DownloadEvidenceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UploadFileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *File
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r UploadFileResponse) GetJSON201() *File {
+	return r.JSON201
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r UploadFileResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r UploadFileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UploadFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UploadFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UploadFileResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteFileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteFileResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteFileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteFileResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetFileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *File
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetFileResponse) GetJSON200() *File {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetFileResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetFileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetFileResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DownloadFileResponse200Headers the declared response headers of an HTTP 200 response for DownloadFile
+type DownloadFileResponse200Headers struct {
+	ContentDisposition  *string
+	ETag                *string
+	XContentTypeOptions *string
+}
+
+type DownloadFileResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *DownloadFileResponse200Headers
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DownloadFileResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadFileResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadFileResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadFileResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadFileResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17190,6 +17905,81 @@ func (c *ClientWithResponses) DownloadEvidenceWithResponse(ctx context.Context, 
 	return ParseDownloadEvidenceResponse(rsp)
 }
 
+// UploadFileWithBodyWithResponse Upload a file the Organisation keeps, such as an avatar
+//
+// The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+// server finds the file's type by reading its bytes and keeps that, never the
+// `Content-Type` the request claims. Any Member may upload; the file belongs to the
+// caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+// unless set otherwise.
+//
+// With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+// (never SVG or HTML, which can carry script); the server keeps the largest square in its
+// middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+// metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+// Errors: `too_large`, `invalid` (not an image an avatar can be).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/files (the `UploadFile` operationId).
+func (c *ClientWithResponses) UploadFileWithBodyWithResponse(ctx context.Context, params *UploadFileParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadFileResponse, error) {
+	rsp, err := c.UploadFileWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadFileResponse(rsp)
+}
+
+// DeleteFileWithResponse Delete a file (its uploader, or an admin)
+//
+// Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+// `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/files/{file} (the `DeleteFile` operationId).
+func (c *ClientWithResponses) DeleteFileWithResponse(ctx context.Context, file FileID, params *DeleteFileParams, reqEditors ...RequestEditorFn) (*DeleteFileResponse, error) {
+	rsp, err := c.DeleteFile(ctx, file, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteFileResponse(rsp)
+}
+
+// GetFileWithResponse Get a file's record
+//
+// Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/files/{file} (the `GetFile` operationId).
+func (c *ClientWithResponses) GetFileWithResponse(ctx context.Context, file FileID, reqEditors ...RequestEditorFn) (*GetFileResponse, error) {
+	rsp, err := c.GetFile(ctx, file, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetFileResponse(rsp)
+}
+
+// DownloadFileWithResponse Download a file's bytes
+//
+// Any Member of the file's Organisation. Served with the type the server found in the
+// bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+// so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+// change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+// a year; `If-None-Match` with that ETag answers 304.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/files/{file}/content (the `DownloadFile` operationId).
+func (c *ClientWithResponses) DownloadFileWithResponse(ctx context.Context, file FileID, params *DownloadFileParams, reqEditors ...RequestEditorFn) (*DownloadFileResponse, error) {
+	rsp, err := c.DownloadFile(ctx, file, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadFileResponse(rsp)
+}
+
 // GetHealthWithResponse Report that the Install is up, how Members sign in, and whether a newer release exists
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17429,9 +18219,17 @@ func (c *ClientWithResponses) GetMemberWithResponse(ctx context.Context, member 
 	return ParseGetMemberResponse(rsp)
 }
 
-// UpdateMemberWithBodyWithResponse Change a Member's name, email or admin mark (admin)
+// UpdateMemberWithBodyWithResponse Change a Member's name, email, admin mark or avatar
 //
-// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+// An admin changes any of them. A human Member may change their own avatar, and only that;
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
+// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
+// admin).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -17444,9 +18242,17 @@ func (c *ClientWithResponses) UpdateMemberWithBodyWithResponse(ctx context.Conte
 	return ParseUpdateMemberResponse(rsp)
 }
 
-// UpdateMemberWithResponse Change a Member's name, email or admin mark (admin)
+// UpdateMemberWithResponse Change a Member's name, email, admin mark or avatar
 //
-// Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+// An admin changes any of them. A human Member may change their own avatar, and only that;
+// an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+// Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+// `""` removes the avatar. The avatar file a Member stops showing is
+// deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+// for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+// file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+// `conflict` (name or email taken; removing the last
+// admin).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19524,6 +20330,157 @@ func ParseDownloadEvidenceResponse(rsp *http.Response) (*DownloadEvidenceRespons
 				return nil, err
 			}
 			headers.ContentDisposition = &value
+		}
+		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Content-Type-Options", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XContentTypeOptions = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseUploadFileResponse parses an HTTP response from a UploadFileWithResponse call
+func ParseUploadFileResponse(rsp *http.Response) (*UploadFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UploadFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest File
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteFileResponse parses an HTTP response from a DeleteFileWithResponse call
+func ParseDeleteFileResponse(rsp *http.Response) (*DeleteFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetFileResponse parses an HTTP response from a GetFileWithResponse call
+func ParseGetFileResponse(rsp *http.Response) (*GetFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest File
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadFileResponse parses an HTTP response from a DownloadFileWithResponse call
+func ParseDownloadFileResponse(rsp *http.Response) (*DownloadFileResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadFileResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers DownloadFileResponse200Headers
+		if values := rsp.Header.Values("Content-Disposition"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Disposition", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentDisposition = &value
+		}
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = &value
 		}
 		if values := rsp.Header.Values("X-Content-Type-Options"); len(values) > 0 {
 			var value string

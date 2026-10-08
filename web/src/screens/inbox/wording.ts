@@ -94,6 +94,8 @@ const kinds: Record<ActivityKind, KindWords> = {
   "session.closed": { group: "Session", label: "Closed", verb: "closed a Session" },
   "login_link.issued": { group: "Login link", label: "Issued", verb: "issued a login link for" },
   "login_link.redeemed": { group: "Login link", label: "Redeemed", verb: "signed in with a login link" },
+  "file.uploaded": { group: "File", label: "Uploaded", verb: "uploaded" },
+  "file.deleted": { group: "File", label: "Deleted", verb: "deleted" },
 };
 
 /** The groups a Project's Activity holds: what `/v1/activity?project=` returns. */
@@ -194,6 +196,9 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     case "skill":
       s.subject = { type: "text", text: l.skills.get(e.subject_id)?.name ?? text(p, "name") ?? "a Skill" };
       break;
+    case "file":
+      s.subject = { type: "text", text: text(p, "name") ?? "a File" };
+      break;
   }
 
   switch (e.kind) {
@@ -250,6 +255,15 @@ export function describe(e: Activity, l: Lookup): Sentence | null {
     case "task.claim_ended":
       s.details.push(`held by ${member(text(p, "holder_id"))}`);
       if (text(p, "how_ended")) s.details.push(claimEnds[text(p, "how_ended")!] ?? text(p, "how_ended")!);
+      break;
+    case "member.updated":
+      if (Object.hasOwn(p, "avatar_file_id")) s.details.push(p.avatar_file_id ? "new Avatar" : "Avatar removed");
+      break;
+    case "file.uploaded":
+      if (text(p, "purpose") === "avatar") s.details.push("as an Avatar");
+      break;
+    case "file.deleted":
+      if (p.released) s.details.push("an Avatar no one shows");
       break;
     case "task.split":
       s.after.push("into Subtasks");

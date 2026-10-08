@@ -106,12 +106,19 @@ type MemberChange struct {
 	Name  *string
 	Email *string
 	Admin *bool
+	// AvatarFileID sets the Member's avatar to a file uploaded as one; "" removes it.
+	AvatarFileID *string
 }
 
-// UpdateMember changes a Member's name, email or admin mark (admin). The last admin keeps the mark.
+// UpdateMember changes a Member's name, email, admin mark or avatar. An admin changes any of
+// them; a human changes their own avatar too. The last admin keeps the mark. An avatar file the
+// Member no longer shows, and no other Member shows, is deleted with the change.
 func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, ch MemberChange, idem Idem) (Member, error) {
-	if err := mustAdmin(c); err != nil {
-		return Member{}, err
+	onlyAvatar := ch.Name == nil && ch.Email == nil && ch.Admin == nil && ch.AvatarFileID != nil
+	if !onlyAvatar {
+		if err := mustAdmin(c); err != nil {
+			return Member{}, err
+		}
 	}
 	if ch.Name != nil {
 		if err := validMemberName("name", *ch.Name); err != nil {
@@ -127,6 +134,9 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 		if err != nil {
 			return nil, err
 		}
+		if !c.Admin && (id != c.MemberID || m.Kind != "human") {
+			return nil, refuse(CodeForbidden, "only an admin may change another Member's avatar, or an agent's")
+		}
 		payload := map[string]any{}
 		name := m.Name
 		if ch.Name != nil && *ch.Name != m.Name {
@@ -139,6 +149,19 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 		admin := m.Admin
 		if ch.Admin != nil && *ch.Admin != m.Admin {
 			admin, payload["admin"] = *ch.Admin, *ch.Admin
+		}
+		avatar := m.AvatarFileID
+		if ch.AvatarFileID != nil && (m.AvatarFileID == nil || *ch.AvatarFileID != *m.AvatarFileID) {
+			if *ch.AvatarFileID == "" {
+				if m.AvatarFileID != nil {
+					avatar, payload["avatar_file_id"] = nil, nil
+				}
+			} else {
+				if err := avatarFile(ctx, t, c, *ch.AvatarFileID); err != nil {
+					return nil, err
+				}
+				avatar, payload["avatar_file_id"] = ch.AvatarFileID, *ch.AvatarFileID
+			}
 		}
 		if len(payload) == 0 {
 			return m, nil
@@ -155,12 +178,17 @@ func (s *Service) UpdateMember(ctx context.Context, c *auth.Caller, ref string, 
 				return nil, refuse(CodeConflict, "%s is the last active admin", m.Name)
 			}
 		}
-		if _, err := t.Exec(ctx, `UPDATE members SET name = $1, email = $2, admin = $3, updated_at = $4 WHERE org_id = $5 AND id = $6`,
-			name, email, admin, ms(t.now), c.OrgID, id); err != nil {
+		if _, err := t.Exec(ctx, `UPDATE members SET name = $1, email = $2, admin = $3, avatar_file_id = $4, updated_at = $5 WHERE org_id = $6 AND id = $7`,
+			name, email, admin, avatar, ms(t.now), c.OrgID, id); err != nil {
 			return nil, err
 		}
 		if err := t.recordByCaller("member.updated", id, payload); err != nil {
 			return nil, err
+		}
+		if _, changed := payload["avatar_file_id"]; changed && m.AvatarFileID != nil {
+			if err := releaseAvatar(t, *m.AvatarFileID); err != nil {
+				return nil, err
+			}
 		}
 		return getMember(ctx, t, c.OrgID, id)
 	})

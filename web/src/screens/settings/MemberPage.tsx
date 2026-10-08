@@ -8,7 +8,6 @@ import { useDirectory, useMember, useMemberSessions, useProjects, useRunnerSessi
 import { taskPath } from "@/screens/task/format";
 import { addProjectMember, removeProjectMember } from "@/api/writes";
 import type { Crumb } from "@/app/TopBar";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
@@ -24,6 +23,7 @@ import { shortSessionId } from "@/lib/members";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { AgentCard } from "./AgentSettings";
+import { AvatarControl } from "./AvatarControl";
 import { TokenRows } from "./credentials";
 import { SessionsTable } from "./SessionsTable";
 import { LoadingFrame, SettingsFrame } from "./frame";
@@ -96,7 +96,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" />}
+          mark={<AvatarControl member={m} editable={me.member.admin || (self && m.kind === "human")} />}
           meta={
             <>
               {m.kind === "agent" ? <Pill tone="agent">Agent</Pill> : <Pill>Human</Pill>}

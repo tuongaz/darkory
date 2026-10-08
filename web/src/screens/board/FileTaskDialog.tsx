@@ -89,7 +89,7 @@ function StepOption({ step, skill }: { step: WorkflowStep; skill: string | undef
       {step.takers.length > 0 && (
         <span className="flex items-center -space-x-1" aria-label={`Taken by ${step.takers.map((t) => t.name).join(", ")}`}>
           {step.takers.slice(0, 4).map((t) => (
-            <MemberAvatar key={t.id} member={t} />
+            <MemberAvatar key={t.id} member={t} card={false} />
           ))}
         </span>
       )}
@@ -372,7 +372,7 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
                 .map((m) => ({
                   value: m.id,
                   label: m.name,
-                  icon: <MemberAvatar member={m} />,
+                  icon: <MemberAvatar member={m} card={false} />,
                   detail: m.id === me.member.id ? <span className="text-muted-foreground">· you</span> : undefined,
                 }))}
               placeholder="Choose a Member"
@@ -437,7 +437,7 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
               }}
               options={memberList
                 .filter((m) => !m.deactivated_at)
-                .map((m) => ({ value: m.id, label: m.name, icon: <MemberAvatar member={m} /> }))}
+                .map((m) => ({ value: m.id, label: m.name, icon: <MemberAvatar member={m} card={false} /> }))}
               placeholder="No one by name"
               searchPlaceholder="Search Members"
               empty="No Member"

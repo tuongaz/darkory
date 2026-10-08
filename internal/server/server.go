@@ -38,6 +38,11 @@ type Server struct {
 	blobs blob.Store
 	// maxEvidence bounds one Evidence file, in bytes.
 	maxEvidence int64
+	// files keeps the Organisations' files, such as avatars; nil when the Install has no file
+	// store.
+	files blob.Store
+	// maxFile bounds one file, in bytes.
+	maxFile int64
 	// bodyTimeout bounds how long a request body may take to arrive.
 	bodyTimeout time.Duration
 	// browser bounds how long a browser Session lasts; its cookie lives as long as Lifetime.
@@ -78,6 +83,11 @@ type Options struct {
 	Blobs blob.Store
 	// MaxEvidenceSize bounds one Evidence file, in bytes. Defaults to DefaultMaxEvidenceSize.
 	MaxEvidenceSize int64
+	// Files keeps the Organisations' files, such as avatars: on disk under the data directory by
+	// default. Without one, files cannot be uploaded or downloaded.
+	Files blob.Store
+	// MaxFileSize bounds one file, in bytes. Defaults to DefaultMaxFileSize.
+	MaxFileSize int64
 	// BodyReadTimeout bounds how long a request body may take to arrive; an Evidence upload also
 	// gets time in proportion to its size. Defaults to DefaultBodyReadTimeout.
 	BodyReadTimeout time.Duration
@@ -112,6 +122,9 @@ func New(st *store.Store, o Options) *Server {
 	if o.MaxEvidenceSize <= 0 {
 		o.MaxEvidenceSize = DefaultMaxEvidenceSize
 	}
+	if o.MaxFileSize <= 0 {
+		o.MaxFileSize = DefaultMaxFileSize
+	}
 	if o.BodyReadTimeout <= 0 {
 		o.BodyReadTimeout = DefaultBodyReadTimeout
 	}
@@ -138,6 +151,8 @@ func New(st *store.Store, o Options) *Server {
 		signIn:      newEmailSignIn(o),
 		blobs:       o.Blobs,
 		maxEvidence: o.MaxEvidenceSize,
+		files:       o.Files,
+		maxFile:     o.MaxFileSize,
 		bodyTimeout: o.BodyReadTimeout,
 		browser:     o.Sessions,
 		streams:     newWaiting("Activity streams", o.MaxWaiting),

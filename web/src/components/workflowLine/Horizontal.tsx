@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { DONE, DROPPED, type FlowState } from "@/components/workflow/live";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,10 @@ import { arrowhead, placeCallout, smooth, type Box } from "./draw";
 import { handRoute, horizontal as layOut, type Density, type DrawnArc, type Horizontal as Laid, type LineTopology } from "./layout";
 import { DONE_STATION, isHoldStep, PICKUP_MS, spanTime, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { Bead, GhostToken, HiddenCount, Token } from "./Token";
+import { AFTER_HINT, BREAKDOWN_BRANCH, ENTRY_LABEL, HOLD_NOTE } from "./words";
+
+/** A clear, wide stroke over a drawn line: what the pointer finds to say what the line means. */
+const hitStroke = { fill: "none", stroke: "transparent", strokeWidth: 12, style: { pointerEvents: "stroke" as const, cursor: "help" } };
 
 /** How many tokens a Step's column shows before "+N more". */
 export const COLUMN_CAP = 6;
@@ -109,10 +113,34 @@ export function HorizontalLine(props: HorizontalProps) {
     },
     [steps, ghosts, columns, hiddenAt],
   );
-  const h: Laid = useMemo(
-    () => layOut(t, { width, density, column: props.fold ? 0 : columnPx, noBranch: props.noBranch, branchGap: ghosts?.length ? 380 : 240, labelWidth }),
-    [t, width, density, columnPx, props.fold, props.noBranch, ghosts?.length, labelWidth],
+  // A parked hold's tokens hang in a column under its name: their height, to the cap.
+  const holdColumn = useCallback(
+    (id: string) => {
+      if (props.fold || props.compactHeads) return (hiddenAt?.get(id) ? 24 : 0);
+      const n = columns.get(id)?.length ?? 0;
+      const shown = density === "beads" ? Math.ceil(n / 6) * 18 : Math.min(n, COLUMN_CAP) * (TOKEN_H + TOKEN_GAP) + (n > COLUMN_CAP ? 24 : 0);
+      return shown + (hiddenAt?.get(id) ? 24 : 0);
+    },
+    [columns, density, hiddenAt, props.fold, props.compactHeads],
   );
+  const h: Laid = useMemo(
+    () => layOut(t, { width, density, column: props.fold ? 0 : columnPx, noBranch: props.noBranch, branchGap: ghosts?.length ? 380 : 240, labelWidth, holdColumn }),
+    [t, width, density, columnPx, props.fold, props.noBranch, ghosts?.length, labelWidth, holdColumn],
+  );
+
+  // What a line means, in words, while the pointer is on it.
+  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const hover = (text: string | undefined) =>
+    text
+      ? {
+          "data-hint": text,
+          onMouseEnter: (e: MouseEvent) => {
+            const r = box.current?.getBoundingClientRect();
+            if (r) setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text });
+          },
+          onMouseLeave: () => setTip(null),
+        }
+      : {};
 
   const selected = props.selected ? all.find((x) => x.id === props.selected) : undefined;
   const chain = useMemo(() => (selected ? chainOf(selected.id, all, props.me) : undefined), [selected, all, props.me]);
@@ -349,14 +377,16 @@ export function HorizontalLine(props: HorizontalProps) {
     );
   };
 
-  const label = (l: { x: number; y: number; text: string; back?: boolean; connectorId?: string; align?: "start" }, k: string, main = false) => {
+  const label = (l: { x: number; y: number; text: string; back?: boolean; connectorId?: string; align?: "start"; hint?: string }, k: string, main = false) => {
     const tone = l.connectorId ? routeTone([l.connectorId], main) : props.litLoop ? "dim" : "plain";
     return (
       <span
         key={k}
+        {...hover(l.hint)}
         data-lit={l.connectorId && (lit.has(l.connectorId) || loopLit([l.connectorId])) ? "true" : undefined}
         className={cn(
-          "pointer-events-none absolute -translate-y-1/2 rounded bg-background px-1.5 text-[11px] leading-4 whitespace-nowrap",
+          "absolute -translate-y-1/2 rounded bg-background px-1.5 text-[11px] leading-4 whitespace-nowrap",
+          !l.hint && "pointer-events-none",
           l.align === "start" ? "font-semibold" : "-translate-x-1/2",
           l.back ? "text-foreground" : "text-muted-foreground",
           (tone === "trace" || tone === "next" || tone === "lit") && "font-semibold text-state-claimed",
@@ -464,6 +494,71 @@ export function HorizontalLine(props: HorizontalProps) {
 
   const ghostsAt = (id: string) => (props.ghosts ?? []).filter((g) => g.stepId === id);
 
+  // A Step off the main line (on a branch): its name line over its station, with its Skill, who takes it, its Tasks.
+  const sideName = (id: string, x: number, y: number) => {
+    const s = stepOf(id);
+    if (!s) return null;
+    const here = columns.get(id) ?? [];
+    const takers = s.takers ?? [];
+    const paused = takers.length > 0 && takers.every((m) => m.paused);
+    const hidden = props.hidden?.get(id) ?? 0;
+    return (
+      <div key={id} data-head={s.name} className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: x - 6, top: y - 36 }}>
+        <span className="text-[13px] font-semibold">{s.name}</span>
+        {!props.compactHeads && !props.ghosts?.length && s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
+        {!props.compactHeads && (!props.ghosts?.length || paused) && takers.slice(0, 2).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
+        {paused && <span className="rounded-full border px-1.5 text-[10.5px] leading-4 text-muted-foreground">paused</span>}
+        {here.slice(0, 2).map((task) => token(task))}
+        {here.length > 2 && <span className="text-[11px] text-muted-foreground">+{here.length - 2}</span>}
+        {ghostsAt(id).map((g) => (
+          <GhostToken key={g.label} text={g.text} label={g.label} />
+        ))}
+        {hidden > 0 && <HiddenCount n={hidden} />}
+      </div>
+    );
+  };
+
+  // A parked hold: its name and what it is, right of nothing, left of its spine; its Tasks in a column under them.
+  const holdBlock = (id: string, x: number, y: number, hint: string) => {
+    const s = stepOf(id);
+    if (!s) return null;
+    const list = columns.get(id) ?? [];
+    const hidden = props.hidden?.get(id) ?? 0;
+    const shown = list.length > COLUMN_CAP ? list.slice(0, COLUMN_CAP - 1) : list;
+    const more = list.length - shown.length;
+    const tokens = !props.fold && !props.compactHeads;
+    return (
+      <div key={id} className="absolute flex -translate-x-full flex-col items-end" style={{ left: x - 14, top: y - 10 }}>
+        <div data-head={s.name} {...hover(hint)} className="flex flex-col items-end leading-[18px] whitespace-nowrap">
+          <span className="text-[13px] font-semibold">{s.name}</span>
+          <span className="text-[11px] text-muted-foreground">{HOLD_NOTE}</span>
+        </div>
+        {tokens && density === "beads" && list.length > 0 && (
+          <div className="mt-2 flex w-[110px] flex-wrap justify-end gap-1.5">
+            {list.map((task) => (
+              <Bead key={task.id} task={task} hold dim={dimOthers && !inChain.has(task.id)} />
+            ))}
+          </div>
+        )}
+        {tokens && density === "tokens" && list.length > 0 && (
+          <div className="mt-2 flex flex-col items-end gap-1.5">
+            {shown.map((task) => token(task))}
+            {more > 0 && (
+              <button type="button" onClick={() => setOpenStep(id)} className="rounded-full border px-2 text-[11px] leading-5 text-muted-foreground hover:text-foreground">
+                +{more} more
+              </button>
+            )}
+          </div>
+        )}
+        {hidden > 0 && (
+          <div className="mt-1.5">
+            <HiddenCount n={hidden} />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div ref={box} className="relative w-full select-none" style={{ height: h.height }} onClick={(e) => e.target === e.currentTarget && props.onSelect?.(null)}>
       <svg aria-hidden className="pointer-events-none absolute top-0 left-0 overflow-visible" width={width} height={h.height}>
@@ -536,6 +631,42 @@ export function HorizontalLine(props: HorizontalProps) {
             />
           );
         })}
+        {h.entry && (
+          <g data-entry className={cn((dimOthers || props.litLoop) && "wl-dim")}>
+            {h.entry.arrow && (
+              <g data-route="entry">
+                <path d={smooth(h.entry.arrow.line)} fill="none" stroke="var(--foreground)" strokeWidth={1.6} />
+                <path d={arrowhead(h.entry.arrow.head.x, h.entry.arrow.head.y, "right")} fill="none" stroke="var(--foreground)" strokeWidth={1.6} />
+              </g>
+            )}
+            {h.entry.before?.files && (
+              <g data-route="files">
+                <path d={smooth(h.entry.before.files.line)} fill="none" stroke="var(--foreground)" strokeWidth={1.6} />
+                <path d={arrowhead(h.entry.before.files.head.x, h.entry.before.files.head.y, "down")} fill="none" stroke="var(--foreground)" strokeWidth={1.5} />
+              </g>
+            )}
+            {h.entry.spine && (
+              <g data-route="holds">
+                <path d={smooth(h.entry.spine.line)} fill="none" stroke="var(--muted-foreground)" strokeWidth={1.5} strokeDasharray="2 4" strokeLinecap="round" />
+                <path d={arrowhead(h.entry.spine.head.x, h.entry.spine.head.y, h.entry.spine.head.dir)} fill="none" stroke="var(--muted-foreground)" strokeWidth={1.5} />
+              </g>
+            )}
+            {h.entry.before && (
+              <circle data-station={h.entry.before.id} cx={h.entry.before.station.x} cy={h.entry.before.station.y} r={5.5} fill="var(--background)" stroke="var(--foreground)" strokeWidth={2} />
+            )}
+            {h.entry.holds.map((x) => (
+              <circle key={x.id} data-station={x.id} cx={x.x} cy={x.y} r={6} fill="var(--background)" stroke="var(--foreground)" strokeWidth={2} strokeDasharray="3 3" />
+            ))}
+          </g>
+        )}
+        {/* What every line means, on hover: a wide clear stroke over each. */}
+        {!props.fold &&
+          h.main.map((s) => <path key={`hit-${s.from}`} d={`M${s.x1} ${h.lineY} H${s.x2}`} {...hitStroke} {...hover(h.hints.get(`seg:${s.from}`))} />)}
+        {h.polylines
+          .filter((p) => p.id !== "main")
+          .map((p) => (
+            <path key={`hit-${p.id}`} d={smooth(p.points)} {...hitStroke} {...hover(h.hints.get(p.id))} />
+          ))}
         {chainLines.map((c) => (
           <g key={c.key}>
             <path className="wl-chain" d={c.d} fill="none" stroke={c.blue ? "var(--state-waiting)" : "var(--foreground)"} strokeWidth={1.6} />
@@ -552,6 +683,7 @@ export function HorizontalLine(props: HorizontalProps) {
       {h.chips.map((c, i) => (
         <span
           key={`chip-${i}`}
+          {...hover(c.hint)}
           className={cn(
             "absolute rounded-full border border-dashed bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap text-muted-foreground",
             c.align === "right" && "-translate-x-full",
@@ -566,33 +698,62 @@ export function HorizontalLine(props: HorizontalProps) {
 
       {h.branch && (
         <div className={cn((dimOthers || props.litLoop) && "wl-dim")}>
-          <div className={cn("absolute text-[11px] text-muted-foreground", props.branchLabel !== "After a Parent" && "font-medium text-state-claimed")} style={{ left: h.branch.label.x, top: h.branch.label.y }}>
+          <div
+            {...hover(props.branchLabel === "After a Parent" ? AFTER_HINT : undefined)}
+            className={cn("absolute text-[11px] text-muted-foreground", props.branchLabel !== "After a Parent" && "font-medium text-state-claimed")}
+            style={{ left: h.branch.label.x, top: h.branch.label.y }}
+          >
             {props.branchLabel}
           </div>
           {h.branch.labels.map((l, i) => label(l, `bl-${i}`))}
           {h.branch.loops.flatMap((a) => a.labels.map((l, i) => label(l, `bll-${a.id}-${i}`)))}
-          {h.branch.stations.map((bs) => {
-            const s = stepOf(bs.id);
-            if (!s) return null;
-            const here = columns.get(bs.id) ?? [];
-            const takers = s.takers ?? [];
-            const paused = takers.length > 0 && takers.every((m) => m.paused);
-            const hidden = props.hidden?.get(bs.id) ?? 0;
-            return (
-              <div key={bs.id} className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: bs.x - 6, top: bs.y - 36 }}>
-                <span className="text-[13px] font-semibold">{s.name}</span>
-                {!props.compactHeads && !props.ghosts?.length && s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
-                {!props.compactHeads && (!props.ghosts?.length || paused) && takers.slice(0, 2).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
-                {paused && <span className="rounded-full border px-1.5 text-[10.5px] leading-4 text-muted-foreground">paused</span>}
-                {here.slice(0, 2).map((task) => token(task))}
-                {here.length > 2 && <span className="text-[11px] text-muted-foreground">+{here.length - 2}</span>}
-                {ghostsAt(bs.id).map((g) => (
-                  <GhostToken key={g.label} text={g.text} label={g.label} />
-                ))}
-                {hidden > 0 && <HiddenCount n={hidden} />}
+          {h.branch.stations.map((bs) => sideName(bs.id, bs.x, bs.y))}
+        </div>
+      )}
+
+      {h.entry && (
+        <div className={cn((dimOthers || props.litLoop) && "wl-dim")}>
+          {h.entry.arrow && (
+            <span
+              {...hover(h.entry.arrow.label.hint)}
+              className="absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap"
+              style={{ left: h.entry.arrow.label.x, top: h.entry.arrow.label.y }}
+            >
+              {ENTRY_LABEL}
+            </span>
+          )}
+          {h.entry.mark && (
+            <span
+              {...hover(h.entry.mark.hint)}
+              data-entry-mark
+              className="absolute inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 rounded-full border bg-background px-2 text-[11px] leading-[18px] font-medium whitespace-nowrap"
+              style={{ left: h.entry.mark.x, top: h.entry.mark.y }}
+            >
+              {ENTRY_LABEL}
+              <span aria-hidden>↓</span>
+            </span>
+          )}
+          {h.entry.before && (
+            <>
+              <div {...hover(h.entry.before.title.hint)} className="absolute text-[11px] text-muted-foreground" style={{ left: h.entry.before.title.x, top: h.entry.before.title.y }}>
+                {BREAKDOWN_BRANCH}
               </div>
-            );
-          })}
+              {sideName(h.entry.before.id, h.entry.before.station.x, h.entry.before.station.y)}
+              {h.entry.before.files && label(h.entry.before.files.label, "files")}
+            </>
+          )}
+          {h.entry.spine && label(h.entry.spine.label, "spine")}
+          {h.entry.holds.map((x) => holdBlock(x.id, x.x, x.y, x.hint))}
+        </div>
+      )}
+
+      {tip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none absolute z-30 w-max max-w-[320px] rounded-md border bg-popover px-2.5 py-1.5 text-xs leading-[18px] text-popover-foreground shadow-pop"
+          style={{ left: Math.max(8, Math.min(tip.x + 12, width - 330)), top: tip.y + 16 }}
+        >
+          {tip.text}
         </div>
       )}
 

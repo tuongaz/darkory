@@ -17,6 +17,8 @@ import (
 
 // Defines values for ActivityKind.
 const (
+	ActivityKindFileDeleted           ActivityKind = "file.deleted"
+	ActivityKindFileUploaded          ActivityKind = "file.uploaded"
 	ActivityKindLabelChanged          ActivityKind = "label.changed"
 	ActivityKindLabelCreated          ActivityKind = "label.created"
 	ActivityKindLabelDeleted          ActivityKind = "label.deleted"
@@ -71,6 +73,10 @@ const (
 // Valid indicates whether the value is a known member of the ActivityKind enum.
 func (e ActivityKind) Valid() bool {
 	switch e {
+	case ActivityKindFileDeleted:
+		return true
+	case ActivityKindFileUploaded:
+		return true
 	case ActivityKindLabelChanged:
 		return true
 	case ActivityKindLabelCreated:
@@ -306,6 +312,24 @@ func (e ErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for FilePurpose.
+const (
+	FilePurposeAvatar  FilePurpose = "avatar"
+	FilePurposeGeneral FilePurpose = "general"
+)
+
+// Valid indicates whether the value is a known member of the FilePurpose enum.
+func (e FilePurpose) Valid() bool {
+	switch e {
+	case FilePurposeAvatar:
+		return true
+	case FilePurposeGeneral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	HealthStatusOk HealthStatus = "ok"
@@ -521,6 +545,7 @@ func (e SkillKind) Valid() bool {
 
 // Defines values for SubjectType.
 const (
+	SubjectTypeFile      SubjectType = "file"
 	SubjectTypeLabel     SubjectType = "label"
 	SubjectTypeLoginLink SubjectType = "login_link"
 	SubjectTypeMember    SubjectType = "member"
@@ -536,6 +561,8 @@ const (
 // Valid indicates whether the value is a known member of the SubjectType enum.
 func (e SubjectType) Valid() bool {
 	switch e {
+	case SubjectTypeFile:
+		return true
 	case SubjectTypeLabel:
 		return true
 	case SubjectTypeLoginLink:
@@ -1021,6 +1048,29 @@ type Evidence struct {
 	TaskID      string    `json:"task_id"`
 }
 
+// File Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+// at `/v1/files/{id}/content`.
+type File struct {
+	// ContentType The type the server found by reading the bytes.
+	ContentType string    `json:"content_type"`
+	CreatedAt   time.Time `json:"created_at"`
+
+	// CreatedBy The Member who uploaded it.
+	CreatedBy string `json:"created_by"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+
+	// Purpose What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+	// most 256 pixels square, and only such a file can be set as a Member's avatar.
+	Purpose FilePurpose `json:"purpose"`
+	Sha256  string      `json:"sha256"`
+	Size    int64       `json:"size"`
+}
+
+// FilePurpose What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+// most 256 pixels square, and only such a file can be set as a Member's avatar.
+type FilePurpose string
+
 // FileTaskBody defines model for FileTaskBody.
 type FileTaskBody struct {
 	// Acceptance Defaults to the Project's. Not on a Subtask.
@@ -1180,8 +1230,12 @@ type Member struct {
 	// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
 	// and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
 	// `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
-	Agent     *AgentSettings `json:"agent,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
+	Agent *AgentSettings `json:"agent,omitempty"`
+
+	// AvatarFileID The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+	// at most 256 pixels square. Absent when the Member has none.
+	AvatarFileID *string   `json:"avatar_file_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 
 	// DeactivatedAt When an admin deactivated the Member. Absent while the Member is active.
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
@@ -1873,9 +1927,12 @@ type UpdateLabelBody struct {
 
 // UpdateMemberBody defines model for UpdateMemberBody.
 type UpdateMemberBody struct {
-	Admin *bool                `json:"admin,omitempty"`
-	Email *openapi_types.Email `json:"email,omitempty"`
-	Name  *string              `json:"name,omitempty"`
+	Admin *bool `json:"admin,omitempty"`
+
+	// AvatarFileID A file uploaded with `purpose=avatar`; `""` removes the avatar.
+	AvatarFileID *string              `json:"avatar_file_id,omitempty"`
+	Email        *openapi_types.Email `json:"email,omitempty"`
+	Name         *string              `json:"name,omitempty"`
 }
 
 // UpdateProjectBody defines model for UpdateProjectBody.
@@ -2041,6 +2098,12 @@ type EvidenceFilename = string
 // EvidenceID defines model for EvidenceID.
 type EvidenceID = string
 
+// FileID defines model for FileID.
+type FileID = string
+
+// FileName defines model for FileName.
+type FileName = string
+
 // IdempotencyKey defines model for IdempotencyKey.
 type IdempotencyKey = string
 
@@ -2117,6 +2180,31 @@ type StreamActivityParams struct {
 	// After Used when `Last-Event-ID` is absent.
 	After       *int64 `form:"after,omitempty" json:"after,omitempty"`
 	LastEventID *int64 `json:"Last-Event-ID,omitempty"`
+}
+
+// UploadFileParams defines parameters for UploadFile.
+type UploadFileParams struct {
+	// Name The file's name, as it should be shown and downloaded.
+	Name FileName `form:"name" json:"name"`
+
+	// Purpose What the file is for; `general` unless said.
+	Purpose *FilePurpose `form:"purpose,omitempty" json:"purpose,omitempty"`
+
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DeleteFileParams defines parameters for DeleteFile.
+type DeleteFileParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
+// DownloadFileParams defines parameters for DownloadFile.
+type DownloadFileParams struct {
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
 }
 
 // CreateLabelParams defines parameters for CreateLabel.
@@ -2757,6 +2845,18 @@ type ServerInterface interface {
 	// DownloadEvidence Download an Evidence file
 	// (GET /v1/evidence/{evidence}/content)
 	DownloadEvidence(w http.ResponseWriter, r *http.Request, evidence EvidenceID)
+	// UploadFile Upload a file the Organisation keeps, such as an avatar
+	// (POST /v1/files)
+	UploadFile(w http.ResponseWriter, r *http.Request, params UploadFileParams)
+	// DeleteFile Delete a file (its uploader, or an admin)
+	// (DELETE /v1/files/{file})
+	DeleteFile(w http.ResponseWriter, r *http.Request, file FileID, params DeleteFileParams)
+	// GetFile Get a file's record
+	// (GET /v1/files/{file})
+	GetFile(w http.ResponseWriter, r *http.Request, file FileID)
+	// DownloadFile Download a file's bytes
+	// (GET /v1/files/{file}/content)
+	DownloadFile(w http.ResponseWriter, r *http.Request, file FileID, params DownloadFileParams)
 	// GetHealth Report that the Install is up, how Members sign in, and whether a newer release exists
 	// (GET /v1/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -2793,7 +2893,7 @@ type ServerInterface interface {
 	// GetMember Get a Member with their Projects, Skills and Reporting line
 	// (GET /v1/members/{member})
 	GetMember(w http.ResponseWriter, r *http.Request, member MemberRef)
-	// UpdateMember Change a Member's name, email or admin mark (admin)
+	// UpdateMember Change a Member's name, email, admin mark or avatar
 	// (PATCH /v1/members/{member})
 	UpdateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params UpdateMemberParams)
 	// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no session for it (admin)
@@ -3219,6 +3319,199 @@ func (siw *ServerInterfaceWrapper) DownloadEvidence(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DownloadEvidence(w, r, evidence)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadFile operation middleware
+func (siw *ServerInterfaceWrapper) UploadFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadFileParams
+
+	// ------------- Required query parameter "name" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "name", r.URL.Query(), &params.Name, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "name"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "purpose" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "purpose", r.URL.Query(), &params.Purpose, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "purpose"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "purpose", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadFile(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteFile operation middleware
+func (siw *ServerInterfaceWrapper) DeleteFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "file" -------------
+	var file FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "file", r.PathValue("file"), &file, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "file", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteFileParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteFile(w, r, file, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFile operation middleware
+func (siw *ServerInterfaceWrapper) GetFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "file" -------------
+	var file FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "file", r.PathValue("file"), &file, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "file", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFile(w, r, file)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadFile operation middleware
+func (siw *ServerInterfaceWrapper) DownloadFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "file" -------------
+	var file FileID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "file", r.PathValue("file"), &file, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "file", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DownloadFileParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadFile(w, r, file, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7030,6 +7323,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/tasks/{task}/evidence", wrapper.AttachTaskEvidence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/evidence/{evidence}", wrapper.GetEvidence)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/evidence/{evidence}/content", wrapper.DownloadEvidence)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/v1/files", wrapper.UploadFile)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/files/{file}", wrapper.DeleteFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/files/{file}", wrapper.GetFile)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/files/{file}/content", wrapper.DownloadFile)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity", wrapper.ListActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/activity/stream", wrapper.StreamActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/runner/sessions", wrapper.ListRunnerSessions)

@@ -45,7 +45,7 @@ func optional(s string) *string {
 
 func memberOut(m core.Member) gen.Member {
 	out := gen.Member{ID: m.ID, Name: m.Name, Kind: gen.MemberKind(m.Kind), Email: m.Email, Admin: m.Admin, ManagerID: m.ManagerID,
-		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt}
+		CreatedAt: m.CreatedAt, DeactivatedAt: m.DeactivatedAt, AvatarFileID: m.AvatarFileID}
 	if a := m.Agent; a != nil {
 		out.Agent = &gen.AgentSettings{Command: a.Command, Args: a.Args, Model: a.Model, Env: a.Env, Unattended: a.Unattended,
 			Paused: a.Paused, ProgressFile: optional(a.ProgressFile)}

@@ -17,18 +17,19 @@ import (
 // Readers for each record. They take a store.Reader so a write can read inside its own
 // transaction and a read can run outside any.
 
-const memberCols = `m.id, m.name, m.kind, m.email, m.admin, m.created_at, r.manager_id, m.deactivated_at, m.agent`
+const memberCols = `m.id, m.name, m.kind, m.email, m.admin, m.created_at, r.manager_id, m.deactivated_at, m.agent, m.avatar_file_id`
 const memberFrom = `members m LEFT JOIN reporting_lines r ON r.member_id = m.id`
 
 func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	var m Member
-	var email, manager, agent sql.NullString
+	var email, manager, agent, avatar sql.NullString
 	var created int64
 	var deactivated sql.NullInt64
-	if err := row.Scan(&m.ID, &m.Name, &m.Kind, &email, &m.Admin, &created, &manager, &deactivated, &agent); err != nil {
+	if err := row.Scan(&m.ID, &m.Name, &m.Kind, &email, &m.Admin, &created, &manager, &deactivated, &agent, &avatar); err != nil {
 		return m, err
 	}
 	m.Email, m.ManagerID, m.CreatedAt, m.DeactivatedAt = nullString(email), nullString(manager), fromMS(created), nullTime(deactivated)
+	m.AvatarFileID = nullString(avatar)
 	if agent.Valid {
 		var a AgentSettings
 		if err := json.Unmarshal([]byte(agent.String), &a); err != nil {

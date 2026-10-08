@@ -265,8 +265,16 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a Member's name, email or admin mark (admin)
-         * @description Errors: `forbidden`, `conflict` (name or email taken; removing the last admin).
+         * Change a Member's name, email, admin mark or avatar
+         * @description An admin changes any of them. A human Member may change their own avatar, and only that;
+         *     an agent's avatar is changed by an admin. `avatar_file_id` names a file of the
+         *     Organisation uploaded with `purpose=avatar`, by the caller unless they are an admin;
+         *     `""` removes the avatar. The avatar file a Member stops showing is
+         *     deleted, unless another Member shows it. Records `member.updated`, and `file.deleted`
+         *     for a released avatar. Errors: `forbidden`, `not_found` (no such file), `invalid` (the
+         *     file was not uploaded as an avatar), `forbidden` (also: another Member's upload),
+         *     `conflict` (name or email taken; removing the last
+         *     admin).
          */
         patch: operations["updateMember"];
         trace?: never;
@@ -1396,6 +1404,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file the Organisation keeps, such as an avatar
+         * @description The request body is the file itself with a `Content-Length`, as Evidence is sent. The
+         *     server finds the file's type by reading its bytes and keeps that, never the
+         *     `Content-Type` the request claims. Any Member may upload; the file belongs to the
+         *     caller's Organisation, and every Member of it can read it. The Install's limit is 10 MiB
+         *     unless set otherwise.
+         *
+         *     With `purpose=avatar` the file must be a PNG, JPEG, WebP or GIF image of at most 2 MiB
+         *     (never SVG or HTML, which can carry script); the server keeps the largest square in its
+         *     middle, scaled down to 256 pixels a side, re-encoded as PNG. Only the pixels are kept:
+         *     metadata such as EXIF goes, and a GIF keeps its first frame. Records `file.uploaded`.
+         *     Errors: `too_large`, `invalid` (not an image an avatar can be).
+         */
+        post: operations["uploadFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/files/{file}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a file's record
+         * @description Any Member of the file's Organisation; a deleted file, or another Organisation's, is `not_found`.
+         */
+        get: operations["getFile"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a file (its uploader, or an admin)
+         * @description Its bytes are removed and its id is never reused. Records `file.deleted`. Errors:
+         *     `forbidden`, `conflict` (the file is a Member's avatar: change or remove that first).
+         */
+        delete: operations["deleteFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/files/{file}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a file's bytes
+         * @description Any Member of the file's Organisation. Served with the type the server found in the
+         *     bytes and `X-Content-Type-Options: nosniff`: inline for a PNG, JPEG, WebP or GIF image,
+         *     so an `<img>` can show it, and as an attachment for anything else. A file's bytes never
+         *     change, so the response carries an `ETag` of its SHA-256 and may be cached privately for
+         *     a year; `If-None-Match` with that ETag answers 304.
+         */
+        get: operations["downloadFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/activity": {
         parameters: {
             query?: never;
@@ -1788,6 +1875,11 @@ export interface components {
              */
             deactivated_at?: string;
             agent?: components["schemas"]["AgentSettings"];
+            /**
+             * @description The file shown in place of the Member's initials, at `/v1/files/{id}/content`: a PNG
+             *     at most 256 pixels square. Absent when the Member has none.
+             */
+            avatar_file_id?: string;
         };
         /** @enum {string} */
         MemberKind: "human" | "agent";
@@ -1814,6 +1906,8 @@ export interface components {
             /** Format: email */
             email?: string;
             admin?: boolean;
+            /** @description A file uploaded with `purpose=avatar`; `""` removes the avatar. */
+            avatar_file_id?: string;
         };
         /**
          * @description How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
@@ -2576,6 +2670,30 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description Bytes the Organisation keeps, referenced by id, such as a Member's avatar. Its bytes are
+         *     at `/v1/files/{id}/content`.
+         */
+        File: {
+            id: string;
+            name: string;
+            /** @description The type the server found by reading the bytes. */
+            content_type: string;
+            /** Format: int64 */
+            size: number;
+            sha256: string;
+            purpose: components["schemas"]["FilePurpose"];
+            /** @description The Member who uploaded it. */
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description What a file was uploaded as. An `avatar` was checked to be an image and made a PNG at
+         *     most 256 pixels square, and only such a file can be set as a Member's avatar.
+         * @enum {string}
+         */
+        FilePurpose: "general" | "avatar";
         Activity: {
             /**
              * Format: int64
@@ -2611,13 +2729,13 @@ export interface components {
          *     had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
          * @enum {string}
          */
-        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed";
+        ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed" | "file.uploaded" | "file.deleted";
         /**
          * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
          *     whole; its `subject_id` is the Project's id.
          * @enum {string}
          */
-        SubjectType: "task" | "workflow" | "label" | "skill" | "member" | "project" | "token" | "session" | "login_link" | "workspace";
+        SubjectType: "task" | "workflow" | "label" | "skill" | "member" | "project" | "token" | "session" | "login_link" | "workspace" | "file";
         ActivityPage: {
             items: components["schemas"]["Activity"][];
             /**
@@ -2786,6 +2904,9 @@ export interface components {
         /** @description Label id. */
         LabelID: string;
         EvidenceID: string;
+        FileID: string;
+        /** @description The file's name, as it should be shown and downloaded. */
+        FileName: string;
         ProposalID: string;
         /** @description The id the running copy chose for its Session. */
         SessionID: string;
@@ -5125,6 +5246,128 @@ export interface operations {
                 content: {
                     "*/*": string;
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    uploadFile: {
+        parameters: {
+            query: {
+                /** @description The file's name, as it should be shown and downloaded. */
+                name: components["parameters"]["FileName"];
+                /** @description What the file is for; `general` unless said. */
+                purpose?: components["schemas"]["FilePurpose"];
+            };
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "*/*": string;
+            };
+        };
+        responses: {
+            /** @description The file's record. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file: components["parameters"]["FileID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file's record. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["File"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                file: components["parameters"]["FileID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    downloadFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                file: components["parameters"]["FileID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bytes. */
+            200: {
+                headers: {
+                    /** @description `inline` for an image, else `attachment`, with the file's name. */
+                    "Content-Disposition"?: string;
+                    ETag?: string;
+                    "X-Content-Type-Options"?: "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+            /** @description The copy the client holds is current. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };
