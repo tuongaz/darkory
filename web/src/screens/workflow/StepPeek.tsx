@@ -14,7 +14,8 @@ import { Property, PropertiesRail } from "@/components/PropertiesRail";
 import { Loaded } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
-import { durationText, outgoing, targetName, unstaffed, waitingAt, type Step, type Workflow } from "@/components/workflow/model";
+import { outgoing, targetName, unstaffed, waitingAt, type Step, type Workflow } from "@/components/workflow/model";
+import { spanText } from "@/lib/time";
 import { NoWayOut } from "@/components/workflow/nodes";
 import { glyphLabel } from "@/lib/work";
 import { useCurrentMe } from "@/me";
@@ -66,7 +67,7 @@ export function StepPeek({ project, workflow, step, onClose }: { project: Projec
         </Property>
         <Property label="Median time">
           {step.medianMs !== undefined ? (
-            <span title="The median time Tasks that left it in the last 30 days spent here">{durationText(step.medianMs)}</span>
+            <span title="The median time Tasks that left it in the last 30 days spent here">{spanText(step.medianMs)}</span>
           ) : (
             <span className="text-muted-foreground">No Task has left it in 30 days</span>
           )}

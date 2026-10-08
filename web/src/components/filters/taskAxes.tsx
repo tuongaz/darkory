@@ -294,7 +294,7 @@ export function memberOptions(members: Iterable<Member>, me: string): FilterOpti
 const claimOptions: FilterOption[] = [
   { value: "held", label: "Held" },
   { value: "unheld", label: "Unheld" },
-  { value: "lapsed", label: "Lapsed in 24 h" },
+  { value: "lapsed", label: "Lapsed in 24h" },
   { value: "session", label: "Live session" },
 ];
 

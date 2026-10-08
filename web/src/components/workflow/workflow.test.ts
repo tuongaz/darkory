@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DONE_NODE, DROPPED_NODE, endsOf, routesOf, stepLabel, toEdges, toNodes } from "./flow";
 import { RANK_GAP, ROW_GAP, STEP_H, STEP_W, terminals, tidy } from "./layout";
-import { connectProblem, deleteProblem, durationText, isHold, outgoing, unstaffed, waitingAt, type Step, type Workflow } from "./model";
+import { connectProblem, deleteProblem, isHold, outgoing, unstaffed, waitingAt, type Step, type Workflow } from "./model";
 import { sampleWorkflow } from "./samples";
 
 const step = (id: string) => sampleWorkflow.steps.find((s) => s.id === id)!;
@@ -86,12 +86,6 @@ describe("the Workflow's rules, in words before sending", () => {
     expect(deleteProblem(sampleWorkflow, step("s-build"))).toBe("4 Tasks are at Build: say which Step they move to.");
     expect(deleteProblem(sampleWorkflow, step("s-build"), "s-build")).toBe("Pick another Step of this Workflow.");
     expect(deleteProblem(sampleWorkflow, step("s-build"), "s-qa")).toBeUndefined();
-  });
-
-  it("says a median in the unit it reads best in", () => {
-    expect(durationText(25 * 60_000)).toBe("25 min");
-    expect(durationText(3 * 3_600_000)).toBe("3 h");
-    expect(durationText(72 * 3_600_000)).toBe("3 d");
   });
 });
 

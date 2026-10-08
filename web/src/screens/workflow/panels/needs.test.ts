@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Member, RunnerSession, Task, TaskDetail, Workflow } from "@/api/client";
 import { ada, bob, builder, detail, engineer, parentTask, retro, skills, step, subtask, task, web, workflow } from "@/test/fixtures";
-import { ageText, agentNeedsOf, consequence, needsOf, type NeedsInput } from "./needs";
+import { ageText } from "@/lib/time";
+import { agentNeedsOf, consequence, needsOf, type NeedsInput } from "./needs";
 
 const now = Date.parse("2026-10-08T10:42:05Z");
 const ago = (m: number) => new Date(now - m * 60_000).toISOString();
@@ -170,11 +171,5 @@ describe("Agents need you", () => {
       ["WEB-7", Date.parse(ago(1))],
       ["WEB-6", Date.parse(ago(2))],
     ]);
-  });
-});
-
-describe("ageText", () => {
-  it("reads as the cards do", () => {
-    expect([0.5, 36, 62, 89, 600, 18 * 60, 47 * 60, 49 * 60].map((m) => ageText(m * 60_000))).toEqual(["now", "36m", "1h 2m", "1h 29m", "10h", "18h", "47h", "2d"]);
   });
 });

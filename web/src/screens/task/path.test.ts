@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Activity } from "@/api/client";
 import { parentTask, step, task } from "@/test/fixtures";
-import { stayText, taskPath } from "./path";
+import { taskPath } from "./path";
 
 const t = (min: number) => `2026-10-01T09:${String(min).padStart(2, "0")}:00Z`;
 const ms = (min: number) => Date.parse(t(min));
@@ -53,12 +53,5 @@ describe("a Task's path through its Steps", () => {
     const path = taskPath(p, [entry(1, "task.filed", 0, { step_id: step.build }), entry(2, "task.became_parent", 15, { from: step.build, since: ms(0) })]);
     expect(path.stays).toEqual([{ stepId: step.build, since: ms(0), until: ms(15), left: { by: "parent" } }]);
     expect(path.end).toEqual({ kind: "parent", at: ms(15) });
-  });
-
-  it("says a stay's length in words", () => {
-    expect(stayText(40_000)).toBe("40 s");
-    expect(stayText(12 * 60_000)).toBe("12 min");
-    expect(stayText(3 * 3_600_000)).toBe("3 h");
-    expect(stayText(50 * 3_600_000)).toBe("2 d");
   });
 });

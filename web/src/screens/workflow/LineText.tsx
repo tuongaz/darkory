@@ -1,7 +1,8 @@
 import { ArrowRightIcon } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import type { LineData, LineTask } from "@/components/workflowLine";
-import { blockedBy, sideSteps, tokenState, spanTime, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
+import { blockedBy, sideSteps, tokenState, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
+import { spanText } from "@/lib/time";
 import { breakdownSentence, ENTRY_LABEL, entryHint, holdSentence } from "@/components/workflowLine/words";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +68,7 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {list.length} {list.length === 1 ? "Task" : "Tasks"}
             {hidden > 0 && ` · +${hidden} outside the scope`}
-            {s.medianMs !== undefined && ` · median ${spanTime(s.medianMs)}`}
+            {s.medianMs !== undefined && ` · median ${spanText(s.medianMs)}`}
           </span>
         </div>
         {(!s.skill || sides.before.has(s.id)) && <p className="px-3 pb-1.5 text-xs text-muted-foreground">{s.skill ? breakdownSentence(start) : holdSentence()}</p>}

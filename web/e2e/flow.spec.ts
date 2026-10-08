@@ -169,7 +169,7 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
     await markLoaded(page);
     await call(planner, "POST", `/v1/tasks/${breakdown.id}/claim`, hb);
     await expect(properties).toContainText(/Held by(PL)?planner/);
-    await expect(properties.getByText(/lapses in (9|10) min/)).toBeVisible();
+    await expect(properties.getByText(/lapses in (9|10)m/)).toBeVisible();
     await notReloaded(page);
     await shot(page, "1-03-planner-claim-live");
 

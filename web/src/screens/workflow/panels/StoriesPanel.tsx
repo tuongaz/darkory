@@ -16,7 +16,7 @@ import { TaskGlyph } from "@/screens/inbox/parts";
 import { liveClaim } from "@/work";
 import { startOfDay } from "@/screens/inbox/derive";
 import type { FlowContext } from "../flowEvents";
-import { ageText } from "./needs";
+import { ageText } from "@/lib/time";
 import { entriesOf, segmentsOf, type Story } from "./stories";
 import { useMarkSeenOnLeave } from "./useSeen";
 import { useStories } from "./useStories";

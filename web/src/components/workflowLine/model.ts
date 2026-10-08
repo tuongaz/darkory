@@ -1,4 +1,5 @@
 import type { MemberKind, Working } from "@/lib/work";
+import { durationText } from "@/lib/time";
 
 /*
  * What the Workflow line draws (Direction D, docs: mock-workflow/frag-d.html): a Project's Steps
@@ -135,20 +136,7 @@ export function tokenState(task: LineTask, hold: boolean): TokenState {
 
 /** "now", "40s", "12m", "1h 2m", "18h", "3d": a token's time at its Step, as the drawing writes it. */
 export function tokenTime(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  if (s < 60) return s < 15 ? "now" : `${s}s`;
-  const min = Math.floor(s / 60);
-  if (min < 60) return `${min}m`;
-  const h = Math.floor(min / 60);
-  if (h < 10) return min % 60 ? `${h}h ${min % 60}m` : `${h}h`;
-  if (h < 48) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
-
-/** "40s", "12m", "1h 2m": a span that has ended (a median, the time worked at a past Step), never "now". */
-export function spanTime(ms: number): string {
-  const s = Math.max(1, Math.round(ms / 1000));
-  return s < 60 ? `${s}s` : tokenTime(ms);
+  return ms < 15_000 ? "now" : durationText(ms);
 }
 
 /** How long a pickup reads "now" on its token, with its tag beside it. */

@@ -77,7 +77,7 @@ describe("a Project's Agents", () => {
     expect(row).toHaveTextContent("advanced WEB-4 Cart along pass to Review");
     // A lapse arriving on the stream counts at once.
     act(() => FakeEventSource.latest().emit("activity", entry(9, "task.lapsed", "k-4", { payload: { holder_id: builder.id, claim_id: "c-9" }, at: minutes(0) }), 9));
-    await waitFor(() => expect(row).toHaveTextContent("1 lapse in 24 h"));
+    await waitFor(() => expect(row).toHaveTextContent("1 lapse in 24h"));
     // ada is a human: not listed.
     expect(screen.queryByRole("link", { name: "ada" })).not.toBeInTheDocument();
   });

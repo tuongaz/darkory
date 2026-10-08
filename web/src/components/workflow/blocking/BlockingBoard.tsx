@@ -10,7 +10,7 @@ import { glyphFor, type SubtaskCounts } from "@/lib/work";
 import type { GraphStep } from "../graph";
 import type { Point } from "../model";
 import { roundedPath } from "../route";
-import { ageText } from "./bind";
+import { ageText } from "@/lib/time";
 import { acrossGeometry, analyseBlocking, downGeometry, endsText, placeBlocking, type BlockingAnalysis, type BlockingLayout, type BlockingTask, type PlacedNode } from "./layout";
 
 /** A Parent as a band's header names it. */

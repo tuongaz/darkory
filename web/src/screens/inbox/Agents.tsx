@@ -346,7 +346,7 @@ function AgentTableRow({
             <span className="truncate text-xs">{lastWords ? sentenceShort(lastWords) : last.kind}</span>
             <small className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShortTime at={last.at} />
-              {lapses.length > 0 && <Pill tone="dropped">{lapses.length === 1 ? "1 lapse" : `${lapses.length} lapses`} in 24 h</Pill>}
+              {lapses.length > 0 && <Pill tone="dropped">{lapses.length === 1 ? "1 lapse" : `${lapses.length} lapses`} in 24h</Pill>}
             </small>
           </span>
         ) : (

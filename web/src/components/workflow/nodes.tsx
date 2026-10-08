@@ -7,7 +7,8 @@ import { useCanvas } from "./context";
 import type { StepFlowNode, TerminalFlowNode } from "./flow";
 import { SHOWN_CHIPS } from "./layout";
 import type { LiveCanvas } from "./live";
-import { durationText, isHold, noWayOut, unstaffed, waitingAt, type Step, type Taker, type TaskChip } from "./model";
+import { isHold, noWayOut, unstaffed, waitingAt, type Step, type Taker, type TaskChip } from "./model";
+import { spanText } from "@/lib/time";
 
 const shownTakers = 4;
 
@@ -149,7 +150,7 @@ export function StepNode({ data: { step, deadEnd }, selected }: NodeProps<StepFl
         )}
         <span
           className="ml-auto flex-none text-xs text-muted-foreground tabular-nums"
-          title={step.medianMs !== undefined ? `A Task's median time here: ${durationText(step.medianMs)} (30 days)` : undefined}
+          title={step.medianMs !== undefined ? `A Task's median time here: ${spanText(step.medianMs)} (30 days)` : undefined}
         >
           {step.tasks === 0 ? (
             "No Tasks"

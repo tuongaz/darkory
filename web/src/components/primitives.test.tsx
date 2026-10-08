@@ -6,7 +6,6 @@ import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { initials, tintOf } from "@/lib/members";
-import { agoText, untilText } from "@/lib/time";
 import { SessionId } from "./CopyValue";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
@@ -135,28 +134,13 @@ describe("HeartbeatMeter", () => {
         <HeartbeatMeter claim={{ expires_at: inMinutes(-1), heartbeat_timeout_seconds: 2 }} />
       </>,
     );
-    expect(screen.getByText("lapses in 15 min")).toBeInTheDocument();
+    expect(screen.getByText("lapses in 15m")).toBeInTheDocument();
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "100");
     // A card's compact meter reads as the Agents table's does, and says when on hover.
-    expect(screen.getByText("lapses in 10 min")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
-    expect(screen.getByText("lapses in 36 s")).toBeInTheDocument();
+    expect(screen.getByText("lapses in 10m")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
+    expect(screen.getByText("lapses in 36s")).toBeInTheDocument();
     expect(screen.getByText("No expiry")).toBeInTheDocument();
     expect(screen.getByText("Lapsed")).toBeInTheDocument();
-  });
-
-  it("rounds up, so a holding Claim never reads 0", () => {
-    expect(untilText(500)).toBe("1 s");
-    expect(untilText(61_000)).toBe("2 min");
-    expect(untilText(15 * 60_000)).toBe("15 min");
-    expect(untilText(3 * 3600_000)).toBe("3 h");
-  });
-
-  it("says how long ago, short enough for a narrow column", () => {
-    expect(agoText(-200)).toBe("0 s ago");
-    expect(agoText(40_000)).toBe("40 s ago");
-    expect(agoText(3 * 60_000)).toBe("3 min ago");
-    expect(agoText(5 * 3600_000)).toBe("5 h ago");
-    expect(agoText(3 * 86400_000)).toBe("3 d ago");
   });
 });
 
