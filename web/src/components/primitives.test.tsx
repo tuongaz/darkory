@@ -105,19 +105,26 @@ describe("MemberAvatar", () => {
       expect(agent).toHaveClass(box);
       expect(agent.dataset.size).toBe(size);
     }
-    // The rules (jsdom draws nothing): a human's 1px line; an agent's ring as wide as its size's
-    // --mark-ring, at least 2px and growing with the mark; a live Claim changes how it is drawn, never its width.
+    // The rules (jsdom draws nothing): a human's hairline; an agent's ring about an eighth of the
+    // mark across, in the full-strength AI gradient, a 1px gap inside it and the face shrunk within;
+    // a live Claim changes how the ring is drawn, never its width.
     const css = readFileSync("src/globals.css", "utf8");
-    const rule = (selector: string) => css.match(new RegExp(`\\n  ${selector.replace(/[[\]".=]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+    const rule = (selector: string) => css.match(new RegExp(`\\n  ${selector.replace(/[[\]".=:]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
     expect(rule(".avatar-tint")).toMatch(/border: 1px solid transparent;/);
-    expect(rule('.avatar-tint[data-kind="agent"]')).toMatch(/border-width: var\(--mark-ring\);/);
-    expect(rule('.avatar-tint[data-kind="agent"]')).toMatch(/conic-gradient\(from var\(--spin\), var\(--agent-stops\)\) border-box/);
-    const ring = (selector: string) => parseFloat(rule(selector).match(/--mark-ring: ([\d.]+)px;/)?.[1] ?? "0");
-    const widths = [ring(".avatar-tint"), ring('.avatar-tint[data-size="md"]'), ring('.avatar-tint[data-size="lg"]')];
-    expect(widths[0]).toBeGreaterThanOrEqual(2);
-    expect(widths).toEqual([...widths].sort((a, b) => a - b));
-    expect(new Set(widths).size).toBe(3);
-    for (const state of ["running", "waiting", "stalled", "ending"]) expect(rule(`.avatar-tint[data-working="${state}"]`)).not.toMatch(/border-width/);
+    expect(rule(".avatar-tint")).toMatch(/--mark-gap: 1px;/);
+    const agent = rule('.avatar-tint[data-kind="agent"]');
+    expect(agent).toMatch(/--mark-line: conic-gradient\(from var\(--spin\), var\(--agent-ring-stops\)\);/);
+    expect(agent).toMatch(/padding: calc\(var\(--mark-ring\) \+ var\(--mark-gap\)\);/);
+    expect(agent).toMatch(/content-box/);
+    const ring = rule('.avatar-tint[data-kind="agent"]::before');
+    expect(ring).toMatch(/inset: 0;/);
+    expect(ring).toMatch(/background: var\(--mark-line\);/);
+    expect(ring).toMatch(/mask: radial-gradient\(closest-side, transparent calc\(100% - var\(--mark-ring\)/);
+    const width = (selector: string) => parseFloat(rule(selector).match(/--mark-ring: ([\d.]+)px;/)?.[1] ?? "0");
+    for (const [selector, across] of [[".avatar-tint", 20], ['.avatar-tint[data-size="md"]', 28], ['.avatar-tint[data-size="lg"]', 40], ['.avatar-tint[data-size="xl"]', 96]] as const) {
+      expect(width(selector) / across, selector).toBeGreaterThanOrEqual(0.12);
+    }
+    for (const state of ["running", "waiting", "stalled", "ending"]) expect(rule(`.avatar-tint[data-working="${state}"]`)).not.toMatch(/border-width|padding/);
   });
 
   it("says that a standalone mark's Member works, and how", () => {

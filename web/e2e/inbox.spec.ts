@@ -181,7 +181,11 @@ test("marks: an agent's gradient ring turns while its session runs, stops in its
   await page.goto(`${base()}/projects/INB/agents`);
   const agentMark = page.getByRole("img", { name: /^inbox-builder \(agent\)/ }).first();
   await expect(agentMark).toHaveAttribute("data-kind", "agent");
-  expect(await agentMark.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain("conic-gradient");
+  // The ring is drawn by ::before over the mark's edge, a 1px gap inside it, the face shrunk within.
+  expect(await agentMark.evaluate((el) => getComputedStyle(el, "::before").backgroundImage)).toContain("conic-gradient");
+  expect(await agentMark.evaluate((el) => getComputedStyle(el).backgroundImage)).not.toContain("conic-gradient");
+  const [box, face] = await agentMark.evaluate((el) => [el.getBoundingClientRect().width, parseFloat(getComputedStyle(el).paddingLeft)]);
+  expect(face / box).toBeGreaterThanOrEqual(0.12);
   await shot(page, "marks");
   expect(errors).toEqual([]);
 });

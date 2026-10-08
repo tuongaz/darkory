@@ -207,6 +207,9 @@
   --agent-stops: oklch(0.55 0.23 293) 0% 12%, oklch(0.6 0.19 258) 32%, oklch(0.7 0.13 190) 50%,
     oklch(0.67 0.21 350) 70%, oklch(0.55 0.23 293) 88% 100%;
   --agent-gradient: conic-gradient(var(--agent-stops));
+  /* An agent's mark's ring: the same blend at full strength, so it reads at 20px. */
+  --agent-ring-stops: oklch(0.54 0.26 293) 0% 12%, oklch(0.58 0.23 258) 32%, oklch(0.68 0.17 190) 50%,
+    oklch(0.62 0.25 350) 70%, oklch(0.54 0.26 293) 88% 100%;
 }
 
 /* shadcn's neutral dark theme, with the Darkory additions lifted for a dark ground. The app sets
@@ -270,6 +273,8 @@
   --agent-stops: oklch(0.7 0.19 293) 0% 12%, oklch(0.72 0.15 258) 32%, oklch(0.8 0.12 190) 50%,
     oklch(0.76 0.17 350) 70%, oklch(0.7 0.19 293) 88% 100%;
   --agent-gradient: conic-gradient(var(--agent-stops));
+  --agent-ring-stops: oklch(0.68 0.25 293) 0% 12%, oklch(0.7 0.21 258) 32%, oklch(0.8 0.17 190) 50%,
+    oklch(0.72 0.24 350) 70%, oklch(0.68 0.25 293) 88% 100%;
 }
 
 /* The angle a working ring has turned to: registered so it animates, and not inherited, so a mark
@@ -370,18 +375,21 @@
   --tint-border: 0.42 0.07;
 }
 @layer components {
-  /* A Member's mark (MemberAvatar): a tinted disc, or its Avatar, in a round ring. The ring is
-     the border box painted under the disc, so it can be a gradient: a human's is a plain 1px line
-     in its tint; an agent's is the AI gradient, thick enough to tell at a glance at every size
-     (`--mark-ring` by `data-size`). The box is the size's own and the ring takes its width from
-     inside it, so nothing moves. A standalone mark whose Member works (data-working) keeps the
-     ring's width and changes how it is drawn: an agent's turns while its Shift runs and stops
-     amber (waiting), red (stalled) or grey (ending); a human's live Claim is a still 2px ring in
-     the human ink. */
+  /* A Member's mark (MemberAvatar): a tinted disc, or its Avatar, round. A human's has a neutral
+     hairline round it. An agent's face sits inside a thick ring in the AI gradient with a clear
+     1px gap between, so the ring reads as a ring of its own: the ring is about an eighth of the
+     mark across (`--mark-ring` by `data-size`; 2.5px at 20px, 3.5px at 28px, 5px at 40px), drawn by
+     ::before over the edge of the mark's own box, and the face is shrunk inside it, so an agent's
+     mark takes no more room than a human's and nothing moves. A standalone mark whose Member works
+     (data-working) keeps the ring's width and changes how it is drawn: an agent's turns while its
+     Shift runs and stops amber (waiting), red (stalled) or grey (ending); a human's live Claim is
+     a still 2px ring in the human ink. */
   .avatar-tint {
     --mark-disc: oklch(var(--tint-bg) var(--tint-h));
-    --mark-line: oklch(var(--tint-border) var(--tint-h));
-    --mark-ring: 2px;
+    --mark-line: color-mix(in oklch, var(--foreground) 14%, transparent);
+    --mark-ring: 2.5px;
+    --mark-gap: 1px;
+    position: relative;
     border: 1px solid transparent;
     border-radius: 9999px;
     background:
@@ -390,23 +398,34 @@
     color: oklch(var(--tint-fg) var(--tint-h));
   }
   .avatar-tint[data-size="md"] {
-    --mark-ring: 2.5px;
+    --mark-ring: 3.5px;
   }
   .avatar-tint[data-size="lg"] {
-    --mark-ring: 3px;
-  }
-  .avatar-tint[data-size="xl"] {
     --mark-ring: 5px;
   }
+  .avatar-tint[data-size="xl"] {
+    --mark-ring: 12px;
+  }
   .avatar-tint[data-kind="agent"] {
-    border-width: var(--mark-ring);
-    background:
-      linear-gradient(var(--mark-disc) 0 0) padding-box,
-      conic-gradient(from var(--spin), var(--agent-stops)) border-box;
+    --mark-line: conic-gradient(from var(--spin), var(--agent-ring-stops));
+    border: 0;
+    padding: calc(var(--mark-ring) + var(--mark-gap));
+    background: linear-gradient(var(--mark-disc) 0 0) content-box;
+  }
+  .avatar-tint[data-kind="agent"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--mark-line);
+    mask: radial-gradient(closest-side, transparent calc(100% - var(--mark-ring) - 0.4px), black calc(100% - var(--mark-ring) + 0.4px));
+    pointer-events: none;
   }
   .avatar-tint[data-working="held"] {
     border-width: 2px;
+    --mark-line: var(--human);
   }
+  /* The ring's gradient turns with the mark's --spin, which ::before reads through --mark-line. */
   .avatar-tint[data-working="running"] {
     animation: mark-spin 1.6s linear infinite;
   }
@@ -418,17 +437,6 @@
   }
   .avatar-tint[data-working="ending"] {
     --mark-line: var(--state-dropped);
-  }
-  .avatar-tint[data-working="held"] {
-    --mark-line: var(--human);
-  }
-  .avatar-tint[data-working="waiting"],
-  .avatar-tint[data-working="stalled"],
-  .avatar-tint[data-working="ending"],
-  .avatar-tint[data-working="held"] {
-    background:
-      linear-gradient(var(--mark-disc) 0 0) padding-box,
-      linear-gradient(var(--mark-line) 0 0) border-box;
   }
 
   /* The working glyph (WorkGlyph): a 2px ring with a clear middle, so it sits on any row. An
