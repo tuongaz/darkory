@@ -53,7 +53,7 @@ export function DeleteStepDialog({
   if (before.start === step.id) {
     also.push(
       after.start
-        ? `New Tasks start at ${nameOf(after.start)}${after.before ? `, and ${nameOf(after.before)}'s Subtasks too` : ""}.`
+        ? `New Tasks start at ${nameOf(after.start)}${after.before ? `, and so do ${nameOf(after.before)}'s Subtasks filed naming no Step` : ""}.`
         : "No Step is left where New Tasks start.",
     );
   }

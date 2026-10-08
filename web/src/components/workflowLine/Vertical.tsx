@@ -280,11 +280,7 @@ export function VerticalLine({
           <div className="text-[11px] text-muted-foreground">{BREAKDOWN_BRANCH}</div>
           <ul className="flex flex-col">{sideRow(before, false)}</ul>
           <div title={filesHint(name(before), start)} className="flex flex-wrap gap-1 pl-5">
-            {start && (
-              <span className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
-                {FILES_LABEL} → {start}
-              </span>
-            )}
+            {start && <span className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">{FILES_LABEL}</span>}
             {t.chips
               .filter((c) => c.stepId === before)
               .map((c) => (

@@ -89,11 +89,11 @@ describe("Settings › Workflow", () => {
     expect(list.getByText("After a Parent")).toBeInTheDocument();
     expect(list.getByText(/Darkory files Acceptance under a Parent/)).toBeInTheDocument();
     expect(list.getByRole("listitem", { name: "1. Backlog" })).toHaveTextContent(/Backlog.*Hold.*by hand/);
-    expect(list.getByRole("listitem", { name: "2. Plan" })).toHaveTextContent("Break down · Subtasks start at Build");
+    expect(list.getByRole("listitem", { name: "2. Plan" })).toHaveTextContent("Break down · Subtasks start at Build by default");
     expect(list.getByRole("listitem", { name: "3. Build" })).toHaveTextContent("New Tasks start here");
     expect(list.getByRole("listitem", { name: "6. Skill review" })).toHaveTextContent("Taken by anyone in the Organisation with skill-review");
     expect(list.queryAllByRole("textbox")).toHaveLength(0);
-    expect(screen.getByRole("img", { name: /^The line: Build → Review → Done\. New Tasks start at Build\. Break down: Plan, whose Subtasks start at Build\. Hold: Backlog, moved on by hand\.$/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /^The line: Build → Review → Done\. New Tasks start at Build\. Break down: Plan, whose Subtasks start at Build by default\. Hold: Backlog, moved on by hand\.$/ })).toBeInTheDocument();
     // Where New Tasks start is open in the panel.
     expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
     expect(screen.getByRole("textbox", { name: "Name of Step 3" })).toHaveValue("Build");
@@ -343,7 +343,7 @@ describe("Settings › Workflow", () => {
     await openList();
     await userEvent.click(screen.getByRole("button", { name: "Delete Build" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Delete Build" }));
-    expect(dialog.getByText("New Tasks start at Review, and Plan's Subtasks too.")).toBeInTheDocument();
+    expect(dialog.getByText("New Tasks start at Review, and so do Plan's Subtasks filed naming no Step.")).toBeInTheDocument();
     await userEvent.click(dialog.getByRole("button", { name: "Delete Build" }));
     expect(header()).toHaveTextContent("2 changes");
     await userEvent.click(screen.getByRole("button", { name: "Editing · 2 changes: list them" }));
