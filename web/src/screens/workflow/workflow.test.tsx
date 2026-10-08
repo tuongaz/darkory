@@ -265,6 +265,31 @@ describe("Settings › Workflow", () => {
     await waitFor(() => expect(screen.getByRole("status", { name: /^(Saving…|Saved)$/ })).toHaveTextContent("Saved"));
   });
 
+  it("keeps a new Step's name as typed while /v1 names the Step, and sends it on Enter", async () => {
+    let release!: () => void;
+    const { puts, api } = serve();
+    const first = api.routes["PUT /v1/projects/:project/workflow"] as (c: Call & { params: Record<string, string> }) => unknown;
+    api.routes["PUT /v1/projects/:project/workflow"] = async (c: Call & { params: Record<string, string> }) => {
+      if (puts.length === 0) await new Promise<void>((r) => (release = r));
+      return first(c) as object;
+    };
+    renderApp("/settings/projects/WEB/workflow");
+    await userEvent.click(await screen.findByRole("button", { name: "Add Step" }));
+    const name = within(await panel()).getByRole("textbox", { name: "Name of New Step" });
+    await userEvent.type(name, "{Control>}a{/Control}Docs");
+    release();
+    await waitFor(() => expect(puts).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("status", { name: /^(Saving…|Saved)$/ })).toHaveTextContent("Saved"));
+    // The field is the one typed in, still holding what was typed.
+    const field = within(await panel()).getByRole("textbox", { name: "Name of New Step" });
+    expect(field).toBe(name);
+    expect(field).toHaveValue("Docs");
+    expect(field).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(puts).toHaveLength(2));
+    expect(puts[1].steps.at(-1)).toMatchObject({ id: "st-made-1", name: "Docs" });
+  });
+
   it("says in words what /v1 would refuse, and sends nothing", async () => {
     const { api } = serve();
     const p = await openEditing(`/settings/projects/WEB/workflow?step=${step.plan}`);
