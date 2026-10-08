@@ -556,6 +556,28 @@ func TestRunnerGivesAQuestionNoBranch(t *testing.T) {
 	}
 }
 
+// An agent paused while next waits starts no session: the Task next took is released with a
+// Note, unworked.
+func TestRunnerStartsNoSessionForAnAgentPausedWhileWaiting(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.timings.Wait = 10 * time.Second
+	f.workflow(buildOnly)
+	f.agent("builder", "complete", "engineer")
+	f.run("builder")
+	time.Sleep(500 * time.Millisecond) // the runner is waiting in next
+	f.ok("ada", "agent", "set", "builder", "--paused")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+
+	eventually(t, 15*time.Second, "WEB-1 released unworked", func() bool { return strings.Contains(notesOf(f.task("WEB-1")), "The agent was paused while it waited") })
+	d := f.task("WEB-1")
+	if d.Task.Claim != nil || d.Task.State != client.TaskStateOpen {
+		t.Fatalf("WEB-1 after the release: %+v", d.Task)
+	}
+	if _, err := os.Stat(filepath.Join(f.data, "sessions", "WEB-1", "pane.log")); err == nil {
+		t.Fatal("a session started for a paused agent")
+	}
+}
+
 // A Task with no Parent works on a branch from main, and its advance into Done merges it into
 // main; no Parent's branch is made.
 func TestRunnerMergesATaskStandingAlone(t *testing.T) {

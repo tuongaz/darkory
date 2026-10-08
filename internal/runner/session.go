@@ -122,6 +122,9 @@ func (s *session) setState(st string) {
 	s.mu.Unlock()
 }
 
+// errPaused is a session that did not start because its agent was paused meanwhile.
+var errPaused = errors.New("the agent was paused")
+
 // claimEnded is told by the Activity stream that the session's Claim ended, and how.
 func (s *session) claimEnded(kind string) {
 	select {
@@ -173,6 +176,11 @@ func (s *session) run(ctx context.Context) bool {
 		defer cancel()
 		if ctx.Err() != nil {
 			s.release(bctx, "The runner stopped before the session started.")
+			return true
+		}
+		if errors.Is(err, errPaused) {
+			s.log.Info("the agent was paused before its session started; releasing the Task unworked")
+			s.release(bctx, pausedNote)
 			return true
 		}
 		s.log.Error("could not start the session", "err", err)
@@ -299,6 +307,10 @@ func (s *session) start(ctx context.Context) error {
 	case s.claude:
 		s.claudeDir = ClaudeDir(env)
 		s.progress, s.transcript = TranscriptPath(s.claudeDir, cwd, s.rec.Session()), true
+	}
+	// The last moment to see a pause set while the Task was prepared: no command starts after it.
+	if set, ok, err := s.a.rec.Agent(ctx, s.a.me.Member.ID); err == nil && (!ok || set.Paused) {
+		return errPaused
 	}
 	proc, err := r.host.Start(ctx, Spec{Name: TmuxName(s.key), Argv: argv, Dir: cwd, Env: env, SessionDir: s.dir, Log: s.logPath})
 	if err != nil {
