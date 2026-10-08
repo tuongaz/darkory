@@ -2,7 +2,7 @@ import { BookOpenIcon, HeartPulseIcon, InboxIcon, LinkIcon } from "lucide-react"
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import type { Task, TaskDetail } from "@/api/client";
-import { useDirectory, useTakeable } from "@/api/queries";
+import { useDirectory, useOpenTasks, useTakeable } from "@/api/queries";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
@@ -39,6 +39,7 @@ export function InboxPage() {
   const [allTakeable, setAllTakeable] = useState(false);
 
   const ownedTasks = useMemo(() => owned.data ?? [], [owned.data]);
+  const allOpen = useOpenTasks();
   // The records a decision needs: each finished Parent's Subtasks (how its Acceptance ended) and
   // each open Retrospective's proposals.
   const looked = ownedTasks.filter((t) => (t.subtask_counts && t.subtask_counts.open === 0) || t.kind === "retrospective");
@@ -61,7 +62,8 @@ export function InboxPage() {
   // The page's one primary: the first row's action.
   const primary = aimedAtMe.length > 0 ? "answer" : decisions.some((d) => d.kind === "complete") ? "complete" : "claim";
   const project = (t: Task) => dir.projects.get(t.project_id);
-  const openTasks = [...(aimed.data ?? []), ...ownedTasks];
+  // What a question blocks may be anyone's: every open Task the sidebar already reads.
+  const openTasks = [...new Map([...(aimed.data ?? []), ...ownedTasks, ...(allOpen.data ?? [])].map((t) => [t.id, t])).values()];
 
   return (
     <>

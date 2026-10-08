@@ -112,6 +112,15 @@ describe("the Inbox", () => {
     expect(calls.some((c) => c.query.getAll("filter").includes(`owner:is:${ada.id}`))).toBe(true);
   });
 
+  it("says what a question blocks when that Task is someone else's", async () => {
+    const blocked = task(3, { owner_id: bob.id, blocked: true, open_blockers: [{ id: "k-8", key: "WEB-8", title: "Which currency?" }] });
+    const question = task(8, { aimed_at_id: ada.id, owner_id: bob.id, step_id: undefined, filed_by: bob.id, title: "Which currency?" });
+    recordApi({ tasks: [blocked, question] });
+    renderApp("/inbox");
+    const q = row(await section("Aimed at you"), "WEB-8");
+    await waitFor(() => expect(q).toHaveTextContent("blocks WEB-3"));
+  });
+
   it("opens a row's peek over the Inbox", async () => {
     const t = task(4, { title: "Build the cart" });
     recordApi({ tasks: [t], takeable: [t], extra: { "GET /v1/tasks/:task": { task: t, subtasks: [], connectors: [], labels: [], workspaces: [], claims: [], notes: [], evidence: [], blockers: [], blocking: [], observations: [], proposals: [] } } });
