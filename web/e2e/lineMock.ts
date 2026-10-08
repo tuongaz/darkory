@@ -38,9 +38,9 @@ const who = (id: string) => {
 const skill = (name: string, builtin = false) => ({ id: `s-${name}`, name, kind: "generic", builtin, current_version: 1, created_at: at });
 const skills = ["breakdown", "acceptance", "retro", "skill-review"].map((n) => skill(n, true)).concat(["engineer", "qa", "review", "triage", "design", "security", "docs", "release", "architecture", "devops"].map((n) => skill(n)));
 
-const MAIN = { id: "p-main", key: "MAIN", name: "Main", auto_complete: false, acceptance: true, created_at: at };
-const BIG = { id: "p-big", key: "BIG", name: "Big", auto_complete: false, acceptance: true, created_at: at };
-const SW = { id: "p-sw", key: "SW", name: "Software", auto_complete: true, acceptance: true, created_at: at };
+const MAIN = { id: "p-main", key: "MAIN", name: "Main", color: 0, auto_complete: false, acceptance: true, created_at: at };
+const BIG = { id: "p-big", key: "BIG", name: "Big", color: 6, auto_complete: false, acceptance: true, created_at: at };
+const SW = { id: "p-sw", key: "SW", name: "Software", color: 3, auto_complete: true, acceptance: true, created_at: at };
 const projects = [MAIN, BIG, SW];
 
 const step = (id: string, name: string, position: number, skillName: string | undefined, takers: string[], median?: number) => ({

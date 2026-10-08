@@ -7,7 +7,8 @@ import type { Activity, TaskDetail, WorkflowStep } from "@/api/client";
 import { useNow } from "@/clock";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
-import { stayText, taskPath, type Stay } from "./path";
+import { taskPath, type Stay } from "./path";
+import { spanText } from "@/lib/time";
 
 const leftWords = (left: Stay["left"]) => {
   switch (left?.by) {
@@ -46,7 +47,7 @@ export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: rea
               title={`${name(s.stepId)}: ${new Date(s.since).toLocaleString()}${s.until ? ` to ${new Date(s.until).toLocaleString()}` : ", now"}`}
             >
               <span className="max-w-32 truncate">{name(s.stepId)}</span>
-              <span className="tabular-nums">{stayText((s.until ?? now) - s.since)}</span>
+              <span className="tabular-nums">{spanText((s.until ?? now) - s.since)}</span>
               {current && <span className="sr-only">, now</span>}
             </li>
             {out && <li className="inline-flex text-2xs text-muted-foreground">{out}</li>}

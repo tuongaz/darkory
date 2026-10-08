@@ -2,7 +2,7 @@ import type { Activity, RunnerSession, Task } from "@/api/client";
 import { progressText } from "@/screens/inbox/derive";
 import { liveClaim } from "@/work";
 import { flowKinds, storyVerb, type FlowContext } from "../flowEvents";
-import { ageText } from "./needs";
+import { ageText } from "@/lib/time";
 
 // What's happening, kept free of React so the tests read it as data: one story per Task that
 // changed, newest change first, each with its latest change in the glossary's words and its path

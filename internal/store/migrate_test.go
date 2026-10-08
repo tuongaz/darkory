@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -306,10 +307,81 @@ VALUES ('sub', 'o', 'p', 't', 'WEB-2', 'acceptance', 'A', 'open', 'st', 'm', 0, 
 				`INSERT INTO views (id, org_id, member_id, entity, name, filters, created_at, updated_at) VALUES ('v2', 'o', 'm', 'features', 'x', '[]', 0, 0)`,
 				`INSERT INTO views (id, org_id, member_id, entity, project_id, name, filters, created_at, updated_at) VALUES ('v3', 'o', 'm', 'tasks', 'nope', 'x', '[]', 0, 0)`,
 				`INSERT INTO views (id, org_id, member_id, entity, name, created_at, updated_at) VALUES ('v4', 'o', 'm', 'tasks', 'x', 0, 0)`,
+				`UPDATE projects SET color = 12 WHERE id = 'p'`,
+				`UPDATE projects SET color = -1 WHERE id = 'p'`,
 			} {
 				if err := exec(q); err == nil {
 					t.Errorf("accepted: %s", q)
 				}
+			}
+		})
+	}
+}
+
+// Migration 0005 gives the Projects already in a database their colours in the order they were
+// created, per Organisation, by the rule a new Project takes its colour by: the hue farthest from
+// those already taken, the lowest on a tie (0 6 3 9 1 2 4 5 7 8 10 11, then again).
+func TestMigration0005ColoursTheProjectsInCreationOrder(t *testing.T) {
+	before := fstest.MapFS{}
+	for _, name := range []string{"0001_init.sql", "0002_project_seen.sql", "0003_files.sql", "0004_sessions_by_member.sql"} {
+		data, err := os.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = &fstest.MapFile{Data: data}
+	}
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			if _, err := s.MigrateFS(ctx, before, now); err != nil {
+				t.Fatal(err)
+			}
+			// Two Organisations: fourteen Projects in one, created out of key order and two at the
+			// same moment (the id breaks the tie), and two in the other.
+			err := s.WriteNoSeq(ctx, func(tx store.Tx) error {
+				for _, o := range []string{"o1", "o2"} {
+					if _, err := tx.Exec(ctx, `INSERT INTO organisations (id, name, created_at) VALUES ($1, $1, 0)`, o); err != nil {
+						return err
+					}
+				}
+				for i := range 14 {
+					created := []int{5, 1, 3, 3, 9, 2, 11, 4, 12, 13, 6, 10, 7, 8}[i]
+					id, key := fmt.Sprintf("p%02d", i), fmt.Sprintf("K%02d", i)
+					if _, err := tx.Exec(ctx, `INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ($1, 'o1', $2, $2, $3)`, id, key, created); err != nil {
+						return err
+					}
+				}
+				for i, id := range []string{"q1", "q0"} {
+					if _, err := tx.Exec(ctx, `INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ($1, 'o2', $1, $1, $2)`, id, i); err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			got := map[string][]int{}
+			rows, err := s.Query(ctx, `SELECT org_id, color FROM projects ORDER BY org_id, created_at, id`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rows.Close()
+			for rows.Next() {
+				var org string
+				var color int
+				if err := rows.Scan(&org, &color); err != nil {
+					t.Fatal(err)
+				}
+				got[org] = append(got[org], color)
+			}
+			want := map[string][]int{"o1": {0, 6, 3, 9, 1, 2, 4, 5, 7, 8, 10, 11, 0, 6}, "o2": {0, 6}}
+			if fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Fatalf("colours %v, want %v", got, want)
 			}
 		})
 	}

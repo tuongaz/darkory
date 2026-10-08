@@ -449,7 +449,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+         * Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
          * @description Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
          *     The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
          *     default; a Task filed without `auto_complete` or `acceptance` takes the Project's. Tasks
@@ -2001,6 +2001,7 @@ export interface components {
             /** @description The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`. */
             key: string;
             name: string;
+            color: components["schemas"]["ProjectColor"];
             /**
              * Format: id
              * @description The Workspace a Task with no Parent filed in the Project names when it names none.
@@ -2014,6 +2015,14 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @description The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+         *     0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+         *     theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+         *     those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+         *     the hues the fewest Projects have), unless its creator names one.
+         */
+        ProjectColor: number;
         ProjectDetail: {
             project: components["schemas"]["Project"];
             /** @description The Project's Members, by name. */
@@ -2033,6 +2042,7 @@ export interface components {
         CreateProjectBody: {
             key: string;
             name: string;
+            color?: components["schemas"]["ProjectColor"];
             workflow?: components["schemas"]["NewWorkflow"];
             /** @description With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied. */
             copy_from?: string;
@@ -2047,6 +2057,7 @@ export interface components {
         };
         UpdateProjectBody: {
             name?: string;
+            color?: components["schemas"]["ProjectColor"];
             /** @description Workspace id or name; `""` clears the Project's default. */
             default_workspace?: string;
             auto_complete?: boolean;

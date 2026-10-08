@@ -207,7 +207,7 @@ export function LoopsList({ loops, onHover }: { loops: readonly Loop[]; onHover?
       <h3 className="mb-1.5 flex items-baseline gap-2 text-[13px] font-semibold">
         Loops <span className="font-medium text-muted-foreground">{loops.length}</span>
       </h3>
-      <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2 xl:grid-cols-3">
         {loops.map((l) => (
           <li
             key={l.connector.id}

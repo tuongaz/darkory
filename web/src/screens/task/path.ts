@@ -99,13 +99,3 @@ export function taskPath(task: Pick<Task, "id" | "state" | "step_id" | "step_sin
   return { stays, end };
 }
 
-/** "40 s", "12 min", "3 h", "2 d": how long a stay lasted. */
-export function stayText(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s} s`;
-  const min = Math.round(s / 60);
-  if (min < 60) return `${min} min`;
-  const h = Math.round(min / 60);
-  if (h < 48) return `${h} h`;
-  return `${Math.round(h / 24)} d`;
-}

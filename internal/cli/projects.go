@@ -15,12 +15,12 @@ import (
 // Projects with their Members and Workflows (ADR 0015, ADR 0016), and Labels.
 
 var projectCommands = []command{
-	{path: "project create", args: "<KEY> <name> [--workflow default|empty|copy] [--copy-from p] [--member m]… [--workspace ws] [--auto-complete] [--acceptance]", short: "create a Project with its first Workflow (admin)", run: cmdProjectCreate},
+	{path: "project create", args: "<KEY> <name> [--workflow default|empty|copy] [--copy-from p] [--member m]… [--workspace ws] [--color 0-11] [--auto-complete] [--acceptance]", short: "create a Project with its first Workflow (admin)", run: cmdProjectCreate},
 	{path: "project list", short: "list the Organisation's Projects", run: cmdProjectList},
 	{path: "project show", args: "<project>", short: "show a Project, its defaults and its Members", run: cmdProjectShow},
 	{path: "project add", args: "<project> <member>", short: "add a Member to a Project (admin)", run: cmdProjectAdd},
 	{path: "project remove", args: "<project> <member>", short: "remove a Member from a Project (admin)", run: cmdProjectRemove},
-	{path: "project set", args: "<project> [--name n] [--workspace ws|\"\"] [--auto-complete=true|false] [--acceptance=true|false]", short: "change a Project's name and the defaults a Task filed in it takes (admin)", run: cmdProjectSet},
+	{path: "project set", args: "<project> [--name n] [--color 0-11] [--workspace ws|\"\"] [--auto-complete=true|false] [--acceptance=true|false]", short: "change a Project's name, colour and the defaults a Task filed in it takes (admin)", run: cmdProjectSet},
 	{path: "workflow show", args: "<project> [--body]", short: "show a Project's Workflow: its Steps, their Skills, the Connectors out of each, and what is at each now", run: cmdWorkflowShow},
 	{path: "workflow set", args: "<project> --file path|-", short: "replace a Project's Workflow with the body in a file, as workflow show --body prints it (admin)", run: cmdWorkflowSet},
 	{path: "label create", args: "<name> --color #rrggbb [--project p]", short: "define a Label for a Project, or for the Organisation (admin)", run: cmdLabelCreate},
@@ -36,6 +36,7 @@ func cmdProjectCreate(c *call) error {
 	var members strs
 	c.fs.Var(&members, "member", "a Member put in the Project; give it once per Member (you are not added unless named)")
 	ws := c.fs.String("workspace", "", "the Workspace a Task filed in the Project names when it names none")
+	color := c.fs.Int("color", -1, "the hue of the Project's mark, 0 (red) to 11 (pink); by default the one farthest from its Organisation's other Projects'")
 	var auto, acceptance optBool
 	c.fs.Var(&auto, "auto-complete", "a Task filed in the Project completes itself when its last Subtask ends Done, unless its filer says")
 	c.fs.Var(&acceptance, "acceptance", "a Task filed in the Project has an Acceptance before it is done, unless its filer says")
@@ -45,6 +46,9 @@ func cmdProjectCreate(c *call) error {
 	}
 	body := client.CreateProjectBody{Key: args[0], Name: args[1], CopyFrom: opt(*copyFrom), DefaultWorkspace: opt(*ws),
 		AutoComplete: auto.v, Acceptance: acceptance.v}
+	if *color >= 0 {
+		body.Color = color
+	}
 	switch {
 	case *workflow != "":
 		body.Workflow = ptr(client.NewWorkflow(*workflow))
@@ -137,6 +141,7 @@ func cmdProjectRemove(c *call) error {
 
 func cmdProjectSet(c *call) error {
 	name := c.fs.String("name", "", "the Project's new name")
+	color := c.fs.Int("color", -1, "the hue of the Project's mark, 0 (red) to 11 (pink)")
 	var ws optString
 	c.fs.Var(&ws, "workspace", `the Workspace a Task filed in the Project names when it names none; "" for none`)
 	var auto, acceptance optBool
@@ -147,8 +152,11 @@ func cmdProjectSet(c *call) error {
 		return err
 	}
 	body := client.UpdateProjectBody{Name: opt(*name), DefaultWorkspace: ws.v, AutoComplete: auto.v, Acceptance: acceptance.v}
-	if body.Name == nil && body.DefaultWorkspace == nil && body.AutoComplete == nil && body.Acceptance == nil {
-		return usagef("nothing to change: give --name, --workspace, --auto-complete or --acceptance")
+	if *color >= 0 {
+		body.Color = color
+	}
+	if body.Name == nil && body.Color == nil && body.DefaultWorkspace == nil && body.AutoComplete == nil && body.Acceptance == nil {
+		return usagef("nothing to change: give --name, --color, --workspace, --auto-complete or --acceptance")
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {

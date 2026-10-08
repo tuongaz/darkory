@@ -41,13 +41,13 @@ func scanMember(row interface{ Scan(...any) error }) (Member, error) {
 	return m, nil
 }
 
-const projectCols = `pr.id, pr.key_prefix, pr.name, pr.default_workspace_id, pr.auto_complete, pr.acceptance, pr.created_at`
+const projectCols = `pr.id, pr.key_prefix, pr.name, pr.color, pr.default_workspace_id, pr.auto_complete, pr.acceptance, pr.created_at`
 
 func scanProject(row interface{ Scan(...any) error }) (Project, error) {
 	var p Project
 	var workspace sql.NullString
 	var created int64
-	err := row.Scan(&p.ID, &p.Key, &p.Name, &workspace, &p.AutoComplete, &p.Acceptance, &created)
+	err := row.Scan(&p.ID, &p.Key, &p.Name, &p.Color, &workspace, &p.AutoComplete, &p.Acceptance, &created)
 	p.DefaultWorkspaceID, p.CreatedAt = nullString(workspace), fromMS(created)
 	return p, err
 }

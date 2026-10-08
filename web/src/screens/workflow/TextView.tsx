@@ -1,6 +1,7 @@
 import { ArrowRightIcon, TriangleAlertIcon } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
-import { durationText, outgoing, stepsInOrder, targetName, unstaffed, waitingAt, type Step, type Workflow } from "@/components/workflow/model";
+import { outgoing, stepsInOrder, targetName, unstaffed, waitingAt, type Step, type Workflow } from "@/components/workflow/model";
+import { spanText } from "@/lib/time";
 import { NoWayOut } from "@/components/workflow/nodes";
 import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { cn } from "@/lib/utils";
@@ -68,7 +69,7 @@ export function TextView({
                       ))}
                     </span>
                   ) : null}
-                  {s.medianMs !== undefined && <span>Median {durationText(s.medianMs)}</span>}
+                  {s.medianMs !== undefined && <span>Median {spanText(s.medianMs)}</span>}
                 </span>
               </button>
               {mode === "live" && s.chips && s.chips.length > 0 && (

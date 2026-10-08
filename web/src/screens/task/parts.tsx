@@ -56,7 +56,7 @@ export function SkillPill({ id }: { id: string | undefined }) {
 
 /**
  * Another Task, by key and title, opening its peek over the page in view. The title truncates,
- * or with `wrap` runs on to more lines (the 300px rail).
+ * or with `wrap` runs on to more lines (the 320px rail).
  */
 export function TaskLink({ task, children, wrap, className }: { task: Pick<Task, "key" | "title">; children?: ReactNode; wrap?: boolean; className?: string }) {
   const peek = usePeekLink();

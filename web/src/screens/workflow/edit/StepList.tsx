@@ -213,7 +213,7 @@ function Row({
     <span className="rounded-full bg-state-waiting-bg px-2 text-[11px] leading-[18px] text-state-waiting">New Tasks start here</span>
   ) : tags.breakdown ? (
     <span className="rounded-full bg-agent-bg px-2 text-[11px] leading-[18px] text-agent">
-      Break down{tags.breakdown.start ? ` · Subtasks start at ${tags.breakdown.start}` : ""}
+      Break down{tags.breakdown.start ? ` · Subtasks start at ${tags.breakdown.start} by default` : ""}
     </span>
   ) : tags.orgWide ? (
     <span className="rounded-full border px-2 text-[11px] leading-[18px] text-muted-foreground">Taken by anyone in the Organisation with skill-review</span>

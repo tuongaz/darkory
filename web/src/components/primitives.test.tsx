@@ -1,12 +1,13 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { initials, tintOf } from "@/lib/members";
-import { agoText, untilText } from "@/lib/time";
+import { markHues, projectHue } from "@/lib/projectHue";
 import { SessionId } from "./CopyValue";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
@@ -122,6 +123,14 @@ describe("SessionId", () => {
     expect(screen.getByText("1CfppqWvwQruvqjgSEtEQt")).toHaveClass("font-mono");
     expect(screen.getByRole("button", { name: "Copy Session id" })).toBeInTheDocument();
   });
+
+  it("never breaks an id across lines; cut short only where it cannot fit, whole on hover", () => {
+    render(<SessionId id="1CfppqWvwQruvqjgSEtEQt" />);
+    const id = screen.getByText("1CfppqWvwQruvqjgSEtEQt");
+    expect(id).toHaveClass("whitespace-nowrap", "truncate");
+    expect(id).not.toHaveClass("break-all");
+    expect(id).toHaveAttribute("title", "1CfppqWvwQruvqjgSEtEQt");
+  });
 });
 
 describe("HeartbeatMeter", () => {
@@ -135,28 +144,13 @@ describe("HeartbeatMeter", () => {
         <HeartbeatMeter claim={{ expires_at: inMinutes(-1), heartbeat_timeout_seconds: 2 }} />
       </>,
     );
-    expect(screen.getByText("lapses in 15 min")).toBeInTheDocument();
+    expect(screen.getByText("lapses in 15m")).toBeInTheDocument();
     expect(screen.getByRole("meter")).toHaveAttribute("aria-valuenow", "100");
     // A card's compact meter reads as the Agents table's does, and says when on hover.
-    expect(screen.getByText("lapses in 10 min")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
-    expect(screen.getByText("lapses in 36 s")).toBeInTheDocument();
+    expect(screen.getByText("lapses in 10m")).toHaveAttribute("title", expect.stringMatching(/^Lapses at .+ unless a Heartbeat arrives$/));
+    expect(screen.getByText("lapses in 36s")).toBeInTheDocument();
     expect(screen.getByText("No expiry")).toBeInTheDocument();
     expect(screen.getByText("Lapsed")).toBeInTheDocument();
-  });
-
-  it("rounds up, so a holding Claim never reads 0", () => {
-    expect(untilText(500)).toBe("1 s");
-    expect(untilText(61_000)).toBe("2 min");
-    expect(untilText(15 * 60_000)).toBe("15 min");
-    expect(untilText(3 * 3600_000)).toBe("3 h");
-  });
-
-  it("says how long ago, short enough for a narrow column", () => {
-    expect(agoText(-200)).toBe("0 s ago");
-    expect(agoText(40_000)).toBe("40 s ago");
-    expect(agoText(3 * 60_000)).toBe("3 min ago");
-    expect(agoText(5 * 3600_000)).toBe("5 h ago");
-    expect(agoText(3 * 86400_000)).toBe("3 d ago");
   });
 });
 
@@ -248,19 +242,49 @@ describe("FormDialog", () => {
 });
 
 describe("ProjectMark", () => {
-  it("letters a Project by its name, coloured by its key so it keeps its colour", () => {
+  it("letters a Project by its name on the colour it stores, whatever its key", () => {
     render(
       <>
-        <ProjectMark project={{ key: "WEB", name: "web app" }} />
-        <ProjectMark project={{ key: "WEB", name: "Storefront" }} size="lg" />
+        <ProjectMark project={{ key: "WEB", name: "web app", color: 3 }} />
+        <ProjectMark project={{ key: "OPS", name: "Storefront", color: 3 }} size="lg" />
+        <ProjectMark project={{ key: "WEB", name: "web app", color: 9 }} />
       </>,
     );
-    const [a, b] = document.querySelectorAll("[aria-hidden]");
+    const [a, b, c] = document.querySelectorAll<HTMLElement>("[aria-hidden]");
     expect(a).toHaveTextContent("W");
     expect(b).toHaveTextContent("S");
-    const fill = (el: Element) => [...el.classList].find((c) => c.startsWith("bg-chart-"));
-    expect(fill(a)).toBeDefined();
-    expect(fill(a)).toBe(fill(b));
+    expect(a.dataset.hue).toBe(String(markHues[3]));
+    expect(a.style.backgroundColor).toBe(b.style.backgroundColor);
+    expect(c.dataset.hue).toBe(String(markHues[9]));
+  });
+
+  it("draws twelve stored colours as twelve hues, at least 30° apart", () => {
+    render(
+      <>
+        {markHues.map((_, i) => (
+          <ProjectMark key={i} project={{ key: `P${i}`, name: `P${i}`, color: i }} />
+        ))}
+      </>,
+    );
+    const hues = [...document.querySelectorAll<HTMLElement>("[aria-hidden]")].map((el) => Number(el.dataset.hue));
+    expect(new Set(hues).size).toBe(12);
+    const gaps = markHues.map((h, i) => (markHues[(i + 1) % markHues.length] - h + 360) % 360);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(30);
+    expect(projectHue(12)).toBe(markHues[0]);
+  });
+
+  it("keeps a Project's hue in light and dark: the theme sets only lightness and strength", () => {
+    render(<ProjectMark project={{ key: "SAM", name: "Sample", color: 6 }} />);
+    const fill = (document.querySelector("[aria-hidden]") as HTMLElement).style.backgroundColor;
+    expect(fill).toBe(`oklch(var(--mark-l) var(--mark-c) ${markHues[6]})`);
+    const css = readFileSync("src/globals.css", "utf8"); // vitest runs in web/
+    // The rule blocks that set the mark's tokens: one per theme, lightness and strength only.
+    const blocks = [...css.matchAll(/^([^\s{}/*][^{}\n]*) \{([^{}]*)\}/gm)].filter(([, , body]) => /--mark-[lc]:/.test(body));
+    expect(blocks.map(([, selector]) => selector)).toEqual([":root", ".dark"]);
+    const value = (body: string, token: string) => body.match(new RegExp(`--mark-${token}: ([\\d.]+);`))?.[1];
+    for (const [, , body] of blocks) expect([value(body, "l"), value(body, "c")]).not.toContain(undefined);
+    expect(value(blocks[0][2], "l")).not.toBe(value(blocks[1][2], "l"));
+    expect(css).not.toMatch(/--mark-h\b/);
   });
 });
 

@@ -13,7 +13,10 @@ const at = "2026-10-01T09:00:00.000Z";
 const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 const soon = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
 
-const project = (id: string, key: string, name: string, extra: object = {}) => ({ id, key, name, auto_complete: false, acceptance: false, created_at: at, ...extra });
+// The colours the server gives Projects in the order they are made (core.pickProjectColor).
+const colors = [0, 6, 3, 9, 1, 2, 4, 5, 7, 8, 10, 11];
+let made = 0;
+const project = (id: string, key: string, name: string, extra: object = {}) => ({ id, key, name, color: colors[made++ % colors.length], auto_complete: false, acceptance: false, created_at: at, ...extra });
 const web = project("p-web", "WEB", "Web storefront", { default_workspace_id: "w-shop", acceptance: true });
 const ops = project("p-ops", "OPS", "Operations");
 const books = project("p-books", "BOOKS", "Bookkeeping", { auto_complete: true });

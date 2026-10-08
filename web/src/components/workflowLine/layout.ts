@@ -434,7 +434,7 @@ export function zoneOf(t: LineTopology, measure: Measure = estimate, labelWidth?
   let joinX = 0;
   if (t.before) {
     for (const c of t.chips.filter((c) => c.stepId === t.before)) chips.push({ text: c.text, connectorId: c.connector.id });
-    if (!entry && t.start) chips.push({ text: `${FILES_LABEL} → ${nameOf(t)(t.start)}` });
+    if (!entry && t.start) chips.push({ text: FILES_LABEL });
     const widest = Math.max(0, ...chips.map((c) => chipW(c.text, measure)));
     px = Math.round(ZONE_L + (widest ? widest + 14 : 6));
     const nameW = labelWidth?.(t.before) ?? nameLine(t.steps.get(t.before), measure);

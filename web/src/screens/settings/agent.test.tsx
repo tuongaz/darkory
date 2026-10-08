@@ -5,7 +5,7 @@ import type { AgentSettings, Member, MemberDetail } from "@/api/client";
 import { json, mockApi, type Handler } from "@/test/api";
 import { ada, bob, builder, engineer, signedIn, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
-import { argsOf, envOf, envText } from "./agent";
+import { argsOf, envOf, envText, runnerNow } from "./agent";
 
 const at = "2026-10-01T09:00:00Z";
 const settings: AgentSettings = {
@@ -61,6 +61,13 @@ describe("an agent's settings", () => {
     expect(envText({ A: "1", B: "2" })).toBe("A = 1\nB = 2");
   });
 
+  it("says the Runner's state now apart from the setting, never that it starts the agent when nothing will", () => {
+    expect(runnerNow({ runner: false, session: undefined, paused: false })).toMatch(/^Not running: no Runner runs beside this server/);
+    expect(runnerNow({ runner: true, session: undefined, paused: true })).toMatch(/^Not running: paused/);
+    expect(runnerNow({ runner: true, session: undefined, paused: false })).toBe("Not running now. The Runner beside this server starts this agent's command whenever it has a Task to take.");
+    expect(runnerNow({ runner: undefined, session: undefined, paused: false })).toBe("");
+  });
+
   // Typing without a pause between keys: these tests type whole command lines.
   const typist = () => userEvent.setup({ delay: null });
 
@@ -74,9 +81,11 @@ describe("an agent's settings", () => {
     expect(within(card).getByLabelText("Environment")).toHaveValue("HTTP_PROXY = http://proxy:3128");
     expect(within(card).getByLabelText("Progress file")).toHaveValue("");
     expect(within(card).getByRole("switch", { name: "Unattended" })).toBeChecked();
-    // The Runner row says what the Runner is, in one line; ⓘ says more.
+    // The Runner row says the setting, and whether a Runner runs it now: with none beside the
+    // server, nothing starts it, as the Agents page's "Not running" says; ⓘ says more.
     expect(card).toHaveTextContent("In use");
-    expect(card).toHaveTextContent("Darkory starts this agent's command on this machine whenever it has a Task to take.");
+    expect(card).toHaveTextContent("Not running: no Runner runs beside this server, so nothing starts this agent's command until one does.");
+    expect(card).not.toHaveTextContent("whenever it has a Task to take");
     expect(within(card).getByRole("button", { name: "About the Runner" })).toBeInTheDocument();
     // The page in cards, the Agent's first and pausing and deactivating last, where Paused is.
     expect(screen.getAllByRole("region", { name: (n) => !n.startsWith("Notifications") }).map((r) => r.getAttribute("aria-label"))).toEqual(["Agent", "Work", "Access", "Profile", "Pause and deactivate"]);
@@ -175,13 +184,26 @@ describe("an agent's settings", () => {
     expect(patches(api.calls)).toHaveLength(0);
   });
 
+  it("says whether a Runner runs the agent now: running, not running with one beside the server, or paused", async () => {
+    const running = { task_id: "k-3", member_id: runBuilder.id, session_id: "s-1", host: "mac-mini", tmux: "dk-WEB-3", started_at: at, state: "running" as const, state_since: at, log_path: "/tmp/log" };
+    mockApi(routes([ada, bob, runBuilder, pausedReviewer], { "GET /v1/runner/sessions": { items: [running], runner: true } }));
+    renderApp("/settings/organisation/agents/m-builder");
+    let card = await screen.findByRole("group", { name: "Agent settings of builder" });
+    expect(await within(card).findByText("Running now, on mac-mini.")).toBeInTheDocument();
+
+    mockApi(routes([ada, bob, runBuilder, pausedReviewer], { "GET /v1/runner/sessions": { items: [], runner: true } }));
+    renderApp("/settings/organisation/agents/m-reviewer");
+    card = await screen.findByRole("group", { name: "Agent settings of reviewer" });
+    expect(await within(card).findByText("Not running: paused, so the Runner starts no new session for it.")).toBeInTheDocument();
+  });
+
   it("hands an agent with no settings to the Runner with the Install's defaults", async () => {
     const user = userEvent.setup();
     const api = mockApi(routes([ada, bob, builder]));
     renderApp("/settings/organisation/agents/m-builder");
     const card = await screen.findByRole("group", { name: "Agent settings of builder" });
     expect(card).toHaveTextContent("the Runner does not start it");
-    expect(card).toHaveTextContent("Darkory starts this agent's command on this machine whenever it has a Task to take.");
+    expect(card).toHaveTextContent("In use, the Runner beside this server starts the agent's command whenever it has a Task to take.");
     // No Paused until the Runner starts it.
     expect(screen.queryByRole("switch", { name: "Paused" })).not.toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Use the Runner" }));

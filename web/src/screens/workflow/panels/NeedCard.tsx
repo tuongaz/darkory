@@ -15,7 +15,8 @@ import { useCurrentMe } from "@/me";
 import { TaskGlyph } from "@/screens/inbox/parts";
 import { liveClaim } from "@/work";
 import { useAnswer, useComplete, useMoveTo, useResume, useTake } from "./acts";
-import { actLabel, ageText, consequence, type NeedItem } from "./needs";
+import { actLabel, consequence, type NeedItem } from "./needs";
+import { ageText } from "@/lib/time";
 
 /** What a card tells its list when a question was answered: the green line that stands in for it a moment. */
 export type Answered = { key: string; unblocks: string[]; at: string };

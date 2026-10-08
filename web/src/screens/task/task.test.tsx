@@ -52,7 +52,7 @@ describe("a Task's page", () => {
     expect(head).toHaveTextContent("Rank #2");
     expect(within(head).getByRole("button", { name: "Labels: client-x" })).toBeInTheDocument();
     const stepper = await within(head).findByRole("list", { name: "Path through the Steps" });
-    await waitFor(() => expect(within(stepper).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Backlog10 min", "moved", expect.stringMatching(/^Build50 min/)]));
+    await waitFor(() => expect(within(stepper).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Backlog10m", "moved", expect.stringMatching(/^Build50m/)]));
     expect(within(stepper).getByText("Build").closest("li")).toHaveAttribute("aria-current", "step");
     // The path is one read of the Task's own Activity.
     const reads = api.calls.filter((c) => c.path === "/v1/activity");

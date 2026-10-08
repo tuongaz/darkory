@@ -86,17 +86,6 @@ function str(payload: Record<string, unknown>, key: string): string | undefined 
   return typeof v === "string" ? v : undefined;
 }
 
-/** How long, as a card's age says it: "now", "36m", "1h 29m", "18h", "2d". */
-export function ageText(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return "now";
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 10) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
-  if (h < 48) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}
-
 /**
  * "unblocks MAIN-4", "unblocks 3 Tasks", "lands 2 Subtasks": what acting on it does beyond the Task
  * itself, or nothing when it does nothing more (a hold to move on, a paused agent to resume): the

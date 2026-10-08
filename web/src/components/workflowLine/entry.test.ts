@@ -44,7 +44,7 @@ describe("where Tasks enter the line (MAIN)", () => {
     const chip = h.chips.find((c) => c.stepId === "plan")!;
     expect(chip.text).toBe("done → Done");
     expect(chip.x).toBeLessThan(h.entry!.before!.station.x);
-    expect(chip.hint).toBe("Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start at Build");
+    expect(chip.hint).toBe("Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start each at the Step its filer names, Build when they name none");
   });
 
   it("parks Backlog below the entry, its spine rising into it by hand", () => {
@@ -179,7 +179,7 @@ describe("a start Step that is not the line's first", () => {
     const h = horizontal(t, { width: 1000, column: 30 });
     expect(h.entry?.mark?.x).toBe(h.at.get("build")!.x);
     expect(h.entry?.before?.files).toBeUndefined();
-    expect(h.chips.filter((c) => c.stepId === "plan").map((c) => c.text)).toEqual(["files Subtasks → build"]);
+    expect(h.chips.filter((c) => c.stepId === "plan").map((c) => c.text)).toEqual(["files Subtasks"]);
     expect(h.entry?.spine?.head.dir).toBe("right");
     expect(h.entry?.spine?.label.text).toBe(HAND_LABEL);
     expect(crossings(h.polylines)).toEqual([]);

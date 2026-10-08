@@ -1,5 +1,7 @@
 // An agent's settings as the Member page edits them: how the Runner starts its sessions.
 
+import type { RunnerSession } from "@/api/client";
+
 /** The model an agent made in the web app runs on unless the admin names another. */
 export const defaultModel = "claude-sonnet-5-5";
 
@@ -55,4 +57,17 @@ export function envText(env: Record<string, string>): string {
   return Object.entries(env)
     .map(([k, v]) => `${k} = ${v}`)
     .join("\n");
+}
+
+/**
+ * Whether the Runner runs this agent now, beside the setting: the same "Not running" the Agents
+ * page says, and why. The setting says the Runner may start it; only a Runner running beside the
+ * server does (none with `serve --runner=off`), and not while the agent is paused.
+ */
+export function runnerNow({ runner, session, paused }: { runner: boolean | undefined; session: RunnerSession | undefined; paused: boolean }): string {
+  if (session) return `Running now, on ${session.host}.`;
+  if (runner === undefined) return "";
+  if (!runner) return "Not running: no Runner runs beside this server, so nothing starts this agent's command until one does.";
+  if (paused) return "Not running: paused, so the Runner starts no new session for it.";
+  return "Not running now. The Runner beside this server starts this agent's command whenever it has a Task to take.";
 }

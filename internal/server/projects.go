@@ -22,7 +22,7 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request, params ge
 	if !ok {
 		return
 	}
-	np := core.NewProject{Key: body.Key, Name: body.Name, CopyFrom: body.CopyFrom, DefaultWorkspace: body.DefaultWorkspace,
+	np := core.NewProject{Key: body.Key, Name: body.Name, Color: body.Color, CopyFrom: body.CopyFrom, DefaultWorkspace: body.DefaultWorkspace,
 		AutoComplete: body.AutoComplete, Acceptance: body.Acceptance}
 	if body.Workflow != nil {
 		np.Workflow = string(*body.Workflow)
@@ -46,7 +46,7 @@ func (s *Server) UpdateProject(w http.ResponseWriter, r *http.Request, project g
 	if !ok {
 		return
 	}
-	p, err := s.core.UpdateProject(r.Context(), c, project, core.ProjectChange{Name: body.Name, DefaultWorkspace: body.DefaultWorkspace,
+	p, err := s.core.UpdateProject(r.Context(), c, project, core.ProjectChange{Name: body.Name, Color: body.Color, DefaultWorkspace: body.DefaultWorkspace,
 		AutoComplete: body.AutoComplete, Acceptance: body.Acceptance}, idem)
 	s.respond(w, r, out, p, err)
 }

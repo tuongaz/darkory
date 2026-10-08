@@ -66,7 +66,7 @@ export function Preview({
 
 /**
  * The line in words: "The line: Build → Review → Done. New Tasks start at Build. Break down: Plan,
- * whose Subtasks start at Build. Hold: Backlog, moved on by hand." → where a Connector joins
+ * whose Subtasks start at Build by default. Hold: Backlog, moved on by hand." → where a Connector joins
  * neighbours, · where none does.
  */
 function describe(line: ReturnType<typeof asLine>): string {
@@ -75,7 +75,7 @@ function describe(line: ReturnType<typeof asLine>): string {
   const names = t.main.map(name);
   const parts = [`The line: ${names.map((n, i) => (i === 0 ? n : `${t.segments[i - 1].connector ? "→" : "·"} ${n}`)).join(" ")}.`];
   if (t.start) parts.push(`New Tasks start at ${name(t.start)}.`);
-  if (t.before) parts.push(`Break down: ${name(t.before)}${t.start ? `, whose Subtasks start at ${name(t.start)}` : ""}.`);
+  if (t.before) parts.push(`Break down: ${name(t.before)}${t.start ? `, whose Subtasks start at ${name(t.start)} by default` : ""}.`);
   if (t.holds.length > 0) parts.push(`${t.holds.length === 1 ? "Hold" : "Holds"}: ${t.holds.map(name).join(", ")}, moved on by hand.`);
   return parts.join(" ");
 }

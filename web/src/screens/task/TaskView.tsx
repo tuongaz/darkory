@@ -34,7 +34,7 @@ import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
 import { Branch, ParentLink, Standing, TaskProperties } from "./TaskProperties";
 import { TaskRecord } from "./TaskRecord";
 
-/** /tasks/:task: the Task's record in the main column, its Claim and Blocking in the 300px rail. */
+/** /tasks/:task: the Task's record in the main column, its Claim and Blocking in the 320px rail. */
 export function TaskPage() {
   const { task: ref = "" } = useParams();
   const q = useTask(ref);
@@ -61,7 +61,7 @@ export function TaskPage() {
           <div className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:overflow-auto lg:px-12 lg:py-7">
             <TaskBody detail={d} ui={ui} heading="h1" session={session} steps={steps} />
           </div>
-          <aside aria-label="Properties" className="w-full flex-none border-t p-4 lg:w-[300px] lg:overflow-auto lg:border-t-0 lg:border-l">
+          <aside aria-label="Properties" className="w-full flex-none border-t p-4 lg:w-[320px] lg:overflow-auto lg:border-t-0 lg:border-l">
             <TaskProperties detail={d} steps={steps} grouped />
           </aside>
         </div>

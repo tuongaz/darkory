@@ -113,11 +113,3 @@ export function countTasks(n: number): string {
   return `${n} ${n === 1 ? "Task" : "Tasks"}`;
 }
 
-/** A duration as a Step's median says it: "40 min", "3 h", "2 d". */
-export function durationText(ms: number): string {
-  const min = Math.round(ms / 60_000);
-  if (min < 60) return `${Math.max(1, min)} min`;
-  const h = Math.round(min / 60);
-  if (h < 48) return `${h} h`;
-  return `${Math.round(h / 24)} d`;
-}

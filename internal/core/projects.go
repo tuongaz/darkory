@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,10 +23,12 @@ var projectKey = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 // WorkflowEmpty, or WorkflowCopy with CopyFrom naming the Project to copy, by id or key. Members
 // are put in it, by id or name; its creator is not unless named. DefaultWorkspace names a
 // Workspace by id or name; AutoComplete and Acceptance are what a Task filed in it takes when its
-// filer does not say, off when nil.
+// filer does not say, off when nil. Color is its mark's hue; when nil it takes the hue farthest
+// from those its Organisation's Projects have (pickProjectColor).
 type NewProject struct {
 	Key              string
 	Name             string
+	Color            *int
 	Workflow         string
 	CopyFrom         *string
 	Members          []string
@@ -46,6 +49,9 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 	if err := validName("name", np.Name); err != nil {
 		return ProjectDetail{}, err
 	}
+	if err := validProjectColor(np.Color); err != nil {
+		return ProjectDetail{}, err
+	}
 	switch np.Workflow {
 	case "":
 		np.Workflow = WorkflowDefault
@@ -61,7 +67,7 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 		return ProjectDetail{}, refuse(CodeInvalid, "copy_from names the Project whose Workflow is copied; this Workflow is %s", np.Workflow)
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		row := projectRow{key: np.Key, name: np.Name, workflow: np.Workflow}
+		row := projectRow{key: np.Key, name: np.Name, color: np.Color, workflow: np.Workflow}
 		if np.CopyFrom != nil {
 			id, err := resolveProject(ctx, t, c.OrgID, *np.CopyFrom)
 			if err != nil {
@@ -106,6 +112,7 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 // projectRow is a Project to insert: from is the Project whose Workflow a copy copies.
 type projectRow struct {
 	key, name, workflow, from string
+	color                     *int
 	defaultWorkspace          *string
 	autoComplete, acceptance  bool
 }
@@ -116,12 +123,25 @@ func createProject(t *tx, r projectRow) (string, error) {
 	if err := projectNameFree(t, "", r.key, r.name); err != nil {
 		return "", err
 	}
+	color := 0
+	if r.color != nil {
+		color = *r.color
+	} else {
+		taken, err := collect(t.ctx, t, func(row interface{ Scan(...any) error }) (int, error) {
+			var c int
+			return c, row.Scan(&c)
+		}, `SELECT color FROM projects WHERE org_id = $1`, t.caller.OrgID)
+		if err != nil {
+			return "", err
+		}
+		color = pickProjectColor(taken)
+	}
 	id := newID()
-	if _, err := t.Exec(t.ctx, `INSERT INTO projects (id, org_id, key_prefix, name, last_number, default_workspace_id, auto_complete, acceptance, created_at)
-VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8)`, id, t.caller.OrgID, r.key, r.name, r.defaultWorkspace, r.autoComplete, r.acceptance, ms(t.now)); err != nil {
+	if _, err := t.Exec(t.ctx, `INSERT INTO projects (id, org_id, key_prefix, name, color, last_number, default_workspace_id, auto_complete, acceptance, created_at)
+VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9)`, id, t.caller.OrgID, r.key, r.name, color, r.defaultWorkspace, r.autoComplete, r.acceptance, ms(t.now)); err != nil {
 		return "", err
 	}
-	payload := map[string]any{"key": r.key, "name": r.name, "workflow": r.workflow, "auto_complete": r.autoComplete, "acceptance": r.acceptance}
+	payload := map[string]any{"key": r.key, "name": r.name, "color": color, "workflow": r.workflow, "auto_complete": r.autoComplete, "acceptance": r.acceptance}
 	if r.from != "" {
 		payload["from"] = r.from
 	}
@@ -157,12 +177,13 @@ func projectNameFree(t *tx, except, key, name string) error {
 // names a Workspace by id or name, or "" for none.
 type ProjectChange struct {
 	Name             *string
+	Color            *int
 	DefaultWorkspace *string
 	AutoComplete     *bool
 	Acceptance       *bool
 }
 
-// UpdateProject changes a Project's name, default Workspace, or the auto_complete and acceptance
+// UpdateProject changes a Project's name, colour, default Workspace, or the auto_complete and acceptance
 // a Task filed in it takes when its filer does not say (admin).
 func (s *Service) UpdateProject(ctx context.Context, c *auth.Caller, ref string, ch ProjectChange, idem Idem) (Project, error) {
 	if err := mustAdmin(c); err != nil {
@@ -172,6 +193,9 @@ func (s *Service) UpdateProject(ctx context.Context, c *auth.Caller, ref string,
 		if err := validName("name", *ch.Name); err != nil {
 			return Project{}, err
 		}
+	}
+	if err := validProjectColor(ch.Color); err != nil {
+		return Project{}, err
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		id, err := resolveProject(ctx, t, c.OrgID, ref)
@@ -188,6 +212,9 @@ func (s *Service) UpdateProject(ctx context.Context, c *auth.Caller, ref string,
 				return nil, err
 			}
 			p.Name, payload["name"] = *ch.Name, *ch.Name
+		}
+		if ch.Color != nil && *ch.Color != p.Color {
+			p.Color, payload["color"] = *ch.Color, *ch.Color
 		}
 		if ch.DefaultWorkspace != nil {
 			var ws *string
@@ -211,8 +238,8 @@ func (s *Service) UpdateProject(ctx context.Context, c *auth.Caller, ref string,
 		if len(payload) == 0 {
 			return p, nil
 		}
-		if _, err := t.Exec(ctx, `UPDATE projects SET name = $1, default_workspace_id = $2, auto_complete = $3, acceptance = $4
-WHERE org_id = $5 AND id = $6`, p.Name, p.DefaultWorkspaceID, p.AutoComplete, p.Acceptance, c.OrgID, id); err != nil {
+		if _, err := t.Exec(ctx, `UPDATE projects SET name = $1, color = $2, default_workspace_id = $3, auto_complete = $4, acceptance = $5
+WHERE org_id = $6 AND id = $7`, p.Name, p.Color, p.DefaultWorkspaceID, p.AutoComplete, p.Acceptance, c.OrgID, id); err != nil {
 			return nil, err
 		}
 		if err := t.recordByCaller("project.changed", id, payload); err != nil {
@@ -224,6 +251,48 @@ WHERE org_id = $5 AND id = $6`, p.Name, p.DefaultWorkspaceID, p.AutoComplete, p.
 		return Project{}, err
 	}
 	return res.(Project), nil
+}
+
+// ProjectColors is how many hues a Project's mark can take: indices 0 to 11 around the wheel.
+const ProjectColors = 12
+
+func validProjectColor(c *int) error {
+	if c != nil && (*c < 0 || *c >= ProjectColors) {
+		return refuse(CodeInvalid, "a Project's colour is one of %d hues, 0 to %d, not %d", ProjectColors, ProjectColors-1, *c)
+	}
+	return nil
+}
+
+// pickProjectColor is the colour a new Project takes, given those its Organisation's Projects
+// have: of the hues the fewest Projects have, the one farthest round the wheel from every hue
+// more of them have, the lowest on a tie. Until twelve Projects that is the hue farthest from all
+// taken, and each Project's is its own: 0 6 3 9 1 2 4 5 7 8 10 11, the order migration 0005
+// gave the Projects already there.
+func pickProjectColor(taken []int) int {
+	count := make([]int, ProjectColors)
+	for _, c := range taken {
+		if c >= 0 && c < ProjectColors {
+			count[c]++
+		}
+	}
+	fewest := slices.Min(count)
+	best, bestDistance := 0, -1
+	for c := range ProjectColors {
+		if count[c] != fewest {
+			continue
+		}
+		distance := ProjectColors // as far as can be: no hue is held by more
+		for o := range ProjectColors {
+			if count[o] > fewest {
+				d := (c - o + ProjectColors) % ProjectColors
+				distance = min(distance, d, ProjectColors-d)
+			}
+		}
+		if distance > bestDistance {
+			best, bestDistance = c, distance
+		}
+	}
+	return best
 }
 
 // sameRef reports whether two optional ids name the same record, or both none.

@@ -16,8 +16,8 @@ const builder = member("m-builder", "builder", "agent", { manager_id: "m-ada" })
 const reviewer = member("m-reviewer", "reviewer", "agent", { manager_id: "m-ada" });
 const members = [ada, bob, builder, reviewer];
 
-const web = { id: "p-web", key: "WEB", name: "Web shop", auto_complete: true, acceptance: true, created_at: created, default_workspace_id: "w-shop" };
-const ops = { id: "p-ops", key: "OPS", name: "Ops", auto_complete: false, acceptance: false, created_at: created };
+const web = { id: "p-web", key: "WEB", name: "Web shop", color: 0, auto_complete: true, acceptance: true, created_at: created, default_workspace_id: "w-shop" };
+const ops = { id: "p-ops", key: "OPS", name: "Ops", color: 6, auto_complete: false, acceptance: false, created_at: created };
 
 const skill = (name: string, builtin = false) => ({ id: `s-${name}`, name, kind: "generic", builtin, current_version: 1, created_at: created });
 const skills = [skill("acceptance", true), skill("breakdown", true), skill("engineer"), skill("qa"), skill("retro", true), skill("review"), skill("skill-review", true)];

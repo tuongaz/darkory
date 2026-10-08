@@ -16,7 +16,8 @@ function session(state: RunnerSession["state"], extra: Partial<RunnerSession> = 
   return { task_id: "k-3", member_id: builder.id, session_id: "sess-1", host: "mac-mini", tmux: "dk-WEB-3", started_at: minutes(-20), state, state_since: minutes(-20), log_path: "/tmp/log", ...extra };
 }
 
-function agentsApi({ sessions = [], member = ada }: { sessions?: RunnerSession[]; member?: Member } = {}) {
+function agentsApi({ sessions = [], member = ada, paused = false }: { sessions?: RunnerSession[]; member?: Member; paused?: boolean } = {}) {
+  const shown = paused ? { ...agentBuilder, agent: { ...agentBuilder.agent!, paused: true } } : agentBuilder;
   const held = task(3, { title: "Payment form", claim: claim("k-3", builder.id, { expires_at: minutes(10), heartbeat_timeout_seconds: 600, skill_id: engineer.id }) });
   return recordApi({
     tasks: [held, task(4, { title: "Cart" })],
@@ -26,10 +27,14 @@ function agentsApi({ sessions = [], member = ada }: { sessions?: RunnerSession[]
     ],
     extra: {
       "GET /v1/me": { organisation: { id: "o-1", name: "Acme", created_at: minutes(-1) }, member, projects: [web], skills: [] },
-      "GET /v1/members": { items: [ada, bob, agentBuilder, planner] },
+      "GET /v1/members": { items: [ada, bob, shown, planner] },
       "GET /v1/projects/:project": ({ params }) => (params.project === "OPS" ? { project: ops, members: [ada, planner] } : { project: web, members: [ada, builder] }),
       "GET /v1/members/:member": ({ params }) =>
-        params.member === planner.id || params.member === planner.name ? { member: planner, projects: [ops], skills: [], reports: [] } : memberDetail(params.member),
+        params.member === planner.id || params.member === planner.name
+          ? { member: planner, projects: [ops], skills: [], reports: [] }
+          : paused && params.member === builder.id
+            ? { member: shown, projects: [web, ops], skills: [engineer], reports: [] }
+            : memberDetail(params.member),
       "GET /v1/runner/sessions": { items: sessions, runner: true },
       "POST /v1/runner/sessions/:task/nudge": undefined,
       "POST /v1/runner/sessions/:task/stop": undefined,
@@ -77,9 +82,23 @@ describe("a Project's Agents", () => {
     expect(row).toHaveTextContent("advanced WEB-4 Cart along pass to Review");
     // A lapse arriving on the stream counts at once.
     act(() => FakeEventSource.latest().emit("activity", entry(9, "task.lapsed", "k-4", { payload: { holder_id: builder.id, claim_id: "c-9" }, at: minutes(0) }), 9));
-    await waitFor(() => expect(row).toHaveTextContent("1 lapse in 24 h"));
+    await waitFor(() => expect(row).toHaveTextContent("1 lapse in 24h"));
     // ada is a human: not listed.
     expect(screen.queryByRole("link", { name: "ada" })).not.toBeInTheDocument();
+  });
+
+  it("reads a paused agent's Paused beside its name and its other Projects whole on the line under it", async () => {
+    agentsApi({ paused: true });
+    renderApp("/projects/WEB/agents");
+    const row = await waitFor(() => tableRow("builder"));
+    const name = within(row).getByRole("link", { name: "builder" });
+    const paused = within(row).getByText("Paused");
+    // Paused shares the name's line; the other Projects keep theirs, never cut to make room for it.
+    expect(paused.parentElement).toBe(name.parentElement);
+    const also = await within(row).findByText("also OPS");
+    expect(also).toHaveAttribute("title", "Ops");
+    expect(also.contains(paused)).toBe(false);
+    expect(paused.parentElement!.contains(also)).toBe(false);
   });
 
   it("stops the mark in the session's colour while its session is stalled", async () => {

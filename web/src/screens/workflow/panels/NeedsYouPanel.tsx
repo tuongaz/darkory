@@ -17,7 +17,8 @@ import { cn } from "@/lib/utils";
 import { useAgentActions } from "@/screens/inbox/useAgentActions";
 import { useTakeBack } from "./acts";
 import { AnsweredLine, NeedCard, type Answered } from "./NeedCard";
-import { ageText, type AgentNeed, type NeedItem } from "./needs";
+import { type AgentNeed, type NeedItem } from "./needs";
+import { ageText } from "@/lib/time";
 import { useNeeds } from "./useNeeds";
 
 /** How many cards Needs you shows at rest; the rest wait behind "+N more". */

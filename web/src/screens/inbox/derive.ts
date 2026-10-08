@@ -308,16 +308,6 @@ export function groupByDay(entries: Activity[], now: number): TimeGroup[] {
   return groups;
 }
 
-/** How long something has waited: "< 1 min", "4 min", "3 h", "2 d". */
-export function sinceText(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return "< 1 min";
-  if (m < 60) return `${m} min`;
-  const h = Math.floor(m / 60);
-  if (h < 48) return `${h} h`;
-  return `${Math.floor(h / 24)} d`;
-}
-
 /** "1 Task", "3 Tasks": a number with its noun. */
 export function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;

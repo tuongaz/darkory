@@ -65,6 +65,21 @@ describe("Settings › a Project › General", () => {
     ]);
   });
 
+  it("picks the Project's colour from twelve swatches, each naming the other Projects that have it", async () => {
+    const user = userEvent.setup();
+    const api = mockApi(routes());
+    renderApp("/settings/projects/WEB/general");
+    const colours = await screen.findByRole("radiogroup", { name: "Colour of Web" });
+    const swatches = within(colours).getAllByRole("radio");
+    expect(swatches).toHaveLength(12);
+    // Web stores 0, red; Ops has 6, cyan.
+    expect(within(colours).getByRole("radio", { name: "Red" })).toHaveAttribute("aria-checked", "true");
+    expect(await within(colours).findByRole("radio", { name: "Cyan, also Ops" })).toHaveAttribute("aria-checked", "false");
+    await user.click(within(colours).getByRole("radio", { name: "Violet" }));
+    await waitFor(() => expect(writes(api.calls).map((c) => [c.path, c.body])).toEqual([["/v1/projects/WEB", { color: 9 }]]));
+    await waitFor(() => expect(within(colours).getByRole("radio", { name: "Violet" })).toHaveAttribute("aria-checked", "true"));
+  });
+
   it("says when the Workflow has no Step carrying acceptance, so none is filed", async () => {
     const withAcceptance = workflow(web);
     withAcceptance.steps.push({ ...withAcceptance.steps[3], id: "st-accept", name: "Acceptance", skill_id: acceptance.id, position: 7 });
@@ -93,6 +108,8 @@ describe("Settings › a Project › General", () => {
     const form = await screen.findByRole("group", { name: "General settings of Web" });
     expect(await within(form).findByText("shop")).toBeInTheDocument();
     expect(form).toHaveTextContent("NameWeb");
+    expect(within(form).getByText("Red")).toBeInTheDocument();
+    expect(within(form).queryByRole("radiogroup")).not.toBeInTheDocument();
     expect(form).toHaveTextContent("Auto-completeOn");
     expect(form).toHaveTextContent("AcceptanceOff");
     expect(within(form).queryByRole("textbox")).not.toBeInTheDocument();

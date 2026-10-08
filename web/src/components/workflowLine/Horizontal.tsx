@@ -7,7 +7,8 @@ import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
 import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology } from "./layout";
 import { estimate, type Measure } from "./measure";
-import { blockedBy, DONE_STATION, isHoldStep, PICKUP_MS, spanTime, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { blockedBy, DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { spanText } from "@/lib/time";
 import { Bead, GhostToken, HiddenCount, Token } from "./Token";
 import { AFTER_BRANCH, AFTER_HINT, BREAKDOWN_BRANCH, ENTRY_LABEL, HOLD_NOTE } from "./words";
 
@@ -149,7 +150,7 @@ export function HorizontalLine(props: HorizontalProps) {
       const takers = s.takers ?? [];
       if (takers.length === 0) return measure("no Member", "entry");
       const k = Math.min(3, takers.length);
-      return k * 20 + (k - 1) * 6 + (takers.length > 3 ? 6 + measure(`+${takers.length - 3}`, "entry") : 0) + (s.medianMs !== undefined ? 6 + measure(`median ${spanTime(s.medianMs)}`, "entry") : 0);
+      return k * 20 + (k - 1) * 6 + (takers.length > 3 ? 6 + measure(`+${takers.length - 3}`, "entry") : 0) + (s.medianMs !== undefined ? 6 + measure(`median ${spanText(s.medianMs)}`, "entry") : 0);
     },
     [compact, hiddenAt, density, props.doneToday, steps, columns, measure],
   );
@@ -304,7 +305,7 @@ export function HorizontalLine(props: HorizontalProps) {
                 <MemberAvatar key={m.id} member={m} working={m.working} />
               ))}
               {takers.length > 3 && <span>+{takers.length - 3}</span>}
-              {s.medianMs !== undefined && <span>median {spanTime(s.medianMs)}</span>}
+              {s.medianMs !== undefined && <span>median {spanText(s.medianMs)}</span>}
             </>
           )}
         </div>
@@ -413,15 +414,15 @@ export function HorizontalLine(props: HorizontalProps) {
       <div key={`c-${id}`} className="absolute flex -translate-x-1/2 flex-col items-center gap-1.5" style={{ left: x, top: h.columnY }}>
         {past && trace && (
           <div className="flex flex-col items-center gap-0.5">
-            <Token task={{ ...(tasks[0] ?? { id: "past", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanTime(past.worked) }} noKey />
-            {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanTime(past.waited)}</span>}
+            <Token task={{ ...(tasks[0] ?? { id: "past", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanText(past.worked) }} noKey />
+            {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(past.waited)}</span>}
           </div>
         )}
         {shown.map((task) => (
           <Fragment key={task.id}>
             {token(task)}
             {trace?.current === id && trace.stays.at(-1)?.waited !== undefined && trace.stays.at(-1)!.waited > 60_000 && (
-              <span className="text-[11px] text-muted-foreground">waited {spanTime(trace.stays.at(-1)!.waited)}</span>
+              <span className="text-[11px] text-muted-foreground">waited {spanText(trace.stays.at(-1)!.waited)}</span>
             )}
           </Fragment>
         ))}

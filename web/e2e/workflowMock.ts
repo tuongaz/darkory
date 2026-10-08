@@ -36,7 +36,7 @@ export const skills = [
   skill("docs"),
 ];
 
-export const project = { id: "p-web", key: "WEB", name: "Web", auto_complete: true, acceptance: true, created_at: at };
+export const project = { id: "p-web", key: "WEB", name: "Web", color: 0, auto_complete: true, acceptance: true, created_at: at };
 
 type StepRec = {
   id: string;

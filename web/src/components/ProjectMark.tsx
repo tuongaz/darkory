@@ -1,14 +1,6 @@
 import type { Project } from "@/api/client";
+import { markFill, projectHue } from "@/lib/projectHue";
 import { cn } from "@/lib/utils";
-
-// The chart tokens a Project's mark is filled with, picked by its key so a Project keeps its colour.
-const fills = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
-
-function projectFill(key: string): string {
-  let h = 0;
-  for (const c of key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return fills[h % fills.length];
-}
 
 const sizes = {
   sm: "size-3.5 rounded-[4px] text-[8px]",
@@ -17,27 +9,26 @@ const sizes = {
 };
 
 /**
- * A Project's square mark: the first letter of its name on its colour. `sm` 14px (rows, crumbs),
- * `md` 20px, `lg` 28px (a page head).
+ * A Project's square mark: the first letter of its name on its stored colour. `sm` 14px (rows, crumbs),
+ * `md` 20px, `lg` 28px (a page head). The fill is written through the style property (a CSSOM
+ * write, which the app's CSP allows).
  */
 export function ProjectMark({
   project,
   size = "sm",
   className,
 }: {
-  project: Pick<Project, "key" | "name">;
+  project: Pick<Project, "key" | "name" | "color">;
   size?: keyof typeof sizes;
   className?: string;
 }) {
+  const hue = projectHue(project.color);
   return (
     <span
       aria-hidden
-      className={cn(
-        "inline-grid flex-none place-items-center leading-none font-semibold text-on-solid",
-        sizes[size],
-        projectFill(project.key),
-        className,
-      )}
+      data-hue={hue}
+      className={cn("inline-grid flex-none place-items-center leading-none font-semibold text-on-solid", sizes[size], className)}
+      style={{ backgroundColor: markFill(project.color) }}
     >
       {(project.name[0] ?? project.key[0] ?? "?").toUpperCase()}
     </span>

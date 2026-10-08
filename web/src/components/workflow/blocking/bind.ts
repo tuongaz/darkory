@@ -41,13 +41,3 @@ export function blockingTasks(
     });
 }
 
-/** How long it has been at its Step: "now", "43m", "1h 2m", "18h", "3d". */
-export function ageText(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return "now";
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 10) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
-  if (h < 48) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
-}

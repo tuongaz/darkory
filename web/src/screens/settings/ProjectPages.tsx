@@ -3,7 +3,7 @@ import { BotIcon, PlusIcon, UserIcon, UsersIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import type { Member, MemberDetail, Project } from "@/api/client";
-import { useDirectory, useProject, useWorkflow, useWorkspaces } from "@/api/queries";
+import { useDirectory, useProject, useProjects, useWorkflow, useWorkspaces } from "@/api/queries";
 import { addProjectMember, removeProjectMember, updateProject } from "@/api/writes";
 import { projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { EmptyState } from "@/components/EmptyState";
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { markFill, markHues, markName } from "@/lib/projectHue";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { SettingsFrame, tableHead, tableRow } from "./frame";
@@ -33,7 +34,7 @@ function crumbs(project: Project, page: string) {
 }
 
 /**
- * Settings › a Project › General: its name, its key (which never changes), and what a Task filed
+ * Settings › a Project › General: its name, its colour, its key (which never changes), and what a Task filed
  * in it takes when its filer does not say: the Workspace, Auto-complete and Acceptance. Admins
  * change them; anyone else reads.
  */
@@ -50,6 +51,7 @@ export function ProjectGeneralPage() {
         <SettingsForm label={`General settings of ${project.name}`}>
           {/* Keyed by the saved value, so an edit made elsewhere replaces the field's. */}
           <ProjectNameRow key={project.name} project={project} admin={admin} />
+          <ProjectColorRow project={project} admin={admin} />
           <SettingsRow label="Key" help={`Starts each Task key, as in ${project.key}-1, and never changes.`}>
             <Key>{project.key}</Key>
           </SettingsRow>
@@ -91,6 +93,57 @@ function ProjectNameRow({ project, admin }: { project: Project; admin: boolean }
           if (e.key === "Escape") setName(project.name);
         }}
       />
+      <Refusal error={save.error} />
+    </SettingsRow>
+  );
+}
+
+/**
+ * Colour: the hue of the Project's mark, one of twelve, picked from swatches. Each says which
+ * other Projects have it, so an admin can keep them apart.
+ */
+function ProjectColorRow({ project, admin }: { project: Project; admin: boolean }) {
+  const projects = useProjects();
+  const save = useMutation({ mutationFn: (color: number) => updateProject(project.key, { color }) });
+  const value = save.isPending ? save.variables : project.color;
+  const help = "The colour of its mark beside its name, the same in light and dark.";
+  if (!admin) {
+    return (
+      <SettingsRow label="Colour" help={help}>
+        <span className="inline-flex items-center gap-2">
+          <ProjectMark project={project} size="md" />
+          {markName(project.color)}
+        </span>
+      </SettingsRow>
+    );
+  }
+  const others = (projects.data ?? []).filter((p) => p.id !== project.id);
+  return (
+    <SettingsRow label="Colour" help={help}>
+      <div role="radiogroup" aria-label={`Colour of ${project.name}`} className="flex flex-wrap gap-1">
+        {markHues.map((_, i) => {
+          const sharing = others.filter((p) => p.color === i).map((p) => p.name);
+          const name = sharing.length ? `${markName(i)}, also ${sharing.join(", ")}` : markName(i);
+          return (
+            <button
+              key={i}
+              type="button"
+              role="radio"
+              aria-checked={value === i}
+              aria-label={name}
+              title={name}
+              disabled={save.isPending}
+              onClick={() => value !== i && save.mutate(i)}
+              className={cn(
+                "grid size-7 cursor-pointer place-items-center rounded-md hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                value === i && "ring-2 ring-foreground",
+              )}
+            >
+              <span aria-hidden className="size-[18px] rounded-[5px]" style={{ backgroundColor: markFill(i) }} />
+            </button>
+          );
+        })}
+      </div>
       <Refusal error={save.error} />
     </SettingsRow>
   );

@@ -7,7 +7,8 @@ import { Key } from "@/components/Key";
 import { Pill } from "@/components/Pill";
 import { ClockTime } from "@/components/Time";
 import { SystemMark, Timeline, TimelineDay, TimelineRow } from "@/components/Timeline";
-import { dayText, durationText, sizeText, useMemberName, useSkillName } from "./format";
+import { dayText, sizeText, useMemberName, useSkillName } from "./format";
+import { durationText } from "@/lib/time";
 import { Avatar, TaskLink } from "./parts";
 import { taskRecord, type RecordEntry } from "./record";
 
@@ -218,7 +219,7 @@ function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { k
         }
         when={when}
       >
-        Claim lapsed{claim.heartbeat_timeout_seconds ? `: no Heartbeat in ${durationText(claim.heartbeat_timeout_seconds)}` : ""}
+        Claim lapsed{claim.heartbeat_timeout_seconds ? `: no Heartbeat in ${durationText(claim.heartbeat_timeout_seconds * 1000)}` : ""}
         <div className="text-xs text-muted-foreground">Recorded by Darkory</div>
       </TimelineRow>
     );

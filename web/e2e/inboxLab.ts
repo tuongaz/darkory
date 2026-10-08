@@ -17,7 +17,10 @@ const reviewer = member("m-reviewer", "reviewer", "agent", { manager_id: "m-ada"
 const planner = member("m-planner", "planner", "agent", { manager_id: "m-ada", agent: agentSettings("claude-sonnet-5-5") });
 const members = [ada, bob, builder, reviewer, planner];
 
-const project = (id: string, key: string, name: string) => ({ id, key, name, auto_complete: false, acceptance: true, created_at: ago(9000) });
+// The colours the server gives Projects in the order they are made (core.pickProjectColor).
+const colors = [0, 6, 3, 9, 1, 2, 4, 5, 7, 8, 10, 11];
+let made = 0;
+const project = (id: string, key: string, name: string) => ({ id, key, name, color: colors[made++ % colors.length], auto_complete: false, acceptance: true, created_at: ago(9000) });
 const web = project("p-web", "WEB", "Web shop");
 const ops = project("p-ops", "OPS", "Operations");
 const projects = [ops, web];

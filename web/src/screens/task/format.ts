@@ -31,13 +31,6 @@ export function dayText(at: string, now: number): string {
   return d.toDateString() === new Date(now).toDateString() ? "Today" : day.format(d);
 }
 
-/** "2 s", "15 min", "2 h": a Heartbeat timeout as it reads in a sentence. */
-export function durationText(seconds: number): string {
-  if (seconds < 60) return `${seconds} s`;
-  if (seconds < 7200) return `${Math.round(seconds / 60)} min`;
-  return `${Math.round(seconds / 3600)} h`;
-}
-
 /** The Project line narrowed to one Task: `/projects/:key/workflow?scope=<id>`. */
 export function workflowScopePath(project: { key: string }, taskId: string): string {
   return `/projects/${project.key}/workflow?scope=${encodeURIComponent(taskId)}`;

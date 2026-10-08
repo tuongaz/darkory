@@ -272,21 +272,24 @@ function AgentTableRow({
       <td>
         <span className="flex min-w-0 items-center gap-2">
           <MemberAvatar member={agent} size="md" working={workingMark(held, runnerSession, now)} className={cn(idle && !runnerSession && "opacity-60")} />
+          {/* Paused sits beside the name, which gives way first; the other Projects have the line under it to themselves. */}
           <span className="flex min-w-0 flex-col">
-            <Link
-              to={{ search: `?${agentParam}=${encodeURIComponent(agent.name)}` }}
-              onClick={(e) => {
-                e.preventDefault();
-                onOpen(agent.name);
-              }}
-              className={cn("truncate font-medium hover:underline", !idle && "text-foreground")}
-            >
-              {agent.name}
-            </Link>
-            {(agent.agent?.paused || otherProjects.length > 0) && (
-              <small className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                {agent.agent?.paused && <Pill tone="secondary">Paused</Pill>}
-                {otherProjects.length > 0 && <span className="truncate" title={otherProjects.map((p) => p.name).join(", ")}>also {otherProjects.map((p) => p.key).join(" · ")}</span>}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Link
+                to={{ search: `?${agentParam}=${encodeURIComponent(agent.name)}` }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onOpen(agent.name);
+                }}
+                className={cn("truncate font-medium hover:underline", !idle && "text-foreground")}
+              >
+                {agent.name}
+              </Link>
+              {agent.agent?.paused && <Pill tone="secondary">Paused</Pill>}
+            </span>
+            {otherProjects.length > 0 && (
+              <small className="truncate text-xs text-muted-foreground" title={otherProjects.map((p) => p.name).join(", ")}>
+                also {otherProjects.map((p) => p.key).join(" · ")}
               </small>
             )}
           </span>
@@ -346,7 +349,7 @@ function AgentTableRow({
             <span className="truncate text-xs">{lastWords ? sentenceShort(lastWords) : last.kind}</span>
             <small className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <ShortTime at={last.at} />
-              {lapses.length > 0 && <Pill tone="dropped">{lapses.length === 1 ? "1 lapse" : `${lapses.length} lapses`} in 24 h</Pill>}
+              {lapses.length > 0 && <Pill tone="dropped">{lapses.length === 1 ? "1 lapse" : `${lapses.length} lapses`} in 24h</Pill>}
             </small>
           </span>
         ) : (

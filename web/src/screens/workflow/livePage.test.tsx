@@ -91,7 +91,7 @@ describe("the Workflow page", () => {
     await userEvent.hover(within(line()).getByText("Backlog"));
     expect(screen.getByRole("tooltip")).toHaveTextContent("Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step");
     await userEvent.hover(within(line()).getByText("files Subtasks"));
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Whoever takes it files the Parent's other Subtasks; they start at Build");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none");
     // No line goes without words.
     const lines = [...line().querySelectorAll("svg path[stroke='transparent']")];
     expect(lines.length).toBeGreaterThan(5);
@@ -102,7 +102,7 @@ describe("the Workflow page", () => {
     serve([task(2)]);
     renderApp("/projects/WEB/workflow?view=text");
     expect(await screen.findByText("New Tasks start at Build, unless the filer names another Step.")).toBeInTheDocument();
-    expect(screen.getByText(/^Break down: a Task filed with Break down on gets its Breakdown Subtask here; whoever takes it files the other Subtasks, which start at Build\.$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Break down: a Task filed with Break down on gets its Breakdown Subtask here; whoever takes it files the other Subtasks, each at the Step its filer names, Build when they name none\.$/)).toBeInTheDocument();
     expect(screen.getByText(/^A hold: no one is offered its Tasks/)).toBeInTheDocument();
   });
 
