@@ -43,7 +43,7 @@ var workCommands = []command{
 	{path: "tasks", args: "[--project p] [--parent task] [--state s] [--step s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
 	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposals written on a Task, or one by id", run: cmdProposalShow},
-	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--project p] [--task t] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
+	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--project p] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
 }
 
 // maxWait is the longest one `next` request waits; longer waits are made of several.

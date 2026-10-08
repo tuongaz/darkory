@@ -33,7 +33,7 @@ var SubjectTypes = []string{"task", "workflow", "label", "skill", "member", "pro
 
 // ActivityQuery picks a page of Activity: the entries numbered above After and below Before
 // (zero for no bound), at most Limit of them. With Before the page is the entries closest below
-// it, still in sequence order. Member, Kinds, Project and Task, when set, keep only the entries that
+// it, still in sequence order. Member, Kinds and Project, when set, keep only the entries that
 // match them all, and the page is then that many matching entries.
 type ActivityQuery struct {
 	After, Before int64
@@ -45,9 +45,6 @@ type ActivityQuery struct {
 	// Project keeps the entries about a Project (id or key), its Workflow, its own Labels, or a
 	// Task of it.
 	Project string
-	// Task keeps the entries whose subject is a Task (id or key) or, for a Parent, one of its
-	// Subtasks.
-	Task string
 }
 
 // ListActivity returns a page of Activity entries in sequence order. Numbers are allocated in
@@ -89,16 +86,6 @@ func (s *Service) ListActivity(ctx context.Context, c *auth.Caller, q ActivityQu
 		p, like := "$"+itoa(len(args)-1), "$"+itoa(len(args))
 		where = append(where, `(a.subject_id = `+p+` OR EXISTS (SELECT 1 FROM tasks ft WHERE ft.org_id = a.org_id AND ft.id = a.subject_id AND ft.project_id = `+p+`)
 	OR (a.kind IN ('label.created', 'label.changed', 'label.deleted') AND a.payload LIKE `+like+`))`)
-	}
-	if q.Task != "" {
-		id, err := resolveTask(ctx, s.store, c.OrgID, q.Task)
-		if err != nil {
-			return ActivityPage{}, err
-		}
-		// The Task's own entries and its Subtasks'. A Subtask has no Subtasks, so one level is all.
-		args = append(args, id)
-		t := "$" + itoa(len(args))
-		where = append(where, `(a.subject_id = `+t+` OR EXISTS (SELECT 1 FROM tasks st WHERE st.org_id = a.org_id AND st.id = a.subject_id AND st.parent_id = `+t+`))`)
 	}
 	query := `SELECT a.seq, a.at, a.actor_id, a.kind, a.subject_id, a.payload FROM activity a WHERE ` + strings.Join(where, " AND ")
 	var items []Activity
