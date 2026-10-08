@@ -13,7 +13,8 @@ const sizes = [
 
 function watchErrors(page: Page): string[] {
   const errors: string[] = [];
-  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  // The mocked /v1 runs no terminal: a Session panel's socket is refused, which is not the line's.
+  page.on("console", (m) => m.type() === "error" && !m.text().startsWith("WebSocket connection") && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(e.message));
   return errors;
 }
@@ -68,6 +69,28 @@ for (const scheme of ["light", "dark"] as const) {
         await page.goto("/projects/MAIN/workflow?view=text");
         await page.waitForTimeout(300);
         await shot(page, `text-${tag}`);
+      }
+
+      // r2-scope-3, -5, -8 (and -7 on a phone): the Task pages.
+      await page.goto("/tasks/MAIN-7");
+      await expect(page.getByRole("region", { name: "Subtasks, line" }).locator('[data-task="MAIN-10"]')).toBeVisible();
+      await page.waitForTimeout(500);
+      await shot(page, `task-parent-${tag}`);
+      await page.goto("/tasks/MAIN-9");
+      await expect(page.getByRole("region", { name: "MAIN-9's way through the Workflow" })).toBeVisible();
+      await page.waitForTimeout(500);
+      await shot(page, `task-subtask-${tag}`);
+      await page.goto("/tasks/MAIN-6");
+      await page.waitForTimeout(700);
+      await shot(page, `task-standalone-${tag}`);
+      await page.goto("/tasks/MAIN-1");
+      await page.waitForTimeout(700);
+      await shot(page, `task-done-parent-${tag}`);
+      if (!phone) {
+        // r2-scope-4: MAIN-9 in the peek over the Tasks board.
+        await page.goto("/projects/MAIN/tasks?view=board&task=MAIN-9");
+        await page.waitForTimeout(800);
+        await shot(page, `peek-${tag}`);
       }
 
       // d-11: the heavy Workflow.

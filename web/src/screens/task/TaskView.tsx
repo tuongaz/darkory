@@ -29,6 +29,7 @@ import { useSessionActions } from "./SessionActions";
 import { SessionPanel } from "./SessionPanel";
 import { Stepper } from "./Stepper";
 import { Subtasks } from "./Subtasks";
+import { TaskLine } from "./TaskLine";
 import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
 import { Branch, ParentLink, Standing, TaskProperties } from "./TaskProperties";
 import { TaskRecord } from "./TaskRecord";
@@ -227,7 +228,17 @@ function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; 
         )}
       </div>
       <LabelsEditor detail={detail} editable={ui.actions.labels} />
-      <Stepper detail={detail} path={path} steps={steps} />
+      {task.subtask_counts || detail.subtasks.length > 0 ? (
+        <Stepper detail={detail} path={path} steps={steps} />
+      ) : (
+        <>
+          {/* The line is drawn for the eye; a screen reader reads the same path as a list. */}
+          <div className="sr-only">
+            <Stepper detail={detail} path={path} steps={steps} />
+          </div>
+          <TaskLine detail={detail} />
+        </>
+      )}
       {task.description && <p className="mt-1 whitespace-pre-wrap">{task.description}</p>}
     </header>
   );

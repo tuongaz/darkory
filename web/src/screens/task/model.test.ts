@@ -1,49 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { Activity, RunnerSession } from "@/api/client";
-import { ada, bob, builder, detail, parentTask, review, skills, step, subtask, task, workflow } from "@/test/fixtures";
+import type { Activity } from "@/api/client";
+import { ada, bob, builder, detail, parentTask, review, step, subtask, task, workflow } from "@/test/fixtures";
 import { liveClaimOf } from "../board/testData";
 import { taskActions } from "./actions";
 import { taskRecord } from "./record";
-import { graphSteps, graphSubtasks } from "./graph";
 import { takersOf } from "./takers";
 
 const members = new Map([ada, bob, builder].map((m) => [m.id, m]));
 const now = Date.now();
 const inWeb = new Set(["p-web"]);
-
-describe("the graph's binding", () => {
-  it("lays the Workflow's Steps as columns, with their Skills", () => {
-    const cols = graphSteps(workflow().steps, new Map(skills.map((s) => [s.id, s])));
-    expect(cols.map((c) => [c.name, c.skill?.name])).toEqual([
-      ["Backlog", undefined],
-      ["Plan", "breakdown"],
-      ["Build", "engineer"],
-      ["Review", "review"],
-      ["Retro", "retro"],
-      ["Skill review", "skill-review"],
-    ]);
-  });
-
-  it("binds each Subtask's Step, holder and how they work, aim, open blockers and kind", () => {
-    const p = parentTask(1, { open: 3, working: 1, done: 1, dropped: 0 });
-    const subs = [
-      subtask(2, p, { claim: liveClaimOf(builder, "k-2") }),
-      subtask(3, p, { claim: liveClaimOf(ada, "k-3"), step_id: step.review }),
-      subtask(4, p, { step_id: undefined, aimed_at_id: bob.id, blocked: true, open_blockers: [{ id: "k-9", key: "WEB-9", title: "x" }] }),
-      subtask(5, p, { state: "done", step_id: undefined, kind: "acceptance" }),
-    ];
-    const sessions = new Map<string, RunnerSession>([["k-2", { task_id: "k-2", member_id: builder.id, session_id: "s", host: "h", started_at: "", state: "stalled", log_path: "" }]]);
-    const nodes = graphSubtasks(subs, { members, now, sessions });
-    expect(nodes.map((n) => [n.key, n.stepId, n.holder?.name, n.working, n.aimedAt?.name, n.blockedBy, n.kind])).toEqual([
-      ["WEB-2", step.build, "builder", "stalled", undefined, [], "work"],
-      ["WEB-3", step.review, "ada", "held", undefined, [], "work"],
-      ["WEB-4", null, undefined, undefined, "bob", ["k-9"], "work"],
-      ["WEB-5", null, undefined, undefined, undefined, [], "acceptance"],
-    ]);
-    // An agent's live Claim with no Runner session counts as running.
-    expect(graphSubtasks([subs[0]], { members, now, sessions: new Map() })[0].working).toBe("running");
-  });
-});
 
 describe("who could take a Task", () => {
   const wf = workflow();

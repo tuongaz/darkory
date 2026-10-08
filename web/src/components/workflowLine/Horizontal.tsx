@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { DONE, DROPPED, type FlowState } from "@/components/workflow/live";
 import { cn } from "@/lib/utils";
@@ -84,7 +84,33 @@ export function HorizontalLine(props: HorizontalProps) {
     return Math.max(0, max - TOKEN_GAP);
   }, [t.main, columns, density, props.hidden, props.fold, traceStays, traceAt, doneTokens.length]);
 
-  const h: Laid = useMemo(() => layOut(t, { width, density, column: props.fold ? 0 : columnPx, noBranch: props.noBranch, branchGap: props.ghosts?.length ? 380 : 240 }), [t, width, density, columnPx, props.fold, props.noBranch, props.ghosts?.length]);
+  // A branch Step's name line, roughly: its name, Skill, marks, up to two tokens, its ghost.
+  const ghosts = props.ghosts;
+  const hiddenAt = props.hidden;
+  const labelWidth = useCallback(
+    (id: string) => {
+      const s = steps.get(id);
+      if (!s) return 0;
+      const named = !ghosts?.length;
+      const takers = s.takers ?? [];
+      const paused = takers.length > 0 && takers.every((m) => m.paused);
+      const here = columns.get(id) ?? [];
+      return (
+        s.name.length * 7.6 +
+        (named && s.skill ? s.skill.name.length * 6.7 + 6 : 0) +
+        (named || paused ? Math.min(2, takers.length) * 26 : 0) +
+        (paused ? 58 : 0) +
+        here.slice(0, 2).reduce((n, x) => n + x.key.length * 7 + 74, 0) +
+        (ghosts ?? []).filter((g) => g.stepId === id).reduce((n, g) => n + g.text.length * 6.4 + 30, 0) +
+        (hiddenAt?.get(id) ? 36 : 0)
+      );
+    },
+    [steps, ghosts, columns, hiddenAt],
+  );
+  const h: Laid = useMemo(
+    () => layOut(t, { width, density, column: props.fold ? 0 : columnPx, noBranch: props.noBranch, branchGap: ghosts?.length ? 380 : 240, labelWidth }),
+    [t, width, density, columnPx, props.fold, props.noBranch, ghosts?.length, labelWidth],
+  );
 
   const selected = props.selected ? all.find((x) => x.id === props.selected) : undefined;
   const chain = useMemo(() => (selected ? chainOf(selected.id, all, props.me) : undefined), [selected, all, props.me]);
@@ -131,7 +157,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const hidden = props.hidden?.get(id) ?? 0;
     if (id === DONE_STATION) {
       return (
-        <div key={id} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: h.headY }}>
+        <div key={id} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: props.compactHeads || props.fold ? h.headY + 20 : h.headY }}>
           <div className={cn("text-[13.5px] font-semibold whitespace-nowrap", density === "beads" && "flex h-[30px] items-end justify-center text-[12.5px]")}>Done</div>
           {!props.compactHeads && density === "tokens" && <div className="mt-1 flex h-[22px] items-center justify-center text-[11.5px] text-muted-foreground">{props.doneToday !== undefined ? `${props.doneToday} today` : ""}</div>}
         </div>
@@ -218,6 +244,15 @@ export function HorizontalLine(props: HorizontalProps) {
     return undefined;
   };
 
+  // A tag hangs into the gap left of its token: only where that gap is wide and empty.
+  const mainStation = (stepId: string | undefined) => !!stepId && t.main.includes(stepId);
+  const roomLeft = (stepId: string | undefined) => {
+    const i = stepId ? t.main.indexOf(stepId) : -1;
+    if (i <= 0) return false;
+    const prev = t.main[i - 1];
+    const gap = h.at.get(stepId!)!.x - h.at.get(prev)!.x;
+    return gap >= 180 && !(columns.get(prev)?.length) && !props.hidden?.get(prev);
+  };
   const token = (task: LineTask) => {
     const s = task.stepId ? stepOf(task.stepId) : undefined;
     const first = t.main[0] === task.stepId;
@@ -232,7 +267,7 @@ export function HorizontalLine(props: HorizontalProps) {
         dim={dimOthers && !inChain.has(task.id)}
         pulse={flow.pulses.get(task.id)}
         arrived={flow.arrived.has(task.id)}
-        tag={tagFor(task)}
+        tag={first || roomLeft(task.stepId) || !mainStation(task.stepId) ? tagFor(task) : undefined}
         tagSide={first ? "right" : "left"}
         onClick={props.onSelect && (() => props.onSelect!(props.selected === task.id ? null : task.id))}
         onHover={props.onRing && ((on) => props.onRing!(on ? task.id : null))}
@@ -538,8 +573,8 @@ export function HorizontalLine(props: HorizontalProps) {
             return (
               <div key={bs.id} className="absolute flex items-center gap-1.5 whitespace-nowrap" style={{ left: bs.x - 6, top: bs.y - 36 }}>
                 <span className="text-[13px] font-semibold">{s.name}</span>
-                {!props.compactHeads && s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
-                {!props.compactHeads && takers.slice(0, 2).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
+                {!props.compactHeads && !props.ghosts?.length && s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
+                {!props.compactHeads && (!props.ghosts?.length || paused) && takers.slice(0, 2).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
                 {paused && <span className="rounded-full border px-1.5 text-[10.5px] leading-4 text-muted-foreground">paused</span>}
                 {here.slice(0, 2).map((task) => token(task))}
                 {here.length > 2 && <span className="text-[11px] text-muted-foreground">+{here.length - 2}</span>}

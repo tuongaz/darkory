@@ -294,7 +294,7 @@ export function densityFor(topology: LineTopology, width: number): Density {
 }
 
 function spacingFor(n: number, width: number) {
-  const margin = n <= 1 ? width / 2 : Math.min(100, Math.max(56, (width / n) * 0.8));
+  const margin = n <= 1 ? width / 2 : Math.min(100, Math.max(56, (width / n) * 0.55));
   const sp = n <= 1 ? 0 : (width - 2 * margin) / (n - 1);
   return { margin, sp };
 }
@@ -356,6 +356,8 @@ export type HorizontalOptions = {
   noBranch?: boolean;
   /** How far left of Done the branch's first row ends: more when its Steps carry ghosts. */
   branchGap?: number;
+  /** How wide a branch Step's name line runs (name, Skill, marks, tokens), so the next Step stands clear of it. */
+  labelWidth?: (stepId: string) => number;
 };
 
 /** The step between nested legs at a shared station, and the inset of the outermost. */
@@ -463,7 +465,9 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       // Each row ends left of where the row above begins, so their names and chips stay clear.
       let end = rightEdge;
       if (end - (k - 1) * rowSp < margin + 60) end = Math.max(margin + 60 + (k - 1) * rowSp, xd - (opts.branchGap ?? 240));
-      const xsRow = row.stations.map((_, i) => Math.round(end - (k - 1 - i) * rowSp));
+      const xsRow: number[] = new Array(k);
+      xsRow[k - 1] = Math.round(end);
+      for (let i = k - 2; i >= 0; i--) xsRow[i] = Math.round(xsRow[i + 1] - Math.max(rowSp, (opts.labelWidth?.(row.stations[i]) ?? 0) + 24));
       row.stations.forEach((id, i) => {
         stations.push({ id, x: xsRow[i], y, row: r });
         at.set(id, { x: xsRow[i], y });
@@ -500,7 +504,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       row.stations.forEach((id, i) => {
         const mine = t.chips.filter((c) => c.stepId === id);
         mine.forEach((c, m) => {
-          if (i === 0 && k > 1) chips.push({ stepId: id, x: xsRow[i] - 14, y: y - 9 + m * 22, text: c.text, align: "right", connectorId: c.connector.id });
+          if (i === 0) chips.push({ stepId: id, x: xsRow[i] - 14, y: y - 9 + m * 22, text: c.text, align: "right", connectorId: c.connector.id });
           else chips.push({ stepId: id, x: xsRow[i] + 8, y: y + 8 + m * 22, text: c.text, align: "left", connectorId: c.connector.id });
         });
       });

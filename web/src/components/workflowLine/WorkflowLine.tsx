@@ -46,6 +46,8 @@ export type WorkflowLineProps = {
   /** The button for a chain's first move: Answer, Claim. */
   actionFor?: (first: Chain["first"]) => ReactNode;
   orientation?: "auto" | "horizontal" | "vertical";
+  /** Under this width (auto) the line runs down the page. */
+  verticalBelow?: number;
   density?: "auto" | Density;
   /** Station heads as names with "+N" only. */
   compactHeads?: boolean;
@@ -83,7 +85,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
   // Laid out before it is measured (and under a test's DOM) at the drawing's own width.
   const w = width || 1198;
   const topology = useMemo(() => lineTopology(props.workflow), [props.workflow]);
-  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && width < VERTICAL_BELOW);
+  const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && width < (props.verticalBelow ?? VERTICAL_BELOW));
   const density: Density = props.density && props.density !== "auto" ? props.density : densityFor(topology, w);
   const flow = props.flow ?? quiet;
   const all = props.all ?? props.tasks;

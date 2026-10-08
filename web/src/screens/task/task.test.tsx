@@ -200,36 +200,56 @@ describe("a Parent's page", () => {
     }
   });
 
-  it("lists its Subtasks, and draws them over the Workflow as a graph, remembered", async () => {
+  it("draws a worked Task's way through the Workflow on the line, with Workflow → to the Project's line at it", async () => {
+    mockApi(taskRoutes());
+    renderApp("/tasks/WEB-2");
+    const line = await screen.findByRole("region", { name: "WEB-2's way through the Workflow" });
+    await waitFor(() => expect(line.querySelector('button[data-task="WEB-2"]')).not.toBeNull());
+    expect(screen.getByRole("link", { name: "Workflow, at WEB-2" })).toHaveAttribute("href", expect.stringMatching(/^\/projects\/WEB\/workflow\?scope=/));
+  });
+
+  it("draws its Subtasks on the Workflow line first, lists them, and remembers the choice", async () => {
     mockApi(taskRoutes());
     const first = renderApp("/tasks/WEB-3");
     const section = await screen.findByRole("region", { name: "Subtasks" });
     expect(section).toHaveTextContent("1/3 done");
-    expect(within(section).getAllByRole("link").map((l) => l.getAttribute("data-task"))).toEqual(["WEB-4", "WEB-5", "WEB-6"]);
-    await userEvent.click(within(section).getByRole("button", { name: "Graph" }));
-    const graph = await within(section).findByRole("region", { name: "Subtasks, graph" });
-    // builder works WEB-4 and WEB-5; WEB-6 is done; none is takeable now.
-    expect(within(graph).getByRole("button", { name: /^WEB-4 Payment form, .*held by builder/ })).toBeInTheDocument();
-    expect(within(graph).getByRole("button", { name: /^WEB-6 Basket icon, Done/ })).toBeInTheDocument();
-    await userEvent.click(within(graph).getByRole("button", { name: /^WEB-4 / }));
+    const line = await within(section).findByRole("region", { name: "Subtasks, line" });
+    // builder works WEB-4 and WEB-5 at their Steps; WEB-6 ended Done and stands green at Done.
+    await waitFor(() => expect(line.querySelector('button[data-task="WEB-4"]')).toHaveAccessibleName(/^WEB-4 Payment form, held by builder/));
+    expect(line.querySelector('button[data-task="WEB-6"]')).toHaveAttribute("data-state", "done");
+    await userEvent.click(line.querySelector<HTMLElement>('button[data-task="WEB-4"]')!);
+    await userEvent.click(await screen.findByRole("button", { name: /Open WEB-4/ }));
     expect(await screen.findByRole("dialog", { name: "Task WEB-4" })).toBeInTheDocument();
     first.unmount();
 
+    const second = renderApp("/tasks/WEB-3");
+    const again = await screen.findByRole("region", { name: "Subtasks" });
+    await userEvent.click(within(again).getByRole("button", { name: "List" }));
+    expect(within(again).getAllByRole("link").map((l) => l.getAttribute("data-task"))).toEqual(["WEB-4", "WEB-5", "WEB-6"]);
+    second.unmount();
     renderApp("/tasks/WEB-3");
-    expect(await screen.findByRole("region", { name: "Subtasks, graph" })).toBeInTheDocument();
+    const third = await screen.findByRole("region", { name: "Subtasks" });
+    expect(within(third).getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("draws a Subtask Darkory filed without its kind's pill when its title already says it", async () => {
+  it("opens the Blocking among its Subtasks from the old graph's address", async () => {
+    mockApi(taskRoutes());
+    renderApp("/tasks/WEB-3?view=graph");
+    const section = await screen.findByRole("region", { name: "Subtasks" });
+    expect(within(section).getByRole("button", { name: "Blocking" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("lists a Subtask Darkory filed without its kind's pill when its title already says it", async () => {
     const retro: Task = { ...basket, id: "t-retro", key: "WEB-9", kind: "retrospective", title: "Retrospective: Checkout", state: "open", step_id: step.retro };
     const accept: Task = { ...basket, id: "t-acc", key: "WEB-10", kind: "acceptance", title: "Check it all", state: "open", step_id: step.review };
     details["WEB-3"] = detail(checkout, { subtasks: [payment, retro, accept] });
     try {
       mockApi(taskRoutes());
-      renderApp("/tasks/WEB-3?view=graph");
-      const graph = await screen.findByRole("region", { name: "Subtasks, graph" });
-      const node = (key: string) => within(graph).getByRole("button", { name: new RegExp(`^${key} `) });
-      expect(within(await waitFor(() => node("WEB-9"))).queryByText("Retrospective", { exact: true })).toBeNull();
-      expect(within(node("WEB-10")).getByText("Acceptance", { exact: true })).toBeInTheDocument();
+      renderApp("/tasks/WEB-3?view=list");
+      const section = await screen.findByRole("region", { name: "Subtasks" });
+      const row = (key: string) => within(section).getByRole("link", { name: new RegExp(`^${key} `) });
+      expect(within(await waitFor(() => row("WEB-9"))).queryByText("Retrospective", { exact: true })).toBeNull();
+      expect(within(row("WEB-10")).getByText("Acceptance", { exact: true })).toBeInTheDocument();
     } finally {
       details["WEB-3"] = detail(checkout, { subtasks: [payment, receipt, basket] });
     }
