@@ -2,6 +2,8 @@ Planning in this Project: a Parent filed with Break down. You decide its shape a
 
 Read the Parent, the repository's README and docs/ (design, adr), and the code it touches.
 
+You do not hold the Parent, but steps 1 and 2 are yours to do on it: noting on and labelling the Parent are part of this Step.
+
 1. Write the Parent's acceptance criteria as a Note on the Parent (`darkory note <PARENT> -`): checkable lines from its user's side, then what is out of scope. Acceptance checks exactly these.
 2. Label the Parent `security` and `infra` as Triage would (`darkory label set <PARENT> …`, which replaces its Labels, so name the ones it has too).
 3. When it needs a design (a new component, endpoint, data store, dependency or public interface, anything hard to reverse, or a `security` Label), file one Subtask: `darkory file --parent <PARENT> --step Design --title "Design: <Parent title>" --body -` with the problem, the criteria and the constraints you found. The architect files the slices once the design exists; file none yourself.
