@@ -271,6 +271,7 @@ export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
     const url = new URL(req.url());
     const path = url.pathname;
     const method = req.method();
+    if (path.endsWith("/seen")) return json(route, { seq: 0, at });
     if (path === "/v1/activity/stream") return route.fulfill({ status: 200, contentType: "text/event-stream", body: ": idle\n\n" });
     if (method === "GET") {
       if (path === "/v1/health") return json(route, { status: "ok", version: "v2.0.0", sign_in_modes: ["printed_link"] });
