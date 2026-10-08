@@ -209,7 +209,6 @@ function Row({
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: step.id, disabled: readOnly });
   const name = step.name.trim() || "New Step";
   const hold = !step.skill_id;
-  const shown = (takers ?? []).slice(0, 2);
   const tag = tags.start ? (
     <span className="rounded-full bg-state-waiting-bg px-2 text-[11px] leading-[18px] text-state-waiting">New Tasks start here</span>
   ) : tags.breakdown ? (
@@ -263,13 +262,13 @@ function Row({
               <span className="font-medium whitespace-nowrap text-state-claimed">Owner takes it</span>
             ) : (
               <>
-                {shown.map((h) => (
-                  <span key={h.id} className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
-                    <MemberAvatar member={h} card={false} />
-                    <span className="truncate">{h.name}</span>
-                  </span>
-                ))}
-                {takers.length > shown.length && <span className="text-[11px] text-muted-foreground">+{takers.length - shown.length}</span>}
+                <span className="flex flex-none items-center gap-[3px]">
+                  {takers.slice(0, 3).map((h) => (
+                    <MemberAvatar key={h.id} member={h} card={false} />
+                  ))}
+                </span>
+                <span className="truncate">{takers[0].name}</span>
+                {takers.length > 1 && <span className="flex-none text-[11px] text-muted-foreground">+{takers.length - 1}</span>}
               </>
             )}
           </span>

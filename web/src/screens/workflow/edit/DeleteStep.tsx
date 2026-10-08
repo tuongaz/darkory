@@ -85,7 +85,7 @@ export function DeleteStepDialog({
           <h3 className="text-[13px] font-semibold">
             {countTasks(tasks)} at {name}
           </h3>
-          <div className="grid grid-cols-[130px_minmax(0,1fr)] items-center gap-2">
+          <div className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-2">
             <span className="text-[13px]">Move them to</span>
             <Select value={to} onValueChange={setTo}>
               <SelectTrigger aria-label={`Step that receives the Tasks at ${name}`} className="w-full">
@@ -107,7 +107,7 @@ export function DeleteStepDialog({
           <h3 className="text-[13px] font-semibold">
             {into.length} {into.length === 1 ? "outcome leads" : "outcomes lead"} into {name}
           </h3>
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1.5">
+          <div className="grid grid-cols-1 items-center gap-x-2.5 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             {into.map((c) => {
               const from = nameOf(c.from_step_id);
               return (

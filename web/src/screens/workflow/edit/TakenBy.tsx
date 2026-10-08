@@ -12,7 +12,6 @@ import { countTasks } from "@/components/workflow/model";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { memberSettingsPath } from "@/lib/members";
 import { orgWide, type Holder } from "./holders";
 import { CreateAgentDialog } from "./people";
@@ -130,19 +129,22 @@ export function TakenBy({
       )}
       {!readOnly && (
         <div className="flex flex-wrap gap-2 pt-0.5">
-          <Popover open={adding} onOpenChange={setAdding}>
-            <PopoverTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
-                <PlusIcon aria-hidden /> Add a Member
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-[440px] max-w-[calc(100vw-32px)] p-0">
-              <AddMember project={project} skill={skill} holders={holders ?? []} skills={skills} facts={facts} onDone={() => setAdding(false)} />
-            </PopoverContent>
-          </Popover>
+          <Button type="button" variant="outline" size="sm" aria-expanded={adding} onClick={() => setAdding((v) => !v)} className="aria-expanded:border-foreground">
+            <PlusIcon aria-hidden /> Add a Member
+          </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => setAgent(true)}>
             <BotIcon aria-hidden /> Create an agent
           </Button>
+        </div>
+      )}
+      {!readOnly && adding && (
+        <div
+          className="mt-1 max-w-[440px] overflow-hidden rounded-md border shadow-soft"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setAdding(false);
+          }}
+        >
+          <AddMember project={project} skill={skill} holders={holders ?? []} skills={skills} facts={facts} onDone={() => setAdding(false)} />
         </div>
       )}
       {act && facts && <RemoveDialog act={act.kind} member={act.member} project={project} skill={skill} skills={skills} facts={facts} onClose={() => setAct(undefined)} />}
@@ -206,10 +208,10 @@ function AddMember({
       <CommandItem key={m.id} value={m.name} aria-label={`${m.name}: ${what(m.id)}`} disabled={add.isPending} onSelect={() => add.mutate(m.id)} className="items-start">
         <MemberAvatar member={m} card={false} className="mt-0.5" />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="flex items-baseline gap-1.5">
+          <span className="flex flex-wrap items-baseline gap-x-1.5">
             <span className="truncate">{m.name}</span>
             <span className="text-xs text-muted-foreground">· {m.kind === "agent" ? "Agent" : "Human"}</span>
-            <span className="ml-auto pl-3 text-right text-xs text-muted-foreground">{what(m.id)}</span>
+            <span className="text-xs text-muted-foreground max-sm:basis-full sm:ml-auto sm:pl-3 sm:text-right">{what(m.id)}</span>
           </span>
           {extra && <span className="text-xs text-muted-foreground">{extra}</span>}
         </span>
@@ -218,7 +220,7 @@ function AddMember({
   };
   return (
     <Command>
-      <CommandInput placeholder="Find a Member" aria-label="Find a Member" />
+      <CommandInput placeholder="Find a Member" aria-label="Find a Member" autoFocus />
       <CommandList className="max-h-80">
         <CommandEmpty>{facts ? `Every Member has ${skill.name}.` : "…"}</CommandEmpty>
         {inside.length > 0 && <CommandGroup heading={wide ? `Without ${skill.name}` : `In ${project.name} · without ${skill.name}`}>{inside.map(item)}</CommandGroup>}
