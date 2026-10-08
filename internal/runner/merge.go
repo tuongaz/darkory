@@ -371,7 +371,8 @@ func (r *Runner) resolve(ctx context.Context, rec Record, d *client.TaskDetail, 
 
 // parentCompleted merges a completed Parent's branch into the default branch in every Workspace
 // it has one, or opens its pull request, and records it in a Note on the Parent, which names any
-// done Subtask whose work the branch lacks (its merge conflicted).
+// done Subtask whose work the branch lacks (its merge conflicted). A merge that conflicts files a
+// Task resolving it (resolve), standing alone in the Parent's Project.
 func (r *Runner) parentCompleted(ctx context.Context, a client.Activity, d *client.TaskDetail) {
 	key := d.Task.Key
 	branch := ParentBranch(key)
@@ -416,8 +417,16 @@ func (r *Runner) parentCompleted(ctx context.Context, a client.Activity, d *clie
 			lines = append(lines, fmt.Sprintf("%s: could not merge %s into %s: %v. Merge it by hand.", ws.Name, branch, def, err))
 			r.logError(ctx, "merging a completed Parent's branch", "parent", key, "workspace", ws.Name, "err", err)
 		case res.Conflict != "":
-			lines = append(lines, fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged; merge it by hand.\n%s", ws.Name, branch, def, res.Conflict))
-			r.logError(ctx, "a completed Parent's branch conflicts with the default branch; merge it by hand", "parent", key, "workspace", ws.Name)
+			// The Parent stays done; a Task standing alone in its Project, on a branch from the default
+			// branch, carries its work there, as one resolving a Subtask's merge does.
+			line := fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged.", ws.Name, branch, def)
+			if ws.ID == "" { // a repository no Workspace names any more: no Task can work in it
+				line += " Merge it by hand."
+			} else {
+				line += r.resolve(ctx, rec, d, nil, ws, branch, def, res.Conflict, "completed")
+			}
+			lines = append(lines, line+"\n"+res.Conflict)
+			r.logError(ctx, "a completed Parent's branch conflicts with the default branch", "parent", key, "workspace", ws.Name)
 		case res.Already:
 			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).%s", ws.Name, branch, def, short(res.Commit), without))
 		default:

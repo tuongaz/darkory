@@ -434,6 +434,44 @@ func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
 	})
 }
 
+// A completed Parent whose branch conflicts with the default branch stays done, and a Task standing
+// alone in its Project is filed to carry the work there, as for a Subtask's conflicting merge.
+func TestRunnerParentMergeConflictFilesAResolvingTask(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "complete", "engineer")
+	f.setScenario("builder", "complete", "FAKEAGENT_DELAY=3s")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Checkout", "--auto-complete")
+	f.ok("ada", "file", "--parent", "WEB-1", "--title", "Cart page")
+	f.run("builder")
+	// main moves on after the Parent's branch is made from it, while the Subtask is worked.
+	eventually(t, 30*time.Second, "the Parent's branch", func() bool { return branchExists(t.Context(), f.repo, "web-1") })
+	commitFile(t, f.repo, "fakeagent-WEB-2.txt", "main's own\n", "main moves on")
+
+	var resolve client.Task
+	eventually(t, 30*time.Second, "a Task resolving the Parent's merge", func() bool {
+		var list client.TaskList
+		f.json(&list, "ada", "tasks", "--project", "WEB")
+		for _, x := range list.Items {
+			if x.Title == "Resolve the merge of web-1 into main" {
+				resolve = x
+				return true
+			}
+		}
+		return false
+	})
+	if resolve.ParentID != nil || !strings.Contains(resolve.Description, "WEB-1 was completed, but merging its branch web-1 into main") ||
+		!strings.Contains(resolve.Description, "CONFLICT") {
+		t.Fatalf("the resolving Task: %+v\n%s", resolve, resolve.Description)
+	}
+	eventually(t, 10*time.Second, "the Parent's Note", func() bool {
+		return strings.Contains(notesOf(f.task("WEB-1")), "web: merging web-1 into main conflicted, so nothing was merged. Filed "+resolve.Key+" to resolve it.")
+	})
+	if d := f.task("WEB-1"); d.Task.State != client.TaskStateDone {
+		t.Fatalf("the Parent is %s", d.Task.State)
+	}
+}
+
 // reviewThenRelease is a Workflow whose review is not its last Step: Build, Review, then Release,
 // whose holder advances the Task into Done.
 const reviewThenRelease = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1},
