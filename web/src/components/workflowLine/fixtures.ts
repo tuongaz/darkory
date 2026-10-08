@@ -1,8 +1,13 @@
 import type { LineConnector, LineStep, LineWorkflow } from "./model";
+import saccaJSON from "./workflows/sacca.json";
+import softwareJSON from "./workflows/software.json";
 
 /*
- * Two Workflows the line is proved on: MAIN, the default Workflow at Sacca today
- * (mock-workflow/fixture.md), and BIG, the heavy 12-Step / 7-loop Workflow of the brief's F8.
+ * The Workflows the line is proved on: MAIN, the Workflow at Sacca today (mock-workflow/fixture.md;
+ * seed-sample.sh's Project "Sample" draws the same one); SACCA, read from the Sacca Install's own
+ * workflow.json; DEFAULT, the Workflow a new Project starts with (internal/core/workflow.go);
+ * BIG, the heavy 12-Step / 7-loop Workflow of the brief's F8; and SOFTWARE, the software Workflow
+ * (examples/workflows/software/workflow.json): 14 Steps, loops into Design and Build, skips.
  */
 
 function workflow(steps: [id: string, name: string, skill: string | null][], connectors: [from: string, name: string, to: string | null][]): LineWorkflow {
@@ -83,3 +88,45 @@ export const BIG = workflow(
     ["retro", "pass", null],
   ],
 );
+
+/** A workflow.json as `darkory workflow set --file` reads it: Steps and Connectors by name. */
+type WorkflowFile = {
+  steps: { name: string; skill?: string; position: number }[];
+  connectors: { from: string; to?: string; name: string; position: number }[];
+};
+
+const slug = (name: string) => name.toLowerCase().replace(/\W+/g, "-");
+
+function fromFile(file: WorkflowFile): LineWorkflow {
+  return {
+    steps: file.steps.map((s) => ({ id: slug(s.name), name: s.name, position: s.position, ...(s.skill ? { skill: { name: s.skill } } : {}) })),
+    connectors: file.connectors.map((c) => ({ id: `${slug(c.from)}:${c.name}`, from: slug(c.from), to: c.to ? slug(c.to) : null, name: c.name, position: c.position })),
+  };
+}
+
+export const SACCA = fromFile(saccaJSON);
+export const SOFTWARE = fromFile(softwareJSON);
+
+export const DEFAULT = workflow(
+  [
+    ["backlog", "Backlog", null],
+    ["plan", "Plan", "breakdown"],
+    ["build", "Build", "engineer"],
+    ["review", "Review", "review"],
+    ["retro", "Retro", "retro"],
+    ["skillreview", "Skill review", "skill-review"],
+  ],
+  [
+    ["plan", "done", null],
+    ["build", "pass", "review"],
+    ["review", "pass", null],
+    ["review", "needs changes", "build"],
+    ["retro", "done", null],
+    ["retro", "propose", "skillreview"],
+    ["skillreview", "publish", null],
+    ["skillreview", "needs changes", "retro"],
+  ],
+);
+
+/** Every fixture by name, for the proofs that hold of them all. */
+export const FIXTURES = { MAIN, SACCA, DEFAULT, BIG, SOFTWARE } as const;
