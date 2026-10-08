@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { InfoTip } from "./InfoTip";
 import { cn } from "@/lib/utils";
 import { Refusal } from "./Refusal";
 
@@ -92,13 +93,20 @@ export function FormRows({ children, className }: { children: ReactNode; classNa
   );
 }
 
-/** One field of FormRows. `htmlFor` ties the label to its control; `help` is a line under the control. */
-export function FormRow({ label, htmlFor, help, children }: { label: ReactNode; htmlFor?: string; help?: ReactNode; children: ReactNode }) {
+/**
+ * One field of FormRows. `htmlFor` ties the label to its control; `info` explains the field from
+ * an ⓘ beside the label; `help` is a line under the control, kept for what the field says now (an
+ * error, a status), never for explaining it.
+ */
+export function FormRow({ label, htmlFor, info, help, children }: { label: string; htmlFor?: string; info?: ReactNode; help?: ReactNode; children: ReactNode }) {
   return (
     <>
-      <Label htmlFor={htmlFor} className="text-[12.5px] font-medium">
-        {label}
-      </Label>
+      <span className="flex items-center gap-1">
+        <Label htmlFor={htmlFor} className="text-[12.5px] font-medium">
+          {label}
+        </Label>
+        {info && <InfoTip label={label}>{info}</InfoTip>}
+      </span>
       <div className="flex min-w-0 flex-col gap-1.5 justify-self-stretch">
         {children}
         {help && <p className="text-xs text-muted-foreground">{help}</p>}

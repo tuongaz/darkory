@@ -8,7 +8,7 @@ import { updateProject } from "@/api/writes";
 import { useRouteProject } from "@/app/currentProject";
 import { EmptyState } from "@/components/EmptyState";
 import { FormDialog, FormRow, FormRows } from "@/components/FormDialog";
-import { InfoPopover } from "@/components/InfoPopover";
+import { InfoTip } from "@/components/InfoTip";
 import { Loaded, Refusal } from "@/components/Refusal";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
@@ -92,14 +92,9 @@ export function WorkspacesPage() {
                   </span>
                   <span ref={modeHead} role="columnheader" className="flex items-center gap-1">
                     Mode
-                    <InfoPopover label="About the modes" anchor={modeHead} side="bottom" align="start" className="w-[320px]">
-                      <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
-                        <dt className="text-muted-foreground">{modeNames.plain}</dt>
-                        <dd>The Runner merges branches itself: a Subtask&apos;s into its Parent&apos;s, a Task&apos;s into the default branch when it completes.</dd>
-                        <dt className="text-muted-foreground">{modeNames.pull_request}</dt>
-                        <dd>The Runner opens pull requests instead; one merged that carries a Task&apos;s key is that Task&apos;s branch landed.</dd>
-                      </dl>
-                    </InfoPopover>
+                    <InfoTip label="Mode" anchor={modeHead} side="bottom" className="w-[320px]">
+                      {modeWords}
+                    </InfoTip>
                   </span>
                   <span role="columnheader" className={wide}>
                     Default branch
@@ -325,6 +320,16 @@ function InlineText({
 
 const modeIcons = { plain: <GitMergeIcon />, pull_request: <GitPullRequestIcon /> };
 
+/** What each mode does, from the Mode column's ⓘ and the New Workspace's. */
+const modeWords = (
+  <dl className="grid grid-cols-[84px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
+    <dt className="text-muted-foreground">{modeNames.plain}</dt>
+    <dd>The Runner merges branches itself: a Subtask&apos;s into its Parent&apos;s, a Task&apos;s into the default branch when it completes.</dd>
+    <dt className="text-muted-foreground">{modeNames.pull_request}</dt>
+    <dd>The Runner opens pull requests instead; one merged that carries a Task&apos;s key is that Task&apos;s branch landed.</dd>
+  </dl>
+);
+
 function ModeSelect({ label, value, onChange, disabled }: { label: string; value: WorkspaceMode; onChange: (m: WorkspaceMode) => void; disabled?: boolean }) {
   return (
     <Select value={value} onValueChange={(v) => v !== value && onChange(v as WorkspaceMode)} disabled={disabled}>
@@ -373,20 +378,19 @@ function NewWorkspaceDialog({ onClose }: { onClose: () => void }) {
         <FormRow
           label="Name"
           htmlFor="workspace-name"
+          info="Names the Shift's checkout, as in web."
           help={
             name.trim() && !nameOK ? (
               <span className="text-state-blocked">Letters, digits, dots, dashes and underscores, starting with a letter or digit.</span>
-            ) : (
-              "Names the Shift's checkout, as in web."
-            )
+            ) : undefined
           }
         >
           <Input id="workspace-name" required maxLength={63} value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!name.trim() && !nameOK} autoFocus />
         </FormRow>
-        <FormRow label="Path" htmlFor="workspace-path" help="The git repository's absolute path on this machine.">
+        <FormRow label="Path" htmlFor="workspace-path" info="The git repository's absolute path on this machine.">
           <Input id="workspace-path" required maxLength={4096} value={path} onChange={(e) => setPath(e.target.value)} placeholder="/home/ada/src/web" className="font-mono text-xs md:text-xs" />
         </FormRow>
-        <FormRow label="Mode" help={mode === "plain" ? "The Runner merges branches itself." : "Work lands through pull requests."}>
+        <FormRow label="Mode" info={modeWords}>
           <Segmented
             label="Mode"
             value={mode}
@@ -397,7 +401,7 @@ function NewWorkspaceDialog({ onClose }: { onClose: () => void }) {
             ]}
           />
         </FormRow>
-        <FormRow label="Default branch" htmlFor="workspace-branch" help="Where completed work lands.">
+        <FormRow label="Default branch" htmlFor="workspace-branch" info="Where completed work lands.">
           <Input id="workspace-branch" required maxLength={255} value={branch} onChange={(e) => setBranch(e.target.value)} className="w-40 font-mono text-xs md:text-xs" />
         </FormRow>
       </FormRows>

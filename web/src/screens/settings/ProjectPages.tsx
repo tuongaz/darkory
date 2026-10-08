@@ -52,7 +52,7 @@ export function ProjectGeneralPage() {
           {/* Keyed by the saved value, so an edit made elsewhere replaces the field's. */}
           <ProjectNameRow key={project.name} project={project} admin={admin} />
           <ProjectColorRow project={project} admin={admin} />
-          <SettingsRow label="Key" help={`Starts each Task key, as in ${project.key}-1, and never changes.`}>
+          <SettingsRow label="Key" info={`Starts each Task key, as in ${project.key}-1, and never changes.`}>
             <Key>{project.key}</Key>
           </SettingsRow>
           <DefaultWorkspaceRow project={project} admin={admin} />
@@ -61,7 +61,7 @@ export function ProjectGeneralPage() {
             admin={admin}
             field="auto_complete"
             label="Auto-complete"
-            help="A Parent filed here completes itself when its last Subtask ends Done, unless its filer says otherwise."
+            info="A Parent filed here completes itself when its last Subtask ends Done, unless its filer says otherwise."
           />
           <AcceptanceRow project={project} admin={admin} />
         </SettingsForm>
@@ -106,10 +106,10 @@ function ProjectColorRow({ project, admin }: { project: Project; admin: boolean 
   const projects = useProjects();
   const save = useMutation({ mutationFn: (color: number) => updateProject(project.key, { color }) });
   const value = save.isPending ? save.variables : project.color;
-  const help = "The colour of its mark beside its name.";
+  const info = "The colour of its mark beside its name.";
   if (!admin) {
     return (
-      <SettingsRow label="Colour" help={help}>
+      <SettingsRow label="Colour" info={info}>
         <span className="inline-flex items-center gap-2">
           <ProjectMark project={project} size="md" />
           {markName(project.color)}
@@ -119,7 +119,7 @@ function ProjectColorRow({ project, admin }: { project: Project; admin: boolean 
   }
   const others = (projects.data ?? []).filter((p) => p.id !== project.id);
   return (
-    <SettingsRow label="Colour" help={help}>
+    <SettingsRow label="Colour" info={info}>
       <div role="radiogroup" aria-label={`Colour of ${project.name}`} className="flex flex-wrap gap-1">
         {markHues.map((_, i) => {
           const sharing = others.filter((p) => p.color === i).map((p) => p.name);
@@ -158,16 +158,16 @@ function DefaultWorkspaceRow({ project, admin }: { project: Project; admin: bool
   const value = save.isPending ? save.variables : (project.default_workspace_id ?? none);
   const list = workspaces.data ?? [];
   const chosen = list.find((w) => w.id === value);
-  const help = "Where the Shifts of its Tasks work when a Task names none; a Subtask works where its Parent does.";
+  const info = "Where the Shifts of its Tasks work when a Task names none; a Subtask works where its Parent does.";
   if (!admin) {
     return (
-      <SettingsRow label="Default Workspace" help={help}>
+      <SettingsRow label="Default Workspace" info={info}>
         {chosen ? chosen.name : <span className="text-muted-foreground">None</span>}
       </SettingsRow>
     );
   }
   return (
-    <SettingsRow label="Default Workspace" htmlFor="project-workspace" help={help}>
+    <SettingsRow label="Default Workspace" htmlFor="project-workspace" info={info}>
       {workspaces.data && list.length === 0 ? (
         <span className="text-muted-foreground">
           No Workspace yet;{" "}
@@ -204,6 +204,7 @@ function DefaultSwitchRow({
   admin,
   field,
   label,
+  info,
   help,
   disabled,
 }: {
@@ -211,14 +212,16 @@ function DefaultSwitchRow({
   admin: boolean;
   field: "auto_complete" | "acceptance";
   label: string;
-  help: ReactNode;
+  info: ReactNode;
+  /** What the setting does now, where it differs from what it says (no Step to file at). */
+  help?: ReactNode;
   disabled?: boolean;
 }) {
   const save = useMutation({ mutationFn: (on: boolean) => updateProject(project.key, { [field]: on }) });
   const on = save.isPending ? save.variables : project[field];
   const id = `project-${field}`;
   return (
-    <SettingsRow label={label} htmlFor={admin ? id : undefined} help={help}>
+    <SettingsRow label={label} htmlFor={admin ? id : undefined} info={info} help={help}>
       {admin ? (
         <Switch id={id} checked={on} onCheckedChange={(v) => save.mutate(v)} disabled={save.isPending || disabled} />
       ) : (
@@ -247,10 +250,17 @@ function AcceptanceRow({ project, admin }: { project: Project; admin: boolean })
         </Link>{" "}
         has no Step carrying acceptance, so no Acceptance is filed.
       </>
-    ) : (
-      "A Member confirms a Parent filed here as a whole before it is called done, unless its filer says otherwise."
-    );
-  return <DefaultSwitchRow project={project} admin={admin} field="acceptance" label="Acceptance" help={help} />;
+    ) : undefined;
+  return (
+    <DefaultSwitchRow
+      project={project}
+      admin={admin}
+      field="acceptance"
+      label="Acceptance"
+      info="A Member confirms a Parent filed here as a whole before it is called done, unless its filer says otherwise."
+      help={help}
+    />
+  );
 }
 
 // Member · Skills · Reporting line · ⋯. A phone keeps Member and ⋯.

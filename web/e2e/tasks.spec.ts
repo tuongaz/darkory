@@ -118,7 +118,7 @@ test("4 · the holder splits a held Task: the Claim ends split, it becomes a Par
   // A Member files the second from the page.
   await subtasks.getByRole("button", { name: "Add Subtask" }).click();
   const dialog = page.getByRole("dialog", { name: "File a Task" });
-  await expect(dialog).toContainText(`under ${held.task.key}`);
+  await expect(dialog.getByRole("combobox", { name: "Parent" })).toContainText(held.task.key);
   await dialog.getByLabel("Title").fill("Saved cards list");
   await dialog.getByRole("button", { name: "File Task" }).click();
   await expect(subtasks.getByRole("link", { name: /Saved cards list/ })).toBeVisible();

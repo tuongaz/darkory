@@ -154,7 +154,7 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
             autoFocus
           />
         </FormRow>
-        <FormRow label="Kind">
+        <FormRow label="Kind" info="A generic Skill is what a Member arrives with; a company Skill builds on a generic one and adds the company's own knowledge.">
           <Segmented
             label="Kind"
             value={kind}
@@ -181,7 +181,7 @@ function NewSkillDialog({ skills, onClose }: { skills: Skill[]; onClose: () => v
             </Select>
           </FormRow>
         )}
-        <FormRow label="Text" htmlFor="skill-body" help="Published as version 1.">
+        <FormRow label="Text" htmlFor="skill-body" info="Published as version 1.">
           <Textarea id="skill-body" required rows={6} value={body} onChange={(e) => setBody(e.target.value)} className="font-mono text-xs" />
         </FormRow>
       </FormRows>

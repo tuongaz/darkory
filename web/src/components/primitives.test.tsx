@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { MemoryRouter } from "react-router";
@@ -12,7 +12,7 @@ import { SessionId } from "./CopyValue";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
 import { HeartbeatMeter } from "./HeartbeatMeter";
-import { InfoPopover } from "./InfoPopover";
+import { InfoTip } from "./InfoTip";
 import { Key } from "./Key";
 import { MemberAvatar } from "./MemberAvatar";
 import { Peek } from "./Peek";
@@ -84,6 +84,47 @@ describe("MemberAvatar", () => {
     expect(human.dataset.kind).toBe("human");
     expect(agent.dataset.kind).toBe("agent");
     expect(agent).not.toHaveAttribute("data-working");
+  });
+
+  it("rings an agent thick in the AI gradient at every size, inside the same box as a human's", () => {
+    render(
+      <>
+        {(["sm", "md", "lg"] as const).map((size) => (
+          <MemberAvatar key={`h-${size}`} member={{ name: `ada-${size}`, kind: "human" }} size={size} />
+        ))}
+        {(["sm", "md", "lg"] as const).map((size) => (
+          <MemberAvatar key={`a-${size}`} member={{ name: `bot-${size}`, kind: "agent" }} size={size} />
+        ))}
+      </>,
+    );
+    // The same box for both kinds at a size: the ring is drawn inside it.
+    for (const [size, box] of [["sm", "size-5"], ["md", "size-7"], ["lg", "size-10"]]) {
+      const human = screen.getByRole("img", { name: `ada-${size}` });
+      const agent = screen.getByRole("img", { name: `bot-${size} (agent)` });
+      expect(human).toHaveClass(box);
+      expect(agent).toHaveClass(box);
+      expect(agent.dataset.size).toBe(size);
+    }
+    // The rules (jsdom draws nothing): a human's hairline; an agent's ring about an eighth of the
+    // mark across, in the full-strength AI gradient, a 1px gap inside it and the face shrunk within;
+    // a live Claim changes how the ring is drawn, never its width.
+    const css = readFileSync("src/globals.css", "utf8");
+    const rule = (selector: string) => css.match(new RegExp(`\\n  ${selector.replace(/[[\]".=:]/g, "\\$&")} \\{([^}]*)\\}`))?.[1] ?? "";
+    expect(rule(".avatar-tint")).toMatch(/border: 1px solid transparent;/);
+    expect(rule(".avatar-tint")).toMatch(/--mark-gap: 1px;/);
+    const agent = rule('.avatar-tint[data-kind="agent"]');
+    expect(agent).toMatch(/--mark-line: conic-gradient\(from var\(--spin\), var\(--agent-ring-stops\)\);/);
+    expect(agent).toMatch(/padding: calc\(var\(--mark-ring\) \+ var\(--mark-gap\)\);/);
+    expect(agent).toMatch(/content-box/);
+    const ring = rule('.avatar-tint[data-kind="agent"]::before');
+    expect(ring).toMatch(/inset: 0;/);
+    expect(ring).toMatch(/background: var\(--mark-line\);/);
+    expect(ring).toMatch(/mask: radial-gradient\(closest-side, transparent calc\(100% - var\(--mark-ring\)/);
+    const width = (selector: string) => parseFloat(rule(selector).match(/--mark-ring: ([\d.]+)px;/)?.[1] ?? "0");
+    for (const [selector, across] of [[".avatar-tint", 20], ['.avatar-tint[data-size="md"]', 28], ['.avatar-tint[data-size="lg"]', 40], ['.avatar-tint[data-size="xl"]', 96]] as const) {
+      expect(width(selector) / across, selector).toBeGreaterThanOrEqual(0.12);
+    }
+    for (const state of ["running", "waiting", "stalled", "ending"]) expect(rule(`.avatar-tint[data-working="${state}"]`)).not.toMatch(/border-width|padding/);
   });
 
   it("says that a standalone mark's Member works, and how", () => {
@@ -288,12 +329,66 @@ describe("ProjectMark", () => {
   });
 });
 
-describe("InfoPopover", () => {
-  it("opens its explanation from the ⓘ", async () => {
-    render(<InfoPopover label="About holds">A Task at a hold is not takeable.</InfoPopover>);
+describe("InfoTip", () => {
+  it("is named About and its label, and opens its explanation on a click, until Esc", async () => {
+    render(<InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>);
+    const button = screen.getByRole("button", { name: "About Step" });
     expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "About holds" }));
+    await userEvent.click(button);
     expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
+    // Pinned: the pointer leaving does not close it.
+    await userEvent.unhover(button);
+    expect(screen.getByText(/not takeable/)).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument());
+  });
+
+  it("opens on hover and closes when the pointer leaves", async () => {
+    render(<InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>);
+    const button = screen.getByRole("button", { name: "About Step" });
+    await userEvent.hover(button);
+    expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
+    await userEvent.unhover(button);
+    await waitFor(() => expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument());
+  });
+
+  it("opens when the keyboard reaches it, leaving the focus where it is", async () => {
+    render(
+      <>
+        <input aria-label="Before" />
+        <InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>
+      </>,
+    );
+    screen.getByLabelText("Before").focus();
+    await userEvent.tab();
+    const button = screen.getByRole("button", { name: "About Step" });
+    expect(await screen.findByText(/not takeable/)).toBeInTheDocument();
+    expect(button).toHaveFocus();
+    await userEvent.tab();
+    await waitFor(() => expect(screen.queryByText(/not takeable/)).not.toBeInTheDocument());
+  });
+
+  it("moves nothing: the ⓘ is a fixed square and its explanation floats outside the label's line", async () => {
+    const { container } = render(
+      <span data-testid="line" className="flex items-center gap-1">
+        <label htmlFor="x">Step</label>
+        <InfoTip label="Step">A Task at a hold is not takeable.</InfoTip>
+        <input id="x" />
+      </span>,
+    );
+    const line = screen.getByTestId("line");
+    const shape = [...line.children].map((e) => e.tagName);
+    const button = screen.getByRole("button", { name: "About Step" });
+    const classes = button.className;
+    expect(button).toHaveClass("size-4", "flex-none");
+    // Outside the <label>: the field's name stays the label's words.
+    expect(screen.getByRole("textbox")).toHaveAccessibleName("Step");
+    await userEvent.click(button);
+    const tip = await screen.findByText(/not takeable/);
+    expect(container).not.toContainElement(tip);
+    // The line holds only what it held, and the ⓘ keeps its classes: opening adds no box to it.
+    expect([...line.children].map((e) => e.tagName)).toEqual(shape);
+    expect(button.className).toBe(classes);
   });
 });
 

@@ -156,10 +156,10 @@ function NewSkillDialog({ name: initial, onClose, onDone }: { name: string; onCl
       size="md"
     >
       <FormRows>
-        <FormRow label="Name" htmlFor="new-skill-name" help={problem ? <span className="text-destructive">{problem}</span> : "Such as qa or security."}>
+        <FormRow label="Name" htmlFor="new-skill-name" info="Such as qa or security." help={problem ? <span className="text-destructive">{problem}</span> : undefined}>
           <Input id="new-skill-name" required maxLength={63} value={name} onChange={(e) => setName(e.target.value)} className="font-mono text-xs md:text-xs" />
         </FormRow>
-        <FormRow label="Text" htmlFor="new-skill-body" help="What a Member with it knows and does. Markdown.">
+        <FormRow label="Text" htmlFor="new-skill-body" info="What a Member with it knows and does. Markdown.">
           <Textarea id="new-skill-body" rows={6} value={body} onChange={(e) => setBody(e.target.value)} autoFocus />
         </FormRow>
       </FormRows>

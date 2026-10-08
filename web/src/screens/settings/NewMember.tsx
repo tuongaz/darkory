@@ -144,13 +144,13 @@ export function NewMemberDialog({
         )}
         {kind === "human" && (
           <FormRow label="Email" htmlFor="member-email">
-            <Input id="member-email" type="email" placeholder="Optional" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Input id="member-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </FormRow>
         )}
         {kind === "agent" && (
           <FormRow
             label="Runner"
-            help={runner ? "The Runner starts its Shifts with the Install's default command." : "It works through its own token; the Runner does not start it."}
+            info="On, the Runner starts its Shifts with the Install's default command; off, it works through its own token."
           >
             <Switch checked={runner} onCheckedChange={setRunner} aria-label="Run with the Runner" className="self-start" />
           </FormRow>
@@ -173,7 +173,7 @@ export function NewMemberDialog({
           </FormRow>
         )}
         {projects.length > 0 && (
-          <FormRow label="Projects" help="It takes their Tasks at the Steps whose Skills it has.">
+          <FormRow label="Projects" info="It takes their Tasks at the Steps whose Skills it has.">
             <div role="group" aria-label="Projects" className="max-h-40 overflow-y-auto rounded-md border p-1">
               {projects.map((p) => (
                 <label key={p.id} className="flex h-8 cursor-pointer items-center gap-2 rounded-sm px-1.5 hover:bg-accent">

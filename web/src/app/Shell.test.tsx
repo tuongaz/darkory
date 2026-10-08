@@ -384,7 +384,7 @@ describe("the Install checklist", () => {
     expect(within(setup).getByRole("link", { name: "Add Member" })).toHaveAttribute("href", "/settings/organisation/members?new=1");
     await userEvent.click(within(setup).getByRole("button", { name: "File Task" }));
     // The Tasks screen answers the intent; its placeholder dialog names the Project.
-    expect(await screen.findByRole("dialog", { name: "File a Task" })).toHaveTextContent("In WEB.");
+    expect(within(await screen.findByRole("dialog", { name: "File a Task" })).getByRole("combobox", { name: "Project" })).toHaveTextContent("Web");
     await userEvent.keyboard("{Escape}");
 
     api.routes["GET /v1/tasks"] = { items: [task(1)] };
@@ -574,7 +574,7 @@ describe("keys", () => {
     renderApp("/projects/OPS/activity");
     await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
     await userEvent.click(within(sidebar()).getByRole("button", { name: "File a Task" }));
-    expect(await screen.findByRole("dialog", { name: "File a Task" })).toHaveTextContent("In OPS.");
+    expect(within(await screen.findByRole("dialog", { name: "File a Task" })).getByRole("combobox", { name: "Project" })).toHaveTextContent("Ops");
   });
 
   it("C files a Task in the current Project, and not while typing", async () => {
@@ -583,7 +583,7 @@ describe("keys", () => {
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Activity"));
 
     await userEvent.keyboard("c");
-    expect(await screen.findByRole("dialog", { name: "File a Task" })).toHaveTextContent("In OPS.");
+    expect(within(await screen.findByRole("dialog", { name: "File a Task" })).getByRole("combobox", { name: "Project" })).toHaveTextContent("Ops");
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 

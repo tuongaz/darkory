@@ -4,7 +4,6 @@ import { ApiError, type AgentSettings, type Member } from "@/api/client";
 import { useRunnerSessions } from "@/api/queries";
 import type { components } from "@/api/schema.gen";
 import { clearAgentSettings, setAgentSettings } from "@/api/writes";
-import { InfoPopover } from "@/components/InfoPopover";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,7 +30,6 @@ export function AgentCard({ member }: { member: Member }) {
   return (
     <SettingsSection
       title="Agent"
-      description="How the Runner starts this agent's Shifts."
       actions={
         s && (
           <MoreMenu label={`More for the Agent settings of ${member.name}`} size="icon-xs">
@@ -48,22 +46,14 @@ export function AgentCard({ member }: { member: Member }) {
   );
 }
 
-/** What using the Runner means, under the row that offers it; ⓘ says what it does with the Task. */
-export const runnerLine = "In use, the Runner beside this server starts the agent's command whenever it has a Task to take.";
-
-function AboutRunner({ children = runnerLine }: { children?: ReactNode }) {
-  return (
-    <span className="flex flex-wrap items-center gap-1">
-      {children}
-      <InfoPopover label="About the Runner" className="w-[320px]">
-        <p>
-          It takes the Task through <code className="font-mono text-[11.5px]">next</code> as this agent, prepares its Workspace, and ends the
-          Shift when the Claim ends.
-        </p>
-      </InfoPopover>
-    </span>
-  );
-}
+/** What the Runner does for this agent, from the Runner row's ⓘ. */
+const aboutRunner = (
+  <p>
+    In use, the Runner beside this server starts the agent&apos;s command whenever it has a Task to take: it takes the Task through{" "}
+    <code className="font-mono text-[11.5px]">next</code> as this agent, prepares its Workspace, and ends the Shift when the Claim ends. Not in
+    use, the agent works through its own token.
+  </p>
+);
 
 /** Paused, for an agent the Runner starts: no new session until it is switched off. */
 export function PausedRow({ member, settings: s }: { member: Member; settings: AgentSettings }) {
@@ -74,7 +64,7 @@ export function PausedRow({ member, settings: s }: { member: Member; settings: A
       label="Paused"
       checked={s.paused}
       body={(paused) => ({ paused })}
-      help="The Runner starts no new Shift; one running carries on."
+      info="The Runner starts no new Shift; one running carries on."
     />
   );
 }
@@ -116,11 +106,11 @@ function NotRun({ member }: { member: Member }) {
   const start = useMutation({ mutationFn: () => setAgentSettings(member.id, {}) });
   return (
     <SettingsForm label={`Agent settings of ${member.name}`}>
-      <SettingsRow label="Runner" help={<AboutRunner />}>
+      <SettingsRow label="Runner" info={aboutRunner}>
+        <span className="text-muted-foreground">Not in use</span>
         <Button variant="outline" size="xs" onClick={() => start.mutate()} disabled={start.isPending}>
           Use the Runner
         </Button>
-        <span className="text-muted-foreground">Works through its own token; the Runner does not start it.</span>
         <Refusal error={start.error} />
       </SettingsRow>
     </SettingsForm>
@@ -133,7 +123,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
   // Each row is keyed by its saved value, so a change made elsewhere replaces what the field shows.
   return (
     <SettingsForm label={`Agent settings of ${member.name}`}>
-      <SettingsRow label="Runner" help={<AboutRunner>{now}</AboutRunner>}>
+      <SettingsRow label="Runner" info={aboutRunner} help={now}>
         <span>In use</span>
       </SettingsRow>
       <TextSetting
@@ -144,7 +134,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         saved={s.command}
         required
         body={(command) => ({ command })}
-        help={<Placeholders />}
+        info={<Placeholders />}
       />
       <LinesSetting
         key={`args:${argsText(s.args)}`}
@@ -153,7 +143,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         label="Arguments"
         saved={argsText(s.args)}
         parse={(text) => ({ body: { args: argsOf(text) }, same: argsText(argsOf(text)) === argsText(s.args) })}
-        help="One per line, in order."
+        info="One per line, in order."
       />
       <TextSetting
         key={`model:${s.model}`}
@@ -164,7 +154,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         required
         list="agent-models"
         body={(model) => ({ model })}
-        help="Passed as {model}, and reported as the Claim's model label."
+        info="Passed as {model}, and reported as the Claim's model label."
       />
       <datalist id="agent-models">
         {knownModels.map((m) => (
@@ -182,7 +172,8 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
           const r = envOf(text);
           return "problem" in r ? r : { body: { env: r.env }, same: envText(r.env) === envText(s.env) };
         }}
-        help="One KEY = value per line. Every Member can read these: keep secrets in the server's environment, which Shifts inherit."
+        info="One KEY = value per line. Shifts also inherit the server's environment."
+        help="Every Member can read these: keep secrets in the server's environment."
       />
       <TextSetting
         key={`progress:${s.progress_file ?? ""}`}
@@ -192,7 +183,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         saved={s.progress_file ?? ""}
         placeholder="Claude Code's transcript"
         body={(progress_file) => ({ progress_file })}
-        help="For a command other than Claude Code: the file whose changes show the Shift working."
+        info="For a command other than Claude Code: the file whose changes show the Shift working."
       />
       <SwitchSetting
         member={member}
@@ -200,34 +191,26 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         label="Unattended"
         checked={s.unattended}
         body={(unattended) => ({ unattended })}
-        help="Skips the agent's permission checks; its worktree and the exit rules are the fence."
+        info="Skips the agent's permission checks; its worktree and the exit rules are the fence."
       />
     </SettingsForm>
   );
 }
 
-/** The placeholders a template may use, under the Command field; ⓘ says what each becomes. */
+/** The placeholders a template may use, from the Command field's ⓘ: what each becomes. */
 function Placeholders() {
   return (
-    <span className="flex flex-wrap items-center gap-1">
-      Placeholders
-      {placeholders.map(([p]) => (
-        <code key={p} className="rounded-sm bg-muted px-1 font-mono text-[11.5px] text-foreground">
-          {p}
-        </code>
-      ))}
-      <InfoPopover label="About the placeholders" className="w-[340px]">
-        <p className="mb-1.5">The Runner replaces these in the command, each argument and the progress file:</p>
-        <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
-          {placeholders.map(([p, what]) => (
-            <div key={p} className="contents">
-              <dt className="font-mono text-[11.5px]">{p}</dt>
-              <dd>{what}</dd>
-            </div>
-          ))}
-        </dl>
-      </InfoPopover>
-    </span>
+    <>
+      <p className="mb-1.5">The Runner replaces these in the command, each argument and the progress file:</p>
+      <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
+        {placeholders.map(([p, what]) => (
+          <div key={p} className="contents">
+            <dt className="font-mono text-[11.5px]">{p}</dt>
+            <dd>{what}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }
 
@@ -241,7 +224,7 @@ function TextSetting({
   list,
   placeholder,
   body,
-  help,
+  info,
 }: {
   member: Member;
   id: string;
@@ -251,7 +234,7 @@ function TextSetting({
   list?: string;
   placeholder?: string;
   body: (value: string) => Body;
-  help?: ReactNode;
+  info?: ReactNode;
 }) {
   const [value, setValue] = useState(saved);
   const save = useMutation({ mutationFn: (v: string) => setAgentSettings(member.id, body(v)) });
@@ -261,7 +244,7 @@ function TextSetting({
     save.mutate(next);
   };
   return (
-    <SettingsRow label={label} htmlFor={id} help={help}>
+    <SettingsRow label={label} htmlFor={id} info={info}>
       <Input
         id={id}
         className={cn(w320, "font-mono text-xs md:text-xs")}
@@ -291,6 +274,7 @@ function LinesSetting({
   saved,
   placeholder,
   parse,
+  info,
   help,
 }: {
   member: Member;
@@ -299,6 +283,8 @@ function LinesSetting({
   saved: string;
   placeholder?: string;
   parse: (text: string) => Parsed;
+  info?: ReactNode;
+  /** A warning the field keeps in sight. */
   help?: ReactNode;
 }) {
   const [value, setValue] = useState(saved);
@@ -311,7 +297,7 @@ function LinesSetting({
     if (!r.same) save.mutate(r.body);
   };
   return (
-    <SettingsRow label={label} htmlFor={id} help={help}>
+    <SettingsRow label={label} htmlFor={id} info={info} help={help}>
       <Textarea
         id={id}
         className={cn(w320, "min-h-9 py-1.5 font-mono text-xs md:text-xs")}
@@ -339,18 +325,18 @@ function SwitchSetting({
   label,
   checked,
   body,
-  help,
+  info,
 }: {
   member: Member;
   id: string;
   label: string;
   checked: boolean;
   body: (on: boolean) => Body;
-  help: ReactNode;
+  info: ReactNode;
 }) {
   const save = useMutation({ mutationFn: (on: boolean) => setAgentSettings(member.id, body(on)) });
   return (
-    <SettingsRow label={label} htmlFor={id} help={help}>
+    <SettingsRow label={label} htmlFor={id} info={info}>
       <Switch id={id} checked={save.isPending ? save.variables : checked} onCheckedChange={(on) => save.mutate(on)} disabled={save.isPending} />
       <Refusal error={save.error} />
     </SettingsRow>

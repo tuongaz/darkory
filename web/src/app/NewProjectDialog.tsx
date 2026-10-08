@@ -98,7 +98,6 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
       open
       onOpenChange={(o) => !o && onClose()}
       title="New Project"
-      description="A body of work with its own key, Workflow and Members."
       submitLabel="Create Project"
       onSubmit={() => create.mutate()}
       pending={create.isPending}
@@ -113,6 +112,7 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
         <FormRow
           label="Key"
           htmlFor="project-key"
+          info={`Starts each Task key, as in ${key || "MAIN"}-1. It never changes.`}
           help={
             key && !keyOK ? (
               <span className="text-state-blocked">2 to 10 capitals or digits, starting with a capital.</span>
@@ -120,9 +120,7 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
               <span className="text-state-blocked">
                 {taken.name} has the key {taken.key}.
               </span>
-            ) : (
-              <>Starts each Task key, as in {key || "MAIN"}-1. It never changes.</>
-            )
+            ) : undefined
           }
         >
           <Input
@@ -135,7 +133,19 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
             className="w-32 font-mono"
           />
         </FormRow>
-        <FormRow label="Workflow">
+        <FormRow
+          label="Workflow"
+          info={
+            <dl className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-2.5 gap-y-1">
+              {workflows.map((w) => (
+                <div key={w.value} className="contents">
+                  <dt className="text-muted-foreground">{w.label}</dt>
+                  <dd>{w.help}</dd>
+                </div>
+              ))}
+            </dl>
+          }
+        >
           <RadioGroup aria-label="Workflow" value={workflow} onValueChange={(v) => setWorkflow(v as NewWorkflow)} className="gap-2">
             {workflows.map((w) => {
               const disabled = w.value === "copy" && projects.length === 0;
@@ -161,18 +171,14 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
                           ))}
                         </SelectContent>
                       </Select>
-                    ) : (
-                      <span aria-hidden className="text-xs text-muted-foreground">
-                        {w.help}
-                      </span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
             })}
           </RadioGroup>
         </FormRow>
-        <FormRow label="Members" help="They take its Tasks at the Steps whose Skills they have.">
+        <FormRow label="Members" info="They take its Tasks at the Steps whose Skills they have.">
           <div role="group" aria-label="Members" className="max-h-48 overflow-y-auto rounded-md border p-1">
             {ordered.map((m) => (
               <label key={m.id} className="flex h-8 cursor-pointer items-center gap-2 rounded-sm px-1.5 hover:bg-accent">
@@ -188,7 +194,7 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
           </div>
         </FormRow>
         {workspaces.length > 0 && (
-          <FormRow label="Workspace" help="Where its Tasks' Shifts work when a Task names none.">
+          <FormRow label="Workspace" info="Where its Tasks' Shifts work when a Task names none.">
             <Select value={workspace} onValueChange={setWorkspace}>
               <SelectTrigger aria-label="Workspace" className="w-full">
                 <SelectValue />

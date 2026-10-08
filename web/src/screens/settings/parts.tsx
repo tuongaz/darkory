@@ -1,6 +1,7 @@
 import { AlertTriangleIcon, CheckIcon, CopyIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import type { Member, Project } from "@/api/client";
+import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Refusal } from "@/components/Refusal";
@@ -24,8 +25,9 @@ export function SettingsForm({ children, label }: { children: ReactNode; label: 
 }
 
 /**
- * A bordered section of a record page (Profile, Work, Access…): a heading, one line saying what
- * it holds, then its settings form. The form's rows keep their lines between them; the last row's
+ * A bordered section of a record page (Profile, Work, Access…): a heading, then its settings
+ * form; a line under the heading only for what must be read before acting (what Deactivate
+ * ends). The form's rows keep their lines between them; the last row's
  * gives way to the card's edge. `actions` sit on the heading's right, for its rare ones (⋯).
  */
 export function SettingsSection({
@@ -36,7 +38,7 @@ export function SettingsSection({
   children,
 }: {
   title: string;
-  description: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   tone?: "destructive";
   children: ReactNode;
@@ -53,7 +55,7 @@ export function SettingsSection({
       <header className="flex items-start gap-2 pt-3.5 pb-3">
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <h2 className="font-semibold">{title}</h2>
-          <p className="text-xs text-muted-foreground">{description}</p>
+          {description && <p className="text-xs text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="-mr-1.5 flex flex-none items-center gap-1">{actions}</div>}
       </header>
@@ -62,30 +64,36 @@ export function SettingsSection({
   );
 }
 
-/** One setting: its label, then its controls; `help` is a line under them. */
+/**
+ * One setting: its label, then its controls. `info` explains the setting from an ⓘ beside the
+ * label; `help` is a line under the controls, kept for what the setting says now (an error, a
+ * status), never for explaining it.
+ */
 export function SettingsRow({
   label,
   count,
   htmlFor,
+  info,
   help,
   children,
 }: {
   label: string;
   count?: number;
   htmlFor?: string;
+  info?: ReactNode;
   help?: ReactNode;
   children: ReactNode;
 }) {
   const Label = htmlFor ? "label" : "div";
   return (
     <>
-      <Label
-        htmlFor={htmlFor}
-        className="flex items-start gap-1 pt-3 text-[12.5px] font-medium text-muted-foreground sm:border-b sm:pt-[17px]"
-      >
-        {label}
-        {count !== undefined && <span className="font-normal tabular-nums">{count}</span>}
-      </Label>
+      <div className="flex items-start gap-1 pt-3 text-[12.5px] font-medium text-muted-foreground sm:border-b sm:pt-[17px]">
+        <Label htmlFor={htmlFor} className="flex items-start gap-1">
+          {label}
+          {count !== undefined && <span className="font-normal tabular-nums">{count}</span>}
+        </Label>
+        {info && <InfoTip label={label}>{info}</InfoTip>}
+      </div>
       <div className="flex min-h-[52px] min-w-0 flex-wrap items-center gap-2 border-b py-2.5">
         {children}
         {help && <div className="basis-full text-xs text-muted-foreground">{help}</div>}

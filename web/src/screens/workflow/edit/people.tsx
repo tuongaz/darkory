@@ -102,7 +102,7 @@ export function CreateAgentDialog({ project, skill, onClose }: { project: Projec
         <FormRow label="Skill">
           <span className="font-mono text-xs">{skill.name}</span>
         </FormRow>
-        <FormRow label="Runner" help={runner ? "The Runner starts its Shifts with the Install's default command." : "It works through its own token; the Runner does not start it."}>
+        <FormRow label="Runner" info="On, the Runner starts its Shifts with the Install's default command; off, it works through its own token.">
           <Switch checked={runner} onCheckedChange={setRunner} aria-label="Run with the Runner" className="self-start" />
         </FormRow>
         {runner && (

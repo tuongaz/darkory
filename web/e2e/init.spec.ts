@@ -82,7 +82,7 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
   await test.step("File Task files MAIN-1 at Build, where builder takes it; the Inbox replaces the checklist", async () => {
     await setup.getByRole("button", { name: "File Task" }).click();
     const dialog = page.getByRole("dialog", { name: "File a Task" });
-    await expect(dialog).toContainText("In MAIN.");
+    await expect(dialog.getByRole("combobox", { name: "Project" })).toContainText("Main");
     const stepField = dialog.getByRole("combobox", { name: "Step" });
     await expect(stepField).toContainText("Build");
     await expect(stepField.getByLabel("Taken by builder")).toBeVisible();

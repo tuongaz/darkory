@@ -20,8 +20,9 @@ type MarkMember = Pick<Member, "name" | "kind"> & { id?: string; avatar_file_id?
 
 /**
  * A Member's mark: initials on a muted tint of its own (by name, so "RT" for retro and "RT" for
- * reviewer-tax differ), round, in a ring: a plain line for a human, the AI gradient for an agent
- * (`.avatar-tint` in globals.css).
+ * reviewer-tax differ), round, in a ring: a plain line for a human, a thick ring in the AI
+ * gradient for an agent, thicker as the mark grows (`.avatar-tint` in globals.css). The ring is
+ * drawn inside the size's box, so an agent's mark takes no more room than a human's.
  *
  * `working` is for a standalone mark (the Agents page, a canvas or graph node), which says itself
  * that its Member works, where a row's glyph would: an agent's ring turns while its session runs
@@ -70,6 +71,7 @@ const Mark = forwardRef<HTMLSpanElement, MarkProps>(function Mark({ member, size
       role="img"
       aria-label={working ? `${name}, ${workingWords[working]}` : name}
       data-kind={member.kind}
+      data-size={size}
       data-tint={tint}
       data-working={working}
       data-avatar={image ? "image" : undefined}
