@@ -8,7 +8,7 @@ import { startInstall } from "./server";
 //      with Tasks (asked where they go); add a Step with a new Skill and a new agent; a Step nobody
 //      holds shows the warning on the canvas and in the list.
 //   9. Marks: an agent's gradient border, turning while its Claim is live; a human's plain border.
-// And, first, the live canvas as things happen: a Task filed, picked up, advanced and completed.
+// And, first, the live line as things happen: a Task filed, picked up, advanced and completed.
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/workflow/", import.meta.url));
@@ -73,57 +73,59 @@ async function agentToken(name: string): Promise<string> {
   return ((await v1("POST", `/v1/members/${m.id}/tokens`, { name: `live-${name}` })) as { secret: string }).secret;
 }
 
-test("live: a Task filed shows at Build, its pickup is called out, it travels to Review and into Done, the trail says each", async ({ browser }) => {
+test("live: a Task filed shows at Build on the line, its pickup reads now, it travels to Review and into Done", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflow");
-  const canvas = page.getByRole("region", { name: "Workflow", exact: true });
-  const trail = page.getByRole("complementary", { name: "Live trail" });
-  await expect(canvas.locator(".react-flow__edge").first()).toBeVisible();
-  await expect(trail.getByRole("status")).toHaveText("Live");
+  const line = page.getByRole("region", { name: "Workflow", exact: true });
+  await expect(line.locator('[data-head="Build"]')).toBeVisible();
   await page.screenshot({ path: `${liveShots}0-open.png` });
+  const token = (key: string) => line.locator(`button[data-task="${key}"]`);
+  const tag = (key: string) => token(key).locator("xpath=..").locator("[data-tag]");
+  /** Whether the Task's token stands in its Step's column. */
+  const at = async (key: string, step: string) => {
+    const [t, h] = [await token(key).boundingBox(), await line.locator(`[data-head="${step}"]`).boundingBox()];
+    return !!t && !!h && Math.abs(t.x + t.width / 2 - (h.x + h.width / 2)) < 8;
+  };
 
-  // Filed through /v1: its chip fades in at Build with a "filed" callout.
+  // Filed through /v1: its token appears at Build, tagged with who filed it.
   const filed = ((await v1("POST", "/v1/tasks", { project: "MAIN", title: "Count the ledger", step: "Build" })) as { task: { key: string } }).task;
-  const chip = () => node(page, "Build").getByRole("button", { name: new RegExp(`^${filed.key} Count the ledger`) });
-  await expect(chip()).toHaveAttribute("aria-label", `${filed.key} Count the ledger, waiting`);
-  await expect(page.locator(".flow-callout", { hasText: `ada filed ${filed.key}` })).toBeVisible();
-  await expect(trail.getByRole("listitem").first()).toHaveAccessibleName(`ada filed ${filed.key} at Build`);
+  await expect(token(filed.key)).toHaveAttribute("aria-label", `${filed.key} Count the ledger, waiting`);
+  expect(await at(filed.key, "Build")).toBe(true);
+  await expect(tag(filed.key)).toContainText("ada filed");
   await page.screenshot({ path: `${liveShots}1-filed.png` });
 
-  // builder claims it with its own token and Session: called out, its mark ringed on the chip, a trail row.
+  // builder claims it with its own token and Session: the token fills and reads "now", tagged with the pickup.
   const builder = await agentToken("builder");
   await v1("POST", `/v1/tasks/${filed.key}/claim`, { heartbeat_timeout_seconds: 600 }, builder, "builder-live-1");
-  await expect(page.locator(".flow-callout", { hasText: `builder picked up ${filed.key}` })).toBeVisible();
-  await expect(chip()).toHaveAttribute("aria-label", `${filed.key} Count the ledger, held by builder (agent)`);
-  await expect(chip()).toHaveAttribute("data-live", "agent");
-  await expect(chip().getByRole("img", { name: "builder (agent), working" })).toHaveAttribute("data-working", "running");
-  await expect(trail.getByRole("listitem").first()).toHaveAccessibleName(`builder picked up ${filed.key} at Build`);
-  await expect(trail).toContainText("1 working now");
+  await expect(token(filed.key)).toHaveAttribute("aria-label", `${filed.key} Count the ledger, held by builder (agent)`);
+  await expect(token(filed.key)).toHaveAttribute("data-now", "");
+  await expect(token(filed.key)).toContainText("now");
+  await expect(tag(filed.key)).toContainText("builder picked up");
+  await expect(token(filed.key).getByRole("img", { name: "builder (agent), working" })).toHaveAttribute("data-working", "running");
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${liveShots}2-picked-up.png` });
 
-  // It advances along pass: a token travels the drawn line to Review (shot mid-way), the outcome lit.
+  // It advances along pass: a token travels the line to Review (shot mid-way), the outcome lit.
   await v1("POST", `/v1/tasks/${filed.key}/advance`, { outcome: "pass" }, builder, "builder-live-1");
-  const token = page.locator(".flow-token");
-  await expect(token).toHaveText(filed.key);
-  await expect(canvas.locator('[data-lit="true"]')).toHaveText("pass");
+  const travelling = page.locator(`[data-travel="${filed.key}"]`);
+  await expect(travelling).toContainText(`${filed.key}pass`);
+  await expect(line.locator('[data-lit="true"]').first()).toHaveText("pass");
   await page.waitForTimeout(350);
   await page.screenshot({ path: `${liveShots}3-travelling.png` });
-  await expect(token).toHaveCount(0, { timeout: 4_000 });
-  const atReview = node(page, "Review").getByRole("button", { name: new RegExp(`^${filed.key} `) });
-  await expect(atReview).toHaveAttribute("aria-label", `${filed.key} Count the ledger, waiting`);
-  await expect(trail.getByRole("listitem").first()).toHaveAccessibleName(`builder advanced ${filed.key} along pass to Review`);
+  await expect(travelling).toHaveCount(0, { timeout: 4_000 });
+  await expect(token(filed.key)).toHaveAttribute("aria-label", `${filed.key} Count the ledger, waiting`);
+  expect(await at(filed.key, "Review")).toBe(true);
   await page.screenshot({ path: `${liveShots}4-at-review.png` });
 
-  // reviewer picks it up and completes it along pass: into Done, and Review is as it was.
+  // reviewer picks it up and completes it along pass: into Done, and its token leaves the line.
   const reviewer = await agentToken("reviewer");
   await v1("POST", `/v1/tasks/${filed.key}/claim`, {}, reviewer, "reviewer-live-1");
-  await expect(page.locator(".flow-callout", { hasText: `reviewer picked up ${filed.key}` })).toBeVisible();
+  await expect(tag(filed.key)).toContainText("reviewer picked up");
   await v1("POST", `/v1/tasks/${filed.key}/advance`, { outcome: "pass" }, reviewer, "reviewer-live-1");
-  await expect(token).toHaveText(filed.key);
+  await expect(travelling).toContainText(filed.key);
   await page.waitForTimeout(350);
   await page.screenshot({ path: `${liveShots}5-into-done.png` });
-  await expect(trail.getByRole("listitem").first()).toHaveAccessibleName(`reviewer completed ${filed.key} along pass · from Review`);
-  await expect(node(page, "Review").getByRole("button", { name: new RegExp(`^${filed.key} `) })).toHaveCount(0);
+  await expect(token(filed.key)).toHaveCount(0, { timeout: 4_000 });
+  await expect(line.locator('[data-head="Done"]')).toContainText("1 today");
   await page.waitForTimeout(1_500);
   await page.screenshot({ path: `${liveShots}6-done.png` });
 
@@ -131,21 +133,13 @@ test("live: a Task filed shows at Build, its pickup is called out, it travels to
   await page.emulateMedia({ colorScheme: "dark" });
   const again = ((await v1("POST", "/v1/tasks", { project: "MAIN", title: "Recount the ledger", step: "Build" })) as { task: { key: string } }).task;
   await v1("POST", `/v1/tasks/${again.key}/claim`, { heartbeat_timeout_seconds: 600 }, builder, "builder-live-2");
-  await expect(page.locator(".flow-callout", { hasText: `builder picked up ${again.key}` })).toBeVisible();
+  await expect(tag(again.key)).toContainText("builder picked up");
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${liveShots}7-picked-up-dark.png` });
   await v1("POST", `/v1/tasks/${again.key}/release`, undefined, builder, "builder-live-2");
-  await expect(page.locator(".flow-callout", { hasText: `builder let go of ${again.key}` })).toBeVisible();
+  await expect(token(again.key)).toHaveAttribute("aria-label", `${again.key} Recount the ledger, waiting`);
   await v1("POST", `/v1/tasks/${again.key}/drop`, undefined);
-  await expect(trail.getByRole("listitem").first()).toContainText(`ada dropped ${again.key}`);
-
-  // Opened afresh, the trail starts from the Project's recent moves, read from /v1/activity.
-  await page.reload();
-  await expect(trail.getByRole("listitem").first()).toContainText(`ada dropped ${again.key}`);
-  await expect(trail.getByRole("listitem").filter({ hasText: `ada filed ${filed.key} at Build` })).toHaveCount(1);
-  // Filed, picked up, advanced, picked up, completed; filed, picked up, let go of, dropped.
-  await expect(trail.getByRole("listitem")).toHaveCount(9);
-  await page.screenshot({ path: `${liveShots}8-reopened-dark.png` });
+  await expect(token(again.key)).toHaveCount(0);
 
   expect(errors).toEqual([]);
   await ctx.close();
@@ -245,28 +239,22 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await v1("PUT", "/v1/members/ada/skills/engineer");
 
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflow");
-  // The taker's mark, under the Task's chip (which carries the holder's mark too).
-  const mark = node(page, "QA").getByRole("img", { name: "qa-bot (agent), working" }).last();
+  const line = page.getByRole("region", { name: "Workflow", exact: true });
+  // The taker's mark under QA's name, ringed while it works there; the Task's token carries it too.
+  const mark = line.locator('[data-head="QA"]').getByRole("img", { name: "qa-bot (agent), working" });
   await expect(mark).toHaveAttribute("data-working", "running");
   await expect(mark).toHaveAttribute("data-kind", "agent");
+  await expect(line.locator(`button[data-task="${filed.key}"]`)).toHaveAttribute("aria-label", `${filed.key} Test the ledger, held by qa-bot (agent)`);
   const spin = () => mark.evaluate((el) => getComputedStyle(el).getPropertyValue("--spin"));
   const first = await spin();
   await page.waitForTimeout(300);
   expect(await spin()).not.toBe(first);
 
   // ada, a human not working there: a plain ring, still.
-  const ada = node(page, "Make").getByRole("img", { name: "ada" });
+  const ada = line.locator('[data-head="Make"]').getByRole("img", { name: "ada" });
   await expect(ada).toHaveAttribute("data-kind", "human");
   await expect(ada).not.toHaveAttribute("data-working");
   await page.screenshot({ path: `${shots}9-01-marks.png`, animations: "disabled" });
-
-  // The Step's peek lists the Task and its worker.
-  // On its name: the middle of the node is its Tasks' chips, each opening its Task.
-  await node(page, "QA").getByText("QA", { exact: true }).click();
-  const peek = page.getByRole("dialog", { name: "Step QA" });
-  await expect(peek.getByRole("list", { name: "Tasks at QA" })).toContainText("Test the ledger");
-  await expect(peek.getByRole("list", { name: "Takers at QA" })).toContainText("Working here");
-  await page.screenshot({ path: `${shots}9-02-step-peek.png`, animations: "disabled" });
 
   expect(errors).toEqual([]);
   await ctx.close();

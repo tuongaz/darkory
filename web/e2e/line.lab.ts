@@ -73,7 +73,7 @@ for (const scheme of ["light", "dark"] as const) {
 
       // r2-scope-3, -5, -8 (and -7 on a phone): the Task pages.
       await page.goto("/tasks/MAIN-7");
-      await expect(page.getByRole("region", { name: "Subtasks, line" }).locator('[data-task="MAIN-10"]')).toBeVisible();
+      await expect(page.getByRole("region", { name: "Subtask line" }).locator('[data-task="MAIN-10"]')).toBeVisible();
       await page.waitForTimeout(500);
       await shot(page, `task-parent-${tag}`);
       await page.goto("/tasks/MAIN-9");

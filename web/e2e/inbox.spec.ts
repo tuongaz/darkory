@@ -129,7 +129,7 @@ test("a question the agent aims at the human lands in the Inbox, live, with its 
 
   // Scenario 5, from a Subtask: the question is a Subtask of the same Parent, and blocks the cart page.
   expect(question.task.parent_id).toBe(checkout.id);
-  await page.goto(`${base()}/tasks/${checkout.key}`);
+  await page.goto(`${base()}/tasks/${checkout.key}?view=list`);
   const subtasks = page.getByRole("region", { name: "Subtasks" });
   await expect(subtasks.getByRole("link", { name: /Stripe keys for staging\?/ })).toBeVisible();
   await expect(subtasks.getByRole("link", { name: /Build the cart page/ })).toContainText("Blocked");

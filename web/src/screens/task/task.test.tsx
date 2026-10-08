@@ -213,7 +213,7 @@ describe("a Parent's page", () => {
     const first = renderApp("/tasks/WEB-3");
     const section = await screen.findByRole("region", { name: "Subtasks" });
     expect(section).toHaveTextContent("1/3 done");
-    const line = await within(section).findByRole("region", { name: "Subtasks, line" });
+    const line = await within(section).findByRole("region", { name: "Subtask line" });
     // builder works WEB-4 and WEB-5 at their Steps; WEB-6 ended Done and stands green at Done.
     await waitFor(() => expect(line.querySelector('button[data-task="WEB-4"]')).toHaveAccessibleName(/^WEB-4 Payment form, held by builder/));
     expect(line.querySelector('button[data-task="WEB-6"]')).toHaveAttribute("data-state", "done");

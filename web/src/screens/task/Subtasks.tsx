@@ -143,7 +143,7 @@ function ParentLine({ detail }: { detail: TaskDetail }) {
   const s = data.scoped;
   return (
     <WorkflowLine
-      label="Subtasks, line"
+      label="Subtask line"
       className="rounded-md border px-2 pt-2 pb-1"
       workflow={data.facts}
       tasks={s.drawn}

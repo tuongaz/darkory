@@ -157,7 +157,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const hidden = props.hidden?.get(id) ?? 0;
     if (id === DONE_STATION) {
       return (
-        <div key={id} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: props.compactHeads || props.fold ? h.headY + 20 : h.headY }}>
+        <div key={id} data-head="Done" className="absolute -translate-x-1/2 text-center" style={{ left: x, top: props.compactHeads || props.fold ? h.headY + 20 : h.headY }}>
           <div className={cn("text-[13.5px] font-semibold whitespace-nowrap", density === "beads" && "flex h-[30px] items-end justify-center text-[12.5px]")}>Done</div>
           {!props.compactHeads && density === "tokens" && <div className="mt-1 flex h-[22px] items-center justify-center text-[11.5px] text-muted-foreground">{props.doneToday !== undefined ? `${props.doneToday} today` : ""}</div>}
         </div>
@@ -168,7 +168,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const count = columns.get(id)?.length ?? 0;
     if (props.compactHeads || props.fold) {
       return (
-        <div key={id} className="absolute -translate-x-1/2 text-center whitespace-nowrap" style={{ left: x, top: h.headY + 20 }}>
+        <div key={id} data-head={s.name} className="absolute -translate-x-1/2 text-center whitespace-nowrap" style={{ left: x, top: h.headY + 20 }}>
           <span className="text-[13px] font-semibold">{s.name}</span>
           {hidden > 0 && <span className="ml-1 text-[11px] text-muted-foreground">+{hidden}</span>}
         </div>
@@ -183,6 +183,7 @@ export function HorizontalLine(props: HorizontalProps) {
           aria-label={`${s.name}: ${count} ${count === 1 ? "Task" : "Tasks"}`}
           onClick={() => setOpenStep((o) => (o === id ? null : id))}
           onMouseEnter={() => count > 0 && setOpenStep(id)}
+          data-head={s.name}
           className="absolute w-[84px] -translate-x-1/2 text-center"
           style={{ left: x, top: h.headY }}
         >
@@ -196,7 +197,7 @@ export function HorizontalLine(props: HorizontalProps) {
     }
     const takers = s.takers ?? [];
     return (
-      <div key={id} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: h.headY }}>
+      <div key={id} data-head={s.name} className="absolute -translate-x-1/2 text-center" style={{ left: x, top: h.headY }}>
         <div className="text-[13.5px] font-semibold whitespace-nowrap">
           {s.name}
           {s.skill && <span className="ml-1 font-mono text-[11px] font-normal text-muted-foreground">{s.skill.name}</span>}
@@ -431,14 +432,19 @@ export function HorizontalLine(props: HorizontalProps) {
     const col = all2.filter((b) => Math.abs(b.x + b.w / 2 - (r.x + r.w / 2)) < 40);
     const colRight = Math.max(...col.map((b) => b.x + b.w), r.x + r.w);
     const colLeft = Math.min(...col.map((b) => b.x), r.x);
+    // Clear of the tokens to its right where it can be, and of the line and its loops below.
+    const rightTokens = all2.filter((b) => b.x > colRight);
+    const underRight = rightTokens.length ? Math.max(...rightTokens.map((b) => b.y + b.h)) + 12 : r.y;
+    const lineStrip: Box = { x: 0, y: h.lineY - 8, w: width, h: 16 + (t.maxUnder ? 20 + t.maxUnder * 22 : 0) };
     return placeCallout(
       [
+        { x: colRight + 40, y: Math.min(underRight, h.lineY - ch - 6), w, h: ch },
         { x: colRight + 40, y: h.lineY - ch - 14, w, h: ch },
         { x: colLeft - w - 40, y: h.lineY - ch - 14, w, h: ch },
         { x: colRight + 40, y: r.y, w, h: ch },
         { x: r.x, y: h.lineY + 30, w, h: ch },
       ],
-      [...all2, ...avoid],
+      [...all2, ...avoid, ...avoid, lineStrip],
       { w: width, h: h.height },
     );
   })();
@@ -621,7 +627,7 @@ export function HorizontalLine(props: HorizontalProps) {
           ref={calloutRef}
           role="dialog"
           aria-label={`${chain.task.key} Blocking`}
-          className="absolute z-20 w-max max-w-[min(560px,calc(100%-16px))] rounded-lg border bg-popover p-3 text-popover-foreground shadow-pop"
+          className="absolute z-20 w-max max-w-[min(560px,calc(100%-16px))] rounded-lg border bg-popover px-3 py-2.5 text-popover-foreground shadow-pop"
           style={callout ? { left: callout.x, top: callout.y } : { left: 8, top: 8, visibility: "hidden" }}
         >
           <ChainCallout chain={chain} me={props.me.id} takeable={props.me.takeable} action={props.actionFor?.(chain.first)} onOpen={props.onOpenTask} now={now} />

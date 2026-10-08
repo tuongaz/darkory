@@ -57,7 +57,7 @@ export function ChainCallout({
   const when = unblocksWhen(chain);
   const blocked = t.blockers.length > 0;
   return (
-    <div className="flex flex-col gap-2 text-xs">
+    <div className="flex flex-col gap-1.5 text-xs">
       <div className="flex min-w-0 items-center gap-2">
         <span className="font-mono text-[11px] text-muted-foreground">{t.key}</span>
         <span className="min-w-0 truncate text-[13px] font-semibold">{t.title}</span>
