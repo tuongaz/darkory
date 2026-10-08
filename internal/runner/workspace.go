@@ -312,6 +312,64 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 	return addWorktree(ctx, repo, c.Dir, c.Branch)
 }
 
+// mergeWait is how long a session's start waits for the merges of its Parent's done Subtasks.
+const mergeWait = 30 * time.Second
+
+// awaitMerges waits, at most mergeWait, until the branch of each Subtask of parent that ended
+// Done is in the Parent's branch, in each Workspace the runner merges itself, or the merger has
+// tried it and could not. A Subtask a sibling blocked is takeable the moment the sibling ends,
+// while the merger may not yet have merged it; started then, the session's branch would start
+// from the Parent's branch without the very work it waited for.
+func (r *Runner) awaitMerges(ctx context.Context, task string, parent *ParentInfo, wss []Workspace) {
+	if parent == nil || len(parent.Done) == 0 {
+		return
+	}
+	pending := func() []string {
+		var out []string
+		for _, ws := range wss {
+			if ws.Mode == ModePullRequest {
+				continue
+			}
+			base := ParentBranch(parent.Key)
+			for _, key := range parent.Done {
+				r.mu.Lock()
+				tried := r.tried[key]
+				r.mu.Unlock()
+				if tried {
+					continue
+				}
+				made, err := r.ledger.find(ws.Path, func(m Made) bool { return m.Task == key && strings.HasPrefix(m.Branch, taskPrefix(key)) })
+				if err != nil || len(made) == 0 {
+					continue
+				}
+				if branchExists(ctx, ws.Path, base) && isAncestor(ctx, ws.Path, "refs/heads/"+made[0].Branch, "refs/heads/"+base) {
+					continue
+				}
+				out = append(out, key)
+			}
+		}
+		return out
+	}
+	waiting := pending()
+	if len(waiting) == 0 {
+		return
+	}
+	r.log.Info("waiting for done Subtasks to merge into the Parent's branch", "task", task, "parent", parent.Key, "subtasks", waiting)
+	deadline := time.Now().Add(mergeWait)
+	for len(waiting) > 0 {
+		if time.Now().After(deadline) {
+			r.log.Warn("done Subtasks are not in the Parent's branch yet; starting without them", "task", task, "subtasks", waiting)
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(250 * time.Millisecond):
+		}
+		waiting = pending()
+	}
+}
+
 // catchUp brings a Task branch an earlier session left up to its base, in the checkout c: a Task
 // released and taken again later, such as one that waited on a question, or one sent back, would
 // otherwise be worked on its base as it was, without the work merged into it since (a sibling

@@ -229,6 +229,7 @@ func (s *session) start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("reading the Task's Workspaces: %w", err)
 	}
+	r.awaitMerges(ctx, s.key, parent, wss)
 	checkouts, err := r.Prepare(ctx, s.key, parentKey(s.d), PlanCheckouts(r.cfg.Data, s.key, s.d.Task.Title, parentKey(s.d), wss))
 	if err != nil {
 		return fmt.Errorf("preparing the Workspaces: %w", err)

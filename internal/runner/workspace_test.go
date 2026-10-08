@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSlug(t *testing.T) {
@@ -274,6 +275,51 @@ func TestPrepareBringsATaskBranchUpToItsBase(t *testing.T) {
 		t.Fatalf("the worktree after a conflicting merge: %q", st)
 	}
 	has(c, "a.txt", "mine\n")
+}
+
+// A session of a Subtask starts once its done siblings are in the Parent's branch: it waits for
+// a merge still to come, and not for one the merger tried and could not make.
+func TestAwaitMergesWaitsForDoneSiblings(t *testing.T) {
+	repo := gitRepo(t)
+	r := newTestRunner(t)
+	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
+	ctx := t.Context()
+	sibling := func(task, title string) string {
+		t.Helper()
+		got, err := r.Prepare(ctx, task, "WEB-1", PlanCheckouts(r.cfg.Data, task, title, "WEB-1", []Workspace{ws}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		commitFile(t, got[0].Dir, task+".txt", task+"\n", task)
+		return got[0].Branch
+	}
+	keys := sibling("WEB-2", "Keys")
+	parent := &ParentInfo{Key: "WEB-1", Done: []string{"WEB-2"}}
+
+	done := make(chan struct{})
+	go func() { r.awaitMerges(ctx, "WEB-3", parent, []Workspace{ws}); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("started before the done sibling merged")
+	case <-time.After(600 * time.Millisecond):
+	}
+	if res, err := mergeBranch(ctx, repo, keys, "web-1", "merge WEB-2"); err != nil || res.Conflict != "" {
+		t.Fatalf("merge: %+v, %v", res, err)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("still waiting after the merge")
+	}
+
+	// A sibling whose merge the merger tried, such as one that conflicted, is not waited for.
+	sibling("WEB-4", "Limits")
+	r.tried["WEB-4"] = true
+	start := time.Now()
+	r.awaitMerges(ctx, "WEB-5", &ParentInfo{Key: "WEB-1", Done: []string{"WEB-2", "WEB-4"}}, []Workspace{ws})
+	if waited := time.Since(start); waited > time.Second {
+		t.Fatalf("waited %v for a merge already tried", waited)
+	}
 }
 
 // A ledger written before model v2 names a Feature's branch feature/<KEY> under "Feature": it

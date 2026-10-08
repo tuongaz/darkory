@@ -164,6 +164,8 @@ type Runner struct {
 	skills map[string]client.Skill
 	// repos are the locks on the repositories the runner changes, by path.
 	repos map[string]*sync.Mutex
+	// tried are the Tasks whose branches the merger has tried to merge, by key, merged or not.
+	tried map[string]bool
 }
 
 // New returns a Runner; nothing runs until Run.
@@ -185,7 +187,7 @@ func New(cfg Config) (*Runner, error) {
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
 		sessions: map[string]*session{}, merges: make(chan client.Activity, 1024), kept: make(chan struct{}, 1), skills: map[string]client.Skill{},
-		repos: map[string]*sync.Mutex{}}
+		repos: map[string]*sync.Mutex{}, tried: map[string]bool{}}
 	if r.host == nil {
 		switch cfg.Tmux {
 		case "", "auto":

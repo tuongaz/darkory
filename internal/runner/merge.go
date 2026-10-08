@@ -225,6 +225,11 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 		how = "; " + unreviewed
 	}
 	key := d.Task.Key
+	defer func() {
+		r.mu.Lock()
+		r.tried[key] = true
+		r.mu.Unlock()
+	}()
 	parent, err := rec.Parent(ctx, d)
 	if err != nil {
 		r.logError(ctx, "reading a done Task's Parent", "task", key, "err", err)

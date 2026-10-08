@@ -66,6 +66,9 @@ type ParentInfo struct {
 	Owner string
 	// Open: the Parent has not ended.
 	Open bool
+	// Done are the keys of its Subtasks that ended Done with work to merge: worked ones and
+	// Acceptances.
+	Done []string
 }
 
 // Record is the part of /v1 the runner uses, as one Member in one Session.
@@ -197,6 +200,11 @@ func (r *conn) Parent(ctx context.Context, d *client.TaskDetail) (*ParentInfo, e
 	}
 	t := res.JSON200.Task
 	p := &ParentInfo{ID: t.ID, Key: t.Key, Title: t.Title, Description: t.Description, OwnerID: t.OwnerID, Open: t.State == client.TaskStateOpen}
+	for _, sub := range res.JSON200.Subtasks {
+		if sub.State == client.TaskStateDone && merged(sub.Kind) {
+			p.Done = append(p.Done, sub.Key)
+		}
+	}
 	m, err := r.c.GetMemberWithResponse(ctx, p.OwnerID)
 	if err := remote.Check(m, err, http.StatusOK); err != nil {
 		return nil, err
