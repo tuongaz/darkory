@@ -26,9 +26,6 @@ import (
 // 7), a Task standing alone and a Parent with Auto-complete (4), a merge conflict (9), darkory
 // runner beside serve --runner=off (12), and a session in tmux stopped by an admin, when tmux is
 // installed.
-//
-// model v2: the Runner still names a Parent's branch feature/<KEY> and merges it when the Parent
-// completes, as it did at Ship; M3 reworks branches and merges on Parents, and these tests with it.
 
 // runnerTimings make a session take a second or two.
 // The Claims' timeout leaves a loaded machine room for late Heartbeats; a hung session still lapses
@@ -259,21 +256,6 @@ func (ri *runnerInstall) sessionLog(key, agent string) string {
 	return logs.String()
 }
 
-// parentEvidence downloads the last Evidence named filename on Parent key itself.
-func (ri *runnerInstall) parentEvidence(key, filename string) string {
-	ri.t.Helper()
-	var id string
-	for _, e := range ri.task(key).Evidence {
-		if e.Filename == filename {
-			id = e.ID
-		}
-	}
-	if id == "" {
-		return ""
-	}
-	return ri.ada.ok("evidence", "get", id, "-o", "-")
-}
-
 func names(list []client.Evidence) []string {
 	var out []string
 	for _, e := range list {
@@ -292,7 +274,7 @@ func notes(d client.TaskDetail) string {
 
 func done(d client.TaskDetail) bool { return d.Task.State == client.TaskStateDone }
 
-// Scenarios 2, 3, 4 and 11: the planner's session breaks a Task down on feature/MAIN-1 into two
+// Scenarios 2, 3, 4 and 11: the planner's session breaks a Task down on a branch from main-1 into two
 // Subtasks that each name both Workspaces; two builders work them at once, each in one directory
 // with both checkouts, commit, attach a test log and advance to Review; the reviewer advances each
 // into Done and the Runner merges its branch into the Parent's in both repositories; the Owner's
@@ -308,17 +290,18 @@ func TestRunnerWorksAParent(t *testing.T) {
 	ada.ok("file", "--project", "MAIN", "--title", "Checkout", "--breakdown")
 
 	ri.wait(15*time.Second, "the Breakdown done", func() bool { return done(ri.task("MAIN-2")) })
-	if !gitOK(ri.repo, "rev-parse", "--verify", "feature/MAIN-1") {
-		t.Fatal("no feature/MAIN-1 after the Break down")
+	if !gitOK(ri.repo, "rev-parse", "--verify", "refs/heads/main-1") {
+		t.Fatal("no main-1 after the Break down")
 	}
 	ri.wait(60*time.Second, "MAIN-3 and MAIN-4 done", func() bool { return done(ri.task("MAIN-3")) && done(ri.task("MAIN-4")) })
 	for _, key := range []string{"MAIN-3", "MAIN-4"} {
-		ri.wait(15*time.Second, key+"'s merge noted", func() bool { return strings.Contains(notes(ri.task(key)), "Merged "+key+"/") })
+		branch := strings.ToLower(key) + "-"
+		ri.wait(15*time.Second, key+"'s merge noted", func() bool { return strings.Contains(notes(ri.task(key)), "Merged "+branch) })
 		d := ri.task(key)
-		if got := repoGit(t, ri.repo, "show", "feature/MAIN-1:fakeagent-"+key+".txt"); !strings.Contains(got, key+" worked by fakeagent") {
-			t.Fatalf("feature/MAIN-1 holds %q for %s", got, key)
+		if got := repoGit(t, ri.repo, "show", "main-1:fakeagent-"+key+".txt"); !strings.Contains(got, key+" worked by fakeagent") {
+			t.Fatalf("main-1 holds %q for %s", got, key)
 		}
-		if merged := notes(d); !strings.Contains(merged, "into feature/MAIN-1 at") {
+		if merged := notes(d); !strings.Contains(merged, "into main-1 at") {
 			t.Errorf("%s's merge Note:\n%s", key, merged)
 		}
 		if strings.Count(notes(d), "fakeagent: done") != 2 || !slices.Contains(names(d.Evidence), "test-"+key+".log") {
@@ -326,7 +309,7 @@ func TestRunnerWorksAParent(t *testing.T) {
 		}
 		// Both Workspaces were checked out side by side in the Task's directory, on its branch.
 		for _, repo := range []string{ri.repo, repo2} {
-			if repoGit(t, repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/"+key+"/") == "" {
+			if repoGit(t, repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/"+branch+"*") == "" {
 				t.Errorf("no %s branch in %s", key, repo)
 			}
 		}
@@ -344,16 +327,14 @@ func TestRunnerWorksAParent(t *testing.T) {
 	}
 	t.Logf("MAIN-3 and MAIN-4 were built by %v", holders)
 
-	// The Owner's Complete lands feature/MAIN-1 on main, in the repository's own checkout.
+	// The Owner's Complete lands main-1 on main, in the repository's own checkout, and a Note on the
+	// Parent says so.
 	ada.ok("complete", "MAIN-1")
-	ri.wait(15*time.Second, "the Parent's merge recorded", func() bool { return ri.parentEvidence("MAIN-1", "merge-MAIN-1.txt") != "" })
+	ri.wait(15*time.Second, "the Parent's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-1")), "Merged main-1 into main at") })
 	for _, key := range []string{"MAIN-3", "MAIN-4"} {
 		if _, err := os.Stat(filepath.Join(ri.repo, "fakeagent-"+key+".txt")); err != nil {
 			t.Errorf("main's checkout lacks %s's work: %v", key, err)
 		}
-	}
-	if got := ri.parentEvidence("MAIN-1", "merge-MAIN-1.txt"); !strings.Contains(got, "Merged feature/MAIN-1 into main at") {
-		t.Errorf("the Parent's merge record: %q", got)
 	}
 	// The Retrospective the Complete filed is worked by retro, and every worktree goes with its
 	// Task.
@@ -458,23 +439,20 @@ func TestRunnerStandaloneAndAutoComplete(t *testing.T) {
 	ada := ri.ada
 	ada.ok("file", "--project", "MAIN", "--title", "Fix the typo")
 	ri.wait(30*time.Second, "the Task standing alone done", func() bool { return done(ri.task("MAIN-1")) })
-	ri.wait(15*time.Second, "MAIN-1's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-1")), "Merged MAIN-1/") })
+	ri.wait(15*time.Second, "MAIN-1's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-1")), "Merged main-1-") })
 	if got := notes(ri.task("MAIN-1")); !strings.Contains(got, "into main at") {
 		t.Fatalf("the merge's Note:\n%s", got)
 	}
 	if b, err := os.ReadFile(filepath.Join(ri.repo, "fakeagent-MAIN-1.txt")); err != nil || !strings.Contains(string(b), "MAIN-1") {
 		t.Fatalf("main's checkout after the Task standing alone: %q, %v", b, err)
 	}
-	if gitOK(ri.repo, "rev-parse", "--verify", "feature/MAIN-1") {
+	if gitOK(ri.repo, "rev-parse", "--verify", "refs/heads/main-1") {
 		t.Fatal("a Task standing alone got a Parent's branch")
 	}
 
 	ada.ok("file", "--project", "MAIN", "--title", "Checkout", "--breakdown", "--auto-complete")
 	ri.wait(60*time.Second, "the Parent completed itself", func() bool { return done(ri.task("MAIN-2")) })
-	ri.wait(15*time.Second, "its merge recorded", func() bool { return ri.parentEvidence("MAIN-2", "merge-MAIN-2.txt") != "" })
-	if got := ri.parentEvidence("MAIN-2", "merge-MAIN-2.txt"); !strings.Contains(got, "Merged feature/MAIN-2 into main at") {
-		t.Fatalf("the Parent's merge: %q", got)
-	}
+	ri.wait(15*time.Second, "its merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-2")), "Merged main-2 into main at") })
 	if _, err := os.Stat(filepath.Join(ri.repo, "fakeagent-MAIN-4.txt")); err != nil {
 		t.Fatalf("main lacks MAIN-4's work: %v", err)
 	}
@@ -490,7 +468,7 @@ func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
 	})
 	ri.ada.ok("file", "--project", "MAIN", "--title", "Fix the typo")
 	ri.wait(30*time.Second, "the Task done", func() bool { return done(ri.task("MAIN-1")) })
-	ri.wait(15*time.Second, "MAIN-1's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-1")), "Merged MAIN-1/") })
+	ri.wait(15*time.Second, "MAIN-1's merge noted", func() bool { return strings.Contains(notes(ri.task("MAIN-1")), "Merged main-1-") })
 	d := ri.task("MAIN-1")
 	if got := notes(d); !strings.Contains(got, " into main at ") || !strings.Contains(got, "("+ri.ws+"); completed by builder under engineer, without review.") {
 		t.Fatalf("the merge's Note:\n%s", got)
@@ -504,8 +482,8 @@ func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
 }
 
 // Scenario 9: two Subtasks of one Parent change the same file; the second review's merge
-// conflicts, changes nothing, and files a Subtask at the builder's Step to resolve it, the
-// conflict in its description.
+// conflicts, changes nothing, leaves its Task done with a Note, and files a Subtask at the Step
+// its builder worked at to resolve it, the conflict in its description.
 func TestRunnerMergeConflict(t *testing.T) {
 	ri := newRunnerInstall(t, func(ri *runnerInstall) {
 		ri.fake("planner", "advance", "FAKEAGENT_BREAKDOWN=:Part A;:Part B")
@@ -517,7 +495,7 @@ func TestRunnerMergeConflict(t *testing.T) {
 		var list client.TaskList
 		ri.ada.json(&list, "tasks", "--parent", "MAIN-1")
 		for _, x := range list.Items {
-			if strings.HasPrefix(x.Title, "Resolve the merge of MAIN-") {
+			if strings.HasPrefix(x.Title, "Resolve the merge of main-") {
 				resolve = x
 				return true
 			}
@@ -525,8 +503,9 @@ func TestRunnerMergeConflict(t *testing.T) {
 		return false
 	})
 	conflicted := strings.Fields(resolve.Title)[4] // Resolve the merge of <branch> into <target>
-	key := strings.SplitN(conflicted, "/", 2)[0]
-	if !strings.HasSuffix(resolve.Title, " into feature/MAIN-1") || !strings.Contains(resolve.Description, "shared.txt") ||
+	parts := strings.SplitN(conflicted, "-", 3)
+	key := strings.ToUpper(parts[0] + "-" + parts[1])
+	if !strings.HasSuffix(resolve.Title, " into main-1") || !strings.Contains(resolve.Description, "shared.txt") ||
 		!strings.Contains(resolve.Description, "CONFLICT") {
 		t.Fatalf("the resolving Task: %q\n%s", resolve.Title, resolve.Description)
 	}
@@ -536,10 +515,13 @@ func TestRunnerMergeConflict(t *testing.T) {
 		t.Fatalf("the resolving Task needs %s", skill.Skill.Name)
 	}
 	ri.wait(15*time.Second, key+"'s conflict noted", func() bool {
-		return strings.Contains(notes(ri.task(key)), "into feature/MAIN-1 conflicted, so nothing was merged")
+		return strings.Contains(notes(ri.task(key)), "into main-1 conflicted, so nothing was merged. Filed "+resolve.Key+" at Build, where it was built, to resolve it.")
 	})
-	if gitOK(ri.repo, "merge-base", "--is-ancestor", conflicted, "feature/MAIN-1") {
-		t.Fatalf("%s went into feature/MAIN-1 despite the conflict", conflicted)
+	if gitOK(ri.repo, "merge-base", "--is-ancestor", conflicted, "main-1") {
+		t.Fatalf("%s went into main-1 despite the conflict", conflicted)
+	}
+	if !done(ri.task(key)) {
+		t.Fatalf("%s did not stay done", key)
 	}
 }
 
@@ -573,7 +555,7 @@ func TestRunnerAlone(t *testing.T) {
 	ada.ok("file", "--project", "MAIN", "--title", "Fix the typo")
 	ri.wait(30*time.Second, "the Task done and merged", func() bool {
 		d := ri.task("MAIN-1")
-		return done(d) && strings.Contains(notes(d), "Merged MAIN-1/")
+		return done(d) && strings.Contains(notes(d), "Merged main-1-")
 	})
 	if _, err := os.Stat(filepath.Join(ri.repo, "fakeagent-MAIN-1.txt")); err != nil {
 		t.Fatalf("main lacks MAIN-1's work: %v", err)
