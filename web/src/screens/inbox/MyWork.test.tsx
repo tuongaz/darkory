@@ -43,6 +43,8 @@ describe("My work", () => {
     const owned = await section("You own");
     expect(owned.querySelectorAll("[data-task]")).toHaveLength(2);
     expect(row(owned, "WEB-1")).toHaveTextContent("3 of 5 done");
+    // Said once, in words: not "3/5" beside it as well.
+    expect(row(owned, "WEB-1")).not.toHaveTextContent("3/5");
     expect(row(owned, "WEB-1")).toHaveTextContent("1 working");
     expect(within(row(owned, "WEB-1")).getAllByRole("img", { name: "3 of 5 done" }).length).toBeGreaterThan(0);
     expect(within(row(owned, "OPS-20")).getByTitle("Ops")).toBeInTheDocument();

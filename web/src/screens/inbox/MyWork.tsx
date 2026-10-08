@@ -110,7 +110,7 @@ export function MyWorkPage() {
   );
 }
 
-/** A Parent's Subtasks as a bar: done, worked, open and not worked, out of all of them. */
+/** A Parent's Subtasks as a bar: done, worked, open and not worked, out of all of them; the row says the numbers in words beside it. */
 function ProgressBar({ task }: { task: Task }) {
   const c = task.subtask_counts;
   if (!c) return null;
@@ -123,7 +123,6 @@ function ProgressBar({ task }: { task: Task }) {
         <i className="bg-state-claimed" style={{ width: share(c.working) }} />
         <i className="bg-muted-foreground/35" style={{ width: share(c.open - c.working) }} />
       </span>
-      <span className="tabular-nums">{`${c.done}/${total}`}</span>
     </span>
   );
 }
