@@ -12,8 +12,8 @@ import (
 	"github.com/tuongaz/darkory/internal/cli"
 )
 
-// darkory join needs a Task, and says so when the Runner runs no session on it.
-func TestJoinNeedsASession(t *testing.T) {
+// darkory join needs a Task, and says so when the Runner runs no Shift on it.
+func TestJoinNeedsAShift(t *testing.T) {
 	var stderr bytes.Buffer
 	var ex *cli.ExitError
 	if err := run([]string{"join"}, &bytes.Buffer{}, &stderr); !errors.As(err, &ex) || ex.Code != cli.ExitUsage {
@@ -24,7 +24,7 @@ func TestJoinNeedsASession(t *testing.T) {
 	}
 	stderr.Reset()
 	if err := run([]string{"join", "WEB-12", "--data", t.TempDir()}, &bytes.Buffer{}, &stderr); !errors.As(err, &ex) || ex.Code != cli.ExitFailed ||
-		!strings.Contains(stderr.String(), "no session dk-WEB-12") {
+		!strings.Contains(stderr.String(), "no Shift runs as tmux session dk-WEB-12") {
 		t.Fatalf("no session: %v, %s", err, stderr.String())
 	}
 }
