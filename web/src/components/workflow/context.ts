@@ -8,6 +8,8 @@ export type CanvasActions = {
   onAdd?: (from: string) => void;
   /** A Connector's name was clicked: select it, as clicking its line does. */
   onSelectConnector?: (id: string) => void;
+  /** Live, a click on a step opens it. */
+  opens?: boolean;
 };
 
 export const CanvasContext = createContext<CanvasActions>({ mode: "live" });

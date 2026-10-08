@@ -1,0 +1,239 @@
+import type { Page, Route } from "@playwright/test";
+
+// A mocked /v1 for the Workflow screens under `vite dev` (`npm run lab`): WEB with Sacca's
+// Workflow (a QA and an Acceptance step beside the default's), its Members human and agent, Tasks
+// waiting and worked at its Steps, and Runner sessions in each state. `PUT …/workflow` answers
+// with the body as the record, so the editing canvas can be driven and shot.
+
+const at = "2026-10-08T09:00:00Z";
+const human = (id: string, name: string, admin = false) => ({ id, name, kind: "human", admin, created_at: at });
+const agent = (id: string, name: string) => ({ id, name, kind: "agent", admin: false, created_at: at, agent: { command: "claude", args: [], model: "claude-sonnet-5-5", env: {}, unattended: true, paused: false } });
+
+export const members = [
+  human("m-ada", "ada", true),
+  human("m-mai", "Mai Tran"),
+  agent("m-planner", "planner"),
+  agent("m-builder-1", "builder-1"),
+  agent("m-builder-2", "builder-2"),
+  agent("m-qa", "qa-bot"),
+  agent("m-reviewer", "reviewer"),
+  agent("m-retro", "retro"),
+];
+const m = (id: string) => {
+  const x = members.find((y) => y.id === id)!;
+  return { id: x.id, name: x.name, kind: x.kind };
+};
+
+const skill = (name: string, builtin = false) => ({ id: `s-${name}`, name, kind: "generic", builtin, current_version: 1, created_at: at });
+export const skills = [
+  skill("acceptance", true),
+  skill("breakdown", true),
+  skill("engineer"),
+  skill("qa"),
+  skill("retro", true),
+  skill("review"),
+  skill("skill-review", true),
+  skill("docs"),
+];
+
+export const project = { id: "p-web", key: "WEB", name: "Web", auto_complete: true, acceptance: true, created_at: at };
+
+type StepRec = {
+  id: string;
+  name: string;
+  skill_id?: string;
+  position: number;
+  x: number;
+  y: number;
+  tasks: number;
+  working: number;
+  takers: { id: string; name: string; kind: string }[];
+  median_ms?: number;
+};
+type ConnectorRec = { id: string; from_step_id: string; to_step_id?: string; name: string; position: number };
+
+const st = (id: string, name: string, position: number, x: number, y: number, skillName: string | undefined, takers: string[], tasks: number, working: number, median?: number): StepRec => ({
+  id,
+  name,
+  skill_id: skillName ? `s-${skillName}` : undefined,
+  position,
+  x,
+  y,
+  tasks,
+  working,
+  takers: takers.map(m),
+  median_ms: median,
+});
+
+export function initialWorkflow(): { project_id: string; steps: StepRec[]; connectors: ConnectorRec[] } {
+  return {
+    project_id: project.id,
+    steps: [
+      st("st-backlog", "Backlog", 1, 0, 0, undefined, [], 3, 0),
+      st("st-plan", "Plan", 2, 0, 128, "breakdown", ["m-planner"], 1, 1, 25 * 60_000),
+      st("st-build", "Build", 3, 0, 256, "engineer", ["m-builder-1", "m-builder-2", "m-mai"], 4, 2, 3 * 3_600_000),
+      st("st-qa", "QA", 4, 448, 256, "qa", ["m-qa"], 1, 1, 50 * 60_000),
+      st("st-review", "Review", 5, 896, 256, "review", ["m-reviewer", "m-ada"], 2, 0, 70 * 60_000),
+      st("st-acceptance", "Acceptance", 6, 448, 416, "acceptance", [], 1, 0),
+      st("st-retro", "Retro", 7, 0, 576, "retro", ["m-retro"], 0, 0, 40 * 60_000),
+      st("st-skill-review", "Skill review", 8, 448, 576, "skill-review", ["m-reviewer", "m-ada"], 0, 0),
+    ],
+    connectors: [
+      { id: "c-plan-done", from_step_id: "st-plan", name: "done", position: 1 },
+      { id: "c-build-qa", from_step_id: "st-build", to_step_id: "st-qa", name: "pass", position: 1 },
+      { id: "c-qa-review", from_step_id: "st-qa", to_step_id: "st-review", name: "pass", position: 1 },
+      { id: "c-qa-build", from_step_id: "st-qa", to_step_id: "st-build", name: "fail", position: 2 },
+      { id: "c-review-done", from_step_id: "st-review", name: "pass", position: 1 },
+      { id: "c-review-build", from_step_id: "st-review", to_step_id: "st-build", name: "needs changes", position: 2 },
+      { id: "c-acceptance-done", from_step_id: "st-acceptance", name: "pass", position: 1 },
+      { id: "c-acceptance-build", from_step_id: "st-acceptance", to_step_id: "st-build", name: "fail", position: 2 },
+      { id: "c-retro-done", from_step_id: "st-retro", name: "done", position: 1 },
+      { id: "c-retro-skill-review", from_step_id: "st-retro", to_step_id: "st-skill-review", name: "propose", position: 2 },
+      { id: "c-skill-review-done", from_step_id: "st-skill-review", name: "publish", position: 1 },
+      { id: "c-skill-review-retro", from_step_id: "st-skill-review", to_step_id: "st-retro", name: "needs changes", position: 2 },
+    ],
+  };
+}
+
+const claim = (n: number, holder: string, minutesAgo = 20) => ({
+  id: `cl-${n}`,
+  task_id: `k-${n}`,
+  holder_id: holder,
+  session_id: `sess-${n}`,
+  heartbeat_timeout_seconds: 300,
+  started_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+  expires_at: new Date(Date.now() + 4 * 60_000).toISOString(),
+});
+
+const stepSkill: Record<string, string | undefined> = { "st-plan": "s-breakdown", "st-build": "s-engineer", "st-qa": "s-qa", "st-review": "s-review", "st-acceptance": "s-acceptance" };
+const task = (n: number, title: string, stepId: string, extra: Record<string, unknown> = {}) => ({
+  id: `k-${n}`,
+  key: `WEB-${n}`,
+  project_id: project.id,
+  kind: "work",
+  title,
+  description: "",
+  state: "open",
+  owner_id: "m-ada",
+  rank: n,
+  step_id: stepId,
+  step_since: at,
+  skill_id: stepSkill[stepId],
+  breakdown: false,
+  auto_complete: false,
+  acceptance: false,
+  blocked: false,
+  filed_by: "m-ada",
+  waiting_since: at,
+  created_at: at,
+  ...extra,
+});
+
+export const tasks = [
+  task(1, "Support emoji in names", "st-backlog"),
+  task(2, "Export the ledger as CSV", "st-backlog"),
+  task(3, "Dark mode for the invoice page", "st-backlog"),
+  task(4, "Break down: Checkout", "st-plan", { kind: "breakdown", claim: claim(4, "m-planner") }),
+  task(5, "Normalise names on input", "st-build", { claim: claim(5, "m-builder-1") }),
+  task(6, "Render emoji in the sidebar", "st-build", { claim: claim(6, "m-builder-2") }),
+  task(7, "Store names as NFC", "st-build"),
+  task(8, "Fix the avatar tint for two RTs", "st-build", { blocked: true }),
+  task(9, "Test emoji across the app", "st-qa", { claim: claim(9, "m-qa") }),
+  task(10, "Review the CSV export", "st-review"),
+  task(11, "Review the sidebar", "st-review"),
+  task(12, "Acceptance: Support emoji", "st-acceptance", { kind: "acceptance" }),
+];
+
+const session = (n: number, member: string, state: string) => ({
+  task_id: `k-${n}`,
+  member_id: member,
+  session_id: `sess-${n}`,
+  host: "mac-mini",
+  tmux: `dk-WEB-${n}`,
+  started_at: at,
+  state,
+  log_path: `/tmp/WEB-${n}.log`,
+});
+export const sessions = [session(4, "m-planner", "running"), session(5, "m-builder-1", "running"), session(6, "m-builder-2", "stalled"), session(9, "m-qa", "waiting")];
+
+type Body = {
+  steps: { id?: string; name: string; skill?: string; position: number; x?: number; y?: number }[];
+  connectors: { id?: string; from: string; to?: string; name: string; position: number }[];
+};
+
+/** The record a `PUT …/workflow` body makes of `wf`: ids for new Steps and Connectors, the facts kept. */
+export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): ReturnType<typeof initialWorkflow> {
+  let n = 0;
+  const steps = body.steps.map((s) => {
+    const was = wf.steps.find((x) => x.id === s.id);
+    const id = s.id ?? `st-new-${Date.now()}-${n++}`;
+    const skillId = s.skill ? (skills.find((k) => k.id === s.skill || k.name === s.skill)?.id ?? s.skill) : undefined;
+    const takers = skillId === was?.skill_id ? (was?.takers ?? []) : [];
+    return {
+      id,
+      name: s.name,
+      skill_id: skillId,
+      position: s.position,
+      x: s.x ?? was?.x ?? (s.position - 1) * 448,
+      y: s.y ?? was?.y ?? 0,
+      tasks: was?.tasks ?? 0,
+      working: was?.working ?? 0,
+      takers,
+      median_ms: was?.median_ms,
+    };
+  });
+  const ref = (r: string | undefined) => (r === undefined ? undefined : (steps.find((s) => s.id === r || s.name === r)?.id ?? r));
+  const connectors = body.connectors.map((c) => ({
+    id: c.id ?? `c-new-${Date.now()}-${n++}`,
+    from_step_id: ref(c.from)!,
+    to_step_id: ref(c.to),
+    name: c.name,
+    position: c.position,
+  }));
+  return { project_id: wf.project_id, steps: steps.sort((a, b) => a.position - b.position), connectors };
+}
+
+/** Answers every /v1 read the shell and the Workflow screens make, as `who`. */
+export async function mockV1(page: Page, who: "ada" | "bob" = "ada") {
+  let wf = initialWorkflow();
+  const me = who === "ada" ? members[0] : { ...human("m-bob", "bob"), admin: false };
+  const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+  await page.route("**/v1/**", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const path = url.pathname;
+    const method = req.method();
+    if (path === "/v1/activity/stream") return route.fulfill({ status: 200, contentType: "text/event-stream", body: ": idle\n\n" });
+    if (method === "GET") {
+      if (path === "/v1/health") return json(route, { status: "ok", version: "v2.0.0", sign_in_modes: ["printed_link"] });
+      if (path === "/v1/me")
+        return json(route, {
+          organisation: { id: "o-1", name: "Sacca", created_at: at },
+          member: me,
+          projects: [project],
+          skills: [],
+          session: { id: "browser-1", member_id: me.id, kind: "browser", started_at: at, last_seen_at: at },
+        });
+      if (path === "/v1/members") return json(route, { items: [...members, human("m-bob", "bob")] });
+      if (path === "/v1/projects") return json(route, { items: [project] });
+      if (path === "/v1/projects/WEB" || path === "/v1/projects/p-web") return json(route, { project, members: members.filter((x) => x.id !== "m-mai") });
+      if (path.endsWith("/workflow")) return json(route, wf);
+      if (path.endsWith("/labels") || path === "/v1/labels") return json(route, { items: [] });
+      if (path === "/v1/skills") return json(route, { items: skills });
+      if (path === "/v1/tasks") {
+        const step = url.searchParams.get("step");
+        const items = tasks.filter((t) => !step || t.step_id === step);
+        return json(route, { items });
+      }
+      if (path === "/v1/runner/sessions") return json(route, { items: sessions, runner: true });
+      if (path === "/v1/workspaces" || path === "/v1/views") return json(route, { items: [] });
+      if (path === "/v1/tasks/takeable") return json(route, { items: [] });
+      if (path === "/v1/activity") return json(route, { items: [], next_after: 0 });
+    }
+    if (method === "PUT" && path.endsWith("/workflow")) {
+      wf = applyBody(wf, req.postDataJSON() as Body);
+      return json(route, wf);
+    }
+    return json(route, { code: "not_found", message: `${method} ${path} is not mocked` }, 404);
+  });
+}
