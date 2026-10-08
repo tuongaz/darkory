@@ -85,7 +85,7 @@ export function AddMemberDialog({ project, skill, holders, onClose }: { project:
             <CommandGroup>
               {candidates.map((m) => (
                 <CommandItem key={m.id} value={m.name} aria-label={`${m.name}: ${what(m)}`} disabled={add.isPending} onSelect={() => add.mutate(m)}>
-                  <MemberAvatar member={m} />
+                  <MemberAvatar member={m} card={false} />
                   <span className="truncate">{m.name}</span>
                   <span className="ml-auto truncate text-xs text-muted-foreground">{what(m)}</span>
                 </CommandItem>

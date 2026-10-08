@@ -15,6 +15,15 @@ export type Working = SessionState | "held";
 
 export type MemberKind = "human" | "agent";
 
+/** A working mark in words, after its Member's name: "builder (agent), working, its session waiting". */
+export const workingWords: Record<Working, string> = {
+  running: "working",
+  waiting: "working, its session waiting",
+  stalled: "working, its session stalled",
+  ending: "its session ending",
+  held: "working",
+};
+
 /** A Parent's Subtasks by how they stand: `working` counts the open ones with a live Claim. */
 export type SubtaskCounts = { open: number; working: number; done: number; dropped: number };
 

@@ -93,7 +93,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
-          mark={<MemberAvatar member={m} size="lg" />}
+          mark={<MemberAvatar member={m} size="lg" card={false} />}
           meta={
             <>
               {m.kind === "agent" ? <Pill tone="agent">Agent</Pill> : <Pill>Human</Pill>}

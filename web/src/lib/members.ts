@@ -31,6 +31,12 @@ export function tintOf(name: string): number {
   return Math.abs(h) % tints;
 }
 
+/** A Member's page in Settings: an agent's under Agents, a human's under Members. */
+export function memberSettingsPath(member: Pick<Member, "name" | "kind">): string {
+  const area = member.kind === "agent" ? "agents" : "members";
+  return `/settings/organisation/${area}/${encodeURIComponent(member.name)}`;
+}
+
 /**
  * A Session id as rows show it: its last 8 characters after "…". Ids are UUIDv7, so Sessions
  * started the same day share their first characters and differ at the end.

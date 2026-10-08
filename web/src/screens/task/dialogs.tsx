@@ -374,7 +374,7 @@ export function PassOwnershipDialog({ detail, open, onOpenChange }: DialogProps)
           onChange={setOwner}
           options={memberList
             .filter((m) => !m.deactivated_at && m.id !== task.owner_id)
-            .map((m) => ({ value: m.id, label: m.name, icon: <MemberAvatar member={m} /> }))}
+            .map((m) => ({ value: m.id, label: m.name, icon: <MemberAvatar member={m} card={false} /> }))}
           placeholder="Choose a Member"
           searchPlaceholder="Search Members"
           empty="No Member"
