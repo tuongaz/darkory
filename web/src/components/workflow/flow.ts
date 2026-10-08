@@ -1,6 +1,6 @@
 import { Position, type Edge, type Node, type NodeHandle } from "@xyflow/react";
 import { STEP_H, STEP_W, TERMINAL_H, TERMINAL_W, terminals } from "./layout";
-import { stepsInOrder, targetName, unstaffed, waitingAt, type Connector, type Ends, type Step, type Workflow } from "./model";
+import { deadEnd, stepsInOrder, targetName, unstaffed, waitingAt, type Connector, type Ends, type Step, type Workflow } from "./model";
 import { routeConnectors, type Rect, type Route } from "./route";
 
 /** The terminal nodes' ids; a Step's id is a UUID, so these never meet one. */
@@ -9,7 +9,7 @@ export const DROPPED_NODE = "@dropped";
 
 export type Mode = "live" | "edit";
 
-export type StepFlowNode = Node<{ step: Step }, "step">;
+export type StepFlowNode = Node<{ step: Step; deadEnd: boolean }, "step">;
 export type TerminalFlowNode = Node<{ terminal: "done" | "dropped" }, "terminal">;
 export type CanvasNode = StepFlowNode | TerminalFlowNode;
 export type ConnectorFlowEdge = Edge<{ connector: Connector; route: Route }, "connector">;
@@ -38,8 +38,8 @@ const stepHandles = [
 const exitHandles = { right: "out", left: "out-left" } as const;
 const entryHandles = { left: "in", right: "in-right", bottom: "in-bottom", top: "in-top" } as const;
 
-/** A Step in words, for its node's `aria-label`. */
-export function stepLabel(step: Step): string {
+/** A Step in words, for its node's `aria-label`; `noWayOut` when it has a Skill and no Connector out. */
+export function stepLabel(step: Step, noWayOut = false): string {
   const what = step.skill ? `Skill ${step.skill.name}` : "a hold, moved on by hand";
   const counts = `${waitingAt(step)} waiting, ${step.working} working`;
   const who = unstaffed(step)
@@ -47,7 +47,7 @@ export function stepLabel(step: Step): string {
     : step.takers.length > 0
       ? `taken by ${step.takers.map((t) => (t.kind === "agent" ? `${t.name} (agent)` : t.name)).join(", ")}`
       : "";
-  return [`${step.name}: ${what}`, counts, who].filter(Boolean).join("; ");
+  return [`${step.name}: ${what}`, counts, who, noWayOut && "no way out: its Tasks can only be moved by hand"].filter(Boolean).join("; ");
 }
 
 /**
@@ -61,7 +61,7 @@ export function toNodes(workflow: Workflow, mode: Mode): CanvasNode[] {
     id: step.id,
     type: "step",
     position: { x: step.x, y: step.y },
-    data: { step },
+    data: { step, deadEnd: deadEnd(workflow, step) },
     width: STEP_W,
     height: STEP_H,
     handles: stepHandles,
@@ -72,7 +72,7 @@ export function toNodes(workflow: Workflow, mode: Mode): CanvasNode[] {
     connectable: edit,
     selectable: edit,
     deletable: false,
-    ariaLabel: stepLabel(step),
+    ariaLabel: stepLabel(step, deadEnd(workflow, step)),
   }));
   const terminal = (id: string, kind: "done" | "dropped", at: { x: number; y: number }, ariaLabel: string): TerminalFlowNode => ({
     id,

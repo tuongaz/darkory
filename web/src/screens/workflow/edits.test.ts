@@ -5,6 +5,8 @@ import { adoptIds, changeAcross, isNew, newIds, toBody, toCanvas, workingAt } fr
 import {
   addConnector,
   addStep,
+  deadEnds,
+  deadEndsAfterDelete,
   deleteStep,
   layoutSteps,
   placeStep,
@@ -221,5 +223,18 @@ describe("undo and new ids", () => {
     expect(gone.next.steps.some((s) => s.id === "st-new")).toBe(false);
     // With nothing renamed, the change is made as it is.
     expect(changeAcross(wf(), new Map(), (w) => renameStep(w, step.build, "Make")).next.steps.find((s) => s.id === step.build)!.name).toBe("Make");
+  });
+});
+
+describe("dead ends", () => {
+  it("finds the Steps with a Skill and no Connector out, never a hold", () => {
+    expect(deadEnds(wf())).toEqual([]);
+    const cut = { ...wf(), connectors: wf().connectors.filter((c) => c.from_step_id !== step.build) };
+    expect(deadEnds(cut).map((s) => s.name)).toEqual(["Build"]);
+  });
+
+  it("names what deleting a Step strands: Build, whose only way out led into Review", () => {
+    expect(deadEndsAfterDelete(wf(), step.review).map((s) => s.name)).toEqual(["Build"]);
+    expect(deadEndsAfterDelete(wf(), step.skillReview)).toEqual([]);
   });
 });

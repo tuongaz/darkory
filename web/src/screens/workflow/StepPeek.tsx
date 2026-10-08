@@ -15,6 +15,7 @@ import { Loaded } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { durationText, outgoing, targetName, unstaffed, waitingAt, type Step, type Workflow } from "@/components/workflow/model";
+import { NoWayOut } from "@/components/workflow/nodes";
 import { glyphLabel } from "@/lib/work";
 import { useCurrentMe } from "@/me";
 import { taskWorkGlyph } from "@/work";
@@ -100,7 +101,11 @@ export function StepPeek({ project, workflow, step, onClose }: { project: Projec
       <section className="flex flex-col gap-2">
         <SectionHeader title="Outcomes" count={out.length} />
         {out.length === 0 ? (
-          <p className="text-muted-foreground">No Connector out: a human moves its Tasks on.</p>
+          step.skill ? (
+            <NoWayOut />
+          ) : (
+            <p className="text-muted-foreground">No Connector out: a human moves its Tasks on.</p>
+          )
         ) : (
           <ul aria-label={`Outcomes out of ${step.name}`} className="flex flex-col gap-1">
             {out.map((c) => (

@@ -1,6 +1,7 @@
 import { ArrowRightIcon, TriangleAlertIcon } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { durationText, outgoing, stepsInOrder, targetName, unstaffed, waitingAt, type Step, type Workflow } from "@/components/workflow/model";
+import { NoWayOut } from "@/components/workflow/nodes";
 import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { cn } from "@/lib/utils";
 
@@ -67,7 +68,14 @@ export function TextView({
                 </span>
               </button>
               <ul aria-label={`Connectors out of ${s.name}`} className="flex flex-col border-t px-3 py-1.5">
-                {out.length === 0 && <li className="py-0.5 text-xs text-muted-foreground">No Connector out: its Tasks are moved on by hand.</li>}
+                {out.length === 0 &&
+                  (s.skill ? (
+                    <li className="py-0.5 text-xs">
+                      <NoWayOut />
+                    </li>
+                  ) : (
+                    <li className="py-0.5 text-xs text-muted-foreground">No Connector out: its Tasks are moved on by hand.</li>
+                  ))}
                 {out.map((c) => {
                   const line = (
                     <>

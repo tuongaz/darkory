@@ -5,7 +5,7 @@ import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { useCanvas } from "./context";
 import type { StepFlowNode, TerminalFlowNode } from "./flow";
-import { durationText, isHold, unstaffed, waitingAt, type Taker } from "./model";
+import { durationText, isHold, noWayOut, unstaffed, waitingAt, type Taker } from "./model";
 
 const shownTakers = 4;
 
@@ -33,10 +33,11 @@ function Takers({ takers, live }: { takers: Taker[]; live: boolean }) {
 /**
  * A Step: its name, its Skill (or that it is a hold, drawn dashed), the Members who take its
  * Tasks, and how many Tasks wait at it and are worked. A Step whose Skill no Member of the
- * Project holds says so in amber. Editing, "+" on its corner adds a Step after it, clear of the
- * outcomes' names beside its right side.
+ * Project holds says so in amber, as one with a Skill and no Connector out does ("No way out").
+ * Editing, "+" on its corner adds a Step after it, clear of the outcomes' names beside its right
+ * side.
  */
-export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) {
+export function StepNode({ data: { step, deadEnd }, selected }: NodeProps<StepFlowNode>) {
   const { mode, onAdd, opens } = useCanvas();
   const edit = mode === "edit";
   const hold = isHold(step);
@@ -46,13 +47,19 @@ export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) 
       className={cn(
         "group/step relative flex size-full flex-col justify-between rounded-lg border bg-card px-3 pt-2 pb-2.5 text-card-foreground shadow-soft",
         hold && "border-dashed border-muted-foreground/50 bg-muted/40",
-        warn && "border-warn-border",
+        (warn || deadEnd) && "border-warn-border",
         selected && "border-ring ring-2 ring-ring/40",
         opens && "cursor-pointer hover:border-ring/60",
       )}
     >
       <span className="flex min-w-0 items-center gap-1.5">
         <span className="truncate font-semibold">{step.name}</span>
+        {deadEnd && (
+          <span className="ml-auto flex flex-none items-center gap-1 text-xs font-medium text-state-claimed" title={noWayOut}>
+            <TriangleAlertIcon aria-hidden className="size-3.5 flex-none" />
+            No way out
+          </span>
+        )}
       </span>
       <span className="truncate text-xs text-muted-foreground">{step.skill ? step.skill.name : "Hold · moved on by hand"}</span>
       <span className="flex min-w-0 items-center gap-2">
@@ -139,5 +146,15 @@ export function TerminalNode({ data: { terminal } }: NodeProps<TerminalFlowNode>
       </span>
       Dropped
     </div>
+  );
+}
+
+/** A Step with a Skill and no Connector out, said where its outcomes are listed. */
+export function NoWayOut({ className }: { className?: string }) {
+  return (
+    <p className={cn("flex items-center gap-1.5 font-medium text-state-claimed", className)}>
+      <TriangleAlertIcon aria-hidden className="size-3.5 flex-none" />
+      {noWayOut}
+    </p>
   );
 }

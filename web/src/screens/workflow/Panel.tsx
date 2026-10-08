@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { countTasks, stepsInOrder, targetName, unstaffed, type Workflow } from "@/components/workflow/model";
+import { NoWayOut } from "@/components/workflow/nodes";
 import type { CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { cn } from "@/lib/utils";
 import type { RecordConnector, RecordStep, WorkflowRecord } from "./bind";
 import {
   addConnector,
+  deadEndsAfterDelete,
   deleteStep,
   nameMax,
   reconnect,
@@ -235,7 +237,12 @@ function StepEditor({ project, record, workflow, apply, onSelect, step }: PanelP
       </Section>
 
       <Section title="Connectors out">
-        {out.length === 0 && <p className="text-muted-foreground">None: a human moves its Tasks on.</p>}
+        {out.length === 0 &&
+          (step.skill_id ? (
+            <NoWayOut />
+          ) : (
+            <p className="text-muted-foreground">None: a human moves its Tasks on.</p>
+          ))}
         {out.length > 0 && (
           <ul aria-label={`Connectors out of ${step.name}`} className="flex flex-col gap-2">
             {out.map((c, i) => (
@@ -271,7 +278,12 @@ function StepEditor({ project, record, workflow, apply, onSelect, step }: PanelP
           variant="outline"
           size="xs"
           className="self-start text-destructive"
-          onClick={() => (step.tasks > 0 ? setDeleting(true) : apply((wf) => deleteStep(wf, step.id)) === undefined && onSelect(null))}
+          onClick={() =>
+            // Asked first when its Tasks need a Step to go to, or when it leaves a Step with no way out.
+            step.tasks > 0 || deadEndsAfterDelete(record, step.id).length > 0
+              ? setDeleting(true)
+              : apply((wf) => deleteStep(wf, step.id)) === undefined && onSelect(null)
+          }
         >
           <Trash2Icon />
           Delete {step.name}
@@ -431,7 +443,10 @@ function ConnectTo({ record, step, apply }: { record: WorkflowRecord; step: Reco
   );
 }
 
-/** Delete a Step with Tasks at it: asks which Step they move to (`moves`), as `/v1` requires. */
+/**
+ * Delete a Step, asked first: with Tasks at it, which Step they move to (`moves`), as `/v1`
+ * requires; and, said not refused, the Steps it leaves with no way out once its Connectors in go.
+ */
 function DeleteStepDialog({
   record,
   step,
@@ -446,6 +461,8 @@ function DeleteStepDialog({
   onDeleted: () => void;
 }) {
   const others = [...record.steps].sort((a, b) => a.position - b.position).filter((s) => s.id !== step.id);
+  const stranded = deadEndsAfterDelete(record, step.id);
+  const moving = step.tasks > 0;
   const [to, setTo] = useState<string | undefined>();
   const [problem, setProblem] = useState<string | undefined>();
   return (
@@ -453,32 +470,47 @@ function DeleteStepDialog({
       open
       onOpenChange={(o) => !o && onClose()}
       title={`Delete ${step.name}`}
-      description={`${countTasks(step.tasks)} ${step.tasks === 1 ? "is" : "are"} at ${step.name}. Say which Step ${step.tasks === 1 ? "it moves" : "they move"} to; a Claim on ${step.tasks === 1 ? "it" : "them"} stays.`}
+      description={
+        moving
+          ? `${countTasks(step.tasks)} ${step.tasks === 1 ? "is" : "are"} at ${step.name}. Say which Step ${step.tasks === 1 ? "it moves" : "they move"} to; a Claim on ${step.tasks === 1 ? "it" : "them"} stays.`
+          : `No Task is at ${step.name}.`
+      }
       submitLabel={`Delete ${step.name}`}
       destructive
-      submitDisabled={!to}
+      submitDisabled={moving && !to}
       onSubmit={() => {
-        const p = apply((wf) => deleteStep(wf, step.id, to));
+        const p = apply((wf) => deleteStep(wf, step.id, moving ? to : undefined));
         setProblem(p);
         if (!p) onDeleted();
       }}
     >
-      <FormRows>
-        <FormRow label="Move them to">
-          <Select value={to} onValueChange={setTo}>
-            <SelectTrigger aria-label={`Step that receives the Tasks at ${step.name}`} className="w-full">
-              <SelectValue placeholder="Pick a Step" />
-            </SelectTrigger>
-            <SelectContent position="popper" align="start">
-              {others.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FormRow>
-      </FormRows>
+      {moving && (
+        <FormRows>
+          <FormRow label="Move them to">
+            <Select value={to} onValueChange={setTo}>
+              <SelectTrigger aria-label={`Step that receives the Tasks at ${step.name}`} className="w-full">
+                <SelectValue placeholder="Pick a Step" />
+              </SelectTrigger>
+              <SelectContent position="popper" align="start">
+                {others.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormRow>
+        </FormRows>
+      )}
+      {stranded.length > 0 && (
+        <p role="note" className="flex items-start gap-1.5 text-xs font-medium text-state-claimed">
+          <TriangleAlertIcon aria-hidden className="mt-px size-3.5 flex-none" />
+          <span>
+            {listNames(stranded.map((s) => s.name))} {stranded.length === 1 ? "leads" : "lead"} out only into {step.name}: without it,{" "}
+            {stranded.length === 1 ? "it has" : "they have"} no way out, and {stranded.length === 1 ? "its" : "their"} Tasks can only be moved by hand.
+          </span>
+        </p>
+      )}
       {problem && (
         <p role="alert" className="text-xs text-destructive">
           {problem}
@@ -486,6 +518,11 @@ function DeleteStepDialog({
       )}
     </FormDialog>
   );
+}
+
+/** "Build", "Build and QA", "Plan, Build and QA". */
+function listNames(names: string[]): string {
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
 /**

@@ -114,6 +114,17 @@ export function deleteStep(wf: WorkflowRecord, id: string, moveTo?: string): Cha
   };
 }
 
+/** The Steps carrying a Skill with no Connector out: a Task there leaves only when moved by hand. */
+export function deadEnds(wf: WorkflowRecord): RecordStep[] {
+  return inOrder(wf.steps).filter((s) => s.skill_id && !wf.connectors.some((c) => c.from_step_id === s.id));
+}
+
+/** The Steps deleting `id` leaves with no way out, which had one before: its Connectors in go with it. */
+export function deadEndsAfterDelete(wf: WorkflowRecord, id: string): RecordStep[] {
+  const before = new Set(deadEnds(wf).map((s) => s.id));
+  return deadEnds(deleteStep(wf, id).next).filter((s) => !before.has(s.id));
+}
+
 /** One place earlier (-1) or later (+1) in the Workflow's order: the board's order of Steps. */
 export function reorderStep(wf: WorkflowRecord, id: string, by: -1 | 1): Change {
   const order = inOrder(wf.steps);

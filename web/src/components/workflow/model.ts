@@ -46,6 +46,17 @@ export function unstaffed(step: Step): boolean {
   return !!step.skill && step.takers.length === 0;
 }
 
+/**
+ * A Step carrying a Skill with no Connector out: whoever takes a Task there cannot advance it, so
+ * it leaves only when a human moves it by hand. A hold is moved on by hand by design.
+ */
+export function deadEnd(workflow: Workflow, step: Step): boolean {
+  return !!step.skill && !workflow.connectors.some((c) => c.from === step.id);
+}
+
+/** What the canvas, the list and the panels say of a dead end. */
+export const noWayOut = "No way out: Tasks here can only be moved by hand.";
+
 /** The open Tasks at a Step that nobody holds. */
 export function waitingAt(step: Step): number {
   return Math.max(0, step.tasks - step.working);

@@ -51,7 +51,17 @@ describe("WorkflowCanvas, editing", () => {
     renderCanvas();
     const names = screen.getAllByRole("group", { hidden: true }).map((n) => n.getAttribute("aria-label")?.split(":")[0]);
     expect(names.slice(0, 3)).toEqual(["Backlog", "Plan", "Build"]);
-    expect(stepNode("Docs")).toHaveAttribute("aria-label", "Docs: Skill docs; 0 waiting, 0 working; no Member has docs");
+    expect(stepNode("Docs")).toHaveAttribute(
+      "aria-label",
+      "Docs: Skill docs; 0 waiting, 0 working; no Member has docs; no way out: its Tasks can only be moved by hand",
+    );
+  });
+
+  it("warns on a Step with a Skill and no Connector out, and on no hold", () => {
+    renderCanvas();
+    expect(within(stepNode("Docs")).getByText("No way out")).toHaveAttribute("title", "No way out: Tasks here can only be moved by hand.");
+    expect(within(stepNode("Backlog")).queryByText("No way out")).toBeNull();
+    expect(within(stepNode("Review")).queryByText("No way out")).toBeNull();
   });
 
   it("selects a Step on Enter, says so, and opens its panel with the Connectors out", async () => {

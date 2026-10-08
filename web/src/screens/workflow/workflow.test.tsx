@@ -107,6 +107,19 @@ describe("the live Workflow", () => {
     expect(peek.getByRole("link", { name: "Edit in Settings" })).toHaveAttribute("href", `/settings/projects/WEB/workflow?step=${step.build}`);
   });
 
+  it("says in the live canvas and a Step's peek when the Step has no way out", async () => {
+    const record = workflow();
+    record.connectors = record.connectors.filter((c) => c.from_step_id !== step.build);
+    serve(record);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(stepNode("Build")).toBeDefined());
+    expect(within(stepNode("Build")).getByText("No way out")).toBeInTheDocument();
+    act(() => stepNode("Build").focus());
+    fireEvent.keyDown(stepNode("Build"), { key: "Enter" });
+    const peek = within(await screen.findByRole("dialog", { name: "Step Build" }));
+    expect(peek.getByText("No way out: Tasks here can only be moved by hand.")).toBeInTheDocument();
+  });
+
   it("asks the Tasks at the Step by its id, and offers a Member who is not an admin no Edit", async () => {
     const { api } = serve(workflow(), bob);
     renderApp(`/projects/WEB/workflow?view=text`);
@@ -195,6 +208,39 @@ describe("Settings › Workflow", () => {
     const c = deleteStep(record, step.review, step.build);
     expect(puts[0]).toEqual(toBody(c.next, c.moves));
     expect(puts[0].moves).toEqual({ [step.review]: step.build });
+  });
+
+  it("asks before deleting a Step that leaves another with no way out, saying so, and deletes it", async () => {
+    const { puts } = serve();
+    const p = await openEditing(`/settings/projects/WEB/workflow?step=${step.review}`);
+    await userEvent.click(p.getByRole("button", { name: "Delete Review" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Delete Review" }));
+    // No Task to move: no Step to pick, only what it leaves behind.
+    expect(dialog.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(dialog.getByRole("note")).toHaveTextContent("Build leads out only into Review: without it, it has no way out, and its Tasks can only be moved by hand.");
+    await userEvent.click(dialog.getByRole("button", { name: "Delete Review" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0].steps.map((s) => s.name)).not.toContain("Review");
+  });
+
+  it("deletes a Step that strands nothing and holds no Task at once, with Undo", async () => {
+    const { puts } = serve();
+    const p = await openEditing(`/settings/projects/WEB/workflow?step=${step.skillReview}`);
+    await userEvent.click(p.getByRole("button", { name: "Delete Skill review" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(screen.queryByRole("dialog", { name: "Delete Skill review" })).not.toBeInTheDocument();
+  });
+
+  it("says a Step with a Skill and no Connector out has no way out, in its panel and the list", async () => {
+    const record = workflow();
+    record.connectors = record.connectors.filter((c) => c.from_step_id !== step.build);
+    serve(record);
+    const p = await openEditing(`/settings/projects/WEB/workflow?step=${step.build}`);
+    expect(p.getByText("No way out: Tasks here can only be moved by hand.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Text" }));
+    expect(within(await screen.findByRole("list", { name: "Connectors out of Build" })).getByText("No way out: Tasks here can only be moved by hand.")).toBeInTheDocument();
+    // A hold with none says only that a human moves its Tasks on.
+    expect(within(screen.getByRole("list", { name: "Connectors out of Backlog" })).getByText(/moved on by hand/)).toBeInTheDocument();
   });
 
   it("connects a Step to another with Connect to…, renames and removes a Connector", async () => {
