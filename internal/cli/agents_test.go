@@ -111,6 +111,12 @@ func TestAgentCommands(t *testing.T) {
 			t.Fatalf("--no-workspace named %v", none.Task.WorkspaceIds)
 		}
 		ada.fails(ExitUsage, "file", "--parent", "WEB-1", "--aim", "ada", "--title", "Q", "--no-workspace", "--workspace", "api")
+		// --blocked-by files it already blocked, by one Task or several.
+		var after client.TaskDetail
+		ada.json(&after, "file", "--parent", "WEB-1", "--title", "After both", "--blocked-by", "WEB-3,"+none.Task.Key)
+		if !after.Task.Blocked || len(deref(after.Task.OpenBlockers)) != 2 {
+			t.Fatalf("--blocked-by: %+v", after.Task.OpenBlockers)
+		}
 		if res := ada.fails(ExitRefused, "workspace", "remove", "api"); !strings.Contains(res.stderr, "conflict") {
 			t.Fatalf("removing a named Workspace: %s", res.stderr)
 		}

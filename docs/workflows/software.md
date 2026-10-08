@@ -56,7 +56,7 @@ Retro (retro) ── done ──► Done   ── propose ──► Skill review
 A Task takes one of three paths.
 
 1. **Fast path** (a standalone Task): Triage → Build → Code review → QA → Release → Done. It has no design, no threat model, and no security review unless its `security` Label or its diff calls for one.
-2. **Design path** (a Parent, filed with Break down, or split by Triage): Plan decides the shape. A `Design: …` Subtask goes Design → (Threat model) → Design review → Done. Its branch carries the design document, the ADRs and the threat model into the Parent's branch. The architect files the slices while designing: each one in the Backlog first, then blocked by the Design Subtask and by any slice whose code it builds on, and only then moved to Build. So no slice is built before its design is approved, and every slice branches from a Parent branch that holds the design.
+2. **Design path** (a Parent, filed with Break down, or split by Triage): Plan decides the shape. A `Design: …` Subtask goes Design → (Threat model) → Design review → Done. Its branch carries the design document, the ADRs and the threat model into the Parent's branch. The architect files the slices while designing, each at Build and blocked from its first moment (`file --blocked-by`) by the Design Subtask and by any slice whose code it builds on. So no slice is built before its design is approved, and every slice branches from a Parent branch that holds the design.
 3. **Slice path** (each slice): Build → Code review → (Security review) → QA → Release → Done, merging into the Parent's branch. When the last slice ends, Darkory files the Acceptance. Acceptance → Release → Done completes the Parent, which merges into the default branch, and then the Retrospective is filed.
 
 ### Why each Step and outcome exists
@@ -66,7 +66,7 @@ A Task takes one of three paths.
 | Backlog | hold | Ideas that nobody should take yet. A human moves them on. | (moved by hand) |
 | Triage | `triage` (product) | Sets the definition of done and judges the risk before anyone builds. It is the one place a small change is let through quickly. | `no design needed` → Build; otherwise it splits the Task with a Design Subtask |
 | Plan | `breakdown` (product) | A Parent filed with Break down gets its acceptance criteria and its shape: a design first, or slices straight away. | `done` |
-| Design | `architecture` (architect) | Design doc and ADRs before code, written on a branch that every slice later starts from. The slices are filed here: in the Backlog, blocked, then moved to Build. | `security impact` → Threat model; `no security impact` → Design review |
+| Design | `architecture` (architect) | Design doc and ADRs before code, written on a branch that every slice later starts from. The slices are filed here, at Build and already blocked by the Design Subtask. | `security impact` → Threat model; `no security impact` → Design review |
 | Threat model | `security` (security) | The four questions and STRIDE, at design time when a fix is cheap. Their output is numbered security requirements, which bind slices as Notes and Labels. | `accepted` → Design review; `redesign` → Design |
 | Design review | `review` (reviewer) | Peer review of the design: is it the simplest one, do the slices cover it, is the rollout written. Approving it merges the documents and starts the slices. | `approved` → Done; `redesign` → Design |
 | Build | `engineer` (builder) | Test-first slice; attaches the test log. | `ready for review` → Code review |
@@ -105,15 +105,15 @@ Never skipped: acceptance criteria, Code review, QA, and running the CI steps. N
 
 ## Where Darkory's model shapes it
 
-The Workflow fits Darkory's rules as they are. Where the research asks for something the model does not have, the Workflow does the following, and the gap stays open for a decision.
+The Workflow fits Darkory's rules as they are. Where the research asks for something the model does not have, this says how the Workflow works within the model, and what was decided.
 
-- **One Skill per Step, one Step per Task at a time.** Security review and Code review cannot run in parallel on the same Task, so they run one after the other. The reviewer decides whether the security review is needed.
+- **One Skill per Step, one Step per Task at a time.** The reviewer decides whether the security review is needed.
 - **Design review needs two eyes.** Peer review (`review`) and a threat model (`security`) are two Steps, because a Step carries one Skill.
 - **Releasing a Parent.** A Parent is at no Step, so its release rides on its Acceptance Subtask (Acceptance → Release). The Release Step is pre-merge: merging into the default branch is the deploy trigger, and nothing in Darkory watches production after Done. Canary analysis and the post-release check of the golden signals are written into the release note, but no Step runs them.
 - **Triage cannot turn a held Task into a Break down.** The design path from Triage is a split. The triager files a `Design: …` Subtask at Design, which makes the Task a Parent without a Breakdown Subtask.
 - **Labels carry risk, but rules never read them.** `security` and `infra` steer the agents' choice of outcome, and Darkory's rules ignore them, by design.
-- **A Task cannot be filed already blocked.** A Subtask filed at a Step is takeable the moment it exists, so the architect files each slice in the Backlog, blocks it, and then moves it. In the proof run, slices filed straight at Build were claimed in the same second, before the block landed. `file --blocked-by` would close this window in the record itself.
-- **A question is a worked Task whose branch merges.** An answer committed on a question's branch merges into the Parent's branch when the question completes, without passing any review Step. In the proof run, the architect bumped the Go toolchain this way. The Skill text now says to answer in Notes and commit nothing. A question that never merges is the lead's call.
+- **Review Steps run one after another: a known limit.** Code review, Security review and QA cannot run in parallel on one Task; each waits for the one before it. Decided 2026-10-09: keep them sequential rather than give a Step several Skills.
+- **A question has no branch.** A Task aimed at a Member gets no checkout and merges nothing: its answer lives in Notes. In the first proof run, an answer committed on a question's branch merged past every review; the Runner now prepares no Workspace for one.
 - **Self-review is by Skill.** Someone who built a Task under `devops` could release it under `devops` again. So infrastructure is built by the builder (`engineer`) and released by DevOps, never both by one agent.
 
 ## Applying it to an Install

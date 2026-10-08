@@ -35,6 +35,12 @@ func TestWorkspaceTools(t *testing.T) {
 		if len(top.Workspaces) != 1 || top.Workspaces[0].Name != "web" {
 			t.Fatalf("a Task in WEB: %+v, want web", top.Workspaces)
 		}
+		// A Task filed with blocked_by is blocked from its first moment.
+		var blocked client.TaskDetail
+		ok(t, cs, &blocked, "file_task", map[string]any{"project": "WEB", "title": "After it", "step": "Build", "blocked_by": []string{top.Task.Key}})
+		if !blocked.Task.Blocked || len(deref(blocked.Task.OpenBlockers)) != 1 || deref(blocked.Task.OpenBlockers)[0].Key != top.Task.Key {
+			t.Fatalf("filed blocked: %+v", blocked.Task.OpenBlockers)
+		}
 		var shown client.TaskDetail
 		ok(t, cs, &shown, "show_task", map[string]any{"task": named.Task.Key})
 		if len(shown.Workspaces) != 2 || shown.Workspaces[0].Name != "api" || shown.Workspaces[0].Path != "/src/api" ||

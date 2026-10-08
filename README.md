@@ -68,7 +68,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 | `move <task> <step> [--note]` | move a Task to any Step of its Workflow by hand, such as out of the Backlog |
 | `complete <task> [--note]` | complete a Task you hold whose Step has one way into Done, or a Parent you own once its Subtasks have ended |
 | `drop`, `take-back`, `rank <task> <position>`, `owner <task> <member>` | the Owner's and the Reporting line's authority |
-| `file --title t (--project p \| --parent task \| --blocks task --aim m) [--step s] [--breakdown] [--label l]… [--owner m] [--auto-complete] [--acceptance] [--workspace ws]…` | file a Task, a Subtask (splitting the Task when you hold it), or a question that blocks a Task |
+| `file --title t (--project p \| --parent task \| --blocks task --aim m) [--step s] [--breakdown] [--blocked-by task,…] [--label l]… [--owner m] [--auto-complete] [--acceptance] [--workspace ws]…` | file a Task, a Subtask (splitting the Task when you hold it), or a question that blocks a Task; `--blocked-by` files it already blocked |
 | `show <task>`, `tasks [--project p] [--parent task] [--step s] [--filter field:op:values]…` | read Tasks: the Step, the Parent, the Subtasks, the Labels and the outcomes |
 | `note`, `observe`, `observations <task> [--all]`, `attach <task> <file>`, `evidence get` | Notes, Observations and Evidence |
 | `block <task> --by <task>`, `unblock` | Blocking |

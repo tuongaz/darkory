@@ -36,7 +36,7 @@ var workCommands = []command{
 	{path: "observations", args: "<task> [--all]", short: "list the Observations on a Task and its Subtasks not yet reviewed", run: cmdObservations},
 	{path: "attach", args: "<task> <file> [--type mime] [--name filename]", short: "attach Evidence", run: cmdAttach},
 	{path: "evidence get", args: "<id> [-o file|-]", short: "show an Evidence record, or download its file", run: cmdEvidenceGet},
-	{path: "file", args: "--title t (--project p | --parent task | --blocks task --aim member) [--step s] [--breakdown] [--label l]… [--owner m] [--workspace ws]… [--body text|-]", short: "file a Task; with --parent, a Subtask; with --blocks, a question that blocks a Task", run: cmdFile},
+	{path: "file", args: "--title t (--project p | --parent task | --blocks task --aim member) [--step s] [--breakdown] [--blocked-by task,…] [--label l]… [--owner m] [--workspace ws]… [--body text|-]", short: "file a Task; with --parent, a Subtask; with --blocks, a question that blocks a Task", run: cmdFile},
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Step and outcomes, Subtasks, Claims, Notes, Evidence and Observations", run: cmdShow},
@@ -547,6 +547,8 @@ func cmdFile(c *call) error {
 	body := c.fs.String("body", "", "the Task's description (- reads standard input)")
 	step := c.fs.String("step", "", "the Step it starts at, by name or id, such as Backlog (default: the Project's first work Step)")
 	breakdown := c.fs.Bool("breakdown", false, "file it with Break down: a Breakdown Subtask at the Step carrying the breakdown Skill files its other Subtasks")
+	var blockedBy strs
+	c.fs.Var(&blockedBy, "blocked-by", "a Task that blocks the new one from its first moment, so nobody takes it before that ends; give it once per Task, or name several with commas")
 	var labels strs
 	c.fs.Var(&labels, "label", "a Label it carries, by name or id; give it once per Label, or name several with commas")
 	owner := c.fs.String("owner", "", "its Owner (default: you; a Subtask's is its Parent's)")
@@ -587,6 +589,17 @@ func cmdFile(c *call) error {
 		AutoComplete: auto.v, Acceptance: acceptance.v}
 	if *breakdown {
 		req.Breakdown = breakdown
+	}
+	if blockedBy.set {
+		var bs []string
+		for _, b := range blockedBy.v {
+			for _, one := range strings.Split(b, ",") {
+				if one = strings.TrimSpace(one); one != "" {
+					bs = append(bs, one)
+				}
+			}
+		}
+		req.BlockedBy = &bs
 	}
 	if labels.set {
 		var ls []string

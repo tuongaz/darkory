@@ -2630,6 +2630,13 @@ export interface components {
             /** @description Id or display key of a Task the new one blocks (a question or Escalation). */
             blocks?: string;
             /**
+             * @description Ids or display keys of Tasks that block the new one from its first moment, in the same
+             *     write, so it is never takeable before they end. Each a worked Task, never a Parent;
+             *     not with `breakdown`, since a Parent is never blocked. Refused `cycle` when one is the
+             *     Task the new one blocks, or blocked by it.
+             */
+            blocked_by?: string[];
+            /**
              * @description Only when filing a Subtask under a Task the caller holds: added to the Parent's Notes
              *     in the same write, as the Claim the filing ends hands its context on.
              */

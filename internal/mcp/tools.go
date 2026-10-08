@@ -90,6 +90,7 @@ type fileTaskIn struct {
 	Blocks       string   `json:"blocks,omitempty" jsonschema:"a Task the new one blocks: a question or Escalation, filed beside that Task under its Parent"`
 	Breakdown    bool     `json:"breakdown,omitempty" jsonschema:"file it with Break down: a Breakdown Subtask at the Step carrying breakdown files its other Subtasks"`
 	Labels       []string `json:"labels,omitempty" jsonschema:"the Labels it carries, by name or id"`
+	BlockedBy    []string `json:"blocked_by,omitempty" jsonschema:"Tasks that block the new one from its first moment, so nobody can take it before they end"`
 	Owner        string   `json:"owner,omitempty" jsonschema:"its Owner (default you; a Subtask's is its Parent's)"`
 	AutoComplete *bool    `json:"auto_complete,omitempty" jsonschema:"it completes itself when its last Subtask ends Done; default the Project's"`
 	Acceptance   *bool    `json:"acceptance,omitempty" jsonschema:"it has an Acceptance before it is done; default the Project's"`
@@ -315,6 +316,9 @@ func (s *Server) addTools() {
 				Acceptance: in.Acceptance, Note: opt(in.Note)}
 			if in.Breakdown {
 				body.Breakdown = &in.Breakdown
+			}
+			if len(in.BlockedBy) > 0 {
+				body.BlockedBy = &in.BlockedBy
 			}
 			if len(in.Labels) > 0 {
 				body.Labels = &in.Labels
