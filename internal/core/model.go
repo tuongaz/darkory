@@ -368,6 +368,14 @@ type Session struct {
 	// ExpiresAt is when an open browser Session expires unless used; nil for token Sessions.
 	ExpiresAt *time.Time
 	ClosedAt  *time.Time
+	// EndedAt is when the Session ended, however it ended; nil while it is open.
+	EndedAt *time.Time
+}
+
+// SessionPage is a page of a Member's Sessions, with how many are open and how many have ended.
+type SessionPage struct {
+	Page[Session]
+	Open, Ended int
 }
 
 type ClosedSession struct {

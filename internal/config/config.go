@@ -77,6 +77,9 @@ type Serve struct {
 	// --session-idle); SessionLifetime ends one this long after it started, used or not
 	// (DARKORY_SESSION_LIFETIME, --session-lifetime). Token Sessions are not affected.
 	SessionIdle, SessionLifetime time.Duration
+	// TokenSessionIdle ends a token Session no request has come through for this long, unless a
+	// Claim bound to it is live (DARKORY_TOKEN_SESSION_IDLE, --token-session-idle).
+	TokenSessionIdle time.Duration
 	// MaxWaiting is how many Activity streams, and separately how many waiting `next` calls, one
 	// Member may have open on a server process at once (DARKORY_MAX_WAITING, --max-waiting).
 	MaxWaiting int
@@ -89,7 +92,9 @@ type Serve struct {
 const (
 	DefaultSessionIdle     = 30 * 24 * time.Hour
 	DefaultSessionLifetime = 90 * 24 * time.Hour
-	DefaultMaxWaiting      = 16
+	// DefaultTokenSessionIdle is auth.DefaultTokenIdle: three times the Runner's Heartbeat timeout.
+	DefaultTokenSessionIdle = 15 * time.Minute
+	DefaultMaxWaiting       = 16
 )
 
 // SMTP names the server that sends email (environment only).
@@ -207,6 +212,7 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	}{
 		{"session-idle", "DARKORY_SESSION_IDLE", "end a browser Session unused this long (DARKORY_SESSION_IDLE)", &c.SessionIdle, DefaultSessionIdle},
 		{"session-lifetime", "DARKORY_SESSION_LIFETIME", "end a browser Session this long after it started (DARKORY_SESSION_LIFETIME)", &c.SessionLifetime, DefaultSessionLifetime},
+		{"token-session-idle", "DARKORY_TOKEN_SESSION_IDLE", "end a token Session no request has come through this long, unless a Claim bound to it is live (DARKORY_TOKEN_SESSION_IDLE)", &c.TokenSessionIdle, DefaultTokenSessionIdle},
 	} {
 		v := d.def
 		if s := getenv(d.env); s != "" {
@@ -227,8 +233,8 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
 	}
-	if c.SessionIdle <= 0 || c.SessionLifetime <= 0 {
-		return Serve{}, errors.New("--session-idle and --session-lifetime are above zero")
+	if c.SessionIdle <= 0 || c.SessionLifetime <= 0 || c.TokenSessionIdle <= 0 {
+		return Serve{}, errors.New("--session-idle, --session-lifetime and --token-session-idle are above zero")
 	}
 	if c.MaxWaiting < 1 {
 		return Serve{}, fmt.Errorf("--max-waiting is 1 or more, got %d", c.MaxWaiting)

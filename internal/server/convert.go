@@ -202,7 +202,7 @@ func tokenOut(t core.Token) gen.Token {
 
 func sessionOut(s core.Session) gen.Session {
 	return gen.Session{ID: s.ID, MemberID: s.MemberID, Kind: gen.SessionKind(s.Kind), TokenID: s.TokenID,
-		StartedAt: s.StartedAt, LastSeenAt: s.LastSeenAt, ExpiresAt: s.ExpiresAt, ClosedAt: s.ClosedAt}
+		StartedAt: s.StartedAt, LastSeenAt: s.LastSeenAt, ExpiresAt: s.ExpiresAt, ClosedAt: s.ClosedAt, EndedAt: s.EndedAt}
 }
 
 func pageCursor(next string) *string {

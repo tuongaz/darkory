@@ -126,9 +126,13 @@ func (s *Server) ListSessions(w http.ResponseWriter, r *http.Request, member gen
 	if params.Cursor != nil {
 		cursor = *params.Cursor
 	}
-	p, err := s.core.ListSessions(r.Context(), caller(r), member, limit, cursor)
-	s.respond(w, r, as(http.StatusOK, func(p core.Page[core.Session]) any {
-		return gen.SessionList{Items: each(p.Items, sessionOut), NextCursor: pageCursor(p.NextCursor)}
+	var state string
+	if params.State != nil {
+		state = string(*params.State)
+	}
+	p, err := s.core.ListSessions(r.Context(), caller(r), member, state, limit, cursor)
+	s.respond(w, r, as(http.StatusOK, func(p core.SessionPage) any {
+		return gen.SessionList{Items: each(p.Items, sessionOut), NextCursor: pageCursor(p.NextCursor), Open: p.Open, Ended: p.Ended}
 	}), p, err)
 }
 

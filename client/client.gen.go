@@ -468,6 +468,24 @@ func (e SessionKind) Valid() bool {
 	}
 }
 
+// Defines values for SessionState.
+const (
+	SessionEnded SessionState = "ended"
+	SessionOpen  SessionState = "open"
+)
+
+// Valid indicates whether the value is a known member of the SessionState enum.
+func (e SessionState) Valid() bool {
+	switch e {
+	case SessionEnded:
+		return true
+	case SessionOpen:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SignInMode.
 const (
 	SignInEmailLink   SignInMode = "email_link"
@@ -1416,11 +1434,17 @@ type RunnerSessionState string
 
 // Session defines model for Session.
 type Session struct {
+	// ClosedAt When the Session was closed. Absent while it is open, and for a browser Session that expired.
 	ClosedAt *time.Time `json:"closed_at,omitempty"`
+
+	// EndedAt When the Session ended, however it ended: `closed_at`, or the moment a browser
+	// Session expired or a token Session reached the idle limit. Absent while it is open.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
 
 	// ExpiresAt When an open browser Session ends unless it is used before: after a time unused, and
 	// at the latest a time after it started. Absent for token Sessions, which end when
-	// closed or when their token is revoked.
+	// closed, when their token is revoked, or after the Install's idle limit without a
+	// request (see `listSessions`).
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// ID The id the running copy chose.
@@ -1439,11 +1463,19 @@ type SessionKind string
 
 // SessionList defines model for SessionList.
 type SessionList struct {
+	// Ended How many of the Member's Sessions have ended.
+	Ended int       `json:"ended"`
 	Items []Session `json:"items"`
 
 	// NextCursor Pass as `cursor` for the next page. Absent on the last page.
 	NextCursor *string `json:"next_cursor,omitempty"`
+
+	// Open How many of the Member's Sessions are open.
+	Open int `json:"open"`
 }
+
+// SessionState `open`: the Session can still make requests. `ended`: it cannot; a request with its id starts a new Session.
+type SessionState string
 
 // SetAgentSettingsBody The settings to change; those left out stay as they are. `progress_file` set to `""` clears it.
 type SetAgentSettingsBody struct {
@@ -2197,6 +2229,9 @@ type ReactivateMemberParams struct {
 
 // ListSessionsParams defines parameters for ListSessions.
 type ListSessionsParams struct {
+	// State Which Sessions to list. Defaults to `open`.
+	State *SessionState `form:"state,omitempty" json:"state,omitempty"`
+
 	// Limit At most this many items. Defaults to 100.
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
 
@@ -3063,11 +3098,16 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/members/{member}/reactivate (the `ReactivateMember` operationId).
 	ReactivateMember(ctx context.Context, member MemberRef, params *ReactivateMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListSessions List a Member's open Sessions
+	// ListSessions List a Member's Sessions
 	//
-	// The Member's Sessions that are open and, for a browser Session, not yet expired, most
-	// recently seen first. A Member may list their own; an admin anyone's. Close one with
-	// `closeSession` and `member`, or close them all with `deactivateMember`.
+	// The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+	// ended instead, most recently ended first. A Session ends when it is closed, when its token
+	// is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+	// token Session when no request has come through it for the Install's idle limit (15
+	// minutes unless set), but never while a Claim bound to it is live. Every page says how
+	// many of the Member's Sessions are open and how many have ended. A Member may list their
+	// own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+	// `deactivateMember`.
 	//
 	// Corresponds with GET /v1/members/{member}/sessions (the `ListSessions` operationId).
 	ListSessions(ctx context.Context, member MemberRef, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4826,11 +4866,16 @@ func (c *Client) ReactivateMember(ctx context.Context, member MemberRef, params 
 	return c.Client.Do(req)
 }
 
-// ListSessions List a Member's open Sessions
+// ListSessions List a Member's Sessions
 //
-// The Member's Sessions that are open and, for a browser Session, not yet expired, most
-// recently seen first. A Member may list their own; an admin anyone's. Close one with
-// `closeSession` and `member`, or close them all with `deactivateMember`.
+// The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+// ended instead, most recently ended first. A Session ends when it is closed, when its token
+// is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+// token Session when no request has come through it for the Install's idle limit (15
+// minutes unless set), but never while a Claim bound to it is live. Every page says how
+// many of the Member's Sessions are open and how many have ended. A Member may list their
+// own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+// `deactivateMember`.
 //
 // Corresponds with GET /v1/members/{member}/sessions (the `ListSessions` operationId).
 func (c *Client) ListSessions(ctx context.Context, member MemberRef, params *ListSessionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8155,6 +8200,18 @@ func NewListSessionsRequest(server string, member MemberRef, params *ListSession
 		// styled parameters, preserving literal commas as delimiters
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
+
+		if params.State != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", *params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
 
 		if params.Limit != nil {
 
@@ -11852,11 +11909,16 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/members/{member}/reactivate (the `ReactivateMember` operationId).
 	ReactivateMemberWithResponse(ctx context.Context, member MemberRef, params *ReactivateMemberParams, reqEditors ...RequestEditorFn) (*ReactivateMemberResponse, error)
 
-	// ListSessionsWithResponse List a Member's open Sessions
+	// ListSessionsWithResponse List a Member's Sessions
 	//
-	// The Member's Sessions that are open and, for a browser Session, not yet expired, most
-	// recently seen first. A Member may list their own; an admin anyone's. Close one with
-	// `closeSession` and `member`, or close them all with `deactivateMember`.
+	// The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+	// ended instead, most recently ended first. A Session ends when it is closed, when its token
+	// is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+	// token Session when no request has come through it for the Install's idle limit (15
+	// minutes unless set), but never while a Claim bound to it is live. Every page says how
+	// many of the Member's Sessions are open and how many have ended. A Member may list their
+	// own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+	// `deactivateMember`.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17551,11 +17613,16 @@ func (c *ClientWithResponses) ReactivateMemberWithResponse(ctx context.Context, 
 	return ParseReactivateMemberResponse(rsp)
 }
 
-// ListSessionsWithResponse List a Member's open Sessions
+// ListSessionsWithResponse List a Member's Sessions
 //
-// The Member's Sessions that are open and, for a browser Session, not yet expired, most
-// recently seen first. A Member may list their own; an admin anyone's. Close one with
-// `closeSession` and `member`, or close them all with `deactivateMember`.
+// The Member's open Sessions, most recently seen first; with `state=ended`, those that have
+// ended instead, most recently ended first. A Session ends when it is closed, when its token
+// is revoked or its Member deactivated, or on its own: a browser Session when it expires, a
+// token Session when no request has come through it for the Install's idle limit (15
+// minutes unless set), but never while a Claim bound to it is live. Every page says how
+// many of the Member's Sessions are open and how many have ended. A Member may list their
+// own; an admin anyone's. Close one with `closeSession` and `member`, or close them all with
+// `deactivateMember`.
 //
 // Returns a wrapper object for the known response body format(s).
 //

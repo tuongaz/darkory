@@ -11,6 +11,8 @@ Revised 2026-10-05 by the [independent architecture review](../../.scratch/darko
 
 Revised 2026-10-06 after the [security review](../build/security-review.md) (M4, L1). A browser Session now ends on the server after a time unused and a time in all, both settings of the Install, while a token Session still lasts until it is closed or its token revoked. An admin can list a Member's Sessions and deactivate a Member, which revokes their tokens, closes their Sessions, ends their Claims and refuses their credentials; the Member stays in the record. Opening a login link no longer signs a browser in: it shows whom the link signs in as, and a button on that page does it.
 
+Revised 2026-10-08. A token Session now also ends on its own once no request has come through it for a setting of the Install (15 minutes by default, three times the Runner's Heartbeat timeout), unless a Claim bound to it is still live; a request with its id afterwards starts a new Session. Copies that stopped or crashed without closing their Session had left them open for good — every Runner start left two per agent. Ending one this way is presence, like starting it, and records no Activity; closing one still does. The Runner closes the Sessions it opened when it stops.
+
 ## Considered Options
 
 - **One Member per running copy.** Simple, but the org chart fills with throwaway Members.

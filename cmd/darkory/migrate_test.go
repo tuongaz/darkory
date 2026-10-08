@@ -25,7 +25,7 @@ func TestMigrate(t *testing.T) {
 				return out.String(), err
 			}
 			out, err := migrate("--dry-run")
-			if err != nil || !strings.Contains(out, "2 pending migration(s), not applied:\n  0001_init\n  0002_project_seen\n") {
+			if err != nil || !strings.Contains(out, "3 pending migration(s), not applied:\n  0001_init\n  0002_project_seen\n  0003_sessions_by_member\n") {
 				t.Fatalf("dry run: %v\n%s", err, out)
 			}
 			st, err := store.Open(t.Context(), dsn)
@@ -33,12 +33,12 @@ func TestMigrate(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer st.Close()
-			if pending, err := st.Pending(t.Context()); err != nil || len(pending) != 2 {
+			if pending, err := st.Pending(t.Context()); err != nil || len(pending) != 3 {
 				t.Fatalf("after a dry run, pending %v, %v", pending, err)
 			}
 
 			out, err = migrate()
-			if err != nil || !strings.Contains(out, "Applied 0001_init\nApplied 0002_project_seen\n") {
+			if err != nil || !strings.Contains(out, "Applied 0001_init\nApplied 0002_project_seen\nApplied 0003_sessions_by_member\n") {
 				t.Fatalf("migrate: %v\n%s", err, out)
 			}
 			out, err = migrate()

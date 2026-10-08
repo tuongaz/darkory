@@ -106,6 +106,8 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 	flusher.Flush()
 
 	ctx := r.Context()
+	// The stream is the Session at work: it keeps it seen, as requests would, so it never goes idle.
+	alive := sessionKeeper{s: s, c: c, last: time.Now()}
 	keepAlive := time.NewTicker(s.keepAlive)
 	defer keepAlive.Stop()
 	for {
@@ -119,7 +121,7 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 		}
 		// Checked only when there is something to send, so a wake with nothing new costs one read;
 		// the keep-alive tick checks an idle stream.
-		if len(page.Items) > 0 && !s.stillValid(ctx, c) {
+		if len(page.Items) > 0 && !alive.valid(ctx) {
 			return
 		}
 		for _, a := range page.Items {
@@ -143,7 +145,7 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 		select {
 		case <-woken:
 		case <-keepAlive.C:
-			if !s.stillValid(ctx, c) {
+			if !alive.valid(ctx) {
 				return
 			}
 			if _, err := fmt.Fprint(w, ": keep-alive\n\n"); err != nil {
@@ -154,6 +156,28 @@ func (s *Server) StreamActivity(w http.ResponseWriter, r *http.Request, params g
 			return
 		}
 	}
+}
+
+// sessionKeeper checks a stream's caller as it goes, and keeps its Session seen.
+type sessionKeeper struct {
+	s    *Server
+	c    *auth.Caller
+	last time.Time
+}
+
+// valid reports whether the caller may still act and, at most once a minute, records the Session
+// as seen.
+func (k *sessionKeeper) valid(ctx context.Context) bool {
+	if !k.s.stillValid(ctx, k.c) {
+		return false
+	}
+	if time.Since(k.last) >= auth.TouchEvery {
+		if err := k.s.core.TouchSession(ctx, k.c); err != nil && ctx.Err() == nil {
+			k.s.log.Error("activity stream: keep the Session seen", "err", err)
+		}
+		k.last = time.Now()
+	}
+	return true
 }
 
 // stillValid reports whether a long request's caller may still act: its Session open, its token
