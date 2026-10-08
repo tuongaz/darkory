@@ -349,7 +349,7 @@ test.describe("the Session panel with no Runner", () => {
     const properties = page.getByRole("complementary", { name: "Properties" });
     await expect(properties.getByRole("button", { name: "Copy Session id" })).toHaveCount(1);
     await expect(properties).toContainText("sess-ses-builder");
-    await expect(page.getByRole("region", { name: "Session" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Shift" })).toHaveCount(0);
     await page.getByRole("button", { name: "More" }).click();
     await expect(page.getByRole("menuitem", { name: "Take back" })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: "Nudge" })).toHaveCount(0);
@@ -416,7 +416,7 @@ test.describe("the Session panel with no Runner", () => {
     });
 
     await page.goto(`${base}/tasks/${taskKey}`);
-    const panel = page.getByRole("region", { name: "Session" });
+    const panel = page.getByRole("region", { name: "Shift" });
     await expect(panel).toBeVisible();
     await expect(panel).toContainText(`darkory join ${taskKey}`);
     await expect(panel).toContainText("Running");
@@ -430,7 +430,7 @@ test.describe("the Session panel with no Runner", () => {
     await shot(page, "3b-terminal-selection");
 
     await panel.getByRole("button", { name: "Join", exact: true }).click();
-    await expect(panel.getByRole("status")).toHaveText("Joined · your keys go to the session");
+    await expect(panel.getByRole("status")).toHaveText("Joined · your keys go to the Shift");
     expect(sockets[1].url).toMatch(new RegExp(`/v1/runner/sessions/${taskKey}/terminal$`));
     await page.keyboard.type("ls");
     await page.keyboard.press("Enter");
@@ -465,7 +465,7 @@ test.describe("the Session panel with no Runner", () => {
     await shot(page, "6b-agent-peek");
     await agentPeek.getByRole("link", { name: "View" }).click();
     const peek = page.getByRole("dialog", { name: `Task ${taskKey}` });
-    await expect(peek.getByRole("region", { name: "Session" }).locator(".xterm-rows")).toContainText("builder is running the tests");
+    await expect(peek.getByRole("region", { name: "Shift" }).locator(".xterm-rows")).toContainText("builder is running the tests");
     await expect(page).toHaveURL(new RegExp(`/projects/SES/agents\\?task=${taskKey}#session$`));
     await shot(page, "6c-peek-over-agents");
 
@@ -579,7 +579,7 @@ for (const tmux of ["on", "off"] as const) {
       await expect(agentPeek).toContainText("fake-1");
       await agentPeek.getByRole("link", { name: "View" }).click();
       const peek = page.getByRole("dialog", { name: `Task ${key}` });
-      const panel = peek.getByRole("region", { name: "Session" });
+      const panel = peek.getByRole("region", { name: "Shift" });
       await expect(panel).toContainText(tmux === "on" ? `tmux dk-${key}` : "no tmux");
       if (tmux === "on") {
         // Watching, read-only: tmux draws what the fake agent printed.
@@ -591,18 +591,18 @@ for (const tmux of ["on", "off"] as const) {
 
         // Joined, a line typed in the browser reaches the fake agent, which says it read it.
         await panel.getByRole("button", { name: "Join", exact: true }).click();
-        await expect(panel.getByRole("status")).toHaveText("Joined · your keys go to the session");
+        await expect(panel.getByRole("status")).toHaveText("Joined · your keys go to the Shift");
         // The joined socket starts from a cleared screen; type once tmux has attached and drawn it,
         // as a person would (keys sent before tmux takes the terminal are lost).
         await expect(screen).toContainText("fakeagent: busy until /exit");
         await page.keyboard.type("hello from the web");
         await page.keyboard.press("Enter");
         await expect(screen).toContainText('fakeagent: read "hello from the web"');
-        await expect.poll(async () => (await ada<LiveDetail>("GET", `/v1/tasks/${key}`)).notes.map((n) => n.body)).toContain("ada joined the session.");
+        await expect.poll(async () => (await ada<LiveDetail>("GET", `/v1/tasks/${key}`)).notes.map((n) => n.body)).toContain("ada joined the Shift.");
         await shot(page, "runner-10-live-joined");
       } else {
         // Without tmux the session cannot be joined: no terminal, no WebSocket.
-        await expect(panel).toContainText("This session runs without tmux and cannot be joined");
+        await expect(panel).toContainText("This Shift runs without tmux and cannot be joined");
         await expect(panel.locator(".xterm")).toHaveCount(0);
         expect(sockets).toEqual([]);
         await shot(page, "runner-9-live-child");
@@ -611,17 +611,17 @@ for (const tmux of ["on", "off"] as const) {
       // Stop from the peek's ⋯ menu: the session ends, its Claim is released with a Note, and its
       // log is Evidence.
       await peek.getByRole("button", { name: "More", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Stop session" }).click();
-      const confirm = page.getByRole("dialog", { name: `Stop the session on ${key}?` });
+      await page.getByRole("menuitem", { name: "Stop Shift" }).click();
+      const confirm = page.getByRole("dialog", { name: `Stop the Shift on ${key}?` });
       await expect(confirm).toContainText("Its Claim is released, with a Note saying so");
       await shot(page, `runner-11-live-stop-tmux-${tmux}`);
-      await confirm.getByRole("button", { name: "Stop session" }).click();
+      await confirm.getByRole("button", { name: "Stop Shift" }).click();
       await expect(panel).toHaveCount(0, { timeout: 30_000 });
       await expect.poll(async () => (await sessions()).items.length).toBe(0);
       const detail = await ada<LiveDetail>("GET", `/v1/tasks/${key}`);
       expect(detail.task.claim).toBeUndefined();
-      expect(detail.notes.map((n) => n.body).join("\n")).toContain("An admin stopped the session");
-      const log = detail.evidence.find((e) => new RegExp(`^session-${key}-builder-\\d{6}\\.log$`).test(e.filename));
+      expect(detail.notes.map((n) => n.body).join("\n")).toContain("An admin stopped the Shift");
+      const log = detail.evidence.find((e) => new RegExp(`^shift-${key}-builder-\\d{6}\\.log$`).test(e.filename));
       expect(log, "the session's log is Evidence").toBeDefined();
       const text = await (await fetch(`${base}/v1/evidence/${log!.id}/content`, { headers: { Authorization: `Bearer ${token}`, "Darkory-Session": "e2e-live-ada" } })).text();
       expect(text).toContain("fakeagent: busy until /exit");

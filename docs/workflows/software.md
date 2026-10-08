@@ -82,7 +82,7 @@ A Task takes one of three paths.
 
 | Gate | Skipped when | Decided by |
 |---|---|---|
-| Design, Threat model, Design review | The change is one session's work, its approach is obvious, it adds no component, endpoint, store, dependency or public interface, and nothing in it is hard to reverse | Triage (`no design needed`), or Plan filing the slices without a Design Subtask |
+| Design, Threat model, Design review | The change is one Shift's work, its approach is obvious, it adds no component, endpoint, store, dependency or public interface, and nothing in it is hard to reverse | Triage (`no design needed`), or Plan filing the slices without a Design Subtask |
 | Threat model | The design changes nothing on the attack surface | The architect (`no security impact`) |
 | ADR | No decision in the design is hard to reverse | The architect |
 | Security review | The Task has no `security` Label and its diff touches no authentication, authorisation, secret or untrusted input, and adds no dependency | The code reviewer (`pass` instead of `security review`) |
@@ -101,7 +101,7 @@ Never skipped: acceptance criteria, Code review, QA, and running the CI steps. N
 | Reviewer | — | A Note per axis |
 | QA | — | `qa-<KEY>.log` as Evidence; one Note per defect |
 | DevOps | `docs/releases/<KEY>.md` (Acceptance or standalone) | CI log as Evidence; readiness Note |
-| Everyone | — | One Observation per session about the process |
+| Everyone | — | One Observation per Shift about the process |
 
 ## Where Darkory's model shapes it
 
@@ -120,7 +120,7 @@ The Workflow fits Darkory's rules as they are. Where the research asks for somet
 
 The preset holds:
 - `workflow.json`: Steps, Skills, Connectors and canvas positions, in the form `darkory workflow set` reads.
-- `<skill>.md`: five generic Skills (`triage`, `architecture`, `security`, `qa`, `devops`), and the Project's company Skill on each role (`software-*`), whose text the Runner puts first in a session's prompt and which a Retrospective may propose changes to.
+- `<skill>.md`: five generic Skills (`triage`, `architecture`, `security`, `qa`, `devops`), and the Project's company Skill on each role (`software-*`), whose text the Runner puts first in a Shift's prompt and which a Retrospective may propose changes to.
 - `agents.json`: the roster, with each agent's name, Skills, model and Reporting line. `@owner` is the admin running setup.
 - `setup.sh`: applies all of it.
 
@@ -137,11 +137,11 @@ Running it again keeps everything that is already there. Steps keep their ids by
 
 Restart `darkory serve` (or start `darkory runner`) once the tokens exist, so the Runner starts the agents. File work with `darkory file --project WEB --title …`, which starts at Triage, or add `--breakdown` for a Parent, which starts at Plan.
 
-Sessions run in each Task's directory, and Claude Code reads every `CLAUDE.md` from there up to the root. When the data directory is inside a git checkout or under a `CLAUDE.md`, the Runner puts Task directories under `~/.darkory/workspaces/` instead of `<data>/workspaces`, so agents never read another project's rules; `--workspaces` (or `DARKORY_WORKSPACES`) names the place yourself.
+Shifts run in each Task's directory, and Claude Code reads every `CLAUDE.md` from there up to the root. When the data directory is inside a git checkout or under a `CLAUDE.md`, the Runner puts Task directories under `~/.darkory/workspaces/` instead of `<data>/workspaces`, so agents never read another project's rules; `--workspaces` (or `DARKORY_WORKSPACES`) names the place yourself.
 
 ## The proof run (2026-10-08)
 
-The preset ran on a scratch Install, with the Runner starting real Claude Code sessions under the owner's own configuration, against a small Go service (`linkshort`). The run used two Tasks and nobody touched it while it ran.
+The preset ran on a scratch Install, with the Runner starting real Claude Code Shifts under the owner's own configuration, against a small Go service (`linkshort`). The run used two Tasks and nobody touched it while it ran.
 
 - **Fast path.** LS-3 ("a short code that does not exist should say 'link not found'") went Triage → Build → Code review → QA → Release → Done in 3 minutes, with no design and no security Steps.
 - **Design path.** LS-1 ("only callers with an API key can create short links, with rate limiting, a health check, and shipped as a container with CI") was filed with Break down.
@@ -151,14 +151,14 @@ The preset ran on a scratch Install, with the Runner starting real Claude Code s
   - Two questions went to the architect.
   - The container slice went back to Build five times, four of them from Code review, each round finding one more flaw in the operator procedures.
   - Then Acceptance → Release, Auto-complete, the Retrospective, and a Skill review that sent one proposal back before publishing four new Skill versions.
-- **Totals.** 52 sessions and 84 minutes of work, from 12:19 to 13:37 UTC. No Claim lapsed and no session needed a nudge.
+- **Totals.** 52 Shifts and 84 minutes of work, from 12:19 to 13:37 UTC. No Claim lapsed and no Shift needed a nudge.
 - **Landing on main.** The Parent's merge into main conflicted with LS-3. The Retrospective filed LS-13 to land it, and the agents carried it to Done.
 
-The run found three Runner defects, each now fixed with a test: reviewed work was noted "without review" when a Step after the review completed it; a re-taken Task's branch was stale; a session could start before its sibling's merge. It also showed that a Parent's conflicting merge filed nothing to resolve it, which is fixed too. The Skill-text changes it led to are in the preset.
+The run found three Runner defects, each now fixed with a test: reviewed work was noted "without review" when a Step after the review completed it; a re-taken Task's branch was stale; a Shift could start before its sibling's merge. It also showed that a Parent's conflicting merge filed nothing to resolve it, which is fixed too. The Skill-text changes it led to are in the preset.
 
 A second run on a fresh Install used the corrected Skill texts and Runner, and took a screenshot at every Step change.
 - The architect filed five slices in the Backlog, blocked them, then moved them to Build. None was taken early.
 - Design review sent the design back once before approving it.
 - Release found that the Acceptance's branch no longer merged into main and answered `not ready`. The builder merged main in, so the Parent landed on main cleanly.
 - The Retrospective measured 6 loops and about 87 minutes of work, with no time spent waiting in a queue. Skill review published 5 Skill changes after one round of fixes; those changes are now in the preset.
-- No Claim lapsed and no session needed a nudge.
+- No Claim lapsed and no Shift needed a nudge.

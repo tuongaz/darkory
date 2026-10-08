@@ -77,7 +77,7 @@ export function WorkspacesPage() {
               title="No Workspaces yet"
               action={admin && <Button onClick={() => setAdding(true)}>New Workspace</Button>}
             >
-              A Workspace is where an agent&apos;s session works: a git repository on this machine.
+              A Workspace is where an agent&apos;s Shift works: a git repository on this machine.
             </EmptyState>
           ) : (
             <>
@@ -377,7 +377,7 @@ function NewWorkspaceDialog({ onClose }: { onClose: () => void }) {
             name.trim() && !nameOK ? (
               <span className="text-state-blocked">Letters, digits, dots, dashes and underscores, starting with a letter or digit.</span>
             ) : (
-              "Names the session's checkout, as in web."
+              "Names the Shift's checkout, as in web."
             )
           }
         >

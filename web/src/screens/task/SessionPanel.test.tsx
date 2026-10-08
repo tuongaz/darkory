@@ -68,13 +68,13 @@ function rows(panel: HTMLElement) {
   return panel.querySelector(".xterm-rows")!;
 }
 
-describe("the Session panel", () => {
-  it("is absent while the Runner runs no session on the Task, and when no Runner is attached", async () => {
+describe("the Shift panel", () => {
+  it("is absent while the Runner runs no Shift on the Task, and when no Runner is attached", async () => {
     const api = runnerApi(ada, () => ({ items: [], runner: true }));
     const { unmount } = renderApp("/tasks/WEB-3");
     expect(await screen.findByRole("heading", { name: "Build the cart page", level: 1 })).toBeInTheDocument();
     await waitFor(() => expect(api.calls.some((c) => c.path === "/v1/runner/sessions")).toBe(true));
-    expect(screen.queryByRole("region", { name: "Session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Shift" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "More" }));
     expect(await screen.findByRole("menuitem", { name: "Take back" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Nudge" })).not.toBeInTheDocument();
@@ -83,28 +83,28 @@ describe("the Session panel", () => {
     runnerApi(ada, () => ({ items: [], runner: false }));
     renderApp("/tasks/WEB-3");
     expect(await screen.findByRole("heading", { name: "Build the cart page", level: 1 })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Shift" })).not.toBeInTheDocument();
     expect(FakeWebSocket.instances).toEqual([]);
   });
 
-  it("says when the session stalled or waits on its agent", async () => {
+  it("says when the Shift stalled or waits on its agent", async () => {
     runnerApi(bob, () => ({ items: [{ ...session, state: "stalled" }], runner: true }));
     const { unmount } = renderApp("/tasks/WEB-3");
-    let panel = await screen.findByRole("region", { name: "Session" });
+    let panel = await screen.findByRole("region", { name: "Shift" });
     expect(panel).toHaveTextContent(/builder·started \d\d:\d\d·Stalled·mac-mini·tmux dk-WEB-3/);
     expect(within(panel).getByText("Stalled")).toHaveAttribute("data-tone", "blocked");
     unmount();
 
     runnerApi(bob, () => ({ items: [{ ...session, state: "waiting" }], runner: true }));
     renderApp("/tasks/WEB-3");
-    panel = await screen.findByRole("region", { name: "Session" });
+    panel = await screen.findByRole("region", { name: "Shift" });
     expect(panel).toHaveTextContent(/builder·started \d\d:\d\d·Waiting·mac-mini·tmux dk-WEB-3/);
   });
 
   it("lets a Member who is not an admin watch, read-only, with the facts and the shell line", async () => {
     runnerApi(bob);
     renderApp("/tasks/WEB-3");
-    const panel = await screen.findByRole("region", { name: "Session" });
+    const panel = await screen.findByRole("region", { name: "Shift" });
     expect(panel).toHaveTextContent(/builder·started \d\d:\d\d·Running·mac-mini·tmux dk-WEB-3/);
     expect(within(panel).getByText("darkory join WEB-3")).toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: "Join" })).not.toBeInTheDocument();
@@ -122,10 +122,10 @@ describe("the Session panel", () => {
     expect(ws.typed()).toBe("");
   });
 
-  it("joins for an admin: the keyboard goes to the session until Leave", async () => {
+  it("joins for an admin: the keyboard goes to the Shift until Leave", async () => {
     runnerApi(ada);
     renderApp("/tasks/WEB-3");
-    const panel = await screen.findByRole("region", { name: "Session" });
+    const panel = await screen.findByRole("region", { name: "Shift" });
     const watching = await connected();
     expect(within(panel).getByRole("status")).toHaveTextContent("Read-only · Join to type");
 
@@ -133,7 +133,7 @@ describe("the Session panel", () => {
     expect(watching.readyState).toBe(FakeWebSocket.CLOSED);
     const joined = await connected(2);
     expect(joined.url).toBe("ws://localhost:3000/v1/runner/sessions/WEB-3/terminal");
-    expect(within(panel).getByRole("status")).toHaveTextContent("Joined · your keys go to the session");
+    expect(within(panel).getByRole("status")).toHaveTextContent("Joined · your keys go to the Shift");
     // The terminal has the focus: what is typed is sent, as bytes.
     expect(document.activeElement?.closest("[data-owns-keys]")).not.toBeNull();
     await userEvent.keyboard("ls{Enter}");
@@ -149,7 +149,7 @@ describe("the Session panel", () => {
   it("says when the terminal closes, and Reconnect opens it again", async () => {
     runnerApi(bob);
     renderApp("/tasks/WEB-3");
-    const panel = await screen.findByRole("region", { name: "Session" });
+    const panel = await screen.findByRole("region", { name: "Shift" });
     const ws = await connected();
     act(() => ws.serverClose());
     expect(within(panel).getByRole("status")).toHaveTextContent("The terminal closed");
@@ -163,7 +163,7 @@ describe("the Session panel", () => {
   it("sends the view's size as a text frame on connecting and after each fit", async () => {
     runnerApi(bob);
     renderApp("/tasks/WEB-3");
-    await screen.findByRole("region", { name: "Session" });
+    await screen.findByRole("region", { name: "Shift" });
     const ws = await connected();
     // jsdom's panel has no width, so nothing is fitted: xterm's 80 × 24.
     expect(ws.textFrames()).toEqual([{ cols: 80, rows: 24 }]);
@@ -176,12 +176,12 @@ describe("the Session panel", () => {
     expect(again.sent.every((d) => typeof d === "string")).toBe(true);
   });
 
-  it("says a session without tmux cannot be joined, and opens no terminal", async () => {
+  it("says a Shift without tmux cannot be joined, and opens no terminal", async () => {
     runnerApi(ada, () => ({ items: [{ ...session, tmux: undefined }], runner: true }));
     renderApp("/tasks/WEB-3");
-    const panel = await screen.findByRole("region", { name: "Session" });
+    const panel = await screen.findByRole("region", { name: "Shift" });
     expect(panel).toHaveTextContent("no tmux");
-    expect(panel).toHaveTextContent("This session runs without tmux and cannot be joined");
+    expect(panel).toHaveTextContent("This Shift runs without tmux and cannot be joined");
     expect(within(panel).queryByRole("button", { name: "Join" })).not.toBeInTheDocument();
     expect(within(panel).queryByText("darkory join WEB-3")).not.toBeInTheDocument();
     expect(FakeWebSocket.instances).toEqual([]);
@@ -190,7 +190,7 @@ describe("the Session panel", () => {
   it("copies the shell line, or selects it where the clipboard is refused", async () => {
     runnerApi(bob);
     renderApp("/tasks/WEB-3");
-    const panel = await screen.findByRole("region", { name: "Session" });
+    const panel = await screen.findByRole("region", { name: "Shift" });
     const writeText = vi.fn().mockRejectedValueOnce(new Error("not allowed")).mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
 
@@ -205,11 +205,11 @@ describe("the Session panel", () => {
 });
 
 describe("the peek's keys beside a terminal", () => {
-  it("work while the terminal is not focused and stop while it is; Esc in a joined terminal is the session's", async () => {
+  it("work while the terminal is not focused and stop while it is; Esc in a joined terminal is the Shift's", async () => {
     runnerApi(ada);
     renderApp("/inbox?task=WEB-3");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
-    const panel = await within(peek).findByRole("region", { name: "Session" });
+    const panel = await within(peek).findByRole("region", { name: "Shift" });
     await connected();
     const input = within(panel).getByRole("group", { name: "Terminal of WEB-3" }).querySelector("textarea")!;
 
@@ -236,11 +236,11 @@ describe("the peek's keys beside a terminal", () => {
     expect(joined.readyState).toBe(FakeWebSocket.CLOSED);
   });
 
-  it("offers an admin Nudge and Stop session in the ⋯ menu; Stop asks first and says it releases the Claim", async () => {
+  it("offers an admin Nudge and Stop Shift in the ⋯ menu; Stop asks first and says it releases the Claim", async () => {
     const api = runnerApi(ada);
     renderApp("/inbox?task=WEB-3");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
-    await within(peek).findByRole("region", { name: "Session" });
+    await within(peek).findByRole("region", { name: "Shift" });
 
     await userEvent.click(within(peek).getByRole("button", { name: "More" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Nudge" }));
@@ -248,26 +248,26 @@ describe("the peek's keys beside a terminal", () => {
     expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/runner/sessions/k-3/nudge")).toBe(true);
 
     await userEvent.click(within(peek).getByRole("button", { name: "More" }));
-    await userEvent.click(await screen.findByRole("menuitem", { name: "Stop session" }));
-    const confirm = await screen.findByRole("dialog", { name: "Stop the session on WEB-3?" });
-    expect(confirm).toHaveTextContent("builder's session ends now");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Stop Shift" }));
+    const confirm = await screen.findByRole("dialog", { name: "Stop the Shift on WEB-3?" });
+    expect(confirm).toHaveTextContent("builder's Shift ends now");
     expect(confirm).toHaveTextContent("Its Claim is released, with a Note saying so");
     expect(confirm).toHaveTextContent("It stays at Build");
-    expect(confirm).toHaveTextContent("The session's log is attached as Evidence");
+    expect(confirm).toHaveTextContent("The Shift's log is attached as Evidence");
     expect(api.calls.some((c) => c.path.endsWith("/stop"))).toBe(false);
-    await userEvent.click(within(confirm).getByRole("button", { name: "Stop session" }));
+    await userEvent.click(within(confirm).getByRole("button", { name: "Stop Shift" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/runner/sessions/k-3/stop")).toBe(true));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Stop the session on WEB-3?" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Stop the Shift on WEB-3?" })).not.toBeInTheDocument());
   });
 
   it("offers no Nudge or Stop to a Member who is not an admin", async () => {
     runnerApi(bob);
     renderApp("/inbox?task=WEB-3");
     const peek = await screen.findByRole("dialog", { name: "Task WEB-3" });
-    await within(peek).findByRole("region", { name: "Session" });
+    await within(peek).findByRole("region", { name: "Shift" });
     await userEvent.click(within(peek).getByRole("button", { name: "More" }));
     expect(await screen.findByRole("menuitem", { name: "Open as page" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Nudge" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Stop session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Stop Shift" })).not.toBeInTheDocument();
   });
 });

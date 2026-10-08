@@ -56,8 +56,8 @@ export function SessionPanel({ detail, session, tall }: { detail: TaskDetail; se
     ) : null;
 
   return (
-    <section ref={section} id={sessionAnchor} aria-label="Session" className="flex scroll-mt-4 flex-col gap-2">
-      <SectionHeader title="Session" actions={action} />
+    <section ref={section} id={sessionAnchor} aria-label="Shift" className="flex scroll-mt-4 flex-col gap-2">
+      <SectionHeader title="Shift" actions={action} />
       <div className="flex flex-col overflow-hidden rounded-md border">
         <SessionFacts session={session} agent={members.get(session.member_id)} className="min-h-9 border-b px-3 py-1.5" />
         {joinable ? (
@@ -84,7 +84,7 @@ export function SessionPanel({ detail, session, tall }: { detail: TaskDetail; se
             </p>
           </>
         ) : (
-          <p className="flex h-9 items-center px-3 text-muted-foreground">This session runs without tmux and cannot be joined</p>
+          <p className="flex h-9 items-center px-3 text-muted-foreground">This Shift runs without tmux and cannot be joined</p>
         )}
       </div>
     </section>
@@ -95,7 +95,7 @@ export function SessionPanel({ detail, session, tall }: { detail: TaskDetail; se
 function TerminalLine({ status, mode, admin }: { status: TerminalStatus; mode: TerminalMode; admin: boolean }) {
   if (status === "connecting") return <>Connecting…</>;
   if (status === "closed") return <>The terminal closed</>;
-  if (mode === "join") return <>Joined · your keys go to the session</>;
+  if (mode === "join") return <>Joined · your keys go to the Shift</>;
   return <>{admin ? "Read-only · Join to type" : "Read-only · admins can join"}</>;
 }
 

@@ -165,7 +165,7 @@ describe("WorkflowCanvas, live", () => {
 
   it("rings a working taker's mark", () => {
     renderCanvas("live");
-    expect(screen.getAllByRole("img", { name: "builder-2 (agent), working, its session stalled", hidden: true })[0]).toHaveAttribute("data-working", "stalled");
+    expect(screen.getAllByRole("img", { name: "builder-2 (agent), working, its Shift stalled", hidden: true })[0]).toHaveAttribute("data-working", "stalled");
   });
 });
 
@@ -175,7 +175,7 @@ describe("SubtaskGraph", () => {
     render(<SubtaskGraph steps={sampleSteps} subtasks={sampleSubtasks} onOpen={onOpen} />);
     const takeable = screen.getByRole("button", { name: "MAIN-5 Normalise names on input, Waiting, takeable now", hidden: true });
     expect(takeable).toHaveAttribute("data-takeable", "true");
-    expect(screen.getByRole("button", { name: "MAIN-6 Render emoji in the sidebar, Working, its session running, held by builder-1", hidden: true })).not.toHaveAttribute(
+    expect(screen.getByRole("button", { name: "MAIN-6 Render emoji in the sidebar, Working, its Shift running, held by builder-1", hidden: true })).not.toHaveAttribute(
       "data-takeable",
     );
     await userEvent.click(takeable);

@@ -43,7 +43,7 @@ import { activityLimit, useRecentActivity, useSessions, useStepNames, useTaskMap
 
 const actionIcons: Record<string, ReactNode> = {
   Nudge: <BellRingIcon />,
-  "Stop session": <SquareIcon />,
+  "Stop Shift": <SquareIcon />,
   Pause: <PauseIcon />,
   Resume: <PlayIcon />,
   "Open in Settings": <SettingsIcon />,
@@ -117,7 +117,7 @@ export function EndPill({ end, when }: { end: Activity; when?: boolean }) {
 }
 
 /**
- * ?agent=<name> over a Project's Agents page: what holds the agent now, the session the Runner
+ * ?agent=<name> over a Project's Agents page: what holds the agent now, the Shift the Runner
  * runs for it, its Sessions, its Projects and Skills and the Steps it can take here, and its
  * Claims today. Nudge, Stop, Pause and its page in Settings are in the ⋯ menu for an admin.
  */
@@ -319,7 +319,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
 }
 
 /**
- * The session the Runner runs for the agent now: its facts, View (the Task's peek at its Session
+ * The Shift the Runner runs for the agent now: its facts, View (the Task's peek at its Session
  * panel) and, for an admin, Join, Nudge and Stop.
  */
 function RunnerSessionSection({
@@ -339,8 +339,8 @@ function RunnerSessionSection({
 }) {
   const navigate = useNavigate();
   return (
-    <section aria-label="Runner">
-      <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Runner</h3>
+    <section aria-label="Shift">
+      <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Shift</h3>
       <div className="flex flex-col rounded-md border">
         <SessionFacts session={session} agent={agent} className="min-h-9 border-b px-2.5 py-1.5" />
         {task && (
@@ -357,7 +357,7 @@ function RunnerSessionSection({
                     <BellRingIcon />
                     Nudge
                   </Button>
-                  <Button variant="ghost" size="xs" onClick={() => run({ label: "Stop session", session: "stop", taskKey: task.key })}>
+                  <Button variant="ghost" size="xs" onClick={() => run({ label: "Stop Shift", session: "stop", taskKey: task.key })}>
                     <SquareIcon />
                     Stop
                   </Button>

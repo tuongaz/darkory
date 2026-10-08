@@ -33,7 +33,7 @@ export function useSessionActions(detail: TaskDetail | undefined, session: Runne
     </DropdownMenuItem>,
     <DropdownMenuItem key="stop" variant="destructive" onSelect={() => setStopping(taskId)}>
       <CircleStopIcon />
-      Stop session
+      Stop Shift
     </DropdownMenuItem>,
   ];
   const dialogs = stopping === taskId && (

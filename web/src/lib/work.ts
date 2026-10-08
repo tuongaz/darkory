@@ -15,12 +15,12 @@ export type Working = SessionState | "held";
 
 export type MemberKind = "human" | "agent";
 
-/** A working mark in words, after its Member's name: "builder (agent), working, its session waiting". */
+/** A working mark in words, after its Member's name: "builder (agent), working, its Shift waiting". */
 export const workingWords: Record<Working, string> = {
   running: "working",
-  waiting: "working, its session waiting",
-  stalled: "working, its session stalled",
-  ending: "its session ending",
+  waiting: "working, its Shift waiting",
+  stalled: "working, its Shift stalled",
+  ending: "its Shift ending",
   held: "working",
 };
 
@@ -86,10 +86,10 @@ export function workingOf(holderKind: MemberKind, session?: SessionState): Worki
 }
 
 const sessionWords: Record<SessionState, string> = {
-  running: "its session running",
-  waiting: "its session waiting",
-  stalled: "its session stalled",
-  ending: "its session ending",
+  running: "its Shift running",
+  waiting: "its Shift waiting",
+  stalled: "its Shift stalled",
+  ending: "its Shift ending",
 };
 
 /** The glyph in words, for its `aria-label` and title. */

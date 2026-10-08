@@ -295,7 +295,7 @@ const claimOptions: FilterOption[] = [
   { value: "held", label: "Held" },
   { value: "unheld", label: "Unheld" },
   { value: "lapsed", label: "Lapsed in 24h" },
-  { value: "session", label: "Live session" },
+  { value: "session", label: "Live Shift" },
 ];
 
 const kindOptions: FilterOption[] = [

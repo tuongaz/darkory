@@ -62,7 +62,7 @@ function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] 
 
 /** What a node says of itself in its last row's tag. */
 function tagOf(t: BlockingTask, blockers: number, me: string): { text: string; tone: "working" | "waiting" | "blocked" | "plain" } | undefined {
-  if (t.holder) return { text: t.holder.working === "waiting" ? "Session waiting" : t.holder.working === "stalled" ? "Session stalled" : "Working", tone: "working" };
+  if (t.holder) return { text: t.holder.working === "waiting" ? "Shift waiting" : t.holder.working === "stalled" ? "Shift stalled" : "Working", tone: "working" };
   if (blockers > 1) return { text: `by ${blockers}`, tone: "blocked" };
   if (blockers === 1) return { text: "Blocked", tone: "blocked" };
   if (t.aimedAt) return { text: t.aimedAt.id === me ? "With you" : `With ${t.aimedAt.name}`, tone: "waiting" };

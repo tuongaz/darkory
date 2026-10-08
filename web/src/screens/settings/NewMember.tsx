@@ -150,7 +150,7 @@ export function NewMemberDialog({
         {kind === "agent" && (
           <FormRow
             label="Runner"
-            help={runner ? "The Runner starts its sessions with the Install's default command." : "It brings its own session, through its token."}
+            help={runner ? "The Runner starts its Shifts with the Install's default command." : "It works through its own token; the Runner does not start it."}
           >
             <Switch checked={runner} onCheckedChange={setRunner} aria-label="Run with the Runner" className="self-start" />
           </FormRow>

@@ -9,5 +9,5 @@ import (
 
 // descendants is not read on Windows: a session there shows progress by its file alone.
 func descendants(context.Context, int) ([]proc, error) {
-	return nil, errors.New("the processes of a session are not read on Windows")
+	return nil, errors.New("the processes of a Shift are not read on Windows")
 }

@@ -65,6 +65,9 @@ type command struct {
 	run   func(c *call) error
 	// long marks a command that runs until stopped, which skips the update notice.
 	long bool
+	// hidden keeps a command out of Usage and its group's listing: an older name that still
+	// works, such as `sessions` for `shifts`.
+	hidden bool
 }
 
 // commands lists every CLI command, in the order Usage shows them.
@@ -80,6 +83,9 @@ func Usage() string {
 	group := func(title string, cs []command) {
 		fmt.Fprintf(&b, "\n%s:\n", title)
 		for _, c := range cs {
+			if c.hidden {
+				continue
+			}
 			line := c.path
 			if c.args != "" {
 				line += " " + c.args
@@ -149,7 +155,7 @@ func groupOf(args []string) ([]string, []command) {
 	for n := len(args); n > 0; n-- {
 		var out []command
 		for _, c := range commands {
-			if words := strings.Fields(c.path); len(words) > n && slices.Equal(words[:n], args[:n]) {
+			if words := strings.Fields(c.path); !c.hidden && len(words) > n && slices.Equal(words[:n], args[:n]) {
 				out = append(out, c)
 			}
 		}

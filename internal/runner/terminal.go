@@ -26,21 +26,21 @@ import (
 func (r *Runner) Attach(ctx context.Context, taskID string, readonly bool, conn *websocket.Conn) error {
 	s := r.session(taskID)
 	if s == nil {
-		conn.Close(websocket.StatusPolicyViolation, "no session on this Task")
+		conn.Close(websocket.StatusPolicyViolation, "no Shift on this Task")
 		return runnerapi.ErrNoSession
 	}
 	s.mu.Lock()
 	proc := s.proc
 	s.mu.Unlock()
 	if proc == nil || !proc.Tmux() {
-		conn.Close(websocket.StatusPolicyViolation, "the session runs without tmux")
+		conn.Close(websocket.StatusPolicyViolation, "the Shift runs without tmux")
 		return runnerapi.ErrNotJoinable
 	}
 	if v, ok := runnerapi.ViewerOf(ctx); ok && !readonly {
-		if err := s.rec.Note(ctx, s.key, v.Name+" joined the session."); err != nil {
-			s.log.Warn("could not note who joined the session", "viewer", v.Name, "err", err)
+		if err := s.rec.Note(ctx, s.key, v.Name+" joined the Shift."); err != nil {
+			s.log.Warn("could not note who joined the Shift", "viewer", v.Name, "err", err)
 		}
-		s.log.Info("someone joined the session", "viewer", v.Name)
+		s.log.Info("someone joined the Shift", "viewer", v.Name)
 	}
 	args := []string{"-L", r.Socket(), "attach-session", "-t", "=" + TmuxName(s.key)}
 	if readonly {

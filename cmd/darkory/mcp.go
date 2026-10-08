@@ -26,7 +26,7 @@ const mcpUsage = `Usage: darkory mcp [--url url] [--token dk_…] [--session id]
 Serves the agent operations as MCP tools over standard input and output. It reads DARKORY_URL,
 DARKORY_TOKEN and DARKORY_SESSION (a fresh Session id per process when unset), and sends
 Heartbeats for its Session's Claims while it runs, unless --no-heartbeat (DARKORY_MCP_NO_HEARTBEAT=1)
-leaves them to the runner that started the session. attach_evidence reads only regular files under
+leaves them to the Runner that started the Shift. attach_evidence reads only regular files under
 the evidence root (the working directory unless set), none hidden unless allowed. A plain http://
 URL must name this machine unless --insecure (DARKORY_INSECURE=1) is given, since the token would
 cross the network in clear text. Prefer DARKORY_TOKEN to --token, which other processes can read.
@@ -60,7 +60,7 @@ func runMCP(args []string, stderr io.Writer) error {
 	}
 	fs.Int64Var(&o.EvidenceMaxMB, "evidence-max-mb", maxMB, "the largest file attach_evidence sends, in MiB (DARKORY_EVIDENCE_MAX_MB)")
 	noHeartbeat := !slices.Contains([]string{"", "0", "false"}, os.Getenv("DARKORY_MCP_NO_HEARTBEAT"))
-	fs.BoolVar(&o.NoHeartbeats, "no-heartbeat", noHeartbeat, "send no Heartbeats: the runner that started the session sends them (DARKORY_MCP_NO_HEARTBEAT)")
+	fs.BoolVar(&o.NoHeartbeats, "no-heartbeat", noHeartbeat, "send no Heartbeats: the Runner that started the Shift sends them (DARKORY_MCP_NO_HEARTBEAT)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil

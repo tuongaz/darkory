@@ -19,7 +19,7 @@ type agent struct {
 func (a *agent) name() string { return a.me.Member.Name }
 
 // pausedNote is the Note of a Task released because its agent was paused while next waited.
-const pausedNote = "The agent was paused while it waited for this Task, so the runner released it without starting a session."
+const pausedNote = "The agent was paused while it waited for this Task, so the Runner released it without starting a Shift."
 
 // run pulls Tasks through next and works each in a session, until ctx ends. A paused agent takes
 // no work; its settings are read again before every next.
@@ -51,7 +51,7 @@ func (a *agent) run(ctx context.Context) {
 		if !ok {
 			// An admin may give it settings later (darkory agent set).
 			if !unset {
-				log.Warn("the agent has no agent settings, so the runner starts no session for it until it has")
+				log.Warn("the agent has no agent settings, so the runner starts no Shift for it until it has")
 				unset = true
 			}
 			sleep(ctx, r.t.Wait)

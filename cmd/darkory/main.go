@@ -46,8 +46,8 @@ Usage:
   darkory migrate [--data dir] [--db dsn] [--dry-run]                  apply pending migrations, or list them
   darkory mcp                                                          serve the agent operations to an MCP client over stdio
   darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]… [--workspaces dir]
-                                                                       run the Runner alone: agent sessions for the agents' tokens
-  darkory join <task> [--readonly] [--data dir]                        join the tmux session the Runner runs for a Task
+                                                                       run the Runner alone: Shifts for the agents' tokens
+  darkory join <task> [--readonly] [--data dir]                        join the Shift the Runner runs for a Task, in tmux
   darkory update [--check] [--version v]                               replace this binary with a newer release
   darkory version                                                      print the version
 ` + cli.Usage()

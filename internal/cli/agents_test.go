@@ -140,10 +140,10 @@ func TestAgentCommands(t *testing.T) {
 		}
 		ada.fails(ExitUsage, "agent", "set", "bob", "--env", "NOEQUALS")
 
-		if out := bob.ok("sessions"); out != "No Runner is attached to this server; it runs no agent sessions.\n" {
-			t.Fatalf("sessions without a Runner: %q", out)
+		if out := bob.ok("shifts"); out != "No Runner is attached to this server; it runs no Shifts.\n" {
+			t.Fatalf("shifts without a Runner: %q", out)
 		}
-		if res := ada.fails(ExitFailed, "sessions", "nudge", "WEB-3"); !strings.Contains(res.stderr, "no_runner") {
+		if res := ada.fails(ExitFailed, "shifts", "nudge", "WEB-3"); !strings.Contains(res.stderr, "no_runner") {
 			t.Fatalf("nudge without a Runner: %s", res.stderr)
 		}
 		var task client.TaskDetail
@@ -151,16 +151,24 @@ func TestAgentCommands(t *testing.T) {
 		fake := &oneSession{session: runnerapi.Session{TaskID: task.Task.ID, MemberID: deref(task.Task.FiledBy), SessionID: "run-1", Host: "box",
 			Tmux: "dk-WEB-3", StartedAt: time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC), State: runnerapi.StateRunning, LogPath: "/data/pane.log"}}
 		in.srv.AttachRunner(fake)
-		out = bob.ok("sessions")
+		out = bob.ok("shifts")
 		if out != "WEB-3     ada            running  since 2026-10-07T09:00:00Z on box, tmux dk-WEB-3, log /data/pane.log\n" {
-			t.Fatalf("sessions:\n%q", out)
+			t.Fatalf("shifts:\n%q", out)
 		}
-		bob.fails(ExitRefused, "sessions", "nudge", "WEB-3")
+		bob.fails(ExitRefused, "shifts", "nudge", "WEB-3")
+		ada.ok("shifts", "nudge", "WEB-3")
+		ada.ok("shifts", "stop", "WEB-3")
+		// The older name still works, and Usage no longer lists it.
+		if old := bob.ok("sessions"); old != out {
+			t.Fatalf("sessions, the older name:\n%q", old)
+		}
 		ada.ok("sessions", "nudge", "WEB-3")
-		ada.ok("sessions", "stop", "WEB-3")
-		if len(fake.nudged) != 1 || fake.nudged[0] != task.Task.ID {
+		if strings.Contains(Usage(), "darkory sessions") || !strings.Contains(Usage(), "darkory shifts stop <task>") {
+			t.Fatalf("Usage lists the older name or not the new one:\n%s", Usage())
+		}
+		if len(fake.nudged) != 2 || fake.nudged[0] != task.Task.ID {
 			t.Fatalf("nudged %v", fake.nudged)
 		}
-		ada.fails(ExitFailed, "sessions", "nudge", "WEB-4")
+		ada.fails(ExitFailed, "shifts", "nudge", "WEB-4")
 	})
 }

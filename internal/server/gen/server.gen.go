@@ -757,16 +757,16 @@ type AdvanceTaskBody struct {
 	Outcome *string `json:"outcome,omitempty"`
 }
 
-// AgentSettings How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+// AgentSettings How the Runner starts an agent Member's Shifts. Absent for humans, and for agents the
 // Runner does not start (an agent working from elsewhere, through its own token). `command`
 // is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
-// session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
-// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+// id of the Session it chooses for the Shift), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the Shift's
 // directory) and `{task}` (the Task's display key). The defaults start Claude Code:
 // `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
 // --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
 // read these settings, `env` included: keep secrets in the server's own environment and
-// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
+// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A Shift takes only those, `env`
 // and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
 // `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
 type AgentSettings struct {
@@ -776,21 +776,21 @@ type AgentSettings struct {
 	// Command The program to start, such as `claude`.
 	Command string `json:"command"`
 
-	// Env Variables added to the session's environment, besides `DARKORY_URL`, `DARKORY_TOKEN` and `DARKORY_SESSION`.
+	// Env Variables added to the Shift's environment, besides `DARKORY_URL`, `DARKORY_TOKEN` and `DARKORY_SESSION`.
 	Env map[string]string `json:"env"`
 
 	// Model The model the agent runs on, passed as `{model}` and reported as the Claim's model label.
 	Model string `json:"model"`
 
-	// Paused The Runner starts no new session for the agent; one running carries on.
+	// Paused The Runner starts no new Shift for the agent; one running carries on.
 	Paused bool `json:"paused"`
 
-	// ProgressFile The file whose modified time shows the session making progress, for a command other
+	// ProgressFile The file whose modified time shows the Shift making progress, for a command other
 	// than Claude Code (whose transcript the Runner finds itself); it may use the same
 	// placeholders. The Runner sends Heartbeats only while it changes.
 	ProgressFile *string `json:"progress_file,omitempty"`
 
-	// Unattended The session runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
+	// Unattended The Shift runs with the agent's permission checks skipped; the worktree and the exit rules are the fence.
 	Unattended bool `json:"unattended"`
 }
 
@@ -1232,16 +1232,16 @@ type Member struct {
 	// Admin Admins create Members, Projects, Skills and the Organisation's Labels, set Workflows and Reporting lines, and issue tokens and login links.
 	Admin bool `json:"admin"`
 
-	// Agent How the Runner starts an agent Member's sessions. Absent for humans, and for agents the
+	// Agent How the Runner starts an agent Member's Shifts. Absent for humans, and for agents the
 	// Runner does not start (an agent working from elsewhere, through its own token). `command`
 	// is the program and `args` its arguments; in each, the Runner replaces `{session_id}` (the
-	// session id it chooses), `{model}`, `{prompt_file}` (the prompt it writes from the record),
-	// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the session's
+	// id of the Session it chooses for the Shift), `{model}`, `{prompt_file}` (the prompt it writes from the record),
+	// `{mcp_config}` (a config file pointing at `darkory mcp`), `{workspace}` (the Shift's
 	// directory) and `{task}` (the Task's display key). The defaults start Claude Code:
 	// `claude --session-id {session_id} --model {model} --dangerously-skip-permissions
 	// --mcp-config {mcp_config} --append-system-prompt-file {prompt_file}`. Every Member can
 	// read these settings, `env` included: keep secrets in the server's own environment and
-	// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A session takes only those, `env`
+	// name them in its `DARKORY_RUNNER_ENV` (comma-separated). A Shift takes only those, `env`
 	// and a few variables of the server's (`PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`,
 	// `LC_*`, `TERM`, `TMPDIR`, `TZ`, `SSH_AUTH_SOCK`, the proxy variables, `ANTHROPIC_*`).
 	Agent *AgentSettings `json:"agent,omitempty"`
@@ -1461,36 +1461,36 @@ type ReleaseTaskBody struct {
 	Note *string `json:"note,omitempty"`
 }
 
-// RunnerSession An agent session the Runner runs for a Task it claimed as that agent. Not part of the
-// record: it lives as long as the session.
+// RunnerSession A Shift the Runner runs for a Task it claimed as that agent. Not part of the
+// record: it lives as long as the Shift.
 type RunnerSession struct {
-	// Host The machine the session runs on.
+	// Host The machine the Shift runs on.
 	Host string `json:"host"`
 
-	// LogPath Where the session's terminal is logged on that machine; attached to the Task as Evidence when it ends.
+	// LogPath Where the Shift's terminal is logged on that machine; attached to the Task as Evidence when it ends.
 	LogPath string `json:"log_path"`
 
-	// MemberID The agent whose session it is.
+	// MemberID The agent whose Shift it is.
 	MemberID shortid.ID `json:"member_id"`
 
-	// SessionID The Darkory Session the Runner holds the Claim through, which is also the agent's own session id.
+	// SessionID The Darkory Session the Runner holds the Claim through, which is also the agent's own Session id.
 	SessionID shortid.ID `json:"session_id"`
 	StartedAt time.Time  `json:"started_at"`
 
 	// State `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
 	// turn ended with the Task still held and no decision, and the Runner nudges it to end the
 	// Task (a nudge pending or sent), then releases it; or the agent's screen shows a Claude Code
-	// dialog the Runner leaves to a person, who answers it by joining the session. `stalled`:
+	// dialog the Runner leaves to a person, who answers it by joining the Shift. `stalled`:
 	// its progress has not moved for the Runner's stale window, so the Runner sends no more
 	// Heartbeats and the Claim lapses unless it moves again. `ending`: the Claim has ended and
-	// the session is closing.
+	// the Shift is closing.
 	State RunnerSessionState `json:"state"`
 
-	// StateSince When the session entered its current state; `started_at` until it first changed.
+	// StateSince When the Shift entered its current state; `started_at` until it first changed.
 	StateSince time.Time  `json:"state_since"`
 	TaskID     shortid.ID `json:"task_id"`
 
-	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the session runs without tmux and cannot be joined.
+	// Tmux The tmux session's name, such as `dk-MAIN-12`. Absent when the Shift runs without tmux and cannot be joined.
 	Tmux *string `json:"tmux,omitempty"`
 }
 
@@ -1498,17 +1498,17 @@ type RunnerSession struct {
 type RunnerSessionList struct {
 	Items []RunnerSession `json:"items"`
 
-	// Runner Whether a Runner is attached to this server; false with no sessions when none is.
+	// Runner Whether a Runner is attached to this server; false with no Shifts when none is.
 	Runner bool `json:"runner"`
 }
 
 // RunnerSessionState `running`: working, its progress moving, the Runner sending Heartbeats. `waiting`: its
 // turn ended with the Task still held and no decision, and the Runner nudges it to end the
 // Task (a nudge pending or sent), then releases it; or the agent's screen shows a Claude Code
-// dialog the Runner leaves to a person, who answers it by joining the session. `stalled`:
+// dialog the Runner leaves to a person, who answers it by joining the Shift. `stalled`:
 // its progress has not moved for the Runner's stale window, so the Runner sends no more
 // Heartbeats and the Claim lapses unless it moves again. `ending`: the Claim has ended and
-// the session is closing.
+// the Shift is closing.
 type RunnerSessionState string
 
 // Session defines model for Session.
@@ -2554,7 +2554,7 @@ type ListTasksParams struct {
 	// `retrospective`, or `question`: a work Task aimed at a Member; `work` is a work Task aimed
 	// at nobody) · `claim` (`held`: a live Claim; `unheld`: none, as `holder:is:none`;
 	// `lapsed`: a Claim of the Task lapsed within the last 24 hours; `session`: the Runner
-	// beside this server runs a session for it now, as `listRunnerSessions` lists) ·
+	// beside this server runs a Shift for it now, as `listRunnerSessions` lists) ·
 	// `takeable_by` (`agents`: an active agent could take it by its Step's Skill, being a
 	// Member of its Project with that Skill, or for `skill-review` any Member of the
 	// Organisation with it; `humans`: likewise a human; `both`: an agent and a human could) ·
@@ -2959,10 +2959,10 @@ type ServerInterface interface {
 	// UpdateMember Change a Member's name, email, admin mark or avatar
 	// (PATCH /v1/members/{member})
 	UpdateMember(w http.ResponseWriter, r *http.Request, member MemberRef, params UpdateMemberParams)
-	// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no session for it (admin)
+	// ClearAgentSettings Clear an agent Member's settings, so the Runner starts no Shift for it (admin)
 	// (DELETE /v1/members/{member}/agent)
 	ClearAgentSettings(w http.ResponseWriter, r *http.Request, member MemberRef, params ClearAgentSettingsParams)
-	// SetAgentSettings Set how the Runner starts an agent Member's sessions (admin)
+	// SetAgentSettings Set how the Runner starts an agent Member's Shifts (admin)
 	// (PATCH /v1/members/{member}/agent)
 	SetAgentSettings(w http.ResponseWriter, r *http.Request, member MemberRef, params SetAgentSettingsParams)
 	// DeactivateMember Deactivate a Member (admin)
@@ -3031,16 +3031,16 @@ type ServerInterface interface {
 	// SetWorkflow Replace a Project's Workflow (admin)
 	// (PUT /v1/projects/{project}/workflow)
 	SetWorkflow(w http.ResponseWriter, r *http.Request, project ProjectRef, params SetWorkflowParams)
-	// ListRunnerSessions List the agent sessions the Runner is running now
+	// ListRunnerSessions List the Shifts the Runner is running now
 	// (GET /v1/runner/sessions)
 	ListRunnerSessions(w http.ResponseWriter, r *http.Request)
-	// NudgeRunnerSession Nudge the agent in a Task's session to end the Task (admin)
+	// NudgeRunnerSession Nudge the agent in a Task's Shift to end the Task (admin)
 	// (POST /v1/runner/sessions/{task}/nudge)
 	NudgeRunnerSession(w http.ResponseWriter, r *http.Request, task TaskRef, params NudgeRunnerSessionParams)
-	// StopRunnerSession Stop a Task's session (admin)
+	// StopRunnerSession Stop a Task's Shift (admin)
 	// (POST /v1/runner/sessions/{task}/stop)
 	StopRunnerSession(w http.ResponseWriter, r *http.Request, task TaskRef, params StopRunnerSessionParams)
-	// RunnerTerminal Watch or join a Task's session through a terminal (WebSocket)
+	// RunnerTerminal Watch or join a Task's Shift through a terminal (WebSocket)
 	// (GET /v1/runner/sessions/{task}/terminal)
 	RunnerTerminal(w http.ResponseWriter, r *http.Request, task TaskRef, params RunnerTerminalParams)
 	// CloseSession Close one of the caller's Sessions

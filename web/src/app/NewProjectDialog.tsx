@@ -188,7 +188,7 @@ function NewProjectForm({ onClose }: { onClose: () => void }) {
           </div>
         </FormRow>
         {workspaces.length > 0 && (
-          <FormRow label="Workspace" help="Where its Tasks' sessions work when a Task names none.">
+          <FormRow label="Workspace" help="Where its Tasks' Shifts work when a Task names none.">
             <Select value={workspace} onValueChange={setWorkspace}>
               <SelectTrigger aria-label="Workspace" className="w-full">
                 <SelectValue />

@@ -275,25 +275,25 @@ export function StopSessionDialog({ detail, session, open, onOpenChange }: Dialo
   const name = useMemberName();
   const stop = useMutation({
     mutationFn: () => call(api.POST("/v1/runner/sessions/{task}/stop", { params: { path: { task: task.id } } })),
-    onSuccess: done(`The session on ${task.key} is stopping`, onOpenChange),
+    onSuccess: done(`The Shift on ${task.key} is stopping`, onOpenChange),
   });
   return (
     <FormDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={`Stop the session on ${task.key}?`}
+      title={`Stop the Shift on ${task.key}?`}
       description={task.title}
-      submitLabel="Stop session"
+      submitLabel="Stop Shift"
       destructive
       onSubmit={() => stop.mutate()}
       pending={stop.isPending}
       error={stop.error}
     >
       <Consequences>
-        <Consequence mark={<Avatar id={session.member_id} />}>{name(session.member_id)}&apos;s session ends now</Consequence>
+        <Consequence mark={<Avatar id={session.member_id} />}>{name(session.member_id)}&apos;s Shift ends now</Consequence>
         <Consequence mark={<MessageSquareIcon />}>Its Claim is released, with a Note saying so</Consequence>
         <Consequence mark={<ArrowRightIcon />}>{step ? `It stays at ${step.name}` : "It stays where it is"}</Consequence>
-        <Consequence mark={<FileTextIcon />}>The session&apos;s log is attached as Evidence</Consequence>
+        <Consequence mark={<FileTextIcon />}>The Shift&apos;s log is attached as Evidence</Consequence>
       </Consequences>
     </FormDialog>
   );

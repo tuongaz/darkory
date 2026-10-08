@@ -163,7 +163,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
               title={stopTitle}
               tone={canDeactivate ? "destructive" : undefined}
               description={[
-                pausable && "Pausing stops new sessions.",
+                pausable && "Paused, it starts no new Shift.",
                 canDeactivate && `Deactivating revokes ${they.its} tokens, closes ${they.its} Sessions and ends ${they.its} Claims.`,
                 !active && `Deactivated: ${they.do} no work until reactivated.`,
               ]

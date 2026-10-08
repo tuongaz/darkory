@@ -385,7 +385,7 @@ describe("Settings › Install", () => {
     mockApi({ ...signedIn(), "GET /v1/runner/sessions": { items: [], runner: true } });
     renderApp("/settings/organisation/install");
     expect(await screen.findByText("Attached")).toBeInTheDocument();
-    expect(screen.getByText("0 sessions running")).toBeInTheDocument();
+    expect(screen.getByText("0 Shifts running")).toBeInTheDocument();
   });
 });
 

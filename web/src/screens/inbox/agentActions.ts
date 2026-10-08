@@ -60,7 +60,7 @@ export function agentActions({
     if (directs || t.owner_id === me.id) actions.push({ label: `Take back ${t.key}`, to: taskOverAgents(project, t.key) });
   }
   if (me.admin && session && sessionKey && session.state !== "ending") {
-    actions.push({ label: "Nudge", session: "nudge", taskKey: sessionKey }, { label: "Stop session", session: "stop", taskKey: sessionKey });
+    actions.push({ label: "Nudge", session: "nudge", taskKey: sessionKey }, { label: "Stop Shift", session: "stop", taskKey: sessionKey });
   }
   if (me.admin && agent.agent && !agent.deactivated_at) {
     actions.push(agent.agent.paused ? { label: "Resume", paused: false } : { label: "Pause", paused: true });

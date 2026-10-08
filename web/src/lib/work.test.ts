@@ -49,7 +49,7 @@ describe("workingOf", () => {
 
 describe("glyphLabel", () => {
   it("says each glyph in words", () => {
-    expect(glyphLabel({ glyph: "working", holderKind: "agent", session: "stalled" })).toBe("Working, its session stalled");
+    expect(glyphLabel({ glyph: "working", holderKind: "agent", session: "stalled" })).toBe("Working, its Shift stalled");
     expect(glyphLabel({ glyph: "working", holderKind: "human" })).toBe("Working");
     expect(glyphLabel({ glyph: "hold" })).toBe("At a hold");
     expect(glyphLabel({ glyph: "parent", done: 3, dropped: 0, total: 5 })).toBe("3 of 5 Subtasks done");

@@ -241,7 +241,7 @@ func (ri *runnerInstall) sessionLog(key, agent string) string {
 	} else {
 		agent = regexp.QuoteMeta(agent)
 	}
-	re := regexp.MustCompile(`^session-` + regexp.QuoteMeta(key) + `-` + agent + `-[0-9]{6}\.log$`)
+	re := regexp.MustCompile(`^shift-` + regexp.QuoteMeta(key) + `-` + agent + `-[0-9]{6}\.log$`)
 	d := ri.task(key)
 	list := d.Evidence
 	if d.Parent != nil {
@@ -372,7 +372,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		return d.Task.Blocked && d.Task.Claim == nil
 	})
 	d := ri.task("MAIN-3")
-	if n := strings.Count(notes(d), "Session ended without a decision after 2 nudges; exit code 0; last 20 lines:"); n != 3 {
+	if n := strings.Count(notes(d), "Shift ended without a decision after 2 nudges; exit code 0; last 20 lines:"); n != 3 {
 		t.Errorf("%d releases after two nudges:\n%s", n, notes(d))
 	}
 	if !strings.Contains(notes(d), `fakeagent: read "You stopped without ending the Task: advance it, complete it, or file a question."`) {
@@ -390,7 +390,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 		}
 	}
 	q := ri.task((*d.Task.OpenBlockers)[0].Key)
-	if q.Task.Title != "The runner released MAIN-3 three times without a decision" || q.Task.AimedAtID == nil || *q.Task.AimedAtID != ada.id {
+	if q.Task.Title != "The Runner released MAIN-3 three times without a decision" || q.Task.AimedAtID == nil || *q.Task.AimedAtID != ada.id {
 		t.Errorf("the question: %+v", q.Task)
 	}
 	if d.Task.State != client.TaskStateOpen || d.Task.AimedAtID == nil {
@@ -401,7 +401,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 	// Heartbeat refused.
 	ri.wait(30*time.Second, "MAIN-4's session stalled", func() bool {
 		var list client.RunnerSessionList
-		ada.json(&list, "sessions")
+		ada.json(&list, "shifts")
 		return slices.ContainsFunc(list.Items, func(s client.RunnerSession) bool {
 			return s.TaskID == ri.task("MAIN-4").Task.ID && s.State == client.RunnerSessionStalled && s.StateSince.After(s.StartedAt)
 		})
@@ -424,7 +424,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 	// 7: taken back while it works.
 	ri.wait(15*time.Second, "busy at work on MAIN-5", func() bool {
 		var list client.RunnerSessionList
-		ada.json(&list, "sessions")
+		ada.json(&list, "shifts")
 		return slices.ContainsFunc(list.Items, func(s client.RunnerSession) bool {
 			return s.TaskID == ri.task("MAIN-5").Task.ID && s.State == client.RunnerSessionRunning
 		})
@@ -433,7 +433,7 @@ func TestRunnerEndsSessionsWithoutADecision(t *testing.T) {
 	ada.ok("take-back", "MAIN-5", "--reason", "enough")
 	ri.wait(15*time.Second, "the taken-back session to end, its log attached", func() bool {
 		var list client.RunnerSessionList
-		ada.json(&list, "sessions")
+		ada.json(&list, "shifts")
 		return len(slices.DeleteFunc(list.Items, func(s client.RunnerSession) bool { return s.TaskID != ri.task("MAIN-5").Task.ID })) == 0 &&
 			strings.Contains(ri.sessionLog("MAIN-5", "busy"), `fakeagent: read "/exit"`)
 	})
@@ -541,7 +541,7 @@ func TestRunnerMergeConflict(t *testing.T) {
 func TestRunnerAlone(t *testing.T) {
 	ri := newRunnerInstall(t, nil, "--runner=off")
 	ada := ri.ada
-	if out := ada.ok("sessions"); !strings.Contains(out, "No Runner is attached to this server") {
+	if out := ada.ok("shifts"); !strings.Contains(out, "No Runner is attached to this server") {
 		t.Fatalf("sessions on a server with no Runner:\n%s", out)
 	}
 	log := &logBuffer{}
@@ -610,18 +610,18 @@ func TestRunnerInTmux(t *testing.T) {
 	ada.ok("file", "--project", "MAIN", "--title", "Fix the typo")
 	ri.wait(20*time.Second, "a tmux session dk-MAIN-1", func() bool {
 		var list client.RunnerSessionList
-		ada.json(&list, "sessions")
+		ada.json(&list, "shifts")
 		return len(list.Items) == 1 && list.Items[0].Tmux != nil && *list.Items[0].Tmux == "dk-MAIN-1" &&
 			exec.Command("tmux", "-L", socket, "has-session", "-t", "=dk-MAIN-1").Run() == nil
 	})
 	ada.ok("agent", "set", "builder", "--paused")
-	ada.ok("sessions", "stop", "MAIN-1")
+	ada.ok("shifts", "stop", "MAIN-1")
 	ri.wait(20*time.Second, "the stopped session gone, its log attached", func() bool {
 		return exec.Command("tmux", "-L", socket, "has-session", "-t", "=dk-MAIN-1").Run() != nil &&
 			strings.Contains(ri.sessionLog("MAIN-1", "builder"), "fakeagent: busy until /exit")
 	})
 	d := ri.task("MAIN-1")
-	if d.Task.Claim != nil || !strings.Contains(notes(d), "An admin stopped the session") {
+	if d.Task.Claim != nil || !strings.Contains(notes(d), "An admin stopped the Shift") {
 		t.Fatalf("MAIN-1 after the stop: %+v\n%s", d.Task.Claim, notes(d))
 	}
 }
