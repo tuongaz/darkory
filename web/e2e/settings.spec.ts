@@ -236,7 +236,7 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
     await mai.page.goto(`${base}/settings`);
     await expect(mai.page).toHaveURL(`${base}/settings/account`);
     const pages = nav(mai.page);
-    await expect(pages.getByRole("link", { name: "Profile" })).toBeVisible();
+    await expect(pages.getByRole("link", { name: "Account" })).toBeVisible();
     await expect(pages.getByRole("list", { name: "Organisation" })).toHaveCount(0);
     await expect(pages.getByRole("button", { name: "Web" })).toBeVisible();
     await expect(pages.getByRole("button", { name: "Operations" })).toHaveCount(0);

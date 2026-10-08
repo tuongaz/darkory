@@ -70,8 +70,8 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
 
   const setup = page.getByRole("region", { name: "Set up E2E Organisation" });
   await test.step("the checklist: a Project and Members already, File Task next", async () => {
-    await expect(setup.getByLabel("Step 1, done")).toBeVisible();
-    await expect(setup.getByLabel("Step 2, done")).toBeVisible();
+    await expect(setup.getByLabel("1 of 3, done")).toBeVisible();
+    await expect(setup.getByLabel("2 of 3, done")).toBeVisible();
     await expect(setup.getByRole("button", { name: "File Task" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Project: Main" })).toBeVisible();
     await shot(page, "02-checklist");

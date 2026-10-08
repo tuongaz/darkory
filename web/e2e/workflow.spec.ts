@@ -93,11 +93,14 @@ test("scenario 6: rename a Step while the board is open, delete one with Tasks, 
   const dialog = page.getByRole("dialog", { name: "Delete Review" });
   await expect(dialog).toContainText("2 Tasks are at Review");
   await expect(dialog.getByRole("button", { name: "Delete Review" })).toBeDisabled();
+  // Make's only way out led into Review: the dialog says so, and does not refuse.
+  await expect(dialog.getByRole("note")).toContainText("Make leads out only into Review");
   await page.screenshot({ path: `${shots}6-05-delete-asks-where.png`, animations: "disabled" });
   await dialog.getByRole("combobox").click();
   await page.getByRole("option", { name: "Make" }).click();
   await dialog.getByRole("button", { name: "Delete Review" }).click();
   await expect(node(page, "Review")).toHaveCount(0);
+  await expect(node(page, "Make")).toContainText("No way out");
   await page.screenshot({ path: `${shots}6-06-deleted.png`, animations: "disabled" });
   const moved = (await v1("GET", "/v1/tasks?project=MAIN&state=open")) as { items: { title: string; step_id?: string }[] };
   const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { steps: { id: string; name: string }[] };
