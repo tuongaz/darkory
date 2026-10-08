@@ -180,7 +180,7 @@ VALUES ($1, $2, $3, 'human', TRUE, $4, $4)`, memberID, orgID, memberName, ms(now
 
 // seedRoster seeds the roster inside Init's write, the first Member, human, being humanID.
 func seedRoster(t *tx, humanID string, nw *NewWorkspace, out *Initialised) error {
-	project, err := createProject(t, RosterProjectKey, RosterProjectName, WorkflowDefault, "")
+	project, err := createProject(t, projectRow{key: RosterProjectKey, name: RosterProjectName, workflow: WorkflowDefault})
 	if err != nil {
 		return err
 	}

@@ -54,7 +54,7 @@ func qaFlow(f *fixture) {
 	f.skill("build")
 	f.skill("qa")
 	if _, err := f.svc.SetWorkflow(f.t.Context(), f.admin, "WEB", core.WorkflowInput{
-		Steps: []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "QA", Skill: ptrStr("qa"), X: 240}},
+		Steps: []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "QA", Skill: ptrStr("qa")}},
 		Connectors: []core.ConnectorInput{
 			{From: "Build", To: ptrStr("QA"), Name: "pass"},
 			{From: "QA", Name: "pass"}, {From: "QA", To: ptrStr("Build"), Name: "fail"},
@@ -90,6 +90,7 @@ func TestAdvanceKeepsNoSelfReview(t *testing.T) {
 		if !strings.Contains(err.Error(), `"pass"`) {
 			t.Fatalf("the refusal does not name the outcomes: %v", err)
 		}
+		wantDetail(t, err, "outcomes", "[pass]")
 
 		f.clock.Advance(time.Hour)
 		note := "ready for qa"
@@ -126,6 +127,7 @@ func TestAdvanceKeepsNoSelfReview(t *testing.T) {
 		// Two ways out: an empty outcome names neither.
 		_, err = f.svc.Advance(ctx, tester, task.Key, "", nil, core.Idem{})
 		wantCode(t, err, core.CodeNoConnector)
+		wantDetail(t, err, "outcomes", "[pass fail]")
 		if back := f.advance(tester, task.Key, "FAIL"); back.StepID == nil || *back.StepID != f.step("WEB", "Build") {
 			t.Fatalf("failed back to %v", back.StepID)
 		}
@@ -157,7 +159,7 @@ func TestAdvanceKeepsNoSelfReview(t *testing.T) {
 
 // Complete is advancing along the one Connector into Done: refused use_advance from a Step with
 // none or several, naming the outcomes. A Task aimed at a Member, at no Step, has no outcomes to
-// advance along and completes as it is.
+// advance along and completes as it is, whether completed or advanced.
 func TestCompleteIsTheOneWayIntoDone(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -173,6 +175,7 @@ func TestCompleteIsTheOneWayIntoDone(t *testing.T) {
 		if !strings.Contains(err.Error(), `"pass"`) {
 			t.Fatalf("the refusal does not name the outcomes: %v", err)
 		}
+		wantDetail(t, err, "outcomes", "[pass]")
 		f.advance(builder, task.Key, "pass")
 		f.claim(tester, task.Key, noTimeout)
 		done := f.complete(tester, task.Key)
@@ -191,16 +194,26 @@ func TestCompleteIsTheOneWayIntoDone(t *testing.T) {
 			t.Fatalf("task.completed %s", payload)
 		}
 
-		// A question aimed at the lead: no outcomes to advance along; Complete ends it.
+		// A question aimed at the lead has no outcomes to advance along: Complete ends it, and so
+		// does advancing it, with an outcome or without.
 		q := f.aimed(builder, "WEB", "Which provider?", "lead")
 		if q.StepID != nil {
 			t.Fatalf("an aimed Task is at Step %v", *q.StepID)
 		}
 		f.claim(lead, q.Key, noTimeout)
-		_, err = f.svc.Advance(ctx, lead, q.Key, "", nil, core.Idem{})
-		wantCode(t, err, core.CodeNoConnector)
 		if out := f.complete(lead, q.Key); out.State != "done" {
 			t.Fatalf("the question %+v", out)
+		}
+		for _, outcome := range []string{"", "answered"} {
+			q := f.aimed(builder, "WEB", "Which carrier? "+outcome, "lead")
+			f.claim(lead, q.Key, noTimeout)
+			out, err := f.svc.Advance(ctx, lead, q.Key, outcome, ptrStr("Use the cheaper one."), core.Idem{})
+			if err != nil || out.State != "done" || out.Claim != nil || out.StepID != nil {
+				t.Fatalf("advanced the question with %q: %+v, %v", outcome, out, err)
+			}
+			if d := f.get(q.Key); *d.Claims[0].HowEnded != "completed" || d.Notes[len(d.Notes)-1].Body != "Use the cheaper one." {
+				t.Fatalf("after advancing with %q: claims %+v, notes %+v", outcome, d.Claims, d.Notes)
+			}
 		}
 		f.checkActivity()
 	})
@@ -355,7 +368,8 @@ func TestDropTask(t *testing.T) {
 
 // A human moves a Task to any Step of its Workflow by hand, which is the only way out of a hold:
 // any Member of its Project or its Owner while nobody holds it; while it is held, only whoever
-// may take it back, and the move ends the Claim taken_back first. A Parent and an ended Task are
+// may take it back, and the move ends the Claim taken_back first; anyone else in the Project is
+// refused held, anyone outside it forbidden. The mover's Note goes with it. A Parent and an ended Task are
 // at no Step to move from; a Task aimed at a Member waits at the Step instead.
 func TestMove(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
@@ -376,51 +390,59 @@ func TestMove(t *testing.T) {
 		if !strings.Contains(err.Error(), "hold") {
 			t.Fatalf("the refusal does not say the Task is at a hold: %v", err)
 		}
-		_, err = f.svc.MoveTask(ctx, outsider, task.Key, "Build", core.Idem{})
+		_, err = f.svc.MoveTask(ctx, outsider, task.Key, "Build", nil, core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
-		_, err = f.svc.MoveTask(ctx, peer, task.Key, "Nowhere", core.Idem{})
+		_, err = f.svc.MoveTask(ctx, peer, task.Key, "Nowhere", nil, core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
 		f.clock.Advance(time.Minute)
-		out, err := f.svc.MoveTask(ctx, peer, task.Key, "build", core.Idem{})
+		out, err := f.svc.MoveTask(ctx, peer, task.Key, "build", nil, core.Idem{})
 		if err != nil || out.StepID == nil || *out.StepID != f.step("WEB", "Build") || !out.StepSince.Equal(f.clock.Now()) {
 			t.Fatalf("moved %+v, %v", out, err)
 		}
-		if again, err := f.svc.MoveTask(ctx, peer, task.Key, "Build", core.Idem{}); err != nil || !again.StepSince.Equal(*out.StepSince) {
+		if again, err := f.svc.MoveTask(ctx, peer, task.Key, "Build", nil, core.Idem{}); err != nil || !again.StepSince.Equal(*out.StepSince) {
 			t.Fatalf("moving it where it is: %+v, %v", again, err)
 		}
 		if !f.takeable(builder)[task.ID] {
 			t.Fatal("the Task moved out of the hold is not takeable")
 		}
 
-		// Held: the holder's peer may not move it; its Owner may, and the Claim ends taken_back.
+		// Held: neither the holder's peer nor the holder may move it; its Owner may, and the Claim
+		// ends taken_back.
 		f.claim(builder, task.Key, timeout(time.Minute))
-		_, err = f.svc.MoveTask(ctx, peer, task.Key, "Review", core.Idem{})
+		_, err = f.svc.MoveTask(ctx, peer, task.Key, "Review", nil, core.Idem{})
+		wantCode(t, err, core.CodeHeld)
+		_, err = f.svc.MoveTask(ctx, builder, task.Key, "Review", nil, core.Idem{})
+		wantCode(t, err, core.CodeHeld)
+		_, err = f.svc.MoveTask(ctx, outsider, task.Key, "Review", nil, core.Idem{})
 		wantCode(t, err, core.CodeForbidden)
-		_, err = f.svc.MoveTask(ctx, builder, task.Key, "Review", core.Idem{})
-		wantCode(t, err, core.CodeForbidden)
-		out, err = f.svc.MoveTask(ctx, lead, task.Key, "Review", core.Idem{})
+		out, err = f.svc.MoveTask(ctx, lead, task.Key, "Review", ptrStr("the build is done; review it"), core.Idem{})
 		if err != nil || out.Claim != nil || *out.StepID != f.step("WEB", "Review") {
 			t.Fatalf("moved while held %+v, %v", out, err)
+		}
+		// The mover's Note goes with it, under no Skill.
+		if d, err := f.svc.GetTask(ctx, lead, task.Key); err != nil || len(d.Notes) != 1 || d.Notes[0].AuthorID != lead.MemberID ||
+			d.Notes[0].SkillID != nil || d.Notes[0].Body != "the build is done; review it" {
+			t.Fatalf("the move's Note: %+v, %v", d.Notes, err)
 		}
 		if hb, err := f.svc.Heartbeat(ctx, builder, task.Key); err != nil || hb.Status != "taken_back" {
 			t.Fatalf("heartbeat after the move: %+v, %v", hb, err)
 		}
-		if got := f.kinds(task.ID); got != "task.filed task.moved task.claimed task.taken_back task.moved" {
+		if got := f.kinds(task.ID); got != "task.filed task.moved task.claimed task.taken_back task.note_added task.moved" {
 			t.Fatalf("Activity: %s", got)
 		}
 
 		// A question waits with the Member it is aimed at; moved to a Step, it waits there instead.
 		q := f.aimed(lead, "WEB", "Which provider?", "lead")
-		if out, err := f.svc.MoveTask(ctx, lead, q.Key, "Build", core.Idem{}); err != nil || out.AimedAtID != nil || out.StepID == nil {
+		if out, err := f.svc.MoveTask(ctx, lead, q.Key, "Build", nil, core.Idem{}); err != nil || out.AimedAtID != nil || out.StepID == nil {
 			t.Fatalf("moved the question %+v, %v", out, err)
 		}
 		p := f.parent(lead, "WEB", "Checkout").Task
-		_, err = f.svc.MoveTask(ctx, lead, p.Key, "Build", core.Idem{})
+		_, err = f.svc.MoveTask(ctx, lead, p.Key, "Build", nil, core.Idem{})
 		wantCode(t, err, core.CodeConflict)
 		if _, err := f.svc.DropTask(ctx, lead, q.Key, nil, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		_, err = f.svc.MoveTask(ctx, lead, q.Key, "Build", core.Idem{})
+		_, err = f.svc.MoveTask(ctx, lead, q.Key, "Build", nil, core.Idem{})
 		wantCode(t, err, core.CodeEnded)
 		f.checkActivity()
 	})

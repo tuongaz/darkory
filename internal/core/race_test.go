@@ -27,7 +27,7 @@ func builders(t *testing.T, st *store.Store, n int) (*fixture, []*auth.Caller, s
 	f.project("WEB")
 	f.skill("build")
 	if _, err := f.svc.SetWorkflow(t.Context(), f.admin, "WEB", core.WorkflowInput{
-		Steps:      []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "Parked", X: 240}},
+		Steps:      []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "Parked"}},
 		Connectors: []core.ConnectorInput{{From: "Build", Name: "pass"}, {From: "Build", To: ptrStr("Parked"), Name: "park"}},
 	}, core.Idem{}); err != nil {
 		t.Fatal(err)

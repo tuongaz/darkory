@@ -271,8 +271,9 @@ type TaskDetail struct {
 	Blockers     []Task
 	Blocking     []Task
 	Observations []Observation
-	// Proposal is the latest Skill proposal written on the Task.
-	Proposal *SkillProposal
+	// Proposals are the latest Skill proposal written on the Task for each Skill, pending or
+	// decided, oldest first.
+	Proposals []SkillProposal
 }
 
 type SkillProposal struct {

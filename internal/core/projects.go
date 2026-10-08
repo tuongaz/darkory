@@ -19,16 +19,23 @@ func itoa64(n int64) string { return strconv.FormatInt(n, 10) }
 var projectKey = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 
 // NewProject is a Project to create. Workflow is WorkflowDefault (the default when empty),
-// WorkflowEmpty, or WorkflowCopy with From naming the Project to copy.
+// WorkflowEmpty, or WorkflowCopy with CopyFrom naming the Project to copy, by id or key. Members
+// are put in it, by id or name; its creator is not unless named. DefaultWorkspace names a
+// Workspace by id or name; AutoComplete and Acceptance are what a Task filed in it takes when its
+// filer does not say, off when nil.
 type NewProject struct {
-	Key      string
-	Name     string
-	Workflow string
-	From     *string
+	Key              string
+	Name             string
+	Workflow         string
+	CopyFrom         *string
+	Members          []string
+	DefaultWorkspace *string
+	AutoComplete     *bool
+	Acceptance       *bool
 }
 
-// CreateProject creates a Project (admin) with its first Workflow. Its key prefixes the display
-// keys of its Tasks.
+// CreateProject creates a Project (admin) with its first Workflow, its settings and its Members.
+// Its key prefixes the display keys of its Tasks.
 func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProject, idem Idem) (Project, error) {
 	if err := mustAdmin(c); err != nil {
 		return Project{}, err
@@ -44,27 +51,49 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 		np.Workflow = WorkflowDefault
 	case WorkflowDefault, WorkflowEmpty:
 	case WorkflowCopy:
-		if np.From == nil {
-			return Project{}, refuse(CodeInvalid, "a Project whose Workflow is a copy names the Project to copy in from")
+		if np.CopyFrom == nil {
+			return Project{}, refuse(CodeInvalid, "a Project whose Workflow is a copy names the Project to copy in copy_from")
 		}
 	default:
 		return Project{}, refuse(CodeInvalid, "a new Project's Workflow is default, empty or copy, not %q", np.Workflow)
 	}
-	if np.Workflow != WorkflowCopy && np.From != nil {
-		return Project{}, refuse(CodeInvalid, "from names the Project whose Workflow is copied; this Workflow is %s", np.Workflow)
+	if np.Workflow != WorkflowCopy && np.CopyFrom != nil {
+		return Project{}, refuse(CodeInvalid, "copy_from names the Project whose Workflow is copied; this Workflow is %s", np.Workflow)
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
-		var from string
-		if np.From != nil {
-			id, err := resolveProject(ctx, t, c.OrgID, *np.From)
+		row := projectRow{key: np.Key, name: np.Name, workflow: np.Workflow}
+		if np.CopyFrom != nil {
+			id, err := resolveProject(ctx, t, c.OrgID, *np.CopyFrom)
 			if err != nil {
 				return nil, err
 			}
-			from = id
+			row.from = id
 		}
-		id, err := createProject(t, np.Key, np.Name, np.Workflow, from)
+		if np.DefaultWorkspace != nil {
+			id, err := resolveWorkspace(ctx, t, c.OrgID, *np.DefaultWorkspace)
+			if err != nil {
+				return nil, err
+			}
+			row.defaultWorkspace = &id
+		}
+		row.autoComplete = np.AutoComplete != nil && *np.AutoComplete
+		row.acceptance = np.Acceptance != nil && *np.Acceptance
+		var members []string
+		for _, ref := range np.Members {
+			id, err := resolveMember(ctx, t, c.OrgID, ref)
+			if err != nil {
+				return nil, err
+			}
+			members = append(members, id)
+		}
+		id, err := createProject(t, row)
 		if err != nil {
 			return nil, err
+		}
+		for _, m := range members {
+			if err := addProjectMember(t, id, m); err != nil {
+				return nil, err
+			}
 		}
 		return getProject(ctx, t, c.OrgID, id)
 	})
@@ -74,30 +103,40 @@ func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProje
 	return res.(Project), nil
 }
 
+// projectRow is a Project to insert: from is the Project whose Workflow a copy copies.
+type projectRow struct {
+	key, name, workflow, from string
+	defaultWorkspace          *string
+	autoComplete, acceptance  bool
+}
+
 // createProject creates a Project and its first Workflow inside a write, recording
 // project.created and workflow.changed.
-func createProject(t *tx, key, name, workflow, from string) (string, error) {
+func createProject(t *tx, r projectRow) (string, error) {
 	var n int
 	if err := t.QueryRow(t.ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1 AND (key_prefix = $2 OR name = $3)`,
-		t.caller.OrgID, key, name).Scan(&n); err != nil {
+		t.caller.OrgID, r.key, r.name).Scan(&n); err != nil {
 		return "", err
 	}
 	if n > 0 {
-		return "", refuse(CodeConflict, "a Project already has the key %s or the name %q", key, name)
+		return "", refuse(CodeConflict, "a Project already has the key %s or the name %q", r.key, r.name)
 	}
 	id := newID()
-	if _, err := t.Exec(t.ctx, `INSERT INTO projects (id, org_id, key_prefix, name, last_number, created_at) VALUES ($1, $2, $3, $4, 0, $5)`,
-		id, t.caller.OrgID, key, name, ms(t.now)); err != nil {
+	if _, err := t.Exec(t.ctx, `INSERT INTO projects (id, org_id, key_prefix, name, last_number, default_workspace_id, auto_complete, acceptance, created_at)
+VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8)`, id, t.caller.OrgID, r.key, r.name, r.defaultWorkspace, r.autoComplete, r.acceptance, ms(t.now)); err != nil {
 		return "", err
 	}
-	payload := map[string]any{"key": key, "name": name, "workflow": workflow}
-	if from != "" {
-		payload["from"] = from
+	payload := map[string]any{"key": r.key, "name": r.name, "workflow": r.workflow, "auto_complete": r.autoComplete, "acceptance": r.acceptance}
+	if r.from != "" {
+		payload["from"] = r.from
+	}
+	if r.defaultWorkspace != nil {
+		payload["default_workspace_id"] = *r.defaultWorkspace
 	}
 	if err := t.recordByCaller("project.created", id, payload); err != nil {
 		return "", err
 	}
-	return id, seedWorkflow(t, id, workflow, from)
+	return id, seedWorkflow(t, id, r.workflow, r.from)
 }
 
 // ProjectChange is what UpdateProject changes; nil fields stay as they are. DefaultWorkspace

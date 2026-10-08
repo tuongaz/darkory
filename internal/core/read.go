@@ -499,11 +499,11 @@ ORDER BY t.created_at, t.id`, orgID, id); err != nil {
 FROM observations o WHERE o.org_id = $1 AND o.task_id = $2 ORDER BY o.created_at, o.id`, orgID, id); err != nil {
 		return d, err
 	}
-	p, err := scanProposal(r.QueryRow(ctx, `SELECT `+proposalCols+` FROM skill_proposals p
-WHERE p.org_id = $1 AND p.task_id = $2 ORDER BY p.created_at DESC, p.id DESC LIMIT 1`, orgID, id))
-	if err == nil {
-		d.Proposal = &p
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	// The latest proposal for each Skill: no later one on the Task names the same Skill.
+	if d.Proposals, err = collect(ctx, r, scanProposal, `SELECT `+proposalCols+` FROM skill_proposals p
+WHERE p.org_id = $1 AND p.task_id = $2 AND NOT EXISTS (SELECT 1 FROM skill_proposals q WHERE q.org_id = p.org_id AND q.task_id = p.task_id
+	AND q.skill_id = p.skill_id AND (q.created_at > p.created_at OR (q.created_at = p.created_at AND q.id > p.id)))
+ORDER BY p.created_at, p.id`, orgID, id); err != nil {
 		return d, err
 	}
 	return d, nil

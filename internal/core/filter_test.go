@@ -202,6 +202,9 @@ func TestTaskFilters(t *testing.T) {
 			{[]string{"filed_at:last:7d"}, all},
 			{[]string{"completed_at:gte:2026-10-06T00:00:00Z"}, sortedKeys("WEB-6")},
 			{[]string{"completed_at:last:7d"}, sortedKeys("WEB-6")},
+			// Ended done or dropped.
+			{[]string{"ended_at:gte:2026-10-06T00:00:00Z"}, sortedKeys("WEB-6", "WEB-7")},
+			{[]string{"ended_at:last:7d"}, sortedKeys("WEB-6", "WEB-7")},
 			{[]string{"q:contains:cart"}, sortedKeys("WEB-3")},
 			{[]string{"q:contains:CART%20PAGE"}, sortedKeys("WEB-3")},
 			{[]string{"q:contains:ops-3"}, sortedKeys("OPS-3")},
@@ -231,9 +234,15 @@ func TestTaskFilters(t *testing.T) {
 		if got := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Step: ptrStr("backlog")}); !slices.Equal(got, sortedKeys("WEB-5")) {
 			t.Errorf("WEB at Backlog: %v", got)
 		}
-		if got := f.filterKeys(core.TaskFilter{Parent: &checkout, Skill: ptrStr(core.SkillEngineer)}); !slices.Equal(got, sortedKeys("WEB-3", "WEB-4")) {
+		if got := f.filterKeys(core.TaskFilter{Parent: &checkout, Filters: []string{"skill:is:" + engineer}}); !slices.Equal(got, sortedKeys("WEB-3", "WEB-4")) {
 			t.Errorf("Checkout's at an engineer Step: %v", got)
 		}
+		// A Step by its id needs no Project; by its name it does.
+		if got := f.filterKeys(core.TaskFilter{Step: &backlog}); !slices.Equal(got, sortedKeys("WEB-5")) {
+			t.Errorf("at Backlog by its id: %v", got)
+		}
+		_, err = f.svc.ListTasks(ctx, f.admin, core.TaskFilter{Step: ptrStr("Backlog")})
+		wantCode(t, err, core.CodeInvalid)
 		// claim:is:session matches the Tasks the server's Runner says it runs a session for.
 		session := core.TaskFilter{Filters: []string{"claim:is:session"}, SessionTasks: []string{cart.Task.ID, invoice.ID}}
 		if got := f.filterKeys(session); !slices.Equal(got, sortedKeys("WEB-3", "OPS-3")) {

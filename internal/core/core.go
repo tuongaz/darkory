@@ -86,6 +86,9 @@ const (
 type Error struct {
 	Code    Code
 	Message string
+	// Details are extra facts about the refusal, by code: the outcomes a Task's Step offers
+	// (no_connector, use_advance), the stale proposals (proposal_stale). Nil when there are none.
+	Details map[string]any
 }
 
 func (e *Error) Error() string { return string(e.Code) + ": " + e.Message }
@@ -396,4 +399,13 @@ func mustAdmin(c *auth.Caller) error {
 		return refuse(CodeForbidden, "only an admin may do this")
 	}
 	return nil
+}
+
+// with adds a fact to the refusal's Details, for a program to read instead of the message.
+func (e *Error) with(key string, value any) *Error {
+	if e.Details == nil {
+		e.Details = map[string]any{}
+	}
+	e.Details[key] = value
+	return e
 }

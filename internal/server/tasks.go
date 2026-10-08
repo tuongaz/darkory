@@ -50,10 +50,14 @@ func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.Li
 		replaced(w, "a Task's Status is its Step; filter by step")
 		return
 	}
-	tf := core.TaskFilter{Parent: params.Feature, Project: params.Team, State: (*string)(params.State), Skill: params.Skill,
+	tf := core.TaskFilter{Parent: params.Feature, Project: params.Team, State: (*string)(params.State),
 		AimedAt: params.AimedAt, Holder: params.Holder}
+	// model v2: the skill parameter goes; the skill: filter token is the Step's Skill (M1b).
+	if params.Skill != nil {
+		tf.Filters = append(tf.Filters, "skill:is:"+*params.Skill)
+	}
 	if params.Filter != nil {
-		tf.Filters = *params.Filter
+		tf.Filters = append(tf.Filters, *params.Filter...)
 		if run := s.theRunner(); run != nil {
 			for _, sess := range run.Sessions() {
 				tf.SessionTasks = append(tf.SessionTasks, sess.TaskID)

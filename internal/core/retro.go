@@ -2,8 +2,6 @@ package core
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"strings"
 
 	"github.com/tuongaz/darkory/internal/auth"
@@ -18,8 +16,8 @@ import (
 // ProposeSkillVersion writes a proposed new version of a company Skill on a Retrospective the
 // caller holds (ADR 0010), against basedOn, which must be the Skill's current version; refused
 // no_step unless a Connector leads from the Retrospective's Step to a Step carrying skill-review,
-// along which the caller then advances it. A Task carries one pending proposal: a new one
-// supersedes it.
+// along which the caller then advances it. A Task carries one pending proposal per Skill: a new
+// one for the same Skill supersedes it.
 func (s *Service) ProposeSkillVersion(ctx context.Context, c *auth.Caller, taskRef, skillRef string, basedOn int64, body string, idem Idem) (SkillProposal, error) {
 	if strings.TrimSpace(body) == "" {
 		return SkillProposal{}, refuse(CodeInvalid, "a proposal has a body: the Skill's new text")
@@ -64,7 +62,7 @@ WHERE k.org_id = $1 AND k.from_step_id = $2 AND sk.builtin = TRUE AND sk.name = 
 			return nil, refuse(CodeProposalStale, "%s is at version %d; write the proposal against it, not version %d", sk.Name, sk.CurrentVersion, basedOn)
 		}
 		if _, err := t.Exec(ctx, `UPDATE skill_proposals SET state = 'superseded', decided_at = $1
-WHERE org_id = $2 AND task_id = $3 AND state = 'pending'`, ms(t.now), c.OrgID, taskID); err != nil {
+WHERE org_id = $2 AND task_id = $3 AND skill_id = $4 AND state = 'pending'`, ms(t.now), c.OrgID, taskID, skillID); err != nil {
 			return nil, err
 		}
 		id := newID()
@@ -88,10 +86,11 @@ func (s *Service) GetSkillProposal(ctx context.Context, c *auth.Caller, id strin
 	return getProposal(ctx, s.store, c.OrgID, id)
 }
 
-// pendingReview returns the proposal completing pre would publish: pre is at a Step carrying
-// skill-review and carries a pending proposal. It refuses the proposal's author, and a proposal whose base is no
-// longer the Skill's current version, before anything is written.
-func (s *Service) pendingReview(ctx context.Context, c *auth.Caller, pre Task) (*SkillProposal, error) {
+// pendingReview returns the proposals completing pre would publish: pre is at a Step carrying
+// skill-review, and they are the pending proposals it carries, one per Skill, oldest first. It
+// refuses, before anything is written, a caller who wrote one of them, and proposal_stale when
+// the base of any is no longer its Skill's current version, naming those in Details.
+func (s *Service) pendingReview(ctx context.Context, c *auth.Caller, pre Task) ([]SkillProposal, error) {
 	if pre.SkillID == nil {
 		return nil, nil
 	}
@@ -102,18 +101,28 @@ func (s *Service) pendingReview(ctx context.Context, c *auth.Caller, pre Task) (
 	if *pre.SkillID != review {
 		return nil, nil
 	}
-	p, err := scanProposal(s.store.QueryRow(ctx, `SELECT `+proposalCols+` FROM skill_proposals p
-WHERE p.org_id = $1 AND p.task_id = $2 AND p.state = 'pending' ORDER BY p.created_at DESC, p.id DESC LIMIT 1`, c.OrgID, pre.ID))
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+	ps, err := collect(ctx, s.store, scanProposal, `SELECT `+proposalCols+` FROM skill_proposals p
+WHERE p.org_id = $1 AND p.task_id = $2 AND p.state = 'pending' ORDER BY p.created_at, p.id`, c.OrgID, pre.ID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.whyNotPublished(ctx, c, p); err != nil {
-		return nil, err
+	var stale []string
+	var why []string
+	for _, p := range ps {
+		err := s.whyNotPublished(ctx, c, p)
+		if codeOf(err) == CodeProposalStale {
+			stale, why = append(stale, p.ID), append(why, err.(*Error).Message)
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
-	return &p, nil
+	if len(stale) > 0 {
+		return nil, refuse(CodeProposalStale, "%s; the Retrospective rewrites them against the current versions, and nothing is published until every proposal on it is current",
+			strings.Join(why, "; ")).with("proposals", stale)
+	}
+	return ps, nil
 }
 
 // whyNotPublished says why the caller cannot publish p now: they wrote it (no one judges their
@@ -134,8 +143,8 @@ func (s *Service) whyNotPublished(ctx context.Context, c *auth.Caller, p SkillPr
 		return err
 	}
 	if sk.CurrentVersion != now.BasedOnVersion {
-		return refuse(CodeProposalStale, "the proposal was written against version %d of %s, which is now at version %d; the Retrospective rewrites it against the current one",
-			now.BasedOnVersion, sk.Name, sk.CurrentVersion)
+		return refuse(CodeProposalStale, "the proposal for %s was written against version %d, and %s is now at version %d",
+			sk.Name, now.BasedOnVersion, sk.Name, sk.CurrentVersion)
 	}
 	return nil
 }

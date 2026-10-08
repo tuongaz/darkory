@@ -55,9 +55,10 @@ func (f *fixture) workflowText(project string) string {
 	return workflowText(skills, w.Workflow)
 }
 
-// A new Project starts with the default Workflow, laid out left to right, unless its creator
-// picks Empty (Backlog → Done) or a copy of another Project's; the default's engineer and review
-// Skills are made when an Organisation lacks them.
+// A new Project starts with the default Workflow, laid out compact, unless its creator picks
+// Empty (Backlog → Done) or a copy of another Project's, places and all; the default's engineer
+// and review Skills are made when an Organisation lacks them. It starts with the Members, default
+// Workspace, auto_complete and acceptance its creator names, and without its creator unless named.
 func TestNewProjectsWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -67,8 +68,9 @@ func TestNewProjectsWorkflow(t *testing.T) {
 			t.Fatalf("the default Workflow:\n%s", got)
 		}
 		w, _ := f.svc.GetWorkflow(ctx, f.admin, "WEB")
+		places := [][2]int64{{0, 0}, {0, 128}, {0, 256}, {448, 256}, {0, 384}, {448, 384}}
 		for i, s := range w.Steps {
-			if s.Position != int64(i+1) || s.X != int64(i*240) || s.Y != 0 {
+			if s.Position != int64(i+1) || s.X != places[i][0] || s.Y != places[i][1] {
 				t.Fatalf("Step %s at %d (%d, %d)", s.Name, s.Position, s.X, s.Y)
 			}
 		}
@@ -82,8 +84,11 @@ func TestNewProjectsWorkflow(t *testing.T) {
 		if got := f.workflowText("TAX"); got != "Backlog | Backlog -done-> Done" {
 			t.Fatalf("the empty Workflow: %s", got)
 		}
+		if w, _ := f.svc.GetWorkflow(ctx, f.admin, "TAX"); w.Steps[0].X != 0 || w.Steps[0].Y != 0 {
+			t.Fatalf("the empty Workflow's Backlog at (%d, %d)", w.Steps[0].X, w.Steps[0].Y)
+		}
 		f.chain("TAX", [2]string{"Gather", ""}, [2]string{"Prepare", core.SkillEngineer}, [2]string{"Lodged", ""})
-		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "TAX2", Name: "Tax two", Workflow: core.WorkflowCopy, From: ptrStr("TAX")}, core.Idem{}); err != nil {
+		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "TAX2", Name: "Tax two", Workflow: core.WorkflowCopy, CopyFrom: ptrStr("TAX")}, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		if a, b := f.workflowText("TAX"), f.workflowText("TAX2"); a != b {
@@ -94,17 +99,46 @@ func TestNewProjectsWorkflow(t *testing.T) {
 		if tax.Steps[0].ID == tax2.Steps[0].ID {
 			t.Fatal("the copy shares its Steps")
 		}
+		for i, s := range tax2.Steps {
+			if s.X != tax.Steps[i].X || s.Y != tax.Steps[i].Y || s.X != int64(i*448) {
+				t.Fatalf("the copy's %s at (%d, %d), the original's at (%d, %d)", s.Name, s.X, s.Y, tax.Steps[i].X, tax.Steps[i].Y)
+			}
+		}
+
+		// Its Members, default Workspace and defaults, as its creator names them.
+		ws := f.workspace("tax")
+		bea := f.member("bea", nil, nil)
+		ops, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "OPS", Name: "Ops", Members: []string{"bea", bea.MemberID},
+			DefaultWorkspace: ptrStr("tax"), AutoComplete: ptrBool(true), Acceptance: ptrBool(true)}, core.Idem{})
+		if err != nil || ops.DefaultWorkspaceID == nil || *ops.DefaultWorkspaceID != ws.ID || !ops.AutoComplete || !ops.Acceptance {
+			t.Fatalf("created %+v, %v", ops, err)
+		}
+		if d, err := f.svc.GetProject(ctx, f.admin, "OPS"); err != nil || len(d.Members) != 1 || d.Members[0].ID != bea.MemberID {
+			t.Fatalf("its Members: %+v, %v", d.Members, err)
+		}
+		if got := f.kinds(ops.ID); got != "project.created workflow.changed project.member_added" {
+			t.Fatalf("Activity: %s", got)
+		}
+		if d, _ := f.svc.GetProject(ctx, f.admin, "TAX"); len(d.Members) != 0 {
+			t.Fatalf("the creator was put in a Project without being named: %+v", d.Members)
+		}
 
 		for _, np := range []core.NewProject{
 			{Key: "X1", Name: "x1", Workflow: core.WorkflowCopy},
-			{Key: "X2", Name: "x2", Workflow: core.WorkflowEmpty, From: ptrStr("TAX")},
+			{Key: "X2", Name: "x2", Workflow: core.WorkflowEmpty, CopyFrom: ptrStr("TAX")},
 			{Key: "X3", Name: "x3", Workflow: "jira"},
 		} {
 			_, err := f.svc.CreateProject(ctx, f.admin, np, core.Idem{})
 			wantCode(t, err, core.CodeInvalid)
 		}
-		_, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "X4", Name: "x4", Workflow: core.WorkflowCopy, From: ptrStr("NOPE")}, core.Idem{})
-		wantCode(t, err, core.CodeNotFound)
+		for _, np := range []core.NewProject{
+			{Key: "X4", Name: "x4", Workflow: core.WorkflowCopy, CopyFrom: ptrStr("NOPE")},
+			{Key: "X5", Name: "x5", Members: []string{"nobody"}},
+			{Key: "X6", Name: "x6", DefaultWorkspace: ptrStr("nowhere")},
+		} {
+			_, err := f.svc.CreateProject(ctx, f.admin, np, core.Idem{})
+			wantCode(t, err, core.CodeNotFound)
+		}
 
 		// An Install from before model v2 may lack engineer and review: the default makes them.
 		f.exec(`UPDATE skills SET name = name || '-old' WHERE name IN ('engineer', 'review')`)
@@ -120,8 +154,11 @@ func TestNewProjectsWorkflow(t *testing.T) {
 
 // SetWorkflow replaces a Project's whole Workflow: Steps keep their ids, are renamed, reordered,
 // given new Skills; new Steps and Connectors are made; a Connector sent back without its id keeps
-// it; an unchanged Workflow writes nothing. A Step deleted while open Tasks are at it needs moves
-// (step_in_use), which carry the Tasks — their Claims too — to a Step of the new Workflow.
+// it; an unchanged Workflow writes nothing. Positions, not the order of the lists, place Steps and
+// Connectors, numbered 1, 2, 3…; a Step sent without its place keeps it, and a new one is drawn
+// in the first row at its position's place. A Step deleted while open Tasks are at it needs moves
+// (step_in_use), which carry the Tasks — their Claims too — to a Step of the new Workflow. The
+// reply is the Workflow as GetWorkflow reads it, live facts and all.
 func TestSetWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -150,21 +187,22 @@ func TestSetWorkflow(t *testing.T) {
 		f.claim(builder, held.Key, timeout(time.Hour))
 
 		// Build becomes Make; QA (qa) is new, between Make and Review, which is deleted; Make's
-		// connector keeps its id though sent without it.
+		// connector keeps its id though sent without it. The lists are out of order, and the
+		// positions have gaps.
 		next := core.WorkflowInput{
 			Steps: []core.StepInput{
-				{ID: id["Backlog"], Name: "Backlog"}, {ID: id["Plan"], Name: "Plan", Skill: ptrStr(core.SkillBreakdown), X: 240},
-				{ID: id["Build"], Name: "Make", Skill: ptrStr(core.SkillEngineer), X: 480, Y: 40},
-				{Name: "QA", Skill: ptrStr("qa"), X: 720},
-				{ID: id["Retro"], Name: "Retro", Skill: ptrStr(core.SkillRetro), X: 960},
-				{ID: id["Skill review"], Name: "Skill review", Skill: ptrStr(core.SkillSkillReview), X: 1200},
+				{ID: id["Retro"], Name: "Retro", Skill: ptrStr(core.SkillRetro), Position: 50},
+				{ID: id["Backlog"], Name: "Backlog", Position: 1}, {ID: id["Plan"], Name: "Plan", Skill: ptrStr(core.SkillBreakdown), Position: 2, X: ptrInt(240)},
+				{ID: id["Build"], Name: "Make", Skill: ptrStr(core.SkillEngineer), Position: 3, X: ptrInt(480), Y: ptrInt(40)},
+				{Name: "QA", Skill: ptrStr("qa"), Position: 4},
+				{ID: id["Skill review"], Name: "Skill review", Skill: ptrStr(core.SkillSkillReview), Position: 60},
 			},
 			Connectors: []core.ConnectorInput{
-				{From: "Plan", Name: "done"},
-				{From: "make", To: ptrStr("QA"), Name: "pass"},
-				{From: "QA", Name: "pass"}, {From: "QA", To: ptrStr(id["Build"]), Name: "fail"},
-				{From: "Retro", Name: "done"}, {From: "Retro", To: ptrStr("Skill review"), Name: "propose"},
-				{From: "Skill review", Name: "publish"}, {From: "Skill review", To: ptrStr("Retro"), Name: "needs changes"},
+				{From: "Plan", Name: "done", Position: 1},
+				{From: "make", To: ptrStr("QA"), Name: "pass", Position: 1},
+				{From: "QA", To: ptrStr(id["Build"]), Name: "fail", Position: 7}, {From: "QA", Name: "pass", Position: 3},
+				{From: "Retro", Name: "done", Position: 1}, {From: "Retro", To: ptrStr("Skill review"), Name: "propose", Position: 2},
+				{From: "Skill review", Name: "publish", Position: 1}, {From: "Skill review", To: ptrStr("Retro"), Name: "needs changes", Position: 2},
 			},
 		}
 		_, err = f.svc.SetWorkflow(ctx, f.admin, "WEB", next, core.Idem{})
@@ -194,6 +232,10 @@ func TestSetWorkflow(t *testing.T) {
 				w.Steps = append(w.Steps, core.StepInput{ID: id["Plan"], Name: "Plan again"})
 			},
 			func(w *core.WorkflowInput) { w.Connectors[0].ID = store.NewID() },
+			// Two Steps at one place; two Connectors out of QA at one place; a place below 1.
+			func(w *core.WorkflowInput) { w.Steps[1].Position = 50 },
+			func(w *core.WorkflowInput) { w.Connectors[2].Position = 3 },
+			func(w *core.WorkflowInput) { w.Steps[1].Position = -1 },
 			func(w *core.WorkflowInput) { w.Moves = map[string]string{id["Plan"]: "QA"} },
 			func(w *core.WorkflowInput) { w.Moves = map[string]string{id["Review"]: "Nowhere"} },
 		} {
@@ -219,13 +261,28 @@ func TestSetWorkflow(t *testing.T) {
 		want := "Backlog · Plan (breakdown) · Make (engineer) · QA (qa) · Retro (retro) · Skill review (skill-review) | " +
 			"Plan -done-> Done · Make -pass-> QA · QA -pass-> Done · QA -fail-> Make · " +
 			"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro"
-		if got := workflowText(skills, after); got != want {
+		if got := workflowText(skills, after.Workflow); got != want {
 			t.Fatalf("the Workflow set:\n%s", got)
 		}
 		if after.Steps[2].ID != id["Build"] || after.Steps[2].Y != 40 || after.Connectors[1].ID != pass.ID {
 			t.Fatalf("Make %+v, its pass %+v (was %s)", after.Steps[2], after.Connectors[1], pass.ID)
 		}
+		// Numbered 1, 2, 3… in the order of the positions sent; placed as sent, kept, or new.
+		places := [][2]int64{{0, 0}, {240, 128}, {480, 40}, {3 * 448, 0}, {0, 384}, {448, 384}}
+		for i, s := range after.Steps {
+			if s.Position != int64(i+1) || s.X != places[i][0] || s.Y != places[i][1] {
+				t.Fatalf("Step %s at %d (%d, %d)", s.Name, s.Position, s.X, s.Y)
+			}
+		}
+		for _, k := range after.Connectors[2:4] {
+			if want := map[string]int64{"pass": 1, "fail": 2}[k.Name]; k.Position != want {
+				t.Fatalf("QA's %s at %d, want %d", k.Name, k.Position, want)
+			}
+		}
 		qa := after.Steps[3].ID
+		if fs := after.Facts[3]; fs.StepID != qa || fs.Tasks != 2 || fs.Working != 1 || len(fs.Takers) != 1 {
+			t.Fatalf("the reply's facts at QA: %+v", fs)
+		}
 		for _, task := range []string{held.Key, waiting.Key} {
 			d := f.get(task)
 			if d.Step == nil || d.Step.ID != qa || !d.Task.StepSince.Equal(f.clock.Now()) {
@@ -253,10 +310,10 @@ func TestSetWorkflow(t *testing.T) {
 		name := map[string]string{}
 		for _, s := range after.Steps {
 			name[s.ID] = s.Name
-			same.Steps = append(same.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, X: s.X, Y: s.Y})
+			same.Steps = append(same.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
 		}
 		for _, k := range after.Connectors {
-			ci := core.ConnectorInput{From: k.FromStepID, Name: k.Name}
+			ci := core.ConnectorInput{From: k.FromStepID, Name: k.Name, Position: k.Position}
 			if k.ToStepID != nil {
 				ci.To = ptrStr(name[*k.ToStepID])
 			}
@@ -304,7 +361,7 @@ func TestWorkflowFacts(t *testing.T) {
 			f.advance(builder, tasks[i].Key, "pass")
 		}
 		f.clock.Advance(20 * time.Minute)
-		if _, err := f.svc.MoveTask(ctx, lead, tasks[2].Key, "Backlog", core.Idem{}); err != nil {
+		if _, err := f.svc.MoveTask(ctx, lead, tasks[2].Key, "Backlog", nil, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		f.task(lead, "WEB", "Still building", "Build")

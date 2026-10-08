@@ -156,7 +156,8 @@ func TestWorkspaces(t *testing.T) {
 
 // A Project's default Workspace and its auto_complete and acceptance defaults are set and cleared
 // by admins; a Task names the Workspaces it is filed with, in order and each once, an empty list
-// naming none, or else its Project's default, or none when the Project has none.
+// naming none, or else its Project's default, or none when the Project has none; a Subtask, its
+// Parent's.
 func TestTaskWorkspaces(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -215,6 +216,37 @@ func TestTaskWorkspaces(t *testing.T) {
 		}
 		if len(named) != 4 || named[1] == nil || !slices.Equal(named[2], []string{api.ID, web.ID}) {
 			t.Fatalf("listed %v", named)
+		}
+
+		// A Subtask naming none takes its Parent's, not the Project's default, since its branch
+		// starts from the Parent's; one naming some, or an empty list, names those.
+		sub := func(parent string, refs *[]string) []string {
+			t.Helper()
+			d, err := f.svc.FileTask(ctx, lead, core.NewTask{Parent: &parent, Title: "S", Step: ptrStr("Build"), Workspaces: refs}, core.Idem{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return d.Task.WorkspaceIDs
+		}
+		inAPI, err := file(&[]string{"api"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := sub(inAPI.Task.Key, nil); !slices.Equal(got, []string{api.ID}) {
+			t.Fatalf("a Subtask of a Parent in api names %v", got)
+		}
+		if got := sub(inAPI.Task.Key, &[]string{"web"}); !slices.Equal(got, []string{web.ID}) {
+			t.Fatalf("a Subtask naming web names %v", got)
+		}
+		if got := sub(inAPI.Task.Key, &[]string{}); got != nil {
+			t.Fatalf("a Subtask naming none names %v", got)
+		}
+		nowhere, err := file(&[]string{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := sub(nowhere.Task.Key, nil); got != nil {
+			t.Fatalf("a Subtask of a Parent naming none names %v, not the Project's default", got)
 		}
 
 		// The Project's default changes what later Tasks name, not what earlier ones did.

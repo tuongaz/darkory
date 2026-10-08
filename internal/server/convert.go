@@ -119,8 +119,9 @@ func taskDetailOut(d core.TaskDetail) gen.TaskDetail {
 		Claims: each(d.Claims, claimOut), Notes: each(d.Notes, noteOut), Evidence: each(d.Evidence, evidenceOut),
 		Blockers: each(d.Blockers, taskOut), Blocking: each(d.Blocking, taskOut), Observations: each(d.Observations, observationOut),
 	}
-	if d.Proposal != nil {
-		p := proposalOut(*d.Proposal)
+	// model v2: the spec has one proposal; the latest of the Task's proposals stands in (M1b).
+	if n := len(d.Proposals); n > 0 {
+		p := proposalOut(d.Proposals[n-1])
 		out.Proposal = &p
 	}
 	return out

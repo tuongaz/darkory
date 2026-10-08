@@ -17,8 +17,8 @@ func validTitle(title string) error {
 
 // NewTask is a Task to file: in Project, or as a Subtask under Parent, or beside the Task it
 // Blocks (a question or an Escalation). It is aimed at a Member, or at a Step — the one named, or
-// by default the Workflow's first Step that carries a Skill — or, with Break down on, a Parent
-// from its first moment.
+// by default the Workflow's first Step for the Project's own work (defaultStep) — or, with Break
+// down on, a Parent from its first moment.
 type NewTask struct {
 	Project     *string
 	Parent      *string
@@ -33,10 +33,10 @@ type NewTask struct {
 	// AutoComplete and Acceptance are nil for the Project's defaults; they are a Parent's.
 	AutoComplete *bool
 	Acceptance   *bool
-	// Labels names Labels of the Project or the Organisation, by id.
+	// Labels names Labels of the Project or the Organisation, by id or name.
 	Labels []string
-	// Workspaces names the Workspaces it names, in order; nil for its Project's default, an
-	// empty list for none.
+	// Workspaces names the Workspaces it names, in order; nil for its Parent's, or its Project's
+	// default when it has no Parent; an empty list for none.
 	Workspaces *[]string
 	AimedAt    *string
 	// Blocks names a Task the new one blocks: it joins that Task's Parent, or stands alone in its
@@ -211,7 +211,11 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 			}
 			row.stepID = &st.ID
 		default:
-			st := defaultStep(w)
+			builtin, err := builtinSkills(ctx, t, c.OrgID)
+			if err != nil {
+				return nil, err
+			}
+			st := defaultStep(w, builtin)
 			if st == nil {
 				return nil, refuse(CodeNoStep, "Project %s's Workflow has no Steps for a Task to stand at", project.Key)
 			}
@@ -221,8 +225,11 @@ func (s *Service) FileTask(ctx context.Context, c *auth.Caller, nt NewTask, idem
 		if err != nil {
 			return nil, err
 		}
-		workspaces, err := taskWorkspaces(t, projectID, nt.Workspaces)
-		if err != nil {
+		// A Subtask named no Workspaces works in its Parent's: its branch starts from the Parent's.
+		var workspaces []string
+		if parent != nil && nt.Workspaces == nil {
+			workspaces = parent.WorkspaceIDs
+		} else if workspaces, err = taskWorkspaces(t, projectID, nt.Workspaces); err != nil {
 			return nil, err
 		}
 
@@ -467,15 +474,16 @@ func (s *Service) GetTask(ctx context.Context, c *auth.Caller, ref string) (Task
 	return getTaskDetail(ctx, s.store, c.OrgID, id, s.clock.Now())
 }
 
-// TaskFilter narrows ListTasks; nil fields do not. Filters are `filter` tokens (filter.go);
-// SessionTasks are the ids of the Tasks a Runner beside the server runs a session for now, which
-// `claim:is:session` matches.
+// TaskFilter narrows ListTasks; nil fields do not. Step names a Step by id, or by name with
+// Project, since names are unique only within a Project's Workflow. Filters are `filter` tokens
+// (filter.go), where the Step's Skill is `skill`; SessionTasks are the ids of the Tasks a Runner
+// beside the server runs a session for now, which `claim:is:session` matches.
 type TaskFilter struct {
-	Project, Parent, State, Step, Skill, AimedAt, Holder *string
-	Filters                                              []string
-	SessionTasks                                         []string
-	Limit                                                int
-	Cursor                                               string
+	Project, Parent, State, Step, AimedAt, Holder *string
+	Filters                                       []string
+	SessionTasks                                  []string
+	Limit                                         int
+	Cursor                                        string
 }
 
 // ListTasks lists Tasks by Rank: a Subtask after its Parent, by how long each has waited.
@@ -499,7 +507,6 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 	}{
 		{tf.Project, resolveProject, "t.project_id"},
 		{tf.Parent, resolveTask, "t.parent_id"},
-		{tf.Skill, resolveSkill, "ts.skill_id"},
 		{tf.AimedAt, resolveMember, "t.aimed_at_id"},
 		{tf.Holder, resolveMember, "t.claim_holder_id"},
 	}
@@ -517,14 +524,18 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 		q.and("(t.claim_expires_at IS NULL OR t.claim_expires_at > " + q.nowArg() + ")")
 	}
 	if tf.Step != nil {
+		var st Step
 		if tf.Project == nil {
-			return Page[Task]{}, refuse(CodeInvalid, "a Step is named within a Project's Workflow; name the project too")
+			if st, err = getStep(ctx, s.store, c.OrgID, *tf.Step); codeOf(err) == CodeNotFound {
+				return Page[Task]{}, refuse(CodeInvalid, "no Step has the id %q; a Step named by its name needs the project too", *tf.Step)
+			}
+		} else {
+			projectID, rerr := resolveProject(ctx, s.store, c.OrgID, *tf.Project)
+			if rerr != nil {
+				return Page[Task]{}, rerr
+			}
+			st, err = stepOf(ctx, s.store, c.OrgID, projectID, *tf.Step)
 		}
-		projectID, err := resolveProject(ctx, s.store, c.OrgID, *tf.Project)
-		if err != nil {
-			return Page[Task]{}, err
-		}
-		st, err := stepOf(ctx, s.store, c.OrgID, projectID, *tf.Step)
 		if err != nil {
 			return Page[Task]{}, err
 		}

@@ -104,7 +104,7 @@ func TestTakeableRule(t *testing.T) {
 		}
 		var in core.WorkflowInput
 		for _, s := range w.Steps {
-			si := core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, X: s.X, Y: s.Y}
+			si := core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position}
 			if s.Name == "Build" {
 				si.Skill = ptrStr("qa")
 			}

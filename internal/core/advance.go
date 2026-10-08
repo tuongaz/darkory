@@ -18,7 +18,8 @@ import (
 // named outcome, ignoring case, or the only one when outcome is empty; refused no_connector
 // otherwise, naming the Step's outcomes. Along a Connector to a Step the Claim ends advanced and
 // the Task waits there for whoever has that Step's Skill; into Done the Task completes, as
-// Complete says. A Note, when given, is written with it under the Skill of the Claim.
+// Complete says. A Task aimed at a Member is at no Step and has no outcomes: advancing it, with or
+// without one, completes it. A Note, when given, is written with it under the Skill of the Claim.
 func (s *Service) Advance(ctx context.Context, c *auth.Caller, ref, outcome string, note *string, idem Idem) (Task, error) {
 	return s.endWork(ctx, c, ref, &outcome, note, idem)
 }
@@ -45,7 +46,7 @@ func (s *Service) Complete(ctx context.Context, c *auth.Caller, ref string, note
 // endWork ends the caller's Claim on a Task along a Connector: the one outcome names (Advance),
 // or the one into Done (Complete, outcome nil).
 func (s *Service) endWork(ctx context.Context, c *auth.Caller, ref string, outcome *string, note *string, idem Idem) (Task, error) {
-	var review *SkillProposal
+	var review []SkillProposal
 	res, err := s.heldWrite(ctx, c, ref, idem, heldOp{
 		build: func(pre Task, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 			review = nil
@@ -61,27 +62,29 @@ func (s *Service) endWork(ctx context.Context, c *auth.Caller, ref string, outco
 				out, stmts := advanceStmts(c, pre, *k, to, note, nil, args, now)
 				return out, stmts, nil
 			}
-			p, err := s.pendingReview(ctx, c, pre)
+			ps, err := s.pendingReview(ctx, c, pre)
 			if codeOf(err) == CodeProposalStale {
 				return s.sendBack(ctx, c, pre, err.(*Error), args, now)
 			}
 			if err != nil {
 				return nil, nil, err
 			}
-			review = p
-			return s.doneStmts(ctx, c, pre, k, p, note, args, now)
+			review = ps
+			return s.doneStmts(ctx, c, pre, k, ps, note, args, now)
 		},
 		explain: func(ctx context.Context, t Task) error {
-			if review == nil {
-				return nil
+			for _, p := range review {
+				err := s.whyNotPublished(ctx, c, p)
+				if codeOf(err) == CodeProposalStale {
+					// Another review published on the same base after the read: read again, and the
+					// next attempt sends the Task back as a stale one is.
+					return nil
+				}
+				if err != nil {
+					return err
+				}
 			}
-			err := s.whyNotPublished(ctx, c, *review)
-			if codeOf(err) == CodeProposalStale {
-				// Another review published on the same base after the read: read again, and the
-				// next attempt sends the Task back as a stale one is.
-				return nil
-			}
-			return err
+			return nil
 		},
 	})
 	if err != nil {
@@ -95,9 +98,8 @@ func (s *Service) endWork(ctx context.Context, c *auth.Caller, ref string, outco
 // Task at no Step — one aimed at a Member — which completes as it is.
 func (s *Service) connectorFor(ctx context.Context, c *auth.Caller, pre Task, outcome *string) (*Connector, error) {
 	if pre.StepID == nil {
-		if outcome != nil {
-			return nil, refuse(CodeNoConnector, "Task %s is aimed at a Member and at no Step, so it has no outcomes; complete it", pre.Key)
-		}
+		// Aimed at a Member, at no Step: no outcomes to choose between, so advancing it, with or
+		// without one, completes it.
 		return nil, nil
 	}
 	st, err := getStep(ctx, s.store, c.OrgID, *pre.StepID)
@@ -117,14 +119,15 @@ func (s *Service) connectorFor(ctx context.Context, c *auth.Caller, pre Task, ou
 		}
 		if len(done) != 1 {
 			return nil, refuse(CodeUseAdvance, "Task %s is at %s, where %d ways lead into Done: advance it along one; %s",
-				pre.Key, st.Name, len(done), outcomes(ks))
+				pre.Key, st.Name, len(done), outcomes(ks)).with("outcomes", outcomeNames(ks))
 		}
 		return &done[0], nil
 	}
 	name := strings.TrimSpace(*outcome)
 	if name == "" {
 		if len(ks) != 1 {
-			return nil, refuse(CodeNoConnector, "Task %s is at %s, which has %d ways out: name the outcome; %s", pre.Key, st.Name, len(ks), outcomes(ks))
+			return nil, refuse(CodeNoConnector, "Task %s is at %s, which has %d ways out: name the outcome; %s", pre.Key, st.Name, len(ks), outcomes(ks)).
+				with("outcomes", outcomeNames(ks))
 		}
 		return &ks[0], nil
 	}
@@ -133,7 +136,7 @@ func (s *Service) connectorFor(ctx context.Context, c *auth.Caller, pre Task, ou
 			return &k, nil
 		}
 	}
-	return nil, refuse(CodeNoConnector, "%s has no outcome %q; %s", st.Name, name, outcomes(ks))
+	return nil, refuse(CodeNoConnector, "%s has no outcome %q; %s", st.Name, name, outcomes(ks)).with("outcomes", outcomeNames(ks))
 }
 
 // fromGuard holds while the Task is at the Step @from it was read at and the Connector @connector
@@ -177,7 +180,8 @@ func advanceStmts(c *auth.Caller, pre Task, k Connector, to Step, note *string, 
 // sendBack answers an advance into Done that would publish a proposal whose base is no longer
 // current (ADR 0010): the Task goes back along the Step's "needs changes" Connector, or else its
 // first Connector to a Step, with the refusal as its Note, and the caller is refused
-// proposal_stale. With no way back, the advance is only refused.
+// proposal_stale. Nothing is published; the proposals still current stay pending for the next
+// review. With no way back, the advance is only refused.
 func (s *Service) sendBack(ctx context.Context, c *auth.Caller, pre Task, stale *Error, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 	ks, err := connectorsFrom(ctx, s.store, c.OrgID, *pre.StepID)
 	if err != nil {
@@ -207,17 +211,17 @@ func (s *Service) sendBack(ctx context.Context, c *auth.Caller, pre Task, stale 
 }
 
 // doneStmts complete pre along k into Done (k nil: a Task at no Step). Completing a Task at a
-// skill-review Step that carries a pending proposal publishes it as the Skill's next version,
-// only while the version it was written against is still current and never by its author;
+// skill-review Step publishes each pending proposal it carries, ps, as its Skill's next version,
+// only while the version each was written against is still current and never by its author;
 // completing a Retrospective marks its Parent's unreviewed Observations reviewed by it (ADR 0010).
 // A proposal left pending on the Task is superseded. Then, for a Subtask, its Parent may take an
 // Acceptance or complete itself (parentStmts).
-func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Connector, p *SkillProposal, note *string, args map[string]any, now time.Time) (any, []store.Stmt, error) {
+func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Connector, ps []SkillProposal, note *string, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 	out := pre
 	out.Claim, out.State, out.EndedAt, out.StepID, out.StepSince, out.SkillID = nil, "done", &now, nil, nil, nil
 	stmts := []store.Stmt{fromGuard(args, pre, k)}
-	if p != nil {
-		stmts = append(stmts, publishStmts(*p, args)...)
+	for _, p := range ps {
+		stmts = append(stmts, publishStmts(p, args)...)
 	}
 	if note != nil && *note != "" {
 		stmts = append(stmts, noteStmt(pre, args, newID(), *note))
@@ -241,7 +245,7 @@ AND task_id IN (SELECT ot.id FROM tasks ot WHERE ot.org_id = @org AND (ot.parent
 		}
 	}
 	stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.completed", pre.ID, payload, now))
-	if p != nil {
+	for _, p := range ps {
 		stmts = append(stmts, nextSeqStmt(c.OrgID), activityStmt(c.OrgID, &c.MemberID, "skill.version_published", p.SkillID,
 			map[string]any{"version": p.BasedOnVersion + 1, "proposal_id": p.ID, "task_id": pre.ID}, now))
 	}

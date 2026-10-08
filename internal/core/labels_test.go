@@ -10,10 +10,12 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// Labels: a Project's are defined by its Members, the Organisation's by admins; names are unique
-// among a Project's, or among the Organisation's, ignoring case; colours are #rrggbb. A Task
-// carries its Project's Labels and the Organisation's, set by any Member of its Project or its
-// Owner whoever holds it; a Label renamed, recoloured or deleted changes what its Tasks carry.
+// Labels: a Project's are defined by its Members, the Organisation's by admins; a name is unique
+// among a Project's Labels and the Organisation's taken together, ignoring case, so it always
+// names one Label, though two Projects may each have one; colours are #rrggbb. A Task carries its
+// Project's Labels and the Organisation's, named by id or name, set by any Member of its Project
+// or its Owner whoever holds it; a Label renamed, recoloured or deleted changes what its Tasks
+// carry. A Project's Activity covers its own Labels.
 func TestLabels(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -45,6 +47,9 @@ func TestLabels(t *testing.T) {
 			{"outsider", core.NewLabel{Project: ptrStr("WEB"), Name: "x", Color: "#000000"}, core.CodeForbidden},
 			{"lead", core.NewLabel{Project: ptrStr("WEB"), Name: "BUG", Color: "#000000"}, core.CodeConflict},
 			{"ada", core.NewLabel{Name: "CLIENT-X", Color: "#000000"}, core.CodeConflict},
+			// Across the two scopes, both ways.
+			{"lead", core.NewLabel{Project: ptrStr("WEB"), Name: "Client-X", Color: "#000000"}, core.CodeConflict},
+			{"ada", core.NewLabel{Name: "Bug", Color: "#000000"}, core.CodeConflict},
 			{"lead", core.NewLabel{Project: ptrStr("WEB"), Name: "red", Color: "red"}, core.CodeInvalid},
 			{"lead", core.NewLabel{Project: ptrStr("WEB"), Name: "  ", Color: "#000000"}, core.CodeInvalid},
 			{"lead", core.NewLabel{Project: ptrStr("NOPE"), Name: "x", Color: "#000000"}, core.CodeNotFound},
@@ -71,7 +76,10 @@ func TestLabels(t *testing.T) {
 		wantCode(t, err, core.CodeInvalid)
 		_, err = f.svc.SetTaskLabels(ctx, lead, task.Key, []string{"0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"}, core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
-		out, err := f.svc.SetTaskLabels(ctx, lead, task.Key, []string{client.ID, bug.ID, client.ID}, core.Idem{})
+		_, err = f.svc.SetTaskLabels(ctx, lead, task.Key, []string{"feature"}, core.Idem{})
+		wantCode(t, err, core.CodeNotFound)
+		// By id or by name in any case; WEB's bug, not API's.
+		out, err := f.svc.SetTaskLabels(ctx, lead, task.Key, []string{"CLIENT-X", "Bug", client.ID}, core.Idem{})
 		if err != nil || !slices.Equal(out.Labels, []string{bug.ID, client.ID}) || out.Claim == nil {
 			t.Fatalf("labelled %+v, %v", out, err)
 		}
@@ -99,6 +107,10 @@ func TestLabels(t *testing.T) {
 		}
 		_, err = f.svc.UpdateLabel(ctx, lead, bug.ID, core.LabelChange{Color: ptrStr("blue")}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
+		_, err = f.svc.UpdateLabel(ctx, lead, bug.ID, core.LabelChange{Name: ptrStr("CLIENT-Y")}, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
+		_, err = f.svc.UpdateLabel(ctx, f.admin, client.ID, core.LabelChange{Name: ptrStr("BUG")}, core.Idem{})
+		wantCode(t, err, core.CodeConflict)
 		wantCode(t, f.svc.DeleteLabel(ctx, lead, client.ID, core.Idem{}), core.CodeForbidden)
 		if err := f.svc.DeleteLabel(ctx, f.admin, client.ID, core.Idem{}); err != nil {
 			t.Fatal(err)
@@ -108,6 +120,28 @@ func TestLabels(t *testing.T) {
 		}
 		if got := f.kinds(client.ID); got != "label.created label.changed label.deleted" {
 			t.Fatalf("Activity: %s", got)
+		}
+
+		// WEB's Activity has its own Labels, a deleted one's entries included, and not API's or the
+		// Organisation's.
+		temp, err := f.svc.CreateLabel(ctx, lead, core.NewLabel{Project: ptrStr("WEB"), Name: "temp", Color: "#123456"}, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.svc.UpdateLabel(ctx, lead, temp.ID, core.LabelChange{Name: ptrStr("tmp")}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if err := f.svc.DeleteLabel(ctx, lead, temp.ID, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		page, err := f.svc.ListActivity(ctx, lead, core.ActivityQuery{Project: "WEB", Kinds: []string{"label.created", "label.changed", "label.deleted"}})
+		var got []string
+		for _, a := range page.Items {
+			got = append(got, a.Kind+" "+a.SubjectID)
+		}
+		if want := []string{"label.created " + bug.ID, "label.created " + temp.ID, "label.changed " + temp.ID, "label.deleted " + temp.ID}; err != nil ||
+			!slices.Equal(got, want) {
+			t.Fatalf("WEB's Label Activity %q, want %q (%v)", got, want, err)
 		}
 		f.checkActivity()
 	})

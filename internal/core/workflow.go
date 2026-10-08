@@ -1,6 +1,7 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -123,10 +124,17 @@ func builtinStepSQL(skill string) string {
 		` ORDER BY bs.position, bs.id LIMIT 1)`
 }
 
-// defaultStep is the Step a Task is filed at when its filer names none: the first Step that
-// carries a Skill (CONTEXT.md, Workflow), or the first Step when none does. Nil when the
+// defaultStep is the Step a Task is filed at when its filer names none (CONTEXT.md, Workflow):
+// the first Step whose Skill is the Project's own work rather than a builtin one Darkory files its
+// own Subtasks at (Build in the default Workflow), else the first Step that carries a Skill, else
+// the first Step. Break down is a switch on filing, never where a Task lands. Nil when the
 // Workflow has no Steps.
-func defaultStep(w Workflow) *Step {
+func defaultStep(w Workflow, builtin map[string]bool) *Step {
+	for _, s := range w.Steps {
+		if s.SkillID != nil && !builtin[*s.SkillID] {
+			return &s
+		}
+	}
 	for _, s := range w.Steps {
 		if s.SkillID != nil {
 			return &s
@@ -136,6 +144,20 @@ func defaultStep(w Workflow) *Step {
 		return &w.Steps[0]
 	}
 	return nil
+}
+
+// builtinSkills is the set of the Organisation's builtin Skills' ids: breakdown, acceptance,
+// retro and skill-review.
+func builtinSkills(ctx context.Context, r store.Reader, orgID string) (map[string]bool, error) {
+	ids, err := collect(ctx, r, func(row interface{ Scan(...any) error }) (string, error) {
+		var id string
+		return id, row.Scan(&id)
+	}, `SELECT id FROM skills WHERE org_id = $1 AND builtin = TRUE`, orgID)
+	out := map[string]bool{}
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, err
 }
 
 // outcomes names the Connectors out of a Step, for a refusal: "pass" or "needs changes".
@@ -150,6 +172,15 @@ func outcomes(ks []Connector) string {
 	return "its outcomes are " + strings.Join(names, ", ")
 }
 
+// outcomeNames are the names of the Connectors out of a Step, in order, for a refusal's Details.
+func outcomeNames(ks []Connector) []string {
+	names := make([]string, len(ks))
+	for i, k := range ks {
+		names[i] = k.Name
+	}
+	return names
+}
+
 // The Workflows a new Project starts with.
 const (
 	WorkflowDefault = "default"
@@ -157,20 +188,27 @@ const (
 	WorkflowCopy    = "copy"
 )
 
-// plannedStep and plannedConnector describe a Workflow to make, by Step name and Skill name.
-type plannedStep struct{ name, skill string }
+// plannedStep and plannedConnector describe a Workflow to make, by Step name and Skill name, and
+// where the canvas draws each Step.
+type plannedStep struct {
+	name, skill string
+	x, y        int64
+}
 type plannedConnector struct{ from, to, name string }
 
 // defaultWorkflow is the Workflow a new Project starts with unless its creator picks another
 // (model-v2-plan.md, "The default Workflow"): a Backlog hold, Plan, Build, Review, and the
 // Retrospective's Steps. No Acceptance: a Project that wants one adds the Step and turns it on.
+// It is drawn compact, in the board's order: a column of Backlog, Plan, Build and Retro, with
+// Review beside Build and Skill review beside Retro, so a new Project opens with Done in view
+// (decisions.md, W0).
 var defaultWorkflow = struct {
 	steps      []plannedStep
 	connectors []plannedConnector
 }{
 	steps: []plannedStep{
-		{"Backlog", ""}, {"Plan", SkillBreakdown}, {"Build", SkillEngineer}, {"Review", SkillReview},
-		{"Retro", SkillRetro}, {"Skill review", SkillSkillReview},
+		{"Backlog", "", 0, 0}, {"Plan", SkillBreakdown, 0, 128}, {"Build", SkillEngineer, 0, 256}, {"Review", SkillReview, 448, 256},
+		{"Retro", SkillRetro, 0, 384}, {"Skill review", SkillSkillReview, 448, 384},
 	},
 	connectors: []plannedConnector{
 		{"Plan", "", "done"},
@@ -186,13 +224,14 @@ var emptyWorkflow = struct {
 	steps      []plannedStep
 	connectors []plannedConnector
 }{
-	steps:      []plannedStep{{"Backlog", ""}},
+	steps:      []plannedStep{{"Backlog", "", 0, 0}},
 	connectors: []plannedConnector{{"Backlog", "", "done"}},
 }
 
-// stepSpacing is how far apart, in pixels, the canvas draws the Steps of a Workflow Darkory lays
-// out itself.
-const stepSpacing = 240
+// stepSpacing is how far apart, in pixels, the canvas draws one Step from the next in a row: a
+// node 208 wide and the plan's 240 between them. A new Step given no place is drawn in the first
+// row, at its position's place.
+const stepSpacing = 448
 
 // seedWorkflow gives a new Project its first Workflow inside a write: the default one, the empty
 // one, or a copy of another Project's.
@@ -208,10 +247,10 @@ func seedWorkflow(t *tx, projectID, kind, from string) error {
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name
-			steps = append(steps, StepInput{Name: s.Name, Skill: s.SkillID, X: s.X, Y: s.Y})
+			steps = append(steps, StepInput{Name: s.Name, Skill: s.SkillID, Position: s.Position, X: ptr(s.X), Y: ptr(s.Y)})
 		}
 		for _, k := range w.Connectors {
-			ci := ConnectorInput{From: names[k.FromStepID], Name: k.Name}
+			ci := ConnectorInput{From: names[k.FromStepID], Name: k.Name, Position: k.Position}
 			if k.ToStepID != nil {
 				ci.To = ptr(names[*k.ToStepID])
 			}
@@ -223,7 +262,7 @@ func seedWorkflow(t *tx, projectID, kind, from string) error {
 			plan = emptyWorkflow
 		}
 		for i, ps := range plan.steps {
-			in := StepInput{Name: ps.name, X: int64(i * stepSpacing)}
+			in := StepInput{Name: ps.name, Position: int64(i + 1), X: ptr(ps.x), Y: ptr(ps.y)}
 			if ps.skill != "" {
 				id, err := ensureSkill(t, ps.skill)
 				if err != nil {
@@ -269,7 +308,8 @@ func codeOf(err error) Code {
 	return ""
 }
 
-// WorkflowInput is the whole Workflow SetWorkflow puts in place of a Project's, in order.
+// WorkflowInput is the whole Workflow SetWorkflow puts in place of a Project's. The order of its
+// lists is not read: each Step's and Connector's Position says where it goes.
 type WorkflowInput struct {
 	Steps      []StepInput
 	Connectors []ConnectorInput
@@ -279,44 +319,55 @@ type WorkflowInput struct {
 }
 
 // StepInput is one Step of a Workflow being set: ID names one the Workflow has now, and is empty
-// for a new one. Skill names a Skill by id or name; nil for a hold.
+// for a new one. Skill names a Skill by id or name; nil for a hold. Position is its place, 1
+// first, distinct among the Steps, and the Workflow numbers them 1, 2, 3… in that order; 0 reads
+// as its place in the list, for a caller that sends them in order. X and Y, when nil, keep a
+// Step's place on the canvas, and put a new one at ((Position − 1) × 448, 0).
 type StepInput struct {
-	ID    string
-	Name  string
-	Skill *string
-	X, Y  int64
+	ID       string
+	Name     string
+	Skill    *string
+	Position int64
+	X, Y     *int64
 }
 
 // ConnectorInput is one Connector of a Workflow being set. From and To name Steps of the new
 // Workflow by id or name; To nil is Done. ID names one the Workflow has now, and may be left out:
-// a Connector out of the same Step with the same name keeps its id.
+// a Connector out of the same Step with the same name keeps its id. Position is its place among
+// the Connectors out of its Step, as a Step's is among the Steps.
 type ConnectorInput struct {
-	ID   string
-	From string
-	To   *string
-	Name string
+	ID       string
+	From     string
+	To       *string
+	Name     string
+	Position int64
 }
 
-// SetWorkflow replaces a Project's Workflow with w (admin). A Step left out is deleted; the open
-// Tasks at it go where w.Moves says, and are refused step_in_use when it does not say. A Step's
-// Skill may change: the Tasks at it keep their place, and the next `next` reads the new Skill.
-// A connector naming a Step the new Workflow does not have, or two Connectors out of one Step
-// with one name, are refused invalid. The Tasks moved keep their Claims.
-func (s *Service) SetWorkflow(ctx context.Context, c *auth.Caller, projectRef string, w WorkflowInput, idem Idem) (Workflow, error) {
+// SetWorkflow replaces a Project's Workflow with w (admin) and returns it as GetWorkflow does,
+// with its live facts. A Step left out is deleted; the open Tasks at it go where w.Moves says,
+// and are refused step_in_use when it does not say. A Step's Skill may change: the Tasks at it
+// keep their place, and the next `next` reads the new Skill. A connector naming a Step the new
+// Workflow does not have, two Connectors out of one Step with one name, and two Steps, or two
+// Connectors out of one Step, at one position are refused invalid. The Tasks moved keep their
+// Claims. A Workflow may have no Steps: filing in the Project is then refused no_step.
+func (s *Service) SetWorkflow(ctx context.Context, c *auth.Caller, projectRef string, w WorkflowInput, idem Idem) (WorkflowDetail, error) {
 	if err := mustAdmin(c); err != nil {
-		return Workflow{}, err
+		return WorkflowDetail{}, err
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		projectID, err := resolveProject(ctx, t, c.OrgID, projectRef)
 		if err != nil {
 			return nil, err
 		}
-		return replaceWorkflow(t, projectID, w)
+		if _, err := replaceWorkflow(t, projectID, w); err != nil {
+			return nil, err
+		}
+		return workflowDetail(ctx, t, c.OrgID, projectID, t.now)
 	})
 	if err != nil {
-		return Workflow{}, err
+		return WorkflowDetail{}, err
 	}
-	return res.(Workflow), nil
+	return res.(WorkflowDetail), nil
 }
 
 // resolvedWorkflow is a WorkflowInput checked against the record: every Step and Connector with
@@ -447,6 +498,10 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 	var out resolvedWorkflow
 	names := map[string]bool{}
 	ids := map[string]bool{}
+	stepAt, err := places("two Steps", len(w.Steps), func(i int) int64 { return w.Steps[i].Position })
+	if err != nil {
+		return out, err
+	}
 	for i, in := range w.Steps {
 		name := strings.TrimSpace(in.Name)
 		if err := validWorkflowName("a Step's name", name); err != nil {
@@ -456,17 +511,25 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 			return out, refuse(CodeInvalid, "two Steps are named %q; names are unique, ignoring case", name)
 		}
 		names[strings.ToLower(name)] = true
-		st := Step{ID: in.ID, Name: name, Position: int64(i + 1), X: in.X, Y: in.Y}
+		st := Step{ID: in.ID, Name: name, Position: stepAt[i], X: (stepAt[i] - 1) * stepSpacing}
 		if in.ID != "" {
-			if !slices.ContainsFunc(current.Steps, func(s Step) bool { return s.ID == in.ID }) {
+			j := slices.IndexFunc(current.Steps, func(s Step) bool { return s.ID == in.ID })
+			if j < 0 {
 				return out, refuse(CodeInvalid, "the Workflow has no Step %s; a new Step has no id", in.ID)
 			}
 			if ids[in.ID] {
 				return out, refuse(CodeInvalid, "Step %s is in the Workflow twice", in.ID)
 			}
 			ids[in.ID] = true
+			st.X, st.Y = current.Steps[j].X, current.Steps[j].Y
 		} else {
 			st.ID = newID()
+		}
+		if in.X != nil {
+			st.X = *in.X
+		}
+		if in.Y != nil {
+			st.Y = *in.Y
 		}
 		if in.Skill != nil {
 			id, err := resolveSkill(t.ctx, t, t.caller.OrgID, *in.Skill)
@@ -477,6 +540,7 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 		}
 		out.steps = append(out.steps, st)
 	}
+	slices.SortFunc(out.steps, func(a, b Step) int { return cmp.Compare(a.Position, b.Position) })
 	next := Workflow{Steps: out.steps}
 	find := func(what, ref string) (string, error) {
 		st, ok := next.find(ref)
@@ -500,6 +564,7 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 	}
 	out.connectors = []Connector{}
 	outs := map[string]map[string]bool{}
+	given := map[string][]int64{}
 	for _, in := range w.Connectors {
 		name := strings.TrimSpace(in.Name)
 		if err := validWorkflowName("a Connector's name", name); err != nil {
@@ -525,7 +590,7 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 			return out, refuse(CodeInvalid, "two Connectors out of %s are named %q; a Step's outcomes are unique, ignoring case", st.Name, name)
 		}
 		outs[from][strings.ToLower(name)] = true
-		k.Position = int64(len(outs[from]))
+		given[from] = append(given[from], in.Position)
 		if k.ID == "" {
 			// A Connector sent back without its id keeps it, so a Workflow put back as read is
 			// unchanged.
@@ -541,6 +606,27 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 		}
 		out.connectors = append(out.connectors, k)
 	}
+	// Each Step's Connectors take their places among themselves, in the order of the Steps.
+	at := map[string][]int64{}
+	for from, ps := range given {
+		st, _ := next.find(from)
+		if at[from], err = places("two Connectors out of "+st.Name, len(ps), func(i int) int64 { return ps[i] }); err != nil {
+			return out, err
+		}
+	}
+	seen := map[string]int{}
+	for i := range out.connectors {
+		from := out.connectors[i].FromStepID
+		out.connectors[i].Position = at[from][seen[from]]
+		seen[from]++
+	}
+	stepPos := map[string]int64{}
+	for _, st := range out.steps {
+		stepPos[st.ID] = st.Position
+	}
+	slices.SortFunc(out.connectors, func(a, b Connector) int {
+		return cmp.Or(cmp.Compare(stepPos[a.FromStepID], stepPos[b.FromStepID]), cmp.Compare(a.Position, b.Position))
+	})
 
 	out.moves = map[string]string{}
 	for from, to := range w.Moves {
@@ -552,6 +638,34 @@ func resolveWorkflow(t *tx, current Workflow, w WorkflowInput) (resolvedWorkflow
 			return out, err
 		}
 		out.moves[from] = id
+	}
+	return out, nil
+}
+
+// places numbers n Steps, or n Connectors out of one Step, 1 to n in the order of their
+// positions, pos(i) for the i-th in the list; a position of 0 reads as its place in the list.
+// Two at one position, or one below 0, are refused invalid.
+func places(what string, n int, pos func(i int) int64) ([]int64, error) {
+	given := make([]int64, n)
+	order := make([]int, n)
+	taken := map[int64]bool{}
+	for i := range n {
+		given[i], order[i] = pos(i), i
+		if given[i] < 0 {
+			return nil, refuse(CodeInvalid, "a position is 1 or more, not %d", given[i])
+		}
+		if given[i] == 0 {
+			given[i] = int64(i + 1)
+		}
+		if taken[given[i]] {
+			return nil, refuse(CodeInvalid, "%s are at position %d; each has a place of its own", what, given[i])
+		}
+		taken[given[i]] = true
+	}
+	slices.SortFunc(order, func(a, b int) int { return cmp.Compare(given[a], given[b]) })
+	out := make([]int64, n)
+	for place, i := range order {
+		out[i] = int64(place + 1)
 	}
 	return out, nil
 }
@@ -597,8 +711,12 @@ func (s *Service) GetWorkflow(ctx context.Context, c *auth.Caller, projectRef st
 	if err != nil {
 		return WorkflowDetail{}, err
 	}
-	now := s.clock.Now()
-	w, err := getWorkflow(ctx, s.store, c.OrgID, projectID)
+	return workflowDetail(ctx, s.store, c.OrgID, projectID, s.clock.Now())
+}
+
+// workflowDetail reads a Project's Workflow with the live facts of each Step as of now.
+func workflowDetail(ctx context.Context, r store.Reader, orgID, projectID string, now time.Time) (WorkflowDetail, error) {
+	w, err := getWorkflow(ctx, r, orgID, projectID)
 	if err != nil {
 		return WorkflowDetail{}, err
 	}
@@ -609,9 +727,9 @@ func (s *Service) GetWorkflow(ctx context.Context, c *auth.Caller, projectRef st
 		at[st.ID] = i
 	}
 
-	rows, err := s.store.Query(ctx, `SELECT step_id, COUNT(*),
+	rows, err := r.Query(ctx, `SELECT step_id, COUNT(*),
 SUM(CASE WHEN claim_holder_id IS NOT NULL AND (claim_expires_at IS NULL OR claim_expires_at > $3) THEN 1 ELSE 0 END)
-FROM tasks WHERE org_id = $1 AND project_id = $2 AND state = 'open' AND step_id IS NOT NULL GROUP BY step_id`, c.OrgID, projectID, ms(now))
+FROM tasks WHERE org_id = $1 AND project_id = $2 AND state = 'open' AND step_id IS NOT NULL GROUP BY step_id`, orgID, projectID, ms(now))
 	if err != nil {
 		return d, err
 	}
@@ -629,12 +747,12 @@ FROM tasks WHERE org_id = $1 AND project_id = $2 AND state = 'open' AND step_id 
 	rows.Close()
 
 	// The takers of a Step are those who could take a Task at it by its Skill (takeableSQL).
-	rows, err = s.store.Query(ctx, `SELECT st.id, m.id, m.name, m.kind FROM steps st
+	rows, err = r.Query(ctx, `SELECT st.id, m.id, m.name, m.kind FROM steps st
 JOIN skills sk ON sk.id = st.skill_id JOIN member_skills ms ON ms.skill_id = st.skill_id JOIN members m ON m.id = ms.member_id
 WHERE st.org_id = $1 AND st.project_id = $2 AND m.deactivated_at IS NULL
 AND (EXISTS (SELECT 1 FROM project_members pm WHERE pm.org_id = $1 AND pm.project_id = $2 AND pm.member_id = m.id)
 	OR (sk.builtin = TRUE AND sk.name = 'skill-review'))
-ORDER BY st.position, m.name`, c.OrgID, projectID)
+ORDER BY st.position, m.name`, orgID, projectID)
 	if err != nil {
 		return d, err
 	}
@@ -651,7 +769,7 @@ ORDER BY st.position, m.name`, c.OrgID, projectID)
 	}
 	rows.Close()
 
-	dwells, err := stepDwells(ctx, s.store, c.OrgID, projectID, now.Add(-30*24*time.Hour))
+	dwells, err := stepDwells(ctx, r, orgID, projectID, now.Add(-30*24*time.Hour))
 	if err != nil {
 		return d, err
 	}
