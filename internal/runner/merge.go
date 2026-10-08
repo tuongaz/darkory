@@ -144,18 +144,26 @@ type reviewed struct {
 	built bool
 }
 
-// verdict is what the merge's Note says of a branch whose tip is tip: nothing when it is the
-// commit the review was shown, else why it is not reviewed work.
+// verdict is what the merge's Note says of a branch whose tip is tip, "" when it could not be read:
+// nothing when it is the commit the review was shown, else why it is not reviewed work.
 func (rv *reviewed) verdict(ws, branch, tip string) string {
 	switch saw, ok := rv.saw[ws+"\x00"+branch]; {
 	case rv.built:
 		return rv.completed + ", and " + rv.reviewer + " reviewed work it had built itself"
 	case !ok:
 		return rv.completed + ", and nothing records the commit " + rv.reviewer + "'s review saw"
-	case tip == "" || saw != tip:
+	case tip == "":
+		return rv.completed + ", and its branch could not be read to check it against " + rv.reviewer + "'s review"
+	case saw != tip:
 		return rv.completed + ", and its branch changed after " + rv.reviewer + "'s review"
 	}
 	return ""
+}
+
+// moved is what the merge's Note says when the branch moved while it merged: what went in is not
+// the commit checked against the review.
+func (rv *reviewed) moved() string {
+	return rv.completed + ", and its branch changed after " + rv.reviewer + "'s review"
 }
 
 // reviewedLine is how the runner records, in a Note by the reviewer as its session starts, the
@@ -311,8 +319,8 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 			}
 		}
 		res, err := mergeBranch(ctx, ws.Path, branch, target, fmt.Sprintf("Merge %s into %s\n\n%s: %s", branch, target, key, d.Task.Title))
-		if after, _ := runGit(ctx, ws.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); after != tip {
-			verdict("") // the branch moved while it merged: what went in is not the commit checked
+		if after, _ := runGit(ctx, ws.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); after != tip && rv != nil {
+			unrev = rv.moved()
 		}
 		unlock()
 		var dirty ErrDirty

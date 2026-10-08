@@ -1054,6 +1054,9 @@ func TestReviewAttestation(t *testing.T) {
 	if v := rv.verdict("web", "web-1-x", sha('b')); !strings.HasSuffix(v, "changed after rev's review") {
 		t.Fatalf("another commit: %q", v)
 	}
+	if v := rv.verdict("web", "web-1-x", ""); !strings.HasSuffix(v, "its branch could not be read to check it against rev's review") {
+		t.Fatalf("an unreadable branch: %q", v)
+	}
 	if v := rv.verdict("web", "other", sha('a')); !strings.HasSuffix(v, "nothing records the commit rev's review saw") {
 		t.Fatalf("a branch no Note names: %q", v)
 	}
