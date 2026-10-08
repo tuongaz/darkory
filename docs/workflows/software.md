@@ -155,3 +155,10 @@ The preset ran on a scratch Install, with the Runner starting real Claude Code s
 - **Landing on main.** The Parent's merge into main conflicted with LS-3. The Retrospective filed LS-13 to land it, and the agents carried it to Done.
 
 The run found three Runner defects, each now fixed with a test: reviewed work was noted "without review" when a Step after the review completed it; a re-taken Task's branch was stale; a session could start before its sibling's merge. It also showed that a Parent's conflicting merge filed nothing to resolve it, which is fixed too. The Skill-text changes it led to are in the preset.
+
+A second run on a fresh Install used the corrected Skill texts and Runner, and took a screenshot at every Step change.
+- The architect filed five slices in the Backlog, blocked them, then moved them to Build. None was taken early.
+- Design review sent the design back once before approving it.
+- Release found that the Acceptance's branch no longer merged into main and answered `not ready`. The builder merged main in, so the Parent landed on main cleanly.
+- The Retrospective measured 6 loops and about 87 minutes of work, with no time spent waiting in a queue. Skill review published 5 Skill changes after one round of fixes; those changes are now in the preset.
+- No Claim lapsed and no session needed a nudge.
