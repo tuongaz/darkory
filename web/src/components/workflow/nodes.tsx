@@ -37,7 +37,7 @@ function Takers({ takers, live }: { takers: Taker[]; live: boolean }) {
  * outcomes' names beside its right side.
  */
 export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) {
-  const { mode, onAdd } = useCanvas();
+  const { mode, onAdd, opens } = useCanvas();
   const edit = mode === "edit";
   const hold = isHold(step);
   const warn = unstaffed(step);
@@ -48,6 +48,7 @@ export function StepNode({ data: { step }, selected }: NodeProps<StepFlowNode>) 
         hold && "border-dashed border-muted-foreground/50 bg-muted/40",
         warn && "border-warn-border",
         selected && "border-ring ring-2 ring-ring/40",
+        opens && "cursor-pointer hover:border-ring/60",
       )}
     >
       <span className="flex min-w-0 items-center gap-1.5">
