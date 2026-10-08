@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { shortSessionId } from "@/lib/members";
+import { Copy } from "@/components/Copy";
 import { cn } from "@/lib/utils";
 
 /** Puts `value` on the clipboard and says so; where the browser refuses, the toast shows it to copy by hand. */
@@ -13,9 +13,8 @@ async function copy(value: string, what: string) {
 }
 
 /**
- * A value in mono that copies itself when clicked, the whole of it on hover: a Session id, a
- * branch. `children` is what shows (a short form, or the value truncated); `what` names it in the
- * toast and the label ("Session id").
+ * A value in mono that copies itself when clicked, the whole of it on hover: a branch. `children`
+ * is what shows (the value truncated); `what` names it in the toast and the label ("branch").
  */
 export function CopyValue({ value, what, children, className }: { value: string; what: string; children?: string; className?: string }) {
   return (
@@ -39,11 +38,11 @@ export function CopyValue({ value, what, children, className }: { value: string;
   );
 }
 
-/** A Session id, short, with the whole id on hover and copied on click. */
+/** A Session id, whole, in mono, with a copy button after it. */
 export function SessionId({ id, className }: { id: string; className?: string }) {
   return (
-    <CopyValue value={id} what="Session id" className={className}>
-      {shortSessionId(id)}
-    </CopyValue>
+    <Copy value={id} label="Session id" className={className}>
+      <span className="font-mono text-xs break-all">{id}</span>
+    </Copy>
   );
 }

@@ -149,7 +149,7 @@ describe("Settings › a Member", () => {
     await user.click(within(stop).getByRole("button", { name: "Deactivate builder" }));
     const confirm = await screen.findByRole("dialog", { name: "Deactivate builder?" });
     expect(confirm).toHaveTextContent("Revokes1 tokenseed");
-    expect(confirm).toHaveTextContent("Closes1 Session…uilder-1");
+    expect(confirm).toHaveTextContent("Closes1 Sessionsess-builder-1");
     expect(confirm).toHaveTextContent("Ends1 ClaimWEB-3");
     expect(api.calls.some((c) => c.path.endsWith("/deactivate"))).toBe(false);
 
@@ -159,13 +159,13 @@ describe("Settings › a Member", () => {
 
   it("shows an agent's Sessions as a table — the Runner's state on the one it works through — and closes one after asking", async () => {
     const user = userEvent.setup();
-    const worker = "01a11b2b-acc8-7d90-bf1c-5b0a842120d6";
-    const reader = "01a11b2b-acc2-7854-bf88-edcaa71f4218";
+    const worker = "1CfpetKm9mF5bergWMAmtH";
+    const reader = "1CfpetKjfB4XEtcbSpu599";
     const open: Session[] = [
       { id: worker, member_id: builder.id, kind: "token", token_id: "t-live", started_at: at, last_seen_at: at },
       { id: reader, member_id: builder.id, kind: "token", token_id: "t-live", started_at: at, last_seen_at: at },
     ];
-    const gone: Session = { id: "01a119a8-a8b8-7d94-9853-d4737e9effdc", member_id: builder.id, kind: "token", started_at: at, last_seen_at: at, ended_at: at };
+    const gone: Session = { id: "1Cfp6eg2SL6edHPrxot6y1", member_id: builder.id, kind: "token", started_at: at, last_seen_at: at, ended_at: at };
     const holding = task(3, { claim: { id: "c-1", task_id: "k-3", holder_id: builder.id, session_id: worker, started_at: at, expires_at: later(15), heartbeat_timeout_seconds: 900 } });
     const api = mockApi({
       ...signedIn(),

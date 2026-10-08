@@ -345,7 +345,10 @@ test.describe("the Session panel with no Runner", () => {
     await page.goto(`${base}/tasks/${taskKey}`);
     await expect(page.getByRole("heading", { name: "Build the cart page", level: 1 })).toBeVisible();
     await expect.poll(() => asked).toEqual([200]);
-    await expect(page.getByRole("complementary", { name: "Properties" }).getByRole("button", { name: "Copy the Session id sess-ses-builder" })).toHaveText("…-builder");
+    // The Session id shows whole, with Copy (ADR 0017).
+    const properties = page.getByRole("complementary", { name: "Properties" });
+    await expect(properties.getByRole("button", { name: "Copy Session id" })).toHaveCount(1);
+    await expect(properties).toContainText("sess-ses-builder");
     await expect(page.getByRole("region", { name: "Session" })).toHaveCount(0);
     await page.getByRole("button", { name: "More" }).click();
     await expect(page.getByRole("menuitem", { name: "Take back" })).toBeVisible();

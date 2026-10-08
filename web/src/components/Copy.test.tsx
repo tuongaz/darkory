@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Toaster } from "@/components/ui/sonner";
 import { Copy, copiedFor } from "./Copy";
 
-const id = "01a11b2b-acc8-7d90-bf1c-5b0a842120d6";
+const id = "1CfppqWvwQruvqjgSEtEQt";
 
 function clipboard(writeText = vi.fn().mockResolvedValue(undefined)) {
   Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
@@ -49,7 +49,7 @@ describe("Copy", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const writeText = clipboard();
-    render(<Copy value={id} label="Session id">{`…${id.slice(-8)}`}</Copy>);
+    render(<Copy value={id} label="Session id">{id}</Copy>);
     await user.click(screen.getByRole("button", { name: "Copy Session id" }));
     expect(writeText).toHaveBeenCalledWith(id);
     const copied = await screen.findByRole("button", { name: "Copied Session id" });

@@ -26,7 +26,8 @@ import { ConfirmDialog, Fact, Facts, MoreMenu } from "./parts";
  * state of the agent's session there — the Tasks held through it, and Close Session in its ⋯,
  * which asks first. Ended Sessions are hidden behind "Show ended (N)". On Account, `current` marks
  * this browser, whose row has Log out instead. `compact` fits a narrow host, such as the agent's
- * peek: Started and Last seen share a column, and what a Session holds goes under its state.
+ * peek or a phone: Started and Last seen share a column, and the state and what a Session holds
+ * go under its id, which keeps the width to stay on one line.
  */
 export function SessionsTable({
   member,
@@ -65,7 +66,7 @@ export function SessionsTable({
   const signOut = useMutation({ mutationFn: logout, onSuccess: () => qc.resetQueries() });
   const endedRows = showEnded ? (ended.data?.pages.flatMap((p) => p.items) ?? []) : [];
   const ends = closing ? boundToSession(held, closing.id) : [];
-  const cols = compact ? 4 : 6;
+  const cols = compact ? 3 : 6;
 
   const row = (s: Session) => {
     const open = !s.ended_at;
@@ -98,6 +99,7 @@ export function SessionsTable({
             <span className={cn("font-mono text-[11.5px] [overflow-wrap:anywhere]", open && "text-foreground")}>{s.id}</span>
           </Copy>
           {s.kind === "browser" && !here && <span className="block text-xs text-muted-foreground">Browser</span>}
+          {compact && <span className="block text-xs leading-5">{state}</span>}
           {compact && holding && <span className="block text-xs leading-5">{holding}</span>}
         </td>
         {compact ? (
@@ -115,7 +117,7 @@ export function SessionsTable({
             </td>
           </>
         )}
-        <td className="text-xs leading-5">{state}</td>
+        {!compact && <td className="text-xs leading-5">{state}</td>}
         {!compact && <td className="text-xs leading-5">{holding}</td>}
         <td className="!pr-1 text-right">
           {open &&
@@ -145,8 +147,8 @@ export function SessionsTable({
         <table aria-label={`Sessions of ${member.name}`} className="w-full table-fixed border-collapse text-sm">
           <colgroup>
             <col />
-            {/* The id takes what the others leave: a whole UUID (36 characters) on one line in the
-                agent's peek and on a settings page, a short one (22) with room to spare. */}
+            {/* The id takes what the others leave: its 22 characters on one line, on a phone too,
+                where the state goes under it. */}
             {compact ? (
               <col className="w-[76px]" />
             ) : (
@@ -155,7 +157,7 @@ export function SessionsTable({
                 <col className="w-[80px]" />
               </>
             )}
-            <col className={compact ? "w-[108px]" : "w-[112px]"} />
+            {!compact && <col className="w-[112px]" />}
             {!compact && <col className="w-[96px]" />}
             <col className={here(sessions.items, current) ? "w-[92px]" : "w-8"} />
           </colgroup>
@@ -172,7 +174,7 @@ export function SessionsTable({
                   <th scope="col">Last seen</th>
                 </>
               )}
-              <th scope="col">State</th>
+              {!compact && <th scope="col">State</th>}
               {!compact && <th scope="col">Holds</th>}
               <th scope="col">
                 <span className="sr-only">Actions</span>

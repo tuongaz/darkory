@@ -5,7 +5,6 @@ import type { Token } from "@/api/client";
 import { revokeToken } from "@/api/writes";
 import { Key } from "@/components/Key";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { shortSessionId } from "@/lib/members";
 import { count, revokeSummary, type Held, type Session } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, RecordRow } from "./parts";
 
@@ -81,7 +80,7 @@ export function TokenRows({ tokens, sessions, held }: { tokens: Token[]; session
               <Fact label="Closes">
                 {count(summary.sessions.length, "Session")}
                 {summary.sessions.map((s) => (
-                  <Key key={s.id}>{shortSessionId(s.id)}</Key>
+                  <Key key={s.id}>{s.id}</Key>
                 ))}
               </Fact>
             )}

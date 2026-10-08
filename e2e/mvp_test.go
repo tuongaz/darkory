@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/shortid"
 )
 
 // webFlow is the MVP flow's Workflow: a Breakdown at Plan, then Build, QA, UI review and Security
@@ -100,7 +101,7 @@ func TestMVPFlow(t *testing.T) {
 	}
 	mcp.call("next", map[string]any{"wait_seconds": 5, "heartbeat_timeout_seconds": 60, "model_label": engModel}, &took)
 	bd := took.Task.Task
-	if !took.Claimed || bd.Kind != client.Breakdown || bd.Claim == nil || bd.Claim.SessionID != eng.session ||
+	if !took.Claimed || bd.Kind != client.Breakdown || bd.Claim == nil || bd.Claim.SessionID != shortid.Short(eng.session) ||
 		bd.Claim.ModelLabel == nil || *bd.Claim.ModelLabel != engModel || took.Task.Step == nil || took.Task.Step.Name != "Plan" {
 		t.Fatalf("eng took %+v", took)
 	}

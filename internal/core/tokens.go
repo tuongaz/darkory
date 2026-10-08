@@ -493,9 +493,11 @@ WHERE l.code_hash = $1 AND m.deactivated_at IS NULL`, auth.Hash(code)).
 		if n, _ := res.RowsAffected(); n == 0 {
 			return nil, refuse(CodeNotFound, "this login link is unknown, used or expired")
 		}
+		// A browser Session is known by its own id, a UUID like any, so it is shown short (ADR
+		// 0017); its kind says it is a browser's. Those made before were named browser-<UUID>.
 		sessionID := newID()
 		if _, err := t.Exec(ctx, `INSERT INTO sessions (id, org_id, member_id, chosen_id, kind, cookie_hash, created_at, last_seen_at)
-VALUES ($1, $2, $3, $4, 'browser', $5, $6, $6)`, sessionID, orgID, memberID, "browser-"+sessionID, hash, ms(t.now)); err != nil {
+VALUES ($1, $2, $3, $4, 'browser', $5, $6, $6)`, sessionID, orgID, memberID, sessionID, hash, ms(t.now)); err != nil {
 			return nil, err
 		}
 		return nil, t.recordByCaller("login_link.redeemed", linkID, map[string]any{"member_id": memberID})
