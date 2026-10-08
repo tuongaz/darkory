@@ -1313,6 +1313,16 @@ type ProjectList struct {
 	Items []Project `json:"items"`
 }
 
+// ProjectSeen How far a Member has seen a Project's Activity. Both fields are null until the Member
+// first sets it.
+type ProjectSeen struct {
+	// At When the Member last moved it forward.
+	At *time.Time `json:"at"`
+
+	// Seq The `seq` of the newest Activity entry the Member has seen in the Project.
+	Seq *int64 `json:"seq"`
+}
+
 // ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
 // not be published, because a newer proposal for the same Skill replaced it on its Task, or
 // its Task ended without publishing it.
@@ -1433,6 +1443,13 @@ type SetAgentSettingsBody struct {
 type SetManagerBody struct {
 	// Manager Member id or name.
 	Manager string `json:"manager"`
+}
+
+// SetProjectSeenBody defines model for SetProjectSeenBody.
+type SetProjectSeenBody struct {
+	// Seq The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+	// there is none yet.
+	Seq int64 `json:"seq"`
 }
 
 // SetTaskLabelsBody defines model for SetTaskLabelsBody.
@@ -2224,6 +2241,13 @@ type AddProjectMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetProjectSeenParams defines parameters for SetProjectSeen.
+type SetProjectSeenParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // SetWorkflowParams defines parameters for SetWorkflow.
 type SetWorkflowParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2589,6 +2613,9 @@ type UpdateProjectJSONRequestBody = UpdateProjectBody
 // CreateProjectLabelJSONRequestBody defines body for CreateProjectLabel for application/json ContentType.
 type CreateProjectLabelJSONRequestBody = CreateLabelBody
 
+// SetProjectSeenJSONRequestBody defines body for SetProjectSeen for application/json ContentType.
+type SetProjectSeenJSONRequestBody = SetProjectSeenBody
+
 // SetWorkflowJSONRequestBody defines body for SetWorkflow for application/json ContentType.
 type SetWorkflowJSONRequestBody = SetWorkflowBody
 
@@ -2768,6 +2795,12 @@ type ServerInterface interface {
 	// AddProjectMember Add a Member to a Project (admin)
 	// (PUT /v1/projects/{project}/members/{member})
 	AddProjectMember(w http.ResponseWriter, r *http.Request, project ProjectRef, member MemberRef, params AddProjectMemberParams)
+	// GetProjectSeen Read how far the caller has seen a Project's Activity
+	// (GET /v1/projects/{project}/seen)
+	GetProjectSeen(w http.ResponseWriter, r *http.Request, project ProjectRef)
+	// SetProjectSeen Say how far the caller has seen a Project's Activity
+	// (PUT /v1/projects/{project}/seen)
+	SetProjectSeen(w http.ResponseWriter, r *http.Request, project ProjectRef, params SetProjectSeenParams)
 	// GetWorkflow Get a Project's Workflow with what is happening at each Step now
 	// (GET /v1/projects/{project}/workflow)
 	GetWorkflow(w http.ResponseWriter, r *http.Request, project ProjectRef)
@@ -4509,6 +4542,82 @@ func (siw *ServerInterfaceWrapper) AddProjectMember(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddProjectMember(w, r, project, member, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProjectSeen operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectSeen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectSeen(w, r, project)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetProjectSeen operation middleware
+func (siw *ServerInterfaceWrapper) SetProjectSeen(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "project" -------------
+	var project ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetProjectSeenParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetProjectSeen(w, r, project, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6749,6 +6858,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/v1/projects/{project}", wrapper.UpdateProject)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/v1/projects/{project}/members/{member}", wrapper.RemoveProjectMember)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/projects/{project}/members/{member}", wrapper.AddProjectMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects/{project}/seen", wrapper.GetProjectSeen)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/projects/{project}/seen", wrapper.SetProjectSeen)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects/{project}/workflow", wrapper.GetWorkflow)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/projects/{project}/workflow", wrapper.SetWorkflow)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/projects/{project}/labels", wrapper.ListProjectLabels)

@@ -11,7 +11,7 @@ const sizes = [
 ] as const;
 
 const screens = [
-  { name: "inbox", path: "/inbox", ready: (p: Page) => p.getByRole("region", { name: "Aimed at you" }) },
+  { name: "inbox", path: "/inbox", ready: (p: Page) => p.getByRole("region", { name: "Needs you" }) },
   { name: "my-work", path: "/my-work", ready: (p: Page) => p.getByRole("region", { name: "You own" }) },
   { name: "agents", path: "/projects/WEB/agents", ready: (p: Page) => p.getByRole("link", { name: "builder-1", exact: true }) },
   { name: "agent-peek", path: "/projects/WEB/agents?agent=builder-1", ready: (p: Page) => p.getByRole("region", { name: "Runner session" }) },

@@ -1316,6 +1316,16 @@ type ProjectList struct {
 	Items []Project `json:"items"`
 }
 
+// ProjectSeen How far a Member has seen a Project's Activity. Both fields are null until the Member
+// first sets it.
+type ProjectSeen struct {
+	// At When the Member last moved it forward.
+	At *time.Time `json:"at"`
+
+	// Seq The `seq` of the newest Activity entry the Member has seen in the Project.
+	Seq *int64 `json:"seq"`
+}
+
 // ProposalState `pending`: waiting for review. `published`: a review published it. `superseded`: it will
 // not be published, because a newer proposal for the same Skill replaced it on its Task, or
 // its Task ended without publishing it.
@@ -1436,6 +1446,13 @@ type SetAgentSettingsBody struct {
 type SetManagerBody struct {
 	// Manager Member id or name.
 	Manager string `json:"manager"`
+}
+
+// SetProjectSeenBody defines model for SetProjectSeenBody.
+type SetProjectSeenBody struct {
+	// Seq The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+	// there is none yet.
+	Seq int64 `json:"seq"`
 }
 
 // SetTaskLabelsBody defines model for SetTaskLabelsBody.
@@ -2227,6 +2244,13 @@ type AddProjectMemberParams struct {
 	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
 }
 
+// SetProjectSeenParams defines parameters for SetProjectSeen.
+type SetProjectSeenParams struct {
+	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
+	// to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+	IdempotencyKey *IdempotencyKey `json:"Idempotency-Key,omitempty"`
+}
+
 // SetWorkflowParams defines parameters for SetWorkflow.
 type SetWorkflowParams struct {
 	// IdempotencyKey A key unique to this write. A retry with the same key returns the first response. It is 1
@@ -2591,6 +2615,9 @@ type UpdateProjectJSONRequestBody = UpdateProjectBody
 
 // CreateProjectLabelJSONRequestBody defines body for CreateProjectLabel for application/json ContentType.
 type CreateProjectLabelJSONRequestBody = CreateLabelBody
+
+// SetProjectSeenJSONRequestBody defines body for SetProjectSeen for application/json ContentType.
+type SetProjectSeenJSONRequestBody = SetProjectSeenBody
 
 // SetWorkflowJSONRequestBody defines body for SetWorkflow for application/json ContentType.
 type SetWorkflowJSONRequestBody = SetWorkflowBody
@@ -3188,6 +3215,42 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
 	AddProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetProjectSeen Read how far the caller has seen a Project's Activity
+	//
+	// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+	// show what happened there since they looked, and when they set it. Both are null until the
+	// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+	// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+	//
+	// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+	GetProjectSeen(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetProjectSeenWithBody Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeenWithBody(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetProjectSeen Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeen(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetWorkflow Get a Project's Workflow with what is happening at each Step now
 	//
@@ -5050,6 +5113,72 @@ func (c *Client) RemoveProjectMember(ctx context.Context, project ProjectRef, me
 // Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
 func (c *Client) AddProjectMember(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAddProjectMemberRequest(c.Server, project, member, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetProjectSeen Read how far the caller has seen a Project's Activity
+//
+// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+// show what happened there since they looked, and when they set it. Both are null until the
+// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+//
+// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+func (c *Client) GetProjectSeen(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProjectSeenRequest(c.Server, project)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetProjectSeenWithBody Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *Client) SetProjectSeenWithBody(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetProjectSeenRequestWithBody(c.Server, project, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetProjectSeen Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *Client) SetProjectSeen(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetProjectSeenRequest(c.Server, project, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8561,6 +8690,102 @@ func NewAddProjectMemberRequest(server string, project ProjectRef, member Member
 	return req, nil
 }
 
+// NewGetProjectSeenRequest constructs an http.Request for the GetProjectSeen method
+func NewGetProjectSeenRequest(server string, project ProjectRef) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/seen", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetProjectSeenRequest calls the generic SetProjectSeen builder with application/json body
+func NewSetProjectSeenRequest(server string, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetProjectSeenRequestWithBody(server, project, params, "application/json", bodyReader)
+}
+
+// NewSetProjectSeenRequestWithBody constructs an http.Request for the SetProjectSeen method, with any body, and a specified content type
+func NewSetProjectSeenRequestWithBody(server string, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/projects/%s/seen", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetWorkflowRequest constructs an http.Request for the GetWorkflow method
 func NewGetWorkflowRequest(server string, project ProjectRef) (*http.Request, error) {
 	var err error
@@ -11664,6 +11889,44 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/projects/{project}/members/{member} (the `AddProjectMember` operationId).
 	AddProjectMemberWithResponse(ctx context.Context, project ProjectRef, member MemberRef, params *AddProjectMemberParams, reqEditors ...RequestEditorFn) (*AddProjectMemberResponse, error)
 
+	// GetProjectSeenWithResponse Read how far the caller has seen a Project's Activity
+	//
+	// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+	// show what happened there since they looked, and when they set it. Both are null until the
+	// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+	// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+	GetProjectSeenWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectSeenResponse, error)
+
+	// SetProjectSeenWithBodyWithResponse Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeenWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error)
+
+	// SetProjectSeenWithResponse Say how far the caller has seen a Project's Activity
+	//
+	// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+	// below the one kept changes nothing, and the response is the mark as kept, so a client
+	// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+	// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+	// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+	SetProjectSeenWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error)
+
 	// GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
 	//
 	// The Steps in their order and the Connectors out of each, with each Step's live facts: the
@@ -14361,6 +14624,102 @@ func (r AddProjectMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AddProjectMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetProjectSeenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProjectSeen
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetProjectSeenResponse) GetJSON200() *ProjectSeen {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetProjectSeenResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetProjectSeenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProjectSeenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProjectSeenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetProjectSeenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SetProjectSeenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProjectSeen
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetProjectSeenResponse) GetJSON200() *ProjectSeen {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r SetProjectSeenResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SetProjectSeenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetProjectSeenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetProjectSeenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetProjectSeenResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17264,6 +17623,62 @@ func (c *ClientWithResponses) AddProjectMemberWithResponse(ctx context.Context, 
 	return ParseAddProjectMemberResponse(rsp)
 }
 
+// GetProjectSeenWithResponse Read how far the caller has seen a Project's Activity
+//
+// The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+// show what happened there since they looked, and when they set it. Both are null until the
+// caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+// Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/projects/{project}/seen (the `GetProjectSeen` operationId).
+func (c *ClientWithResponses) GetProjectSeenWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectSeenResponse, error) {
+	rsp, err := c.GetProjectSeen(ctx, project, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProjectSeenResponse(rsp)
+}
+
+// SetProjectSeenWithBodyWithResponse Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *ClientWithResponses) SetProjectSeenWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error) {
+	rsp, err := c.SetProjectSeenWithBody(ctx, project, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetProjectSeenResponse(rsp)
+}
+
+// SetProjectSeenWithResponse Say how far the caller has seen a Project's Activity
+//
+// By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+// below the one kept changes nothing, and the response is the mark as kept, so a client
+// learns when its `seq` was behind. It is the caller's preference, not the record: setting
+// it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+// `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
+func (c *ClientWithResponses) SetProjectSeenWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error) {
+	rsp, err := c.SetProjectSeen(ctx, project, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetProjectSeenResponse(rsp)
+}
+
 // GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
 //
 // The Steps in their order and the Connectors out of each, with each Step's live facts: the
@@ -19857,6 +20272,72 @@ func ParseAddProjectMemberResponse(rsp *http.Response) (*AddProjectMemberRespons
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetProjectSeenResponse parses an HTTP response from a GetProjectSeenWithResponse call
+func ParseGetProjectSeenResponse(rsp *http.Response) (*GetProjectSeenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProjectSeenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProjectSeen
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetProjectSeenResponse parses an HTTP response from a SetProjectSeenWithResponse call
+func ParseSetProjectSeenResponse(rsp *http.Response) (*SetProjectSeenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetProjectSeenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProjectSeen
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

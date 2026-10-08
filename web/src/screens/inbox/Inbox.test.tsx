@@ -67,58 +67,66 @@ const section = (name: string) => screen.findByRole("region", { name });
 const row = (region: HTMLElement, key: string) => region.querySelector<HTMLElement>(`[data-task="${key}"]`)!;
 
 describe("the Inbox", () => {
-  it("lists what needs me across Projects, section by section, each row with its Project", async () => {
+  it("lists what needs me across Projects in Needs you's order and words, then what I can take", async () => {
     const blocked = task(3, { blocked: true, open_blockers: [{ id: "k-8", key: "WEB-8", title: "Which currency?" }] });
-    const question = task(8, { aimed_at_id: ada.id, step_id: undefined, filed_by: builder.id, title: "Which currency?" });
+    const question = task(8, { aimed_at_id: ada.id, step_id: undefined, filed_by: builder.id, title: "Which currency?", created_at: minutes(-30) });
     const parent = parentTask(1, done, { title: "Checkout" });
     const lapsed = task(12, { title: "Payment form", owner_id: ada.id });
+    const held = task(20, { step_id: step.backlog, skill_id: undefined, step_since: minutes(-120), title: "Search ignores accents" });
     const opsTask = task(30, { id: "k-ops-30", key: "OPS-30", project_id: ops.id, step_id: `ops-${step.build}`, title: "Rotate keys", owner_id: bob.id });
     const { calls } = recordApi({
-      tasks: [blocked, question, parent, lapsed, opsTask],
+      tasks: [blocked, question, parent, lapsed, held, opsTask],
       takeable: [question, opsTask, lapsed],
       details: { "WEB-1": { subtasks: [subtask(2, parent, { kind: "acceptance", state: "done" })] } },
       activity: [entry(1, "task.lapsed", lapsed.id, { payload: { holder_id: builder.id }, at: minutes(-10) })],
     });
     renderApp("/inbox");
 
-    const aimed = await section("Aimed at you");
-    const q = row(aimed, "WEB-8");
+    const needs = await section("Needs you");
+    // What unblocks first (a question before a Complete), then the hold only I can move.
+    await waitFor(() => expect([...needs.querySelectorAll("[data-task]")].map((r) => r.getAttribute("data-task"))).toEqual(["WEB-8", "WEB-1", "WEB-20"]));
+    const q = row(needs, "WEB-8");
     expect(q).toHaveTextContent("Which currency?");
-    expect(q).toHaveTextContent("blocks WEB-3");
-    expect(q).toHaveTextContent(/from .*builder/);
+    expect(q).toHaveTextContent("unblocks WEB-3");
+    expect(q).toHaveTextContent("Question from builder");
     expect(within(q).getByRole("button", { name: "Answer WEB-8" })).toBeInTheDocument();
+    expect(row(needs, "WEB-1")).toHaveTextContent("Acceptance passed");
+    expect(row(needs, "WEB-1")).toHaveTextContent("lands 3 Subtasks");
+    expect(row(needs, "WEB-20")).toHaveTextContent("Held in Backlog");
+    expect(within(row(needs, "WEB-20")).getByRole("button", { name: "Move on WEB-20" })).toBeInTheDocument();
 
-    const decide = await section("Your decision");
-    expect(row(decide, "WEB-1")).toHaveTextContent("Acceptance passed");
-    expect(row(decide, "WEB-1")).toHaveTextContent("3/3");
-
-    const lapses = await section("Lapsed on your Tasks");
-    expect(row(lapses, "WEB-12")).toHaveTextContent(/Lapsed \d\d:\d\d/);
-    expect(row(lapses, "WEB-12")).toHaveTextContent(/held by .*builder/);
-    // Takeable again, it is Claimed from its lapse and not listed twice.
-    expect(within(row(lapses, "WEB-12")).getByRole("button", { name: "Claim WEB-12" })).toBeInTheDocument();
-
-    // The question and the lapsed Task are listed once each; OPS-30 carries its own Project and Step.
+    // The lapse on WEB-12 clears itself: builder can take it up, so it is only takeable.
+    expect(row(needs, "WEB-12")).toBeNull();
     const take = await section("Takeable by you");
-    expect(take.querySelectorAll("[data-task]")).toHaveLength(1);
+    expect([...take.querySelectorAll("[data-task]")].map((r) => r.getAttribute("data-task"))).toEqual(["OPS-30", "WEB-12"]);
     expect(row(take, "OPS-30")).toHaveTextContent("Build");
-    expect(row(take, "OPS-30").getAttribute("data-task")).toBe("OPS-30");
     expect(within(row(take, "OPS-30")).getByTitle("Ops")).toBeInTheDocument();
 
     // A decision made from the row: the Owner completes the Parent.
-    await userEvent.click(within(row(decide, "WEB-1")).getByRole("button", { name: "Complete WEB-1" }));
+    await userEvent.click(within(row(needs, "WEB-1")).getByRole("button", { name: "Complete WEB-1" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/tasks/WEB-1/complete")).toBe(true));
-    // Reading what I own asks /v1 with my own token.
-    expect(calls.some((c) => c.query.getAll("filter").includes(`owner:is:${ada.id}`))).toBe(true);
   });
 
-  it("says what a question blocks when that Task is someone else's", async () => {
+  it("lists a hold only where nobody else could move it", async () => {
+    const held = task(20, { step_id: step.backlog, skill_id: undefined, step_since: minutes(-120) });
+    const question = task(8, { aimed_at_id: ada.id, step_id: undefined });
+    recordApi({
+      tasks: [held, question],
+      extra: { "GET /v1/projects/:project": ({ params }) => ({ project: params.project === "OPS" ? ops : { ...ops, id: "p-web", key: "WEB", name: "Web" }, members: [ada, bob] }) },
+    });
+    renderApp("/inbox");
+    const needs = await section("Needs you");
+    await waitFor(() => expect(row(needs, "WEB-8")).not.toBeNull());
+    expect(row(needs, "WEB-20")).toBeNull();
+  });
+
+  it("says what a question unblocks when that Task is someone else's", async () => {
     const blocked = task(3, { owner_id: bob.id, blocked: true, open_blockers: [{ id: "k-8", key: "WEB-8", title: "Which currency?" }] });
     const question = task(8, { aimed_at_id: ada.id, owner_id: bob.id, step_id: undefined, filed_by: bob.id, title: "Which currency?" });
     recordApi({ tasks: [blocked, question] });
     renderApp("/inbox");
-    const q = row(await section("Aimed at you"), "WEB-8");
-    await waitFor(() => expect(q).toHaveTextContent("blocks WEB-3"));
+    const q = row(await section("Needs you"), "WEB-8");
+    await waitFor(() => expect(q).toHaveTextContent("unblocks WEB-3"));
   });
 
   it("opens a row's peek over the Inbox", async () => {

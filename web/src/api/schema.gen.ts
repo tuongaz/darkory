@@ -474,6 +474,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/projects/{project}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read how far the caller has seen a Project's Activity
+         * @description The `seq` of the newest Activity entry the caller has seen in the Project, so a client can
+         *     show what happened there since they looked, and when they set it. Both are null until the
+         *     caller first sets it. It is the caller's own: nobody else, an admin included, reads it.
+         *     Errors: `forbidden` (the caller is not in the Project), `not_found` (no such Project).
+         */
+        get: operations["getProjectSeen"];
+        /**
+         * Say how far the caller has seen a Project's Activity
+         * @description By a Member of the Project, for themselves. The mark only moves forward: a `seq` at or
+         *     below the one kept changes nothing, and the response is the mark as kept, so a client
+         *     learns when its `seq` was behind. It is the caller's preference, not the record: setting
+         *     it records no Activity. Errors: `forbidden` (the caller is not in the Project),
+         *     `not_found` (no such Project), `invalid` (`seq` past the newest Activity entry).
+         */
+        put: operations["setProjectSeen"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/projects/{project}/workflow": {
         parameters: {
             query?: never;
@@ -2592,6 +2623,30 @@ export interface components {
          * @enum {string}
          */
         ViewEntity: "tasks";
+        /**
+         * @description How far a Member has seen a Project's Activity. Both fields are null until the Member
+         *     first sets it.
+         */
+        ProjectSeen: {
+            /**
+             * Format: int64
+             * @description The `seq` of the newest Activity entry the Member has seen in the Project.
+             */
+            seq: number | null;
+            /**
+             * Format: date-time
+             * @description When the Member last moved it forward.
+             */
+            at: string | null;
+        };
+        SetProjectSeenBody: {
+            /**
+             * Format: int64
+             * @description The `seq` of the newest Activity entry the caller has seen in the Project; 0 when
+             *     there is none yet.
+             */
+            seq: number;
+        };
         /** @description A saved set of filters, sort and display for a list, kept by one Member for themselves. */
         View: {
             id: string;
@@ -3600,6 +3655,64 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getProjectSeen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's mark. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSeen"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setProjectSeen: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description A key unique to this write. A retry with the same key returns the first response. It is 1
+                 *     to 255 printable ASCII characters, without spaces; any other is refused with `invalid`.
+                 */
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                /** @description Project id or key, such as `MAIN`. */
+                project: components["parameters"]["ProjectRef"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProjectSeenBody"];
+            };
+        };
+        responses: {
+            /** @description The caller's mark as kept. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSeen"];
+                };
             };
             default: components["responses"]["Error"];
         };

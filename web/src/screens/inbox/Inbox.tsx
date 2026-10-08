@@ -1,69 +1,54 @@
-import { BookOpenIcon, HeartPulseIcon, InboxIcon, LinkIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { InboxIcon, LinkIcon } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router";
-import type { Task, TaskDetail } from "@/api/client";
-import { useDirectory, useOpenTasks, useTakeable } from "@/api/queries";
+import type { Project, Task } from "@/api/client";
+import { useDirectory, useTakeable } from "@/api/queries";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
-import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentMe } from "@/me";
+import { ActButton } from "@/screens/workflow/panels/NeedCard";
+import { ageText, consequence, type NeedItem } from "@/screens/workflow/panels/needs";
+import { useNeeds } from "@/screens/workflow/panels/useNeeds";
+import { takeableCap } from "./derive";
+import { AnswerButton, ClaimButton, GroupHeader, KindPill, StandsAt, TaskRow } from "./parts";
+import { useStepNames } from "./queries";
 import { liveClaim } from "@/work";
-import { awaitingComplete, blocksOf, lapsesOn, staleProposals, takeableCap, takeableNow, type Decision, type Lapse } from "./derive";
-import { AnswerButton, ClaimButton, CompleteButton, GroupHeader, KindPill, OpenButton, StandsAt, TaskRow } from "./parts";
-import { useAimedAt, useOwnedOpen, useRecentActivity, useStepNames, useTaskDetails } from "./queries";
-
-const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
 /**
- * /inbox, across Projects: what needs the signed-in Member, section by section, each hidden when
- * it is empty. Questions aimed at them; Tasks they own waiting on their decision (Parents whose
- * Subtasks have all ended, proposals gone stale); Claims on their Tasks that lapsed; and what they
- * can take now. Every row carries its Project's mark; opening one opens its peek, which switches
- * the app to its Project.
+ * /inbox, across Projects: what needs the signed-in Member, then what they can take. Needs you
+ * lists, in the order the Workflow's Needs you uses (what unblocks most first, then what only
+ * they can move, then the rest, oldest first) and in its words: questions aimed at them, Parents
+ * whose Subtasks have all ended, proposals waiting on them, Tasks they own that no Member could
+ * take, and the holds and paused-agent waits only they can move. A lapse another Member can take
+ * up clears itself and is not listed. Every row carries its Project's mark; opening one opens its
+ * peek, which switches the app to its Project.
  */
 export function InboxPage() {
   const me = useCurrentMe();
   const id = me.member.id;
-  const now = useNow();
   const dir = useDirectory();
   const steps = useStepNames();
-  const aimed = useAimedAt(id);
-  const owned = useOwnedOpen(id);
+  const needs = useNeeds();
+  const now = useNow();
   const takeable = useTakeable();
-  const lapses = useRecentActivity({ kind: ["task.lapsed"] }, (e) => e.kind === "task.lapsed");
   const [allTakeable, setAllTakeable] = useState(false);
 
-  const ownedTasks = useMemo(() => owned.data ?? [], [owned.data]);
-  const allOpen = useOpenTasks();
-  // The records a decision needs: each finished Parent's Subtasks (how its Acceptance ended) and
-  // each open Retrospective's proposals.
-  const looked = ownedTasks.filter((t) => (t.subtask_counts && t.subtask_counts.open === 0) || t.kind === "retrospective");
-  const detailQueries = useTaskDetails(looked.map((t) => t.key));
-  const details = new Map<string, TaskDetail>(detailQueries.flatMap((q) => (q.data ? [[q.data.task.id, q.data] as const] : [])));
+  const failed = [takeable].find((q) => q.isError)?.error ?? needs.error;
+  const loading = takeable.isPending || needs.loading;
 
-  const reads = [aimed, owned, takeable];
-  const failed = reads.find((q) => q.isError);
-  const loading = reads.some((q) => q.isPending);
-
-  // A question I have claimed to answer is in My work, held by me.
-  const aimedAtMe = (aimed.data ?? []).filter((t) => liveClaim(t, now)?.holder_id !== id);
-  const decisions: Decision[] = [...awaitingComplete(ownedTasks, details), ...staleProposals([...details.values()], dir.skills)];
-  const lapsed = lapsesOn(ownedTasks, lapses.entries, now);
-  // A lapsed Task I can take again is Claimed from its lapse row, not listed twice.
-  const takeableIds = new Set((takeable.data ?? []).map((t) => t.id));
-  const take = takeableNow(takeable.data ?? [], [...aimedAtMe, ...lapsed.map((l) => l.task)]);
+  // Across Projects, a hold or a paused agent's wait is listed only where nobody else could move it;
+  // a question I have claimed to answer is in My work, held by me.
+  const items = needs.items.filter((i) => ((i.act !== "move" && i.act !== "resume") || i.onlyMe) && !(i.act === "answer" && liveClaim(i.task, now)?.holder_id === id));
+  const listed = new Set(items.map((i) => i.task.id));
+  const take = (takeable.data ?? []).filter((t) => !listed.has(t.id));
   const takeShown = allTakeable ? take : take.slice(0, takeableCap);
-  const nothing = aimedAtMe.length + decisions.length + lapsed.length + take.length === 0;
-  // The page's one primary: the first row's action.
-  const primary = aimedAtMe.length > 0 ? "answer" : decisions.some((d) => d.kind === "complete") ? "complete" : "claim";
+  const nothing = items.length + take.length === 0;
   const project = (t: Task) => dir.projects.get(t.project_id);
-  // What a question blocks may be anyone's: every open Task the sidebar already reads.
-  const openTasks = [...new Map([...(aimed.data ?? []), ...ownedTasks, ...(allOpen.data ?? [])].map((t) => [t.id, t])).values()];
 
   return (
     <>
@@ -71,7 +56,7 @@ export function InboxPage() {
       <Content>
         <h1 className="sr-only">Inbox</h1>
         {failed ? (
-          <Refusal error={failed.error} className="px-6 py-5" />
+          <Refusal error={failed} className="px-6 py-5" />
         ) : loading ? (
           <div className="flex flex-col gap-2 px-6 py-5" aria-busy>
             <Skeleton className="h-8 w-full" />
@@ -92,56 +77,11 @@ export function InboxPage() {
           </EmptyState>
         ) : (
           <>
-            {aimedAtMe.length > 0 && (
-              <section aria-label="Aimed at you">
-                <GroupHeader title="Aimed at you" count={aimedAtMe.length} />
-                {aimedAtMe.map((t, i) => {
-                  const blocks = blocksOf(t, openTasks);
-                  const from = t.filed_by ? dir.members.get(t.filed_by) : undefined;
-                  return (
-                    <TaskRow
-                      key={t.id}
-                      task={t}
-                      project={project(t)}
-                      stands={<StandsAt task={t} steps={steps} me={id} />}
-                      marks={
-                        blocks[0] && (
-                          <Pill tone="secondary">
-                            <LinkIcon className="size-3" aria-hidden />
-                            blocks {blocks[0].key}
-                            {blocks.length > 1 && ` +${blocks.length - 1}`}
-                          </Pill>
-                        )
-                      }
-                      by={
-                        from && (
-                          <>
-                            from <MemberAvatar member={from} />
-                            <span className="truncate">{from.name}</span>
-                          </>
-                        )
-                      }
-                      when={t.created_at}
-                      whenWhat="Asked"
-                      action={<AnswerButton task={t} primary={primary === "answer" && i === 0} />}
-                    />
-                  );
-                })}
-              </section>
-            )}
-            {decisions.length > 0 && (
-              <section aria-label="Your decision">
-                <GroupHeader title="Your decision" count={decisions.length} />
-                {decisions.map((d, i) => (
-                  <DecisionRow key={`${d.kind}-${d.task.id}-${i}`} decision={d} project={project(d.task)} steps={steps} primary={primary === "complete" && i === 0} />
-                ))}
-              </section>
-            )}
-            {lapsed.length > 0 && (
-              <section aria-label="Lapsed on your Tasks">
-                <GroupHeader title="Lapsed on your Tasks" count={lapsed.length} />
-                {lapsed.map((l) => (
-                  <LapseRow key={l.task.id} lapse={l} project={project(l.task)} steps={steps} takeable={takeableIds.has(l.task.id)} />
+            {items.length > 0 && (
+              <section aria-label="Needs you">
+                <GroupHeader title="Needs you" count={items.length} />
+                {items.map((item, i) => (
+                  <NeedRow key={item.task.id} item={item} project={project(item.task)} steps={steps} me={id} primary={i === 0} />
                 ))}
               </section>
             )}
@@ -170,7 +110,7 @@ export function InboxPage() {
                       by={skill && <Pill tone="outline">{skill}</Pill>}
                       when={t.waiting_since}
                       whenWhat="Waiting since"
-                      action={<ClaimButton task={t} primary={primary === "claim" && i === 0} />}
+                      action={<ClaimButton task={t} primary={items.length === 0 && i === 0} />}
                     />
                   );
                 })}
@@ -183,74 +123,35 @@ export function InboxPage() {
   );
 }
 
-/** A Task of mine waiting on my decision: a Parent to Complete, or a proposal gone stale. */
-function DecisionRow({ decision: d, project, steps, primary }: { decision: Decision; project: Parameters<typeof TaskRow>[0]["project"]; steps: ReturnType<typeof useStepNames>; primary: boolean }) {
-  if (d.kind === "stale") {
-    return (
-      <TaskRow
-        task={d.task}
-        project={project}
-        stands={<StandsAt task={d.task} steps={steps} />}
-        marks={
-          <Pill tone="claimed">
-            <BookOpenIcon className="size-3" aria-hidden />
-            Proposal stale
-          </Pill>
-        }
-        by={<span className="truncate">{`${d.skill} v${d.basedOn} → now v${d.current}`}</span>}
-        when={d.task.waiting_since}
-        action={<OpenButton task={d.task} />}
-      />
-    );
-  }
-  const mark =
-    d.acceptance === "done" ? (
-      <Pill tone="done">Acceptance passed</Pill>
-    ) : d.acceptance === "dropped" ? (
-      <Pill tone="dropped">Acceptance dropped</Pill>
-    ) : (
-      <Pill tone="secondary">Subtasks ended</Pill>
-    );
-  return (
-    <TaskRow
-      task={d.task}
-      project={project}
-      stands={<StandsAt task={d.task} steps={steps} />}
-      marks={mark}
-      by={<span className="truncate">awaits your Complete</span>}
-      when={d.task.waiting_since}
-      // An Acceptance that did not pass is a decision to read first, not a click.
-      action={d.acceptance === "dropped" ? <OpenButton task={d.task} /> : <CompleteButton task={d.task} primary={primary} />}
-    />
-  );
-}
+const ageWords: Record<NeedItem["ageLabel"], string> = { asked: "Asked", held: "Held since", waiting: "Waiting since", ready: "Ready since", lapsed: "Lapsed" };
 
-/** A Claim on a Task of mine that lapsed and nobody has taken up again. */
-function LapseRow({ lapse, project, steps, takeable }: { lapse: Lapse; project: Parameters<typeof TaskRow>[0]["project"]; steps: ReturnType<typeof useStepNames>; takeable: boolean }) {
-  const { members } = useDirectory();
-  const holder = lapse.holderId ? members.get(lapse.holderId) : undefined;
+/**
+ * One decision as the Inbox lists it, in Needs you's words: what acting on it does ("unblocks
+ * WEB-3", "lands 2 Subtasks"), why it is with me ("Question from builder", "Held in Backlog"), how
+ * old it is, and its one act. A question's Answer claims it and opens its peek to write the answer:
+ * a row has no room for the box a card carries.
+ */
+function NeedRow({ item, project, steps, me, primary }: { item: NeedItem; project: Project | undefined; steps: ReturnType<typeof useStepNames>; me: string; primary: boolean }) {
+  const now = useNow();
   return (
     <TaskRow
-      task={lapse.task}
+      task={item.task}
       project={project}
-      stands={<StandsAt task={lapse.task} steps={steps} />}
+      stands={<StandsAt task={item.task} steps={steps} me={me} />}
       marks={
-        <Pill tone="dropped">
-          <HeartPulseIcon className="size-3" aria-hidden />
-          Lapsed <time dateTime={lapse.at}>{clock.format(new Date(lapse.at))}</time>
-        </Pill>
+        <span className="inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap text-state-waiting">
+          {item.unblocks.length > 0 && <LinkIcon className="size-3" aria-hidden />}
+          {consequence(item)}
+        </span>
       }
       by={
-        holder && (
-          <>
-            held by <MemberAvatar member={holder} />
-            <span className="truncate">{holder.name}</span>
-          </>
-        )
+        <span className="truncate" title={`${ageWords[item.ageLabel]} ${ageText(now - Date.parse(item.since))} ago`}>
+          {item.why}
+        </span>
       }
-      when={lapse.at}
-      whenWhat="Lapsed"
-      action={takeable ? <ClaimButton task={lapse.task} /> : <OpenButton task={lapse.task} />}
+      when={item.since}
+      whenWhat={ageWords[item.ageLabel]}
+      action={item.act === "answer" ? <AnswerButton task={item.task} primary={primary} /> : <ActButton item={item} primary={primary} />}
     />
   );
 }

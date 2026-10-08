@@ -220,7 +220,7 @@ test("5 · a question from a standalone Task stands alone in the Project and blo
   // bob sees it aimed at him.
   const bob = await open(browser, bobState);
   await bob.page.goto(`${base()}/inbox`);
-  await expect(bob.page.getByRole("region", { name: "Aimed at you" }).locator(`[data-task="${question.key}"]`)).toContainText(`blocks ${standalone.task.key}`);
+  await expect(bob.page.getByRole("region", { name: "Needs you" }).locator(`[data-task="${question.key}"]`)).toContainText(`unblocks ${standalone.task.key}`);
   await shot(bob.page, "5-bob-inbox");
   expect(errors).toEqual([]);
   expect(bob.errors).toEqual([]);
