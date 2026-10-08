@@ -1,15 +1,17 @@
 import type { Skill } from "@/api/client";
 import { newKey } from "@/api/client";
 import { branchSkills, branchSteps, type LineWorkflow } from "@/components/workflowLine/model";
-import { isNew, newIdPrefix, same, type RecordConnector, type RecordStep, type WorkflowRecord } from "../bind";
+import { isNew, newIdPrefix, same, toBody, type RecordConnector, type RecordStep, type SetWorkflowBody, type WorkflowRecord } from "../bind";
+import type { Holder, Roster } from "./holders";
 import { countTasks } from "@/components/workflow/model";
 import { problem as recordProblem } from "../edits";
 
 /*
  * The Workflow as the list editor holds it until Save: the record with every change made on it,
- * where the open Tasks at a deleted Step go, and the generic Skills to create first. Every edit is
- * a function of the draft; Save creates the new Skills, then sends the whole Workflow in one
- * `PUT …/workflow` (bind.ts `toBody`). Nothing reaches `/v1` before Save.
+ * where the open Tasks at a deleted Step go, the generic Skills to create, and who is to take the
+ * Steps (Members given or denied a Skill, Members joining the Project). Every edit is a function
+ * of the draft; Save sends all of it in one `PUT …/workflow` (`saveBody`), which makes it in one
+ * write. Nothing reaches `/v1` before Save.
  */
 
 /** A generic Skill picked by name before it exists: created on Save, before the Workflow. */
@@ -25,7 +27,22 @@ export type Draft = {
   removed?: Record<string, number>;
   /** The group a new Step is listed in until its Skill places it: the group of the Step it was added after. */
   placed?: Record<string, Group>;
+  /** Who takes the Steps, changed: made on Save with the Workflow. */
+  people?: People;
 };
+
+/** A Member and a Skill: an existing Skill's id, or a new one's `new-skill:<name>`. */
+export type Grant = { member: string; skill: string };
+
+/**
+ * The changes to who takes the Steps: the Skills given and taken away, and the Members joining the
+ * Project to take a Skill's Steps here. Each pair is in at most one list, and nothing undone stays.
+ */
+export type People = { grants: Grant[]; revokes: Grant[]; joins: string[] };
+
+const noPeople: People = { grants: [], revokes: [], joins: [] };
+const sameGrant = (a: Grant, b: Grant) => a.member === b.member && a.skill === b.skill;
+const withPeople = (d: Draft, p: People): Draft => ({ ...d, people: p.grants.length || p.revokes.length || p.joins.length ? p : undefined });
 
 /** A Step carries `new-skill:<name>` until Save creates that Skill. */
 export const newSkillPrefix = "new-skill:";
@@ -127,7 +144,96 @@ export function setSkill(d: Draft, id: string, skill: { id: string } | { create:
   const steps = d.wf.steps.map((s) => (s.id === id ? { ...s, skill_id: skillId, takers: skillId === s.skill_id ? s.takers : [] } : s));
   const carried = new Set(steps.map((s) => s.skill_id));
   skills = Object.fromEntries(Object.entries(skills).filter(([k]) => carried.has(k)));
-  return { ...d, wf: { ...d.wf, steps }, skills };
+  const next = { ...d, wf: { ...d.wf, steps }, skills };
+  // Members given a new Skill no Step carries any more are given nothing.
+  const dropped = Object.keys(d.skills).filter((k) => !(k in skills));
+  return dropped.reduce((x, k) => (x.people?.grants.filter((g) => g.skill === k) ?? []).reduce((y, g) => removeTaker(y, g.member, k), x), next);
+}
+
+/**
+ * `member` takes the Steps carrying `skill` here: a Skill taken away in the draft is kept; else
+ * they are given it, and join the Project first when `join` (they are not in it).
+ */
+export function addTaker(d: Draft, member: string, skill: string, join: boolean): Draft {
+  const p = d.people ?? noPeople;
+  const g = { member, skill };
+  if (p.revokes.some((x) => sameGrant(x, g))) return withPeople(d, { ...p, revokes: p.revokes.filter((x) => !sameGrant(x, g)) });
+  if (p.grants.some((x) => sameGrant(x, g))) return d;
+  return withPeople(d, { ...p, grants: [...p.grants, g], joins: join && !p.joins.includes(member) ? [...p.joins, member] : p.joins });
+}
+
+/**
+ * `member` no longer takes the Steps carrying `skill`: a Skill given in the draft is not given,
+ * and a Member who joined only for it does not join; else the Skill is taken from them.
+ */
+export function removeTaker(d: Draft, member: string, skill: string): Draft {
+  const p = d.people ?? noPeople;
+  const g = { member, skill };
+  if (p.grants.some((x) => sameGrant(x, g))) {
+    const grants = p.grants.filter((x) => !sameGrant(x, g));
+    const joins = grants.some((x) => x.member === member) ? p.joins : p.joins.filter((m) => m !== member);
+    return withPeople(d, { ...p, grants, joins });
+  }
+  if (p.revokes.some((x) => sameGrant(x, g))) return d;
+  return withPeople(d, { ...p, revokes: [...p.revokes, g] });
+}
+
+/** Whether `member` is to have `skill` at Save, given whether they have it now. */
+export function willHave(d: Draft, member: string, skill: string, has: boolean): boolean {
+  const p = d.people ?? noPeople;
+  const g = { member, skill };
+  return has ? !p.revokes.some((x) => sameGrant(x, g)) : p.grants.some((x) => sameGrant(x, g));
+}
+
+/** Whether `member` is to be in the Project at Save, given whether they are now. */
+export const willBeIn = (d: Draft, member: string, now: boolean) => now || !!d.people?.joins.includes(member);
+
+/** The draft as `PUT …/workflow` takes it: the Workflow, its new Skills by name, and who takes its Steps. */
+export function saveBody(d: Draft): SetWorkflowBody {
+  const ref = (skill: string) => (isNewSkill(skill) ? (d.skills[skill]?.name ?? skill.slice(newSkillPrefix.length)) : skill);
+  const body = toBody(d.wf, d.moves);
+  body.steps = body.steps.map((s) => (s.skill ? { ...s, skill: ref(s.skill) } : s));
+  const skills = Object.values(d.skills).map((s) => ({ name: s.name, body: s.body }));
+  const p = d.people ?? noPeople;
+  const pairs = (gs: Grant[]) => gs.map((g) => ({ member: g.member, skill: ref(g.skill) }));
+  return {
+    ...body,
+    ...(skills.length ? { skills } : {}),
+    ...(p.joins.length ? { joins: p.joins } : {}),
+    ...(p.grants.length ? { grants: pairs(p.grants) } : {}),
+    ...(p.revokes.length ? { revokes: pairs(p.revokes) } : {}),
+  };
+}
+
+/**
+ * Who takes each Skill's Steps at Save: the Project's Members holding it (the Organisation's, for
+ * skill-review), after the draft's grants, revokes and joins; humans first, then by name.
+ */
+export function holdersAt(d: Draft | undefined, roster: Roster | undefined, orgWideSkills: ReadonlySet<string>): Map<string, Holder[]> | undefined {
+  if (!roster) return undefined;
+  const p = d?.people ?? noPeople;
+  const holders = new Map<string, Holder[]>();
+  for (const m of roster.members) {
+    const skills = new Set(m.skills);
+    for (const g of p.revokes) if (g.member === m.id) skills.delete(g.skill);
+    for (const g of p.grants) if (g.member === m.id) skills.add(g.skill);
+    const inProject = roster.inProject.has(m.id) || p.joins.includes(m.id);
+    for (const s of skills) {
+      if (!orgWideSkills.has(s) && !inProject) continue;
+      holders.set(s, [...(holders.get(s) ?? []), { id: m.id, name: m.name, kind: m.kind }]);
+    }
+  }
+  for (const list of holders.values()) list.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "human" ? -1 : 1));
+  return holders;
+}
+
+/** The changes the draft makes to who takes the Steps, as the header's list says them. */
+export function describePeople(d: Draft, memberName: (id: string) => string, skillName: (id: string) => string, project: string): Change[] {
+  const p = d.people ?? noPeople;
+  return [
+    ...p.grants.map((g): Change => ({ kind: "Added", text: `${memberName(g.member)} to ${skillName(g.skill)}${p.joins.includes(g.member) ? `, joins ${project}` : ""}` })),
+    ...p.revokes.map((g): Change => ({ kind: "Removed", text: `${memberName(g.member)} from ${skillName(g.skill)}` })),
+  ];
 }
 
 /** A new outcome out of a Step, unnamed, into Done until a Step is picked. */

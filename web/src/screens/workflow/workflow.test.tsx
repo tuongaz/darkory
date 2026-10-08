@@ -82,22 +82,23 @@ describe("Settings › Workflow", () => {
     expect(panel("Step 3: Build").getByRole("heading", { name: "Build" })).toBeInTheDocument();
   });
 
-  it("lists the Steps as text in order, the Steps after a Parent in their own group with why, the line above, and none open", async () => {
+  it("lists the Steps as text in order, the Steps after a Parent in their own group, the line above, and none open", async () => {
     serve();
     const list = await openList("/settings/projects/WEB/workflow");
     expect(list.getAllByRole("listitem").map((r) => r.getAttribute("aria-label"))).toEqual(["1. Backlog", "2. Plan", "3. Build", "4. Review", "5. Retro", "6. Skill review"]);
     expect(list.getByText("After a Parent")).toBeInTheDocument();
-    expect(list.getByText(/Darkory files Acceptance under a Parent/)).toBeInTheDocument();
+    expect(list.queryByText(/Darkory files Acceptance under a Parent/)).toBeNull();
     expect(list.getByRole("listitem", { name: "1. Backlog" })).toHaveTextContent(/Backlog.*Hold.*by hand/);
-    expect(list.getByRole("listitem", { name: "2. Plan" })).toHaveTextContent("Break down · Subtasks start at Build by default");
+    expect(list.getByRole("listitem", { name: "2. Plan" })).toHaveTextContent(/Break down$/);
+    expect(within(list.getByRole("listitem", { name: "2. Plan" })).getByLabelText("Break down: Subtasks start at Build by default")).toBeInTheDocument();
     expect(list.getByRole("listitem", { name: "3. Build" })).toHaveTextContent("New Tasks start here");
-    expect(list.getByRole("listitem", { name: "6. Skill review" })).toHaveTextContent("Taken by anyone in the Organisation with skill-review");
+    expect(list.getByRole("listitem", { name: "6. Skill review" })).toHaveTextContent("Organisation-wide");
     expect(list.queryAllByRole("textbox")).toHaveLength(0);
     expect(screen.getByRole("img", { name: /^The line: Build → Review → Done\. New Tasks start at Build\. Break down: Plan, whose Subtasks start at Build by default\. Hold: Backlog, moved on by hand\.$/ })).toBeInTheDocument();
-    // No Step is open until one is picked: the panel says how.
+    // No Step is open until one is picked.
     expect(list.getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "true")).toEqual([]);
     expect(screen.queryByRole("textbox", { name: /^Name of Step/ })).toBeNull();
-    expect(screen.getByRole("note", { name: "No Step picked" })).toHaveTextContent("Pick a Step in the list or on the line");
+    expect(screen.getByRole("note", { name: "No Step picked" })).toHaveTextContent(/^Pick a Step$/);
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
     await pick("3. Build");
     expect(screen.getByRole("textbox", { name: "Name of Step 3" })).toHaveValue("Build");
@@ -138,8 +139,8 @@ describe("Settings › Workflow", () => {
     await pick("2. Plan");
     await userEvent.click(screen.getByRole("combobox", { name: "Skill of Plan" }));
     await userEvent.click(await screen.findByRole("option", { name: "None: a hold" }));
-    expect(screen.getByRole("combobox", { name: "Skill of Plan" })).toHaveTextContent("Hold · pick a Skill");
-    expect(panel("Step 2: Plan").getByText("Moved on by hand.")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Skill of Plan" })).toHaveTextContent(/^Hold$/);
+    expect(panel("Step 2: Plan").getByText("By hand")).toBeInTheDocument();
     expect(header()).toHaveTextContent("2 changes");
     await save();
     await waitFor(() => expect(puts).toHaveLength(1));
@@ -149,13 +150,8 @@ describe("Settings › Workflow", () => {
     expect(puts[0].steps.find((s) => s.name === "Plan")!.skill).toBeUndefined();
   });
 
-  it("creates a new generic Skill on Save, before the Workflow, and the Step carries it", async () => {
-    const { api, puts } = serve(workflow(), ada, {
-      "POST /v1/skills": ({ body }: Call) => ({
-        skill: { id: "sk-security", name: (body as { name: string }).name, kind: "generic", builtin: false, current_version: 1, created_at: "2026-10-08T00:00:00Z" },
-        current: { skill_id: "sk-security", version: 1, body: "", published_at: "2026-10-08T00:00:00Z" },
-      }),
-    });
+  it("creates a new generic Skill on Save, in the Workflow's one PUT, and the Step carries it by name", async () => {
+    const { api, puts } = serve();
     await openList();
     await pick("4. Review");
     await userEvent.click(screen.getByRole("combobox", { name: "Skill of Review" }));
@@ -165,24 +161,17 @@ describe("Settings › Workflow", () => {
     await userEvent.type(dialog.getByRole("textbox", { name: "Text" }), "Look for holes.");
     await userEvent.click(dialog.getByRole("button", { name: "Use this Skill" }));
     expect(screen.getByRole("combobox", { name: "Skill of Review" })).toHaveTextContent("security");
-    expect(panel("Step 4: Review").getByText("security is created on Save: add its Members after.")).toBeInTheDocument();
     expect(api.calls.filter((c) => c.method !== "GET")).toHaveLength(0);
     await save();
     await waitFor(() => expect(puts).toHaveLength(1));
-    const writes = api.calls.filter((c) => c.method !== "GET");
-    expect(writes.map((c) => `${c.method} ${c.path}`)).toEqual(["POST /v1/skills", "PUT /v1/projects/WEB/workflow"]);
-    expect(writes[0].body).toEqual({ name: "security", kind: "generic", body: "Look for holes." });
-    expect(puts[0].steps.find((s) => s.name === "Review")!.skill).toBe("sk-security");
+    expect(api.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`)).toEqual(["PUT /v1/projects/WEB/workflow"]);
+    expect(puts[0].skills).toEqual([{ name: "security", body: "Look for holes." }]);
+    expect(puts[0].steps.find((s) => s.name === "Review")!.skill).toBe("security");
   });
 
-  it("creates a new Skill once: a refused Workflow keeps it, and the next Save sends only the Workflow", async () => {
+  it("sends the new Skill again with the Workflow after a refusal: nothing was made", async () => {
     let refusing = true;
-    const { api, puts } = serve(workflow(), ada, {
-      "POST /v1/skills": ({ body }: Call) => ({
-        skill: { id: "sk-security", name: (body as { name: string }).name, kind: "generic", builtin: false, current_version: 1, created_at: "2026-10-08T00:00:00Z" },
-        current: { skill_id: "sk-security", version: 1, body: "", published_at: "2026-10-08T00:00:00Z" },
-      }),
-    });
+    const { api, puts } = serve();
     const put = api.routes["PUT /v1/projects/:project/workflow"] as (call: Call) => Workflow;
     api.routes["PUT /v1/projects/:project/workflow"] = (call: Call) => (refusing ? ((refusing = false), refuse(409, "conflict", "Try again.")) : put(call));
     await openList();
@@ -197,8 +186,8 @@ describe("Settings › Workflow", () => {
     expect(await screen.findByText(/Try again/)).toBeInTheDocument();
     await save();
     await waitFor(() => expect(puts).toHaveLength(1));
-    expect(api.calls.filter((c) => c.method === "POST")).toHaveLength(1);
-    expect(puts[0].steps.find((s) => s.name === "Review")!.skill).toBe("sk-security");
+    expect(puts[0].skills).toEqual([{ name: "security", body: "Look for holes." }]);
+    expect(api.calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 
   it("adds a Step between two: a hold with no outcome, open with its name in focus; nothing is re-pointed", async () => {
@@ -208,10 +197,10 @@ describe("Settings › Workflow", () => {
     const name = screen.getByRole("textbox", { name: "Name of Step 4" });
     expect(name).toHaveFocus();
     expect(list.getByRole("button", { name: "4. New Step" })).toHaveAttribute("aria-current", "true");
-    expect(screen.getByRole("combobox", { name: "Skill of the new Step" })).toHaveTextContent("Hold · pick a Skill");
+    expect(screen.getByRole("combobox", { name: "Skill of the new Step" })).toHaveTextContent(/^Hold$/);
     const p = panel("Step 4: New Step");
     expect(p.getByText("New · no Tasks")).toBeInTheDocument();
-    expect(p.getByText("Moved on by hand.")).toBeInTheDocument();
+    expect(p.getByText("By hand")).toBeInTheDocument();
     expect(p.queryByRole("textbox", { name: /^Outcome out of/ })).toBeNull();
     await userEvent.type(name, "Security review");
     expect(header()).toHaveTextContent("1 change");
@@ -323,7 +312,7 @@ describe("Settings › Workflow", () => {
     expect(dialog.getByRole("heading", { name: "2 Tasks at Review" })).toBeInTheDocument();
     expect(dialog.getByRole("heading", { name: "1 outcome leads into Review" })).toBeInTheDocument();
     expect(dialog.getByRole("combobox", { name: "Where pass out of Build leads instead" })).toHaveTextContent("Remove this outcome");
-    expect(dialog.getByRole("note")).toHaveTextContent("Build leads out only into Review");
+    expect(dialog.getByRole("note")).toHaveTextContent("Without Review, Build has no way out.");
     expect(dialog.getByText("Review's own outcomes go: pass → Done, needs changes → Build.")).toBeInTheDocument();
     expect(dialog.getByRole("button", { name: "Delete Review" })).toBeDisabled();
     await userEvent.click(dialog.getByRole("combobox", { name: "Step that receives the Tasks at Review" }));
@@ -359,7 +348,7 @@ describe("Settings › Workflow", () => {
     await userEvent.click(screen.getByRole("button", { name: "Editing · 2 changes: list them" }));
     const changes = within(await screen.findByRole("list", { name: "Changes" }));
     expect(changes.getAllByRole("listitem").map((li) => li.textContent)).toEqual(["DeletedBuild", "RemovedReview · needs changes → Build"]);
-    expect(screen.getByText(/New Tasks will start at Review\. ⌘Z undoes the last change\./)).toBeInTheDocument();
+    expect(screen.getByText(/New Tasks will start at Review\. Undo: ⌘Z/)).toBeInTheDocument();
   });
 
   it("deletes a Step at once when it holds no Task, nothing leads into it and it strands nothing", async () => {
@@ -437,65 +426,93 @@ describe("Settings › Workflow", () => {
       expect(list.getByRole("listitem", { name: "4. Review" })).toHaveTextContent("ada");
       expect(list.getByRole("listitem", { name: "2. Plan" })).toHaveTextContent("Owner takes it");
       expect(list.getByRole("listitem", { name: "1. Backlog" })).not.toHaveTextContent("Owner takes it");
-      expect(within(screen.getByRole("list", { name: "Members with engineer" })).getByText("builder")).toBeInTheDocument();
-      expect(screen.getByText(/1 in Web with engineer · changes here happen at once, not on Save/)).toBeInTheDocument();
+      const takers = within(screen.getByRole("list", { name: "Members with engineer" }));
+      expect(takers.getByRole("link", { name: "builder" })).toHaveAttribute("href", "/settings/organisation/agents/builder");
+      expect(takers.getByRole("button", { name: "Remove builder" })).toBeInTheDocument();
+      expect(screen.queryByText(/happen at once/)).toBeNull();
       await pick("2. Plan");
-      expect(screen.getByText("Nobody in Web has breakdown: each Task's Owner takes it.")).toBeInTheDocument();
+      expect(panel("Step 2: Plan").getByText("Nobody")).toBeInTheDocument();
+      expect(panel("Step 2: Plan").getByRole("button", { name: "Add a Member" })).toBeInTheDocument();
     });
 
-    it("takes the Skill away at once, after naming every Step it reaches in every Project", async () => {
-      const { api, puts } = serve(workflow(), ada, { ...people, "DELETE /v1/members/:member/skills/:skill": undefined });
-      await openList();
-      await userEvent.click(await screen.findByRole("button", { name: "Take builder off Build" }));
-      expect(await screen.findByRole("menuitem", { name: /^Take engineer from builder…/ })).toHaveTextContent("Also stops Build in Ops · 0 Tasks");
-      expect(screen.getByRole("menuitem", { name: /^Remove builder from Web…/ })).toHaveTextContent("Leaves Build · stays in Ops");
-      await userEvent.click(screen.getByRole("menuitem", { name: /^Take engineer from builder…/ }));
-      const dialog = within(await screen.findByRole("dialog", { name: "Take engineer from builder?" }));
-      expect(within(dialog.getByRole("list", { name: "Steps it reaches" })).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Ops · Build0 Tasks", "Web · Build0 Tasks"]);
-      expect(dialog.getByText("Nobody else in Ops or Web takes Build: each Task's Owner takes those Tasks.")).toBeInTheDocument();
-      await userEvent.click(dialog.getByRole("button", { name: "Take engineer away" }));
-      await waitFor(() => expect(api.calls.some((c) => c.method === "DELETE" && c.path === `/v1/members/m-builder/skills/${engineer.id}`)).toBe(true));
-      expect(puts).toHaveLength(0);
+    it("removes a Member into the draft: asked first when it reaches past this Step, listed, undone, and sent on Save", async () => {
+      const { api, puts } = serve(workflow(), ada, people);
+      const list = await openList();
+      await userEvent.click(await screen.findByRole("button", { name: "Remove builder" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Remove builder from engineer?" }));
+      expect(dialog.getByText("builder also takes engineer in Ops.")).toBeInTheDocument();
+      await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
       expect(header()).toHaveTextContent(/^Editing$/);
+      await userEvent.click(screen.getByRole("button", { name: "Remove builder" }));
+      await userEvent.click(within(await screen.findByRole("dialog", { name: "Remove builder from engineer?" })).getByRole("button", { name: "Remove" }));
+      expect(panel("Step 3: Build").getByText("Nobody")).toBeInTheDocument();
+      expect(list.getByRole("listitem", { name: "3. Build" })).toHaveTextContent("Owner takes it");
+      expect(header()).toHaveTextContent("1 change");
+      expect(api.calls.filter((c) => c.method !== "GET")).toHaveLength(0);
+      await userEvent.click(screen.getByRole("button", { name: "Editing · 1 change: list them" }));
+      const changes = within(await screen.findByRole("list", { name: "Changes" }));
+      expect(changes.getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Removedbuilder from engineer"]);
+      await userEvent.keyboard("{Escape}");
+      fireEvent.keyDown(document.body, { key: "z", metaKey: true });
+      expect(await within(screen.getByRole("list", { name: "Members with engineer" })).findByText("builder")).toBeInTheDocument();
+      expect(header()).toHaveTextContent(/^Editing$/);
+      await userEvent.click(screen.getByRole("button", { name: "Remove builder" }));
+      await userEvent.click(within(await screen.findByRole("dialog", { name: "Remove builder from engineer?" })).getByRole("button", { name: "Remove" }));
+      await save();
+      await waitFor(() => expect(puts).toHaveLength(1));
+      expect(puts[0].revokes).toEqual([{ member: "m-builder", skill: engineer.id }]);
+      expect(puts[0].grants).toBeUndefined();
+      expect(api.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`)).toEqual(["PUT /v1/projects/WEB/workflow"]);
     });
 
-    it("removes a Member from the Project at once, after naming the Steps they leave and where they stay", async () => {
-      const { api } = serve(workflow(), ada, { ...people, "DELETE /v1/projects/:project/members/:member": undefined });
+    it("removes at once, unasked, when it reaches only this Step", async () => {
+      const { puts } = serve(workflow(), ada, people);
       await openList();
-      await userEvent.click(await screen.findByRole("button", { name: "Take builder off Build" }));
-      await userEvent.click(await screen.findByRole("menuitem", { name: /^Remove builder from Web…/ }));
-      const dialog = within(await screen.findByRole("dialog", { name: "Remove builder from Web?" }));
-      expect(dialog.getByText("builder stays in Ops.")).toBeInTheDocument();
-      await userEvent.click(dialog.getByRole("button", { name: "Remove from Web" }));
-      await waitFor(() => expect(api.calls.some((c) => c.method === "DELETE" && c.path === "/v1/projects/WEB/members/m-builder")).toBe(true));
+      await pick("4. Review");
+      await userEvent.click(await screen.findByRole("button", { name: "Remove ada" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(panel("Step 4: Review").getByText("Nobody")).toBeInTheDocument();
+      await save();
+      await waitFor(() => expect(puts).toHaveLength(1));
+      expect(puts[0].revokes).toEqual([{ member: "m-ada", skill: review.id }]);
     });
 
-    it("offers no removal from the Project for skill-review, which is taken across the Organisation", async () => {
+    it("asks before taking skill-review, which is taken across the Organisation", async () => {
       serve(workflow(), ada, people);
       await openList();
       await pick("6. Skill review");
-      await userEvent.click(await screen.findByRole("button", { name: "Take ada off Skill review" }));
-      expect(await screen.findByRole("menuitem", { name: /^Take skill-review from ada…/ })).toBeInTheDocument();
-      expect(screen.queryByRole("menuitem", { name: /^Remove ada from/ })).toBeNull();
+      await userEvent.click(await screen.findByRole("button", { name: "Remove ada" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Remove ada from skill-review?" }));
+      expect(dialog.getByText("ada also takes skill-review in Ops.")).toBeInTheDocument();
     });
 
-    it("adds a Member at once from a list grouped in and out of the Project, each saying what it does", async () => {
-      const { api, puts } = serve(workflow(), ada, {
-        ...people,
-        "PUT /v1/projects/:project/members/:member": undefined,
-        "PUT /v1/members/:member/skills/:skill": undefined,
-      });
-      await openList();
+    it("adds a Member into the draft from a list grouped in and out of the Project; one from outside joins it on Save", async () => {
+      const { api, puts } = serve(workflow(), ada, people);
+      const list = await openList();
       await userEvent.click(await screen.findByRole("button", { name: "Add a Member" }));
-      expect(await screen.findByRole("option", { name: "ada: Gets engineer" })).toBeInTheDocument();
-      expect(screen.queryByRole("option", { name: /^builder:/ })).toBeNull();
-      expect(screen.getByText("In Web · without engineer")).toBeInTheDocument();
+      expect(await screen.findByRole("option", { name: /^ada/ })).toBeInTheDocument();
+      expect(screen.queryByRole("option", { name: /^builder/ })).toBeNull();
+      expect(screen.getByText("In Web")).toBeInTheDocument();
       expect(screen.getByText("Not in Web")).toBeInTheDocument();
-      await userEvent.click(screen.getByRole("option", { name: "bob: Joins Web, gets engineer" }));
-      await waitFor(() => expect(api.calls.some((c) => c.method === "PUT" && c.path === `/v1/members/m-bob/skills/${engineer.id}`)).toBe(true));
-      expect(api.calls.some((c) => c.method === "PUT" && c.path === "/v1/projects/WEB/members/m-bob")).toBe(true);
-      expect(puts).toHaveLength(0);
+      await userEvent.click(screen.getByRole("option", { name: /^bob/ }));
+      expect(within(screen.getByRole("list", { name: "Members with engineer" })).getByText("bob")).toBeInTheDocument();
+      expect(list.getByRole("listitem", { name: "3. Build" })).toHaveTextContent("+1");
+      expect(header()).toHaveTextContent("1 change");
+      await userEvent.click(screen.getByRole("button", { name: "Editing · 1 change: list them" }));
+      const changes = within(await screen.findByRole("list", { name: "Changes" }));
+      expect(changes.getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Addedbob to engineer, joins Web"]);
+      await userEvent.keyboard("{Escape}");
+      // Removing one added in the draft takes back the add, unasked.
+      await userEvent.click(screen.getByRole("button", { name: "Remove bob" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
       expect(header()).toHaveTextContent(/^Editing$/);
+      await userEvent.click(screen.getByRole("button", { name: "Add a Member" }));
+      await userEvent.click(await screen.findByRole("option", { name: /^bob/ }));
+      expect(api.calls.filter((c) => c.method !== "GET")).toHaveLength(0);
+      await save();
+      await waitFor(() => expect(puts).toHaveLength(1));
+      expect(puts[0].joins).toEqual(["m-bob"]);
+      expect(puts[0].grants).toEqual([{ member: "m-bob", skill: engineer.id }]);
     });
 
     it("creates an agent for the Step at once and shows its token once, with how it runs", async () => {
@@ -509,8 +526,8 @@ describe("Settings › Workflow", () => {
         "POST /v1/members/:member/tokens": { token: { id: "t1", member_id: "m-new", name: "default", created_at: "" }, secret: "dk_secret" },
       });
       await openList();
-      await userEvent.click(screen.getByRole("button", { name: "Create an agent" }));
-      const dialog = within(await screen.findByRole("dialog", { name: "Create an agent" }));
+      await userEvent.click(screen.getByRole("button", { name: "New agent" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "New agent" }));
       expect(dialog.getByText("An agent Member of Web with engineer.")).toBeInTheDocument();
       await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "builder-2");
       await userEvent.click(dialog.getByRole("button", { name: "Create agent" }));
@@ -527,8 +544,8 @@ describe("Settings › Workflow", () => {
       expect(puts).toHaveLength(0);
     });
 
-    it("offers no Member to a Skill created on Save, and none to a hold", async () => {
-      serve(workflow(), ada, people);
+    it("gives Members a Skill created on Save, in the same PUT, and none to a hold", async () => {
+      const { puts } = serve(workflow(), ada, people);
       await openList();
       await pick("1. Backlog");
       expect(screen.queryByRole("button", { name: "Add a Member" })).toBeNull();
@@ -539,8 +556,14 @@ describe("Settings › Workflow", () => {
       const dialog = within(await screen.findByRole("dialog", { name: "New Skill “security”" }));
       await userEvent.type(dialog.getByRole("textbox", { name: "Text" }), "x");
       await userEvent.click(dialog.getByRole("button", { name: "Use this Skill" }));
-      expect(screen.getByText("security is created on Save: add its Members after.")).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Add a Member" })).toBeNull();
+      expect(panel("Step 4: Review").getByText("Nobody")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "New agent" })).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Add a Member" }));
+      await userEvent.click(await screen.findByRole("option", { name: /^ada/ }));
+      await save();
+      await waitFor(() => expect(puts).toHaveLength(1));
+      expect(puts[0].skills).toEqual([{ name: "security", body: "x" }]);
+      expect(puts[0].grants).toEqual([{ member: "m-ada", skill: "security" }]);
     });
   });
 });

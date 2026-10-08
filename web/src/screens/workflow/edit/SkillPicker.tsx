@@ -80,7 +80,7 @@ export function SkillPicker({
               className,
             )}
           >
-            <span className="min-w-0 truncate">{current ? current.name : "Hold · pick a Skill"}</span>
+            <span className="min-w-0 truncate">{current ? current.name : "Hold"}</span>
             {current?.fresh && <span className="flex-none font-sans text-[10.5px] text-state-claimed">new</span>}
             <ChevronDownIcon aria-hidden className="size-3 flex-none text-muted-foreground" />
           </button>
@@ -150,7 +150,6 @@ function NewSkillDialog({ name: initial, onClose, onDone }: { name: string; onCl
       open
       onOpenChange={(o) => !o && onClose()}
       title={`New Skill “${trimmed || initial}”`}
-      description="A generic Skill: what a Member arrives able to do. It is created when you save the Workflow; its text is version 1."
       submitLabel="Use this Skill"
       submitDisabled={!trimmed || !!problem || !body.trim()}
       onSubmit={() => onDone({ name: trimmed, body })}

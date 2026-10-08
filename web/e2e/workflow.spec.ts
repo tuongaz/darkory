@@ -8,7 +8,8 @@ import { startInstall } from "./server";
 //   6. Workflow editing in the list and panel: rename a Step, add one between two with a new Skill
 //      and wire it, delete one with Tasks (asked where they go and where the outcome into it
 //      leads), the changes listed, all saved in one go; the open board's columns follow; then who
-//      takes a Step: a new agent, a Member added, one removed from the Project, at once.
+//      takes a Step: a new agent, at once; a Member added and one removed, saved with the Workflow;
+//      a removal cancelled, discarded.
 //   9. Marks: an agent's gradient border, turning while its Claim is live; a human's plain border.
 // And, first, the live line as things happen: a Task filed, picked up, advanced and completed.
 test.describe.configure({ mode: "serial" });
@@ -168,15 +169,23 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.screenshot({ path: `${shots}6-03-renamed.png`, animations: "disabled" });
 
   // C2: the band between Make and Review adds a Step there: a hold with no outcome, its name in focus.
+  // Hovering it changes only its colour: it and every row under it stay where they were.
   const make = list.getByRole("listitem", { name: "3. Make" });
+  const band = page.getByRole("button", { name: "Add a Step after Make" });
+  const below = list.getByRole("listitem", { name: "4. Review" });
+  const last = list.getByRole("listitem", { name: "6. Skill review" });
+  const rest = [await band.boundingBox(), await below.boundingBox(), await last.boundingBox()];
+  await expect(band).toHaveCSS("opacity", "0");
   const box = (await make.boundingBox())!;
   await page.mouse.move(box.x + 120, box.y + box.height + 2);
-  const band = page.getByRole("button", { name: "Add a Step after Make" });
-  await expect(band).toBeVisible();
+  await band.hover();
+  await expect(band).toHaveCSS("opacity", "1");
+  await expect(band).toHaveText("Add Step");
+  expect([await band.boundingBox(), await below.boundingBox(), await last.boundingBox()]).toEqual(rest);
   await page.screenshot({ path: `${shots}6-04-add-band.png`, animations: "disabled" });
   await band.click();
   await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toBeFocused();
-  await expect(page.getByRole("region", { name: "Step 4: New Step" })).toContainText("Moved on by hand.");
+  await expect(page.getByRole("region", { name: "Step 4: New Step" })).toContainText("By hand");
   await page.getByRole("textbox", { name: "Name of Step 4" }).fill("QA");
   // Its Skill, new, created on Save; then its way on, and Make's main outcome into it.
   await page.getByRole("combobox", { name: "Skill of QA" }).click();
@@ -185,7 +194,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   const skillDialog = page.getByRole("dialog", { name: "New Skill “qa”" });
   await skillDialog.getByRole("textbox", { name: "Text" }).fill("Try it as a user would.");
   await skillDialog.getByRole("button", { name: "Use this Skill" }).click();
-  await expect(page.getByText("No way out: Tasks here can only be moved by hand.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Outcomes" }).getByText("No way out", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add an outcome out of QA" }).click();
   await page.getByRole("textbox", { name: "Outcome out of QA" }).fill("pass");
   await page.getByRole("combobox", { name: "Where pass out of QA leads" }).click();
@@ -239,11 +248,11 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   // C3: QA's Skill exists now and nobody has it: its Owner takes it. A new agent for it, at once: its token shows once.
   await page.goto(`${base}/settings/projects/MAIN/workflow?step=${qaStep.id}`);
   const takenBy = page.getByRole("region", { name: "Step 4: QA" }).getByRole("region", { name: "Taken by" });
-  await expect(takenBy).toContainText("Nobody in Main has qa: each Task's Owner takes it.");
+  await expect(takenBy).toContainText("Nobody");
   await expect(list.getByRole("listitem", { name: "4. QA" })).toContainText("Owner takes it");
   await page.screenshot({ path: `${shots}6-09-unstaffed.png`, animations: "disabled" });
-  await takenBy.getByRole("button", { name: "Create an agent" }).click();
-  const agentDialog = page.getByRole("dialog", { name: "Create an agent" });
+  await takenBy.getByRole("button", { name: "New agent" }).click();
+  const agentDialog = page.getByRole("dialog", { name: "New agent" });
   await agentDialog.getByRole("textbox", { name: "Name" }).fill("qa-bot");
   await agentDialog.getByRole("button", { name: "Create agent" }).click();
   await expect(page.getByRole("textbox", { name: "Secret of qa-bot's token" })).toHaveValue(/^dk_/);
@@ -251,25 +260,41 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.getByRole("button", { name: "Done" }).click();
   await expect(takenBy.getByRole("list", { name: "Members with qa" })).toContainText("qa-bot");
 
-  // ada takes Make's Tasks, added from its panel: the list says what picking her does.
+  // ada takes Make's Tasks, added from its panel; builder no longer does, removed by its ×. Both
+  // are the draft's: listed, sent on Save with the Workflow.
   await list.getByRole("button", { name: "3. Make" }).click();
   const makeTakers = page.getByRole("region", { name: "Step 3: Make" }).getByRole("region", { name: "Taken by" });
+  const engineers = makeTakers.getByRole("list", { name: "Members with engineer" });
   await makeTakers.getByRole("button", { name: "Add a Member" }).click();
-  await page.getByRole("option", { name: "ada: Gets engineer" }).click();
-  await expect(makeTakers.getByRole("list", { name: "Members with engineer" })).toContainText("ada");
-  // builder leaves Make: removed from Main, after the confirm names what it leaves.
-  await makeTakers.getByRole("button", { name: "Take builder off Make" }).click();
-  await page.getByRole("menuitem", { name: /^Remove builder from Main…/ }).click();
-  const leave = page.getByRole("dialog", { name: "Remove builder from Main?" });
-  await expect(leave.getByRole("list", { name: "Steps it reaches" })).toContainText("Make");
-  await page.screenshot({ path: `${shots}6-11-remove-asks.png`, animations: "disabled" });
-  await leave.getByRole("button", { name: "Remove from Main" }).click();
-  await expect(makeTakers.getByRole("list", { name: "Members with engineer" })).not.toContainText("builder");
+  await page.getByRole("option", { name: /^ada/ }).click();
+  await expect(engineers).toContainText("ada");
+  await makeTakers.getByRole("button", { name: "Remove builder" }).hover();
+  await page.screenshot({ path: `${shots}6-11-remove-hover.png`, animations: "disabled" });
+  await makeTakers.getByRole("button", { name: "Remove builder" }).click();
+  await expect(engineers).not.toContainText("builder");
+  await page.getByRole("button", { name: "Editing · 2 changes: list them" }).click();
+  await expect(page.getByRole("list", { name: "Changes" })).toContainText("Addedada to engineer");
+  await expect(page.getByRole("list", { name: "Changes" })).toContainText("Removedbuilder from engineer");
   await page.screenshot({ path: `${shots}6-12-edited.png`, animations: "disabled" });
-  // None of these touched the Workflow: nothing to save.
-  await expect(page.getByRole("status", { name: "Editing" })).toHaveText("Editing");
-  const main = (await v1("GET", "/v1/projects/MAIN")) as { members: { name: string }[] };
-  expect(main.members.map((m) => m.name)).not.toContain("builder");
+  await page.keyboard.press("Escape");
+  const has = async (name: string) => {
+    const { items } = (await v1("GET", "/v1/members")) as { items: { id: string; name: string }[] };
+    const d = (await v1("GET", `/v1/members/${items.find((m) => m.name === name)!.id}`)) as { skills: { name: string }[] };
+    return d.skills.some((k) => k.name === "engineer");
+  };
+  expect([await has("ada"), await has("builder")]).toEqual([false, true]);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page).toHaveURL(`${base}/projects/MAIN/workflow`);
+  expect([await has("ada"), await has("builder")]).toEqual([true, false]);
+
+  // A removal cancelled is discarded: ada keeps engineer.
+  await page.goto(`${base}/settings/projects/MAIN/workflow?step=${madeStep.id}`);
+  await makeTakers.getByRole("button", { name: "Remove ada" }).click();
+  await expect(makeTakers).toContainText("Nobody");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("dialog", { name: "Discard 1 change?" }).getByRole("button", { name: "Discard" }).click();
+  await expect(page).toHaveURL(`${base}/projects/MAIN/workflow`);
+  expect(await has("ada")).toBe(true);
 
   expect(errors).toEqual([]);
   expect(board.errors).toEqual([]);

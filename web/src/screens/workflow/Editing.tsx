@@ -11,6 +11,9 @@ import type { RecordStep, WorkflowRecord } from "./bind";
 import { DeleteStepDialog } from "./edit/DeleteStep";
 import {
   addOutcome,
+  addTaker,
+  holdersAt,
+  removeTaker,
   asksBeforeDelete,
   asLine,
   deleteStep,
@@ -28,7 +31,7 @@ import {
   type Draft,
   type Group,
 } from "./edit/draft";
-import { useSkillHolders } from "./edit/holders";
+import { orgWide, useRoster } from "./edit/holders";
 import { Preview } from "./edit/Preview";
 import { useOrgFacts } from "./edit/reach";
 import { StepList, type RowTags } from "./edit/StepList";
@@ -63,9 +66,11 @@ export function EditingWorkflow({
 }) {
   const phone = useIsMobile();
   const [showLine, setShowLine] = useState(false);
-  const holders = useSkillHolders(project.key, skills);
+  const roster = useRoster(project.key);
   const facts = useOrgFacts(!!editor);
   const skillMap = useMemo(() => new Map((skills ?? []).map((s) => [s.id, s])), [skills]);
+  // Who takes each Skill's Steps at Save: the draft's changes to who takes them drawn in.
+  const holders = holdersAt(draft, roster, new Set((skills ?? []).filter(orgWide).map((s) => s.id)));
   const groups = useMemo(() => (draft ? groupsOf(draft.wf, skillMap, draft.placed) : () => "main" as const), [draft, skillMap]);
   const readOnly = !editor;
   const apply = useCallback((edit: (d: Draft) => Draft, key?: string) => editor?.apply(edit, key), [editor]);
@@ -203,6 +208,8 @@ export function EditingWorkflow({
     reorder: (by) => reorder(step.id, by),
     insertAfter: () => insert(step.id, groups(step)),
     deleteStep: () => remove(step),
+    addTaker: (member, join) => step.skill_id && apply((d) => addTaker(d, member, step.skill_id!, join)),
+    removeTaker: (member) => step.skill_id && apply((d) => removeTaker(d, member, step.skill_id!)),
   };
   const group = step ? (groups(step) === "main" ? main : after) : [];
   const canMove = { up: !!step && group[0]?.id !== step.id, down: !!step && group.at(-1)?.id !== step.id };
@@ -263,9 +270,8 @@ export function EditingWorkflow({
         )}
         {!phone && !step && (
           <div className="min-h-0 overflow-auto border-l pb-24">
-            <div role="note" aria-label="No Step picked" className="flex flex-col gap-1.5 px-6 pt-8 text-sm text-muted-foreground">
-              <p className="font-medium text-foreground">Pick a Step</p>
-              <p>{readOnly ? "Pick a Step in the list or on the line to see who takes its Tasks and where its outcomes lead." : "Pick a Step in the list or on the line to change its Skill, who takes it and where its outcomes lead."}</p>
+            <div role="note" aria-label="No Step picked" className="px-6 pt-8 text-sm text-muted-foreground">
+              Pick a Step
             </div>
           </div>
         )}
@@ -281,6 +287,7 @@ export function EditingWorkflow({
               order={order}
               skills={skills}
               holders={holders}
+              roster={roster}
               facts={facts}
               readOnly={readOnly}
               invalid={invalid}

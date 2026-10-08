@@ -110,7 +110,7 @@ function ReadingPage() {
 
 function EditingPage() {
   const project = useRouteProject();
-  const editor = useDraftEditor(project.key);
+  const editor = useDraftEditor(project.key, project.name);
   const navigate = useNavigate();
   // `?step=<id>` opens with that Step's name in focus: Edit from the live page.
   const [params] = useSearchParams();

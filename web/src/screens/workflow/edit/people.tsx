@@ -13,15 +13,15 @@ import { OnceDialog, TokenShown } from "@/screens/settings/secrets";
 import { orgWide } from "./holders";
 
 /*
- * Create an agent, from a Step's Taken by: it acts at once — it changes Members, not the Workflow,
- * so it is not part of what Save sends.
+ * New agent, from a Step's Taken by: it makes a Member at once, with a token whose secret shows
+ * once, so it is not part of what Save sends.
  */
 
 
 type Made = { member?: Member; token?: IssuedToken; done: string[]; failed?: { what: string; error: unknown }; runner?: string };
 
 /**
- * Create an agent…: a name, the Step's Skill, and whether the Runner starts its sessions and on
+ * New agent: a name, the Step's Skill, and whether the Runner starts its Shifts and on
  * which model. /v1 makes it in steps — the Member, its place in the Project, its Skill, its first
  * token, its Runner settings — and what refuses says which, beside what was made. The token's
  * secret shows once, with how the agent runs.
@@ -87,7 +87,7 @@ export function CreateAgentDialog({ project, skill, onClose }: { project: Projec
     <FormDialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Create an agent"
+      title="New agent"
       description={`An agent Member of ${project.name} with ${skill.name}.`}
       submitLabel="Create agent"
       onSubmit={() => make.mutate()}

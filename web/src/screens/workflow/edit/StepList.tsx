@@ -8,12 +8,14 @@ import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "../bind";
 import type { Holder } from "./holders";
 import { isNewSkill, outcomes, type Draft, type Group } from "./draft";
+import { Tip } from "./Tip";
 
 /*
  * The Workflow's Steps as text, one 38px row each: its number, name, Skill, who takes it and where
  * its main outcome leads. Picking a row opens the Step in the panel beside the list; nothing here is
- * a field. Between rows a band opens on hover with "+ Add Step after …", and each group ends with
- * "+ Add Step". Rows reorder by their grip, Alt+↑/↓, or the panel's menu; ↑/↓ pick the next row.
+ * a field. Between rows a band shows "+ Add Step" on hover, in room it always keeps, and each group
+ * ends with "+ Add Step". Rows reorder by their grip, Alt+↑/↓, or the panel's menu; ↑/↓ pick the
+ * next row.
  */
 
 export const listGrid = "grid grid-cols-[22px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.6fr)] items-center gap-x-2.5";
@@ -143,9 +145,12 @@ export function StepList({
         {group(main, "main")}
         {after.length > 0 && (
           <>
-            <div role="presentation" className="flex flex-wrap items-baseline gap-x-2 px-2 pt-4 pb-1 max-md:px-4">
-              <span className="text-[13px] font-semibold">After a Parent</span>
-              <span className="text-xs text-muted-foreground">Darkory files Acceptance under a Parent when its Subtasks end, and Retro when it ends; Skill review follows Retro.</span>
+            <div role="presentation" className="flex px-2 pt-4 pb-1 max-md:px-4">
+              <Tip label="Darkory files Acceptance under a Parent when its Subtasks end, and Retro when it ends; Skill review follows Retro.">
+                <span tabIndex={0} className="rounded-sm text-[13px] font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                  After a Parent
+                </span>
+              </Tip>
             </div>
             {group(after, "after")}
           </>
@@ -158,19 +163,22 @@ export function StepList({
 export const addStepClass =
   "inline-flex h-7 items-center gap-1 rounded-md border border-dashed border-input bg-background px-2.5 text-xs text-muted-foreground outline-none hover:border-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-/** Between two rows: 4px at rest, a 30px band with "+ Add Step after …" on hover or focus. Never over a row. */
+/**
+ * Between two rows: a band that always keeps its room, showing "+ Add Step" on hover or focus. Only
+ * its colour changes, so nothing in the list moves. Never over a row.
+ */
 function InsertBand({ after, onInsert }: { after: RecordStep; onInsert: () => void }) {
   const name = after.name.trim() || "the new Step";
   return (
-    <div className="group/gap relative flex h-1 items-center pl-[40px] transition-[height] duration-100 focus-within:h-[30px] hover:h-[30px] max-md:hidden">
+    <div className="group/gap relative flex h-5 items-center pl-[40px] max-md:hidden">
       <span aria-hidden className="absolute inset-x-[40px] top-1/2 h-px bg-foreground/30 opacity-0 group-focus-within/gap:opacity-100 group-hover/gap:opacity-100" />
       <button
         type="button"
         onClick={onInsert}
         aria-label={`Add a Step after ${name}`}
-        className={cn(addStepClass, "relative z-10 h-6 border-ring text-foreground opacity-0 group-focus-within/gap:opacity-100 group-hover/gap:opacity-100")}
+        className={cn(addStepClass, "relative z-10 h-5 border-ring text-foreground opacity-0 group-focus-within/gap:opacity-100 group-hover/gap:opacity-100")}
       >
-        <PlusIcon aria-hidden className="size-3" /> Add Step after {name}
+        <PlusIcon aria-hidden className="size-3" /> Add Step
       </button>
     </div>
   );
@@ -212,11 +220,9 @@ function Row({
   const tag = tags.start ? (
     <span className="rounded-full bg-state-waiting-bg px-2 text-[11px] leading-[18px] text-state-waiting">New Tasks start here</span>
   ) : tags.breakdown ? (
-    <span className="rounded-full bg-agent-bg px-2 text-[11px] leading-[18px] text-agent">
-      Break down{tags.breakdown.start ? ` · Subtasks start at ${tags.breakdown.start} by default` : ""}
-    </span>
+    <Chip text="Break down" hint={tags.breakdown.start && `Subtasks start at ${tags.breakdown.start} by default`} className="bg-agent-bg text-agent" />
   ) : tags.orgWide ? (
-    <span className="rounded-full border px-2 text-[11px] leading-[18px] text-muted-foreground">Taken by anyone in the Organisation with skill-review</span>
+    <Chip text="Organisation-wide" hint="Taken by anyone in the Organisation with skill-review" className="border text-muted-foreground" />
   ) : null;
   return (
     <div
@@ -299,5 +305,18 @@ function Row({
         </button>
       )}
     </div>
+  );
+}
+
+/** A chip with its detail on hover or focus, when it has any. */
+function Chip({ text, hint, className }: { text: string; hint?: string; className: string }) {
+  const chip = <span className={cn("rounded-full px-2 text-[11px] leading-[18px]", className)}>{text}</span>;
+  if (!hint) return chip;
+  return (
+    <Tip label={hint}>
+      <span tabIndex={0} aria-label={`${text}: ${hint}`} className="inline-flex rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+        {chip}
+      </span>
+    </Tip>
   );
 }

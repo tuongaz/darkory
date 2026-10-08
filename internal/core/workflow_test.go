@@ -336,6 +336,133 @@ func TestSetWorkflow(t *testing.T) {
 	})
 }
 
+// asSet is a Workflow as SetWorkflow takes it, unchanged.
+func asSet(w core.Workflow) core.WorkflowInput {
+	var in core.WorkflowInput
+	for _, s := range w.Steps {
+		in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
+	}
+	for _, k := range w.Connectors {
+		in.Connectors = append(in.Connectors, core.ConnectorInput{ID: k.ID, From: k.FromStepID, To: k.ToStepID, Name: k.Name, Position: k.Position})
+	}
+	return in
+}
+
+// The Workflow and who takes its Steps are set in one write: new Skills first, so a Step and a
+// grant name one; then Members join the Project and Skills are given and taken away. Refused,
+// none of it is made; with only who takes changed, the Workflow writes nothing of its own.
+func TestSetWorkflowTakers(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		lead := f.member("lead", []string{"WEB"}, nil)
+		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
+		outsider := f.member("outsider", nil, nil)
+		before, err := f.svc.GetWorkflow(ctx, f.admin, "WEB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.task(lead, "WEB", "Waiting at Review", "Review")
+		has := func(member, skill string) bool {
+			return f.count(`SELECT COUNT(*) FROM member_skills WHERE member_id = $1 AND skill_id = $2`, member, f.skillID(skill)) > 0
+		}
+		in := func() core.WorkflowInput { return asSet(before.Workflow) }
+
+		// Refused, nothing is made: Review is deleted with a Task at it and nowhere to go.
+		gone := in()
+		gone.Steps = slices.DeleteFunc(gone.Steps, func(s core.StepInput) bool { return s.Name == "Review" })
+		gone.Connectors = slices.DeleteFunc(gone.Connectors, func(k core.ConnectorInput) bool {
+			return k.From == before.Steps[3].ID || (k.To != nil && *k.To == before.Steps[3].ID)
+		})
+		gone.Skills = []core.WorkflowSkill{{Name: "triage", Body: "triage well"}}
+		gone.Joins = []string{"outsider"}
+		gone.Grants = []core.SkillGrant{{Member: "lead", Skill: core.SkillEngineer}}
+		gone.Revokes = []core.SkillGrant{{Member: "builder", Skill: core.SkillEngineer}}
+		n := f.checkActivity()
+		_, err = f.svc.SetWorkflow(ctx, f.admin, "WEB", gone, core.Idem{})
+		wantCode(t, err, core.CodeStepInUse)
+		if has(lead.MemberID, core.SkillEngineer) || !has(builder.MemberID, core.SkillEngineer) ||
+			f.count(`SELECT COUNT(*) FROM skills WHERE name = 'triage'`) != 0 ||
+			f.count(`SELECT COUNT(*) FROM project_members WHERE member_id = $1`, outsider.MemberID) != 0 || f.checkActivity() != n {
+			t.Fatal("a refused Save made some of what it carried")
+		}
+
+		// What is refused before anything is read.
+		for code, bad := range map[core.Code]func(w *core.WorkflowInput){
+			core.CodeInvalid: func(w *core.WorkflowInput) {
+				w.Grants = []core.SkillGrant{{Member: "lead", Skill: "review"}}
+				w.Revokes = []core.SkillGrant{{Member: "lead", Skill: "review"}}
+			},
+			core.CodeNotFound: func(w *core.WorkflowInput) { w.Grants = []core.SkillGrant{{Member: "nobody", Skill: "review"}} },
+			core.CodeConflict: func(w *core.WorkflowInput) { w.Skills = []core.WorkflowSkill{{Name: core.SkillEngineer}} },
+		} {
+			w := in()
+			bad(&w)
+			_, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
+			wantCode(t, err, code)
+		}
+		for _, name := range []string{"Triage", "a b"} {
+			w := in()
+			w.Skills = []core.WorkflowSkill{{Name: name}}
+			_, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
+			wantCode(t, err, core.CodeInvalid)
+		}
+		if f.checkActivity() != n {
+			t.Fatal("a refused Save wrote Activity")
+		}
+
+		// Backlog takes the new triage Skill, which lead is given by its name; outsider joins and
+		// takes Build; builder no longer does.
+		w := in()
+		w.Steps[0].Skill = ptrStr("triage")
+		w.Skills = []core.WorkflowSkill{{Name: "triage", Body: "triage well"}}
+		w.Joins = []string{outsider.MemberID}
+		w.Grants = []core.SkillGrant{{Member: lead.MemberID, Skill: "triage"}, {Member: "outsider", Skill: core.SkillEngineer}}
+		w.Revokes = []core.SkillGrant{{Member: builder.MemberID, Skill: core.SkillEngineer}}
+		after, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		takers := func(i int) string {
+			var names []string
+			for _, tk := range after.Facts[i].Takers {
+				names = append(names, tk.Name)
+			}
+			return strings.Join(names, ", ")
+		}
+		if takers(0) != "lead" || takers(2) != "outsider" {
+			t.Fatalf("Backlog is taken by %q, Build by %q", takers(0), takers(2))
+		}
+		for kind, want := range map[string]int{"skill.created": 1, "project.member_added": 1, "member.skill_granted": 2, "member.skill_revoked": 1, "workflow.changed": 1} {
+			got := 0
+			for _, a := range f.activity(kind) {
+				if a.Seq > int64(n) {
+					got++
+				}
+			}
+			if got != want {
+				t.Fatalf("%d %s entries, want %d", got, kind, want)
+			}
+		}
+		n = f.checkActivity()
+		changed := len(f.activity("workflow.changed"))
+
+		// Only who takes changes: the Workflow records nothing, the revoke is made.
+		w = asSet(after.Workflow)
+		w.Revokes = []core.SkillGrant{{Member: "lead", Skill: "triage"}}
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if has(lead.MemberID, "triage") || f.checkActivity() != n+1 || len(f.activity("workflow.changed")) != changed {
+			t.Fatalf("revoking alone: lead keeps triage %v, %d entries", has(lead.MemberID, "triage"), f.checkActivity()-n)
+		}
+		if got := f.activity("member.skill_revoked"); got[len(got)-1].SubjectID != lead.MemberID {
+			t.Fatalf("the last revoke is %+v", got[len(got)-1])
+		}
+	})
+}
+
 // The live Workflow tells, per Step, how many open Tasks are at it and how many of them are being
 // worked, who could take them by its Skill — the Project's Members, or for skill-review the
 // Organisation's — and the median time Tasks spent there before leaving it in the last 30 days.

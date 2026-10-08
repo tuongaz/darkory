@@ -548,8 +548,17 @@ export interface paths {
          *     and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
          *     none of them: its Project then offers no Break down, files no Acceptance and no
          *     Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-         *     Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-         *     Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+         *     The same body may change who takes the Steps, so an editor saves its draft whole: it
+         *     creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+         *     the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+         *     away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+         *     is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+         *     `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+         *     that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+         *     Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+         *     `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+         *     given twice; one Member and Skill both granted and revoked; two Steps share a name,
+         *     ignoring case, or a `position`; a Connector
          *     names a Step that is not in the body; two Connectors out of one Step share a name,
          *     ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
          *     `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -2171,6 +2180,25 @@ export interface components {
             moves?: {
                 [key: string]: string;
             };
+            /** @description Generic Skills to create before the Workflow is put in place, each published as version 1. */
+            skills?: components["schemas"]["WorkflowSkillInput"][];
+            /** @description Members, by id or name, to add to the Project; one in it already changes nothing. */
+            joins?: string[];
+            /** @description Skills to give Members; one a Member has changes nothing. */
+            grants?: components["schemas"]["SkillGrantInput"][];
+            /** @description Skills to take away from Members; one a Member lacks changes nothing. Claims held under it are not ended. */
+            revokes?: components["schemas"]["SkillGrantInput"][];
+        };
+        WorkflowSkillInput: {
+            name: string;
+            /** @description The Skill's text, published as version 1. */
+            body: string;
+        };
+        SkillGrantInput: {
+            /** @description The Member, by id or name. */
+            member: string;
+            /** @description The Skill, by id or name; one in `skills` by its name. */
+            skill: string;
         };
         StepInput: {
             /**

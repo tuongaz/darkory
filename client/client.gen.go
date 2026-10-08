@@ -1595,9 +1595,21 @@ type SetWorkflowBody struct {
 	// Connectors Every Connector of the new Workflow. One left out is deleted.
 	Connectors []ConnectorInput `json:"connectors"`
 
+	// Grants Skills to give Members; one a Member has changes nothing.
+	Grants *[]SkillGrantInput `json:"grants,omitempty"`
+
+	// Joins Members, by id or name, to add to the Project; one in it already changes nothing.
+	Joins *[]string `json:"joins,omitempty"`
+
 	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
 	// Workflow, by its id or its name in `steps`.
 	Moves *map[string]string `json:"moves,omitempty"`
+
+	// Revokes Skills to take away from Members; one a Member lacks changes nothing. Claims held under it are not ended.
+	Revokes *[]SkillGrantInput `json:"revokes,omitempty"`
+
+	// Skills Generic Skills to create before the Workflow is put in place, each published as version 1.
+	Skills *[]WorkflowSkillInput `json:"skills,omitempty"`
 
 	// Steps Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
 	// none. A Step left out is deleted.
@@ -1626,6 +1638,15 @@ type Skill struct {
 type SkillDetail struct {
 	Current SkillVersion `json:"current"`
 	Skill   Skill        `json:"skill"`
+}
+
+// SkillGrantInput defines model for SkillGrantInput.
+type SkillGrantInput struct {
+	// Member The Member, by id or name.
+	Member string `json:"member"`
+
+	// Skill The Skill, by id or name; one in `skills` by its name.
+	Skill string `json:"skill"`
 }
 
 // SkillKind defines model for SkillKind.
@@ -2047,6 +2068,13 @@ type Workflow struct {
 
 	// Steps The Steps, by `position`, each with what is happening at it now.
 	Steps []WorkflowStep `json:"steps"`
+}
+
+// WorkflowSkillInput defines model for WorkflowSkillInput.
+type WorkflowSkillInput struct {
+	// Body The Skill's text, published as version 1.
+	Body string `json:"body"`
+	Name string `json:"name"`
 }
 
 // WorkflowStep A Step with what is happening at it now.
@@ -3526,8 +3554,17 @@ type ClientInterface interface {
 	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 	// none of them: its Project then offers no Break down, files no Acceptance and no
 	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// The same body may change who takes the Steps, so an editor saves its draft whole: it
+	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+	// ignoring case, or a `position`; a Connector
 	// names a Step that is not in the body; two Connectors out of one Step share a name,
 	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -3552,8 +3589,17 @@ type ClientInterface interface {
 	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 	// none of them: its Project then offers no Break down, files no Acceptance and no
 	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// The same body may change who takes the Steps, so an editor saves its draft whole: it
+	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+	// ignoring case, or a `position`; a Connector
 	// names a Step that is not in the body; two Connectors out of one Step share a name,
 	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -5605,8 +5651,17 @@ func (c *Client) GetWorkflow(ctx context.Context, project ProjectRef, reqEditors
 // and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 // none of them: its Project then offers no Break down, files no Acceptance and no
 // Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// The same body may change who takes the Steps, so an editor saves its draft whole: it
+// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+// ignoring case, or a `position`; a Connector
 // names a Step that is not in the body; two Connectors out of one Step share a name,
 // ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 // `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -5641,8 +5696,17 @@ func (c *Client) SetWorkflowWithBody(ctx context.Context, project ProjectRef, pa
 // and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 // none of them: its Project then offers no Break down, files no Acceptance and no
 // Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// The same body may change who takes the Steps, so an editor saves its draft whole: it
+// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+// ignoring case, or a `position`; a Connector
 // names a Step that is not in the body; two Connectors out of one Step share a name,
 // ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 // `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -12738,8 +12802,17 @@ type ClientWithResponsesInterface interface {
 	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 	// none of them: its Project then offers no Break down, files no Acceptance and no
 	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// The same body may change who takes the Steps, so an editor saves its draft whole: it
+	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+	// ignoring case, or a `position`; a Connector
 	// names a Step that is not in the body; two Connectors out of one Step share a name,
 	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -12764,8 +12837,17 @@ type ClientWithResponsesInterface interface {
 	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 	// none of them: its Project then offers no Break down, files no Acceptance and no
 	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-	// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-	// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+	// The same body may change who takes the Steps, so an editor saves its draft whole: it
+	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+	// ignoring case, or a `position`; a Connector
 	// names a Step that is not in the body; two Connectors out of one Step share a name,
 	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -18846,8 +18928,17 @@ func (c *ClientWithResponses) GetWorkflowWithResponse(ctx context.Context, proje
 // and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 // none of them: its Project then offers no Break down, files no Acceptance and no
 // Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// The same body may change who takes the Steps, so an editor saves its draft whole: it
+// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+// ignoring case, or a `position`; a Connector
 // names a Step that is not in the body; two Connectors out of one Step share a name,
 // ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 // `moves` key that is not a Step being deleted, or a value that is not a Step kept),
@@ -18878,8 +18969,17 @@ func (c *ClientWithResponses) SetWorkflowWithBodyWithResponse(ctx context.Contex
 // and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
 // none of them: its Project then offers no Break down, files no Acceptance and no
 // Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-// Records `workflow.changed`. Errors: `forbidden` (not an admin), `not_found` (no such
-// Skill), `invalid` (two Steps share a name, ignoring case, or a `position`; a Connector
+// The same body may change who takes the Steps, so an editor saves its draft whole: it
+// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
+// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
+// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
+// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
+// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
+// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
+// given twice; one Member and Skill both granted and revoked; two Steps share a name,
+// ignoring case, or a `position`; a Connector
 // names a Step that is not in the body; two Connectors out of one Step share a name,
 // ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
 // `moves` key that is not a Step being deleted, or a value that is not a Step kept),
