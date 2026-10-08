@@ -212,6 +212,70 @@ func TestPrepareMakesAndReusesCheckouts(t *testing.T) {
 	}
 }
 
+// A Task branch an earlier session left is brought up to its base when the Task is taken again:
+// moved to it when it has no commits of its own, the base merged into it when it has, and left
+// as it was when that merge conflicts.
+func TestPrepareBringsATaskBranchUpToItsBase(t *testing.T) {
+	repo := gitRepo(t)
+	r := newTestRunner(t)
+	ws := Workspace{Name: "web", Kind: "git", Path: repo, Mode: ModePlain}
+	ctx := t.Context()
+	prepare := func(task, title string) Checkout {
+		t.Helper()
+		got, err := r.Prepare(ctx, task, "WEB-1", PlanCheckouts(r.cfg.Data, task, title, "WEB-1", []Workspace{ws}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got[0]
+	}
+	land := func(task, title, file, content string) { // a sibling's work merged into the Parent's branch
+		t.Helper()
+		c := prepare(task, title)
+		commitFile(t, c.Dir, file, content, task)
+		if res, err := mergeBranch(ctx, repo, c.Branch, "web-1", "merge "+task); err != nil || res.Conflict != "" {
+			t.Fatalf("merging %s: %+v, %v", task, res, err)
+		}
+		r.RemoveCheckouts(ctx, task)
+	}
+	has := func(c Checkout, file, want string) {
+		t.Helper()
+		if b, err := os.ReadFile(filepath.Join(c.Dir, file)); err != nil || string(b) != want {
+			t.Fatalf("%s's %s: %q, %v", c.Branch, file, b, err)
+		}
+	}
+
+	// Taken, then released with nothing done (a question), while the design lands on the Parent's
+	// branch: taken again, its branch is the Parent's.
+	prepare("WEB-2", "Keys")
+	r.RemoveCheckouts(ctx, "WEB-2")
+	land("WEB-3", "Design", "design.txt", "design\n")
+	c := prepare("WEB-2", "Keys")
+	has(c, "design.txt", "design\n")
+	if mustGit(t, repo, "rev-parse", c.Branch) != mustGit(t, repo, "rev-parse", "web-1") {
+		t.Fatal("a branch with no commits of its own was not moved to its base")
+	}
+
+	// With work of its own, in a worktree kept between sessions: the base is merged in.
+	commitFile(t, c.Dir, "keys.txt", "keys\n", "keys")
+	land("WEB-4", "Health", "health.txt", "health\n")
+	c = prepare("WEB-2", "Keys")
+	has(c, "health.txt", "health\n")
+	has(c, "keys.txt", "keys\n")
+
+	// A merge that conflicts leaves the branch as it was, with nothing half-merged.
+	commitFile(t, c.Dir, "a.txt", "mine\n", "mine")
+	tip := mustGit(t, repo, "rev-parse", c.Branch)
+	land("WEB-5", "Theirs", "a.txt", "theirs\n")
+	c = prepare("WEB-2", "Keys")
+	if got := mustGit(t, repo, "rev-parse", c.Branch); got != tip {
+		t.Fatalf("a conflicting merge moved the branch to %s", got)
+	}
+	if st := mustGit(t, c.Dir, "status", "--porcelain"); st != "" {
+		t.Fatalf("the worktree after a conflicting merge: %q", st)
+	}
+	has(c, "a.txt", "mine\n")
+}
+
 // A ledger written before model v2 names a Feature's branch feature/<KEY> under "Feature": it
 // reads, it is kept as written when the ledger grows, and no branch of model v2 matches it.
 func TestLedgerReadsEntriesFromBeforeModelV2(t *testing.T) {

@@ -268,6 +268,7 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 		// An earlier session's worktree, kept while the Task is open.
 		if branch, err := runGit(ctx, c.Dir, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil && strings.HasPrefix(branch, taskPrefix(task)) {
 			c.Branch = branch
+			r.catchUp(ctx, task, c)
 			return nil
 		}
 		return fmt.Errorf("%s exists and is not on a branch of %s; remove it to start again", c.Dir, task)
@@ -286,7 +287,11 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 			return fmt.Errorf("the branch %s in %s was not made by the runner; it will not work on it", existing[0], repo)
 		}
 		c.Branch = existing[0]
-		return addWorktree(ctx, repo, c.Dir, c.Branch)
+		if err := addWorktree(ctx, repo, c.Dir, c.Branch); err != nil {
+			return err
+		}
+		r.catchUp(ctx, task, c)
+		return nil
 	}
 	if !branchExists(ctx, repo, c.Base) {
 		if parent == "" || c.Base != ParentBranch(parent) {
@@ -305,6 +310,38 @@ func (r *Runner) prepareOne(ctx context.Context, task, parent string, c *Checkou
 		return err
 	}
 	return addWorktree(ctx, repo, c.Dir, c.Branch)
+}
+
+// catchUp brings a Task branch an earlier session left up to its base, in the checkout c: a Task
+// released and taken again later, such as one that waited on a question, or one sent back, would
+// otherwise be worked on its base as it was, without the work merged into it since (a sibling
+// Subtask's, a design's). A branch with no commits of its own moves to the base; one with its
+// own commits takes the base in a merge, and keeps its old start when that conflicts, which the
+// merge into the base then meets as any conflict.
+func (r *Runner) catchUp(ctx context.Context, task string, c *Checkout) {
+	base := startPoint(ctx, c.Workspace, c.Base)
+	if _, err := runGit(ctx, c.Dir, "rev-parse", "--verify", "--quiet", base+"^{commit}"); err != nil {
+		return
+	}
+	if isAncestor(ctx, c.Dir, base, "HEAD") {
+		return
+	}
+	how := "fast-forwarded"
+	if isAncestor(ctx, c.Dir, "HEAD", base) {
+		if _, err := runGit(ctx, c.Dir, "merge", "--ff-only", base); err != nil {
+			r.log.Warn("could not bring a Task's branch up to its base", "task", task, "branch", c.Branch, "base", base, "err", err)
+			return
+		}
+	} else {
+		how = "merged"
+		msg := fmt.Sprintf("Merge %s into %s\n\n%s: taken again, it takes what landed on %s since", base, c.Branch, task, c.Base)
+		if _, _, err := gitOutput(ctx, c.Dir, identity(ctx, c.Workspace.Path), "merge", "--no-ff", "--no-edit", "-m", msg, base); err != nil {
+			runGit(ctx, c.Dir, "merge", "--abort")
+			r.log.Warn("a Task's branch conflicts with its base; it is worked as it was", "task", task, "branch", c.Branch, "base", base, "err", err)
+			return
+		}
+	}
+	r.log.Info("brought a Task's branch up to its base", "task", task, "branch", c.Branch, "base", base, "how", how)
 }
 
 // startPoint is where a new branch from base starts: base itself, or in a Workspace merged through
