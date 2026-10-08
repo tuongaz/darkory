@@ -2,7 +2,6 @@ package runner
 
 import (
 	"context"
-	"time"
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/cli/remote"
@@ -26,6 +25,12 @@ func (a *agent) run(ctx context.Context) {
 	log := r.log.With("agent", a.name())
 	var pull Record // the Session the next Claim is made in; a fresh one after every Claim
 	unset := false  // said that the agent has no settings
+	defer func() {
+		// Stopping, the Session waiting for the next Claim is closed, not left to go idle.
+		if pull != nil {
+			r.closeSession(ctx, pull, "the Session waiting for the next Task")
+		}
+	}()
 	for ctx.Err() == nil {
 		set, ok, err := a.rec.Agent(ctx, a.me.Member.ID)
 		if err != nil {
@@ -84,10 +89,6 @@ func (a *agent) run(ctx context.Context) {
 		}
 		// The Claim has ended; closing the Session ends one the runner failed to release, and keeps
 		// the Member's list of Sessions short.
-		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-		if err := rec.CloseSession(cctx); err != nil && !stopped(err) {
-			log.Warn("closing the session's Darkory Session", "task", d.Task.Key, "err", err)
-		}
-		cancel()
+		r.closeSession(ctx, rec, "the session's Darkory Session", "task", d.Task.Key)
 	}
 }

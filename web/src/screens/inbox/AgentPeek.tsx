@@ -18,7 +18,7 @@ import type { Activity, Member, Project, RunnerSession, Task } from "@/api/clien
 import { useDirectory, useMember, useOpenTasks, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { projectPath } from "@/app/currentProject";
 import { useNow } from "@/clock";
-import { SessionId } from "@/components/CopyValue";
+import { Copy } from "@/components/Copy";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -33,11 +33,12 @@ import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { untilText } from "@/lib/time";
 import { workingOf } from "@/lib/work";
 import { useCurrentMe } from "@/me";
+import { heldClaims } from "@/screens/settings/model";
+import { SessionsTable } from "@/screens/settings/SessionsTable";
 import { liveClaim } from "@/work";
 import { agentActions, agentSettingsPath, sessionOverAgents, taskOverAgents, type AgentAction } from "./agentActions";
 import { useAgentActions } from "./useAgentActions";
 import { agentRows, claimHolder, claimsSince, count, startOfDay, type ClaimRecord } from "./derive";
-import { ShortTime } from "./parts";
 import { activityLimit, useRecentActivity, useSessions, useStepNames, useTaskMap } from "./queries";
 
 const actionIcons: Record<string, ReactNode> = {
@@ -132,7 +133,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   const agent = memberList.find((m) => m.name === name || m.id === name);
   const id = agent?.id ?? "";
   const detail = useMember(agent ? id : undefined);
-  const [sessionsQ] = useSessions(agent ? [id] : [], admin);
+  const sessionsQ = useSessions(id, admin && !!agent);
   const history = useRecentActivity({ member: id }, (e) => e.actor_id === id || claimHolder(e) === id, !!agent);
   const runnerSession = useRunnerSessions().data?.items.find((s) => s.member_id === id);
   const { run, dialog } = useAgentActions(agent);
@@ -147,7 +148,6 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
 
   const held = agentRows([agent], open.data ?? [], now)[0]?.held ?? [];
   const claims = withLive(claimsSince(history.entries, id, startOfDay(now)), held, now);
-  const sessions = sessionsQ?.data;
   const live = held[0] && liveClaim(held[0], now);
   const set = agent.agent?.model;
   const model = live?.model_label ?? set;
@@ -191,26 +191,18 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
             })
           )}
         </Property>
-        <Property label="Sessions" stack={(sessions?.length ?? 0) > 1}>
-          {admin && sessions ? (
-            sessions.length === 0 ? (
-              <Pill tone="dropped">No Session</Pill>
+        {!admin && (
+          // Only an admin may list another Member's Sessions; anyone sees the one holding the Claim.
+          <Property label="Session">
+            {live ? (
+              <Copy value={live.session_id} label="Session id" className="min-w-0">
+                <span className="font-mono text-[11.5px] [overflow-wrap:anywhere]">{live.session_id}</span>
+              </Copy>
             ) : (
-              sessions.map((s) => (
-                <span key={s.id} className="flex min-w-0 items-center gap-1.5">
-                  <SessionId id={s.id} />
-                  <span className="whitespace-nowrap text-muted-foreground">
-                    · open since <ShortTime at={s.started_at} className="text-sm" />
-                  </span>
-                </span>
-              ))
-            )
-          ) : live ? (
-            <SessionId id={live.session_id} />
-          ) : (
-            <span className="text-muted-foreground">None holding a Claim</span>
-          )}
-        </Property>
+              <span className="text-muted-foreground">None holding a Claim</span>
+            )}
+          </Property>
+        )}
         {model && (
           // The model the live Claim names, else the agent settings'; settings that name another follow it.
           <Property label="Model">
@@ -249,6 +241,25 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
       </PropertiesRail>
 
       {runnerSession && <RunnerSessionSection agent={agent} session={runnerSession} task={sessionTask} admin={admin} project={project} run={run} />}
+
+      {admin && (
+        <section aria-label="Sessions">
+          <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Sessions · {sessionsQ.data?.open ?? "…"}</h3>
+          <Refusal error={sessionsQ.error} />
+          {sessionsQ.data && (
+            <SessionsTable
+              member={agent}
+              sessions={sessionsQ.data}
+              held={heldClaims(held)}
+              runner={runnerSession}
+              taskTo={(key) => taskOverAgents(project, key)}
+              self={agent.id === me.member.id}
+              canClose
+              compact
+            />
+          )}
+        </section>
+      )}
 
       <section aria-label="Claims today">
         <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Claims today · {claims.length}</h3>
@@ -330,8 +341,8 @@ function RunnerSessionSection({
 }) {
   const navigate = useNavigate();
   return (
-    <section aria-label="Runner session">
-      <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Session now</h3>
+    <section aria-label="Runner">
+      <h3 className="pb-1.5 text-2xs font-medium tracking-[0.02em] text-muted-foreground">Runner</h3>
       <div className="flex flex-col rounded-md border">
         <SessionFacts session={session} agent={agent} className="min-h-9 border-b px-2.5 py-1.5" />
         {task && (

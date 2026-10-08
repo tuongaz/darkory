@@ -126,17 +126,17 @@ describe("Settings › a Member", () => {
       ...signedIn(),
       ...details,
       "GET /v1/members/:member/tokens": { items: tokens },
-      "GET /v1/members/:member/sessions": { items: sessions },
+      "GET /v1/members/:member/sessions": { items: sessions, open: 1, ended: 0 },
       "GET /v1/tasks": ({ query }) => ({ items: query.get("holder") === builder.id ? [held] : [] }),
       "POST /v1/members/:member/deactivate": { ...builder, deactivated_at: at },
     });
     renderApp("/settings/organisation/agents/m-builder");
     expect(await screen.findByRole("heading", { name: "builder" })).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Settings/Agents/builder");
-    // The Session says what it holds.
-    const session = await screen.findByRole("listitem", { name: "Session sess-builder-1" });
-    expect(within(session).getByText("Holding WEB-3")).toBeInTheDocument();
-    expect(within(session).getByText(/claude-opus-5-5/)).toBeInTheDocument();
+    // The Session says what it holds, and when its Heartbeat is due.
+    const session = await screen.findByRole("row", { name: "Session sess-builder-1" });
+    expect(await within(session).findByRole("link", { name: "WEB-3" })).toHaveAttribute("href", "/tasks/WEB-3");
+    expect(session).toHaveTextContent("Open");
     // Only the live token is listed.
     expect(screen.getByRole("listitem", { name: "Token seed" })).toBeInTheDocument();
     expect(screen.queryByRole("listitem", { name: "Token old" })).not.toBeInTheDocument();
@@ -151,6 +151,48 @@ describe("Settings › a Member", () => {
 
     await user.click(within(confirm).getByRole("button", { name: "Deactivate" }));
     await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === "/v1/members/m-builder/deactivate")).toBe(true));
+  });
+
+  it("shows an agent's Sessions as a table — the Runner's state on the one it works through — and closes one after asking", async () => {
+    const user = userEvent.setup();
+    const worker = "01a11b2b-acc8-7d90-bf1c-5b0a842120d6";
+    const reader = "01a11b2b-acc2-7854-bf88-edcaa71f4218";
+    const open: Session[] = [
+      { id: worker, member_id: builder.id, kind: "token", token_id: "t-live", started_at: at, last_seen_at: at },
+      { id: reader, member_id: builder.id, kind: "token", token_id: "t-live", started_at: at, last_seen_at: at },
+    ];
+    const gone: Session = { id: "01a119a8-a8b8-7d94-9853-d4737e9effdc", member_id: builder.id, kind: "token", started_at: at, last_seen_at: at, ended_at: at };
+    const holding = task(3, { claim: { id: "c-1", task_id: "k-3", holder_id: builder.id, session_id: worker, started_at: at, expires_at: later(15), heartbeat_timeout_seconds: 900 } });
+    const api = mockApi({
+      ...signedIn(),
+      ...details,
+      "GET /v1/members/:member/tokens": { items: tokens },
+      "GET /v1/members/:member/sessions": ({ query }) => (query.get("state") === "ended" ? { items: [gone], open: 2, ended: 1 } : { items: open, open: 2, ended: 1 }),
+      "GET /v1/tasks": ({ query }) => ({ items: query.get("holder") === builder.id ? [holding] : [] }),
+      "GET /v1/runner/sessions": {
+        items: [{ task_id: "k-3", member_id: builder.id, session_id: worker, host: "mac-mini", started_at: at, state: "running", state_since: at, log_path: "/tmp/log" }],
+        runner: true,
+      },
+      "POST /v1/sessions/:session/close": ({ params }) => ({ session: { ...open[1], id: params.session, closed_at: at, ended_at: at }, claims_ended: 0 }),
+    });
+    renderApp("/settings/organisation/agents/m-builder");
+    const table = await screen.findByRole("table", { name: "Sessions of builder" });
+    expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["ID", "Started", "Last seen", "State", "Holds", "Actions"]);
+    const working = within(table).getByRole("row", { name: `Session ${worker}` });
+    expect(within(working).getByText(worker)).toBeInTheDocument();
+    expect(await within(working).findByText("Running")).toBeInTheDocument();
+    expect(await within(working).findByRole("link", { name: "WEB-3" })).toBeInTheDocument();
+    expect(within(table).getByRole("row", { name: `Session ${reader}` })).not.toHaveTextContent("Running");
+
+    await user.click(screen.getByRole("button", { name: "Show ended (1)" }));
+    expect(await within(table).findByRole("row", { name: `Session ${gone.id}` })).toHaveTextContent("Ended");
+
+    await user.click(within(table).getByRole("button", { name: `More for Session ${reader}` }));
+    await user.click(await screen.findByRole("menuitem", { name: "Close Session" }));
+    const confirm = await screen.findByRole("dialog", { name: "Close this Session?" });
+    expect(confirm).toHaveTextContent(reader);
+    await user.click(within(confirm).getByRole("button", { name: "Close Session" }));
+    await waitFor(() => expect(api.calls.some((c) => c.method === "POST" && c.path === `/v1/sessions/${reader}/close` && c.query.get("member") === builder.id)).toBe(true));
   });
 
   it("puts a Member in a Project and takes them out of one, by its key", async () => {
@@ -251,7 +293,7 @@ describe("Settings › Account", () => {
     const api = mockApi({
       ...signedIn(),
       "GET /v1/members/:member/tokens": { items: tokens },
-      "GET /v1/members/:member/sessions": { items: sessions },
+      "GET /v1/members/:member/sessions": { items: sessions, open: 2, ended: 0 },
     });
     renderApp("/settings/account");
     const profile = await screen.findByRole("group", { name: "Profile" });
@@ -262,16 +304,17 @@ describe("Settings › Account", () => {
     const token = await screen.findByRole("listitem", { name: "Token init" });
     expect(within(token).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["More for token init"]);
     // Besides its id, which copies itself, a Session has one action.
-    const actions = (row: HTMLElement) => within(row).getAllByRole("button").filter((b) => !b.getAttribute("aria-label")?.startsWith("Copy the Session id"));
-    const here = await screen.findByRole("listitem", { name: "This browser" });
+    const actions = (row: HTMLElement) => within(row).getAllByRole("button").filter((b) => b.getAttribute("aria-label") !== "Copy Session id");
+    const here = await screen.findByRole("row", { name: "This browser" });
     expect(actions(here).map((b) => b.textContent)).toEqual(["Log out"]);
-    const other = screen.getByRole("listitem", { name: "Session browser-2" });
+    const other = screen.getByRole("row", { name: "Session browser-2" });
     expect(actions(other).map((b) => b.getAttribute("aria-label"))).toEqual(["More for Session browser-2"]);
     expect(screen.getAllByRole("button", { name: /Log out/ })).toHaveLength(1);
 
     await user.click(within(other).getByRole("button", { name: "More for Session browser-2" }));
     await user.click(await screen.findByRole("menuitem", { name: "Close Session" }));
-    const confirm = await screen.findByRole("dialog", { name: "Close browser-2?" });
+    const confirm = await screen.findByRole("dialog", { name: "Close this Session?" });
+    expect(confirm).toHaveTextContent("Closesbrowser-2");
     expect(api.calls.some((c) => c.method !== "GET" && c.path.includes("browser-2"))).toBe(false);
     expect(within(confirm).getByRole("button", { name: "Close Session" })).toBeInTheDocument();
   });

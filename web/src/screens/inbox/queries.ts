@@ -2,7 +2,7 @@ import { useQueries, useQuery, useQueryClient, type QueryKey } from "@tanstack/r
 import { useEffect, useMemo, useRef } from "react";
 import { api, call, type Activity, type ActivityKind, type ActivityPage, type Project, type Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
-import { keys, newestActivity, useDirectory, useTasks } from "@/api/queries";
+import { keys, newestActivity, useDirectory, useMemberSessions, useTasks } from "@/api/queries";
 import { useWorkflows } from "@/components/filters/useTaskFilter";
 
 // The reads of the Inbox, My work, Agents and Activity. Each key sits under the root that names
@@ -74,19 +74,13 @@ export function useMemberDetails(ids: string[]) {
 }
 
 /**
- * Each Member's open Sessions. Only an admin may read another Member's, so `enabled` is the
- * caller's admin mark. A Session opens without Activity, but a Claim names the Session that made
- * it, so Task entries mark these stale too.
+ * A Member's open Sessions, with the counts of open and ended ones. Only an admin may read another
+ * Member's, so `enabled` is the caller's admin mark. A Session opens without Activity, but a Claim
+ * names the Session that made it, so Task entries mark these stale too.
  */
-export function useSessions(ids: string[], enabled: boolean) {
-  useStaleOn(["member"], (e) => enabled && e.subject_type === "task");
-  return useQueries({
-    queries: ids.map((id) => ({
-      queryKey: keys.memberSessions(id),
-      queryFn: () => call(api.GET("/v1/members/{member}/sessions", { params: { path: { member: id }, query: { limit: 500 } } })).then((r) => r.items),
-      enabled,
-    })),
-  });
+export function useSessions(id: string, enabled: boolean) {
+  useStaleOn(["member", id, "sessions"], (e) => enabled && e.subject_type === "task");
+  return useMemberSessions(id, enabled);
 }
 
 /**

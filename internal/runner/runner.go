@@ -219,9 +219,16 @@ func New(cfg Config) (*Runner, error) {
 	return r, nil
 }
 
-// Run works until ctx ends, then ends the sessions it is running and returns. It returns an error
-// when none of its tokens belongs to an agent it may run.
+// Run works until ctx ends, then ends the sessions it is running, closes its Darkory Sessions and
+// returns. It returns an error when none of its tokens belongs to an agent it may run.
 func (r *Runner) Run(ctx context.Context) error {
+	defer func() {
+		// Every Session the runner opened ends with it: each agent's own (the reader's among them);
+		// the agents' loops close theirs before wg.Wait returns.
+		for _, a := range r.agents {
+			r.closeSession(ctx, a.rec, "the agent's Darkory Session", "agent", a.name())
+		}
+	}()
 	for _, tok := range r.cfg.Tokens {
 		rec, err := r.dial(tok.Secret, remote.NewSessionID())
 		if err != nil {
@@ -235,14 +242,18 @@ func (r *Runner) Run(ctx context.Context) error {
 			r.log.Warn("skipped a token the Install does not accept", "token", tok.Name, "err", err)
 			continue
 		}
+		// A token the runner does not run with has still started a Session, reading `me`: close it.
 		if me.Member.Kind != client.Agent {
 			r.log.Warn("skipped a token of a human Member; the runner runs agents only", "token", tok.Name, "member", me.Member.Name)
+			r.closeSession(ctx, rec, "a skipped token's Session")
 			continue
 		}
 		if len(r.cfg.Members) > 0 && !slices.Contains(r.cfg.Members, me.Member.Name) {
+			r.closeSession(ctx, rec, "a skipped token's Session")
 			continue
 		}
 		if slices.ContainsFunc(r.agents, func(a *agent) bool { return a.me.Member.ID == me.Member.ID }) {
+			r.closeSession(ctx, rec, "a skipped token's Session")
 			continue
 		}
 		r.agents = append(r.agents, &agent{r: r, token: tok.Secret, me: *me, rec: rec})
@@ -274,6 +285,16 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 	wg.Wait()
 	return nil
+}
+
+// closeSession closes a Darkory Session the runner is done with, even once ctx has ended, so a
+// runner that stops leaves none open. A Session the Install has already ended needs nothing.
+func (r *Runner) closeSession(ctx context.Context, rec Record, what string, attrs ...any) {
+	cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	if err := rec.CloseSession(cctx); err != nil && !stopped(err) && !refusedBy(err, client.ErrorCodeNotFound) {
+		r.log.Warn("closing "+what, append(attrs, "session", rec.Session(), "err", err)...)
+	}
 }
 
 func (r *Runner) hostName() string {

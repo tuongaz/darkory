@@ -6,7 +6,7 @@ import { matchRecords } from "@/app/search";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { initials, shortSessionId, tintOf } from "@/lib/members";
-import { untilText } from "@/lib/time";
+import { agoText, untilText } from "@/lib/time";
 import { EmptyState } from "./EmptyState";
 import { FormDialog, FormRow, FormRows } from "./FormDialog";
 import { HeartbeatMeter } from "./HeartbeatMeter";
@@ -147,6 +147,14 @@ describe("HeartbeatMeter", () => {
     expect(untilText(61_000)).toBe("2 min");
     expect(untilText(15 * 60_000)).toBe("15 min");
     expect(untilText(3 * 3600_000)).toBe("3 h");
+  });
+
+  it("says how long ago, short enough for a narrow column", () => {
+    expect(agoText(-200)).toBe("0 s ago");
+    expect(agoText(40_000)).toBe("40 s ago");
+    expect(agoText(3 * 60_000)).toBe("3 min ago");
+    expect(agoText(5 * 3600_000)).toBe("5 h ago");
+    expect(agoText(3 * 86400_000)).toBe("3 d ago");
   });
 });
 

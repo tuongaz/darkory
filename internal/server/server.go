@@ -46,7 +46,7 @@ type Server struct {
 	// bodyTimeout bounds how long a request body may take to arrive.
 	bodyTimeout time.Duration
 	// browser bounds how long a browser Session lasts; its cookie lives as long as Lifetime.
-	browser auth.BrowserLimits
+	browser auth.SessionLimits
 	// streams and nexts count each Member's open Activity streams and waiting `next` calls.
 	streams, nexts *waiting
 	// update is the last check for a newer release, for /v1/health; nil until one ran.
@@ -91,9 +91,9 @@ type Options struct {
 	// BodyReadTimeout bounds how long a request body may take to arrive; an Evidence upload also
 	// gets time in proportion to its size. Defaults to DefaultBodyReadTimeout.
 	BodyReadTimeout time.Duration
-	// BrowserSessions bound how long a browser Session lasts, unused and in all. Zero fields take
-	// auth.DefaultBrowserLimits'.
-	BrowserSessions auth.BrowserLimits
+	// Sessions bound how long a Session lasts without being closed: a browser Session unused and
+	// in all, a token Session idle. Zero fields take auth.DefaultSessionLimits'.
+	Sessions auth.SessionLimits
 	// MaxWaiting is how many Activity streams, and separately how many waiting `next` calls, one
 	// Member may have open on this process at once. Defaults to DefaultMaxWaiting.
 	MaxWaiting int
@@ -128,19 +128,22 @@ func New(st *store.Store, o Options) *Server {
 	if o.BodyReadTimeout <= 0 {
 		o.BodyReadTimeout = DefaultBodyReadTimeout
 	}
-	if o.BrowserSessions.Idle <= 0 {
-		o.BrowserSessions.Idle = auth.DefaultBrowserLimits.Idle
+	if o.Sessions.Idle <= 0 {
+		o.Sessions.Idle = auth.DefaultSessionLimits.Idle
 	}
-	if o.BrowserSessions.Lifetime <= 0 {
-		o.BrowserSessions.Lifetime = auth.DefaultBrowserLimits.Lifetime
+	if o.Sessions.Lifetime <= 0 {
+		o.Sessions.Lifetime = auth.DefaultSessionLimits.Lifetime
+	}
+	if o.Sessions.TokenIdle <= 0 {
+		o.Sessions.TokenIdle = auth.DefaultSessionLimits.TokenIdle
 	}
 	if o.MaxWaiting <= 0 {
 		o.MaxWaiting = DefaultMaxWaiting
 	}
 	s := &Server{
 		store:       st,
-		core:        core.New(st, o.Clock, o.Wake, o.Log).WithBrowserLimits(o.BrowserSessions),
-		auth:        auth.New(st, o.Clock).WithBrowserLimits(o.BrowserSessions),
+		core:        core.New(st, o.Clock, o.Wake, o.Log).WithSessionLimits(o.Sessions),
+		auth:        auth.New(st, o.Clock).WithSessionLimits(o.Sessions),
 		wake:        o.Wake,
 		log:         o.Log,
 		publicURL:   o.PublicURL,
@@ -151,7 +154,7 @@ func New(st *store.Store, o Options) *Server {
 		files:       o.Files,
 		maxFile:     o.MaxFileSize,
 		bodyTimeout: o.BodyReadTimeout,
-		browser:     o.BrowserSessions,
+		browser:     o.Sessions,
 		streams:     newWaiting("Activity streams", o.MaxWaiting),
 		nexts:       newWaiting("waiting next calls", o.MaxWaiting),
 	}

@@ -255,7 +255,7 @@ function watchErrors(page: Page): string[] {
 
 const pages: { slug: string; path: string; ready: (page: Page) => Promise<void> }[] = [
   { slug: "shell-inbox", path: "/inbox", ready: async (p) => void (await p.getByRole("navigation", { name: "Breadcrumb" }).waitFor({ state: "attached" })) },
-  { slug: "settings-account", path: "/settings/account", ready: async (p) => void (await p.getByRole("listitem", { name: "This browser" }).waitFor({ state: "attached" })) },
+  { slug: "settings-account", path: "/settings/account", ready: async (p) => void (await p.getByRole("row", { name: "This browser" }).waitFor({ state: "attached" })) },
   { slug: "settings-members", path: "/settings/organisation/members", ready: async (p) => void (await p.getByRole("row", { name: "priya.r" }).getByText("Bookkeeping").waitFor({ state: "attached" })) },
   { slug: "settings-member", path: "/settings/organisation/members/m-bob", ready: async (p) => void (await p.getByRole("heading", { name: "bob" }).waitFor({ state: "attached" })) },
   { slug: "settings-agents", path: "/settings/organisation/agents", ready: async (p) => void (await p.getByRole("table", { name: "Agents" }).waitFor({ state: "attached" })) },

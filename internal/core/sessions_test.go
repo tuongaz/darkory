@@ -64,7 +64,7 @@ func TestBrowserSessionsExpire(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		sessions, err := f.svc.ListSessions(ctx, f.admin, "ada", 0, "")
+		sessions, err := f.svc.ListSessions(ctx, f.admin, "ada", "", 0, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestBrowserSessionsExpire(t *testing.T) {
 			t.Fatal("a browser Session unused for 30 days still works")
 		}
 		f.session(ada, "ada-1")
-		sessions, err = f.svc.ListSessions(ctx, f.admin, "ada", 0, "")
+		sessions, err = f.svc.ListSessions(ctx, f.admin, "ada", "", 0, "")
 		if err != nil || len(sessions.Items) != 1 || sessions.Items[0].Kind != "token" || sessions.Items[0].ExpiresAt != nil {
 			t.Fatalf("open Sessions %+v, %v", sessions.Items, err)
 		}
@@ -116,15 +116,15 @@ func TestListSessions(t *testing.T) {
 			f.clock.Advance(time.Minute)
 			f.session(bob.MemberID, id)
 		}
-		page, err := f.svc.ListSessions(ctx, bob, "bob", 2, "")
+		page, err := f.svc.ListSessions(ctx, bob, "bob", "", 2, "")
 		if err != nil || len(page.Items) != 2 || page.Items[0].ID != "bob-3" || page.NextCursor == "" {
 			t.Fatalf("first page %+v, %v", page, err)
 		}
-		rest, err := f.svc.ListSessions(ctx, f.admin, "bob", 2, page.NextCursor)
+		rest, err := f.svc.ListSessions(ctx, f.admin, "bob", "", 2, page.NextCursor)
 		if err != nil || len(rest.Items) != 1 || rest.Items[0].ID != "bob-1" || rest.NextCursor != "" {
 			t.Fatalf("second page %+v, %v", rest, err)
 		}
-		_, err = f.svc.ListSessions(ctx, eve, "bob", 0, "")
+		_, err = f.svc.ListSessions(ctx, eve, "bob", "", 0, "")
 		wantCode(t, err, core.CodeForbidden)
 	})
 }
@@ -196,7 +196,7 @@ func TestDeactivatingAMemberStopsEverythingTheyHold(t *testing.T) {
 		if found, err := f.svc.MembersByEmail(ctx, email); err != nil || len(found) != 0 {
 			t.Fatalf("email sign-in finds %+v, %v", found, err)
 		}
-		if sessions, err := f.svc.ListSessions(ctx, f.admin, "alice", 0, ""); err != nil || len(sessions.Items) != 0 {
+		if sessions, err := f.svc.ListSessions(ctx, f.admin, "alice", "", 0, ""); err != nil || len(sessions.Items) != 0 {
 			t.Fatalf("open Sessions %+v, %v", sessions.Items, err)
 		}
 		if got := f.activityKinds(f.a.MemberID); got[len(got)-1] != "member.deactivated" {

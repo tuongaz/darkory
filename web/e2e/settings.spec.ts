@@ -306,9 +306,13 @@ test("an agent: its token shown once; deactivating it ends its live Claim and it
 
   await test.step("its page shows the Session holding it; Deactivate counts what it stops", async () => {
     await page.reload();
-    const session = page.getByRole("listitem", { name: "Session sess-builder-1" });
-    await expect(session).toContainText(`Holding ${key}`);
-    await expect(session).toContainText("claude-opus-5-5");
+    const session = page.getByRole("row", { name: "Session sess-builder-1" });
+    await expect(session.getByRole("link", { name: key })).toBeVisible();
+    await expect(session).toContainText("Open");
+    // Its whole id, with a copy button that shows on hover.
+    const copy = session.getByRole("button", { name: "Copy Session id" });
+    await session.getByText("sess-builder-1").hover();
+    await expect(copy).toBeVisible();
     await page.getByRole("button", { name: "More for builder-1" }).click();
     await page.getByRole("menuitem", { name: "Deactivate" }).click();
     const confirm = page.getByRole("dialog", { name: "Deactivate builder-1?" });
@@ -336,7 +340,7 @@ test("an agent: its token shown once; deactivating it ends its live Claim and it
 
   await test.step("Account: my token, this browser, the CLI line", async () => {
     await page.goto(`${base}/settings/account`);
-    await expect(page.getByRole("listitem", { name: "This browser" }).getByRole("button", { name: "Log out" })).toBeVisible();
+    await expect(page.getByRole("row", { name: "This browser" }).getByRole("button", { name: "Log out" })).toBeVisible();
     await expect(page.getByRole("button", { name: /^More for token / }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Revoke" })).toHaveCount(0);
     await expect(page.getByText("darkory login ada")).toBeVisible();
@@ -451,7 +455,7 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
       ["/settings/projects/WEB/general", () => page.getByRole("group", { name: "General settings of Web" })],
       ["/settings/organisation/members", () => page.getByRole("table", { name: "Members" })],
       ["/settings/organisation/agents", () => page.getByRole("table", { name: "Agents" })],
-      ["/settings/account", () => page.getByRole("listitem", { name: "This browser" })],
+      ["/settings/account", () => page.getByRole("row", { name: "This browser" })],
     ];
     for (const [path, shown] of screens) {
       await page.goto(`${base}${path}`);

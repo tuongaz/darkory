@@ -221,7 +221,7 @@ export function signedIn(member: Member = ada): Record<string, Handler> {
       return m ? memberDetail(m) : refuse(404, "not_found", `No Member ${params.member}`);
     },
     "GET /v1/members/:member/tokens": { items: [] },
-    "GET /v1/members/:member/sessions": { items: [] },
+    "GET /v1/members/:member/sessions": { items: [], open: 0, ended: 0 },
     "GET /v1/projects": { items: projects },
     "GET /v1/projects/:project": ({ params }) => {
       const p = find(params.project);
