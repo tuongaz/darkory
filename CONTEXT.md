@@ -19,7 +19,7 @@ The picture shown for a Member in place of their initials: a File uploaded as on
 _Avoid_: Profile picture, photo, icon
 
 **Project**:
-A body of work with the Members, agents and humans, who do it: its own key, Workflow, Labels, Rank and Workspaces. Every Task belongs to exactly one Project and is taken by that Project's Members, with the exceptions listed under Takeable. It is the context the web app is always in.
+A body of work with the Members, agents and humans, who do it: its own key, Workflows, Labels, Rank and Workspaces. Every Task belongs to exactly one Project and is taken by that Project's Members, with the exceptions listed under Takeable. It is the context the web app is always in.
 _Avoid_: Team, workspace, board, space
 
 **Skill**:
@@ -37,7 +37,7 @@ The part of Darkory that holds the shared record of work. Members pull from it; 
 _Avoid_: Orchestrator, scheduler, runner
 
 **Task**:
-The unit of work in a Project: filed with a title, an Owner, a Rank, and any Labels. A Task with no Subtasks is at one Step of its Project's Workflow, where it is claimed, worked, and advanced by its holder. Everything said of a Task holds for a Subtask too.
+The unit of work in a Project: filed with a title, an Owner, a Rank, and any Labels. A Task with no Subtasks is at one Step of one of its Project's Workflows, where it is claimed, worked, and advanced by its holder. Everything said of a Task holds for a Subtask too.
 _Avoid_: Issue, ticket, job, feature, epic, story, project
 
 **Subtask**:
@@ -49,15 +49,15 @@ A Task that has Subtasks. It is at no Step, is never claimed or takeable, and ne
 _Avoid_: Epic, feature, container, group
 
 **Workflow**:
-A Project's Steps and the Connectors between them: one per Project, drawn on a canvas and shown as the columns of its board. A filed Task starts at the Step the filer names, by default the first Step whose Skill is the Project's own work rather than one Darkory files its Subtasks at.
-_Avoid_: Pipeline, process, scheme, status list
+A named set of Steps and the Connectors between them, drawn on a canvas and shown as the columns of its own board. A Project has one or more; a Connector may lead into a Step of another Workflow of the same Project, or into Done. A Task's Workflow is that of the Step it is at. A filed Task starts at the Step the filer names, by default the Project's first Step whose Skill is its own work rather than one Darkory files its Subtasks at.
+_Avoid_: Pipeline, process, scheme, status list, lane, swimlane
 
 **Step**:
 A place in a Workflow, named by the Project, carrying at most one Skill: a Task at a Step is taken by a Member with that Skill. A Step without a Skill is a hold: no one is offered a Task there, and a human moves it on. Whether the Task at a Step is waiting or being worked follows from its Claim, not from the Step. A Task aimed at a Member by name waits with that Member instead of at a Step. The Steps carrying the breakdown, acceptance and retro Skills are where Darkory files the Subtasks it owns about a Parent as a whole.
 _Avoid_: Status, state, column, stage, phase
 
 **Connector**:
-A named way out of a Step into another Step, or into Done: the outcome the holder names when they advance the Task. Advancing into Done completes the Task; Dropped needs no Connector.
+A named way out of a Step into another Step, of its Workflow or of another Workflow of the same Project, or into Done: the outcome the holder names when they advance the Task. Advancing into Done completes the Task; Dropped needs no Connector.
 _Avoid_: Transition, edge, arrow, rule
 
 **Claim**:
@@ -125,11 +125,11 @@ An entry in a Task's running log, written by whoever is working it, so context s
 _Avoid_: Comment, thread, message
 
 **Breakdown**:
-The Subtask Darkory files under a Task filed with Break down on, at the Project's Step that carries the breakdown Skill. Whoever takes it files the Task's other Subtasks. A Project whose Workflow has no such Step offers no Break down.
+The Subtask Darkory files under a Task filed with Break down on, at the Project's Step that carries the breakdown Skill. Whoever takes it files the Task's other Subtasks. A Project whose Workflows have no such Step offers no Break down.
 _Avoid_: Planning, decomposition, grooming
 
 **Acceptance**:
-The Subtask Darkory files under a Parent when its last other Subtask ends Done, at the Project's Step that carries the acceptance Skill, so that a Member, agent or human, confirms the whole before it is called done. Completing it lets the Parent complete, itself with Auto-complete, else by its Owner; filing more Subtasks instead has it filed again when they end. A Parent's Owner may turn it off when filing; a Project whose Workflow has no such Step files none, and a Parent is then considered done when its Subtasks are.
+The Subtask Darkory files under a Parent when its last other Subtask ends Done, at the Project's Step that carries the acceptance Skill, so that a Member, agent or human, confirms the whole before it is called done. Completing it lets the Parent complete, itself with Auto-complete, else by its Owner; filing more Subtasks instead has it filed again when they end. A Parent's Owner may turn it off when filing; a Project whose Workflows have no such Step files none, and a Parent is then considered done when its Subtasks are.
 _Avoid_: Sign-off, UAT, final review, gate, definition of done
 
 **Observation**:
@@ -137,7 +137,7 @@ An entry on a Task, marked worked or didn't work, recording who wrote it and the
 _Avoid_: Lesson, learning, feedback
 
 **Retrospective**:
-The Subtask Darkory files under a Parent when it ends, at the Project's Step that carries the retro Skill. It reads the Parent's Observations, may propose a new Skill version, and files new Tasks for problems found. It is the only open Subtask an ended Parent can hold, apart from questions that block it. A Project whose Workflow has no such Step files none.
+The Subtask Darkory files under a Parent when it ends, at the Project's Step that carries the retro Skill. It reads the Parent's Observations, may propose a new Skill version, and files new Tasks for problems found. It is the only open Subtask an ended Parent can hold, apart from questions that block it. A Project whose Workflows have no such Step files none.
 _Avoid_: Retro meeting, post-mortem, review
 
 **Skill version**:
