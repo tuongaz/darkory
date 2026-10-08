@@ -533,6 +533,29 @@ func TestRunnerMergeNoteReadsAnEarlierReview(t *testing.T) {
 	}
 }
 
+// A question aimed at a Member is answered in Notes: its session has no checkout, no branch is
+// made for it, and its completion merges nothing.
+func TestRunnerGivesAQuestionNoBranch(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("lead", "complete")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+	f.ok("ada", "file", "--blocks", "WEB-1", "--aim", "lead", "--title", "Which cart?")
+	f.run("lead")
+
+	eventually(t, 30*time.Second, "the question answered", func() bool { return f.task("WEB-2").Task.State == client.TaskStateDone })
+	if branches, _ := branchesWithPrefix(t.Context(), f.repo, taskPrefix("WEB-2")); len(branches) != 0 {
+		t.Fatalf("a branch was made for the question: %v", branches)
+	}
+	if b, err := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-2", "pane.log")); err != nil || strings.Contains(string(b), "git ") ||
+		!strings.Contains(string(b), "as complete in []") {
+		t.Fatalf("the question's session, which should have had no checkout: %v\n%s", err, b)
+	}
+	if n := notesOf(f.task("WEB-2")); strings.Contains(n, "Merged") || strings.Contains(n, "merged into") {
+		t.Fatalf("the question's completion merged:\n%s", n)
+	}
+}
+
 // A Task with no Parent works on a branch from main, and its advance into Done merges it into
 // main; no Parent's branch is made.
 func TestRunnerMergesATaskStandingAlone(t *testing.T) {

@@ -87,13 +87,14 @@ func (r *Runner) isReview(ctx context.Context, rec Record, sk client.Skill) bool
 }
 
 // merged says whether a Task of kind has its branch merged when it ends Done: worked Tasks and an
-// Acceptance, whose fixes are work like any other. A Breakdown's or a Retrospective's branch only
+// Acceptance, whose fixes are work like any other. A Task aimed at a Member, a question, has no
+// branch: its answer is its Notes. A Breakdown's or a Retrospective's branch only
 // holds what its agent read.
 func merged(kind client.TaskKind) bool { return kind == client.Work || kind == client.Acceptance }
 
 // completed merges the branch of a Task that just ended Done.
 func (r *Runner) completed(ctx context.Context, a client.Activity, d *client.TaskDetail) {
-	if !merged(d.Task.Kind) {
+	if !merged(d.Task.Kind) || d.Task.AimedAtID != nil {
 		return
 	}
 	rec := r.reader
