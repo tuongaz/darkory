@@ -75,7 +75,7 @@ export function InstallPage() {
             help={
               runner.data?.runner === false
                 ? "Agents work through their own tokens. darkory serve starts one beside the Tracker unless --runner=off."
-                : "It starts the sessions of agents with Runner settings; see Agents."
+                : "It starts the Shifts of agents with Runner settings; see Agents."
             }
           >
             <Loaded query={runner} loading={<Skeleton className="h-4 w-24" />}>
@@ -83,7 +83,7 @@ export function InstallPage() {
                 r.runner ? (
                   <>
                     <Pill tone="done">Attached</Pill>
-                    <span className="text-muted-foreground">{count(r.items.length, "session")} running</span>
+                    <span className="text-muted-foreground">{count(r.items.length, "Shift")} running</span>
                   </>
                 ) : (
                   <Pill tone="dropped">Not attached</Pill>

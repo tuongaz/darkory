@@ -158,7 +158,7 @@ function DefaultWorkspaceRow({ project, admin }: { project: Project; admin: bool
   const value = save.isPending ? save.variables : (project.default_workspace_id ?? none);
   const list = workspaces.data ?? [];
   const chosen = list.find((w) => w.id === value);
-  const help = "Where the sessions of its Tasks work when a Task names none; a Subtask works where its Parent does.";
+  const help = "Where the Shifts of its Tasks work when a Task names none; a Subtask works where its Parent does.";
   if (!admin) {
     return (
       <SettingsRow label="Default Workspace" help={help}>

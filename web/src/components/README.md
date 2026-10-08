@@ -10,7 +10,7 @@ screens, each in its own folder. Use these pieces rather than drawing your own, 
 | Folder | Owner | Pages it exports from `index.tsx` |
 |---|---|---|
 | `src/screens/board/` | M4b Tasks | `TasksPage` (`/projects/:key/tasks?view=list\|board`), `BoardDialogs` (File a Task, for the `file-task` intent; mounted once by the shell) |
-| `src/screens/task/` | M4b Task | `TaskPage` (`/tasks/:task`), `TaskPeek` (`?task=<key>` over any page). Both must call `useReportProject(task.project_id)`. The Session panel, its terminal and `terminal.ts` are already here. |
+| `src/screens/task/` | M4b Task | `TaskPage` (`/tasks/:task`), `TaskPeek` (`?task=<key>` over any page). Both must call `useReportProject(task.project_id)`. The Shift panel, its terminal and `terminal.ts` are already here. |
 | `src/screens/workflow/` | M4c Workflow | `WorkflowPage` (`/projects/:key/workflow`, live), `WorkflowSettingsPage` (`/settings/projects/:key/workflow`, editing, drawn inside Settings' frame) |
 | `src/screens/inbox/` | M4d Inbox | `InboxPage` (`/inbox`, after the Install checklist), `MyWorkPage` (`/my-work`), `AgentsPage` (`/projects/:key/agents`, `?agent=<name>` opens one), `ActivityPage` (`/projects/:key/activity`) |
 | `src/screens/settings/` | M4a Settings | `SettingsLayout` (`/settings/*`, its own nav), the Account, Organisation and Project pages |
@@ -101,7 +101,7 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 - **Peek** (`@/app/peek`): `usePeekLink()(key)` is a `To` for the current page with `?task=key`
   added (other parameters stay); link a row to it. The shell mounts `TaskPeek` while the parameter
   is there; `usePeek()` gives `{ taskKey, close }`. A link with the hash `sessionAnchor`
-  (`#session`) opens the Task scrolled to its Session panel, and the location state
+  (`#session`) opens the Task scrolled to its Shift panel, and the location state
   `{ join: true }` joins an admin to its terminal (the agent's peek's Join).
 - **Toasts**: `import { toast } from "sonner"`; the shell mounts the Toaster. A refused drag is a
   toast naming the rule ("Only builder, or whoever may take it back, moves WEB-17").
@@ -113,7 +113,7 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
   it and returns the focus to its row, and with the peek open J and K move it along the list. They
   are ignored while typing, while a dialog or a menu is open, and while a card is carried; the
   peek is not modal and does not count. An element marked `ownsKeysAttr` (`data-owns-keys`,
-  `@/lib/keys`), the Session panel's terminal, takes every key while it has the focus, ⌘K and Esc
+  `@/lib/keys`), the Shift panel's terminal, takes every key while it has the focus, ⌘K and Esc
   included: the shell ignores them and the Peek does not close.
 - **Selection** (`@/app/selection`): a page joins the walk by marking each Task row or card
   `data-task={key}` inside `#main`, in the order it shows them, and drawing the ring
@@ -178,8 +178,8 @@ Skill with its version 1 included.
 
 | Component | Kit | Use |
 |---|---|---|
-| `MemberAvatar member size working card` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Every Member round, initials on one of eight muted tints picked by its name (`tintOf` in `@/lib/members`), so two "RT"s differ, in a ring: a plain line for a human, the AI gradient (`--agent-gradient`) for an agent (`.avatar-tint` in `globals.css`); named for screen readers ("builder-1 (agent)"), `data-kind` says which. `working` is for a standalone mark (Agents page, a canvas or graph node) whose Member works: `running` turns an agent's ring (1.6 s), `waiting` / `stalled` / `ending` stop it amber / red / grey, `held` (a human's live Claim) is a still ring in the human ink. Reduced motion stops the turning. A row or a card says the same with its WorkGlyph instead. A mark whose Member has an `id` opens their hover card (`MemberCard`: kind and Admin, the Tasks they hold and their session state for how long, Skills, an agent's model, Reports to, Reports, Projects, an admin's Open profile) after 300 ms of hover, on focus or on a tap; standing alone it is a tab stop, inside a button or link it opens on hover only, inside a menu option or picker row never. Pass `card={false}` for a picker's icon or the Member's own page; `MemberCards` (`memberCards.ts`) turns cards off for a subtree of samples. |
-| `WorkGlyph glyph label` | `.st` | A Task's derived state at 14px: `waiting` ○, `working` (an agent's AI-gradient ring turning while its session runs, stopped in the session's colour otherwise; a human's still ring with a dot), `blocked` ⊘, `hold` (dashed), `done` ✓, `dropped` ✕, `parent` (a progress ring: done green and dropped grey, of all its Subtasks). `glyphFor({state, held, holderKind, session, blocked, atHold, counts})` in `@/lib/work` picks it: ended, then Parent, then held, then blocked, then hold, then waiting; `taskWorkGlyph` in `@/work` reads it off a Task record. |
+| `MemberAvatar member size working card` | `.av` | `sm` 20px (rows, cards), `md` 28px (sidebar), `lg` 40px (a Member page). Every Member round, initials on one of eight muted tints picked by its name (`tintOf` in `@/lib/members`), so two "RT"s differ, in a ring: a plain line for a human, the AI gradient (`--agent-gradient`) for an agent (`.avatar-tint` in `globals.css`); named for screen readers ("builder-1 (agent)"), `data-kind` says which. `working` is for a standalone mark (Agents page, a canvas or graph node) whose Member works: `running` turns an agent's ring (1.6 s), `waiting` / `stalled` / `ending` stop it amber / red / grey, `held` (a human's live Claim) is a still ring in the human ink. Reduced motion stops the turning. A row or a card says the same with its WorkGlyph instead. A mark whose Member has an `id` opens their hover card (`MemberCard`: kind and Admin, the Tasks they hold and their Shift's state for how long, Skills, an agent's model, Reports to, Reports, Projects, an admin's Open profile) after 300 ms of hover, on focus or on a tap; standing alone it is a tab stop, inside a button or link it opens on hover only, inside a menu option or picker row never. Pass `card={false}` for a picker's icon or the Member's own page; `MemberCards` (`memberCards.ts`) turns cards off for a subtree of samples. |
+| `WorkGlyph glyph label` | `.st` | A Task's derived state at 14px: `waiting` ○, `working` (an agent's AI-gradient ring turning while its Shift runs, stopped in the Shift's colour otherwise; a human's still ring with a dot), `blocked` ⊘, `hold` (dashed), `done` ✓, `dropped` ✕, `parent` (a progress ring: done green and dropped grey, of all its Subtasks). `glyphFor({state, held, holderKind, session, blocked, atHold, counts})` in `@/lib/work` picks it: ended, then Parent, then held, then blocked, then hold, then waiting; `taskWorkGlyph` in `@/work` reads it off a Task record. |
 | `Pill tone` | `.badge` | `waiting · claimed · blocked · done · dropped · agent` (ink on a tint), `outline` (a Skill name), `secondary` (a Task kind, a fact), `destructive`. At most two words; a dimmed row's pill says why. |
 | `Key to?` | `.key` | `WEB-3` in mono; a link with `to`. |
 | `ProjectMark project size` | `.team-dot` | A Project's lettered square on the colour it stores (`color`, ADR 0018): one of twelve hues (`lib/projectHue`), the same hue in light and dark, its lightness and strength the theme's (`--mark-l`, `--mark-c`). `sm` 14px (rows, crumbs), `md` 20px, `lg` 28px. |
@@ -197,9 +197,9 @@ Skill with its version 1 included.
 | `CopyValue value what`, `SessionId id` | | `CopyValue`, older: a value in mono that copies itself on click, whole on hover (a branch). `SessionId` shows a Session id whole, in mono, in a `Copy`. Ids are short (22 characters, ADR 0017): an id never breaks across lines, and the places that show one leave room for all of it; only a container narrower still cuts it, whole on hover and on Copy. |
 | `LabelPill label`, `LabelPills ids labels`, `LabelDot label` | | A Label: its colour as a dot (the record's own colour, through the CSSOM), then its name in a round outline; `LabelPills` draws a Task's by name, those that still exist. Rows, cards, a Task's head, Settings › Labels, the Filter. |
 | `PillsFit names` | `.badge` | Skill pills on one line: as many whole ones as fit, then "+N" naming the rest on hover. |
-| `RunnerSessionBadge session bare state` | | The Runner's session on a Task as one line: "Session [Running] started 04:25 · mac-mini"; `bare` leaves out "Session" under a Session column, `state={false}` the pill beside a State column (Agents). |
-| `SessionFacts session agent` | | A runner session's facts in one line: the agent, started, its state, the host, `tmux dk-WEB-12` or "no tmux". |
-| `SessionStatePill state` | `.badge` | A runner session's state: Running (done tone: working, Heartbeats going), Waiting (claimed: its turn ended without a decision and the Runner nudges it, or it shows a dialog a person answers by joining), Stalled (blocked: no progress, no more Heartbeats, the Claim lapsing; the Heartbeat meter empties), Ending (dropped). Its title says which. |
+| `RunnerSessionBadge session bare state` | | The Runner's Shift on a Task as one line: "Shift [Running] started 04:25 · mac-mini"; `bare` leaves out "Shift" under a column that says it, `state={false}` the pill beside a State column (Agents). |
+| `SessionFacts session agent` | | A Shift's facts in one line: the agent, started, its state, the host, `tmux dk-WEB-12` or "no tmux". |
+| `SessionStatePill state` | `.badge` | A Shift's state: Running (done tone: working, Heartbeats going), Waiting (claimed: its turn ended without a decision and the Runner nudges it, or it shows a dialog a person answers by joining), Stalled (blocked: no progress, no more Heartbeats, the Claim lapsing; the Heartbeat meter empties), Ending (dropped). Its title says which. |
 
 ## Canvases (`src/components/workflow/`)
 
@@ -230,7 +230,7 @@ Add more with `npx shadcn@latest add <name>` from `web/`, then check its imports
 
 ## The Session panel and its terminal
 
-While the Runner (`CONTEXT.md`) runs an agent's session on a Task, the Task's peek and page show
+While the Runner (`CONTEXT.md`) runs an agent's Shift on a Task, the Task's peek and page show
 a **Session panel** (`src/screens/task/SessionPanel.tsx`) between the facts and the record:
 
 - **Facts** (`SessionFacts`), then the **shell line** `darkory join WEB-12` with a copy button (the
@@ -239,16 +239,16 @@ a **Session panel** (`src/screens/task/SessionPanel.tsx`) between the facts and 
   when a panel first shows one, 13px mono, coloured from the tokens (`--background`,
   `--foreground`, `--ring` for the selection) and following light and dark. Under it a 36px line
   says what it is doing: Connecting…, "Read-only · admins can join" (not an admin), "Read-only ·
-  Join to type" (an admin), "Joined · your keys go to the session", or "The terminal closed"
-  with Reconnect. A session without tmux opens no terminal and says it cannot be joined.
+  Join to type" (an admin), "Joined · your keys go to the Shift", or "The terminal closed"
+  with Reconnect. A Shift without tmux opens no terminal and says it cannot be joined.
 - **Join and Leave** (admins, the section's one button): Join reconnects read-write and gives
   the terminal the focus; Leave reconnects read-only. The ⋯ menu gains **Nudge** and **Stop
   session** for admins (`SessionActions.tsx`; Stop confirms, naming the Claim's release).
 - **Keys**: the terminal is marked `data-owns-keys`. Focused, it takes every key: watching, Esc
-  gives the focus back to the page; joined, Esc goes to the session. Unfocused, J, K, Esc and
+  gives the focus back to the page; joined, Esc goes to the Shift. Unfocused, J, K, Esc and
   the rest work as everywhere.
 
-The panel shows only while `useRunnerSessions` lists a session on the Task. That read
+The panel shows only while `useRunnerSessions` lists a Shift on the Task. That read
 (`GET /v1/runner/sessions`, `{items, runner}`) is asked every 5 s and on Task, Member and Session
 Activity; `runner: false` (no Runner attached) stops it for the page's life, since a Runner
 starts only with the server. Nudge, Stop and the terminal still answer `no_runner` then.
@@ -271,7 +271,7 @@ allows; xterm's own CSS is in `globals.css`. `csp.test.tsx` fails if the termina
 `e2e/session.spec.ts` draws truecolor output under the real policy with no console error. The same
 spec runs a real session (`startRunnerInstall` in `e2e/server.ts`: `serve --runner=on` with
 `tools/fakeagent` as builder's command): in tmux it watches, joins, types a line the agent reads
-and stops it; as a child process it shows the session cannot be joined and stops it.
+and stops it; as a child process it shows the Shift cannot be joined and stops it.
 
 ## Tokens
 

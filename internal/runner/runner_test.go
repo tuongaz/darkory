@@ -273,9 +273,9 @@ func evidenceNames(list []client.Evidence) []string {
 	return names
 }
 
-// sessionLogs counts the names that are a session log of agent on task, session-<KEY>-<agent>-<HHMMSS>.log.
+// sessionLogs counts the names that are a Shift log of agent on task, shift-<KEY>-<agent>-<HHMMSS>.log.
 func sessionLogs(names []string, task, agent string) int {
-	re := regexp.MustCompile(`^session-` + regexp.QuoteMeta(task) + `-` + regexp.QuoteMeta(agent) + `-[0-9]{6}\.log$`)
+	re := regexp.MustCompile(`^shift-` + regexp.QuoteMeta(task) + `-` + regexp.QuoteMeta(agent) + `-[0-9]{6}\.log$`)
 	n := 0
 	for _, name := range names {
 		if re.MatchString(name) {
@@ -612,13 +612,13 @@ func TestRunnerStartsTheNextSessionOnceTheEarlierEnds(t *testing.T) {
 	eventually(t, 30*time.Second, "WEB-1 done", func() bool { return f.task("WEB-1").Task.State == client.TaskStateDone })
 	eventually(t, 10*time.Second, "the sessions to end", func() bool { return len(r.Running()) == 0 })
 	log := f.log.String()
-	ended := logTime(t, log, "builder", "attached the session's log", "the Task is held by its next holder")
-	started := logTime(t, log, "reviewer", "started the session")
+	ended := logTime(t, log, "builder", "attached the Shift's log", "the Task is held by its next holder")
+	started := logTime(t, log, "reviewer", "started the Shift")
 	if gap := started.Sub(ended); gap < 0 || gap > 2*time.Second {
 		t.Fatalf("the reviewer's session started %s after the builder's ended", gap)
 	}
 	// The builder's log waited for the reviewer's Claim to end, and is on the Task.
-	if !strings.Contains(log, `msg="the Task is held by its next holder; the session's log is attached once it is free" component=runner agent=builder task=WEB-1`) {
+	if !strings.Contains(log, `msg="the Task is held by its next holder; the Shift's log is attached once it is free" component=runner agent=builder task=WEB-1`) {
 		t.Fatalf("the builder's log was not kept for later:\n%s", log)
 	}
 	eventually(t, 10*time.Second, "the builder's log on WEB-1", func() bool {
@@ -722,7 +722,7 @@ func TestRunnerReleasesASilentSession(t *testing.T) {
 				t.Fatalf("%s's release Notes: %q", c.task, released)
 			}
 			q := f.task((*d.Task.OpenBlockers)[0].Key)
-			if q.Task.Title != "The runner released "+c.task+" three times without a decision" || q.Task.AimedAtID == nil || *q.Task.AimedAtID != c.aim {
+			if q.Task.Title != "The Runner released "+c.task+" three times without a decision" || q.Task.AimedAtID == nil || *q.Task.AimedAtID != c.aim {
 				t.Fatalf("%s's question: %+v", c.task, q.Task)
 			}
 			if got := ptrValue(q.Task.ParentID); (c.parent == "") != (got == "") || c.parent != "" && got != f.task(c.parent).Task.ID {
@@ -773,7 +773,7 @@ func TestRunnerKeepsALongToolCallAlive(t *testing.T) {
 				t.Fatalf("WEB-1's Claims: %+v", d.Claims)
 			}
 			want := map[string]string{"process": "a process it started is running (sleep, pid ", "agent": "a tool call is in flight"}[in]
-			if log := f.log.String(); !strings.Contains(log, "the session's progress is quiet, but "+want) || strings.Contains(log, "went stale") {
+			if log := f.log.String(); !strings.Contains(log, "the Shift's progress is quiet, but "+want) || strings.Contains(log, "went stale") {
 				t.Fatalf("the runner's log does not say why the long call kept its Claim:\n%s", log)
 			}
 		})
@@ -795,7 +795,7 @@ func TestRunnerLetsAHungToolCallLapse(t *testing.T) {
 		d := f.task("WEB-1")
 		return len(d.Claims) > 0 && d.Claims[0].HowEnded != nil && *d.Claims[0].HowEnded == client.ClaimEndLapsed
 	})
-	if log := f.log.String(); !strings.Contains(log, "the session's tool call has run for the Claim's timeout with no process of it running") {
+	if log := f.log.String(); !strings.Contains(log, "the Shift's tool call has run for the Claim's timeout with no process of it running") {
 		t.Fatalf("the runner's log:\n%s", log)
 	}
 	f.ok("ada", "agent", "set", "builder", "--paused")
@@ -927,7 +927,7 @@ func TestRunnerTerminal(t *testing.T) {
 	}
 	screen(admin, `fakeagent: read "typed by ada"`)
 	eventually(t, 5*time.Second, "a Note that ada joined", func() bool {
-		return slices.ContainsFunc(f.task("WEB-1").Notes, func(n client.Note) bool { return n.Body == "ada joined the session." })
+		return slices.ContainsFunc(f.task("WEB-1").Notes, func(n client.Note) bool { return n.Body == "ada joined the Shift." })
 	})
 
 	// mai is no admin: she only watches, even when she asks to type (the server decides), so her
@@ -961,7 +961,7 @@ func TestRunnerTerminal(t *testing.T) {
 	}
 	joined := 0
 	for _, n := range f.task("WEB-1").Notes {
-		if strings.HasPrefix(n.Body, "mai") || n.Body == "ada joined the session." {
+		if strings.HasPrefix(n.Body, "mai") || n.Body == "ada joined the Shift." {
 			joined++
 		}
 	}

@@ -123,7 +123,7 @@ describe("MemberCard", () => {
     const link = await c.findByRole("link", { name: /WEB-12/ });
     expect(link).toHaveTextContent("Add login");
     expect(link.getAttribute("href")).toContain("task=WEB-12");
-    expect(await c.findByText("Working, its session waiting for 4m")).toBeInTheDocument();
+    expect(await c.findByText("Working, its Shift waiting for 4m")).toBeInTheDocument();
   });
 
   it("opens nothing for a mark in a picker row, and stays off the tab order inside a button", async () => {

@@ -160,14 +160,14 @@ test("marks: an agent's gradient ring turns while its session runs, stops in its
 
   // Stalled: the ring stops, in the session's colour.
   await runnerSays(page, [{ ...session, state: "stalled" }]);
-  await expect(row.getByRole("img", { name: "inbox-builder (agent), working, its session stalled" })).toHaveAttribute("data-working", "stalled", { timeout: 10_000 });
+  await expect(row.getByRole("img", { name: "inbox-builder (agent), working, its Shift stalled" })).toHaveAttribute("data-working", "stalled", { timeout: 10_000 });
   const still = await row.getByRole("img", { name: /inbox-builder \(agent\)/ }).evaluate((el) => getComputedStyle(el).getPropertyValue("--spin"));
   await page.waitForTimeout(300);
   expect(await row.getByRole("img", { name: /inbox-builder \(agent\)/ }).evaluate((el) => getComputedStyle(el).getPropertyValue("--spin"))).toBe(still);
   await shot(page, "agents-stalled");
 
   await runnerSays(page, [{ ...session, state: "waiting" }]);
-  await expect(row.getByRole("img", { name: /inbox-builder \(agent\), working, its session waiting/ })).toHaveAttribute("data-working", "waiting", { timeout: 10_000 });
+  await expect(row.getByRole("img", { name: /inbox-builder \(agent\), working, its Shift waiting/ })).toHaveAttribute("data-working", "waiting", { timeout: 10_000 });
 
   // A human's mark: a plain round border, no gradient.
   await page.goto(`${base()}/projects/INB/activity`);

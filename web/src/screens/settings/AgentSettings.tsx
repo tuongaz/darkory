@@ -31,7 +31,7 @@ export function AgentCard({ member }: { member: Member }) {
   return (
     <SettingsSection
       title="Agent"
-      description="How the Runner starts this agent's sessions."
+      description="How the Runner starts this agent's Shifts."
       actions={
         s && (
           <MoreMenu label={`More for the Agent settings of ${member.name}`} size="icon-xs">
@@ -58,7 +58,7 @@ function AboutRunner({ children = runnerLine }: { children?: ReactNode }) {
       <InfoPopover label="About the Runner" className="w-[320px]">
         <p>
           It takes the Task through <code className="font-mono text-[11.5px]">next</code> as this agent, prepares its Workspace, and ends the
-          session when the Claim ends.
+          Shift when the Claim ends.
         </p>
       </InfoPopover>
     </span>
@@ -74,7 +74,7 @@ export function PausedRow({ member, settings: s }: { member: Member; settings: A
       label="Paused"
       checked={s.paused}
       body={(paused) => ({ paused })}
-      help="The Runner starts no new session; one running carries on."
+      help="The Runner starts no new Shift; one running carries on."
     />
   );
 }
@@ -102,7 +102,7 @@ function StopRunnerDialog({ member, settings: s, onClose }: { member: Member; se
         </Fact>
         <Fact label="Then">
           <span className="font-normal">
-            The Runner starts no new session for {member.name}, which works through its own tokens; one running carries on until its Claim
+            The Runner starts no new Shift for {member.name}, which works through its own tokens; one running carries on until its Claim
             ends.
           </span>
         </Fact>
@@ -182,7 +182,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
           const r = envOf(text);
           return "problem" in r ? r : { body: { env: r.env }, same: envText(r.env) === envText(s.env) };
         }}
-        help="One KEY = value per line. Every Member can read these: keep secrets in the server's environment, which sessions inherit."
+        help="One KEY = value per line. Every Member can read these: keep secrets in the server's environment, which Shifts inherit."
       />
       <TextSetting
         key={`progress:${s.progress_file ?? ""}`}
@@ -192,7 +192,7 @@ function AgentForm({ member, settings: s }: { member: Member; settings: AgentSet
         saved={s.progress_file ?? ""}
         placeholder="Claude Code's transcript"
         body={(progress_file) => ({ progress_file })}
-        help="For a command other than Claude Code: the file whose changes show the session working."
+        help="For a command other than Claude Code: the file whose changes show the Shift working."
       />
       <SwitchSetting
         member={member}

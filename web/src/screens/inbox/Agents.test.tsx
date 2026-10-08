@@ -104,7 +104,7 @@ describe("a Project's Agents", () => {
   it("stops the mark in the session's colour while its session is stalled", async () => {
     agentsApi({ sessions: [session("stalled")] });
     renderApp("/projects/WEB/agents");
-    expect(await screen.findByRole("img", { name: "builder (agent), working, its session stalled" })).toHaveAttribute("data-working", "stalled");
+    expect(await screen.findByRole("img", { name: "builder (agent), working, its Shift stalled" })).toHaveAttribute("data-working", "stalled");
   });
 
   it("lists the Organisation's other agents, muted, with their Projects", async () => {
@@ -119,7 +119,7 @@ describe("a Project's Agents", () => {
     const { calls } = agentsApi({ sessions: [session("waiting")] });
     renderApp("/projects/WEB/agents?agent=builder");
     const peek = await screen.findByRole("dialog", { name: "Agent builder" });
-    await waitFor(() => expect(within(peek).getByRole("region", { name: "Runner" })).toHaveTextContent("dk-WEB-3"));
+    await waitFor(() => expect(within(peek).getByRole("region", { name: "Shift" })).toHaveTextContent("dk-WEB-3"));
     expect(within(peek).getByText("Steps in Web").nextSibling).toHaveTextContent("Build");
     expect(within(peek).getByRole("link", { name: /Settings/ })).toHaveAttribute("href", "/settings/organisation/agents/builder");
 
@@ -127,9 +127,9 @@ describe("a Project's Agents", () => {
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/runner/sessions/WEB-3/nudge")).toBe(true));
 
     await userEvent.click(within(peek).getByRole("button", { name: "Stop" }));
-    const confirm = await screen.findByRole("dialog", { name: "Stop builder's session on WEB-3?" });
+    const confirm = await screen.findByRole("dialog", { name: "Stop builder's Shift on WEB-3?" });
     expect(calls.some((c) => c.path.endsWith("/stop"))).toBe(false);
-    await userEvent.click(within(confirm).getByRole("button", { name: "Stop session" }));
+    await userEvent.click(within(confirm).getByRole("button", { name: "Stop Shift" }));
     await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.path === "/v1/runner/sessions/WEB-3/stop")).toBe(true));
   });
 
@@ -193,7 +193,7 @@ describe("a Project's Agents", () => {
     agentsApi({ sessions: [session("running")], member: bob });
     renderApp("/projects/WEB/agents?agent=builder");
     const peek = await screen.findByRole("dialog", { name: "Agent builder" });
-    await waitFor(() => expect(within(peek).getByRole("region", { name: "Runner" })).toBeInTheDocument());
+    await waitFor(() => expect(within(peek).getByRole("region", { name: "Shift" })).toBeInTheDocument());
     expect(within(peek).queryByRole("button", { name: "Nudge" })).not.toBeInTheDocument();
     expect(within(peek).queryByRole("link", { name: /Settings/ })).not.toBeInTheDocument();
   });

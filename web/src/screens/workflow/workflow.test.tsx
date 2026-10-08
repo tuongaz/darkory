@@ -515,7 +515,7 @@ describe("Settings › Workflow", () => {
       await userEvent.type(dialog.getByRole("textbox", { name: "Name" }), "builder-2");
       await userEvent.click(dialog.getByRole("button", { name: "Create agent" }));
       expect(await screen.findByRole("textbox", { name: "Secret of builder-2's token" })).toHaveValue("dk_secret");
-      expect(screen.getByText("The Runner starts its sessions on this Install, on claude-sonnet-5-5.")).toBeInTheDocument();
+      expect(screen.getByText("The Runner starts its Shifts on this Install, on claude-sonnet-5-5.")).toBeInTheDocument();
       const writes = api.calls.filter((c) => c.method !== "GET").map((c) => `${c.method} ${c.path}`);
       expect(writes).toEqual([
         "POST /v1/members",

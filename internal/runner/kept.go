@@ -81,7 +81,7 @@ func (r *Runner) attachKeptOnce(ctx context.Context) {
 		}
 		var k keptLog
 		if err := json.Unmarshal(b, &k); err != nil {
-			r.log.Warn("a kept session log's record does not read", "file", meta, "err", err)
+			r.log.Warn("a kept Shift log's record does not read", "file", meta, "err", err)
 			continue
 		}
 		var a *agent
@@ -107,11 +107,11 @@ func (r *Runner) attachKeptOnce(ctx context.Context) {
 			os.Remove(strings.TrimSuffix(meta, ".json"))
 			os.Remove(meta)
 			os.Remove(filepath.Dir(meta))
-			r.log.Info("attached a kept session log", "agent", a.name(), "task", k.Task, "evidence", k.Name)
+			r.log.Info("attached a kept Shift log", "agent", a.name(), "task", k.Task, "evidence", k.Name)
 		case refusedBy(err, client.ErrorCodeNotHolder):
 			// Still held by another; it comes back when that Claim ends.
 		case ctx.Err() == nil:
-			r.log.Debug("attaching a kept session log", "task", k.Task, "evidence", k.Name, "err", err)
+			r.log.Debug("attaching a kept Shift log", "task", k.Task, "evidence", k.Name, "err", err)
 		}
 	}
 }

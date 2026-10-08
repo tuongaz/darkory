@@ -196,7 +196,7 @@ function AgentRow({ need, onHover }: { need: AgentNeed; onHover: Hover }) {
       )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="outline" aria-label={`More about ${need.agent.name}'s session`}>
+          <Button size="icon-sm" variant="outline" aria-label={`More about ${need.agent.name}'s Shift`}>
             <EllipsisIcon />
           </Button>
         </DropdownMenuTrigger>
@@ -205,8 +205,8 @@ function AgentRow({ need, onHover }: { need: AgentNeed; onHover: Hover }) {
             <Link to={peek(need.task.key)}>Open {need.task.key}</Link>
           </DropdownMenuItem>
           {need.canStop && (
-            <DropdownMenuItem variant="destructive" onSelect={() => actions.run({ label: "Stop session", session: "stop", taskKey: need.task.key })}>
-              Stop session
+            <DropdownMenuItem variant="destructive" onSelect={() => actions.run({ label: "Stop Shift", session: "stop", taskKey: need.task.key })}>
+              Stop Shift
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

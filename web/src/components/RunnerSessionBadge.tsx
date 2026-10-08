@@ -12,7 +12,7 @@ const stateHints: Record<RunnerSessionState, string> = {
   running: "The agent is working; the Runner sends its Heartbeats",
   waiting: "The agent's turn ended without a decision (the Runner nudges it, then releases the Task), or it asks something a person answers by joining",
   stalled: "No progress for a while: the Runner sends no more Heartbeats, and the Claim lapses unless it moves",
-  ending: "The Claim has ended; the session is closing",
+  ending: "The Claim has ended; the Shift is closing",
 };
 
 /** A runner session's state as a pill: Running (green), Waiting (amber), Stalled (red), Ending (grey). */
@@ -42,7 +42,7 @@ export function RunnerSessionBadge({
 }) {
   return (
     <span className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
-      {!bare && <span>Session</span>}
+      {!bare && <span>Shift</span>}
       {state && <SessionStatePill state={session.state} />}
       <span className="truncate">
         started <ClockTime at={session.started_at} /> · {session.host}

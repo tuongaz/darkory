@@ -275,7 +275,7 @@ function SessionState({ session, runner }: { session: Session; runner?: RunnerSe
         Open
       </span>
       {runner && (
-        <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5" title="What the Runner's session for the Task held through this Session is doing">
+        <span className="flex flex-wrap items-center gap-x-1 gap-y-0.5" title="What the Shift on the Task held through this Session is doing">
           <SessionStatePill state={runner.state} />
           <span className="whitespace-nowrap text-muted-foreground">
             since <ClockTime at={runner.state_since} />

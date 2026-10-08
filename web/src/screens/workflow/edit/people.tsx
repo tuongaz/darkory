@@ -57,8 +57,8 @@ export function CreateAgentDialog({ project, skill, onClose }: { project: Projec
       if (runner) {
         const m = model.trim() || defaultModel;
         await step("set up for the Runner", () => setAgentSettings(id, { model: m }));
-        if (!made.failed) made.runner = `The Runner starts its sessions on this Install, on ${m}.`;
-      } else made.runner = "The Runner does not start it: it brings its own session, through this token.";
+        if (!made.failed) made.runner = `The Runner starts its Shifts on this Install, on ${m}.`;
+      } else made.runner = "The Runner does not start it: it works through this token.";
       return made;
     },
     onSettled: () => invalidateAll(qc),
@@ -102,7 +102,7 @@ export function CreateAgentDialog({ project, skill, onClose }: { project: Projec
         <FormRow label="Skill">
           <span className="font-mono text-xs">{skill.name}</span>
         </FormRow>
-        <FormRow label="Runner" help={runner ? "The Runner starts its sessions with the Install's default command." : "It brings its own session, through its token."}>
+        <FormRow label="Runner" help={runner ? "The Runner starts its Shifts with the Install's default command." : "It works through its own token; the Runner does not start it."}>
           <Switch checked={runner} onCheckedChange={setRunner} aria-label="Run with the Runner" className="self-start" />
         </FormRow>
         {runner && (

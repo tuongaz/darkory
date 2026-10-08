@@ -16,12 +16,16 @@ var agentCommands = []command{
 	{path: "workspace list", short: "list the Install's Workspaces", run: cmdWorkspaceList},
 	{path: "workspace set", args: "<workspace> [--name n] [--path dir] [--mode m] [--default-branch b]", short: "change a Workspace (admin)", run: cmdWorkspaceSet},
 	{path: "workspace remove", args: "<workspace>", short: "remove a Workspace no Task names (admin)", run: cmdWorkspaceRemove},
-	{path: "agent set", args: "<member> [--command c] [--arg a]… [--model m] [--env K=V]… [--paused] [--unattended] [--progress-file f]", short: "set how the Runner starts an agent's sessions (admin)", run: cmdAgentSet},
-	{path: "agent clear", args: "<member>", short: "clear an agent's settings, so the Runner starts no session for it (admin)", run: cmdAgentClear},
+	{path: "agent set", args: "<member> [--command c] [--arg a]… [--model m] [--env K=V]… [--paused] [--unattended] [--progress-file f]", short: "set how the Runner starts an agent's Shifts (admin)", run: cmdAgentSet},
+	{path: "agent clear", args: "<member>", short: "clear an agent's settings, so the Runner starts no Shift for it (admin)", run: cmdAgentClear},
 	{path: "agent list", short: "list the agents and how the Runner starts them", run: cmdAgentList},
-	{path: "sessions", short: "list the agent sessions the Runner runs now", run: cmdSessions},
-	{path: "sessions nudge", args: "<task>", short: "ask the agent in a Task's session to end the Task (admin)", run: cmdSessionsNudge},
-	{path: "sessions stop", args: "<task>", short: "stop a Task's session, releasing its Claim (admin)", run: cmdSessionsStop},
+	{path: "shifts", short: "list the Shifts the Runner runs now", run: cmdShifts},
+	{path: "shifts nudge", args: "<task>", short: "ask the agent on a Task's Shift to end the Task (admin)", run: cmdShiftsNudge},
+	{path: "shifts stop", args: "<task>", short: "stop a Task's Shift, releasing its Claim (admin)", run: cmdShiftsStop},
+	// The names these had before the Runner's agent sessions were called Shifts.
+	{path: "sessions", short: "list the Shifts the Runner runs now", run: cmdShifts, hidden: true},
+	{path: "sessions nudge", args: "<task>", short: "ask the agent on a Task's Shift to end the Task (admin)", run: cmdShiftsNudge, hidden: true},
+	{path: "sessions stop", args: "<task>", short: "stop a Task's Shift, releasing its Claim (admin)", run: cmdShiftsStop, hidden: true},
 }
 
 // strs is a flag given any number of times; set says whether it was given at all.
@@ -191,13 +195,13 @@ func cmdAgentSet(c *call) error {
 	command := c.fs.String("command", "", "the program to start, such as claude")
 	var args, env strs
 	c.fs.Var(&args, "arg", "an argument of the command, in order; give it once per argument, replacing them all")
-	c.fs.Var(&env, "env", "NAME=value added to the session's environment; give it once per variable, replacing them all (every Member can read them: no secrets)")
+	c.fs.Var(&env, "env", "NAME=value added to the Shift's environment; give it once per variable, replacing them all (every Member can read them: no secrets)")
 	model := c.fs.String("model", "", "the model the agent runs on, such as claude-opus-5-5")
 	var paused, unattended optBool
-	c.fs.Var(&paused, "paused", "start no new session for the agent (--paused=false resumes)")
-	c.fs.Var(&unattended, "unattended", "run sessions with the agent's permission checks skipped")
+	c.fs.Var(&paused, "paused", "start no new Shift for the agent (--paused=false resumes)")
+	c.fs.Var(&unattended, "unattended", "run Shifts with the agent's permission checks skipped")
 	var progress optString
-	c.fs.Var(&progress, "progress-file", `the file whose changes show a session's progress, for a command other than Claude Code; "" for none`)
+	c.fs.Var(&progress, "progress-file", `the file whose changes show a Shift's progress, for a command other than Claude Code; "" for none`)
 	pos, err := c.args(1, 1)
 	if err != nil {
 		return err
@@ -294,7 +298,7 @@ func cmdAgentList(c *call) error {
 	})
 }
 
-func cmdSessions(c *call) error {
+func cmdShifts(c *call) error {
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}
@@ -309,9 +313,9 @@ func cmdSessions(c *call) error {
 	return c.show(res.Body, func(w io.Writer) {
 		switch {
 		case !res.JSON200.Runner:
-			fmt.Fprintln(w, "No Runner is attached to this server; it runs no agent sessions.")
+			fmt.Fprintln(w, "No Runner is attached to this server; it runs no Shifts.")
 		case len(res.JSON200.Items) == 0:
-			fmt.Fprintln(w, "The Runner runs no sessions now.")
+			fmt.Fprintln(w, "The Runner runs no Shifts now.")
 		}
 		for _, s := range res.JSON200.Items {
 			join := "no tmux"
@@ -324,7 +328,7 @@ func cmdSessions(c *call) error {
 	})
 }
 
-func cmdSessionsNudge(c *call) error {
+func cmdShiftsNudge(c *call) error {
 	args, err := c.args(1, 1)
 	if err != nil {
 		return err
@@ -337,10 +341,10 @@ func cmdSessionsNudge(c *call) error {
 	if err := check(res, err, http.StatusNoContent); err != nil {
 		return err
 	}
-	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "Nudged the session on %s.\n", one(args[0])) })
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "Nudged the Shift on %s.\n", one(args[0])) })
 }
 
-func cmdSessionsStop(c *call) error {
+func cmdShiftsStop(c *call) error {
 	args, err := c.args(1, 1)
 	if err != nil {
 		return err
@@ -353,5 +357,5 @@ func cmdSessionsStop(c *call) error {
 	if err := check(res, err, http.StatusNoContent); err != nil {
 		return err
 	}
-	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "Stopping the session on %s.\n", one(args[0])) })
+	return c.show(nil, func(w io.Writer) { fmt.Fprintf(w, "Stopping the Shift on %s.\n", one(args[0])) })
 }

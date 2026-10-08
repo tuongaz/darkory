@@ -17,7 +17,7 @@ export function useAgentActions(agent: Member | undefined) {
   const [stopping, setStopping] = useState<string | null>(null);
   const pause = useMutation({
     mutationFn: (paused: boolean) => setAgentSettings(agent!.id, { paused }),
-    onSuccess: (m) => toast.success(m.agent?.paused ? `${agent!.name} paused: it starts no new session` : `${agent!.name} resumed`),
+    onSuccess: (m) => toast.success(m.agent?.paused ? `${agent!.name} paused: it starts no new Shift` : `${agent!.name} resumed`),
     onError: refusalToast,
   });
   const nudge = useMutation({
@@ -29,7 +29,7 @@ export function useAgentActions(agent: Member | undefined) {
     mutationFn: (task: string) => call(api.POST("/v1/runner/sessions/{task}/stop", { params: { path: { task } } })),
     onSuccess: () => {
       setStopping(null);
-      toast.success(`${agent!.name}'s session is stopping`);
+      toast.success(`${agent!.name}'s Shift is stopping`);
     },
   });
   const run = (a: AgentAction) => {
@@ -45,9 +45,9 @@ export function useAgentActions(agent: Member | undefined) {
     <FormDialog
       open={!!stopping}
       onOpenChange={(open) => !open && setStopping(null)}
-      title={`Stop ${agent?.name ?? "the agent"}'s session on ${stopping}?`}
-      description="Its Claim is released with a Note, and the session's log is attached to the Task as Evidence."
-      submitLabel="Stop session"
+      title={`Stop ${agent?.name ?? "the agent"}'s Shift on ${stopping}?`}
+      description="Its Claim is released with a Note, and the Shift's log is attached to the Task as Evidence."
+      submitLabel="Stop Shift"
       destructive
       pending={stop.isPending}
       error={stop.error}

@@ -159,11 +159,15 @@ _Avoid_: Saved filter, smart list
 ### Agents at work
 
 **Runner**:
-The part of a Local Install, beside the Tracker, that runs agent sessions: it pulls Tasks through `next` as an agent Member, prepares the Workspace, starts the agent's command, keeps its Heartbeats while the session shows progress, and ends the session when the Claim ends. It is a client of the record, never a second scheduler; the Tracker still starts nothing itself.
+The part of a Local Install, beside the Tracker, that runs agents' Shifts: it pulls Tasks through `next` as an agent Member, prepares the Workspace, starts the agent's command, keeps its Heartbeats while the Shift shows progress, and ends the Shift when the Claim ends. It is a client of the record, never a second scheduler; the Tracker still starts nothing itself.
 _Avoid_: Orchestrator, scheduler, supervisor
 
+**Shift**:
+One run of an agent's command on a Task, started by the Runner when the agent's Claim begins and ended when the Claim ends; tmux holds it while it runs. A Shift works under one of the agent's Sessions, which holds the Claim, so the Session is the copy the record knows and the Shift is the work it does on this machine. An admin may nudge or stop it; its log becomes Evidence on the Task.
+_Avoid_: Session (the Session is what the Shift works under), run, job, process
+
 **Workspace**:
-A place a session works in, named on the Install and given a kind — a git repository is the first. A Project has a default Workspace, and a Task names one or more. In a git Workspace the session works in a checkout on a branch named after the Task; a Parent's branch is where its Subtasks' branches merge.
+A place a Shift works in, named on the Install and given a kind — a git repository is the first. A Project has a default Workspace, and a Task names one or more. In a git Workspace the Shift works in a checkout on a branch named after the Task; a Parent's branch is where its Subtasks' branches merge.
 _Avoid_: Repo (when the kind is not fixed), project folder
 
 ### Deployment

@@ -12,6 +12,6 @@ import (
 
 // Attach is not available on Windows, which has no tmux.
 func (r *Runner) Attach(_ context.Context, _ string, _ bool, conn *websocket.Conn) error {
-	conn.Close(websocket.StatusPolicyViolation, "the session runs without tmux")
+	conn.Close(websocket.StatusPolicyViolation, "the Shift runs without tmux")
 	return runnerapi.ErrNotJoinable
 }

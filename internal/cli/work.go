@@ -558,7 +558,7 @@ func cmdFile(c *call) error {
 	c.fs.Var(&auto, "auto-complete", "it completes itself when its last Subtask ends Done (default: the Project's)")
 	c.fs.Var(&acceptance, "acceptance", "it has an Acceptance before it is done, where the Workflow has the Step (default: the Project's)")
 	var workspaces strs
-	c.fs.Var(&workspaces, "workspace", "a Workspace the Task names, where a session works it; give it once per Workspace (default: its Parent's, else its Project's)")
+	c.fs.Var(&workspaces, "workspace", "a Workspace the Task names, where a Shift works it; give it once per Workspace (default: its Parent's, else its Project's)")
 	noWorkspace := c.fs.Bool("no-workspace", false, "name no Workspace, though its Parent or Project names one")
 	if _, err := c.args(0, 0); err != nil {
 		return err

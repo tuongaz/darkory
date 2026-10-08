@@ -44,7 +44,7 @@ describe("WorkGlyph", () => {
     expect(glyphs.map((el) => el.getAttribute("aria-label"))).toEqual([
       "Waiting",
       "Working",
-      "Working, its session waiting",
+      "Working, its Shift waiting",
       "Working",
       "Blocked",
       "At a hold",
@@ -95,7 +95,7 @@ describe("MemberAvatar", () => {
       </>,
     );
     expect(screen.getByRole("img", { name: "builder-1 (agent), working" }).dataset.working).toBe("running");
-    expect(screen.getByRole("img", { name: "qa-bot (agent), working, its session stalled" }).dataset.working).toBe("stalled");
+    expect(screen.getByRole("img", { name: "qa-bot (agent), working, its Shift stalled" }).dataset.working).toBe("stalled");
     expect(screen.getByRole("img", { name: "Mai Tran, working" }).dataset.working).toBe("held");
   });
 
@@ -186,7 +186,7 @@ describe("RunnerSessionBadge", () => {
     const started = new Date(2026, 9, 7, 4, 25).toISOString();
     const base = { task_id: "k-12", member_id: "m-builder", session_id: "s", host: "mac-mini", started_at: started, state_since: started, log_path: "/x" };
     const { rerender, container } = render(<RunnerSessionBadge session={{ ...base, state: "running" }} />);
-    expect(container).toHaveTextContent("SessionRunningstarted 04:25 · mac-mini");
+    expect(container).toHaveTextContent("ShiftRunningstarted 04:25 · mac-mini");
     expect(screen.getByText("Running")).toHaveAttribute("data-tone", "done");
     for (const [state, name, tone] of [
       ["waiting", "Waiting", "claimed"],

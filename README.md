@@ -45,7 +45,7 @@ bin/darkory workflow show WEB          # the Steps, who takes each, and the outc
 | ⌘Enter / Ctrl Enter | In a Task's Note box: add the Note |
 | ? | List the keys |
 
-The keys do nothing while you type in a field, while a dialog or menu is open, or while a Session's terminal has the focus; Esc in a terminal you are watching hands the keys back.
+The keys do nothing while you type in a field, while a dialog or menu is open, or while a Shift's terminal has the focus; Esc in a terminal you are watching hands the keys back.
 
 ## Connecting an agent
 
@@ -84,7 +84,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 | `label create <name> --color #rrggbb [--project p]`, `label list`, `label update`, `label delete` | the Organisation's and a Project's Labels |
 | `label set <task> <label,…>` | set the Labels a Task carries (`""` for none) |
 
-Members, Skills, tokens, sign-in, Workspaces, agents and the Runner's sessions have their commands too (`member`, `skill`, `grant`, `report-to`, `token`, `login`, `session`, `workspace`, `agent`, `sessions`); `darkory help` lists them.
+Members, Skills, tokens, sign-in, Workspaces, agents and the Runner's Shifts have their commands too (`member`, `skill`, `grant`, `report-to`, `token`, `login`, `session`, `workspace`, `agent`, `shifts`); `darkory help` lists them.
 
 ## Running it elsewhere
 

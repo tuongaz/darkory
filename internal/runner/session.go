@@ -19,9 +19,13 @@ import (
 	"github.com/tuongaz/darkory/internal/cli/remote"
 )
 
-// silentPrefix starts the Note of every release for a session that ended without a decision, so
+// silentPrefix starts the Note of every release for a Shift that ended without a decision, so
 // the runner can count them on the Task (three file a question to the Task's Owner).
-const silentPrefix = "Session ended without a decision"
+const silentPrefix = "Shift ended without a decision"
+
+// olderSilentPrefix is how those Notes began before the Runner's sessions were called Shifts; a
+// Task released that way before still counts them.
+const olderSilentPrefix = "Session ended without a decision"
 
 // silentLimit is how many releases without a decision file a question to the Task's Owner.
 const silentLimit = 3
@@ -175,19 +179,19 @@ func (s *session) run(ctx context.Context) bool {
 		bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		if ctx.Err() != nil {
-			s.release(bctx, "The runner stopped before the session started.")
+			s.release(bctx, "The Runner stopped before the Shift started.")
 			return true
 		}
 		if errors.Is(err, errPaused) {
-			s.log.Info("the agent was paused before its session started; releasing the Task unworked")
+			s.log.Info("the agent was paused before its Shift started; releasing the Task unworked")
 			s.release(bctx, pausedNote)
 			return true
 		}
-		s.log.Error("could not start the session", "err", err)
+		s.log.Error("could not start the Shift", "err", err)
 		s.giveUp(bctx, fmt.Sprintf("the runner could not start it: %s", remote.CleanLine(err.Error())))
 		return false
 	}
-	s.log.Info("started the session", "host", r.hostName(), "log", s.logPath, "progress", s.progress)
+	s.log.Info("started the Shift", "host", r.hostName(), "log", s.logPath, "progress", s.progress)
 	s.watch(ctx)
 	return true
 }
@@ -216,7 +220,7 @@ func (s *session) waitForEarlier(ctx context.Context) error {
 			return ctx.Err()
 		case <-t.C:
 			if _, err := s.rec.Heartbeat(ctx, s.key); err != nil && ctx.Err() == nil {
-				s.log.Warn("heartbeat while an earlier session ends", "err", err)
+				s.log.Warn("heartbeat while an earlier Shift ends", "err", err)
 			}
 		}
 	}
@@ -419,9 +423,9 @@ func (s *session) watch(ctx context.Context) {
 			return
 		case c := <-s.cmds:
 			if c.stop {
-				s.log.Info("an admin stopped the session")
+				s.log.Info("an admin stopped the Shift")
 				c.done <- nil
-				s.end(ctx, "An admin stopped the session; the Task goes back for another.")
+				s.end(ctx, "An admin stopped the Shift; the Task goes back for another.")
 				return
 			}
 			s.log.Info("nudged by an admin")
@@ -448,11 +452,11 @@ func (s *session) check(ctx context.Context) bool {
 		var err error
 		rd, err = ReadProgress(s.progress)
 		if err != nil {
-			s.log.Warn("reading the session's progress", "file", s.progress, "err", err)
+			s.log.Warn("reading the Shift's progress", "file", s.progress, "err", err)
 		}
 		if !rd.Exists && s.transcript {
 			if found := findTranscript(s.claudeDir, s.rec.Session()); found != "" && found != s.progress {
-				s.log.Info("found the session's transcript elsewhere", "file", found)
+				s.log.Info("found the Shift's transcript elsewhere", "file", found)
 				s.progress = found
 				rd, _ = ReadProgress(found)
 			}
@@ -475,14 +479,14 @@ func (s *session) check(ctx context.Context) bool {
 		s.holding = ""
 	case quiet != "":
 		if s.holding != quiet {
-			s.log.Info("the session's progress is quiet, but "+quiet+"; counting it as progress", "last_progress", s.lastProgress.Format(time.RFC3339))
+			s.log.Info("the Shift's progress is quiet, but "+quiet+"; counting it as progress", "last_progress", s.lastProgress.Format(time.RFC3339))
 			s.holding = quiet
 		}
 		fresh = true
 	}
 	if fresh {
 		if s.stale {
-			s.log.Info("the session shows progress again; sending Heartbeats")
+			s.log.Info("the Shift shows progress again; sending Heartbeats")
 			s.stale = false
 		}
 		st, err := s.rec.Heartbeat(ctx, s.key)
@@ -496,9 +500,9 @@ func (s *session) check(ctx context.Context) bool {
 		}
 	} else {
 		if !s.stale {
-			msg := "the session's progress went stale; no more Heartbeats, so the Claim lapses unless it moves again"
+			msg := "the Shift's progress went stale; no more Heartbeats, so the Claim lapses unless it moves again"
 			if rd.InFlight {
-				msg = "the session's tool call has run for the Claim's timeout with no process of it running; no more Heartbeats, " +
+				msg = "the Shift's tool call has run for the Claim's timeout with no process of it running; no more Heartbeats, " +
 					"so the Claim lapses unless it moves again"
 			}
 			s.log.Info(msg, "last_progress", s.lastProgress.Format(time.RFC3339))
@@ -598,10 +602,10 @@ func (s *session) firstRun(ctx context.Context) {
 		return
 	}
 	s.toldJoin = true
-	s.log.Warn("the session shows a Claude Code dialog the runner does not answer; it waits for a person", "prompt", p.Name, "after_first_turn", turned)
+	s.log.Warn("the Shift shows a Claude Code dialog the runner does not answer; it waits for a person", "prompt", p.Name, "after_first_turn", turned)
 	note := fmt.Sprintf("Claude Code shows a first-run dialog after the agent's first turn; a person can answer it with darkory join %s.", s.key)
 	if !turned {
-		note = fmt.Sprintf("Claude Code shows %s, and the runner accepts one first-run dialog a session; a person can answer it "+
+		note = fmt.Sprintf("Claude Code shows %s, and the Runner accepts one first-run dialog a Shift; a person can answer it "+
 			"with darkory join %s.", p.Name, s.key)
 	}
 	if err := s.rec.Note(ctx, s.key, note); err != nil && ctx.Err() == nil {
@@ -671,15 +675,15 @@ func (s *session) exited(ctx context.Context) {
 	d, err := s.rec.Task(ctx, s.key)
 	switch {
 	case err != nil:
-		s.log.Warn("reading the Task after the session exited", "err", err)
+		s.log.Warn("reading the Task after the Shift exited", "err", err)
 		s.giveUp(ctx, "")
 	case !s.holds(d):
-		s.log.Info("the session exited after its Claim ended", "exit_code", code)
+		s.log.Info("the Shift exited after its Claim ended", "exit_code", code)
 		s.attachLog(ctx)
 	case d.Task.Blocked:
 		s.asked(ctx, d)
 	default:
-		s.log.Info("the session exited without a decision", "exit_code", code)
+		s.log.Info("the Shift exited without a decision", "exit_code", code)
 		s.giveUp(ctx, "")
 	}
 }
@@ -687,7 +691,7 @@ func (s *session) exited(ctx context.Context) {
 // finish ends a session whose Claim ended: the agent completed, handed over or asked, or someone
 // took it back, or it lapsed.
 func (s *session) finish(ctx context.Context, how string) bool {
-	s.log.Info("the Claim ended; ending the session", "how", strings.TrimPrefix(how, "task."))
+	s.log.Info("the Claim ended; ending the Shift", "how", strings.TrimPrefix(how, "task."))
 	s.end(ctx, "")
 	return true
 }
@@ -753,7 +757,7 @@ func (s *session) giveUp(ctx context.Context, why string) bool {
 	if d, err := s.rec.Task(bctx, s.key); err == nil && s.holds(d) {
 		n := 1
 		for _, nt := range d.Notes {
-			if strings.HasPrefix(nt.Body, silentPrefix) {
+			if strings.HasPrefix(nt.Body, silentPrefix) || strings.HasPrefix(nt.Body, olderSilentPrefix) {
 				n++
 			}
 		}
@@ -773,11 +777,11 @@ func (s *session) giveUp(ctx context.Context, why string) bool {
 // decision (ADR 0013). The question joins the Task's Parent, or stands alone beside a Task with
 // none. It is filed while the session still holds the Task, so nobody takes it in between.
 func (s *session) escalate(ctx context.Context, d *client.TaskDetail, n int) {
-	title := fmt.Sprintf("The runner released %s %s times without a decision", s.key, map[int]string{3: "three"}[n])
+	title := fmt.Sprintf("The Runner released %s %s times without a decision", s.key, map[int]string{3: "three"}[n])
 	if n != silentLimit {
-		title = fmt.Sprintf("The runner released %s %d times without a decision", s.key, n)
+		title = fmt.Sprintf("The Runner released %s %d times without a decision", s.key, n)
 	}
-	body := fmt.Sprintf("Sessions of %s ended %d times without advancing %s, completing it or asking a question; "+
+	body := fmt.Sprintf("Shifts of %s ended %d times without advancing %s, completing it or asking a question; "+
 		"its Notes say how each ended. Answer here what the agent should do (or ask the Task's Owner to drop it), then complete "+
 		"this question: %s stays blocked until then.", s.a.name(), n, s.key, s.key)
 	to := s.manager(d)
@@ -835,25 +839,25 @@ func (s *session) stopCommand(ctx context.Context, wait time.Duration) {
 	case <-t.C:
 	case <-ctx.Done():
 	}
-	s.log.Info("the session did not exit; killing it")
+	s.log.Info("the Shift did not exit; killing it")
 	if err := s.proc.Kill(); err != nil {
-		s.log.Warn("killing the session", "err", err)
+		s.log.Warn("killing the Shift", "err", err)
 	}
 	select {
 	case <-s.proc.Done():
 	case <-time.After(5 * time.Second):
-		s.log.Warn("the session is still running after it was killed")
+		s.log.Warn("the Shift is still running after it was killed")
 	}
 }
 
 // shutdown ends the session because the runner is stopping: the Task goes back with a Note.
 func (s *session) shutdown(ctx context.Context) {
-	s.log.Info("the runner is stopping; ending the session")
+	s.log.Info("the runner is stopping; ending the Shift")
 	s.setState(StateEnding)
 	bctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
 	s.stopCommand(bctx, 2*time.Second)
-	s.release(bctx, "The runner stopped while the session ran; the Task goes back for another session.")
+	s.release(bctx, "The Runner stopped while the Shift ran; the Task goes back for another Shift.")
 	s.attachLog(bctx)
 }
 
@@ -866,7 +870,7 @@ func (s *session) attachLog(ctx context.Context) {
 	b, err := readTail(s.logPath, maxLog)
 	if err != nil || len(b) == 0 {
 		if err != nil {
-			s.log.Warn("reading the session's log", "err", err)
+			s.log.Warn("reading the Shift's log", "err", err)
 		}
 		return
 	}
@@ -874,25 +878,25 @@ func (s *session) attachLog(ctx context.Context) {
 	err = s.rec.Attach(ctx, s.key, name, b)
 	switch {
 	case err == nil:
-		s.log.Info("attached the session's log", "evidence", name, "bytes", len(b))
+		s.log.Info("attached the Shift's log", "evidence", name, "bytes", len(b))
 	case refusedBy(err, client.ErrorCodeNotHolder):
 		if err := s.r.keepLog(s.a, s.key, name, b); err != nil {
-			s.log.Error("could not keep the session's log for later", "evidence", name, "err", err)
+			s.log.Error("could not keep the Shift's log for later", "evidence", name, "err", err)
 			return
 		}
-		s.log.Info("the Task is held by its next holder; the session's log is attached once it is free", "evidence", name)
+		s.log.Info("the Task is held by its next holder; the Shift's log is attached once it is free", "evidence", name)
 	default:
 		if err := s.r.keepLog(s.a, s.key, name, b); err != nil {
-			s.log.Error("could not attach the session's log, nor keep it for later", "evidence", name, "err", err)
+			s.log.Error("could not attach the Shift's log, nor keep it for later", "evidence", name, "err", err)
 			return
 		}
-		s.log.Warn("could not attach the session's log; it is kept and tried again", "evidence", name, "err", err)
+		s.log.Warn("could not attach the Shift's log; it is kept and tried again", "evidence", name, "err", err)
 	}
 }
 
-// SessionLogName is the Evidence name of a session's log: session-<KEY>-<agent>-<HHMMSS>.log.
+// SessionLogName is the Evidence name of a Shift's log: shift-<KEY>-<agent>-<HHMMSS>.log.
 func SessionLogName(task, agent string, started time.Time) string {
-	return fmt.Sprintf("session-%s-%s-%s.log", task, agent, started.UTC().Format("150405"))
+	return fmt.Sprintf("shift-%s-%s-%s.log", task, agent, started.UTC().Format("150405"))
 }
 
 func readTail(path string, n int64) ([]byte, error) {

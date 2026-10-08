@@ -52,11 +52,11 @@ type Session struct {
 
 // ErrNoSession is what Nudge, Stop and Attach return for a Task the Runner runs no session on;
 // the server answers it not_found.
-var ErrNoSession = errors.New("runnerapi: no session on this Task")
+var ErrNoSession = errors.New("runnerapi: no Shift on this Task")
 
 // ErrNotJoinable is what Attach returns for a session that runs without tmux; the server answers
 // it conflict when it can still say so.
-var ErrNotJoinable = errors.New("runnerapi: the session runs without tmux and cannot be joined")
+var ErrNotJoinable = errors.New("runnerapi: the Shift runs without tmux and cannot be joined")
 
 // Runner is the Runner as the server sees it. Every method takes the Task by id; the server has
 // already resolved a display key and checked the caller's rights (admins nudge and stop; anyone

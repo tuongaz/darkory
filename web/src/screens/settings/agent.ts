@@ -10,11 +10,11 @@ export const knownModels = ["claude-fable-5-1", "claude-opus-5-5", "claude-sonne
 
 /** What the Runner puts in place of each placeholder in the command, its arguments and the progress file. */
 export const placeholders: [string, string][] = [
-  ["{session_id}", "the session's id, chosen by the Runner"],
+  ["{session_id}", "the id of the Session the Shift works under, chosen by the Runner"],
   ["{model}", "the model below"],
   ["{prompt_file}", "the prompt the Runner writes from the record"],
   ["{mcp_config}", "a config file pointing at darkory mcp"],
-  ["{workspace}", "the session's directory"],
+  ["{workspace}", "the Shift's directory"],
   ["{task}", "the Task's key"],
 ];
 
@@ -65,9 +65,9 @@ export function envText(env: Record<string, string>): string {
  * server does (none with `serve --runner=off`), and not while the agent is paused.
  */
 export function runnerNow({ runner, session, paused }: { runner: boolean | undefined; session: RunnerSession | undefined; paused: boolean }): string {
-  if (session) return `Running now, on ${session.host}.`;
+  if (session) return `Its Shift is running now, on ${session.host}.`;
   if (runner === undefined) return "";
   if (!runner) return "Not running: no Runner runs beside this server, so nothing starts this agent's command until one does.";
-  if (paused) return "Not running: paused, so the Runner starts no new session for it.";
+  if (paused) return "Not running: paused, so the Runner starts no new Shift for it.";
   return "Not running now. The Runner beside this server starts this agent's command whenever it has a Task to take.";
 }

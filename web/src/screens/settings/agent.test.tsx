@@ -89,7 +89,7 @@ describe("an agent's settings", () => {
     expect(within(card).getByRole("button", { name: "About the Runner" })).toBeInTheDocument();
     // The page in cards, the Agent's first and pausing and deactivating last, where Paused is.
     expect(screen.getAllByRole("region", { name: (n) => !n.startsWith("Notifications") }).map((r) => r.getAttribute("aria-label"))).toEqual(["Agent", "Work", "Access", "Profile", "Pause and deactivate"]);
-    expect(screen.getByRole("region", { name: "Agent" })).toHaveTextContent("How the Runner starts this agent's sessions.");
+    expect(screen.getByRole("region", { name: "Agent" })).toHaveTextContent("How the Runner starts this agent's Shifts.");
     const stop = screen.getByRole("region", { name: "Pause and deactivate" });
     expect(within(stop).getByRole("switch", { name: "Paused" })).not.toBeChecked();
     expect(within(stop).getByRole("button", { name: "Deactivate builder" })).toBeInTheDocument();
@@ -189,12 +189,12 @@ describe("an agent's settings", () => {
     mockApi(routes([ada, bob, runBuilder, pausedReviewer], { "GET /v1/runner/sessions": { items: [running], runner: true } }));
     renderApp("/settings/organisation/agents/m-builder");
     let card = await screen.findByRole("group", { name: "Agent settings of builder" });
-    expect(await within(card).findByText("Running now, on mac-mini.")).toBeInTheDocument();
+    expect(await within(card).findByText("Its Shift is running now, on mac-mini.")).toBeInTheDocument();
 
     mockApi(routes([ada, bob, runBuilder, pausedReviewer], { "GET /v1/runner/sessions": { items: [], runner: true } }));
     renderApp("/settings/organisation/agents/m-reviewer");
     card = await screen.findByRole("group", { name: "Agent settings of reviewer" });
-    expect(await within(card).findByText("Not running: paused, so the Runner starts no new session for it.")).toBeInTheDocument();
+    expect(await within(card).findByText("Not running: paused, so the Runner starts no new Shift for it.")).toBeInTheDocument();
   });
 
   it("hands an agent with no settings to the Runner with the Install's defaults", async () => {
@@ -220,7 +220,7 @@ describe("an agent's settings", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Stop using the Runner" }));
     const confirm = await screen.findByRole("dialog", { name: "Stop using the Runner for builder?" });
     expect(confirm).toHaveTextContent("Clearsclaude4 argumentsclaude-sonnet-5-51 variable");
-    expect(confirm).toHaveTextContent("The Runner starts no new session for builder, which works through its own tokens; one running carries on until its Claim ends.");
+    expect(confirm).toHaveTextContent("The Runner starts no new Shift for builder, which works through its own tokens; one running carries on until its Claim ends.");
     expect(api.calls.some((c) => c.method === "DELETE")).toBe(false);
 
     await user.click(within(confirm).getByRole("button", { name: "Stop using the Runner" }));
@@ -264,7 +264,7 @@ describe("Members and agents", () => {
     renderApp("/settings/organisation/members?new=1&kind=agent");
     const dialog = await screen.findByRole("dialog", { name: "New Member" });
     expect(within(dialog).getByRole("switch", { name: "Run with the Runner" })).toBeChecked();
-    expect(within(dialog).getByText("The Runner starts its sessions with the Install's default command.")).toBeInTheDocument();
+    expect(within(dialog).getByText("The Runner starts its Shifts with the Install's default command.")).toBeInTheDocument();
     const model = within(dialog).getByLabelText("Model");
     expect(model).toHaveValue("claude-sonnet-5-5");
     await user.type(within(dialog).getByLabelText("Name"), "builder-9");
@@ -298,7 +298,7 @@ describe("Members and agents", () => {
     await user.type(within(dialog).getByLabelText("Name"), "bot-1");
     await user.click(within(dialog).getByRole("switch", { name: "Run with the Runner" }));
     expect(within(dialog).queryByLabelText("Model")).not.toBeInTheDocument();
-    expect(within(dialog).getByText("It brings its own session, through its token.")).toBeInTheDocument();
+    expect(within(dialog).getByText("It works through its own token; the Runner does not start it.")).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "Create Member" }));
 
     expect(await screen.findByRole("dialog", { name: "Token for bot-1" })).toBeInTheDocument();

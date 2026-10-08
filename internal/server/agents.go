@@ -89,7 +89,7 @@ func (s *Server) ClearAgentSettings(w http.ResponseWriter, r *http.Request, memb
 
 // noRunner answers a /v1/runner request when no Runner is attached.
 func noRunner(w http.ResponseWriter) {
-	writeError(w, http.StatusConflict, gen.ErrorCodeNoRunner, "no Runner is attached to this server; it runs no agent sessions (serve --runner=off, or darkory runner runs them elsewhere)")
+	writeError(w, http.StatusConflict, gen.ErrorCodeNoRunner, "no Runner is attached to this server; it runs no Shifts (serve --runner=off, or darkory runner runs them elsewhere)")
 }
 
 func runnerSessionOut(rs runnerapi.Session) gen.RunnerSession {
@@ -132,14 +132,14 @@ func (s *Server) runnerSession(w http.ResponseWriter, r *http.Request, task stri
 			return run, rs, true
 		}
 	}
-	writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, "the Runner runs no session on "+t.Task.Key)
+	writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, "the Runner runs no Shift on "+t.Task.Key)
 	return nil, runnerapi.Session{}, false
 }
 
 // runnerFailed answers what a Runner's Nudge or Stop returned.
 func (s *Server) runnerFailed(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, runnerapi.ErrNoSession) {
-		writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, "the Runner runs no session on this Task")
+		writeError(w, http.StatusNotFound, gen.ErrorCodeNotFound, "the Runner runs no Shift on this Task")
 		return
 	}
 	s.fail(w, r, err)
@@ -184,7 +184,7 @@ func (s *Server) RunnerTerminal(w http.ResponseWriter, r *http.Request, task gen
 		return
 	}
 	if rs.Tmux == "" {
-		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, "the session runs without tmux and cannot be joined")
+		writeError(w, http.StatusConflict, gen.ErrorCodeConflict, "the Shift runs without tmux and cannot be joined")
 		return
 	}
 	c := caller(r)

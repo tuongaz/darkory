@@ -207,8 +207,8 @@ func TestRunnerAnswersOneFirstRunPrompt(t *testing.T) {
 	// The next session's Claude Code asks twice: the second time is a person's to answer.
 	f.fakeClaude("builder", "complete", "again")
 	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
-	waitingForAPerson(t, f, r, "WEB-2", "Claude Code shows the folder-trust dialog, and the runner accepts one first-run dialog "+
-		"a session; a person can answer it with darkory join WEB-2.")
+	waitingForAPerson(t, f, r, "WEB-2", "Claude Code shows the folder-trust dialog, and the Runner accepts one first-run dialog "+
+		"a Shift; a person can answer it with darkory join WEB-2.")
 	n := 0
 	for l := range strings.Lines(f.log.String()) {
 		if strings.Contains(l, "accepting it") && strings.Contains(l, " task=WEB-2 ") {

@@ -250,7 +250,7 @@ func LoadServe(args []string, getenv func(string) string, usage io.Writer) (Serv
 	}
 	fs.IntVar(&c.MaxWaiting, "max-waiting", maxWaiting, "Activity streams, and waiting next calls, one Member may have open at once (DARKORY_MAX_WAITING)")
 	fs.StringVar(&c.Workspaces, "workspaces", getenv("DARKORY_WORKSPACES"), "where the Runner puts each Task's checkouts; default <data>/workspaces, or ~/.darkory/workspaces/… when the data directory is inside a git checkout or under a CLAUDE.md (DARKORY_WORKSPACES)")
-	fs.StringVar(&c.Runner, "runner", or(getenv("DARKORY_RUNNER"), "auto"), "run the Runner, agent sessions, beside the server: auto (when <data>/agents holds tokens), on or off (DARKORY_RUNNER)")
+	fs.StringVar(&c.Runner, "runner", or(getenv("DARKORY_RUNNER"), "auto"), "run the Runner, which starts agents' Shifts, beside the server: auto (when <data>/agents holds tokens), on or off (DARKORY_RUNNER)")
 	if err := fs.Parse(args); err != nil {
 		return Serve{}, err
 	}

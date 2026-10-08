@@ -23,8 +23,8 @@ import (
 const runnerUsage = `Usage: darkory runner [--data dir] [--url url] [--token-dir dir] [--member name]… [--tmux auto|on|off] [--workspaces dir]
 
 Runs the Runner on its own (ADR 0013): for every agent Member whose token is in the token
-directory (<data>/agents unless set), it pulls Tasks through next and works each in a session,
-as darkory serve does in-process unless --runner=off. Sessions run in tmux when the machine has it.
+directory (<data>/agents unless set), it pulls Tasks through next and works each in a Shift,
+as darkory serve does in-process unless --runner=off. Shifts run in tmux when the machine has it.
 --member limits it to the agents named. DARKORY_URL names the Install (http://127.0.0.1:7357
 unless set). DARKORY_RUNNER_TIMINGS (such as wait=5s,timeout=1m) changes its clocks, for tests.
 
@@ -38,11 +38,11 @@ func runRunner(args []string, stderr io.Writer) error {
 		fmt.Fprint(stderr, runnerUsage)
 		fs.PrintDefaults()
 	}
-	data := fs.String("data", or(os.Getenv("DARKORY_DATA"), config.DefaultData), "the Install's data directory, where sessions and worktrees go (DARKORY_DATA)")
+	data := fs.String("data", or(os.Getenv("DARKORY_DATA"), config.DefaultData), "the Install's data directory, where Shifts' logs and worktrees go (DARKORY_DATA)")
 	url := fs.String("url", or(os.Getenv(remote.EnvURL), remote.DefaultURL), "the Install's URL (DARKORY_URL)")
 	tokenDir := fs.String("token-dir", "", "the directory of <member>.token files; default <data>/agents")
 	workspaces := fs.String("workspaces", os.Getenv("DARKORY_WORKSPACES"), "where each Task's checkouts go; default <data>/workspaces, or ~/.darkory/workspaces/… when the data directory is inside a git checkout or under a CLAUDE.md (DARKORY_WORKSPACES)")
-	tmux := fs.String("tmux", or(os.Getenv("DARKORY_RUNNER_TMUX"), "auto"), "run sessions in tmux: auto (when it is installed), on or off (DARKORY_RUNNER_TMUX)")
+	tmux := fs.String("tmux", or(os.Getenv("DARKORY_RUNNER_TMUX"), "auto"), "run Shifts in tmux: auto (when it is installed), on or off (DARKORY_RUNNER_TMUX)")
 	var members names
 	fs.Var(&members, "member", "run only this agent; repeat for more")
 	if err := fs.Parse(args); err != nil {
@@ -103,7 +103,7 @@ func or(v, def string) string {
 
 const joinUsage = `Usage: darkory join <task> [--readonly] [--data dir]
 
-Joins the tmux session the Runner runs for a Task (dk-<TASK>), on the Runner's own tmux server
+Joins the Shift the Runner runs for a Task, its tmux session dk-<TASK> on the Runner's own tmux server
 for the Install in the data directory. --readonly watches without typing. Detach with the tmux
 prefix and d.
 
@@ -138,12 +138,12 @@ func joinSession(args []string, stderr io.Writer) error {
 	}
 	tmux, err := exec.LookPath("tmux")
 	if err != nil {
-		return errors.New("darkory join needs tmux, and it is not on the PATH; the session's log is in <data>/sessions/<task>/pane.log")
+		return errors.New("darkory join needs tmux, and it is not on the PATH; the Shift's log is in <data>/sessions/<task>/pane.log")
 	}
 	socket := runner.TmuxSocket(*data)
 	name := runner.TmuxName(strings.ToUpper(task))
 	if out, err := exec.Command(tmux, "-L", socket, "has-session", "-t", "="+name).CombinedOutput(); err != nil {
-		fmt.Fprintf(stderr, "darkory join: no session %s on the Runner's tmux server for %s (%s)\n", name, *data, strings.TrimSpace(string(out)))
+		fmt.Fprintf(stderr, "darkory join: no Shift runs as tmux session %s on the Runner's tmux server for %s (%s)\n", name, *data, strings.TrimSpace(string(out)))
 		return &cli.ExitError{Code: cli.ExitFailed}
 	}
 	argv := []string{"-L", socket, "attach-session", "-t", "=" + name}
