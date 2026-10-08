@@ -15,7 +15,7 @@ import { useState, type ReactNode } from "react";
 import { Link, Outlet, useMatch } from "react-router";
 import type { Project } from "@/api/client";
 import { useProjects } from "@/api/queries";
-import { projectSettingsPath, useCurrentProject, type ProjectSettingsPage } from "@/app/currentProject";
+import { projectSettingsPath, type ProjectSettingsPage } from "@/app/currentProject";
 import { sendIntent } from "@/app/intents";
 import { appReturnPath } from "@/app/returnTo";
 import { Frame } from "@/app/Shell";
@@ -73,11 +73,11 @@ function SettingsNav() {
   const me = useCurrentMe();
   const admin = me.member.admin;
   const projects = useProjects();
-  const current = useCurrentProject();
   const { setOpenMobile } = useSidebar();
   const shown = admin ? (projects.data ?? []) : me.projects;
   const inUrl = useMatch("/settings/projects/:key/*")?.params.key;
-  const open = shown.find((p) => p.key === inUrl) ?? current;
+  // Only the Project being viewed unfolds: on the Account and Organisation pages none does.
+  const open = shown.find((p) => p.key === inUrl);
   const closeOnLink = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("a")) setOpenMobile(false);
   };
