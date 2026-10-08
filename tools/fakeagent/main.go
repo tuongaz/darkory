@@ -289,8 +289,8 @@ func lateDialog() error {
 }
 
 var (
-	titleLine   = regexp.MustCompile(`(?m)^# ([A-Z][A-Z0-9]*-[0-9]+): `)
-	kindLine    = regexp.MustCompile(`(?m)^- Kind: (\S+)$`)
+	titleLine = regexp.MustCompile(`(?m)^# ([A-Z][A-Z0-9]*-[0-9]+): `)
+	kindLine  = regexp.MustCompile(`(?m)^- Kind: (\S+)$`)
 	// model v2: the prompt names the Task's Parent under "Its Feature" until M3.
 	featureLine = regexp.MustCompile(`(?m)^## Its Feature\n\n- Key: (\S+)$`)
 	skillLine   = regexp.MustCompile(`(?m)^- Needs the Skill: (\S+)$`)
