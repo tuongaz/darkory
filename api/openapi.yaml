@@ -616,7 +616,7 @@ paths:
     patch:
       operationId: updateProject
       tags: [projects]
-      summary: Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+      summary: Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
       description: |
         Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
         The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -2748,13 +2748,14 @@ components:
       description: |
         A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
         default Workspace. Every Task belongs to exactly one Project.
-      required: [id, key, name, auto_complete, acceptance, created_at]
+      required: [id, key, name, color, auto_complete, acceptance, created_at]
       properties:
         id: {type: string, format: id}
         key:
           type: string
           description: The prefix of the Project's display keys, such as `MAIN` in `MAIN-42`.
         name: {type: string}
+        color: {$ref: "#/components/schemas/ProjectColor"}
         default_workspace_id:
           type: string
           format: id
@@ -2768,6 +2769,16 @@ components:
           type: boolean
           description: The `acceptance` a Task filed in the Project takes when its filer does not say.
         created_at: {type: string, format: date-time}
+    ProjectColor:
+      type: integer
+      minimum: 0
+      maximum: 11
+      description: |
+        The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+        0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+        theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+        those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+        the hues the fewest Projects have), unless its creator names one.
     ProjectDetail:
       type: object
       required: [project, members]
@@ -2801,6 +2812,7 @@ components:
           type: string
           pattern: "^[A-Z][A-Z0-9]{1,9}$"
         name: {type: string, minLength: 1, maxLength: 100}
+        color: {$ref: "#/components/schemas/ProjectColor"}
         workflow: {$ref: "#/components/schemas/NewWorkflow"}
         copy_from:
           type: string
@@ -2822,6 +2834,7 @@ components:
       type: object
       properties:
         name: {type: string, minLength: 1, maxLength: 100}
+        color: {$ref: "#/components/schemas/ProjectColor"}
         default_workspace:
           type: string
           description: Workspace id or name; `""` clears the Project's default.

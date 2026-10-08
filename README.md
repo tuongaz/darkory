@@ -77,8 +77,8 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 
 | Projects, Workflows and Labels | |
 |---|---|
-| `project create <KEY> <name> [--workflow default\|empty\|copy] [--copy-from p] [--member m]… [--workspace ws] [--auto-complete] [--acceptance]` | create a Project with its first Workflow (admin) |
-| `project list`, `project show <project>`, `project add\|remove <project> <member>`, `project set <project> [--name] [--workspace] [--auto-complete=…] [--acceptance=…]` | Projects, their Members and the defaults a Task filed in them takes |
+| `project create <KEY> <name> [--workflow default\|empty\|copy] [--copy-from p] [--member m]… [--workspace ws] [--color 0-11] [--auto-complete] [--acceptance]` | create a Project with its first Workflow (admin) |
+| `project list`, `project show <project>`, `project add\|remove <project> <member>`, `project set <project> [--name] [--color 0-11] [--workspace] [--auto-complete=…] [--acceptance=…]` | Projects, their Members, their colour and the defaults a Task filed in them takes |
 | `workflow show <project> [--body]` | the Steps, their Skills and takers, what waits and works at each, and the Connectors out of each; `--body` prints it as `workflow set` reads it |
 | `workflow set <project> --file path\|-` | replace the Workflow (admin): `{"steps": [{"id", "name", "skill", "position", "x", "y"}…], "connectors": [{"from", "to", "name", "position"}…], "moves": {deleted Step id: Step}}`, Steps and Skills by name or id, `to` left out for Done |
 | `label create <name> --color #rrggbb [--project p]`, `label list`, `label update`, `label delete` | the Organisation's and a Project's Labels |

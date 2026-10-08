@@ -36,7 +36,7 @@ const skills = [
   skill("skill-review", true),
 ];
 
-const project = { id: "p-main", key: "MAIN", name: "Main", auto_complete: false, acceptance: true, created_at: created };
+const project = { id: "p-main", key: "MAIN", name: "Main", color: 0, auto_complete: false, acceptance: true, created_at: created };
 
 function membersOf(day: Day) {
   return [

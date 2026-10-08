@@ -57,6 +57,8 @@ type Project struct {
 	ID   string
 	Key  string
 	Name string
+	// Color is the hue of the Project's mark, by index into the app's twelve (ProjectColors).
+	Color int
 	// DefaultWorkspaceID is the Workspace a Task filed in the Project names when it names none.
 	DefaultWorkspaceID *string
 	// AutoComplete and Acceptance are what a Task filed in the Project takes when its filer does

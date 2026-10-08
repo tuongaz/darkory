@@ -61,7 +61,7 @@ func memberDetailOut(d core.MemberDetail) gen.MemberDetail {
 }
 
 func projectOut(p core.Project) gen.Project {
-	return gen.Project{ID: shortid.Of(p.ID), Key: p.Key, Name: p.Name, DefaultWorkspaceID: shortid.OfPtr(p.DefaultWorkspaceID), AutoComplete: p.AutoComplete,
+	return gen.Project{ID: shortid.Of(p.ID), Key: p.Key, Name: p.Name, Color: p.Color, DefaultWorkspaceID: shortid.OfPtr(p.DefaultWorkspaceID), AutoComplete: p.AutoComplete,
 		Acceptance: p.Acceptance, CreatedAt: p.CreatedAt}
 }
 

@@ -242,33 +242,42 @@ describe("FormDialog", () => {
 });
 
 describe("ProjectMark", () => {
-  it("letters a Project by its name, coloured by its key so it keeps its colour", () => {
+  it("letters a Project by its name on the colour it stores, whatever its key", () => {
     render(
       <>
-        <ProjectMark project={{ key: "WEB", name: "web app" }} />
-        <ProjectMark project={{ key: "WEB", name: "Storefront" }} size="lg" />
+        <ProjectMark project={{ key: "WEB", name: "web app", color: 3 }} />
+        <ProjectMark project={{ key: "OPS", name: "Storefront", color: 3 }} size="lg" />
+        <ProjectMark project={{ key: "WEB", name: "web app", color: 9 }} />
       </>,
     );
-    const [a, b] = document.querySelectorAll("[aria-hidden]");
+    const [a, b, c] = document.querySelectorAll<HTMLElement>("[aria-hidden]");
     expect(a).toHaveTextContent("W");
     expect(b).toHaveTextContent("S");
-    expect(a.getAttribute("data-hue")).toBe(String(projectHue("WEB")));
-    expect((a as HTMLElement).style.backgroundColor).toBe((b as HTMLElement).style.backgroundColor);
+    expect(a.dataset.hue).toBe(String(markHues[3]));
+    expect(a.style.backgroundColor).toBe(b.style.backgroundColor);
+    expect(c.dataset.hue).toBe(String(markHues[9]));
   });
 
-  it("gives the Projects distinct hues from a palette of distinct hues", () => {
-    // The sample Install's Projects and the tests' own.
-    const keys = ["BIG", "MAIN", "SAM", "SW", "WEB", "OPS"];
-    expect(new Set(keys.map(projectHue)).size).toBe(keys.length);
+  it("draws twelve stored colours as twelve hues, at least 30° apart", () => {
+    render(
+      <>
+        {markHues.map((_, i) => (
+          <ProjectMark key={i} project={{ key: `P${i}`, name: `P${i}`, color: i }} />
+        ))}
+      </>,
+    );
+    const hues = [...document.querySelectorAll<HTMLElement>("[aria-hidden]")].map((el) => Number(el.dataset.hue));
+    expect(new Set(hues).size).toBe(12);
     const gaps = markHues.map((h, i) => (markHues[(i + 1) % markHues.length] - h + 360) % 360);
     expect(Math.min(...gaps)).toBeGreaterThanOrEqual(30);
+    expect(projectHue(12)).toBe(markHues[0]);
   });
 
   it("keeps a Project's hue in light and dark: the theme sets only lightness and strength", () => {
-    render(<ProjectMark project={{ key: "SAM", name: "Sample" }} />);
+    render(<ProjectMark project={{ key: "SAM", name: "Sample", color: 6 }} />);
     const fill = (document.querySelector("[aria-hidden]") as HTMLElement).style.backgroundColor;
-    expect(fill).toBe(`oklch(var(--mark-l) var(--mark-c) ${projectHue("SAM")})`);
-    const css = readFileSync("src/globals.css", "utf8") // vitest runs in web/;
+    expect(fill).toBe(`oklch(var(--mark-l) var(--mark-c) ${markHues[6]})`);
+    const css = readFileSync("src/globals.css", "utf8"); // vitest runs in web/
     // The rule blocks that set the mark's tokens: one per theme, lightness and strength only.
     const blocks = [...css.matchAll(/^([^\s{}/*][^{}\n]*) \{([^{}]*)\}/gm)].filter(([, , body]) => /--mark-[lc]:/.test(body));
     expect(blocks.map(([, selector]) => selector)).toEqual([":root", ".dark"]);

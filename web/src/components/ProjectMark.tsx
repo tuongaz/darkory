@@ -1,5 +1,5 @@
 import type { Project } from "@/api/client";
-import { projectHue } from "@/lib/projectHue";
+import { markFill, projectHue } from "@/lib/projectHue";
 import { cn } from "@/lib/utils";
 
 const sizes = {
@@ -9,7 +9,7 @@ const sizes = {
 };
 
 /**
- * A Project's square mark: the first letter of its name on its colour. `sm` 14px (rows, crumbs),
+ * A Project's square mark: the first letter of its name on its stored colour. `sm` 14px (rows, crumbs),
  * `md` 20px, `lg` 28px (a page head). The fill is written through the style property (a CSSOM
  * write, which the app's CSP allows).
  */
@@ -18,17 +18,17 @@ export function ProjectMark({
   size = "sm",
   className,
 }: {
-  project: Pick<Project, "key" | "name">;
+  project: Pick<Project, "key" | "name" | "color">;
   size?: keyof typeof sizes;
   className?: string;
 }) {
-  const hue = projectHue(project.key);
+  const hue = projectHue(project.color);
   return (
     <span
       aria-hidden
       data-hue={hue}
       className={cn("inline-grid flex-none place-items-center leading-none font-semibold text-on-solid", sizes[size], className)}
-      style={{ backgroundColor: `oklch(var(--mark-l) var(--mark-c) ${hue})` }}
+      style={{ backgroundColor: markFill(project.color) }}
     >
       {(project.name[0] ?? project.key[0] ?? "?").toUpperCase()}
     </span>

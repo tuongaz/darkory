@@ -22,9 +22,10 @@ export const ada: Member = { id: "m-ada", name: "ada", kind: "human", admin: tru
 export const bob: Member = { id: "m-bob", name: "bob", kind: "human", admin: false, manager_id: "m-ada", created_at: at };
 export const builder: Member = { id: "m-builder", name: "builder", kind: "agent", admin: false, manager_id: "m-ada", created_at: at };
 
-const project = (id: string, key: string, name: string): Project => ({ id, key, name, auto_complete: false, acceptance: false, created_at: at });
-export const web: Project = project("p-web", "WEB", "Web");
-export const ops: Project = project("p-ops", "OPS", "Ops");
+const project = (id: string, key: string, name: string, color: number): Project => ({ id, key, name, color, auto_complete: false, acceptance: false, created_at: at });
+// The colours the server gives the first two Projects of an Organisation.
+export const web: Project = project("p-web", "WEB", "Web", 0);
+export const ops: Project = project("p-ops", "OPS", "Ops", 6);
 
 const skill = (name: string, extra: Partial<Skill> = {}): Skill => ({
   id: `s-${name}`,

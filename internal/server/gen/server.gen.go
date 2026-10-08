@@ -909,6 +909,13 @@ type CreateProjectBody struct {
 	// AutoComplete Defaults to false.
 	AutoComplete *bool `json:"auto_complete,omitempty"`
 
+	// Color The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+	// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+	// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+	// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+	// the hues the fewest Projects have), unless its creator names one.
+	Color *ProjectColor `json:"color,omitempty"`
+
 	// CopyFrom With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied.
 	CopyFrom *string `json:"copy_from,omitempty"`
 
@@ -1371,8 +1378,15 @@ type Project struct {
 	Acceptance bool `json:"acceptance"`
 
 	// AutoComplete The `auto_complete` a Task filed in the Project takes when its filer does not say.
-	AutoComplete bool      `json:"auto_complete"`
-	CreatedAt    time.Time `json:"created_at"`
+	AutoComplete bool `json:"auto_complete"`
+
+	// Color The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+	// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+	// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+	// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+	// the hues the fewest Projects have), unless its creator names one.
+	Color     ProjectColor `json:"color"`
+	CreatedAt time.Time    `json:"created_at"`
 
 	// DefaultWorkspaceID The Workspace a Task with no Parent filed in the Project names when it names none.
 	// Absent when the Project has none.
@@ -1383,6 +1397,13 @@ type Project struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
 }
+
+// ProjectColor The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+// the hues the fewest Projects have), unless its creator names one.
+type ProjectColor = int
 
 // ProjectDetail defines model for ProjectDetail.
 type ProjectDetail struct {
@@ -1946,6 +1967,13 @@ type UpdateMemberBody struct {
 type UpdateProjectBody struct {
 	Acceptance   *bool `json:"acceptance,omitempty"`
 	AutoComplete *bool `json:"auto_complete,omitempty"`
+
+	// Color The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+	// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+	// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+	// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+	// the hues the fewest Projects have), unless its creator names one.
+	Color *ProjectColor `json:"color,omitempty"`
 
 	// DefaultWorkspace Workspace id or name; `""` clears the Project's default.
 	DefaultWorkspace *string `json:"default_workspace,omitempty"`
@@ -2948,7 +2976,7 @@ type ServerInterface interface {
 	// GetProject Get a Project and its Members
 	// (GET /v1/projects/{project})
 	GetProject(w http.ResponseWriter, r *http.Request, project ProjectRef)
-	// UpdateProject Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	// UpdateProject Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 	// (PATCH /v1/projects/{project})
 	UpdateProject(w http.ResponseWriter, r *http.Request, project ProjectRef, params UpdateProjectParams)
 	// ListProjectLabels List a Project's own Labels

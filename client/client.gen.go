@@ -911,6 +911,13 @@ type CreateProjectBody struct {
 	// AutoComplete Defaults to false.
 	AutoComplete *bool `json:"auto_complete,omitempty"`
 
+	// Color The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+	// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+	// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+	// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+	// the hues the fewest Projects have), unless its creator names one.
+	Color *ProjectColor `json:"color,omitempty"`
+
 	// CopyFrom With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied.
 	CopyFrom *string `json:"copy_from,omitempty"`
 
@@ -1373,8 +1380,15 @@ type Project struct {
 	Acceptance bool `json:"acceptance"`
 
 	// AutoComplete The `auto_complete` a Task filed in the Project takes when its filer does not say.
-	AutoComplete bool      `json:"auto_complete"`
-	CreatedAt    time.Time `json:"created_at"`
+	AutoComplete bool `json:"auto_complete"`
+
+	// Color The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+	// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+	// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+	// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+	// the hues the fewest Projects have), unless its creator names one.
+	Color     ProjectColor `json:"color"`
+	CreatedAt time.Time    `json:"created_at"`
 
 	// DefaultWorkspaceID The Workspace a Task with no Parent filed in the Project names when it names none.
 	// Absent when the Project has none.
@@ -1385,6 +1399,13 @@ type Project struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
 }
+
+// ProjectColor The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+// the hues the fewest Projects have), unless its creator names one.
+type ProjectColor = int
 
 // ProjectDetail defines model for ProjectDetail.
 type ProjectDetail struct {
@@ -1948,6 +1969,13 @@ type UpdateMemberBody struct {
 type UpdateProjectBody struct {
 	Acceptance   *bool `json:"acceptance,omitempty"`
 	AutoComplete *bool `json:"auto_complete,omitempty"`
+
+	// Color The colour of the Project's mark: one of twelve hues around the colour wheel, by index,
+	// 0 red through 11 pink, 30° apart; the app sets how light and strong it reads in each
+	// theme. Stored with the Project, so it keeps it. A new Project takes the hue farthest from
+	// those its Organisation's Projects already have (the lowest index on a tie; past twelve,
+	// the hues the fewest Projects have), unless its creator names one.
+	Color *ProjectColor `json:"color,omitempty"`
 
 	// DefaultWorkspace Workspace id or name; `""` clears the Project's default.
 	DefaultWorkspace *string `json:"default_workspace,omitempty"`
@@ -3360,7 +3388,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/projects/{project} (the `GetProject` operationId).
 	GetProject(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateProjectWithBody Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	// UpdateProjectWithBody Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 	//
 	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -3374,7 +3402,7 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
 	UpdateProjectWithBody(ctx context.Context, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateProject Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	// UpdateProject Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 	//
 	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -5329,7 +5357,7 @@ func (c *Client) GetProject(ctx context.Context, project ProjectRef, reqEditors 
 	return c.Client.Do(req)
 }
 
-// UpdateProjectWithBody Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+// UpdateProjectWithBody Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 //
 // Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 // The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -5353,7 +5381,7 @@ func (c *Client) UpdateProjectWithBody(ctx context.Context, project ProjectRef, 
 	return c.Client.Do(req)
 }
 
-// UpdateProject Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+// UpdateProject Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 //
 // Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 // The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -12562,7 +12590,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/projects/{project} (the `GetProject` operationId).
 	GetProjectWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetProjectResponse, error)
 
-	// UpdateProjectWithBodyWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	// UpdateProjectWithBodyWithResponse Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 	//
 	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -12576,7 +12604,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/projects/{project} (the `UpdateProject` operationId).
 	UpdateProjectWithBodyWithResponse(ctx context.Context, project ProjectRef, params *UpdateProjectParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateProjectResponse, error)
 
-	// UpdateProjectWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+	// UpdateProjectWithResponse Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 	//
 	// Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 	// The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -18604,7 +18632,7 @@ func (c *ClientWithResponses) GetProjectWithResponse(ctx context.Context, projec
 	return ParseGetProjectResponse(rsp)
 }
 
-// UpdateProjectWithBodyWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+// UpdateProjectWithBodyWithResponse Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 //
 // Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 // The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
@@ -18624,7 +18652,7 @@ func (c *ClientWithResponses) UpdateProjectWithBodyWithResponse(ctx context.Cont
 	return ParseUpdateProjectResponse(rsp)
 }
 
-// UpdateProjectWithResponse Change a Project's name, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
+// UpdateProjectWithResponse Change a Project's name, colour, default Workspace, or the Auto-complete and Acceptance a Task filed in it takes (admin)
 //
 // Changes the fields given and keeps the others; `default_workspace` set to `""` clears it.
 // The key never changes. A Task filed with no Parent naming no Workspace takes the Project's
