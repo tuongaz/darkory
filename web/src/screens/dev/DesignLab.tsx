@@ -1,6 +1,7 @@
 import { MoonIcon, SunIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { MemberAvatar, type AvatarSize } from "@/components/MemberAvatar";
+import { MemberCards } from "@/components/memberCards";
 import { Button } from "@/components/ui/button";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { BlockingBoard } from "@/components/workflow/blocking/BlockingBoard";
@@ -22,42 +23,44 @@ import type { WorkGlyph as Glyph, Working } from "@/lib/work";
  */
 export default function DesignLab() {
   return (
-    <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-10 px-4 py-6 sm:px-6">
-      <header className="flex items-start gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-[-0.01em]">Design lab</h1>
-          <p className="text-muted-foreground">Marks, glyphs and the canvases of model v2, on sample records. Dev only.</p>
-        </div>
-        <ThemeSwitch />
-      </header>
-      <Section title="Marks" note="Every Member round in a ring: a plain line for a human, the AI gradient for an agent. A standalone mark says its Member works.">
-        <AvatarMatrix />
-      </Section>
-      <Section title="WorkGlyph" note="A Task's derived state at 14px, as rows and cards draw it.">
-        <GlyphSet />
-      </Section>
-      <Section title="Workflow canvas · live" note="Project › Workflow: read-only, the counts and the takers' rings.">
-        <WorkflowCanvas workflow={sampleWorkflow} mode="live" className="h-[520px] rounded-lg border" />
-      </Section>
-      <Section title="Workflow canvas · a new Project" note="The default Workflow at the places darkory init stores: the board's order, ranks 448px apart, rows 128px.">
-        <WorkflowCanvas workflow={defaultWorkflow} mode="live" className="h-[420px] rounded-lg border" />
-      </Section>
-      <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a Step, Tidy up.">
-        <EditingCanvas />
-      </Section>
-      <Section title="Subtask graph" note="MAIN-2 Support emoji in names: its Subtasks over the Workflow, Blocking arrows, takeable ones highlighted, a Blocking outside the Parent as a stub.">
-        <GraphDemo />
-      </Section>
-      <Section title="Blocking · MAIN" note="The Blocking view of MAIN at 10:42:05: MAIN-7's Subtasks and the Tasks with no Parent, a Blocking across the bands, a double block.">
-        <BlockingDemo tasks={mainTasks} steps={mainSteps} projectId="p-main" />
-      </Section>
-      <Section title="Blocking · BIG" note="The heavy case: 9 Blockings, a 4-chain, a double block, 11 Tasks with no Blocking.">
-        <BlockingDemo tasks={bigTasks} steps={bigSteps} projectId="p-big" />
-      </Section>
-      <Section title="Blocking · MAIN-7" note="Scoped to a Parent: its Subtasks, and MAIN-19 outside it.">
-        <BlockingDemo tasks={mainTasks} steps={mainSteps} projectId="p-main" scope="main-7" />
-      </Section>
-    </main>
+    <MemberCards value={false}>
+      <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-10 px-4 py-6 sm:px-6">
+        <header className="flex items-start gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-[-0.01em]">Design lab</h1>
+            <p className="text-muted-foreground">Marks, glyphs and the canvases of model v2, on sample records. Dev only.</p>
+          </div>
+          <ThemeSwitch />
+        </header>
+        <Section title="Marks" note="Every Member round in a ring: a plain line for a human, the AI gradient for an agent. A standalone mark says its Member works.">
+          <AvatarMatrix />
+        </Section>
+        <Section title="WorkGlyph" note="A Task's derived state at 14px, as rows and cards draw it.">
+          <GlyphSet />
+        </Section>
+        <Section title="Workflow canvas · live" note="Project › Workflow: read-only, the counts and the takers' rings.">
+          <WorkflowCanvas workflow={sampleWorkflow} mode="live" className="h-[520px] rounded-lg border" />
+        </Section>
+        <Section title="Workflow canvas · a new Project" note="The default Workflow at the places darkory init stores: the board's order, ranks 448px apart, rows 128px.">
+          <WorkflowCanvas workflow={defaultWorkflow} mode="live" className="h-[420px] rounded-lg border" />
+        </Section>
+        <Section title="Workflow canvas · editing" note="Settings › Workflow: select, drag, connect, + to add a Step, Tidy up.">
+          <EditingCanvas />
+        </Section>
+        <Section title="Subtask graph" note="MAIN-2 Support emoji in names: its Subtasks over the Workflow, Blocking arrows, takeable ones highlighted, a Blocking outside the Parent as a stub.">
+          <GraphDemo />
+        </Section>
+        <Section title="Blocking · MAIN" note="The Blocking view of MAIN at 10:42:05: MAIN-7's Subtasks and the Tasks with no Parent, a Blocking across the bands, a double block.">
+          <BlockingDemo tasks={mainTasks} steps={mainSteps} projectId="p-main" />
+        </Section>
+        <Section title="Blocking · BIG" note="The heavy case: 9 Blockings, a 4-chain, a double block, 11 Tasks with no Blocking.">
+          <BlockingDemo tasks={bigTasks} steps={bigSteps} projectId="p-big" />
+        </Section>
+        <Section title="Blocking · MAIN-7" note="Scoped to a Parent: its Subtasks, and MAIN-19 outside it.">
+          <BlockingDemo tasks={mainTasks} steps={mainSteps} projectId="p-main" scope="main-7" />
+        </Section>
+      </main>
+    </MemberCards>
   );
 }
 

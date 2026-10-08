@@ -260,6 +260,23 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await expect(ada).not.toHaveAttribute("data-working");
   await page.screenshot({ path: `${shots}9-01-marks.png`, animations: "disabled" });
 
+  // Hovering the step-head mark opens qa-bot's card: an agent with the qa Skill, holding the Task.
+  await mark.hover();
+  const card = page.locator('[data-slot="hover-card-content"]');
+  await expect(card.locator("[data-member-card]")).toHaveAttribute("data-member-card", "qa-bot");
+  await expect(card.getByText("Agent", { exact: true })).toBeVisible();
+  await expect(card.locator("dd").getByText("qa", { exact: true })).toBeVisible();
+  await expect(card.getByRole("link", { name: new RegExp(`${filed.key}\\s*Test the ledger`) })).toBeVisible();
+  await expect(card.getByText(/^Working for /)).toBeVisible();
+  await expect(card.getByRole("link", { name: "Open profile" })).toHaveAttribute("href", "/settings/organisation/agents/qa-bot");
+  await page.screenshot({ path: `${shots}9-02-card.png`, animations: "disabled" });
+  // Moving away closes it; focusing ada's mark opens hers.
+  await page.mouse.move(5, 5);
+  await expect(card).toHaveCount(0);
+  await ada.focus();
+  await expect(card.locator("[data-member-card]")).toHaveAttribute("data-member-card", "ada");
+  await expect(card.getByText("Human", { exact: true })).toBeVisible();
+
   expect(errors).toEqual([]);
   await ctx.close();
 });

@@ -1,14 +1,17 @@
 import { ArrowRightIcon } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import type { LineData, LineTask } from "@/components/workflowLine";
-import { blockedBy, tokenState, spanTime, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
+import { blockedBy, sideSteps, tokenState, spanTime, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
+import { breakdownSentence, ENTRY_LABEL, entryHint, holdSentence } from "@/components/workflowLine/words";
 import { cn } from "@/lib/utils";
 
 /**
  * The Workflow as a list, for a screen reader and a narrow window: each Step in order with who
  * takes its Tasks, its median, the Tasks at it now (held, waiting, blocked and by what, how long),
  * the scope's "+N" and the Connectors out of it; then the Steps after a Parent, and the questions
- * waiting with a Member at no Step. A Task opens its peek.
+ * waiting with a Member at no Step. It says what the line draws: where new Tasks start, the
+ * breakdown Step and what its Subtasks do, and that a hold's Tasks move on by hand. A Task opens
+ * its peek.
  */
 export function LineText({ data, now, onTask }: { data: LineData; now: number; onTask: (key: string) => void }) {
   const steps = [...data.facts.steps].sort((a, b) => a.position - b.position);
@@ -17,6 +20,8 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
   for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
   const name = (to: string | null) => (to === null ? "Done" : (steps.find((s) => s.id === to)?.name ?? "a Step"));
   const questions = data.all.filter((t) => t.aimedAt && !t.stepId);
+  const sides = sideSteps(data.facts);
+  const start = sides.start !== undefined ? name(sides.start) : undefined;
 
   const row = (t: LineTask, s: LineStepFacts) => {
     const state = tokenState(t, !s.skill);
@@ -58,12 +63,14 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
           <span className="text-xs text-muted-foreground tabular-nums">{i + 1}</span>
           <span className="truncate font-semibold">{s.name}</span>
           <span className="truncate font-mono text-[11px] text-muted-foreground">{s.skill?.name ?? "hold"}</span>
+          {s.id === sides.start && <span className="rounded-full border px-1.5 text-[11px] leading-4 font-medium">{ENTRY_LABEL}</span>}
           <span className="ml-auto text-xs text-muted-foreground tabular-nums">
             {list.length} {list.length === 1 ? "Task" : "Tasks"}
             {hidden > 0 && ` · +${hidden} outside the scope`}
             {s.medianMs !== undefined && ` · median ${spanTime(s.medianMs)}`}
           </span>
         </div>
+        {(!s.skill || sides.before.has(s.id)) && <p className="px-3 pb-1.5 text-xs text-muted-foreground">{s.skill ? breakdownSentence(start) : holdSentence()}</p>}
         {list.length > 0 && (
           <ul aria-label={`Tasks at ${s.name}`} className="flex flex-col border-t px-1.5 py-1">
             {list.map((t) => row(t, s))}
@@ -87,6 +94,7 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3 px-4 py-5 sm:px-6">
       {steps.length === 0 && <p className="text-muted-foreground">No Steps yet: nothing can be filed in this Project.</p>}
+      {start && <p className="text-sm">{entryHint(start)}.</p>}
       <ol aria-label="Steps" className="flex flex-col gap-2">
         {steps.map(step)}
         <li className="flex items-center gap-2 rounded-lg border px-3 py-2.5">

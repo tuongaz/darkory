@@ -20,7 +20,8 @@ type Picked = { file: File; url: string };
  * The mark at the head of a Member's settings, and how their Avatar is changed: click it (or
  * Upload beside it) to choose an image, see it in the Member's ring, and save it; Remove goes back
  * to initials. The server cuts the middle square and scales it to 256 pixels, which the round
- * preview shows. Only the editable see the controls: an admin, or a human on their own page.
+ * preview shows. Only the editable see the controls: an admin, or a human on their own page. The
+ * mark opens no hover card: the page is the Member's own.
  */
 export function AvatarControl({ member, editable }: { member: Member; editable: boolean }) {
   const [picked, setPicked] = useState<Picked | null>(null);
@@ -29,7 +30,7 @@ export function AvatarControl({ member, editable }: { member: Member; editable: 
     mutationFn: () => updateMember(member.id, { avatar_file_id: "" }),
     onSuccess: () => toast(`Avatar of ${member.name} removed`),
   });
-  if (!editable) return <MemberAvatar member={member} size="lg" />;
+  if (!editable) return <MemberAvatar member={member} size="lg" card={false} />;
   const has = !!member.avatar_file_id;
   const pick = (file: File) => {
     const p = avatarProblem(file);
@@ -86,7 +87,7 @@ function AvatarButton({ member, label, ...props }: { member: Member; label: stri
       className="group relative rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       {...props}
     >
-      <MemberAvatar member={member} size="lg" />
+      <MemberAvatar member={member} size="lg" card={false} />
       <span
         aria-hidden
         className="absolute inset-0 grid place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
