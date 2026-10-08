@@ -396,7 +396,12 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
                 label="Acceptance"
                 checked={acceptance ?? project?.acceptance ?? false}
                 onChange={setAcceptance}
-                help={`An Acceptance at ${acceptanceStep.name} before it is done`}
+                help={
+                  // "An Acceptance at Acceptance" says the word twice when the Step is named for it.
+                  acceptanceStep.name.trim().toLowerCase() === "acceptance"
+                    ? "Confirmed as a whole at the Acceptance Step before it is done"
+                    : `Acceptance runs at the ${acceptanceStep.name} Step before it is done`
+                }
               />
             )}
           </div>

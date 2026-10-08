@@ -231,7 +231,7 @@ describe("the addresses before Projects", () => {
     ["/admin/teams/OPS", "Settings/Ops/General"],
     ["/admin/workflow", "Settings/Web/Workflow"],
     ["/admin/workspaces", "Settings/Web/Workspaces"],
-    ["/account", "Settings/Profile"],
+    ["/account", "Settings/Account"],
     ["/teams/OPS/features", "Ops/Tasks"],
     ["/agents", "Web/Agents"],
     ["/activity", "Web/Activity"],
@@ -298,8 +298,13 @@ describe("the Install checklist", () => {
     renderApp("/inbox");
 
     const setup = await screen.findByRole("region", { name: "Set up Acme" });
-    expect(within(setup).getByLabelText("Step 1, done")).toBeInTheDocument();
-    expect(within(setup).getByLabelText("Step 2, done")).toBeInTheDocument();
+    expect(within(setup).getByLabelText("1 of 3, done")).toBeInTheDocument();
+    expect(within(setup).getByLabelText("2 of 3, done")).toBeInTheDocument();
+    // A Project exists: the list offers no first one. Its items are not "steps": Step is a
+    // Workflow's word, which only item 3's help uses, for one.
+    expect(within(setup).queryByRole("button", { name: "Create Project" })).not.toBeInTheDocument();
+    expect(setup).not.toHaveTextContent(/\bsteps\b|step \d/i);
+    expect(within(setup).queryAllByLabelText(/step/i)).toEqual([]);
     expect(within(setup).getByRole("link", { name: "Add Member" })).toHaveAttribute("href", "/settings/organisation/members?new=1");
     await userEvent.click(within(setup).getByRole("button", { name: "File Task" }));
     // The Tasks screen answers the intent; its placeholder dialog names the Project.
@@ -557,7 +562,7 @@ describe("Settings", () => {
 
     await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Ops/General"));
     expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
-    expect(within(nav()).getByRole("link", { name: "Profile" })).toHaveAttribute("href", "/settings/account");
+    expect(within(nav()).getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
     const organisation = within(nav()).getByRole("list", { name: "Organisation" });
     expect(within(organisation).getAllByRole("link").map((l) => l.textContent)).toEqual(["Members", "Agents", "Skills", "Labels", "Install"]);
     expect(within(organisation).getByRole("link", { name: "Members" })).toHaveAttribute("href", "/settings/organisation/members");
@@ -574,7 +579,7 @@ describe("Settings", () => {
   it("shows a Member who is not an admin their Account and the Projects they are in, and refuses the Organisation's pages", async () => {
     mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
     renderApp("/settings");
-    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Profile"));
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
     expect(within(nav()).queryByRole("list", { name: "Organisation" })).not.toBeInTheDocument();
     expect(within(within(nav()).getByRole("list", { name: "Projects" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["WWeb"]);
     expect(within(nav()).queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();

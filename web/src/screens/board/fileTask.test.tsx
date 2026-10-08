@@ -158,6 +158,16 @@ describe("File a Task", () => {
     expect(filed(api)!.body).toEqual({ project: "WEB", title: "Which card brands?", aim: bob.id, blocks: "WEB-4" });
   });
 
+  it("names the Acceptance Step once when it is named Acceptance", async () => {
+    const wf = workflow();
+    wf.steps.push({ ...wf.steps[3], id: "st-accept", name: "Acceptance", skill_id: acceptance.id, position: 7, takers: [] });
+    mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": wf }));
+    const dialog = await openDialog();
+    await within(dialog).findByRole("switch", { name: "Acceptance" });
+    expect(dialog).toHaveTextContent("Confirmed as a whole at the Acceptance Step before it is done");
+    expect(dialog).not.toHaveTextContent("Acceptance at Acceptance");
+  });
+
   it("offers Acceptance when the Workflow has an acceptance Step, starting at the Project's default", async () => {
     const wf = workflow();
     wf.steps.push({ ...wf.steps[3], id: "st-accept", name: "Accept", skill_id: acceptance.id, position: 7, takers: [] });
@@ -171,6 +181,7 @@ describe("File a Task", () => {
     const dialog = await openDialog();
     expect(await within(dialog).findByRole("switch", { name: "Acceptance" })).toBeChecked();
     expect(within(dialog).getByRole("switch", { name: "Auto-complete" })).toBeChecked();
+    expect(dialog).toHaveTextContent("Acceptance runs at the Accept Step before it is done");
     await userEvent.click(within(dialog).getByRole("switch", { name: "Acceptance" }));
     await userEvent.type(within(dialog).getByLabelText("Title"), "Refunds");
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));

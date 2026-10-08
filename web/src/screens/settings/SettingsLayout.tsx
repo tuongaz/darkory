@@ -100,7 +100,7 @@ function SettingsNav() {
       <SidebarContent className="gap-0 px-2 pb-3" onClickCapture={closeOnLink}>
         <nav aria-label="Settings pages">
           <NavGroup label="Account">
-            <NavLink to="/settings/account" icon={<CircleUserIcon />} label="Profile" />
+            <NavLink to="/settings/account" icon={<CircleUserIcon />} label="Account" />
           </NavGroup>
           {admin && (
             <NavGroup label="Organisation">

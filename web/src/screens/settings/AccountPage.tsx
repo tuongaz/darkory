@@ -15,7 +15,7 @@ import { useHeldTasks } from "./queries";
 import { memberPath } from "./paths";
 
 /**
- * Settings › Account › Profile: who the signed-in Member is, and what can sign in as them: their
+ * Settings › Account: who the signed-in Member is, and what can sign in as them: their
  * tokens, their Sessions with this browser marked (Sign out on its row), and the CLI line for
  * another browser. An admin changes the facts on the Member's page under Organisation.
  */
@@ -26,7 +26,7 @@ export function AccountPage() {
   const sessions = useMemberSessions(m.id);
   const held = heldClaims(useHeldTasks(m.id).data ?? []);
   return (
-    <SettingsFrame crumbs={[{ label: "Profile" }]}>
+    <SettingsFrame crumbs={[{ label: "Account" }]}>
       <div className="max-w-[820px]">
         <PageHeader
           title={m.name}
