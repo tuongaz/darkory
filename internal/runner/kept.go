@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -161,5 +162,32 @@ func (s *session) noteBuilt(ctx context.Context) {
 	}
 	if err != nil {
 		s.log.Warn("recording the Step the Task was built at", "err", err)
+	}
+}
+
+// noteReviewing records, as a review session starts and before its agent runs, the commit the
+// review is shown on each branch, in a Note by the reviewer: "Reviewing <branch> at <sha> in
+// <Workspace>." A later merge calls the Task reviewed work only where its branch is still that
+// commit (reviewed in merge.go): a commit after it, the reviewer's own included, however dated,
+// is not what was reviewed. Written before the agent starts, it is the first such Note of the
+// Claim, which is the one the merge reads.
+func (s *session) noteReviewing(ctx context.Context) {
+	if len(s.checkouts) == 0 || s.d.Task.SkillID == nil {
+		return
+	}
+	if sk, ok := s.r.skill(ctx, s.rec, *s.d.Task.SkillID); !ok || !s.r.isReview(ctx, s.rec, sk) {
+		return
+	}
+	var lines []string
+	for _, c := range s.checkouts {
+		if sha := s.tips[c.Workspace.Path+"\x00"+c.Branch]; sha != "" {
+			lines = append(lines, fmt.Sprintf("Reviewing %s at %s in %s.", c.Branch, sha, c.Workspace.Name))
+		}
+	}
+	if len(lines) == 0 {
+		return
+	}
+	if err := s.rec.Note(ctx, s.key, strings.Join(lines, "\n")); err != nil {
+		s.log.Warn("recording the commit the review is shown", "err", err)
 	}
 }

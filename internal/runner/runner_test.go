@@ -479,14 +479,25 @@ const reviewThenRelease = `{"steps": [{"name": "Build", "skill": "engineer", "po
  "connectors": [{"from": "Build", "to": "Review", "name": "built", "position": 1},
   {"from": "Review", "to": "Release", "name": "pass", "position": 1}, {"from": "Release", "name": "released", "position": 1}]}`
 
-// A Task reviewed at an earlier Step and completed by a later one merges as reviewed work while
-// nothing was committed after the review; a commit after it is named in the merge's Note.
+// A Task reviewed at an earlier Step and completed by a later one merges as reviewed work only
+// when its branch is the very commit the review was shown, which a Note by the reviewer records as
+// its session starts. A commit after that, however it is dated, an amend, and the reviewer's own
+// commit are not reviewed work.
 func TestRunnerMergeNoteReadsAnEarlierReview(t *testing.T) {
+	backdated := []string{"GIT_COMMITTER_DATE=2001-01-01T00:00:00Z", "GIT_AUTHOR_DATE=2001-01-01T00:00:00Z"}
+	changed := " (web); completed by devops under devops, and its branch changed after reviewer's review."
 	for _, tc := range []struct {
-		name, devops, want string
+		name           string
+		reviewer       []string
+		devops         []string
+		want           string
+		reviewerRecord bool
 	}{
-		{"nothing committed after the review", "FAKEAGENT_NO_COMMIT=1", " (web)."},
-		{"a commit after the review", "FAKEAGENT_DELAY=1100ms", " (web); completed by devops under devops, and its branch changed after reviewer's review."},
+		{"nothing committed after the review", nil, []string{"FAKEAGENT_NO_COMMIT=1"}, " (web).", true},
+		{"a commit after the review", nil, nil, changed, true},
+		{"a commit after the review dated before it", nil, backdated, changed, true},
+		{"the reviewed commit amended, dated before the review", nil, append([]string{"FAKEAGENT_AMEND=1"}, backdated...), changed, true},
+		{"the reviewer committing to what it reviewed", []string{}, []string{"FAKEAGENT_NO_COMMIT=1"}, changed, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t, storetest.Open(t, store.SQLite))
@@ -494,9 +505,13 @@ func TestRunnerMergeNoteReadsAnEarlierReview(t *testing.T) {
 			f.workflow(reviewThenRelease)
 			f.agent("builder", "advance", "engineer")
 			f.agent("reviewer", "advance", "review")
-			f.setScenario("reviewer", "advance", "FAKEAGENT_OUTCOME=pass", "FAKEAGENT_NO_COMMIT=1", "FAKEAGENT_DELAY=1100ms")
+			reviewer := []string{"FAKEAGENT_OUTCOME=pass", "FAKEAGENT_NO_COMMIT=1"}
+			if tc.reviewer != nil {
+				reviewer = append([]string{"FAKEAGENT_OUTCOME=pass"}, tc.reviewer...)
+			}
+			f.setScenario("reviewer", "advance", reviewer...)
 			f.agent("devops", "advance", "devops")
-			f.setScenario("devops", "advance", tc.devops)
+			f.setScenario("devops", "advance", tc.devops...)
 			f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
 			f.run("builder", "reviewer", "devops")
 
@@ -506,6 +521,12 @@ func TestRunnerMergeNoteReadsAnEarlierReview(t *testing.T) {
 				return strings.HasPrefix(n.Body, "Merged web-1-cart-page into main at ") && strings.HasSuffix(n.Body, tc.want)
 			}) {
 				t.Fatalf("WEB-1's Notes, wanting one ending %q:\n%s", tc.want, notesOf(web1))
+			}
+			recorded := slices.ContainsFunc(web1.Notes, func(n client.Note) bool {
+				return n.AuthorID == f.ids["reviewer"] && reviewedLine.MatchString(n.Body)
+			})
+			if recorded != tc.reviewerRecord {
+				t.Fatalf("the reviewer's record of the commit it saw: %v, want %v\n%s", recorded, tc.reviewerRecord, notesOf(web1))
 			}
 		})
 	}
@@ -1001,5 +1022,42 @@ func TestRunnerMergeConflict(t *testing.T) {
 				t.Fatalf("%s's work reached main despite the conflict", conflicted)
 			}
 		})
+	}
+}
+
+// The commit a review was shown is read from the first Note its holder wrote during the Claim; a
+// later Note of the agent's, a Note by anyone else and one outside the Claim change nothing, and a
+// reviewer who held the Task under another Skill reviewed its own work.
+func TestReviewAttestation(t *testing.T) {
+	at := func(m int) time.Time { return time.Date(2026, 10, 9, 1, m, 0, 0, time.UTC) }
+	sha := func(c byte) string { return strings.Repeat(string(c), 40) }
+	ended := at(10)
+	c := &client.Claim{HolderID: "rev", StartedAt: at(1), EndedAt: &ended}
+	note := func(by string, m int, body string) client.Note {
+		return client.Note{AuthorID: by, CreatedAt: at(m), Body: body}
+	}
+	d := &client.TaskDetail{Notes: []client.Note{
+		note("rev", 9, "Reviewing web-1-x at "+sha('b')+" in web."), // the agent's own, later
+		note("dev", 2, "Reviewing web-1-x at "+sha('c')+" in web."), // someone else's
+		note("rev", 0, "Reviewing web-1-x at "+sha('d')+" in web."), // before the Claim
+		note("rev", 2, "Reviewing web-1-x at "+sha('a')+" in web."), // the runner's, first in the Claim
+	}}
+	saw := attested(d, c)
+	if got := saw["web\x00web-1-x"]; got != sha('a') {
+		t.Fatalf("attested %q, want the first Note of the Claim", got)
+	}
+	rv := &reviewed{completed: "completed by devops under devops", reviewer: "rev", saw: saw}
+	if v := rv.verdict("web", "web-1-x", sha('a')); v != "" {
+		t.Fatalf("the commit reviewed: %q", v)
+	}
+	if v := rv.verdict("web", "web-1-x", sha('b')); !strings.HasSuffix(v, "changed after rev's review") {
+		t.Fatalf("another commit: %q", v)
+	}
+	if v := rv.verdict("web", "other", sha('a')); !strings.HasSuffix(v, "nothing records the commit rev's review saw") {
+		t.Fatalf("a branch no Note names: %q", v)
+	}
+	rv.built = true
+	if v := rv.verdict("web", "web-1-x", sha('a')); !strings.HasSuffix(v, "rev reviewed work it had built itself") {
+		t.Fatalf("its own work: %q", v)
 	}
 }

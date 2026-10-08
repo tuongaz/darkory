@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,9 +18,9 @@ import (
 
 // Merges follow the record (ADR 0015): a worked Task ending Done merges its branch into its base,
 // its Parent's branch for a Subtask or the default branch for a Task with no Parent, whoever
-// completed it: a review's advance into Done, or a later Step's after a review with nothing
-// committed since, as reviewed work; otherwise its holder's own, without review or changed after
-// it, which the merge's Note then says. A Parent's Complete merges its branch into the
+// completed it: a review's advance into Done, or a later Step's when the branch is still the
+// commit the review was shown (recorded by the runner as the review starts), as reviewed work;
+// otherwise its holder's own, without review or changed after it, which the merge's Note says. A Parent's Complete merges its branch into the
 // default branch, or opens its pull request. In a Workspace merged through pull requests GitHub
 // merges, and the runner reads the merged pull request carrying the Task's key. The merger works
 // through the Activity entries one at a time, in order, so a Subtask's merge lands before the
@@ -114,23 +115,86 @@ func (r *Runner) completed(ctx context.Context, a client.Activity, d *client.Tas
 		}
 	}
 	unreviewed := ""
+	var rv *reviewed
 	if !review {
 		unreviewed = "completed by " + r.memberName(ctx, by)
 		if skill != "" {
 			unreviewed += " under " + skill
 		}
-		switch last := r.lastReview(ctx, rec, d); {
-		case last == nil:
+		if last := r.lastReview(ctx, rec, d); last != nil {
+			// Reviewed at an earlier Step, such as a code review before QA and a release: the merge
+			// is of reviewed work only where the branch is the very commit that review saw.
+			rv = &reviewed{completed: unreviewed, reviewer: r.memberName(ctx, last.HolderID), saw: attested(d, last),
+				built: builtBy(ctx, r, rec, d, last.HolderID)}
+		} else {
 			unreviewed += ", without review"
-		case r.changedSince(ctx, rec, d, *last.EndedAt):
-			unreviewed += ", and its branch changed after " + r.memberName(ctx, last.HolderID) + "'s review"
-		default:
-			// Reviewed at an earlier Step, such as a code review before QA and a release, and
-			// nothing was committed since: the merge is of reviewed work.
-			unreviewed = ""
 		}
 	}
-	r.mergeTask(ctx, r.actingAs(by), d, unreviewed)
+	r.mergeTask(ctx, r.actingAs(by), d, unreviewed, rv)
+}
+
+// reviewed is what a Task completed at a Step after its review merges with: the commit the review
+// saw on each branch, from its reviewer's Note, which the merge checks the branch against.
+type reviewed struct {
+	// completed says who completed the Task and under which Skill; reviewer names the reviewer.
+	completed, reviewer string
+	// saw are the commits the review saw, by Workspace name and branch.
+	saw map[string]string
+	// built: the reviewer held the Task under another Skill too, so reviewed its own work.
+	built bool
+}
+
+// verdict is what the merge's Note says of a branch whose tip is tip: nothing when it is the
+// commit the review was shown, else why it is not reviewed work.
+func (rv *reviewed) verdict(ws, branch, tip string) string {
+	switch saw, ok := rv.saw[ws+"\x00"+branch]; {
+	case rv.built:
+		return rv.completed + ", and " + rv.reviewer + " reviewed work it had built itself"
+	case !ok:
+		return rv.completed + ", and nothing records the commit " + rv.reviewer + "'s review saw"
+	case tip == "" || saw != tip:
+		return rv.completed + ", and its branch changed after " + rv.reviewer + "'s review"
+	}
+	return ""
+}
+
+// reviewedLine is how the runner records, in a Note by the reviewer as its session starts, the
+// commit a review is shown on a branch (noteReviewing).
+var reviewedLine = regexp.MustCompile(`^Reviewing (\S+) at ([0-9a-f]{40}) in (.+)\.$`)
+
+// attested are the commits the review Claim c was shown, by Workspace name and branch: from the
+// first Note its holder wrote during the Claim that names each, which the runner writes before the
+// agent starts, so nothing the agent writes later replaces it.
+func attested(d *client.TaskDetail, c *client.Claim) map[string]string {
+	out := map[string]string{}
+	notes := slices.Clone(d.Notes)
+	slices.SortStableFunc(notes, func(a, b client.Note) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	for _, n := range notes {
+		if n.AuthorID != c.HolderID || n.CreatedAt.Before(c.StartedAt) || (c.EndedAt != nil && n.CreatedAt.After(*c.EndedAt)) {
+			continue
+		}
+		for l := range strings.Lines(n.Body) {
+			if m := reviewedLine.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
+				if k := m[3] + "\x00" + m[1]; out[k] == "" {
+					out[k] = m[2]
+				}
+			}
+		}
+	}
+	return out
+}
+
+// builtBy says whether member held d under a Skill other than review: its review was of its own work.
+func builtBy(ctx context.Context, r *Runner, rec Record, d *client.TaskDetail, member string) bool {
+	for _, c := range d.Claims {
+		if c.HolderID != member || c.SkillID == nil {
+			continue
+		}
+		if sk, ok := r.skill(ctx, rec, *c.SkillID); ok && !r.isReview(ctx, rec, sk) {
+			return true
+		}
+	}
+	return false
 }
 
 // lastReview is the latest of d's Claims held under a review Skill that its holder ended by
@@ -151,32 +215,6 @@ func (r *Runner) lastReview(ctx context.Context, rec Record, d *client.TaskDetai
 		}
 	}
 	return last
-}
-
-// changedSince says whether a commit on one of d's branches came after t: a branch the runner made
-// for it whose tip was committed later, or one it cannot read, which it cannot say was not.
-func (r *Runner) changedSince(ctx context.Context, rec Record, d *client.TaskDetail, t time.Time) bool {
-	wss, err := rec.Workspaces(ctx, d)
-	if err != nil {
-		return true
-	}
-	for _, ws := range wss {
-		made, err := r.ledger.find(ws.Path, func(m Made) bool { return m.Task == d.Task.Key && strings.HasPrefix(m.Branch, taskPrefix(d.Task.Key)) })
-		if err != nil {
-			return true
-		}
-		for _, m := range made {
-			out, err := runGit(ctx, ws.Path, "log", "-1", "--format=%ct", "refs/heads/"+m.Branch)
-			if err != nil {
-				return true
-			}
-			sec, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
-			if err != nil || sec > t.Unix() {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func ptrValue[T any](p *T) T {
@@ -219,11 +257,7 @@ func (r *Runner) actingAs(member string) Record {
 // mergeTask merges a done Task's branch into its base in each of its Workspaces, or reads its
 // merged pull request, and records how it went in a Note on the Task, as rec. unreviewed says who
 // completed it, and under which Skill, when it was not a review's.
-func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail, unreviewed string) {
-	how := ""
-	if unreviewed != "" {
-		how = "; " + unreviewed
-	}
+func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail, unreviewed string, rv *reviewed) {
 	key := d.Task.Key
 	defer func() {
 		r.mu.Lock()
@@ -247,11 +281,28 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 			continue
 		}
 		branch, target := made[0].Branch, made[0].Base
+		// What the Note says of review is per branch: the commit merged against the one the review saw.
+		unrev := unreviewed
+		verdict := func(tip string) {
+			if rv != nil {
+				unrev = rv.verdict(ws.Name, branch, tip)
+			}
+		}
+		how := func() string {
+			if unrev == "" {
+				return ""
+			}
+			return "; " + unrev
+		}
 		if ws.Mode == ModePullRequest {
-			lines = append(lines, r.pullRequestLine(ctx, ws, branch, target, how))
+			tip, _ := runGit(ctx, ws.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+			verdict(tip)
+			lines = append(lines, r.pullRequestLine(ctx, ws, branch, target, how()))
 			continue
 		}
 		unlock := r.lockRepo(ws.Path)
+		tip, _ := runGit(ctx, ws.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+		verdict(tip)
 		if parent != nil && target == ParentBranch(parent.Key) && !branchExists(ctx, ws.Path, target) {
 			if err := r.makeParentBranch(ctx, ws, parent.Key); err != nil {
 				unlock()
@@ -260,24 +311,27 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 			}
 		}
 		res, err := mergeBranch(ctx, ws.Path, branch, target, fmt.Sprintf("Merge %s into %s\n\n%s: %s", branch, target, key, d.Task.Title))
+		if after, _ := runGit(ctx, ws.Path, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); after != tip {
+			verdict("") // the branch moved while it merged: what went in is not the commit checked
+		}
 		unlock()
 		var dirty ErrDirty
 		switch {
 		case errors.As(err, &dirty):
 			line := fmt.Sprintf("%s: did not merge %s into %s: %v.", ws.Name, branch, target, err)
-			lines = append(lines, line+r.resolve(ctx, rec, d, parent, ws, branch, target, err.Error()+"; commit or stash them, then merge "+branch+" by hand or here.", unreviewed))
+			lines = append(lines, line+r.resolve(ctx, rec, d, parent, ws, branch, target, err.Error()+"; commit or stash them, then merge "+branch+" by hand or here.", unrev))
 		case err != nil:
 			lines = append(lines, fmt.Sprintf("%s: could not merge %s into %s: %v", ws.Name, branch, target, err))
 			r.logError(ctx, "merging a done Task's branch", "task", key, "workspace", ws.Name, "err", err)
 		case res.Conflict != "":
 			line := fmt.Sprintf("%s: merging %s into %s conflicted, so nothing was merged.", ws.Name, branch, target)
-			lines = append(lines, line+r.resolve(ctx, rec, d, parent, ws, branch, target, res.Conflict, unreviewed)+"\n"+res.Conflict)
+			lines = append(lines, line+r.resolve(ctx, rec, d, parent, ws, branch, target, res.Conflict, unrev)+"\n"+res.Conflict)
 		case res.Already:
 			lines = append(lines, fmt.Sprintf("%s: %s was already merged into %s (%s).", ws.Name, branch, target, short(res.Commit)))
 		default:
-			lines = append(lines, fmt.Sprintf("Merged %s into %s at %s (%s)%s.", branch, target, short(res.Commit), ws.Name, how))
+			lines = append(lines, fmt.Sprintf("Merged %s into %s at %s (%s)%s.", branch, target, short(res.Commit), ws.Name, how()))
 			r.log.Info("merged a done Task's branch", "task", key, "workspace", ws.Name, "branch", branch, "into", target, "commit", short(res.Commit),
-				"reviewed", unreviewed == "")
+				"reviewed", unrev == "")
 		}
 	}
 	if len(lines) == 0 {

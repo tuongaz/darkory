@@ -243,6 +243,7 @@ func (s *session) start(ctx context.Context) error {
 	}
 	s.checkouts = checkouts
 	s.tips = tips(ctx, checkouts)
+	s.noteReviewing(ctx)
 	p, err := s.prompt(ctx, parent, checkouts)
 	if err != nil {
 		return err
