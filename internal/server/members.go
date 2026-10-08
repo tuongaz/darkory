@@ -77,7 +77,12 @@ func (s *Server) UpdateMember(w http.ResponseWriter, r *http.Request, member gen
 	if !ok {
 		return
 	}
-	m, err := s.core.UpdateMember(r.Context(), c, member, core.MemberChange{Name: body.Name, Email: (*string)(body.Email), Admin: body.Admin}, idem)
+	m, err := s.core.UpdateMember(r.Context(), c, member, core.MemberChange{Name: body.Name, Email: (*string)(body.Email), Admin: body.Admin,
+		AvatarFileID: body.AvatarFileID}, idem)
+	if err == nil && body.AvatarFileID != nil {
+		// An avatar file the Member stopped showing was deleted with the change.
+		s.purgeFiles(r.Context(), c)
+	}
 	s.respond(w, r, out, m, err)
 }
 

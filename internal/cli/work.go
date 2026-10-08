@@ -504,6 +504,11 @@ func cmdEvidenceGet(c *call) error {
 		return c.show(res.Body, func(w io.Writer) { c.printEvidence(w, *res.JSON200) })
 	}
 	res, err := conn.ClientInterface.DownloadEvidence(c.ctx, args[0])
+	return c.save(res, err, *out)
+}
+
+// save writes a download to out, or to standard output for -.
+func (c *call) save(res *http.Response, err error, out string) error {
 	if err != nil {
 		return check(nil, err)
 	}
@@ -512,11 +517,11 @@ func cmdEvidenceGet(c *call) error {
 		b, _ := io.ReadAll(res.Body)
 		return remote.ErrorFrom(res.StatusCode, b)
 	}
-	if *out == "-" {
+	if out == "-" {
 		_, err = io.Copy(c.env.Stdout, res.Body)
 		return err
 	}
-	f, err := os.Create(*out)
+	f, err := os.Create(out)
 	if err != nil {
 		return err
 	}
@@ -528,7 +533,7 @@ func cmdEvidenceGet(c *call) error {
 		return err
 	}
 	if !c.g.json {
-		fmt.Fprintf(c.out(), "Saved %d bytes to %s.\n", n, *out)
+		fmt.Fprintf(c.out(), "Saved %d bytes to %s.\n", n, out)
 	}
 	return nil
 }
