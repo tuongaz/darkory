@@ -2,7 +2,6 @@ import type { RunnerSession, Schemas, Skill, Task, Workflow as WorkflowRecord } 
 import type { Connector, Step, Taker, TaskChip, Workflow } from "@/components/workflow/model";
 import { workingOf, type MemberKind, type Working } from "@/lib/work";
 import { liveClaim } from "@/work";
-import type { Change } from "./edits";
 
 /*
  * The Project's Workflow as `/v1` serves it (`WorkflowRecord`, `GET …/workflow`) bound to the shapes the
@@ -158,54 +157,6 @@ export function toBody(record: WorkflowRecord, moves?: Record<string, string>): 
 
 function positionOf(steps: RecordStep[], id: string): number {
   return steps.find((s) => s.id === id)?.position ?? 0;
-}
-
-/**
- * The ids `/v1` gave the Steps and Connectors `sent` drew without one: a Step by its name in the
- * reply, a Connector by its Step and name. Read from what was sent, so a Step renamed since keeps
- * its new id.
- */
-export function newIds(sent: WorkflowRecord, reply: WorkflowRecord): Map<string, string> {
-  const ids = new Map<string, string>();
-  for (const s of sent.steps) {
-    if (!isNew(s.id)) continue;
-    const got = reply.steps.find((r) => same(r.name, s.name));
-    if (got) ids.set(s.id, got.id);
-  }
-  const sid = (id: string) => ids.get(id) ?? id;
-  for (const c of sent.connectors) {
-    if (!isNew(c.id)) continue;
-    const got = reply.connectors.find((r) => r.from_step_id === sid(c.from_step_id) && same(r.name, c.name));
-    if (got) ids.set(c.id, got.id);
-  }
-  return ids;
-}
-
-/** `draft` with the new ids in place of its `new:…` ones, so later edits name them as the record does. */
-export function adoptIds(draft: WorkflowRecord, ids: Map<string, string>): WorkflowRecord {
-  const id = (x: string) => ids.get(x) ?? x;
-  return {
-    ...draft,
-    steps: draft.steps.map((s) => (ids.has(s.id) ? { ...s, id: id(s.id) } : s)),
-    connectors: draft.connectors.map((c) => ({
-      ...c,
-      id: id(c.id),
-      from_step_id: id(c.from_step_id),
-      to_step_id: c.to_step_id ? id(c.to_step_id) : undefined,
-    })),
-  };
-}
-
-/**
- * `make` applied to `wf` as a caller saw it before `/v1` named its new Steps (`renamed`, `new:…`
- * id to the record's): the change names them by their `new:…` ids, and comes back by `wf`'s.
- */
-export function changeAcross(wf: WorkflowRecord, renamed: Map<string, string>, make: (wf: WorkflowRecord) => Change): Change {
-  if (renamed.size === 0) return make(wf);
-  const change = make(adoptIds(wf, new Map([...renamed].map(([was, now]) => [now, was]))));
-  const id = (x: string) => renamed.get(x) ?? x;
-  const moves = change.moves && Object.fromEntries(Object.entries(change.moves).map(([from, to]) => [id(from), id(to)]));
-  return { ...change, next: adoptIds(change.next, renamed), moves };
 }
 
 /** Names compare as `/v1` compares them: ignoring case. */

@@ -1,122 +1,105 @@
-import type { Project } from "@/api/client";
+import { ChevronDownIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { Skill } from "@/api/client";
 import { Refusal } from "@/components/Refusal";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { WorkflowCanvas, type CanvasSelection } from "@/components/workflow/WorkflowCanvas";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { addConnector, addStep, layoutSteps, placeStep, reconnect, removeConnector } from "./edits";
-import { useEditingCanvas } from "./canvasData";
-import { EditPanel } from "./Panel";
-import { TextView } from "./TextView";
-import type { useWorkflowEditor } from "./useEditor";
-import type { WorkflowView } from "./view";
+import { cn } from "@/lib/utils";
+import type { RecordStep, WorkflowRecord } from "./bind";
+import { groupOf, type Draft } from "./edit/draft";
+import { Preview } from "./edit/Preview";
+import { StepList } from "./edit/StepList";
+import type { DraftEditor } from "./edit/useDraft";
 
 /**
- * Settings › a Project › Workflow, for an admin: the canvas (or its list) editing, the selected
- * Step or Connector's panel beside it (a sheet on a phone), and under the canvas what `/v1`
- * would refuse, in words, or did refuse.
+ * Settings › a Project › Workflow: the Workflow as a plain ordered list, with a preview of its line
+ * above (behind a toggle on a phone). An admin edits it and saves it whole; anyone else reads it.
+ * Under the list, what Save would be refused, in words, or what `/v1` did refuse.
  */
 export function EditingWorkflow({
-  project,
-  view,
   editor,
-  picked,
-  setPicked,
+  draft,
+  base,
+  skills,
+  focusStep,
 }: {
-  project: Project;
-  view: WorkflowView;
-  editor: ReturnType<typeof useWorkflowEditor>;
-  /** What is selected, as picked: a new Step by its `new:…` id until /v1 names it. */
-  picked: CanvasSelection;
-  setPicked: (s: CanvasSelection) => void;
+  /** Absent for a Member who is not an admin: the list read-only. */
+  editor?: DraftEditor;
+  draft: Draft | undefined;
+  base: WorkflowRecord | undefined;
+  skills: Skill[] | undefined;
+  focusStep?: string;
 }) {
-  const { workflow: record, apply, resolve } = editor;
-  const workflow = useEditingCanvas(record);
   const phone = useIsMobile();
-  // A new Step or Connector keeps its selection once /v1 gives it its id.
-  const resolved = picked && { ...picked, id: resolve(picked.id) };
-  const exists =
-    resolved &&
-    (resolved.kind === "step" ? record?.steps.some((s) => s.id === resolved.id) : record?.connectors.some((c) => c.id === resolved.id));
-  const selection = exists ? resolved : null;
+  const [showLine, setShowLine] = useState(false);
+  const skillMap = useMemo(() => new Map((skills ?? []).map((s) => [s.id, s])), [skills]);
+  const groups = (s: Pick<RecordStep, "skill_id">) => groupOf(s, skillMap);
 
-  if (editor.query.isError) return <Refusal error={editor.query.error} className="m-6" />;
-  if (!record || !workflow) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
+  // Leaving the page with changes unsaved asks first.
+  const unsaved = !!editor && editor.changes > 0;
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
 
-  const panel = selection && (
-    <EditPanel project={project} record={record} workflow={workflow} selection={selection} picked={picked?.id ?? selection.id} apply={apply} onSelect={setPicked} />
-  );
-  const said = (editor.problem || !!editor.refused) && (
-    <div className="pointer-events-auto max-w-[min(560px,calc(100%-96px))] rounded-md border border-danger-border bg-background px-3 py-2 shadow-soft">
-      {editor.problem ? (
+  // Undo, outside a field (a field undoes its own typing): ⌘Z or Ctrl+Z.
+  useEffect(() => {
+    if (!editor) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== "z") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (document.querySelector("[role=dialog]")) return;
+      e.preventDefault();
+      editor.undo();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editor]);
+
+  if (editor?.query.isError) return <Refusal error={editor.query.error} className="m-6" />;
+  if (!draft || !base || !skills) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
+
+  const said = editor && ((editor.tried && editor.problem) || !!editor.refused) && (
+    <div className="rounded-md border border-danger-border bg-background px-3 py-2 shadow-soft">
+      {editor.refused ? (
+        <Refusal error={editor.refused} />
+      ) : (
         <p role="alert" className="text-xs text-destructive">
           {editor.problem}
         </p>
-      ) : (
-        <Refusal error={editor.refused} />
       )}
     </div>
   );
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="relative min-w-0 flex-1">
-        {view === "text" ? (
-          <div className="h-full overflow-auto">
-            <TextView
-              workflow={workflow}
-              mode="edit"
-              selection={selection}
-              onStep={(s) => setPicked({ kind: "step", id: s.id })}
-              onConnector={(id) => setPicked({ kind: "connector", id })}
-            />
-          </div>
-        ) : (
-          <WorkflowCanvas
-            workflow={workflow}
-            mode="edit"
-            className="h-full"
-            selection={selection}
-            onSelectionChange={setPicked}
-            onMove={(step, x, y) => apply((wf) => placeStep(wf, step.id, x, y))}
-            onAddStep={(from, at) => {
-              let select: string | undefined;
-              apply((wf) => {
-                const change = addStep(wf, from, at);
-                select = change.select;
-                return change;
-              });
-              if (select) setPicked({ kind: "step", id: select });
-            }}
-            onAddConnector={({ from, to }) => {
-              let made: string | undefined;
-              apply((wf) => {
-                const change = addConnector(wf, from, to ?? undefined);
-                made = change.next.connectors.at(-1)?.id;
-                return change;
-              });
-              if (made) setPicked({ kind: "connector", id: made });
-            }}
-            onConnectorChange={(c, ends) => apply((wf) => reconnect(wf, c.id, { from: ends.from, to: ends.to ?? undefined }))}
-            onDeleteConnector={(c) => apply((wf) => removeConnector(wf, c.id))}
-            onLayout={(positions) => apply((wf) => layoutSteps(wf, positions))}
-          />
-        )}
-        {said && <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">{said}</div>}
+    <div className="relative flex h-full min-h-0 flex-col">
+      <section aria-label="Preview" className="flex-none border-b bg-sidebar">
+        <div className="flex items-center gap-2 px-5 pt-2.5 text-xs text-muted-foreground max-md:px-4 max-md:py-2.5">
+          {phone ? (
+            <button
+              type="button"
+              aria-expanded={showLine}
+              onClick={() => setShowLine((v) => !v)}
+              className="flex items-center gap-1 rounded-sm font-semibold text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {showLine ? "Hide the line" : "Show the line"}
+              <ChevronDownIcon aria-hidden className={cn("size-3.5 transition-transform", showLine && "rotate-180")} />
+            </button>
+          ) : (
+            <span className="font-semibold text-foreground">Preview</span>
+          )}
+        </div>
+        {(!phone || showLine) && <Preview draft={draft.wf} base={base} skills={skillMap} groups={groups} className="mx-auto max-w-[1240px] px-2" />}
+      </section>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="mx-auto w-full max-w-[900px] pt-3 pb-24 md:px-4">
+          <StepList editor={editor} draft={draft} base={base} skills={skills} groups={groups} readOnly={!editor} focusStep={focusStep} />
+        </div>
       </div>
-      {!phone && panel && (
-        <aside aria-label="Selected" className="w-[340px] flex-none overflow-auto border-l bg-background">
-          {panel}
-        </aside>
-      )}
-      {phone && (
-        <Sheet open={!!panel} onOpenChange={(o) => !o && setPicked(null)} modal={false}>
-          <SheetContent side="bottom" showCloseButton={false} className="max-h-[75vh] gap-0 overflow-auto p-0" aria-describedby={undefined}>
-            <SheetTitle className="sr-only">Selected</SheetTitle>
-            {panel}
-          </SheetContent>
-        </Sheet>
-      )}
+      {said && <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3 [&>*]:pointer-events-auto">{said}</div>}
     </div>
   );
 }
