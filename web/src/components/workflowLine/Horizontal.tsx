@@ -7,7 +7,7 @@ import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
 import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology } from "./layout";
 import { estimate, type Measure } from "./measure";
-import { DONE_STATION, isHoldStep, PICKUP_MS, spanTime, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { blockedBy, DONE_STATION, isHoldStep, PICKUP_MS, spanTime, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { Bead, GhostToken, HiddenCount, Token } from "./Token";
 import { AFTER_BRANCH, AFTER_HINT, BREAKDOWN_BRANCH, ENTRY_LABEL, HOLD_NOTE } from "./words";
 
@@ -127,10 +127,11 @@ export function HorizontalLine(props: HorizontalProps) {
     (id: string) => {
       if (props.fold || props.compactHeads) return (hiddenAt?.get(id) ? 24 : 0);
       const n = columns.get(id)?.length ?? 0;
-      const shown = density === "beads" ? Math.ceil(n / 6) * 18 : Math.min(n, COLUMN_CAP) * (TOKEN_H + TOKEN_GAP) + (n > COLUMN_CAP ? 24 : 0);
+      // A hold stands off the crowded line, so its Tasks are full tokens whatever the density.
+      const shown = Math.min(n, COLUMN_CAP) * (TOKEN_H + TOKEN_GAP) + (n > COLUMN_CAP ? 24 : 0);
       return shown + (hiddenAt?.get(id) ? 24 : 0);
     },
-    [columns, density, hiddenAt, props.fold, props.compactHeads],
+    [columns, hiddenAt, props.fold, props.compactHeads],
   );
   // What a head says under its name (or beside it, compact), as wide as it draws.
   const measure = props.measure ?? estimate;
@@ -335,14 +336,33 @@ export function HorizontalLine(props: HorizontalProps) {
     return undefined;
   };
 
-  // A tag hangs into the gap left of its token: only where that gap is wide and empty.
-  const mainStation = (stepId: string | undefined) => !!stepId && t.main.includes(stepId);
-  const roomLeft = (stepId: string | undefined) => {
-    const i = stepId ? t.main.indexOf(stepId) : -1;
-    if (i <= 0) return false;
-    const prev = t.main[i - 1];
-    const gap = h.at.get(stepId!)!.x - h.at.get(prev)!.x;
-    return gap >= 180 && !(columns.get(prev)?.length) && !props.hidden?.get(prev);
+  // How wide a token and its tag run, as drawn: a tag hangs into the gap beside its token (right
+  // of the line's first Step, else left) only where it ends short of the column beside it.
+  const compactTokens = width < 900 && t.main.length > 6;
+  const tokenWidth = (task: LineTask) => {
+    const since = task.holder ? task.heldSince : task.since;
+    const time = since !== undefined ? tokenTime(now - since) : "";
+    return 38 + (trace ? 0 : measure(task.key, "skillLarge") * 1.05 + 6) + (compactTokens ? 0 : measure(time, "entry") + 6) + (task.blockers.length && !task.holder ? measure(blockedBy(task) ?? "", "label") + 6 : 0);
+  };
+  const tagWidth = (task: LineTask): number => {
+    if (task.holder && task.heldSince !== undefined && now - task.heldSince < PICKUP_MS) {
+      const waited = task.since !== undefined ? task.heldSince - task.since : undefined;
+      return 4 + measure("now", "label") + 12 + 6 + measure(`${task.holder.name} picked up`, "entry") + (waited !== undefined && waited > 60_000 ? 6 + measure(`· waited ${tokenTime(waited)}`, "entry") : 0) + 6 + 16;
+    }
+    const said = task.stepId ? flow.callouts.get(task.stepId)?.find((c) => c.taskId === task.id) : undefined;
+    return said ? 4 + measure(said.text.replace(` ${task.key}`, ""), "label") + 14 + 6 + 12 : 0;
+  };
+  const columnHalf = (id: string) => {
+    const list = columns.get(id) ?? [];
+    if (density === "beads") return list.length ? 27 : 2;
+    return Math.max(2, ...list.slice(0, COLUMN_CAP).map((x) => tokenWidth(x) / 2), props.hidden?.get(id) ? 20 : 0);
+  };
+  const tagRoom = (task: LineTask) => {
+    const i = task.stepId ? t.main.indexOf(task.stepId) : -1;
+    if (i < 0 || t.main.length < 2) return false;
+    const j = i === 0 ? 1 : i - 1;
+    const gap = Math.abs(h.at.get(t.main[i])!.x - h.at.get(t.main[j])!.x);
+    return tokenWidth(task) / 2 + tagWidth(task) + columnHalf(t.main[j]) + 8 <= gap;
   };
   const token = (task: LineTask) => {
     const s = task.stepId ? stepOf(task.stepId) : undefined;
@@ -358,11 +378,11 @@ export function HorizontalLine(props: HorizontalProps) {
         dim={dimOthers && !inChain.has(task.id)}
         pulse={flow.pulses.get(task.id)}
         arrived={flow.arrived.has(task.id)}
-        tag={first || roomLeft(task.stepId) || !mainStation(task.stepId) ? tagFor(task) : undefined}
+        tag={tagRoom(task) ? tagFor(task) : undefined}
         tagSide={first ? "right" : "left"}
         onClick={props.onSelect && (() => props.onSelect!(props.selected === task.id ? null : task.id))}
         onHover={props.onRing && ((on) => props.onRing!(on ? task.id : null))}
-        compact={width < 900 && t.main.length > 6}
+        compact={compactTokens}
         noKey={!!trace}
       />
     );
@@ -605,14 +625,7 @@ export function HorizontalLine(props: HorizontalProps) {
           <span className="text-[13px] font-semibold">{s.name}</span>
           <span className="text-[11px] text-muted-foreground">{HOLD_NOTE}</span>
         </div>
-        {tokens && density === "beads" && list.length > 0 && (
-          <div className="mt-2 flex w-[110px] flex-wrap justify-end gap-1.5">
-            {list.map((task) => (
-              <Bead key={task.id} task={task} hold dim={dimOthers && !inChain.has(task.id)} />
-            ))}
-          </div>
-        )}
-        {tokens && density === "tokens" && list.length > 0 && (
+        {tokens && list.length > 0 && (
           <div className="mt-2 flex flex-col items-end gap-1.5">
             {shown.map((task) => token(task))}
             {more > 0 && (

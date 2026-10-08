@@ -518,7 +518,10 @@ export async function mockLine(page: Page) {
       const ref = url.searchParams.get("task");
       const x = ref ? byRef(ref) : undefined;
       const ids = x ? new Set([x.id, ...tasks.filter((y) => y.parent_id === x.id).map((y) => y.id)]) : undefined;
-      const items = activity.filter((e) => !ids || ids.has(e.subject_id));
+      // As the server does: `project` keeps only that Project's entries (MAIN's, here).
+      const pref = url.searchParams.get("project");
+      const proj = pref ? projects.find((p) => p.key === pref || p.id === pref)?.id : undefined;
+      const items = activity.filter((e) => (!ids || ids.has(e.subject_id)) && (!proj || byRef(e.subject_id)?.project_id === proj));
       return json(route, { items: [...items].reverse(), last_seq: seq, first_seq: 1 });
     }
     return json(route, { code: "not_found", message: `GET ${path} is not mocked` }, 404);

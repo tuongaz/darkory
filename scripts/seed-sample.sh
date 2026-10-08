@@ -289,7 +289,6 @@ api PUT /v1/projects/SW/workflow '{
 keys=$(file '{"project":"SW","title":"Only callers with an API key can create short links"}')
 design=$(file "$(jq -nc --arg p "$keys" '{parent: $p, title: "Design: Only callers with an API key can create short links", step: "Design"}')")
 claim "$T_SOL" sol-1 "$design"; advance "$T_SOL" sol-1 "$design" "no security impact"
-claim "$T_REN" ren-1 "$design"; advance "$T_REN" ren-1 "$design" approved
 slice() { file "$(jq -nc --arg p "$keys" --arg t "$1" --arg s "$2" '{parent: $p, title: $t, step: $s}')"; }
 slice "Keys are issued out of band and revocable" Backlog >/dev/null
 apikey=$(slice "Creating a link requires an API key" Build)
@@ -298,6 +297,9 @@ health=$(slice "A health check a load balancer can poll" "Code review")
 slice "Callers learn when they are limited" "Security review" >/dev/null
 slice "The service ships as a container image" QA >/dev/null
 slice "A CI pipeline builds and tests every push" Release >/dev/null
+# Approved once its slices are filed: a Parent whose last open Subtask ends Done gets its
+# Acceptance filed then, which would come too early.
+claim "$T_REN" ren-1 "$design"; advance "$T_REN" ren-1 "$design" approved
 block "$limited" "$apikey"
 claim "$T_SOL" sol-3 "$apikey"
 claim "$T_REN" ren-2 "$health"
