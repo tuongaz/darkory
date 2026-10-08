@@ -97,15 +97,19 @@ export function routeGrid(grid: Grid, arrows: GridArrow[], { turnLate = false }:
     return Math.round(gapY(k) + (users.indexOf(id) - (users.length - 1) / 2) * spread);
   };
 
-  // Ends: arrows meeting one side of a node spread along it, in the order they come from.
+  // Ends: arrows meeting one side of a node spread along it, in the order of the rows they come
+  // from or go to, so two never cross at a node. With `turnLate`, the arrows out of one node
+  // leave from one point and fork.
   const ends = new Map<string, string[]>();
   const sideOf = (p: Plan, end: "from" | "to") => {
-    if (end === "from") return `${p.from}@${p.sx}`;
+    if (end === "from") return turnLate && p.shape !== "back" ? `${p.from}@out` : `${p.from}@${p.sx}`;
     if (p.shape !== "back") return `${p.to}@${p.ex}`;
     return `${p.to}@${p.ra < p.rb ? "top" : "bottom"}`;
   };
-  for (const p of [...plans].sort((p, q) => p.sx - q.sx || p.ra - q.ra || p.rb - q.rb)) {
-    for (const end of ["from", "to"] as const) ends.set(sideOf(p, end), [...(ends.get(sideOf(p, end)) ?? []), p.id]);
+  for (const end of ["from", "to"] as const) {
+    const other = (p: Plan) => (end === "from" ? p.rb : p.ra);
+    for (const p of [...plans].sort((p, q) => other(p) - other(q) || p.sx - q.sx || p.ra - q.ra || p.rb - q.rb))
+      ends.set(sideOf(p, end), [...(ends.get(sideOf(p, end)) ?? []), p.id]);
   }
   const spread = (p: Plan, end: "from" | "to", at: number, step: number) => {
     const users = ends.get(sideOf(p, end))!;
@@ -114,7 +118,7 @@ export function routeGrid(grid: Grid, arrows: GridArrow[], { turnLate = false }:
   const alone = (p: Plan, end: "from" | "to") => ends.get(sideOf(p, end))!.length === 1;
 
   return plans.map((p) => {
-    let sy = spread(p, "from", middle(p.ra), 10);
+    let sy = turnLate && p.shape !== "back" ? middle(p.ra) : spread(p, "from", middle(p.ra), 10);
     let points: Point[];
     if (p.shape === "back") {
       const start = { x: p.sx, y: sy };
@@ -164,7 +168,6 @@ function segments(points: Point[]): Segment[] {
 
 const level = ([a, b]: Segment) => a.y === b.y;
 const between = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
-const within = (v: number, a: number, b: number) => v >= Math.min(a, b) && v <= Math.max(a, b);
 
 /** Whether two level-or-upright segments cross or run over each other. */
 function meet(s: Segment, t: Segment): boolean {
@@ -191,9 +194,4 @@ export function edgeCrossings(edges: { from: string; to: string; points: Point[]
       for (const s of segments(e.points)) for (const t of segments(f.points)) if (meet(s, t)) n++;
     }
   return n;
-}
-
-/** Whether point `p` lies on the polyline. */
-export function onPath(points: Point[], p: Point): boolean {
-  return segments(points).some(([a, b]) => (a.x === b.x ? a.x === p.x && within(p.y, a.y, b.y) : a.y === p.y && within(p.x, a.x, b.x)));
 }
