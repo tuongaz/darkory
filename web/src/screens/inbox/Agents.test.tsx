@@ -1,6 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { act } from "react";
 import { describe, expect, it } from "vitest";
+import { FakeEventSource } from "@/test/eventSource";
 import type { Member, RunnerSession } from "@/api/client";
 import { ada, bob, builder, engineer, ops, task, web } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
@@ -73,6 +75,9 @@ describe("a Project's Agents", () => {
     expect(row).toHaveTextContent("dk-WEB-3");
     await waitFor(() => expect(row).toHaveTextContent("engineer"));
     expect(row).toHaveTextContent("advanced WEB-4 Cart along pass to Review");
+    // A lapse arriving on the stream counts at once.
+    act(() => FakeEventSource.latest().emit("activity", entry(9, "task.lapsed", "k-4", { payload: { holder_id: builder.id, claim_id: "c-9" }, at: minutes(0) }), 9));
+    await waitFor(() => expect(row).toHaveTextContent("1 lapse in 24 h"));
     // ada is a human: not listed.
     expect(screen.queryByRole("link", { name: "ada" })).not.toBeInTheDocument();
   });

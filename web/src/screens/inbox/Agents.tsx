@@ -25,7 +25,7 @@ import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
 import { AgentMenuItems, AgentPeek, EndPill } from "./AgentPeek";
 import { agentActions, agentParam, taskOverAgents } from "./agentActions";
-import { agentRows, lapsesIn24h, lastActivity, lastClaimEntry, type AgentRow } from "./derive";
+import { aboutProject, agentRows, lapsesIn24h, lastActivity, lastClaimEntry, type AgentRow } from "./derive";
 import { GroupHeader, ShortTime } from "./parts";
 import { useMemberDetails, useRecentActivity, useStepNames, useTaskMap } from "./queries";
 import { useAgentActions } from "./useAgentActions";
@@ -68,7 +68,7 @@ export function AgentsPage() {
   const ids = rows.map((r) => r.agent.id);
   const details = useMemberDetails([...ids, ...others.map((m) => m.id)]);
   const detailOf = new Map(details.flatMap((q) => (q.data ? [[q.data.member.id, q.data] as const] : [])));
-  const history = useRecentActivity({ project: project.key }, () => false);
+  const history = useRecentActivity({ project: project.key }, (e) => aboutProject(e, project.id, { taskProject: (id) => tasks.get(id)?.project_id }));
 
   const openPeek = useCallback(
     (name: string) =>

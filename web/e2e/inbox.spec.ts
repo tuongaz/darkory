@@ -229,10 +229,15 @@ test("Inbox, My work, Agents and Activity fit a phone without a sideways scroll"
   const page = await context.newPage();
   const errors = consoleErrors(page);
   await signIn(page, admin, "ada");
-  for (const path of ["/inbox", "/my-work", "/projects/INB/agents", "/projects/INB/activity"]) {
+  const screens = [
+    { path: "/inbox", ready: () => page.getByRole("region", { name: "Lapsed on your Tasks" }) },
+    { path: "/my-work", ready: () => page.getByRole("region", { name: "You own" }) },
+    { path: "/projects/INB/agents", ready: () => page.getByRole("link", { name: "inbox-builder", exact: true }) },
+    { path: "/projects/INB/activity", ready: () => page.getByRole("list", { name: "Activity" }) },
+  ];
+  for (const { path, ready } of screens) {
     await page.goto(`${base()}${path}`);
-    await expect(page.locator("#main")).toBeVisible();
-    await page.waitForLoadState("networkidle");
+    await expect(ready()).toBeVisible();
     const widths = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
     expect(widths.scroll, path).toBe(widths.client);
     await shot(page, `phone${path.replaceAll("/", "-")}`);

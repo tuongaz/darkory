@@ -53,7 +53,9 @@ export function InboxPage() {
   const aimedAtMe = (aimed.data ?? []).filter((t) => liveClaim(t, now)?.holder_id !== id);
   const decisions: Decision[] = [...awaitingComplete(ownedTasks, details), ...staleProposals([...details.values()], dir.skills)];
   const lapsed = lapsesOn(ownedTasks, lapses.entries, now);
-  const take = takeableNow(takeable.data ?? [], aimedAtMe);
+  // A lapsed Task I can take again is Claimed from its lapse row, not listed twice.
+  const takeableIds = new Set((takeable.data ?? []).map((t) => t.id));
+  const take = takeableNow(takeable.data ?? [], [...aimedAtMe, ...lapsed.map((l) => l.task)]);
   const takeShown = allTakeable ? take : take.slice(0, takeableCap);
   const nothing = aimedAtMe.length + decisions.length + lapsed.length + take.length === 0;
   // The page's one primary: the first row's action.
@@ -137,7 +139,7 @@ export function InboxPage() {
               <section aria-label="Lapsed on your Tasks">
                 <GroupHeader title="Lapsed on your Tasks" count={lapsed.length} />
                 {lapsed.map((l) => (
-                  <LapseRow key={l.task.id} lapse={l} project={project(l.task)} steps={steps} />
+                  <LapseRow key={l.task.id} lapse={l} project={project(l.task)} steps={steps} takeable={takeableIds.has(l.task.id)} />
                 ))}
               </section>
             )}
@@ -222,7 +224,7 @@ function DecisionRow({ decision: d, project, steps, primary }: { decision: Decis
 }
 
 /** A Claim on a Task of mine that lapsed and nobody has taken up again. */
-function LapseRow({ lapse, project, steps }: { lapse: Lapse; project: Parameters<typeof TaskRow>[0]["project"]; steps: ReturnType<typeof useStepNames> }) {
+function LapseRow({ lapse, project, steps, takeable }: { lapse: Lapse; project: Parameters<typeof TaskRow>[0]["project"]; steps: ReturnType<typeof useStepNames>; takeable: boolean }) {
   const { members } = useDirectory();
   const holder = lapse.holderId ? members.get(lapse.holderId) : undefined;
   return (
@@ -246,7 +248,7 @@ function LapseRow({ lapse, project, steps }: { lapse: Lapse; project: Parameters
       }
       when={lapse.at}
       whenWhat="Lapsed"
-      action={<OpenButton task={lapse.task} />}
+      action={takeable ? <ClaimButton task={lapse.task} /> : <OpenButton task={lapse.task} />}
     />
   );
 }

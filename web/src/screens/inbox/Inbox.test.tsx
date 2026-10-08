@@ -75,7 +75,7 @@ describe("the Inbox", () => {
     const opsTask = task(30, { id: "k-ops-30", key: "OPS-30", project_id: ops.id, step_id: `ops-${step.build}`, title: "Rotate keys", owner_id: bob.id });
     const { calls } = recordApi({
       tasks: [blocked, question, parent, lapsed, opsTask],
-      takeable: [question, opsTask],
+      takeable: [question, opsTask, lapsed],
       details: { "WEB-1": { subtasks: [subtask(2, parent, { kind: "acceptance", state: "done" })] } },
       activity: [entry(1, "task.lapsed", lapsed.id, { payload: { holder_id: builder.id }, at: minutes(-10) })],
     });
@@ -95,8 +95,10 @@ describe("the Inbox", () => {
     const lapses = await section("Lapsed on your Tasks");
     expect(row(lapses, "WEB-12")).toHaveTextContent(/Lapsed \d\d:\d\d/);
     expect(row(lapses, "WEB-12")).toHaveTextContent(/held by .*builder/);
+    // Takeable again, it is Claimed from its lapse and not listed twice.
+    expect(within(row(lapses, "WEB-12")).getByRole("button", { name: "Claim WEB-12" })).toBeInTheDocument();
 
-    // The question is listed once, under Aimed at you; OPS-30 carries its own Project and Step.
+    // The question and the lapsed Task are listed once each; OPS-30 carries its own Project and Step.
     const take = await section("Takeable by you");
     expect(take.querySelectorAll("[data-task]")).toHaveLength(1);
     expect(row(take, "OPS-30")).toHaveTextContent("Build");
