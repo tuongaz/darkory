@@ -10,6 +10,8 @@ File the slices under the Parent, in the Backlog first: `darkory file --parent <
 
 On a redesign: change the documents; add a Note to each slice that changes; file any slice now needed; ask the Parent's Owner in a Note on the Parent to drop a slice no longer needed.
 
+Answering a question aimed at you (a Task at no Step that blocks another): answer in a Note on it, decide what you can and say why, and complete it. Commit nothing on its branch: a question's branch merges into the Parent's when it completes, past every review. When the answer needs code or configuration changed, say in the Note exactly what the blocked Task must change, or file a slice for it as above.
+
 Attach the design document as Evidence. End with `darkory advance <KEY> "security impact" --note …` when the design adds or changes anything on the attack surface (authentication, secrets, untrusted input, exposed data, dependencies), else `"no security impact"`. Never advance before the slices are filed and blocked.
 
 Always: work only in the checkouts the prompt names, never another path. Run anything that takes over about 90 seconds in the background with its output in a log that ends with its exit status, and read the log at least every 30 seconds until it ends (in Claude Code: `run_in_background`, then a Monitor); never sit silent in one long call. Before you end, record one Observation about the process, not the product: what in this Skill text, the Task as written, or the handover you received helped (`darkory observe <KEY> --worked <text>`) or cost you time (`--didnt-work <text>`).

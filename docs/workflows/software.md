@@ -113,6 +113,7 @@ The Workflow fits Darkory's rules as they are. Where the research asks for somet
 - **Triage cannot turn a held Task into a Break down.** The design path from Triage is a split. The triager files a `Design: …` Subtask at Design, which makes the Task a Parent without a Breakdown Subtask.
 - **Labels carry risk, but rules never read them.** `security` and `infra` steer the agents' choice of outcome, and Darkory's rules ignore them, by design.
 - **A Task cannot be filed already blocked.** A Subtask filed at a Step is takeable the moment it exists, so the architect files each slice in the Backlog, blocks it, and then moves it. In the proof run, slices filed straight at Build were claimed in the same second, before the block landed. `file --blocked-by` would close this window in the record itself.
+- **A question is a worked Task whose branch merges.** An answer committed on a question's branch merges into the Parent's branch when the question completes, without passing any review Step. In the proof run, the architect bumped the Go toolchain this way. The Skill text now says to answer in Notes and commit nothing. A question that never merges is the lead's call.
 - **Self-review is by Skill.** Someone who built a Task under `devops` could release it under `devops` again. So infrastructure is built by the builder (`engineer`) and released by DevOps, never both by one agent.
 
 ## Applying it to an Install
