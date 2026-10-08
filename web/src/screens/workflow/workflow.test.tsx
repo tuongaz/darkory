@@ -7,7 +7,7 @@ import { ada, bob, builder, engineer, memberDetail, review, skillReview, skills,
 import { signedIn } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { toBody } from "./bind";
-import { addOutcome, deleteStep, fromRecord, insertStep, moveStepTo, renameOutcome, renameStep, reorderStep, setSkill, setTarget, groupOf, removeOutcome } from "./edit/draft";
+import { addOutcome, deleteStep, fromRecord, insertStep, moveStepTo, renameOutcome, renameStep, reorderStep, setSkill, setTarget, removeOutcome, groupsOf } from "./edit/draft";
 
 type Body = Schemas["SetWorkflowBody"];
 
@@ -125,7 +125,7 @@ describe("the live Workflow", () => {
 });
 
 const skillMap = new Map(skills.map((s) => [s.id, s]));
-const groups = (s: Parameters<typeof groupOf>[0]) => groupOf(s, skillMap);
+const groups = groupsOf(workflow(), skillMap);
 
 /** Settings › Workflow open on the list, once WEB's Workflow is drawn. */
 async function openList(path = "/settings/projects/WEB/workflow") {

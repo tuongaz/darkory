@@ -5,8 +5,8 @@ import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { RecordStep, WorkflowRecord } from "./bind";
-import { groupOf, type Draft } from "./edit/draft";
+import type { WorkflowRecord } from "./bind";
+import { groupsOf, type Draft } from "./edit/draft";
 import { useSkillHolders } from "./edit/holders";
 import { Preview } from "./edit/Preview";
 import { StepList } from "./edit/StepList";
@@ -37,7 +37,7 @@ export function EditingWorkflow({
   const [showLine, setShowLine] = useState(false);
   const holders = useSkillHolders(project.key, skills);
   const skillMap = useMemo(() => new Map((skills ?? []).map((s) => [s.id, s])), [skills]);
-  const groups = (s: Pick<RecordStep, "skill_id">) => groupOf(s, skillMap);
+  const groups = useMemo(() => (draft ? groupsOf(draft.wf, skillMap) : () => "main" as const), [draft, skillMap]);
 
   // Leaving the page with changes unsaved asks first.
   const unsaved = !!editor && editor.changes > 0;

@@ -28,15 +28,30 @@ export const newSkillPrefix = "new-skill:";
 export const isNewSkill = (id: string | undefined) => !!id?.startsWith(newSkillPrefix);
 export const skillName = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
-/** The builtin Skills whose Steps stand after a Parent, on the line's short branch, not on the main line. */
-export const afterParentSkills = ["acceptance", "retro", "skill-review"] as const;
+/** The Skills whose Steps may stand after a Parent, on the line's short branch: the Workflow line's `branchSkills`. */
+export const afterParentSkills: readonly string[] = ["acceptance", "retro", "skill-review"];
 
 export type Group = "main" | "after";
 
-/** Which group a Step is listed in: "After a Parent" when it carries acceptance, retro or skill-review. */
-export function groupOf(step: Pick<RecordStep, "skill_id">, skills: Map<string, Pick<Skill, "name" | "builtin">>): Group {
-  const skill = step.skill_id ? skills.get(step.skill_id) : undefined;
-  return skill?.builtin && (afterParentSkills as readonly string[]).includes(skill.name) ? "after" : "main";
+/**
+ * Which group each Step is listed in, as the Workflow line draws it (its `branchSteps`): "After a
+ * Parent" when it carries acceptance, retro or skill-review and no Step on the main line leads
+ * into it; one a main Step leads into (Docs "pass" → Acceptance) stays on the main line.
+ */
+export function groupsOf(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>): (s: Pick<RecordStep, "id">) => Group {
+  const side = new Set(
+    wf.steps.filter((s) => s.skill_id && afterParentSkills.includes(skills.get(s.skill_id)?.name ?? "")).map((s) => s.id),
+  );
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const c of wf.connectors) {
+      if (c.to_step_id && side.has(c.to_step_id) && !side.has(c.from_step_id)) {
+        side.delete(c.to_step_id);
+        changed = true;
+      }
+    }
+  }
+  return (s) => (side.has(s.id) ? "after" : "main");
 }
 
 const fresh = () => `${newIdPrefix}${newKey()}`;

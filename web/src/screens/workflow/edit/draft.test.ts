@@ -8,7 +8,7 @@ import {
   deleteStep,
   firstOutcome,
   fromRecord,
-  groupOf,
+  groupsOf,
   insertStep,
   problem,
   removeOutcome,
@@ -22,7 +22,7 @@ import {
 } from "./draft";
 
 const skillMap = new Map(skills.map((s) => [s.id, s]));
-const groups = (s: Parameters<typeof groupOf>[0]) => groupOf(s, skillMap);
+const groups = groupsOf(workflow(), skillMap);
 const base = () => workflow();
 const d0 = () => fromRecord(base());
 
@@ -32,6 +32,24 @@ describe("the list's groups", () => {
     expect(wf.steps.filter((s) => groups(s) === "after").map((s) => s.name)).toEqual(["Retro", "Skill review"]);
     expect(wf.steps.find((s) => s.id === step.plan)!.skill_id).toBeDefined();
     expect(groups(wf.steps.find((s) => s.id === step.plan)!)).toBe("main");
+  });
+});
+
+describe("the groups follow the line's branch", () => {
+  it("keeps a Step with a branch Skill on the main line when a main Step leads into it, and its Steps after it", () => {
+    const wf = base();
+    // Review's pass leads into Retro: Retro joins the main line, and Skill review, led into from Retro, with it.
+    wf.connectors = wf.connectors.map((c) => (c.id === `${step.review}-c3` ? { ...c, to_step_id: step.retro } : c));
+    const g = groupsOf(wf, skillMap);
+    expect(wf.steps.filter((s) => g(s) === "after").map((s) => s.name)).toEqual([]);
+  });
+
+  it("moves a Step back to the branch when the outcome into it is pointed elsewhere", () => {
+    const wf = base();
+    wf.connectors = wf.connectors.map((c) => (c.id === `${step.review}-c3` ? { ...c, to_step_id: step.retro } : c));
+    const d = setTarget(fromRecord(wf), `${step.review}-c3`, undefined);
+    const g = groupsOf(d.wf, skillMap);
+    expect(d.wf.steps.filter((s) => g(s) === "after").map((s) => s.name)).toEqual(["Retro", "Skill review"]);
   });
 });
 
