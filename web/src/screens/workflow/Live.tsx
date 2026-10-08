@@ -24,8 +24,21 @@ import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
  * token. Selecting a token draws its Blocking chain. The Blocking view and the Text view take the
  * line's place. Fills the page's Content.
  */
-export function LiveWorkflow({ project, view, scope, onView }: { project: Project; view: LineView; scope: string | null; onView?: (v: LineView) => void }) {
-  const { data, error } = useLineData(project.key, scope);
+export function LiveWorkflow({
+  project,
+  view,
+  scope,
+  onView,
+  filter,
+}: {
+  project: Project;
+  view: LineView;
+  scope: string | null;
+  onView?: (v: LineView) => void;
+  /** The Filter bar's test: Tasks it leaves out leave the line, counted into their Step's "+N". */
+  filter?: (task: Task) => boolean;
+}) {
+  const { data, error } = useLineData(project.key, scope, filter);
   const now = useNow();
   const [, setParams] = useSearchParams();
   const openTask = useCallback(

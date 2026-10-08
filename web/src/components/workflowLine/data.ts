@@ -102,10 +102,12 @@ export type ScopedLine = {
  * its Subtasks still to come as ghosts on the branch: its Acceptance (when it has one due and the
  * Workflow a Step for it) and its Retrospective (when the Workflow has a Step for it).
  */
-export function scopedLine(all: readonly LineTask[], scope: LineScope, ctx: { workflow: LineWorkflow; parent?: ScopeParent }): ScopedLine {
+export function scopedLine(all: readonly LineTask[], scope: LineScope, ctx: { workflow: LineWorkflow; parent?: ScopeParent; passes?: (id: string) => boolean }): ScopedLine {
   const atStep = all.filter((t) => t.stepId);
-  const keep: (t: LineTask) => boolean =
+  const inScope: (t: LineTask) => boolean =
     scope.kind === "all" ? () => true : scope.kind === "none" ? (t) => !t.parentId : scope.kind === "parent" ? (t) => t.parentId === scope.id : (t) => t.id === scope.id;
+  // The Filter narrows tokens as a scope does: what it leaves out counts into its Step's "+N".
+  const keep = (t: LineTask) => inScope(t) && (scope.kind === "task" || !ctx.passes || ctx.passes(t.id));
   const drawn = atStep.filter(keep);
   const hidden = new Map<string, number>();
   for (const t of atStep) if (!keep(t)) hidden.set(t.stepId!, (hidden.get(t.stepId!) ?? 0) + 1);

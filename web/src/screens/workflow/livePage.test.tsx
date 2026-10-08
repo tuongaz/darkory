@@ -153,6 +153,17 @@ describe("the Workflow page", () => {
     await waitFor(() => expect(tokenOf("WEB-10")).not.toBeNull());
   });
 
+  it("the Filter narrows the tokens like a scope: what it leaves out counts into its Step's +N", async () => {
+    serve([task(2), task(3, blockedBy(2)), task(4, { step_id: step.review })]);
+    renderApp(`/projects/WEB/workflow?filter.tasks=${encodeURIComponent("blocked:is:true")}`);
+    await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
+    expect(tokenOf("WEB-2")).toBeNull();
+    expect(tokenOf("WEB-4")).toBeNull();
+    expect(within(line()).getAllByLabelText("1 more Task outside this scope")).toHaveLength(2);
+    expect(screen.getByText("2 hidden")).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: /Filter/ })).toBeInTheDocument();
+  });
+
   it("the scope menu lists All Tasks, the Parents with open Subtasks and No Parent, and narrows on a pick", async () => {
     serve([task(7, { step_id: undefined, title: "Emoji reactions", subtask_counts: { open: 1, working: 0, done: 0, dropped: 0 } }), task(8, { parent_id: "k-7", rank: undefined }), task(10)]);
     renderApp("/projects/WEB/workflow");

@@ -2,7 +2,7 @@ import { LoaderIcon, PencilIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { useSkills, useWorkflow } from "@/api/queries";
+import { useSkills, useTasks, useWorkflow } from "@/api/queries";
 import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
@@ -11,12 +11,14 @@ import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { useCurrentMe } from "@/me";
-import { fromRecord } from "./edit/draft";
-import { useDraftEditor } from "./edit/useDraft";
-import { EditingWorkflow } from "./Editing";
+import { FilterChipRow, FilterMenuButton } from "@/components/filters/FilterBar";
+import { useTaskFilter } from "@/components/filters/useTaskFilter";
 import { useBlockingCount } from "@/components/workflow/blocking";
 import { useLineData } from "@/components/workflowLine";
 import { taskPath as taskPagePath } from "@/screens/task/format";
+import { fromRecord } from "./edit/draft";
+import { useDraftEditor } from "./edit/useDraft";
+import { EditingWorkflow } from "./Editing";
 import { LiveWorkflow } from "./Live";
 import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
@@ -33,7 +35,9 @@ export function WorkflowPage() {
   const admin = useCurrentMe().member.admin;
   const [view, setView] = useLineView();
   const [scope, setScope] = useScopeParam();
-  const { data } = useLineData(project.key, scope);
+  const tasks = useTasks({ project: project.key, state: "open" }).data;
+  const filter = useTaskFilter({ projects: [project], tasks });
+  const { data } = useLineData(project.key, scope, filter.matches);
   const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined);
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
@@ -43,7 +47,7 @@ export function WorkflowPage() {
         view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
         actions={
           <>
-            {data && data.scoped.hiddenTotal > 0 && data.scope.kind !== "all" && (
+            {data && data.scoped.hiddenTotal > 0 && (
               <span className="hidden text-xs text-muted-foreground tabular-nums lg:inline">{data.scoped.hiddenTotal} hidden</span>
             )}
             {named && named.key !== "…" && (
@@ -51,6 +55,7 @@ export function WorkflowPage() {
                 <Link to={taskPagePath(named.key)}>Open {named.key}</Link>
               </Button>
             )}
+            {view === "line" && <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />}
             {admin && (
               <Button asChild variant="outline">
                 <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
@@ -63,7 +68,8 @@ export function WorkflowPage() {
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <LiveWorkflow project={project} view={view} scope={scope} onView={setView} />
+        {view === "line" && <FilterChipRow {...filter.bar} />}
+        <LiveWorkflow project={project} view={view} scope={scope} onView={setView} filter={filter.matches} />
       </Content>
     </>
   );

@@ -40,9 +40,10 @@ const noTakeable: ReadonlySet<string> = new Set();
  * Everything the Workflow line draws for a Project at a scope, live: the Workflow and its Steps'
  * facts, the open Tasks (Claims, Blocking, Runner sessions), what reached Done today, the scope's
  * Parent or Task, and one Task's path. `scope` is the `?scope=` value: `none`, a Task's id or key,
- * or null for every open Task.
+ * or null for every open Task. `filter` (the Filter bar's `matches`) narrows the tokens further;
+ * what it leaves out counts into each Step's "+N".
  */
-export function useLineData(project: string, scopeParam: string | null): { data?: LineData; error?: unknown; loading: boolean } {
+export function useLineData(project: string, scopeParam: string | null, filter?: (task: Task) => boolean): { data?: LineData; error?: unknown; loading: boolean } {
   const record = useWorkflow(project);
   const facts = useLiveCanvas(project, record.data);
   const open = useTasks({ project, state: "open" });
@@ -104,7 +105,8 @@ export function useLineData(project: string, scopeParam: string | null): { data?
         subtasks: detail.subtasks.map((s) => ({ id: s.id, key: s.key, title: s.title, kind: s.kind, state: s.state })),
       };
     }
-    const narrowed = scopedLine(all, scope, { workflow: lineFacts, parent });
+    const passing = filter ? new Set(open.data.filter(filter).map((t) => t.id)) : undefined;
+    const narrowed = scopedLine(all, scope, { workflow: lineFacts, parent, passes: passing && ((id) => passing.has(id)) });
     let trace: Trace | undefined;
     if (scope.kind === "task" && detail) trace = traceOf(detail.task, path, detail.claims, lineFacts, (id) => byMember.get(id), now);
 
@@ -130,7 +132,7 @@ export function useLineData(project: string, scopeParam: string | null): { data?
       me: { id: me?.member.id ?? "", takeable: takeable.data ?? noTakeable },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `endedParents` is rebuilt each render; `endedKey` names its records.
-  }, [facts, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey]);
+  }, [facts, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
 
   return { data, error: record.error ?? open.error, loading: !data && !record.error && !open.error };
 }
