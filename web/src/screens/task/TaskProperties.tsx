@@ -11,7 +11,6 @@ import { ClockTime } from "@/components/Time";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { taskBranch } from "@/lib/branch";
 import { liveClaim } from "@/work";
-import { progressText } from "../board/derive";
 import { useMemberName, useSkillName } from "./format";
 import { MemberName, SkillPill, TaskLink } from "./parts";
 import { lapsedClaim } from "./record";
@@ -31,7 +30,8 @@ export function Standing({ detail, steps }: { detail: TaskDetail; steps: readonl
       </span>
     );
   }
-  if (task.subtask_counts) return <span>Its Subtasks: {progressText(task.subtask_counts)} done</span>;
+  // An open Parent is at no Step; its Subtasks' progress is the Subtasks section's, right below.
+  if (task.subtask_counts) return <Pill tone="secondary">Open</Pill>;
   if (task.aimed_at_id && !task.step_id) return <span>With {name(task.aimed_at_id)}</span>;
   const step = detail.step ?? steps.find((s) => s.id === task.step_id);
   if (!step) return <span className="text-muted-foreground">No Step</span>;

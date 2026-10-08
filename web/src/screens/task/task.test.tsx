@@ -176,6 +176,15 @@ describe("a Parent's page", () => {
     }
   });
 
+  it("heads an open Parent with Open, its Subtasks' progress said once, in their section", async () => {
+    mockApi(taskRoutes());
+    renderApp("/tasks/WEB-3");
+    const head = (await screen.findByRole("heading", { level: 1, name: checkout.title })).parentElement!;
+    expect(within(head).getByText("Open")).toBeInTheDocument();
+    expect(head).not.toHaveTextContent("Its Subtasks");
+    expect(await screen.findByRole("region", { name: "Subtasks" })).toHaveTextContent("1/3 done");
+  });
+
   it("says why nobody holds a Parent or an ended Task, so its Properties are never empty", async () => {
     mockApi(taskRoutes());
     const parent = renderApp("/tasks/WEB-3");
