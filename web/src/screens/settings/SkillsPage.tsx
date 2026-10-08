@@ -215,7 +215,7 @@ function SkillRecord({ detail }: { detail: SkillDetail }) {
   const holders = humansFirst(holdersBySkill(details).get(skill.id) ?? []);
 
   return (
-    <SettingsFrame crumbs={[{ label: "Skills", to: skillsPath }, { label: skill.name }]}>
+    <SettingsFrame crumbs={[{ label: "Skills", to: skillsPath, wide: true }, { label: skill.name }]}>
       <div className="grid max-w-[1100px] grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-[22px]">
           <div className="flex flex-wrap items-center gap-2.5">

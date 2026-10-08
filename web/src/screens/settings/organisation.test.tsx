@@ -32,8 +32,10 @@ describe("Settings › Members", () => {
     expect(within(table).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Member", "Model", "Projects", "Skills", "Reporting line", "Admin"]);
 
     const b = within(table).getByRole("row", { name: "bob" });
-    expect(await within(b).findByText("Ops")).toBeInTheDocument();
-    expect(within(b).getByText("Web")).toBeInTheDocument();
+    // Two Projects are their marks and a count, named on hover; one is named.
+    expect(await within(b).findByText("2 Projects")).toBeInTheDocument();
+    expect(within(b).getByTitle("Ops, Web")).toBeInTheDocument();
+    expect(within(within(table).getByRole("row", { name: "ada" })).getByText("Web")).toBeInTheDocument();
     expect(within(b).getByText("review")).toBeInTheDocument();
     // bob reports to ada; ada to no one.
     expect(within(b).getAllByText("ada")).not.toHaveLength(0);

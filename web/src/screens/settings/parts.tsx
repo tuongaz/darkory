@@ -1,7 +1,8 @@
 import { AlertTriangleIcon, CheckIcon, CopyIcon, MoreHorizontalIcon, XIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
-import type { Member } from "@/api/client";
+import type { Member, Project } from "@/api/client";
 import { MemberAvatar } from "@/components/MemberAvatar";
+import { ProjectMark } from "@/components/ProjectMark";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -351,5 +352,28 @@ export function GroupRow({ icon, label, count }: { icon: ReactNode; label: strin
         <span className="font-normal text-muted-foreground tabular-nums">{count}</span>
       </span>
     </div>
+  );
+}
+
+/** A Member's Projects in a table cell: the one by name, several as their marks and a count, named on hover. */
+export function ProjectsCell({ projects }: { projects: Project[] }) {
+  if (projects.length === 0) return <span className="text-muted-foreground">None</span>;
+  if (projects.length === 1) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <ProjectMark project={projects[0]} />
+        <span className="truncate">{projects[0].name}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="flex min-w-0 items-center gap-1.5" title={projects.map((p) => p.name).join(", ")}>
+      <span className="inline-flex flex-none gap-[3px]">
+        {projects.map((p) => (
+          <ProjectMark key={p.id} project={p} />
+        ))}
+      </span>
+      <span className="truncate">{projects.length} Projects</span>
+    </span>
   );
 }

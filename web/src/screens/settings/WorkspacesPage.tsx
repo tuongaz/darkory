@@ -26,7 +26,7 @@ import { createWorkspace, removeWorkspace, updateWorkspace } from "./writes";
 
 // Name · Kind · Path · Mode · Default branch · Default of · Open Tasks · ⋯. A phone keeps Name,
 // Mode and ⋯; the rest come at the width of a laptop.
-const cols = "grid-cols-[minmax(0,1fr)_132px_26px] lg:grid-cols-[150px_40px_minmax(0,1fr)_150px_140px_120px_84px_26px]";
+const cols = "grid-cols-[minmax(0,1fr)_152px_26px] lg:grid-cols-[150px_40px_minmax(0,1fr)_150px_140px_120px_84px_26px]";
 const wide = "hidden lg:flex";
 
 type Change = { workspace: Workspace; body: Partial<Pick<Workspace, "path" | "mode" | "default_branch">> };

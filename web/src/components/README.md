@@ -144,8 +144,10 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 ids in `step` (`step.build` is `"st-build"`; another Project's are prefixed with its key); `label`,
 `bug` (the Organisation's), `clientX` (WEB's); `task(n, extra)` (WEB-n waiting at Build),
 `parentTask(n, counts)`, `subtask(n, parent)`, `detail(task, extra)` (a `TaskDetail` with its Step
-and Connectors); `me(member, { organisations? })`; `signedIn(member)`, which answers every read
-the shell makes, each Project's detail, Workflow and own Labels included.
+and Connectors); `memberDetail(member, extra)` (in WEB, holding engineer); `skillVersion(skill, version?, body?)`;
+`me(member, { organisations? })`; `signedIn(member)`, which answers every read the shell makes, each
+Project's detail, Workflow and own Labels, each Member's record (no tokens or Sessions) and each
+Skill with its version 1 included.
 
 ## Primitives (`src/components/`)
 
@@ -188,6 +190,9 @@ M4 binds `/v1` to.
 canvas modes and a Subtask graph from `samples.ts`; the editing canvas lists the callbacks it
 receives. `npm run lab` (Playwright against `vite dev`) shoots it at 1440×900 and 390×844 in light
 and dark into `e2e/screenshots/`, and checks the drags, the turning ring and the phone width.
+`e2e/settings.lab.ts`, in the same run, shoots the shell and every Settings page on a mocked `/v1`
+(`page.route`, the Activity stream held open by a stand-in) and fails on a console error or a
+page wider than the phone.
 
 shadcn/ui components are in `src/components/ui/` (sidebar, button, badge, avatar, sheet, dialog,
 dropdown-menu, popover, command, tabs, table, switch, select, input, textarea, tooltip, separator,

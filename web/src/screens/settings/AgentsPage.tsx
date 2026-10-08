@@ -3,14 +3,13 @@ import { Link } from "react-router";
 import type { Member, MemberDetail } from "@/api/client";
 import { EmptyState } from "@/components/EmptyState";
 import { Pill } from "@/components/Pill";
-import { ProjectMark } from "@/components/ProjectMark";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { SettingsFrame, tableHead, tableRow } from "./frame";
 import { NewMemberDialog } from "./NewMember";
-import { MemberName } from "./parts";
+import { MemberName, ProjectsCell } from "./parts";
 import { memberPath, useNewParam } from "./paths";
 import { useMemberDetails } from "./queries";
 
@@ -98,13 +97,7 @@ function AgentRow({ member, detail, loading }: { member: Member; detail?: Member
         )}
       </span>
       <span role="cell" className={cn(wide, "min-w-0 items-center gap-3 overflow-hidden", dim)}>
-        {detail?.projects.map((p) => (
-          <span key={p.id} className="inline-flex items-center gap-1.5 whitespace-nowrap">
-            <ProjectMark project={p} />
-            {p.name}
-          </span>
-        ))}
-        {detail && detail.projects.length === 0 && <span className="text-muted-foreground">None</span>}
+        {detail && <ProjectsCell projects={detail.projects} />}
         {!detail && loading && <Skeleton className="h-4 w-20" />}
       </span>
       <span role="cell" className={cn(wide, "min-w-0 items-center gap-1.5 overflow-hidden", dim)}>

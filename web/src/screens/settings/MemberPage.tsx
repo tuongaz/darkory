@@ -40,7 +40,7 @@ import { clearManager, deactivateMember, grantSkill, reactivateMember, revokeSki
 export function MemberPage({ area }: { area: "members" | "agents" }) {
   const { member: ref = "" } = useParams();
   const detail = useMember(ref);
-  const list: Crumb = area === "agents" ? { label: "Agents", to: agentsPath } : { label: "Members", to: membersPath };
+  const list: Crumb = area === "agents" ? { label: "Agents", to: agentsPath, wide: true } : { label: "Members", to: membersPath, wide: true };
   return (
     <Loaded query={detail} loading={<LoadingFrame crumbs={[list]} />}>
       {(d) => <MemberSettings key={d.member.id} detail={d} list={list} />}

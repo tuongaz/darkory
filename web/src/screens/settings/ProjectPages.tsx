@@ -50,9 +50,8 @@ export function ProjectGeneralPage() {
         <SettingsForm label={`General settings of ${project.name}`}>
           {/* Keyed by the saved value, so an edit made elsewhere replaces the field's. */}
           <ProjectNameRow key={project.name} project={project} admin={admin} />
-          <SettingsRow label="Key" help="Starts each Task key, as in its first, and never changes.">
+          <SettingsRow label="Key" help={`Starts each Task key, as in ${project.key}-1, and never changes.`}>
             <Key>{project.key}</Key>
-            <span className="text-muted-foreground">{project.key}-1</span>
           </SettingsRow>
           <DefaultWorkspaceRow project={project} admin={admin} />
           <DefaultSwitchRow
