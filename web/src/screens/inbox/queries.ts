@@ -127,23 +127,20 @@ export function useStepNames(projects?: Project[]): Map<string, StepName> {
   }, [workflows]);
 }
 
-/** A page of the Activity page's history: its entries that pass the filters, and whether more are before it. */
-export type HistoryPage = ActivityPage & { more: boolean; scanned: number };
+/** A page of the Activity page's history, and whether more are before it. */
+export type HistoryPage = ActivityPage & { more: boolean };
 
 /**
- * One page of a Project's Activity before `before`, narrowed by the Activity page's filters:
- * `member` and `kind` by /v1, `task` (an id) here, from the `limit` entries read, so a page may
- * hold none of the Task's entries and still not be the last. This is the one place that knows
- * /v1/activity has no `task`: when it does, `task` goes into the query and the narrowing goes.
+ * One page of a Project's Activity before `before`, narrowed by the Activity page's filters, all
+ * by /v1: `member`, `kind`, and `task` (an id or key), whose Subtasks' entries come with a Parent's.
  */
 export async function activityHistoryPage(
   filter: { project: string; member?: string; kind?: ActivityKind; task?: string },
   before: number,
   limit: number,
 ): Promise<HistoryPage> {
-  const { task, kind, ...rest } = filter;
+  const { kind, ...rest } = filter;
   const page = await call(api.GET("/v1/activity", { params: { query: { ...rest, kind: kind ? [kind] : undefined, before, limit } } }));
   const more = page.items.length >= limit && page.first_seq !== undefined && page.first_seq > 1;
-  const items = task ? page.items.filter((e) => e.subject_type === "task" && e.subject_id === task) : page.items;
-  return { ...page, items, more, scanned: page.items.length };
+  return { ...page, more };
 }

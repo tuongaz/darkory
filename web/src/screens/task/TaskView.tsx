@@ -255,7 +255,7 @@ function TaskBody({
   steps: Parameters<typeof Stepper>[0]["steps"];
 }) {
   const { task } = detail;
-  const path = useTaskPath(task.project_id, task.id);
+  const path = useTaskPath(task.id);
   const actions: TaskActions = ui.actions;
   return (
     <div className="flex flex-col gap-7">

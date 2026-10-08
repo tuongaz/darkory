@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { describe, expect, it } from "vitest";
 import type { Activity } from "@/api/client";
-import { ada, bob, builder, bug, engineer, ops, parentTask, step, task, web } from "@/test/fixtures";
+import { ada, bob, builder, bug, engineer, ops, parentTask, step, subtask, task, web } from "@/test/fixtures";
 import { FakeEventSource } from "@/test/eventSource";
 import { renderApp } from "@/test/render";
 import { aboutProject, groupByDay, matchesFilter } from "./derive";
@@ -80,6 +80,10 @@ describe("the Activity page's rules", () => {
     expect(matchesFilter(lapse, { member: ada.id })).toBe(false);
     expect(matchesFilter(lapse, { kind: "task.lapsed", task: cart.id })).toBe(true);
     expect(matchesFilter(lapse, { task: checkout.id })).toBe(false);
+    // A Parent's filter keeps its Subtasks' entries.
+    const parentOf = (id: string) => (id === cart.id ? checkout.id : undefined);
+    expect(matchesFilter(lapse, { task: checkout.id, parentOf })).toBe(true);
+    expect(matchesFilter(entry(2, "task.claimed", checkout.id), { task: cart.id, parentOf })).toBe(false);
   });
 
   it("groups by day, newest first", () => {
@@ -116,19 +120,29 @@ describe("a Project's Activity", () => {
     expect(rows()[0]).toHaveTextContent("ada moved WEB-3");
   });
 
-  it("narrows by Kind through /v1, and by Task here", async () => {
-    const { calls } = recordApi({ tasks: [cart, checkout], activity: [...history, entry(2, "task.claimed", checkout.id, { actor_id: bob.id, payload: { claim_id: "d" } })] });
+  it("narrows by Kind and by Task through /v1, a Parent's with its Subtasks'", async () => {
+    const pay = subtask(7, checkout, { title: "Pay" });
+    const { calls } = recordApi({
+      tasks: [cart, checkout, pay],
+      activity: [...history, entry(2, "task.claimed", checkout.id, { actor_id: bob.id, payload: { claim_id: "d" } }), entry(1, "task.claimed", pay.id, { actor_id: bob.id, payload: { claim_id: "e" } })],
+    });
     renderApp("/projects/WEB/activity?kind=task.claimed");
-    await waitFor(() => expect(rows()).toHaveLength(2));
+    await waitFor(() => expect(rows()).toHaveLength(3));
     expect(calls.some((c) => c.path === "/v1/activity" && c.query.getAll("kind").includes("task.claimed") && c.query.get("project") === "WEB")).toBe(true);
     expect(screen.getByRole("toolbar", { name: "Filters" })).toHaveTextContent("Kind is Task claimed");
 
     await userEvent.click(screen.getByRole("button", { name: /^Task/ }));
     await userEvent.click(await screen.findByRole("option", { name: /WEB-1/ }));
-    await waitFor(() => expect(rows()).toHaveLength(1));
-    expect(rows()[0]).toHaveTextContent("bob claimed WEB-1");
-    await userEvent.click(screen.getByRole("button", { name: "Clear Task" }));
     await waitFor(() => expect(rows()).toHaveLength(2));
+    expect(rows()[0]).toHaveTextContent("bob claimed WEB-1");
+    expect(rows()[1]).toHaveTextContent("bob claimed WEB-7");
+    expect(calls.some((c) => c.path === "/v1/activity" && c.query.get("task") === "WEB-1" && c.query.getAll("kind").includes("task.claimed"))).toBe(true);
+    // A Subtask's entry from the stream joins its Parent's.
+    act(() => FakeEventSource.latest().emit("activity", entry(9, "task.claimed", pay.id, { actor_id: ada.id, payload: { claim_id: "f" }, at: minutes(0) }), 9));
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    expect(rows()[0]).toHaveTextContent("ada claimed WEB-7");
+    await userEvent.click(screen.getByRole("button", { name: "Clear Task" }));
+    await waitFor(() => expect(rows()).toHaveLength(4));
   });
 
   it("loads older pages", async () => {

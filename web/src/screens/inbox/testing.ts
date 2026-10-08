@@ -62,9 +62,15 @@ export function recordApi({
     "GET /v1/activity": ({ query }) => {
       const kinds = query.getAll("kind");
       const member = query.get("member");
+      const ref = query.get("task");
+      // `task` keeps a Task's entries and, for a Parent, its Subtasks', as /v1 does.
+      const about = ref ? tasks.find((t) => t.key === ref || t.id === ref) : undefined;
+      if (ref && !about) return refuse(404, "not_found", `No Task ${ref}`);
+      const parentOf = (id: string) => tasks.find((t) => t.id === id)?.parent_id;
       const items = activity
         .filter((e) => kinds.length === 0 || kinds.includes(e.kind))
         .filter((e) => !member || e.actor_id === member || e.payload.holder_id === member)
+        .filter((e) => !about || e.subject_id === about.id || parentOf(e.subject_id) === about.id)
         .sort((a, b) => a.seq - b.seq);
       return { items, last_seq: items.at(-1)?.seq ?? 0, first_seq: items[0]?.seq };
     },

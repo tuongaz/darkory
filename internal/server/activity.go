@@ -37,6 +37,9 @@ func (s *Server) ListActivity(w http.ResponseWriter, r *http.Request, params gen
 	if params.Project != nil {
 		q.Project = *params.Project
 	}
+	if params.Task != nil {
+		q.Task = *params.Task
+	}
 	if params.Kind != nil {
 		for _, k := range *params.Kind {
 			q.Kinds = append(q.Kinds, string(k))

@@ -20,33 +20,28 @@ export function useTakeableIds() {
   });
 }
 
-// How far back a Task's Activity is read: pages of its Project's until the Task's filing.
-const taskPages = 6;
-
 /**
- * A Task's Activity of `kinds`, oldest page last. This is the one place that knows
- * /v1/activity reads by Project and not by Task: it reads the Project's pages back from the newest
- * until the Task's filing is among them, at most six pages of 500, and keeps the Task's entries.
- * When /v1 takes `task`, this becomes one call with it.
+ * A Task's Activity of `kinds`, its Subtasks' included when it is a Parent, oldest first: the
+ * latest page of /v1/activity?task=, and the pages before it while they come back full.
  */
-export async function taskActivity(project: string, task: string, kinds: readonly ActivityKind[]): Promise<Activity[]> {
-  const out: Activity[] = [];
+export async function taskActivity(task: string, kinds: readonly ActivityKind[]): Promise<Activity[]> {
+  const pages: Activity[][] = [];
   let before = newestActivity;
-  for (let i = 0; i < taskPages; i++) {
-    const page = await call(api.GET("/v1/activity", { params: { query: { project, kind: [...kinds], before, limit: 500 } } }));
-    out.push(...page.items.filter((e) => e.subject_type === "task" && e.subject_id === task));
-    if (out.some((e) => e.kind === "task.filed") || page.first_seq === undefined || page.items.length < 500) break;
+  for (;;) {
+    const page = await call(api.GET("/v1/activity", { params: { query: { task, kind: [...kinds], before, limit: 500 } } }));
+    pages.unshift(page.items);
+    if (page.items.length < 500 || page.first_seq === undefined || page.first_seq <= 1) break;
     before = page.first_seq;
   }
-  return out;
+  return pages.flat();
 }
 
 /** The entries that trace a Task through its Workflow (`pathKinds`), with what the stream has brought since. */
-export function useTaskPath(projectId: string | undefined, taskId: string | undefined) {
+export function useTaskPath(taskId: string | undefined) {
   const history = useQuery({
-    queryKey: ["activity", { project: projectId, kind: pathKinds, task: taskId }],
-    queryFn: () => taskActivity(projectId!, taskId!, pathKinds),
-    enabled: !!projectId && !!taskId,
+    queryKey: ["activity", { kind: pathKinds, task: taskId }],
+    queryFn: () => taskActivity(taskId!, pathKinds),
+    enabled: !!taskId,
   });
   const live = useLiveEntries();
   return useMemo(() => {

@@ -42,7 +42,7 @@ const bar = async () => within((await screen.findByRole("navigation", { name: "B
 
 describe("a Task's page", () => {
   it("heads with its key, title, Step and Skill, Owner, Rank, Labels and its path through the Steps", async () => {
-    mockApi(taskRoutes());
+    const api = mockApi(taskRoutes());
     renderApp("/tasks/WEB-2");
     expect(await screen.findByRole("heading", { level: 1, name: "Build the cart page" })).toBeInTheDocument();
     const head = screen.getByRole("heading", { level: 1 }).closest("header")!;
@@ -54,6 +54,11 @@ describe("a Task's page", () => {
     const stepper = await within(head).findByRole("list", { name: "Path through the Steps" });
     await waitFor(() => expect(within(stepper).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Backlog10 min", "moved", expect.stringMatching(/^Build50 min/)]));
     expect(within(stepper).getByText("Build").closest("li")).toHaveAttribute("aria-current", "step");
+    // The path is one read of the Task's own Activity.
+    const reads = api.calls.filter((c) => c.path === "/v1/activity");
+    expect(reads).toHaveLength(1);
+    expect(reads[0].query.get("task")).toBe(cart.id);
+    expect(reads[0].query.get("project")).toBeNull();
     // The record says who moved it, from where.
     expect(await screen.findByText(/moved it from Backlog to/)).toBeInTheDocument();
     // Its crumbs lead to its Project, which the sidebar follows.

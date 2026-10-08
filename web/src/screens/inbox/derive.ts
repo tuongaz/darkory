@@ -246,7 +246,8 @@ export function startOfDay(now: number): number {
 
 // ---------------------------------------------------------------- Activity
 
-export type ActivityFilter = { member?: string; kind?: string; task?: string };
+/** The Activity page's filters, by id; `parentOf` names a Task's Parent, for the Task filter. */
+export type ActivityFilter = { member?: string; kind?: string; task?: string; parentOf?: (taskId: string) => string | undefined };
 
 /** Where the Activity page places an entry: a Task's Project, by the Task's id. */
 export type Placement = { taskProject: (taskId: string) => string | undefined };
@@ -270,14 +271,14 @@ export function aboutProject(e: Activity, projectId: string, where: Placement): 
 }
 
 /**
- * Whether an entry passes the Activity page's filters (ids), by the rule /v1 applies to `member`
- * and `kind`, and the page's own Task filter: the Member acted in it or held the Claim it ended;
- * it is of the kind; it is about the Task.
+ * Whether an entry passes the Activity page's filters (ids), by the rules /v1 applies to `member`,
+ * `kind` and `task`: the Member acted in it or held the Claim it ended; it is of the kind; it is
+ * about the Task or, when the Task is a Parent, one of its Subtasks.
  */
 export function matchesFilter(e: Activity, f: ActivityFilter): boolean {
   if (f.kind && e.kind !== f.kind) return false;
   if (f.member && e.actor_id !== f.member && !(endedForHolder.has(e.kind) && str(e.payload, "holder_id") === f.member)) return false;
-  if (f.task && !(e.subject_type === "task" && e.subject_id === f.task)) return false;
+  if (f.task && !(e.subject_type === "task" && (e.subject_id === f.task || f.parentOf?.(e.subject_id) === f.task))) return false;
   return true;
 }
 
