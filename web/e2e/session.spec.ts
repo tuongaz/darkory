@@ -153,8 +153,8 @@ test.describe("signing in and setting up an empty Install", () => {
     await test.step("another Project, Web, from New Project under the sidebar's Projects", async () => {
       await projectRow(page, "New Project").click();
       const dialog = page.getByRole("dialog", { name: "New Project" });
-      await dialog.getByLabel("Name").fill("Web");
-      await expect(dialog.getByLabel("Key")).toHaveValue("WEB");
+      await dialog.getByLabel("Name", { exact: true }).fill("Web");
+      await expect(dialog.getByLabel("Key", { exact: true })).toHaveValue("WEB");
       await shot(page, "04-new-project");
       await dialog.getByRole("button", { name: "Create Project" }).click();
       await expect(dialog).toHaveCount(0);
@@ -171,7 +171,7 @@ test.describe("signing in and setting up an empty Install", () => {
       await expect(page).toHaveURL(`${at}/settings/organisation/members?new=1`);
       const dialog = page.getByRole("dialog", { name: "New Member" });
       await dialog.getByRole("radio", { name: "Agent" }).click();
-      await dialog.getByLabel("Name").fill("builder");
+      await dialog.getByLabel("Name", { exact: true }).fill("builder");
       await shot(page, "06-checklist-new-member");
       await dialog.getByRole("button", { name: /^Create / }).click();
       await page.getByRole("dialog", { name: "Token for builder" }).getByRole("button", { name: "Done" }).click();
@@ -184,7 +184,7 @@ test.describe("signing in and setting up an empty Install", () => {
       await markLoaded(page);
       await setup.getByRole("button", { name: "File Task" }).click();
       const dialog = page.getByRole("dialog", { name: "File a Task" });
-      await expect(dialog).toContainText("In WEB.");
+      await expect(dialog.getByRole("combobox", { name: "Project" })).toContainText("Web");
       await dialog.getByLabel("Title").fill("Checkout flow");
       await shot(page, "08-checklist-file-task");
       await dialog.getByRole("button", { name: "File Task" }).click();
@@ -218,7 +218,7 @@ test.describe("signing in and setting up an empty Install", () => {
 
     await test.step("C opens File a Task; G B opens the board", async () => {
       await page.keyboard.press("c");
-      await expect(page.getByRole("dialog", { name: "File a Task" })).toContainText("In WEB.");
+      await expect(page.getByRole("dialog", { name: "File a Task" }).getByRole("combobox", { name: "Project" })).toContainText("Web");
       await page.keyboard.press("Escape");
       await expect(page.getByRole("dialog")).toHaveCount(0);
       await page.keyboard.press("g");

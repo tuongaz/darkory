@@ -87,9 +87,9 @@ test("New Project, Members and Skills from Settings", async ({ browser }) => {
     await shot(page, "01-settings-fresh-install");
     await nav(page).getByRole("button", { name: "New Project" }).click();
     const dialog = page.getByRole("dialog", { name: "New Project" });
-    await dialog.getByLabel("Name").fill("Web");
+    await dialog.getByLabel("Name", { exact: true }).fill("Web");
     // The key is offered from the name.
-    await expect(dialog.getByLabel("Key")).toHaveValue("WEB");
+    await expect(dialog.getByLabel("Key", { exact: true })).toHaveValue("WEB");
     await shot(page, "02-new-project");
     await dialog.getByRole("button", { name: "Create Project" }).click();
     await expect(page).toHaveURL(new RegExp(`${base}/(settings/)?projects/WEB/`));
@@ -103,7 +103,7 @@ test("New Project, Members and Skills from Settings", async ({ browser }) => {
     await page.getByRole("button", { name: "New Member" }).click();
     const dialog = page.getByRole("dialog", { name: "New Member" });
     await expect(dialog.getByRole("radio", { name: "Human" })).toHaveAttribute("aria-checked", "true");
-    await dialog.getByLabel("Name").fill("Mai Tran");
+    await dialog.getByLabel("Name", { exact: true }).fill("Mai Tran");
     await dialog.getByLabel("Email").fill("mai@acme.test");
     // In the Project Settings was opened in, unless taken out.
     await expect(dialog.getByRole("checkbox", { name: "Web" })).toBeChecked();
@@ -146,19 +146,19 @@ test("New Project, Members and Skills from Settings", async ({ browser }) => {
     await page.goto(`${base}/settings/organisation/skills`);
     await page.getByRole("button", { name: "New Skill" }).click();
     let dialog = page.getByRole("dialog", { name: "New Skill" });
-    await dialog.getByLabel("Name").fill("bookkeeping");
-    await dialog.getByLabel("Text").fill("Keep the books.");
+    await dialog.getByLabel("Name", { exact: true }).fill("bookkeeping");
+    await dialog.getByLabel("Text", { exact: true }).fill("Keep the books.");
     await dialog.getByRole("button", { name: "Create Skill" }).click();
     await expect(page).toHaveURL(`${base}/settings/organisation/skills/bookkeeping`);
 
     await page.goto(`${base}/settings/organisation/skills`);
     await page.getByRole("button", { name: "New Skill" }).click();
     dialog = page.getByRole("dialog", { name: "New Skill" });
-    await dialog.getByLabel("Name").fill("web-engineer");
+    await dialog.getByLabel("Name", { exact: true }).fill("web-engineer");
     await dialog.getByRole("radio", { name: "Company" }).click();
     await dialog.getByRole("combobox", { name: "Builds on" }).click();
     await page.getByRole("option", { name: "engineer", exact: true }).click();
-    await dialog.getByLabel("Text").fill("1. Reuse the cart component.\n2. Ship behind a flag.");
+    await dialog.getByLabel("Text", { exact: true }).fill("1. Reuse the cart component.\n2. Ship behind a flag.");
     await shot(page, "10-new-skill");
     await dialog.getByRole("button", { name: "Create Skill" }).click();
     await expect(page).toHaveURL(`${base}/settings/organisation/skills/web-engineer`);
@@ -279,7 +279,7 @@ test("an agent: its token shown once; deactivating it ends its live Claim and it
     await page.goto(`${base}/settings/organisation/agents`);
     await page.getByRole("button", { name: "New agent" }).first().click();
     const dialog = page.getByRole("dialog", { name: "New agent" });
-    await dialog.getByLabel("Name").fill("builder-1");
+    await dialog.getByLabel("Name", { exact: true }).fill("builder-1");
     await dialog.getByRole("checkbox", { name: "Web" }).check();
     await shot(page, "20-new-agent");
     await dialog.getByRole("button", { name: "Create agent" }).click();
@@ -361,10 +361,10 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
     await shot(page, "25-no-workspaces");
     await page.getByRole("button", { name: "New Workspace" }).first().click();
     const dialog = page.getByRole("dialog", { name: "New Workspace" });
-    await dialog.getByLabel("Name").fill("shop");
-    await dialog.getByLabel("Path").fill("/srv/src/shop");
+    await dialog.getByLabel("Name", { exact: true }).fill("shop");
+    await dialog.getByLabel("Path", { exact: true }).fill("/srv/src/shop");
     await dialog.getByRole("radio", { name: "Pull request" }).click();
-    await expect(dialog.getByLabel("Default branch")).toHaveValue("main");
+    await expect(dialog.getByLabel("Default branch", { exact: true })).toHaveValue("main");
     await shot(page, "26-new-workspace");
     await dialog.getByRole("button", { name: "Create Workspace" }).click();
     await expect(dialog).toHaveCount(0);
@@ -402,9 +402,9 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
   await test.step("New agent asks its model; its page edits the model and pauses it", async () => {
     await page.goto(`${base}/settings/organisation/agents?new=1`);
     const dialog = page.getByRole("dialog", { name: "New agent" });
-    await dialog.getByLabel("Name").fill("planner-1");
-    await expect(dialog.getByLabel("Model")).toHaveValue("claude-sonnet-5-5");
-    await dialog.getByLabel("Model").fill("claude-opus-5-5");
+    await dialog.getByLabel("Name", { exact: true }).fill("planner-1");
+    await expect(dialog.getByLabel("Model", { exact: true })).toHaveValue("claude-sonnet-5-5");
+    await dialog.getByLabel("Model", { exact: true }).fill("claude-opus-5-5");
     await dialog.getByRole("button", { name: "Create agent" }).click();
     const once = page.getByRole("dialog", { name: "Token for planner-1" });
     await expect(once.getByRole("textbox", { name: /^Secret of / })).toHaveValue(/^dk_/);
@@ -413,11 +413,11 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
 
     type Agent = { member: { agent?: { command: string; model: string; paused: boolean } } };
     const card = page.getByRole("group", { name: "Agent settings of planner-1" });
-    await expect(card.getByLabel("Model")).toHaveValue("claude-opus-5-5");
-    await expect(card.getByLabel("Command")).toHaveValue("claude");
+    await expect(card.getByLabel("Model", { exact: true })).toHaveValue("claude-opus-5-5");
+    await expect(card.getByLabel("Command", { exact: true })).toHaveValue("claude");
     expect((await ada<Agent>("GET", "/v1/members/planner-1")).member.agent).toMatchObject({ command: "claude", model: "claude-opus-5-5", paused: false });
 
-    await card.getByLabel("Model").fill("claude-haiku-4-5-20251001");
+    await card.getByLabel("Model", { exact: true }).fill("claude-haiku-4-5-20251001");
     await page.keyboard.press("Enter");
     // The Install runs --runner=off: the setting is In use, and nothing runs the agent now.
     await expect(card).toContainText("In use");
