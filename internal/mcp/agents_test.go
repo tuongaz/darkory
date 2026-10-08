@@ -9,7 +9,8 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// file_task names the Workspaces it is given, else the Team's default; show_task reads them
+// file_task names the Workspaces it is given, else its Parent's (model v2: a Subtask works where
+// its Parent does, whatever the Project's default); show_task reads them
 // back whole, path and default branch included, for the session that works the Task.
 func TestWorkspaceTools(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
@@ -26,8 +27,9 @@ func TestWorkspaceTools(t *testing.T) {
 		// model v2: a Task needing a Skill is filed at a Step (M2); an aimed one still files.
 		ok(t, cs, &byDefault, "file_task", map[string]any{"feature": "WEB-1", "aimed_at": "bob", "title": "Default"})
 		ok(t, cs, &named, "file_task", map[string]any{"feature": "WEB-1", "aimed_at": "bob", "title": "Named", "workspaces": []string{"api", "web"}})
-		if len(byDefault.Workspaces) != 1 || byDefault.Workspaces[0].Name != "web" {
-			t.Fatalf("by default: %+v", byDefault.Workspaces)
+		// WEB-1 was filed before WEB had a default, so it names none, and so does its Subtask.
+		if len(byDefault.Workspaces) != 0 {
+			t.Fatalf("by default: %+v, want WEB-1's, none", byDefault.Workspaces)
 		}
 		var shown client.TaskDetail
 		ok(t, cs, &shown, "show_task", map[string]any{"task": named.Task.Key})
