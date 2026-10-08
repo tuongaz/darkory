@@ -110,7 +110,7 @@ export function MyWorkPage() {
   );
 }
 
-/** A Parent's Subtasks as a bar: done, worked, open and not worked, out of all of them; the row says the numbers in words beside it. */
+/** A Parent's Subtasks as a bar: done, worked, open and not worked, out of all of them; beside it the row says the numbers in words. */
 function ProgressBar({ task }: { task: Task }) {
   const c = task.subtask_counts;
   if (!c) return null;
@@ -123,6 +123,8 @@ function ProgressBar({ task }: { task: Task }) {
         <i className="bg-state-claimed" style={{ width: share(c.working) }} />
         <i className="bg-muted-foreground/35" style={{ width: share(c.open - c.working) }} />
       </span>
+      {/* A phone has no room for the words beside it; there the bar keeps its numbers. */}
+      <span className="tabular-nums md:hidden">{`${c.done}/${total}`}</span>
     </span>
   );
 }
