@@ -704,6 +704,11 @@ type Activity struct {
 	// itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
 	// `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
 	// had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
+	//
+	// `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
+	// (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
+	// `position` each) and `connectors` (`id`, `from`, `to`, `name` each), with `moves` and
+	// `tasks_moved` when open Tasks were moved off deleted Steps.
 	Kind    ActivityKind           `json:"kind"`
 	Payload map[string]interface{} `json:"payload"`
 
@@ -732,6 +737,11 @@ type Activity struct {
 // itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
 // `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
 // had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
+//
+// `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
+// (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
+// `position` each) and `connectors` (`id`, `from`, `to`, `name` each), with `moves` and
+// `tasks_moved` when open Tasks were moved off deleted Steps.
 type ActivityKind string
 
 // ActivityPage defines model for ActivityPage.
@@ -877,7 +887,7 @@ type ConnectorInput struct {
 	// From The Step it leads out of, by its id or its name in `steps`.
 	From string `json:"from"`
 
-	// ID The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
+	// ID The id of a Connector of the Project now. Left out, a Connector out of the same Step
 	// with the same name, ignoring case, keeps its id; any other is new.
 	ID   *string `json:"id,omitempty"`
 	Name string  `json:"name"`
@@ -885,7 +895,7 @@ type ConnectorInput struct {
 	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
 	Position int64 `json:"position"`
 
-	// To The Step it leads to, by its id or its name in `steps`. Left out, it leads into Done.
+	// To The Step it leads to, by its id or its name in `steps`, in any Workflow of the body. Left out, it leads into Done.
 	To *string `json:"to,omitempty"`
 }
 
@@ -1592,7 +1602,7 @@ type SetTaskLabelsBody struct {
 
 // SetWorkflowBody defines model for SetWorkflowBody.
 type SetWorkflowBody struct {
-	// Connectors Every Connector of the new Workflow. One left out is deleted.
+	// Connectors Every Connector of the Project. One left out is deleted.
 	Connectors []ConnectorInput `json:"connectors"`
 
 	// Grants Skills to give Members; one a Member has changes nothing.
@@ -1601,8 +1611,8 @@ type SetWorkflowBody struct {
 	// Joins Members, by id or name, to add to the Project; one in it already changes nothing.
 	Joins *[]string `json:"joins,omitempty"`
 
-	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
-	// Workflow, by its id or its name in `steps`.
+	// Moves Where the open Tasks at a deleted Step go: the deleted Step's id to any Step of the
+	// body, by its id or its name in `steps`.
 	Moves *map[string]string `json:"moves,omitempty"`
 
 	// Revokes Skills to take away from Members; one a Member lacks changes nothing. Claims held under it are not ended.
@@ -1611,9 +1621,14 @@ type SetWorkflowBody struct {
 	// Skills Generic Skills to create before the Workflow is put in place, each published as version 1.
 	Skills *[]WorkflowSkillInput `json:"skills,omitempty"`
 
-	// Steps Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
-	// none. A Step left out is deleted.
+	// Steps Every Step of the Project, in any of its Workflows. A Step already there carries its
+	// `id`; a new one has none. A Step left out is deleted.
 	Steps []StepInput `json:"steps"`
+
+	// Workflows Every Workflow of the Project. One already there carries its `id`; one without an
+	// `id` keeps the id of the Workflow with the same name, ignoring case, and any other is
+	// new. One left out is deleted with its Steps, whose open Tasks need `moves`.
+	Workflows []WorkflowInput `json:"workflows"`
 }
 
 // SignInMode `printed_link`: one-time login links, printed by `darkory serve` and issued by admins.
@@ -1704,14 +1719,17 @@ type SkillVersionList struct {
 type Step struct {
 	ID string `json:"id"`
 
-	// Name Unique in its Workflow, ignoring case.
+	// Name Unique in its Project, ignoring case.
 	Name string `json:"name"`
 
-	// Position Its place in the Workflow, 1 first.
+	// Position Its place in its Workflow, 1 first.
 	Position int64 `json:"position"`
 
 	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
 	SkillID *string `json:"skill_id,omitempty"`
+
+	// WorkflowID The Workflow it belongs to.
+	WorkflowID string `json:"workflow_id"`
 
 	// X Where the canvas draws it, in pixels from the left.
 	X int64 `json:"x"`
@@ -1740,20 +1758,23 @@ type StepFacts struct {
 
 // StepInput defines model for StepInput.
 type StepInput struct {
-	// ID The id of a Step in the Workflow now; left out for a new one.
+	// ID The id of a Step of the Project now; left out for a new one.
 	ID   *string `json:"id,omitempty"`
 	Name string  `json:"name"`
 
-	// Position The Step's place in the Workflow; distinct among the Steps, and the Workflow numbers them 1, 2, 3… in this order.
+	// Position The Step's place in its Workflow; distinct among that Workflow's Steps, numbered 1, 2, 3… in this order.
 	Position int64 `json:"position"`
 
 	// Skill Skill id or name the Step carries. Left out, the Step is a hold.
 	Skill *string `json:"skill,omitempty"`
 
-	// X Left out, a Step in the Workflow now keeps its place, and a new one is drawn at (position − 1) × 448.
+	// Workflow The Workflow it belongs to, by its id or its name in `workflows`.
+	Workflow string `json:"workflow"`
+
+	// X Left out, a Step of the Project now keeps its place, and a new one is drawn at (position − 1) × 448 in its Workflow.
 	X *int64 `json:"x,omitempty"`
 
-	// Y Left out, a Step in the Workflow now keeps its place, and a new one is drawn at 0.
+	// Y Left out, a Step of the Project now keeps its place, and a new one is drawn at 0.
 	Y *int64 `json:"y,omitempty"`
 }
 
@@ -1834,6 +1855,9 @@ type Task struct {
 	// Labels The ids of the Labels it carries, by name. Absent when it carries none.
 	Labels *[]string `json:"labels,omitempty"`
 
+	// LastStepID The Step an ended Task ended at. Absent while it is open, and when that Step was since deleted.
+	LastStepID *string `json:"last_step_id,omitempty"`
+
 	// OpenBlockers The open Tasks blocking this one. Absent when none is open.
 	OpenBlockers *[]TaskBrief `json:"open_blockers,omitempty"`
 
@@ -1868,6 +1892,9 @@ type Task struct {
 
 	// WaitingSince When the Task was filed or last reached a Step; `next` gives a tie to the Task that has waited longest.
 	WaitingSince time.Time `json:"waiting_since"`
+
+	// WorkflowID The Workflow of the Step the Task is at, or of the Step it ended at. Absent on a Parent, on a Task aimed at a Member, and when that Step was since deleted.
+	WorkflowID *string `json:"workflow_id,omitempty"`
 
 	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
 	WorkspaceIds *[]string `json:"workspace_ids,omitempty"`
@@ -2059,15 +2086,28 @@ type ViewList struct {
 	Items []View `json:"items"`
 }
 
-// Workflow A Project's Steps, in order, and the Connectors between them. The board's columns are
-// the Steps in this order, then Done.
+// Workflow A named set of Steps and the Connectors between them, drawn on a canvas and shown as the
+// columns of its own board. A Project has one or more; a Connector may lead into a Step of
+// another Workflow of the same Project, or into Done. A Task's Workflow is that of the Step
+// it is at.
 type Workflow struct {
-	// Connectors Every Connector, by its Step's `position`, then its own.
-	Connectors []Connector `json:"connectors"`
-	ProjectID  string      `json:"project_id"`
+	ID string `json:"id"`
 
-	// Steps The Steps, by `position`, each with what is happening at it now.
-	Steps []WorkflowStep `json:"steps"`
+	// Name Unique in its Project, ignoring case.
+	Name string `json:"name"`
+
+	// Position Its place among the Project's Workflows, 1 first.
+	Position int64 `json:"position"`
+}
+
+// WorkflowInput defines model for WorkflowInput.
+type WorkflowInput struct {
+	// ID The id of a Workflow of the Project now; left out, the one with the same name keeps its id.
+	ID   *string `json:"id,omitempty"`
+	Name string  `json:"name"`
+
+	// Position Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order.
+	Position int64 `json:"position"`
 }
 
 // WorkflowSkillInput defines model for WorkflowSkillInput.
@@ -2085,10 +2125,10 @@ type WorkflowStep struct {
 	// move, Complete or drop. Absent when none left it.
 	MedianMs *int64 `json:"median_ms,omitempty"`
 
-	// Name Unique in its Workflow, ignoring case.
+	// Name Unique in its Project, ignoring case.
 	Name string `json:"name"`
 
-	// Position Its place in the Workflow, 1 first.
+	// Position Its place in its Workflow, 1 first.
 	Position int64 `json:"position"`
 
 	// SkillID The Skill a Member needs to take a Task at the Step. Absent on a hold.
@@ -2102,6 +2142,9 @@ type WorkflowStep struct {
 	// Tasks The open Tasks at the Step.
 	Tasks int `json:"tasks"`
 
+	// WorkflowID The Workflow it belongs to.
+	WorkflowID string `json:"workflow_id"`
+
 	// Working Those of them with a live Claim; also counted in `tasks`.
 	Working int `json:"working"`
 
@@ -2110,6 +2153,21 @@ type WorkflowStep struct {
 
 	// Y Where the canvas draws it, in pixels from the top.
 	Y int64 `json:"y"`
+}
+
+// Workflows A Project's Workflows, with every Step and Connector. The Steps are ordered by their
+// Workflow's `position`, then their own; "the first Step" reads that order. Each
+// Workflow's board shows its Steps in order, then Done.
+type Workflows struct {
+	// Connectors Every Connector, by its Step's order, then its own `position`.
+	Connectors []Connector `json:"connectors"`
+	ProjectID  string      `json:"project_id"`
+
+	// Steps Every Step, by its Workflow's `position` then its own, each with what is happening at it now.
+	Steps []WorkflowStep `json:"steps"`
+
+	// Workflows The Workflows, by `position`.
+	Workflows []Workflow `json:"workflows"`
 }
 
 // Workspace A place a session works in, named on the Install. A `git` Workspace is a repository at
@@ -2520,6 +2578,9 @@ type ListTasksParams struct {
 	// Step Only Tasks at this Step, by id, or by name together with `project`.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
+	// Workflow Only Tasks whose Workflow this is, by id, or by name together with `project`.
+	Workflow *string `form:"workflow,omitempty" json:"workflow,omitempty"`
+
 	// AimedAt Only Tasks aimed at this Member.
 	AimedAt *string `form:"aimed_at,omitempty" json:"aimed_at,omitempty"`
 
@@ -2545,7 +2606,8 @@ type ListTasksParams struct {
 	// Parent, a Task aimed at a Member, an ended Task), and on a field with several values
 	// (`label`, `workspace`) match a Task none of whose values is one given.
 	//
-	// Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+	// Fields: `project` (Project id) · `step` (Step id the Task is at) · `workflow` (Workflow
+	// id of the Step the Task is at, or of the Step it ended at) · `skill` (Skill id
 	// carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
 	// `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
 	// (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
@@ -3370,14 +3432,14 @@ type ClientInterface interface {
 	// CreateProjectWithBody Create a Project with its first Workflow (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+	// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+	// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 	// when its filer does not say; both default to false. Records `project.created`. Errors:
 	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -3392,14 +3454,14 @@ type ClientInterface interface {
 	// CreateProject Create a Project with its first Workflow (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+	// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+	// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 	// when its filer does not say; both default to false. Records `project.created`. Errors:
 	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -3529,81 +3591,97 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
 	SetProjectSeen(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetWorkflow Get a Project's Workflow with what is happening at each Step now
+	// GetWorkflow Get a Project's Workflows with what is happening at each Step now
 	//
-	// The Steps in their order and the Connectors out of each, with each Step's live facts: the
-	// open Tasks at it, how many of them are being worked, the Members who could take them by
-	// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
-	// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+	// The Workflows in their order, the Steps in theirs and the Connectors out of each, with
+	// each Step's live facts: the open Tasks at it, how many of them are being worked, the
+	// Members who could take them by its Skill, and the median time Tasks spent at it over the
+	// last 30 days. Any Member may read any Project's Workflows. A Task aimed at a Member, a Parent and an ended Task are at
 	// no Step and counted at none.
 	//
 	// Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
 	GetWorkflow(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetWorkflowWithBody Replace a Project's Workflow (admin)
+	// SetWorkflowWithBody Replace a Project's Workflows (admin)
 	//
-	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-	// unless a Connector out of the same Step with the same name exists, which it then keeps.
-	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+	// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+	// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+	// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+	// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+	// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+	// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+	// deleted, and one without `id` is new unless a Connector out of the same Step with the
+	// same name exists, which it then keeps. A Connector may lead into a Step of another
+	// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+	// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+	// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+	// offers them by the new Skill. A deleted Step at which open
 	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-	// none of them: its Project then offers no Break down, files no Acceptance and no
-	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+	// Project's order, and a Project may have none of them: it then offers no Break down, files
+	// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+	// whose Workflows have none files nothing.
 	// The same body may change who takes the Steps, so an editor saves its draft whole: it
 	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-	// ignoring case, or a `position`; a Connector
-	// names a Step that is not in the body; two Connectors out of one Step share a name,
-	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-	// `step_in_use`.
+	// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+	// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+	// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+	// Connector names a Step that is not in the body; two Connectors out of one Step share a
+	// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+	// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+	// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
 	SetWorkflowWithBody(ctx context.Context, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// SetWorkflow Replace a Project's Workflow (admin)
+	// SetWorkflow Replace a Project's Workflows (admin)
 	//
-	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-	// unless a Connector out of the same Step with the same name exists, which it then keeps.
-	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+	// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+	// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+	// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+	// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+	// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+	// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+	// deleted, and one without `id` is new unless a Connector out of the same Step with the
+	// same name exists, which it then keeps. A Connector may lead into a Step of another
+	// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+	// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+	// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+	// offers them by the new Skill. A deleted Step at which open
 	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-	// none of them: its Project then offers no Break down, files no Acceptance and no
-	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+	// Project's order, and a Project may have none of them: it then offers no Break down, files
+	// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+	// whose Workflows have none files nothing.
 	// The same body may change who takes the Steps, so an editor saves its draft whole: it
 	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-	// ignoring case, or a `position`; a Connector
-	// names a Step that is not in the body; two Connectors out of one Step share a name,
-	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-	// `step_in_use`.
+	// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+	// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+	// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+	// Connector names a Step that is not in the body; two Connectors out of one Step share a
+	// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+	// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+	// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5327,14 +5405,14 @@ func (c *Client) ListProjects(ctx context.Context, reqEditors ...RequestEditorFn
 // CreateProjectWithBody Create a Project with its first Workflow (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 // `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 // `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 // Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 // "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 // unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 // when its filer does not say; both default to false. Records `project.created`. Errors:
 // `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -5359,14 +5437,14 @@ func (c *Client) CreateProjectWithBody(ctx context.Context, params *CreateProjec
 // CreateProject Create a Project with its first Workflow (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 // `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 // `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 // Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 // "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 // unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 // when its filer does not say; both default to false. Records `project.created`. Errors:
 // `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -5616,12 +5694,12 @@ func (c *Client) SetProjectSeen(ctx context.Context, project ProjectRef, params 
 	return c.Client.Do(req)
 }
 
-// GetWorkflow Get a Project's Workflow with what is happening at each Step now
+// GetWorkflow Get a Project's Workflows with what is happening at each Step now
 //
-// The Steps in their order and the Connectors out of each, with each Step's live facts: the
-// open Tasks at it, how many of them are being worked, the Members who could take them by
-// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
-// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+// The Workflows in their order, the Steps in theirs and the Connectors out of each, with
+// each Step's live facts: the open Tasks at it, how many of them are being worked, the
+// Members who could take them by its Skill, and the median time Tasks spent at it over the
+// last 30 days. Any Member may read any Project's Workflows. A Task aimed at a Member, a Parent and an ended Task are at
 // no Step and counted at none.
 //
 // Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
@@ -5637,35 +5715,43 @@ func (c *Client) GetWorkflow(ctx context.Context, project ProjectRef, reqEditors
 	return c.Client.Do(req)
 }
 
-// SetWorkflowWithBody Replace a Project's Workflow (admin)
+// SetWorkflowWithBody Replace a Project's Workflows (admin)
 //
-// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-// unless a Connector out of the same Step with the same name exists, which it then keeps.
-// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+// deleted, and one without `id` is new unless a Connector out of the same Step with the
+// same name exists, which it then keeps. A Connector may lead into a Step of another
+// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+// offers them by the new Skill. A deleted Step at which open
 // Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 // Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-// none of them: its Project then offers no Break down, files no Acceptance and no
-// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+// Project's order, and a Project may have none of them: it then offers no Break down, files
+// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+// whose Workflows have none files nothing.
 // The same body may change who takes the Steps, so an editor saves its draft whole: it
 // creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 // away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 // `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 // that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 // Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 // `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-// ignoring case, or a `position`; a Connector
-// names a Step that is not in the body; two Connectors out of one Step share a name,
-// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-// `step_in_use`.
+// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+// Connector names a Step that is not in the body; two Connectors out of one Step share a
+// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5682,35 +5768,43 @@ func (c *Client) SetWorkflowWithBody(ctx context.Context, project ProjectRef, pa
 	return c.Client.Do(req)
 }
 
-// SetWorkflow Replace a Project's Workflow (admin)
+// SetWorkflow Replace a Project's Workflows (admin)
 //
-// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-// unless a Connector out of the same Step with the same name exists, which it then keeps.
-// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+// deleted, and one without `id` is new unless a Connector out of the same Step with the
+// same name exists, which it then keeps. A Connector may lead into a Step of another
+// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+// offers them by the new Skill. A deleted Step at which open
 // Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 // Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-// none of them: its Project then offers no Break down, files no Acceptance and no
-// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+// Project's order, and a Project may have none of them: it then offers no Break down, files
+// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+// whose Workflows have none files nothing.
 // The same body may change who takes the Steps, so an editor saves its draft whole: it
 // creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 // away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 // `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 // that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 // Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 // `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-// ignoring case, or a `position`; a Connector
-// names a Step that is not in the body; two Connectors out of one Step share a name,
-// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-// `step_in_use`.
+// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+// Connector names a Step that is not in the body; two Connectors out of one Step share a
+// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -10200,6 +10294,18 @@ func NewListTasksRequest(server string, params *ListTasksParams) (*http.Request,
 
 		}
 
+		if params.Workflow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "workflow", *params.Workflow, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.AimedAt != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "aimed_at", *params.AimedAt, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -12606,14 +12712,14 @@ type ClientWithResponsesInterface interface {
 	// CreateProjectWithBodyWithResponse Create a Project with its first Workflow (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+	// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+	// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 	// when its filer does not say; both default to false. Records `project.created`. Errors:
 	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -12628,14 +12734,14 @@ type ClientWithResponsesInterface interface {
 	// CreateProjectWithResponse Create a Project with its first Workflow (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 	// `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 	// `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 	// Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 	// "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-	// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-	// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-	// Tasks. The Members named are put in the Project in the same write; the creator is not,
+	// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+	// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+	// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 	// unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 	// when its filer does not say; both default to false. Records `project.created`. Errors:
 	// `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -12775,12 +12881,12 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/projects/{project}/seen (the `SetProjectSeen` operationId).
 	SetProjectSeenWithResponse(ctx context.Context, project ProjectRef, params *SetProjectSeenParams, body SetProjectSeenJSONRequestBody, reqEditors ...RequestEditorFn) (*SetProjectSeenResponse, error)
 
-	// GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
+	// GetWorkflowWithResponse Get a Project's Workflows with what is happening at each Step now
 	//
-	// The Steps in their order and the Connectors out of each, with each Step's live facts: the
-	// open Tasks at it, how many of them are being worked, the Members who could take them by
-	// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
-	// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+	// The Workflows in their order, the Steps in theirs and the Connectors out of each, with
+	// each Step's live facts: the open Tasks at it, how many of them are being worked, the
+	// Members who could take them by its Skill, and the median time Tasks spent at it over the
+	// last 30 days. Any Member may read any Project's Workflows. A Task aimed at a Member, a Parent and an ended Task are at
 	// no Step and counted at none.
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -12788,70 +12894,86 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/projects/{project}/workflow (the `GetWorkflow` operationId).
 	GetWorkflowWithResponse(ctx context.Context, project ProjectRef, reqEditors ...RequestEditorFn) (*GetWorkflowResponse, error)
 
-	// SetWorkflowWithBodyWithResponse Replace a Project's Workflow (admin)
+	// SetWorkflowWithBodyWithResponse Replace a Project's Workflows (admin)
 	//
-	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-	// unless a Connector out of the same Step with the same name exists, which it then keeps.
-	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+	// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+	// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+	// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+	// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+	// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+	// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+	// deleted, and one without `id` is new unless a Connector out of the same Step with the
+	// same name exists, which it then keeps. A Connector may lead into a Step of another
+	// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+	// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+	// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+	// offers them by the new Skill. A deleted Step at which open
 	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-	// none of them: its Project then offers no Break down, files no Acceptance and no
-	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+	// Project's order, and a Project may have none of them: it then offers no Break down, files
+	// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+	// whose Workflows have none files nothing.
 	// The same body may change who takes the Steps, so an editor saves its draft whole: it
 	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-	// ignoring case, or a `position`; a Connector
-	// names a Step that is not in the body; two Connectors out of one Step share a name,
-	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-	// `step_in_use`.
+	// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+	// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+	// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+	// Connector names a Step that is not in the body; two Connectors out of one Step share a
+	// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+	// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+	// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PUT /v1/projects/{project}/workflow (the `SetWorkflow` operationId).
 	SetWorkflowWithBodyWithResponse(ctx context.Context, project ProjectRef, params *SetWorkflowParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetWorkflowResponse, error)
 
-	// SetWorkflowWithResponse Replace a Project's Workflow (admin)
+	// SetWorkflowWithResponse Replace a Project's Workflows (admin)
 	//
-	// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-	// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-	// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-	// unless a Connector out of the same Step with the same name exists, which it then keeps.
-	// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-	// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-	// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+	// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+	// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+	// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+	// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+	// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+	// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+	// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+	// deleted, and one without `id` is new unless a Connector out of the same Step with the
+	// same name exists, which it then keeps. A Connector may lead into a Step of another
+	// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+	// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+	// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+	// offers them by the new Skill. A deleted Step at which open
 	// Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 	// Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-	// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-	// none of them: its Project then offers no Break down, files no Acceptance and no
-	// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+	// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+	// Project's order, and a Project may have none of them: it then offers no Break down, files
+	// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+	// whose Workflows have none files nothing.
 	// The same body may change who takes the Steps, so an editor saves its draft whole: it
 	// creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-	// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+	// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 	// away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-	// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+	// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 	// `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 	// that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 	// Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 	// `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-	// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-	// ignoring case, or a `position`; a Connector
-	// names a Step that is not in the body; two Connectors out of one Step share a name,
-	// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-	// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-	// `step_in_use`.
+	// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+	// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+	// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+	// Connector names a Step that is not in the body; two Connectors out of one Step share a
+	// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+	// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+	// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15809,13 +15931,13 @@ type GetWorkflowResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Workflow
+	JSON200 *Workflows
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetWorkflowResponse) GetJSON200() *Workflow {
+func (r GetWorkflowResponse) GetJSON200() *Workflows {
 	return r.JSON200
 }
 
@@ -15857,13 +15979,13 @@ type SetWorkflowResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *Workflow
+	JSON200 *Workflows
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r SetWorkflowResponse) GetJSON200() *Workflow {
+func (r SetWorkflowResponse) GetJSON200() *Workflows {
 	return r.JSON200
 }
 
@@ -18648,14 +18770,14 @@ func (c *ClientWithResponses) ListProjectsWithResponse(ctx context.Context, reqE
 // CreateProjectWithBodyWithResponse Create a Project with its first Workflow (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 // `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 // `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 // Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 // "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 // unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 // when its filer does not say; both default to false. Records `project.created`. Errors:
 // `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -18676,14 +18798,14 @@ func (c *ClientWithResponses) CreateProjectWithBodyWithResponse(ctx context.Cont
 // CreateProjectWithResponse Create a Project with its first Workflow (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
+// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog, a hold · Plan carrying
 // `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
 // `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
 // Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
 // "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-// "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-// own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-// Tasks. The Members named are put in the Project in the same write; the creator is not,
+// "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done "done"), for a
+// Project that draws its own; or `copy`, every Workflow of the Project `copy_from` names,
+// with its Steps and Connectors, without its Tasks. The Members named are put in the Project in the same write; the creator is not,
 // unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
 // when its filer does not say; both default to false. Records `project.created`. Errors:
 // `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
@@ -18895,12 +19017,12 @@ func (c *ClientWithResponses) SetProjectSeenWithResponse(ctx context.Context, pr
 	return ParseSetProjectSeenResponse(rsp)
 }
 
-// GetWorkflowWithResponse Get a Project's Workflow with what is happening at each Step now
+// GetWorkflowWithResponse Get a Project's Workflows with what is happening at each Step now
 //
-// The Steps in their order and the Connectors out of each, with each Step's live facts: the
-// open Tasks at it, how many of them are being worked, the Members who could take them by
-// its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
-// read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
+// The Workflows in their order, the Steps in theirs and the Connectors out of each, with
+// each Step's live facts: the open Tasks at it, how many of them are being worked, the
+// Members who could take them by its Skill, and the median time Tasks spent at it over the
+// last 30 days. Any Member may read any Project's Workflows. A Task aimed at a Member, a Parent and an ended Task are at
 // no Step and counted at none.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -18914,35 +19036,43 @@ func (c *ClientWithResponses) GetWorkflowWithResponse(ctx context.Context, proje
 	return ParseGetWorkflowResponse(rsp)
 }
 
-// SetWorkflowWithBodyWithResponse Replace a Project's Workflow (admin)
+// SetWorkflowWithBodyWithResponse Replace a Project's Workflows (admin)
 //
-// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-// unless a Connector out of the same Step with the same name exists, which it then keeps.
-// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+// deleted, and one without `id` is new unless a Connector out of the same Step with the
+// same name exists, which it then keeps. A Connector may lead into a Step of another
+// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+// offers them by the new Skill. A deleted Step at which open
 // Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 // Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-// none of them: its Project then offers no Break down, files no Acceptance and no
-// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+// Project's order, and a Project may have none of them: it then offers no Break down, files
+// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+// whose Workflows have none files nothing.
 // The same body may change who takes the Steps, so an editor saves its draft whole: it
 // creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 // away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 // `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 // that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 // Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 // `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-// ignoring case, or a `position`; a Connector
-// names a Step that is not in the body; two Connectors out of one Step share a name,
-// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-// `step_in_use`.
+// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+// Connector names a Step that is not in the body; two Connectors out of one Step share a
+// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18955,35 +19085,43 @@ func (c *ClientWithResponses) SetWorkflowWithBodyWithResponse(ctx context.Contex
 	return ParseSetWorkflowResponse(rsp)
 }
 
-// SetWorkflowWithResponse Replace a Project's Workflow (admin)
+// SetWorkflowWithResponse Replace a Project's Workflows (admin)
 //
-// Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-// reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-// is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-// unless a Connector out of the same Step with the same name exists, which it then keeps.
-// Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-// order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-// included, and the next `next` offers them by the new Skill. A deleted Step at which open
+// Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs
+// to, and every Connector. A Workflow already there carries its `id` and may be renamed or
+// reordered; one without `id` keeps the id of the Workflow with the same name, ignoring
+// case, and any other is new; one left out is deleted with its Steps, whose open Tasks need
+// `moves` as for any deleted Step. A Step already there carries its `id` and may be
+// renamed, reordered, moved on the canvas, given another Skill or put in another Workflow;
+// a new one has no `id`; one left out is deleted. Connectors likewise: one left out is
+// deleted, and one without `id` is new unless a Connector out of the same Step with the
+// same name exists, which it then keeps. A Connector may lead into a Step of another
+// Workflow of the Project. Workflows are ordered by `position`, each Workflow's Steps by
+// theirs and each Step's Connectors by theirs; the lists' own order is not read. Changing
+// a Step's Skill keeps the Tasks at it where they are, Claims included, and the next `next`
+// offers them by the new Skill. A deleted Step at which open
 // Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
 // Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-// and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-// none of them: its Project then offers no Break down, files no Acceptance and no
-// Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
+// and `retro` Skills are where Darkory files the Subtasks it owns, the first of each by the
+// Project's order, and a Project may have none of them: it then offers no Break down, files
+// no Acceptance and no Retrospective. A Workflow may have no Steps at all, and a Project
+// whose Workflows have none files nothing.
 // The same body may change who takes the Steps, so an editor saves its draft whole: it
 // creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-// the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
+// the Workflows in place, adds the Members in `joins` to the Project, and gives and takes
 // away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-// is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
+// is made. Records `workflow.changed` when the Workflows change, and `skill.created`,
 // `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
 // that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
 // Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
 // `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-// given twice; one Member and Skill both granted and revoked; two Steps share a name,
-// ignoring case, or a `position`; a Connector
-// names a Step that is not in the body; two Connectors out of one Step share a name,
-// ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-// `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-// `step_in_use`.
+// given twice; one Member and Skill both granted and revoked; two Workflows share a name,
+// ignoring case, or a `position`; a Step names a Workflow that is not in the body; two
+// Steps share a name, ignoring case; two Steps of one Workflow share a `position`; a
+// Connector names a Step that is not in the body; two Connectors out of one Step share a
+// name, ignoring case, or a `position`; a Workflow `id` the Project does not have, or given
+// twice; a Step or Connector `id` the Project does not have, or given twice; a `moves` key
+// that is not a Step being deleted, or a value that is not a Step kept), `step_in_use`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21789,7 +21927,7 @@ func ParseGetWorkflowResponse(rsp *http.Response) (*GetWorkflowResponse, error) 
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Workflow
+		var dest Workflows
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -21822,7 +21960,7 @@ func ParseSetWorkflowResponse(rsp *http.Response) (*SetWorkflowResponse, error) 
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Workflow
+		var dest Workflows
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
