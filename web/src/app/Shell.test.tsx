@@ -226,7 +226,7 @@ describe("the addresses before Projects", () => {
   it.each([
     ["/admin", "Settings/Members"],
     ["/admin/members", "Settings/Members"],
-    ["/admin/members/m-bob", "Settings/Members/m-bob"],
+    ["/admin/members/m-bob", "Settings/Members/bob"],
     ["/admin/skills/engineer", "Settings/Skills/engineer"],
     ["/admin/teams/OPS", "Settings/Ops/General"],
     ["/admin/workflow", "Settings/Web/Workflow"],

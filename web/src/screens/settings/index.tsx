@@ -1,72 +1,31 @@
-import { useParams } from "react-router";
-import { useRouteProject } from "@/app/currentProject";
-import { PlaceholderPage } from "@/app/Placeholder";
+import { AccountPage } from "./AccountPage";
+import { AgentsPage } from "./AgentsPage";
+import { InstallPage } from "./InstallPage";
+import { OrganisationLabelsPage, ProjectLabelsPage } from "./LabelsPage";
+import { MemberPage } from "./MemberPage";
+import { MembersPage } from "./MembersPage";
+import { SkillPage, SkillsPage } from "./SkillsPage";
+import { WorkspacesPage } from "./WorkspacesPage";
 
 export { OrganisationGate, SettingsLayout } from "./SettingsLayout";
+export { ProjectGeneralPage, ProjectMembersPage } from "./ProjectPages";
+export { ProjectLabelsPage };
 
-// M4a's second part fills these pages; the route table and the nav are final.
+// The pages app/routes.tsx mounts under /settings, by the names it imports.
 
-const owner = "M4a (Settings)";
-
-export function AccountSettingsPage() {
-  return <PlaceholderPage title="Profile" owner={owner} crumbs={[{ label: "Settings" }, { label: "Profile" }]} />;
-}
-
-function OrganisationPage({ title }: { title: string }) {
-  const { member, skill } = useParams();
-  const record = member ?? skill;
-  return <PlaceholderPage title={title} owner={owner} crumbs={[{ label: "Settings" }, { label: title }, ...(record ? [{ label: record }] : [])]} />;
-}
-
-export function MembersSettingsPage() {
-  return <OrganisationPage title="Members" />;
-}
+export const AccountSettingsPage = AccountPage;
+export const MembersSettingsPage = MembersPage;
+export const AgentsSettingsPage = AgentsPage;
+export const SkillsSettingsPage = SkillsPage;
+export const SkillSettingsPage = SkillPage;
+export const LabelsSettingsPage = OrganisationLabelsPage;
+export const InstallSettingsPage = InstallPage;
+export const ProjectWorkspacesPage = WorkspacesPage;
 
 export function MemberSettingsPage() {
-  return <OrganisationPage title="Members" />;
-}
-
-export function AgentsSettingsPage() {
-  return <OrganisationPage title="Agents" />;
+  return <MemberPage area="members" />;
 }
 
 export function AgentSettingsPage() {
-  return <OrganisationPage title="Agents" />;
-}
-
-export function SkillsSettingsPage() {
-  return <OrganisationPage title="Skills" />;
-}
-
-export function SkillSettingsPage() {
-  return <OrganisationPage title="Skills" />;
-}
-
-export function LabelsSettingsPage() {
-  return <OrganisationPage title="Labels" />;
-}
-
-export function InstallSettingsPage() {
-  return <OrganisationPage title="Install" />;
-}
-
-function ProjectPage({ title }: { title: string }) {
-  const project = useRouteProject();
-  return <PlaceholderPage title={title} owner={owner} crumbs={[{ label: "Settings" }, { label: project.name }, { label: title }]} />;
-}
-
-export function ProjectGeneralPage() {
-  return <ProjectPage title="General" />;
-}
-
-export function ProjectMembersPage() {
-  return <ProjectPage title="Members" />;
-}
-
-export function ProjectLabelsPage() {
-  return <ProjectPage title="Labels" />;
-}
-
-export function ProjectWorkspacesPage() {
-  return <ProjectPage title="Workspaces" />;
+  return <MemberPage area="agents" />;
 }

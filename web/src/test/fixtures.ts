@@ -4,9 +4,11 @@ import type {
   Label,
   Me,
   Member,
+  MemberDetail,
   Project,
   ProjectDetail,
   Skill,
+  SkillVersion,
   Task,
   TaskDetail,
   Workflow,
@@ -42,6 +44,11 @@ export const acceptance = skill("acceptance", { builtin: true });
 export const retro = skill("retro", { builtin: true });
 export const skillReview = skill("skill-review", { builtin: true });
 export const skills: Skill[] = [acceptance, breakdown, engineer, retro, review, skillReview];
+
+/** A Skill's version 1, published by ada when it was created. */
+export function skillVersion(s: Skill, version = 1, body = `How ${s.name} is done here.`): SkillVersion {
+  return { skill_id: s.id, version, body, published_by: ada.id, published_at: at };
+}
 
 /**
  * A Step id of a Project's default Workflow: `step.build` is WEB's Build. Another Project's Steps
@@ -185,6 +192,11 @@ export function detail(t: Task, extra: Partial<TaskDetail> = {}): TaskDetail {
   };
 }
 
+/** A Member's record: in WEB, holding engineer, directing no one, unless `extra` says otherwise. */
+export function memberDetail(member: Member, extra: Partial<MemberDetail> = {}): MemberDetail {
+  return { member, projects: [web], skills: [engineer], reports: [], ...extra };
+}
+
 export function health(extra: Partial<Health> = {}): Health {
   return { status: "ok", version: "v1.2.0", sign_in_modes: ["printed_link"], ...extra };
 }
@@ -195,7 +207,8 @@ const projects = [ops, web];
  * What every signed-in page reads: health, the caller, the Members, Projects and Skills for names,
  * each Project with ada as its one Member, its default Workflow and no Labels of its own, the
  * Organisation's Labels (none), every Task (none: the Install checklist shows), the Install's
- * Workspaces (none), the Member's Views (none), and the Runner's sessions (no Runner).
+ * Workspaces (none), the Member's Views (none), and the Runner's sessions (no Runner); each
+ * Member's record (`memberDetail`) with no tokens or Sessions, and each Skill at its version 1.
  */
 export function signedIn(member: Member = ada): Record<string, Handler> {
   const find = (ref: string) => projects.find((p) => p.id === ref || p.key === ref.toUpperCase());
@@ -203,6 +216,12 @@ export function signedIn(member: Member = ada): Record<string, Handler> {
     "GET /v1/health": health(),
     "GET /v1/me": me(member),
     "GET /v1/members": { items: [ada, bob, builder] },
+    "GET /v1/members/:member": ({ params }) => {
+      const m = [ada, bob, builder].find((x) => x.id === params.member || x.name === params.member);
+      return m ? memberDetail(m) : refuse(404, "not_found", `No Member ${params.member}`);
+    },
+    "GET /v1/members/:member/tokens": { items: [] },
+    "GET /v1/members/:member/sessions": { items: [] },
     "GET /v1/projects": { items: projects },
     "GET /v1/projects/:project": ({ params }) => {
       const p = find(params.project);
@@ -212,6 +231,14 @@ export function signedIn(member: Member = ada): Record<string, Handler> {
     "GET /v1/projects/:project/labels": { items: [] },
     "GET /v1/labels": { items: [] },
     "GET /v1/skills": { items: skills },
+    "GET /v1/skills/:skill": ({ params }) => {
+      const sk = skills.find((x) => x.id === params.skill || x.name === params.skill);
+      return sk ? { skill: sk, current: skillVersion(sk) } : refuse(404, "not_found", `No Skill ${params.skill}`);
+    },
+    "GET /v1/skills/:skill/versions": ({ params }) => {
+      const sk = skills.find((x) => x.id === params.skill || x.name === params.skill);
+      return sk ? { items: [skillVersion(sk)] } : refuse(404, "not_found", `No Skill ${params.skill}`);
+    },
     "GET /v1/tasks": { items: [] },
     "GET /v1/runner/sessions": { items: [], runner: false },
     "GET /v1/workspaces": { items: [] },
