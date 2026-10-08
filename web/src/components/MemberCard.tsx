@@ -59,11 +59,13 @@ function CardBody({ detail }: { detail: MemberDetail }) {
   const members = useMembers().data;
   const manager = member.manager_id ? members?.find((m) => m.id === member.manager_id) : undefined;
   const isAgent = member.kind === "agent";
+  const held = useHeld(member);
+  const first = held?.[0];
 
   return (
     <div data-member-card={member.name} className="flex flex-col gap-3 text-xs">
       <div className="flex items-center gap-3">
-        <MemberAvatar member={member} size="lg" card={false} />
+        <MemberAvatar member={member} size="lg" card={false} working={first && workingOf(member.kind, first.session?.state)} />
         <div className="flex min-w-0 flex-col gap-1">
           <span className="truncate text-sm font-semibold">
             {member.name}
@@ -78,7 +80,7 @@ function CardBody({ detail }: { detail: MemberDetail }) {
         </div>
       </div>
 
-      <Now member={member} />
+      <Now member={member} held={held} />
 
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-2">
         <Fact label="Skills">
@@ -153,24 +155,32 @@ function Named({ member }: { member: Member }) {
   );
 }
 
-/** What the Member is doing now: the Tasks they hold, or nothing. */
-function Now({ member }: { member: Member }) {
+/**
+ * The Tasks the Member holds a live Claim on, the longest held first, each with the Runner's
+ * session on it and since when it has been as it is (the session's state, else the Claim);
+ * undefined while the open Tasks load.
+ */
+function useHeld(member: Member): Held[] | undefined {
   const tasks = useOpenTasks();
   const sessions = useRunnerSessions().data?.items;
   const now = useNow();
-  const peek = usePeekLink();
-
-  if (tasks.isPending) return <Skeleton className="h-8 w-full" />;
-
-  const held: Held[] = [];
+  if (tasks.isPending) return undefined;
+  const held: (Held & { claimed: string })[] = [];
   for (const task of tasks.data ?? []) {
     const claim = liveClaim(task, now);
     if (claim?.holder_id !== member.id) continue;
     const session = sessions?.find((s) => s.task_id === task.id && s.member_id === member.id);
-    held.push({ task, session, since: session?.state_since ?? claim.started_at });
+    held.push({ task, session, since: session?.state_since ?? claim.started_at, claimed: claim.started_at });
   }
-  held.sort((a, b) => a.since.localeCompare(b.since));
+  return held.sort((a, b) => a.claimed.localeCompare(b.claimed));
+}
 
+/** What the Member is doing now: the Tasks they hold, or nothing. */
+function Now({ member, held }: { member: Member; held: Held[] | undefined }) {
+  const now = useNow();
+  const peek = usePeekLink();
+
+  if (!held) return <Skeleton className="h-8 w-full" />;
   if (held.length === 0) {
     return (
       <p data-now="idle" className="rounded-md bg-muted px-2.5 py-2 text-muted-foreground">
