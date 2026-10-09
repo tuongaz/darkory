@@ -266,7 +266,7 @@ test("4 · completed at Verify, its card sits in Bugs' Done and in no other Work
 });
 
 test("5 · the line of Triage shows an exit chip per crossing outcome; Bugs' shows the entry from Triage", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, `/projects/ACC/workflow?workflow=${wf("Triage")}`);
+  const { page, errors, ctx } = await open(browser, `/projects/ACC/workflows/${wf("Triage")}`);
   const line = page.getByRole("region", { name: "Workflow", exact: true });
   await expect(line.locator('[data-head="Triage"]')).toBeVisible();
   await expect(line.locator('[data-chip="exit"]')).toHaveText(["bug → Bugs › Investigate", "feature → Features › Build", "prototype → Prototypes › Sketch", "question → Support › Support"]);
@@ -282,7 +282,7 @@ test("5 · the line of Triage shows an exit chip per crossing outcome; Bugs' sho
 });
 
 test("6 · the editor's rail: a Workflow added, renamed and moved first, the chip reads the order saved; deleted with a Task and an outcome into it, it asks where each goes", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, "/settings/projects/ACC/workflow");
+  const { page, errors, ctx } = await open(browser, "/settings/projects/ACC/workflows");
   const rail = page.getByRole("list", { name: "Workflows" });
   await expect(rail.getByRole("listitem")).toHaveCount(5);
   await expect(rail.getByRole("button", { name: "Triage", exact: true })).toHaveAttribute("aria-current", "true");
@@ -303,7 +303,7 @@ test("6 · the editor's rail: a Workflow added, renamed and moved first, the chi
   await page.getByRole("option", { name: /^devops/ }).click();
   await expect(page.getByRole("button", { name: "Editing · 2 changes: list them" })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(address("/projects/ACC/workflow\\?workflow="));
+  await expect(page).toHaveURL(address("/projects/ACC/workflows/"));
   await expect.poll(async () => (graph = await readGraph()).workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support", "Ops"]);
   expect(graph.steps.find((s) => s.name === "Deploy")?.workflow_id).toBe(wf("Ops"));
 
@@ -314,14 +314,14 @@ test("6 · the editor's rail: a Workflow added, renamed and moved first, the chi
   await boardPage.page.keyboard.press("Escape");
 
   // An outcome's target out of a Bugs Step: its own Workflow's Steps first, then each other's under its name.
-  await page.goto(`${base}/settings/projects/ACC/workflow?workflow=${wf("Bugs")}&step=${stepOf("Fix")}`);
+  await page.goto(`${base}/settings/projects/ACC/workflows/${wf("Bugs")}?step=${stepOf("Fix")}`);
   await page.getByRole("combobox", { name: "Where ready out of Fix leads" }).click();
   await expect.poll(() => groupsOfListbox(page)).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support", "Ops"]);
   await shot(page, "editor-outcome-groups");
   await page.keyboard.press("Escape");
 
   // Ops renamed with the pencil, Enter keeping the name; a second rename, Escape puts it back.
-  await page.goto(`${base}/settings/projects/ACC/workflow?workflow=${wf("Ops")}`);
+  await page.goto(`${base}/settings/projects/ACC/workflows/${wf("Ops")}`);
   await expect(rail.getByRole("button", { name: "Ops", exact: true })).toHaveAttribute("aria-current", "true");
   await rail.getByRole("button", { name: "Rename Ops" }).click();
   await name.fill("Releases");
@@ -351,7 +351,7 @@ test("6 · the editor's rail: a Workflow added, renamed and moved first, the chi
   await page.getByRole("combobox", { name: "Where release out of Triage leads" }).click();
   await page.getByRole("option", { name: "Deploy", exact: true }).click();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(address("/projects/ACC/workflow\\?workflow="));
+  await expect(page).toHaveURL(address("/projects/ACC/workflows/"));
   await expect.poll(async () => (graph = await readGraph()).workflows.map((w) => w.name)).toEqual(["Releases", "Triage", "Bugs", "Features", "Prototypes", "Support"]);
   const release = () => graph.connectors.find((c) => c.from_step_id === stepOf("Triage") && c.name === "release");
   expect(release()?.to_step_id).toBe(stepOf("Deploy"));
@@ -365,7 +365,7 @@ test("6 · the editor's rail: a Workflow added, renamed and moved first, the chi
   // A Task at Deploy: deleting Releases asks where it goes (to Triage) and where release leads
   // instead (nowhere: the outcome is removed).
   const deploying = (await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "ACC", title: "Roll the ledger service", step: "Deploy" })).task;
-  await page.goto(`${base}/settings/projects/ACC/workflow?workflow=${wf("Releases")}`);
+  await page.goto(`${base}/settings/projects/ACC/workflows/${wf("Releases")}`);
   await expect(rail.getByRole("button", { name: "Releases", exact: true })).toHaveAttribute("aria-current", "true");
   await rail.getByRole("button", { name: "Delete Releases" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete Releases" });
@@ -378,7 +378,7 @@ test("6 · the editor's rail: a Workflow added, renamed and moved first, the chi
   await dialog.getByRole("button", { name: "Delete Releases" }).click();
   await expect(rail.getByRole("listitem")).toHaveCount(5);
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(address("/projects/ACC/workflow"));
+  await expect(page).toHaveURL(address("/projects/ACC/workflows"));
   await expect.poll(async () => (await v1<Detail>(as.ada, "GET", `/v1/tasks/${deploying.key}`)).task.step_id).toBe(stepOf("Triage"));
   await expect.poll(async () => (graph = await readGraph()).workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
   expect(release()).toBeUndefined();
@@ -496,7 +496,7 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     await expect(menu).toBeHidden();
     await expect(page.getByRole("button", { name: "More" })).toBeFocused();
   }
-  await page.goto(`${base}/projects/ACC/workflow?workflow=${wf("Bugs")}`);
+  await page.goto(`${base}/projects/ACC/workflows/${wf("Bugs")}`);
   await expect(page.getByRole("region", { name: "Workflow" })).toBeVisible();
   await chipReadsWhole(page, "Bugs");
   // Here the Project's crumb is a link, and on a phone its mark is all of it.

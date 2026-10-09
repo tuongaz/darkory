@@ -35,7 +35,7 @@ export const shortcutList: { section: string; keys: { label: string; ways: strin
       { label: "Go to My work", ways: [["G", "M"]] },
       { label: "Go to Tasks", ways: [["G", "T"]] },
       { label: "Go to the board", ways: [["G", "B"]] },
-      { label: "Go to Workflow", ways: [["G", "W"]] },
+      { label: "Go to Workflows", ways: [["G", "W"]] },
       { label: "Go to Agents", ways: [["G", "A"]] },
       { label: "Go to Settings", ways: [["G", "S"]] },
       { label: "Switch Organisation", ways: [["O", "W"]] },
@@ -89,7 +89,7 @@ function inPeek(target: EventTarget | null): boolean {
 /**
  * The keys of `shortcutList`, none of them while a terminal has the focus. ⌘K (Ctrl K) toggles
  * search; the rest do nothing while typing or while a dialog or a menu is open. C files a Task in
- * the current Project; G then T, B, W or A goes to the current Project's Tasks, board, Workflow or
+ * the current Project; G then T, B, W or A goes to the current Project's Tasks, board, Workflows or
  * Agents, G then S to Settings (an admin's Organisation, anyone else's Account), and G then P to the current Project in the sidebar's Projects;
  * O then W opens Switch Organisation, and ⌥⇧Q (Alt Shift Q) logs out, a menu open or not. J, K, ↓ and ↑ walk the Tasks the page lists
  * (its `[data-task]` rows), and with the peek open move the peek along them; Enter opens the
@@ -186,7 +186,7 @@ export function useShortcuts({
           s: settingsHome(admin),
           t: project && projectPath(project, "tasks"),
           b: project && projectPath(project, "tasks", "board"),
-          w: project && projectPath(project, "workflow"),
+          w: project && projectPath(project, "workflows"),
           a: project && projectPath(project, "agents"),
         }[key];
         if (to) {

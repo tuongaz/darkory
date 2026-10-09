@@ -57,7 +57,7 @@ const organisationPages = [
 
 const projectPages: { page: ProjectSettingsPage; label: string }[] = [
   { page: "general", label: "General" },
-  { page: "workflow", label: "Workflow" },
+  { page: "workflows", label: "Workflows" },
   { page: "members", label: "Members" },
   { page: "labels", label: "Labels" },
   { page: "workspaces", label: "Workspaces" },

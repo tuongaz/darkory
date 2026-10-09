@@ -261,7 +261,7 @@ function StreamDot() {
 
 const places: { area: ProjectArea; label: string; icon: React.ReactNode }[] = [
   { area: "tasks", label: "Tasks", icon: <ListIcon /> },
-  { area: "workflow", label: "Workflow", icon: <WorkflowIcon /> },
+  { area: "workflows", label: "Workflows", icon: <WorkflowIcon /> },
   { area: "agents", label: "Agents", icon: <ZapIcon /> },
   { area: "activity", label: "Activity", icon: <ActivityIcon /> },
 ];
@@ -369,7 +369,7 @@ function ProjectsGroup({ current }: { current: Project | undefined }) {
   );
 }
 
-/** A Project in the sidebar: its mark and name, unfolding onto Tasks, Workflow, Agents (with its live count), Activity, Settings. */
+/** A Project in the sidebar: its mark and name, unfolding onto Tasks, Workflows, Agents (with its live count), Activity, Settings. */
 function ProjectRow({ project, current, open, onOpenChange }: { project: Project; current: boolean; open: boolean; onOpenChange: (open: boolean) => void }) {
   // A Task's page sits under its Project's Tasks: the current Project is the Task's.
   const onTask = useMatch("/tasks/:task") !== null && current;

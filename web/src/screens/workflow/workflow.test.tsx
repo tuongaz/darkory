@@ -100,7 +100,7 @@ const skillMap = new Map(skills.map((s) => [s.id, s]));
 const groups = groupsOf(workflow(), skillMap);
 
 /** Settings › Workflow open on the list with Build in the panel (the address names it), once WEB's Workflow is drawn. */
-async function openList(path = `/settings/projects/WEB/workflow?step=${step.build}`) {
+async function openList(path = `/settings/projects/WEB/workflows?step=${step.build}`) {
   renderApp(path);
   await screen.findByRole("list", { name: "Steps" });
   return within(screen.getByRole("list", { name: "Steps" }));
@@ -126,7 +126,7 @@ describe("Settings › Workflow", () => {
 
   it("lists the Steps as text in order, the Steps after a Parent in their own group, the line above, and none open", async () => {
     serve();
-    const list = await openList("/settings/projects/WEB/workflow");
+    const list = await openList("/settings/projects/WEB/workflows");
     expect(list.getAllByRole("listitem").map((r) => r.getAttribute("aria-label"))).toEqual(["1. Backlog", "2. Plan", "3. Build", "4. Review", "5. Retro", "6. Skill review"]);
     expect(list.getByText("After a Parent")).toBeInTheDocument();
     expect(list.queryByText(/Darkory files Acceptance under a Parent/)).toBeNull();
@@ -149,7 +149,7 @@ describe("Settings › Workflow", () => {
 
   it("picks a Step from its row, with ↑ and ↓, and from the address", async () => {
     serve();
-    const list = await openList("/settings/projects/WEB/workflow?step=st-review");
+    const list = await openList("/settings/projects/WEB/workflows?step=st-review");
     expect(screen.getByRole("textbox", { name: "Name of Step 4" })).toHaveValue("Review");
     await pick("2. Plan");
     expect(screen.getByRole("textbox", { name: "Name of Step 2" })).toHaveValue("Plan");
@@ -628,7 +628,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("adds a Workflow from the rail, named in place, and saves it whole with its Step naming it", async () => {
     const { puts, current } = serve();
-    await openList("/settings/projects/WEB/workflow");
+    await openList("/settings/projects/WEB/workflows");
     expect(segments()).toEqual(["Work"]);
     expect(rail().getByRole("button", { name: "Work" })).toHaveAttribute("aria-current", "true");
     await userEvent.click(screen.getByRole("button", { name: "Add a Workflow" }));
@@ -661,7 +661,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("edits one Workflow at a time: the rail picks it, the list holds its Steps, an outcome's target groups the others", async () => {
     serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
     expect(segments()).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
     expect(rows()).toEqual(["1. Investigate", "2. Fix", "3. Review", "4. Verify"]);
     await userEvent.click(rail().getByRole("button", { name: "Triage" }));
@@ -677,7 +677,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("offers an outcome's targets with the Step's own Workflow first, then the others in order", async () => {
     serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}&step=${wfStep.fix}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}?step=${wfStep.fix}`);
     await userEvent.click(screen.getByRole("combobox", { name: "Where ready out of Fix leads" }));
     const groups = within(await screen.findByRole("listbox")).getAllByRole("group");
     expect(groups.map((g) => document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]);
@@ -685,7 +685,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("shows no rail to a Member who is not an admin while the Project has one Workflow", async () => {
     serve(workflow(), bob);
-    await openList("/settings/projects/WEB/workflow");
+    await openList("/settings/projects/WEB/workflows");
     expect(screen.queryByRole("list", { name: "Workflows" })).toBeNull();
   });
 
@@ -698,7 +698,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("reorders the Workflows with ← and →, and with the arrow keys: one change, and where New Tasks start", async () => {
     serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(screen.getByRole("button", { name: "Move Bugs left" }));
     expect(segments()).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]);
     expect(header()).toHaveTextContent("1 change");
@@ -713,7 +713,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("renames the picked Workflow with its pencil", async () => {
     const { puts } = serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(screen.getByRole("button", { name: "Rename Bugs" }));
     const name = screen.getByRole("textbox", { name: "Name of the Workflow" });
     expect(name).toHaveFocus();
@@ -729,7 +729,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("cancels a rename with Escape, back to the name it had, and keeps one typed when the field is left", async () => {
     serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(screen.getByRole("button", { name: "Rename Bugs" }));
     await userEvent.clear(screen.getByRole("textbox", { name: "Name of the Workflow" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Name of the Workflow" }), "Defects{Escape}");
@@ -748,7 +748,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("cancels the name of a Workflow just added with Escape: it stays, named Workflow N", async () => {
     serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(screen.getByRole("button", { name: "Add a Workflow" }));
     await userEvent.clear(screen.getByRole("textbox", { name: "Name of the Workflow" }));
     await userEvent.type(screen.getByRole("textbox", { name: "Name of the Workflow" }), "Ops{Escape}");
@@ -759,7 +759,7 @@ describe("Settings › Workflow, its Workflows", () => {
   it("deletes a Workflow: its Tasks need a Step of another, the outcome into it is removed unless led on", async () => {
     const record = five({ fix: { tasks: 1 } });
     const { puts } = serve(record, ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
     await userEvent.click(screen.getByRole("button", { name: "Delete Bugs" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Delete Bugs" }));
     expect(dialog.getByText("The Steps of Bugs go with it: Investigate, Fix, Review, Verify.")).toBeInTheDocument();
@@ -790,7 +790,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("keeps the last Workflow", async () => {
     serve();
-    await openList("/settings/projects/WEB/workflow");
+    await openList("/settings/projects/WEB/workflows");
     await userEvent.click(screen.getByRole("button", { name: "Delete Work" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Delete Work" }));
     expect(dialog.getByText("A Project keeps one Workflow at least.")).toBeInTheDocument();
@@ -799,7 +799,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("moves a Step into another Workflow from its panel, and the panel follows it", async () => {
     serve(five(), ada, withSkills);
-    await openList(`/settings/projects/WEB/workflow?workflow=${wfId.bugs}&step=${wfStep.fix}`);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}?step=${wfStep.fix}`);
     await userEvent.click(screen.getByRole("combobox", { name: "Workflow of Fix" }));
     await userEvent.click(await screen.findByRole("option", { name: "Support" }));
     expect(rail().getByRole("button", { name: "Support" })).toHaveAttribute("aria-current", "true");
@@ -810,7 +810,7 @@ describe("Settings › Workflow, its Workflows", () => {
 
   it("opens on the Workflow of the Step the address names, and a Member who is not an admin only picks", async () => {
     serve(five(), bob, withSkills);
-    await openList(`/settings/projects/WEB/workflow?step=${wfStep.sketch}`);
+    await openList(`/settings/projects/WEB/workflows?step=${wfStep.sketch}`);
     expect(rail().getByRole("button", { name: "Prototypes" })).toHaveAttribute("aria-current", "true");
     expect(rows()).toEqual(["1. Sketch", "2. Prototype review"]);
     expect(screen.queryByRole("button", { name: "Add a Workflow" })).toBeNull();

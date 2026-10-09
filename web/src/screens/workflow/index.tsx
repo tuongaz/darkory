@@ -3,9 +3,10 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
-import { remember, usePickedWorkflow, workflowParam } from "@/components/pickedWorkflow";
+import { remember, usePickedWorkflow, type PickOptions } from "@/components/pickedWorkflow";
 import { WorkflowChip } from "@/components/WorkflowChip";
-import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
+import { projectPath, projectSettingsPath, useRouteProject, workflowsPath } from "@/app/currentProject";
+import { NotFound } from "@/app/NotFound";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { FormDialog } from "@/components/FormDialog";
@@ -26,14 +27,15 @@ import { LiveWorkflow } from "./Live";
 import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
 import { ScopeChip } from "./ScopeChip";
+import { useGoToWorkflow, useWorkflowSegment, workflowNamed } from "./routeWorkflow";
 import { stepParam } from "./StepPeek";
 import { ChangesChip } from "./edit/Changes";
 import { toShort } from "@/lib/shortid";
 
 /**
- * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; of a Project
- * of several, one Workflow at a time, picked by the chip in the breadcrumb (`?workflow=`, shared
- * with the board). `?scope=` narrows it to the Tasks with no Parent, a Parent's Subtasks or one
+ * /projects/:key/workflows and /projects/:key/workflows/:workflow: a Workflow of the Project, live,
+ * as one line with its panels; of a Project of several, one Workflow at a time, the one the
+ * address names, else picked by the chip in the breadcrumb (`?workflow=`, shared with the board). `?scope=` narrows it to the Tasks with no Parent, a Parent's Subtasks or one
  * Task, `?view=` swaps the line for the Blocking among its Tasks or a list.
  */
 export function WorkflowPage() {
@@ -44,7 +46,13 @@ export function WorkflowPage() {
   const tasks = useTasks({ project: project.key, state: "open" }).data;
   const filter = useTaskFilter({ projects: [project], tasks });
   const workflows = useWorkflow(project.key).data?.workflows;
-  const picked = usePickedWorkflow(project, workflows);
+  const segment = useWorkflowSegment();
+  const remembered = usePickedWorkflow(project, workflows);
+  const fixed = segment && workflows ? workflowNamed(workflows, segment) : undefined;
+  const goTo = useGoToWorkflow((id) => workflowsPath(project, id), project);
+  const picked = segment
+    ? { id: fixed?.id, set: (id: string, options?: PickOptions) => goTo(id, { also: options?.also, replace: id === fixed?.id }) }
+    : remembered;
   const { data } = useLineData(project.key, picked.id, scope, filter.matches);
   const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.shown);
   // A Task scoped to stays in scope across a pick only where it is listed, as on the board; a
@@ -56,6 +64,7 @@ export function WorkflowPage() {
     const working = scope?.kind === "parent" && !!data?.shown?.lines(scope.id).has(next);
     picked.set(next, at && !at.has(next) && !working ? { also: (p) => p.delete("scope") } : undefined);
   };
+  if (segment && workflows && !fixed) return <NotFound />;
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
@@ -65,7 +74,7 @@ export function WorkflowPage() {
           // The Workflow drawn, at every width: on a phone too it is the way to another.
           ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={pick} />, whole: true }] : []),
           // Beside the chip on a phone, the page's name gives its room to the Project and the chip.
-          { label: "Workflow", wide: !!workflows && workflows.length > 1 },
+          { label: "Workflows", wide: !!workflows && workflows.length > 1 },
           ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
         ]}
         view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
@@ -82,7 +91,7 @@ export function WorkflowPage() {
             {view === "line" && <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />}
             {admin && (
               <Button asChild variant="outline">
-                <Link to={projectSettingsPath(project, "workflow")} aria-label="Edit the Workflow">
+                <Link to={projectSettingsPath(project, "workflows")} aria-label="Edit the Workflows">
                   <PencilIcon />
                   <span className="hidden sm:inline">Edit</span>
                 </Link>
@@ -99,10 +108,10 @@ export function WorkflowPage() {
   );
 }
 
-const settingsCrumbs = (name: string) => [{ label: "Settings" }, { label: name, wide: true }, { label: "Workflow" }];
+const settingsCrumbs = (name: string) => [{ label: "Settings" }, { label: name, wide: true }, { label: "Workflows" }];
 
 /**
- * /settings/projects/:key/workflow: the Workflow as a plain list, editing, for an admin; saved
+ * /settings/projects/:key/workflows: the Workflows as a plain list, editing, for an admin; saved
  * whole on Save. Anyone else reads the same list, with a line saying only an admin changes it.
  */
 export function WorkflowSettingsPage() {
@@ -120,7 +129,7 @@ function ReadingPage() {
       <TopBar crumbs={settingsCrumbs(project.name)} />
       <p className="border-b bg-muted/50 px-4 py-2 text-muted-foreground sm:px-6">
         Only an admin changes {project.name}'s Workflow; this is how it stands.{" "}
-        <Link to={projectPath(project, "workflow")} className="text-foreground underline-offset-2 hover:underline">
+        <Link to={projectPath(project, "workflows")} className="text-foreground underline-offset-2 hover:underline">
           Open it in {project.name}
         </Link>
       </p>
@@ -142,7 +151,7 @@ function EditingPage() {
     return id ? toShort(id) : undefined; // an old link's long id reads as the short one
   });
   const [discarding, setDiscarding] = useState(false);
-  const live = projectPath(project, "workflow");
+  const live = projectPath(project, "workflows");
   const shown = useEditorWorkflow(project, editor.draft);
   const save = async () => {
     // The Workflow edited, by name: a new one has its id only once saved.
@@ -153,7 +162,7 @@ function EditingPage() {
     const saved = editing === undefined ? undefined : reply.workflows.find((w) => same(w.name, editing));
     if (saved && reply.workflows.length > 1) {
       remember(project.key, saved.id);
-      navigate(projectPath(project, "workflow", undefined, { [workflowParam]: saved.id }));
+      navigate(workflowsPath(project, saved.id));
     } else navigate(live);
   };
   const n = editor.changes;

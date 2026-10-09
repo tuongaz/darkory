@@ -38,7 +38,7 @@ for (const scheme of ["light", "dark"] as const) {
       const phone = size.name === "phone";
 
       // r2-final-1: the page at 10:42:05.
-      await page.goto("/projects/MAIN/workflow");
+      await page.goto("/projects/MAIN/workflows");
       const line = page.getByRole("region", { name: "Workflow", exact: true });
       await expect(line.locator('[data-task="MAIN-10"]')).toBeVisible();
       await page.waitForTimeout(500);
@@ -65,11 +65,11 @@ for (const scheme of ["light", "dark"] as const) {
         await shot(page, `scope-parent-${tag}`);
       expect(await lineOverlaps(page, "Workflow"), "scope-parent").toEqual([]);
         // A single Task's path on the Project line (MAIN-9).
-        await page.goto("/projects/MAIN/workflow?scope=k-9");
+        await page.goto("/projects/MAIN/workflows?scope=k-9");
         await page.waitForTimeout(600);
         await shot(page, `scope-task-${tag}`);
         // The Text view.
-        await page.goto("/projects/MAIN/workflow?view=text");
+        await page.goto("/projects/MAIN/workflows?view=text");
         await page.waitForTimeout(300);
         await shot(page, `text-${tag}`);
       }
@@ -98,7 +98,7 @@ for (const scheme of ["light", "dark"] as const) {
       }
 
       // d-11: the heavy Workflow.
-      await page.goto("/projects/BIG/workflow");
+      await page.goto("/projects/BIG/workflows");
       await expect(page.getByRole("region", { name: "Workflow", exact: true })).toBeVisible();
       await page.waitForTimeout(500);
       await noSidewaysScroll(page);

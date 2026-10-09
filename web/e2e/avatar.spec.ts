@@ -117,7 +117,7 @@ test("an admin uploads an agent's Avatar; the Agents table and the Workflow line
   });
 
   await test.step("the Workflow line shows it on builder's Step", async () => {
-    await page.goto(`${base}/projects/MAIN/workflow`);
+    await page.goto(`${base}/projects/MAIN/workflows`);
     await loaded(page.getByRole("img", { name: /^builder \(agent\)/ }).first());
     await shot(page, "05-workflow-line");
   });

@@ -87,21 +87,21 @@ describe("Settings › a Project › General", () => {
     await waitFor(() => expect(within(colours).getByRole("radio", { name: "Violet" })).toHaveAttribute("aria-checked", "true"));
   });
 
-  it("says when the Workflow has no Step carrying acceptance, so none is filed", async () => {
+  it("says when the Workflows have no Step carrying acceptance, so none is filed", async () => {
     const withAcceptance = workflow(web);
     withAcceptance.steps.push({ ...withAcceptance.steps[3], id: "st-accept", name: "Acceptance", skill_id: acceptance.id, position: 7 });
     mockApi(routes());
     const first = renderApp("/settings/projects/WEB/general");
-    expect(await screen.findByText(/has no Step carrying acceptance/)).toBeInTheDocument();
+    expect(await screen.findByText(/have no Step carrying acceptance/)).toBeInTheDocument();
     const form = screen.getByRole("group", { name: "General settings of Web" });
-    expect(within(form).getByRole("link", { name: "Workflow" })).toHaveAttribute("href", "/settings/projects/WEB/workflow");
+    expect(within(form).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/settings/projects/WEB/workflows");
     first.unmount();
 
     mockApi(routes(undefined, { "GET /v1/projects/:project/workflow": withAcceptance }));
     renderApp("/settings/projects/WEB/general");
     await userEvent.click(await screen.findByRole("button", { name: "About Acceptance" }));
     expect(await screen.findByText(/confirms a Parent filed here as a whole/)).toBeInTheDocument();
-    expect(screen.queryByText(/has no Step carrying acceptance/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/have no Step carrying acceptance/)).not.toBeInTheDocument();
   });
 
   it("points to Workspaces when the Install has none", async () => {

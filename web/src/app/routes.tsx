@@ -1,7 +1,8 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router";
-import { useAnyTask } from "@/api/queries";
+import { useAnyTask, useWorkflow } from "@/api/queries";
 import { Loaded } from "@/components/Refusal";
+import { toShort } from "@/lib/shortid";
 import { BoardDialogs, TasksPage } from "@/screens/board";
 import { ActivityPage, AgentsPage, InboxPage, MyWorkPage } from "@/screens/inbox";
 import {
@@ -55,7 +56,9 @@ export function AppRoutes() {
           <Route path="projects/:key" element={<ProjectScope />}>
             <Route index element={<Navigate to="tasks" replace />} />
             <Route path="tasks" element={<TasksPage />} />
-            <Route path="workflow" element={<WorkflowPage />} />
+            <Route path="workflows" element={<WorkflowPage />} />
+            <Route path="workflows/:workflow" element={<WorkflowPage />} />
+            <Route path="workflow" element={<FromWorkflow />} />
             <Route path="agents" element={<AgentsPage />} />
             <Route path="activity" element={<ActivityPage />} />
             <Route path="*" element={<NotFound />} />
@@ -89,7 +92,9 @@ export function AppRoutes() {
           <Route path="projects/:key" element={<ProjectScope />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<ProjectGeneralPage />} />
-            <Route path="workflow" element={<WorkflowSettingsPage />} />
+            <Route path="workflows" element={<WorkflowSettingsPage />} />
+            <Route path="workflows/:workflow" element={<WorkflowSettingsPage />} />
+            <Route path="workflow" element={<FromWorkflow settings />} />
             <Route path="members" element={<ProjectMembersPage />} />
             <Route path="labels" element={<ProjectLabelsPage />} />
             <Route path="workspaces" element={<ProjectWorkspacesPage />} />
@@ -138,6 +143,28 @@ function FromTeam() {
   return <Navigate to={{ pathname: `/projects/${encodeURIComponent(key)}/tasks`, search }} replace />;
 }
 
+/**
+ * /projects/:key/workflow and /settings/projects/:key/workflow, the addresses of one Workflow per
+ * Project: the Workflows' now. A `?workflow=` becomes the `:workflow` segment; with none, a
+ * `?step=` names the Workflow of its Step (Edit from a Step on the live page, as it was linked);
+ * everything else the address says (`?step=`, `?scope=`, `?view=`…) is kept.
+ */
+export function FromWorkflow({ settings = false }: { settings?: boolean }) {
+  const { key = "" } = useParams();
+  const { search } = useLocation();
+  const params = new URLSearchParams(search);
+  const named = params.get("workflow");
+  const step = params.get("step");
+  const byStep = !named && !!step;
+  const graph = useWorkflow(byStep ? key : undefined);
+  if (byStep && graph.isPending) return null;
+  const workflow = named ? toShort(named) : step ? graph.data?.steps.find((s) => s.id === toShort(step))?.workflow_id : undefined;
+  params.delete("workflow");
+  const rest = params.toString();
+  const pathname = `${settings ? "/settings" : ""}/projects/${encodeURIComponent(key)}/workflows${workflow ? `/${encodeURIComponent(workflow)}` : ""}`;
+  return <Navigate to={{ pathname, search: rest ? `?${rest}` : "" }} replace />;
+}
+
 /** /features/:key: a Feature is a Task with Subtasks now, under the same key. */
 function FromFeature() {
   const { key = "" } = useParams();
@@ -163,7 +190,7 @@ function FromAdmin() {
     case "teams":
       return to(record ? `/settings/projects/${record}/general` : "/settings/projects");
     case "workflow":
-      return projectPage("workflow");
+      return projectPage("workflows");
     case "workspaces":
       return projectPage("workspaces");
     default:

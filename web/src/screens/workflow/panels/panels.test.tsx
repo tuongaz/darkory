@@ -18,7 +18,7 @@ function renderPanel(ui: ReactNode) {
   const live = new LiveActivity();
   return render(
     <Providers client={client} live={live}>
-      <MemoryRouter initialEntries={["/projects/WEB/workflow"]}>
+      <MemoryRouter initialEntries={["/projects/WEB/workflows"]}>
         <MeContext.Provider value={me(ada)}>{ui}</MeContext.Provider>
       </MemoryRouter>
     </Providers>,

@@ -15,9 +15,9 @@ const sizes = [
 ] as const;
 
 const pages = [
-  { name: "software-workflow", path: "/projects/SW/workflow", region: "Workflow" },
+  { name: "software-workflow", path: "/projects/SW/workflows", region: "Workflow" },
   { name: "software-parent", path: "/tasks/SW-1?view=line", region: "Subtask line" },
-  { name: "big-workflow", path: "/projects/BIG/workflow", region: "Workflow" },
+  { name: "big-workflow", path: "/projects/BIG/workflows", region: "Workflow" },
   { name: "big-parent", path: "/tasks/BIG-25?view=line", region: "Subtask line" },
 ] as const;
 

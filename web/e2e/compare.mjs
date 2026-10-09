@@ -40,22 +40,22 @@ const keys = {
 
 /** Each screen: its name, the mockup it answers, the size, how to reach it, and what stays different. */
 const screens = [
-  { name: "page", mock: "r2-final-1.png", size: "desktop", go: "/projects/SAM/workflow" },
+  { name: "page", mock: "r2-final-1.png", size: "desktop", go: "/projects/SAM/workflows" },
   {
     name: "selected",
     mock: "r2-final-2.png",
     size: "desktop",
-    go: "/projects/SAM/workflow",
+    go: "/projects/SAM/workflows",
     act: async (page) => page.locator(`button[data-task="${keys.exportReactions}"]`).click(),
   },
-  { name: "blocking", mock: "r2-deps-6.png", size: "desktop", go: "/projects/SAM/workflow?view=blocking" },
-  { name: "big-line", mock: "d-11.png", size: "desktop", go: "/projects/BIG/workflow" },
-  { name: "big-blocking", mock: "r2-deps-8.png", size: "desktop", go: "/projects/BIG/workflow?view=blocking" },
+  { name: "blocking", mock: "r2-deps-6.png", size: "desktop", go: "/projects/SAM/workflows?view=blocking" },
+  { name: "big-line", mock: "d-11.png", size: "desktop", go: "/projects/BIG/workflows" },
+  { name: "big-blocking", mock: "r2-deps-8.png", size: "desktop", go: "/projects/BIG/workflows?view=blocking" },
   {
     name: "scope-menu",
     mock: "r2-scope-6.png",
     size: "desktop",
-    go: "/projects/SAM/workflow",
+    go: "/projects/SAM/workflows",
     act: async (page) => {
       await page.getByRole("button", { name: /^Scope: / }).click();
       await page.getByRole("option", { name: new RegExp(keys.emoji) }).hover();
@@ -64,9 +64,9 @@ const screens = [
   { name: "parent-line", mock: "r2-scope-3.png", size: "desktop", go: `/tasks/${keys.emoji}?view=line` },
   { name: "subtask-peek", mock: "r2-scope-4.png", size: "desktop", go: `/projects/SAM/tasks?view=board&task=${keys.picker}` },
   { name: "standalone", mock: "r2-scope-5.png", size: "desktop", go: `/tasks/${keys.abn}` },
-  { name: "editor", mock: "d-6.png", size: "desktop", go: "/settings/projects/SAM/workflow" },
+  { name: "editor", mock: "d-6.png", size: "desktop", go: "/settings/projects/SAM/workflows" },
   { name: "inbox", mock: null, size: "desktop", go: "/inbox" },
-  { name: "phone", mock: "r2-final-5.png", size: "phone", go: "/projects/SAM/workflow" },
+  { name: "phone", mock: "r2-final-5.png", size: "phone", go: "/projects/SAM/workflows" },
 ];
 
 const sizes = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };

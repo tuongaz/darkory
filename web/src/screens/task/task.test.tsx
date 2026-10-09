@@ -293,7 +293,7 @@ describe("a Parent's page", () => {
     renderApp("/tasks/WEB-2");
     const line = await screen.findByRole("region", { name: "WEB-2's way through the Workflow" });
     await waitFor(() => expect(line.querySelector('button[data-task="WEB-2"]')).not.toBeNull());
-    expect(screen.getByRole("link", { name: "Workflow, at WEB-2" })).toHaveAttribute("href", expect.stringMatching(/^\/projects\/WEB\/workflow\?scope=/));
+    expect(screen.getByRole("link", { name: "Workflow, at WEB-2" })).toHaveAttribute("href", expect.stringMatching(/^\/projects\/WEB\/workflows\?scope=/));
   });
 
   it("draws its Subtasks on the Workflow line first, lists them, and remembers the choice", async () => {

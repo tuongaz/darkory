@@ -1,6 +1,7 @@
 import type { Connector, Workflow, WorkflowStep } from "@/api/client";
 import { useDirectory } from "@/api/queries";
 import { stepTitle } from "@/components/workflowLine/model";
+import { workflowsPath } from "@/app/currentProject";
 
 /** A Member's name for a sentence, by id. */
 export function useMemberName(): (id: string | undefined) => string {
@@ -33,9 +34,12 @@ export function dayText(at: string, now: number): string {
   return d.toDateString() === new Date(now).toDateString() ? "Today" : day.format(d);
 }
 
-/** The Project line narrowed to one Task: `/projects/:key/workflow?scope=<id>`. */
-export function workflowScopePath(project: { key: string }, taskId: string): string {
-  return `/projects/${project.key}/workflow?scope=${encodeURIComponent(taskId)}`;
+/**
+ * The line of the Task's Workflow narrowed to the Task: `/projects/:key/workflows/:workflow?scope=<id>`;
+ * the Project's Workflows when the Task is in none.
+ */
+export function workflowScopePath(project: { key: string }, taskId: string, workflowId?: string): string {
+  return workflowsPath(project, workflowId, { scope: taskId });
 }
 
 /**

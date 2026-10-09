@@ -24,7 +24,7 @@ for (const scheme of ["light", "dark"] as const) {
         page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
         page.on("pageerror", (e) => errors.push(e.message));
         await mockPanels(page, day);
-        await page.goto("/projects/MAIN/workflow");
+        await page.goto("/projects/MAIN/workflows");
         await expect(page.getByRole("region", { name: "Needs you" })).toBeVisible();
         await expect(page.getByRole("region", { name: "What's happening" })).toBeVisible();
         if (day === "quiet") await expect(page.getByText("Nothing needs you")).toBeVisible();

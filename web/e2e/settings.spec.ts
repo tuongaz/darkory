@@ -228,8 +228,11 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
       ["/admin/skills/web-engineer", "/settings/organisation/skills/web-engineer"],
       ["/admin/teams", "/settings/projects/WEB/general"],
       ["/admin/teams/OPS", "/settings/projects/OPS/general"],
-      ["/admin/workflow", "/settings/projects/WEB/workflow"],
+      ["/admin/workflow", "/settings/projects/WEB/workflows"],
       ["/admin/workspaces", "/settings/projects/WEB/workspaces"],
+      // The one Workflow's addresses before a Project had several: its Workflows' now.
+      ["/settings/projects/WEB/workflow", "/settings/projects/WEB/workflows"],
+      ["/projects/WEB/workflow?view=text", "/projects/WEB/workflows?view=text"],
       ["/account", "/settings/account"],
     ];
     // The current Project is the one last shown: WEB.
