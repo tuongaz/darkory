@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { Project, Task, Workflow, WorkflowStep } from "@/api/client";
+import { legacyTaskKeys } from "@/components/filters/useTaskFilter";
 import { workflowsInOrder } from "@/components/workflowLine/model";
 import { toShort } from "@/lib/shortid";
 import { listedOn } from "@/screens/board/derive";
@@ -12,12 +13,14 @@ export const workflowParam = "workflow";
 
 /**
  * Whether an address says what only one Workflow's page reads: its view (`?view=`), its scope
- * (`?scope=`), its picked Step (`?step=`, StepPeek's `stepParam`) or a Filter (`?filter.<entity>=`).
- * A Project of one sent to its Workflows list with any of them (an address of round 2, when the
- * list's address was that one Workflow's page) goes to that Workflow's page instead.
+ * (`?scope=`), its picked Step (`?step=`, StepPeek's `stepParam`) or a Filter (`?filter.<entity>=`,
+ * or the filter's older by-name keys, `legacyTaskKeys`, which it still rewrites). A Project of one
+ * sent to its Workflows list with any of them (an address of round 2, when the list's address was
+ * that one Workflow's page) goes to that Workflow's page instead.
  */
 export function asksForTheLine(params: URLSearchParams): boolean {
-  return [...params.keys()].some((k) => k === "view" || k === "scope" || k === "step" || k.startsWith("filter."));
+  const legacy: readonly string[] = legacyTaskKeys;
+  return [...params.keys()].some((k) => k === "view" || k === "scope" || k === "step" || k.startsWith("filter.") || legacy.includes(k));
 }
 
 /** Where this browser remembers the Workflow last picked in a Project. */

@@ -136,6 +136,12 @@ describe("the Workflows list's address of round 2", () => {
     expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
   });
 
+  it("is the one Workflow's page of a Project of one when it says the filter's older ?skill=", async () => {
+    appAt("/projects/WEB/workflows?skill=s-engineer", workflow());
+    await waitFor(() => expect(here()).toBe("/projects/WEB/workflows/wf-work?skill=s-engineer"));
+    expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
+  });
+
   it("stays the list of a Project of several, ?view= and all", async () => {
     appAt("/projects/WEB/workflows?view=text", workflowsFixture(web));
     expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
