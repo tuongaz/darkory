@@ -71,7 +71,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar aria-label="Sidebar">
+    <Sidebar aria-label="Sidebar" variant="inset">
       <SidebarHeader className="flex-row items-center gap-1 p-2 pb-1">
         <OrganisationMenu />
         <StreamDot />

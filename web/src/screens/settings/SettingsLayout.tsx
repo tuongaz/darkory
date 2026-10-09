@@ -83,7 +83,7 @@ function SettingsNav() {
   };
 
   return (
-    <Sidebar aria-label="Settings">
+    <Sidebar aria-label="Settings" variant="inset">
       <SidebarHeader className="gap-0 p-2 pb-1" onClickCapture={closeOnLink}>
         <SidebarMenu>
           <SidebarMenuItem>

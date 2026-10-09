@@ -111,6 +111,18 @@ describe("the shell", () => {
 
     expect(await within(projectsNav()).findByRole("button", { name: "Platform" })).toBeInTheDocument();
   });
+
+  it("draws the page as a bordered card beside a flat sidebar, from md up", async () => {
+    mockApi(signedIn());
+    renderApp("/inbox");
+    await screen.findByRole("navigation", { name: "Main" });
+    // The kit's sidebar is a <div data-slot="sidebar">, with no landmark role of its own.
+    expect(sidebar()).toHaveAttribute("data-variant", "inset");
+    const main = document.querySelector('[data-slot="sidebar-inset"]')!;
+    expect(main.className).toMatch(/md:peer-data-\[variant=inset\]:border\b/);
+    expect(main.className).toMatch(/md:peer-data-\[variant=inset\]:rounded-lg\b/);
+    expect(main.className).not.toMatch(/rounded-xl|shadow-sm/);
+  });
 });
 
 describe("the Projects", () => {
