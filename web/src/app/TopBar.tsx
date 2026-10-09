@@ -105,14 +105,20 @@ export function TopBar({
 }
 
 /**
- * An act on the bar's second row: its icon, then its label once the row has 42rem; on a narrower
- * row the label steps aside and the act is a 32px square, still named by its label. What it is
- * given as children follows the label (Filter's count, File Task's key), or, with `asChild`, is
- * the element it becomes (a Link).
+ * An act on the bar's second row, the kit's sm size (28px, 12px text, 14px icon): the height of
+ * the row's pills and chips. Its icon, then its label once the row has 42rem; on a narrower row the
+ * label steps aside and the act is a 28px square, still named by its label. What it is given as
+ * children follows the label (Filter's count, File Task's key), or, with `asChild`, is the element
+ * it becomes (a Link).
  */
-export function BarAction({ icon, label, className, children, ...props }: { icon: ReactNode; label: string } & ComponentProps<typeof Button>) {
+export function BarAction({ icon, label, className, children, size = "sm", ...props }: { icon: ReactNode; label: string } & ComponentProps<typeof Button>) {
   return (
-    <Button aria-label={label} className={cn("@max-2xl/page:min-w-8 @max-2xl/page:px-2", className)} {...props}>
+    <Button
+      aria-label={label}
+      size={size}
+      className={cn("text-xs [&_svg:not([class*='size-'])]:size-3.5 @max-2xl/page:min-w-7 @max-2xl/page:px-1.5", className)}
+      {...props}
+    >
       {icon}
       <span className="hidden @2xl/page:inline">{label}</span>
       <Slot.Slottable>{children}</Slot.Slottable>

@@ -40,7 +40,7 @@ export function TaskPage() {
   const q = useTask(ref);
   const d = q.data;
   useReportProject(d?.task.project_id);
-  const ui = useTaskActionsUI(d, "default");
+  const ui = useTaskActionsUI(d, "sm");
   const session = useRunnerSession(d?.task.id);
   const runner = useSessionActions(d, session);
   const { project, steps } = useTaskWorkflow(d?.task.project_id);
