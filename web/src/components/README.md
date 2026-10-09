@@ -121,7 +121,7 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
   toast naming the rule ("Only builder, or whoever may take it back, moves WEB-17").
 - **Keys** (`shortcutList` in `@/app/shortcuts`, which the ? sheet lists), and no others: ⌘K /
   Ctrl K search, C file a Task, G then P the current Project's row in the sidebar, G then I / M the
-  Inbox and My work, G then T / B / W / A the current Project's Tasks, board, Workflow and Agents,
+  Inbox and My work, G then T / B / W / A the current Project's Tasks, board, Workflows and Agents,
   G then S Settings (an admin's Organisation, anyone else's Account), O then W Switch Organisation, ⌥⇧Q (Alt Shift Q) Log out, ? the shortcuts;
   on a list of Tasks J / ↓ and K / ↑ move the ring, Enter opens the ringed Task's peek, Esc closes
   it and returns the focus to its row, and with the peek open J and K move it along the list. They
