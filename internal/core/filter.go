@@ -200,10 +200,19 @@ func takenBy(kind string) func(*sqlQuery) string {
 	}
 }
 
+// inWorkflows holds when the Task t's Step, or the Step it ended at, is in one of the Workflows
+// ids; never null, so a Task at no Step and with no last Step (a Parent, a Task aimed at a
+// Member, an ended Task whose last Step was since deleted) is matched by its NOT.
+func inWorkflows(q *sqlQuery, ids []string) string {
+	return `EXISTS (SELECT 1 FROM steps xwf WHERE xwf.org_id = t.org_id AND xwf.id = COALESCE(t.step_id, t.last_step_id)
+	AND xwf.workflow_id IN (` + q.list(ids) + "))"
+}
+
 // taskFields are the fields listTasks filters by, over a Task t.
 var taskFields = fieldMap(
 	filterField{name: "project", kind: idField, match: column("t.project_id", false)},
 	filterField{name: "step", kind: idField, match: column("t.step_id", true)},
+	filterField{name: "workflow", kind: idField, match: inWorkflows},
 	filterField{name: "skill", kind: idField, match: func(q *sqlQuery, vals []string) string {
 		return `EXISTS (SELECT 1 FROM steps xs WHERE xs.org_id = t.org_id AND xs.id = t.step_id AND xs.skill_id IN (` + q.list(vals) + "))"
 	}},

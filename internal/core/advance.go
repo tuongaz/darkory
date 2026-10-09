@@ -156,6 +156,7 @@ WHERE t.org_id = @org AND t.id = @task AND t.step_id = @from AND k.id = @connect
 func advanceStmts(c *auth.Caller, pre Task, k Connector, to Step, note *string, extra map[string]any, args map[string]any, now time.Time) (Task, []store.Stmt) {
 	out := pre
 	out.Claim, out.StepID, out.StepSince, out.WaitingSince, out.SkillID = nil, k.ToStepID, &now, now, to.SkillID
+	out.WorkflowID = &to.WorkflowID
 	a := with(args, map[string]any{"to": k.ToStepID})
 	stmts := []store.Stmt{fromGuard(args, pre, &k)}
 	if note != nil && *note != "" {
@@ -219,6 +220,7 @@ func (s *Service) sendBack(ctx context.Context, c *auth.Caller, pre Task, stale 
 func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Connector, ps []SkillProposal, note *string, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 	out := pre
 	out.Claim, out.State, out.EndedAt, out.StepID, out.StepSince, out.SkillID = nil, "done", &now, nil, nil, nil
+	out.LastStepID = pre.StepID // its WorkflowID stays that Step's
 	stmts := []store.Stmt{fromGuard(args, pre, k)}
 	for _, p := range ps {
 		stmts = append(stmts, publishStmts(p, args)...)
@@ -228,7 +230,8 @@ func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Co
 	}
 	stmts = append(stmts,
 		store.S(`UPDATE claims SET ended_at = @now, how_ended = 'completed', ended_by = @member WHERE org_id = @org AND id = @claim`, args),
-		store.S(clearClaimSQL+`, state = 'done', ended_at = @now, step_id = NULL, step_since = NULL WHERE org_id = @org AND id = @task`, args),
+		store.S(clearClaimSQL+`, state = 'done', ended_at = @now, last_step_id = step_id, step_id = NULL, step_since = NULL
+WHERE org_id = @org AND id = @task`, args),
 		store.S(supersedeSQL+` WHERE org_id = @org AND task_id = @task AND state = 'pending'`, args),
 	)
 	if pre.Kind == "retrospective" && pre.ParentID != nil {

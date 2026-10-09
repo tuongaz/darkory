@@ -121,6 +121,35 @@ func (w Workflows) findWorkflow(ref string) (Workflow, bool) {
 	return Workflow{}, false
 }
 
+// workflowByID reads a Workflow by its id, either form, in any Project of the organisation.
+func workflowByID(ctx context.Context, r store.Reader, orgID, id string) (Workflow, error) {
+	id = shortid.Canonical(id) // either form (ADR 0017)
+	var wf Workflow
+	err := r.QueryRow(ctx, `SELECT id, name, position FROM workflows WHERE org_id = $1 AND id = $2`, orgID, id).
+		Scan(&wf.ID, &wf.Name, &wf.Position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return wf, refuse(CodeNotFound, "no Workflow %s", id)
+	}
+	return wf, err
+}
+
+// workflowOf resolves ref to a Workflow of the Project, by its id or its name, refusing one it
+// does not have.
+func workflowOf(ctx context.Context, r store.Reader, orgID, projectID, ref string) (Workflow, error) {
+	if strings.TrimSpace(ref) == "" {
+		return Workflow{}, refuse(CodeInvalid, "a Workflow reference is empty")
+	}
+	w, err := getWorkflow(ctx, r, orgID, projectID)
+	if err != nil {
+		return Workflow{}, err
+	}
+	wf, ok := w.findWorkflow(ref)
+	if !ok {
+		return Workflow{}, refuse(CodeNotFound, "the Project has no Workflow %q", ref)
+	}
+	return wf, nil
+}
+
 // stepOf resolves ref to a Step of the Project, in any of its Workflows, refusing a name it does
 // not have.
 func stepOf(ctx context.Context, r store.Reader, orgID, projectID, ref string) (Step, error) {

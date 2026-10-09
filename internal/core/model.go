@@ -213,9 +213,14 @@ type Task struct {
 	StepSince *time.Time
 	// SkillID is the Skill of its Step, read with it: the Skill that takes it. Nil at a hold and
 	// wherever StepID is nil.
-	SkillID   *string
-	AimedAtID *string
-	OwnerID   string
+	SkillID *string
+	// LastStepID is the Step an ended Task ended at; nil while it is open, on a Task that ended at
+	// no Step (a Parent, a Task aimed at a Member), and once that Step is deleted with no move for
+	// it. WorkflowID is the Workflow of its Step, or of its last Step: nil wherever both are.
+	LastStepID *string
+	WorkflowID *string
+	AimedAtID  *string
+	OwnerID    string
 	// Rank is the Task's place in its Project's Rank, 1 first; nil on a Subtask, which sorts by
 	// its Parent's.
 	Rank *int64

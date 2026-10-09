@@ -73,26 +73,27 @@ func scanSkill(row interface{ Scan(...any) error }) (Skill, error) {
 	return s, err
 }
 
-// taskCols reads a Task with its Step's Skill and its current Claim; scanTask shows the Claim
-// only while it is live.
+// taskCols reads a Task with its Step's Skill, the Workflow of its Step or of the Step it ended
+// at, and its current Claim; scanTask shows the Claim only while it is live.
 const taskCols = `t.id, t.display_key, t.project_id, t.parent_id, t.kind, t.title, t.description, t.state,
-t.step_id, t.step_since, ts.skill_id, t.aimed_at_id, t.owner_id, t.rank, t.breakdown, t.auto_complete, t.acceptance,
+t.step_id, t.step_since, ts.skill_id, t.last_step_id, COALESCE(ts.workflow_id, ls.workflow_id), t.aimed_at_id, t.owner_id, t.rank, t.breakdown, t.auto_complete, t.acceptance,
 t.from_retrospective_task_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
 t.claim_id, t.claim_holder_id, cs.chosen_id, t.claim_skill_id, cc.skill_version, cc.model_label,
 t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
 EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
 	WHERE b.org_id = t.org_id AND b.task_id = t.id AND bt.state = 'open')`
 
-const taskFrom = `tasks t LEFT JOIN steps ts ON ts.id = t.step_id LEFT JOIN claims cc ON cc.id = t.claim_id
+const taskFrom = `tasks t LEFT JOIN steps ts ON ts.id = t.step_id LEFT JOIN steps ls ON ls.id = t.last_step_id
+LEFT JOIN claims cc ON cc.id = t.claim_id
 LEFT JOIN sessions cs ON cs.id = t.claim_session_id`
 
 func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) {
 	var t Task
-	var parent, step, skill, aimed, fromRetro, filedBy, claimID, holder, session, claimSkill, label sql.NullString
+	var parent, step, skill, lastStep, workflow, aimed, fromRetro, filedBy, claimID, holder, session, claimSkill, label sql.NullString
 	var waiting, created int64
 	var stepSince, rank, ended, version, timeout, started, expires sql.NullInt64
 	err := row.Scan(&t.ID, &t.Key, &t.ProjectID, &parent, &t.Kind, &t.Title, &t.Description, &t.State,
-		&step, &stepSince, &skill, &aimed, &t.OwnerID, &rank, &t.Breakdown, &t.AutoComplete, &t.Acceptance,
+		&step, &stepSince, &skill, &lastStep, &workflow, &aimed, &t.OwnerID, &rank, &t.Breakdown, &t.AutoComplete, &t.Acceptance,
 		&fromRetro, &filedBy, &waiting, &created, &ended,
 		&claimID, &holder, &session, &claimSkill, &version, &label,
 		&timeout, &started, &expires, &t.Blocked)
@@ -100,6 +101,7 @@ func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) 
 		return t, err
 	}
 	t.ParentID, t.StepID, t.StepSince, t.SkillID = nullString(parent), nullString(step), nullTime(stepSince), nullString(skill)
+	t.LastStepID, t.WorkflowID = nullString(lastStep), nullString(workflow)
 	t.AimedAtID, t.FromRetrospectiveTaskID, t.FiledBy = nullString(aimed), nullString(fromRetro), nullString(filedBy)
 	if rank.Valid {
 		t.Rank = &rank.Int64

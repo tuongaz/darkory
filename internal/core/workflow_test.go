@@ -880,7 +880,6 @@ func TestSetWorkflows(t *testing.T) {
 // An ended Task at a deleted Step goes where moves says, as the open ones do: its last_step_id
 // becomes the target; with no moves for it, it becomes null.
 func TestSetWorkflowMovesEndedTasks(t *testing.T) {
-	t.Skip("Task 5: last_step_id is set when a Task ends")
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
@@ -928,5 +927,138 @@ func TestSetWorkflowMovesEndedTasks(t *testing.T) {
 		if got := lastStep(dropped.ID); got != "-" {
 			t.Fatalf("the ended Task at Verify, which moves did not name, ended at %s", got)
 		}
+		// Its Workflow went with its last Step: it has none, and workflow:not matches it.
+		if wf := f.get(dropped.Key).Task.WorkflowID; wf != nil {
+			t.Fatalf("the ended Task whose last Step was deleted is in Workflow %s", *wf)
+		}
+		if got := f.get(moved.Key).Task.WorkflowID; got == nil || *got != f.workflowIDs("WEB")[core.WorkflowFirstName] {
+			t.Fatalf("the ended Task moved onto Build is in Workflow %v", got)
+		}
+		work := f.workflowIDs("WEB")[core.WorkflowFirstName]
+		if got := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Filters: []string{"workflow:not:" + work}}); !slices.Contains(got, dropped.Key) || slices.Contains(got, moved.Key) {
+			t.Fatalf("workflow:not:Work lists %v", got)
+		}
+	})
+}
+
+// An ended Task keeps the Step it ended at, set by the write that ends it: advanced into Done,
+// completed, dropped, or dropped with its Parent. Its Workflow is that of its Step, or of the
+// Step it ended at; a Parent and a Task aimed at a Member have neither. ListTasks' workflow (by
+// id, or by name with the project) and the workflow filter read the same.
+func TestEndedTaskKeepsItsLastStep(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		lead := f.member("lead", []string{"WEB"}, nil)
+		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
+		w := asSet(f.workflows("WEB"))
+		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 2})
+		w.Steps = append(w.Steps, core.StepInput{Workflow: "Bugs", Name: "Investigate", Skill: ptrStr(core.SkillEngineer), Position: 1},
+			core.StepInput{Workflow: "Bugs", Name: "Verify", Position: 2})
+		w.Connectors = append(w.Connectors, core.ConnectorInput{From: "Investigate", Name: "fixed"},
+			core.ConnectorInput{From: "Investigate", To: ptrStr("Verify"), Name: "check"},
+			core.ConnectorInput{From: "Build", To: ptrStr("Investigate"), Name: "bug"})
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		f.chainBuildIntoDone("WEB")
+		ids := f.workflowIDs("WEB")
+		work, bugs := ids[core.WorkflowFirstName], ids["Bugs"]
+		build, investigate, verify := f.step("WEB", "Build"), f.step("WEB", "Investigate"), f.step("WEB", "Verify")
+		str := func(p *string) string {
+			if p == nil {
+				return "-"
+			}
+			return *p
+		}
+		check := func(what string, task core.Task, last, wf string) {
+			t.Helper()
+			if str(task.LastStepID) != last || str(task.WorkflowID) != wf {
+				t.Errorf("%s: last Step %s, Workflow %s; want %s, %s", what, str(task.LastStepID), str(task.WorkflowID), last, wf)
+			}
+			read := f.get(task.Key).Task
+			if str(read.LastStepID) != last || str(read.WorkflowID) != wf {
+				t.Errorf("%s read back: last Step %s, Workflow %s; want %s, %s", what, str(read.LastStepID), str(read.WorkflowID), last, wf)
+			}
+		}
+
+		// Open at a Step: no last Step, its Step's Workflow; across a Connector into Bugs, Bugs.
+		open := f.task(lead, "WEB", "Open", "Build")
+		check("open", open, "-", work)
+		crossed := f.task(lead, "WEB", "Crossed", "Build")
+		f.claim(builder, crossed.Key, noTimeout)
+		check("crossed into Bugs", f.advance(builder, crossed.Key, "bug"), "-", bugs)
+
+		// Advanced into Done, completed, dropped: the Step it ended at, and that Step's Workflow.
+		fixed := f.task(lead, "WEB", "Fixed", "Investigate")
+		f.claim(builder, fixed.Key, noTimeout)
+		ended := f.advance(builder, fixed.Key, "fixed")
+		if ended.State != "done" || ended.StepID != nil {
+			t.Fatalf("advanced into Done: %s at %s", ended.State, str(ended.StepID))
+		}
+		check("advanced into Done", ended, investigate, bugs)
+		built := f.task(lead, "WEB", "Built", "Build")
+		f.claim(builder, built.Key, noTimeout)
+		check("completed", f.complete(builder, built.Key), build, work)
+		gone := f.task(lead, "WEB", "Gone", "Verify")
+		dropped, err := f.svc.DropTask(ctx, lead, gone.Key, nil, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check("dropped", dropped, verify, bugs)
+
+		// A Parent and a Task aimed at a Member are at no Step and in no Workflow; dropping the
+		// Parent ends each open Subtask at its Step, in the same write.
+		pd := f.parent(lead, "WEB", "Chat")
+		sub := f.subtask(lead, pd.Task.ID, "Sub", "Verify")
+		aimed := f.aimed(lead, "WEB", "Which provider?", "builder")
+		check("Parent", pd.Task, "-", "-")
+		check("aimed", aimed, "-", "-")
+		breakdown := f.get(pd.Task.Key).Subtasks[0]
+		if breakdown.Kind != "breakdown" || breakdown.StepID == nil {
+			t.Fatalf("the Parent's first Subtask is %s at %s", breakdown.Kind, str(breakdown.StepID))
+		}
+		breakdownAt := *breakdown.StepID
+		parentDropped, err := f.svc.DropTask(ctx, lead, pd.Task.Key, nil, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check("dropped Parent", parentDropped, "-", "-")
+		check("Subtask dropped with its Parent", f.get(sub.Key).Task, verify, bugs)
+		check("Breakdown dropped with its Parent", f.get(breakdown.Key).Task, breakdownAt, work)
+
+		// ListTasks' workflow: the Tasks at its Steps and those that ended at one.
+		inBugs := sortedKeys(crossed.Key, fixed.Key, gone.Key, sub.Key)
+		for _, tf := range []core.TaskFilter{
+			{Project: ptrStr("WEB"), Workflow: ptrStr("bugs")},
+			{Project: ptrStr("WEB"), Workflow: ptrStr(bugs)},
+			{Workflow: ptrStr(bugs)},
+			{Filters: []string{"workflow:is:" + bugs}},
+		} {
+			if got := f.filterKeys(tf); !slices.Equal(got, inBugs) {
+				t.Errorf("%v %q lists %v, want %v", str(tf.Workflow), tf.Filters, got, inBugs)
+			}
+		}
+		_, err = f.svc.ListTasks(ctx, f.admin, core.TaskFilter{Workflow: ptrStr("Bugs")})
+		wantCode(t, err, core.CodeInvalid)
+		_, err = f.svc.ListTasks(ctx, f.admin, core.TaskFilter{Project: ptrStr("WEB"), Workflow: ptrStr("Triage")})
+		wantCode(t, err, core.CodeNotFound)
+
+		all := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB")})
+		without := func(keys ...string) []string {
+			return slices.DeleteFunc(slices.Clone(all), func(k string) bool { return slices.Contains(keys, k) })
+		}
+		if got, want := f.filterKeys(core.TaskFilter{Filters: []string{"workflow:in:" + work + "," + bugs}}), without(pd.Task.Key, aimed.Key); !slices.Equal(got, want) {
+			t.Errorf("workflow:in:Work,Bugs lists %v, want %v", got, want)
+		}
+		// not and nin also match a Task in no Workflow: the Parent and the aimed Task.
+		for _, tok := range []string{"workflow:nin:" + bugs, "workflow:not:" + bugs} {
+			got, want := f.filterKeys(core.TaskFilter{Filters: []string{tok}}), without(inBugs...)
+			if !slices.Equal(got, want) || !slices.Contains(got, pd.Task.Key) || !slices.Contains(got, aimed.Key) {
+				t.Errorf("%s lists %v, want %v", tok, got, want)
+			}
+		}
+		f.checkActivity()
 	})
 }
