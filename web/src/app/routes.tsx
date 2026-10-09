@@ -23,7 +23,7 @@ import {
   SkillsSettingsPage,
 } from "@/screens/settings";
 import { TaskPage, TaskPeek } from "@/screens/task";
-import { WorkflowPage, WorkflowSettingsPage, WorkflowsPage } from "@/screens/workflow";
+import { WorkflowPage, WorkflowSettingsPage, WorkflowsPage, WorkflowsSettingsPage } from "@/screens/workflow";
 import { NotFound } from "./NotFound";
 import { ProjectScope, ToCurrentProject } from "./ProjectScope";
 import { SetupChecklist } from "./SetupChecklist";
@@ -92,7 +92,7 @@ export function AppRoutes() {
           <Route path="projects/:key" element={<ProjectScope />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<ProjectGeneralPage />} />
-            <Route path="workflows" element={<WorkflowSettingsPage />} />
+            <Route path="workflows" element={<WorkflowsSettingsPage />} />
             <Route path="workflows/:workflow" element={<WorkflowSettingsPage />} />
             <Route path="workflow" element={<FromWorkflow settings />} />
             <Route path="members" element={<ProjectMembersPage />} />

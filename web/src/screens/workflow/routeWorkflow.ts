@@ -41,3 +41,6 @@ export function useGoToWorkflow(path: (workflow: string) => string, project: Pic
     [navigate, search, path, project.key, keep],
   );
 }
+
+/** What a page opening a Workflow's editor may say: the Workflow was just added, its name to be typed. */
+export type EditorState = { rename?: boolean };

@@ -3,11 +3,12 @@ import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
-import { remember, workflowParam } from "@/components/pickedWorkflow";
+import { workflowParam } from "@/components/pickedWorkflow";
+import type { Project } from "@/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { workflowsInOrder } from "@/components/workflowLine/model";
 import { WorkflowChip } from "@/components/WorkflowChip";
-import { projectPath, projectSettingsPath, useRouteProject, workflowsPath, workflowsSettingsPath } from "@/app/currentProject";
+import { projectSettingsPath, useRouteProject, workflowsPath, workflowsSettingsPath } from "@/app/currentProject";
 import { NotFound } from "@/app/NotFound";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
@@ -23,14 +24,14 @@ import { taskPath as taskPagePath } from "@/screens/task/format";
 import { fromRecord } from "./edit/draft";
 import { useDraftEditor } from "./edit/useDraft";
 import { useEditorWorkflow } from "./edit/useEditorWorkflow";
-import { same } from "./bind";
 import { EditingWorkflow } from "./Editing";
 import { LiveWorkflow } from "./Live";
 import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
 import { ScopeChip } from "./ScopeChip";
 import { WorkflowsList } from "./WorkflowsList";
-import { useGoToWorkflow, useWorkflowSegment, workflowNamed } from "./routeWorkflow";
+export { WorkflowsSettingsPage } from "./WorkflowsSettings";
+import { useGoToWorkflow, useWorkflowSegment, workflowNamed, type EditorState } from "./routeWorkflow";
 import { stepParam } from "./StepPeek";
 import { ChangesChip } from "./edit/Changes";
 import { toShort } from "@/lib/shortid";
@@ -159,11 +160,12 @@ export function WorkflowPage() {
   );
 }
 
-const settingsCrumbs = (name: string) => [{ label: "Settings" }, { label: name, wide: true }, { label: "Workflows" }];
+/** The crumbs of a Workflow's editor: Settings › the Project › Workflows, leading back to the list. */
+const editorCrumbs = (project: Project) => [{ label: "Settings" }, { label: project.name, wide: true }, { label: "Workflows", to: workflowsSettingsPath(project) }];
 
 /**
- * /settings/projects/:key/workflows: the Workflows as a plain list, editing, for an admin; saved
- * whole on Save. Anyone else reads the same list, with a line saying only an admin changes it.
+ * /settings/projects/:key/workflows/:workflow: one Workflow's editor, for an admin; the draft is
+ * the Project's whole graph, saved whole on Save. Anyone else reads it.
  */
 export function WorkflowSettingsPage() {
   const admin = useCurrentMe().member.admin;
@@ -175,12 +177,14 @@ function ReadingPage() {
   const query = useWorkflow(project.key);
   const skills = useSkills();
   const draft = useMemo(() => query.data && fromRecord(query.data), [query.data]);
+  const shown = useEditorWorkflow(project, draft);
+  if (draft && !shown.id) return <NotFound crumbs={editorCrumbs(project)} />;
   return (
     <>
-      <TopBar crumbs={settingsCrumbs(project.name)} />
+      <TopBar crumbs={editorCrumbs(project)} />
       <p className="border-b bg-muted/50 px-4 py-2 text-muted-foreground sm:px-6">
-        Only an admin changes {project.name}'s Workflow; this is how it stands.{" "}
-        <Link to={projectPath(project, "workflows")} className="text-foreground underline-offset-2 hover:underline">
+        Only an admin changes {project.name}'s Workflows.{" "}
+        <Link to={workflowsPath(project, shown.id)} className="text-foreground underline-offset-2 hover:underline">
           Open it in {project.name}
         </Link>
       </p>
@@ -201,29 +205,29 @@ function EditingPage() {
     const id = params.get(stepParam);
     return id ? toShort(id) : undefined; // an old link's long id reads as the short one
   });
+  const { state } = useLocation();
+  const [focusName] = useState(() => !focusStep && !!(state as EditorState | null)?.rename);
   const [discarding, setDiscarding] = useState(false);
-  const live = projectPath(project, "workflows");
+  const list = workflowsSettingsPath(project);
   const shown = useEditorWorkflow(project, editor.draft);
   const save = async () => {
-    // The Workflow edited, by name: a new one has its id only once saved.
-    const editing = editor.draft?.wf.workflows.find((w) => w.id === shown.id)?.name;
+    const id = shown.id;
     const reply = await editor.save();
     if (!reply) return;
-    toast(`Saved ${project.name}'s Workflow`);
-    const saved = editing === undefined ? undefined : reply.workflows.find((w) => same(w.name, editing));
-    if (saved && reply.workflows.length > 1) {
-      remember(project.key, saved.id);
-      navigate(workflowsPath(project, saved.id));
-    } else navigate(live);
+    const saved = reply.workflows.find((w) => w.id === id);
+    toast(`Saved ${saved?.name ?? "the Workflows"}`);
+    // That Workflow's live page; of a Project of one, the Workflows' page, which is its.
+    navigate(saved && reply.workflows.length > 1 ? workflowsPath(project, saved.id) : workflowsPath(project));
   };
   const n = editor.changes;
+  if (editor.draft && !shown.id) return <NotFound crumbs={editorCrumbs(project)} />;
   return (
     <>
       <TopBar
-        crumbs={settingsCrumbs(project.name)}
+        crumbs={editorCrumbs(project)}
         view={<ChangesChip editor={editor} />}
         actions={
-          <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(live))}>
+          <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(list))}>
             Cancel
           </Button>
         }
@@ -235,17 +239,17 @@ function EditingPage() {
         }
       />
       <Content className="flex flex-col overflow-hidden">
-        <EditingWorkflow project={project} editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} />
+        <EditingWorkflow project={project} editor={editor} draft={editor.draft} base={editor.base} skills={editor.skills} focusStep={focusStep} focusName={focusName} />
       </Content>
       {discarding && (
         <FormDialog
           open
           onOpenChange={(o) => !o && setDiscarding(false)}
           title={`Discard ${n} ${n === 1 ? "change" : "changes"}?`}
-          description={`${project.name}'s Workflow stays as it was saved.`}
+          description={`${project.name}'s Workflows stay as they were saved.`}
           submitLabel="Discard"
           destructive
-          onSubmit={() => navigate(live)}
+          onSubmit={() => navigate(list)}
         >
           {null}
         </FormDialog>
