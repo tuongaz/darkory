@@ -69,7 +69,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 | `complete <task> [--note]` | complete a Task you hold whose Step has one way into Done, or a Parent you own once its Subtasks have ended |
 | `drop`, `take-back`, `rank <task> <position>`, `owner <task> <member>` | the Owner's and the Reporting line's authority |
 | `file --title t (--project p \| --parent task \| --blocks task --aim m) [--step s] [--breakdown] [--blocked-by task,…] [--label l]… [--owner m] [--auto-complete] [--acceptance] [--workspace ws]…` | file a Task, a Subtask (splitting the Task when you hold it), or a question that blocks a Task; `--blocked-by` files it already blocked |
-| `show <task>`, `tasks [--project p] [--parent task] [--step s] [--filter field:op:values]…` | read Tasks: the Step, the Parent, the Subtasks, the Labels and the outcomes |
+| `show <task>`, `tasks [--project p] [--parent task] [--workflow w] [--step s] [--filter field:op:values]…` | read Tasks: the Step, the Parent, the Subtasks, the Labels and the outcomes |
 | `note`, `observe`, `observations <task> [--all]`, `attach <task> <file>`, `evidence get` | Notes, Observations and Evidence |
 | `block <task> --by <task>`, `unblock` | Blocking |
 | `propose <task> --skill s --base n --file f`, `proposal show <task\|id>` | a Retrospective's Skill proposals |
@@ -79,8 +79,8 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 |---|---|
 | `project create <KEY> <name> [--workflow default\|empty\|copy] [--copy-from p] [--member m]… [--workspace ws] [--color 0-11] [--auto-complete] [--acceptance]` | create a Project with its first Workflow (admin) |
 | `project list`, `project show <project>`, `project add\|remove <project> <member>`, `project set <project> [--name] [--color 0-11] [--workspace] [--auto-complete=…] [--acceptance=…]` | Projects, their Members, their colour and the defaults a Task filed in them takes |
-| `workflow show <project> [--body]` | the Steps, their Skills and takers, what waits and works at each, and the Connectors out of each; `--body` prints it as `workflow set` reads it |
-| `workflow set <project> --file path\|-` | replace the Workflow (admin): `{"steps": [{"id", "name", "skill", "position", "x", "y"}…], "connectors": [{"from", "to", "name", "position"}…], "moves": {deleted Step id: Step}}`, Steps and Skills by name or id, `to` left out for Done |
+| `workflow show <project> [--workflow w] [--body]` | each Workflow's Steps (under its name when there are two or more), their Skills and takers, what waits and works at each, and the Connectors out of each, one into another Workflow as `bug → Bugs › Investigate`; `--workflow` shows one; `--body` prints them all as `workflow set` reads them |
+| `workflow set <project> --file path\|-` | replace the Project's Workflows (admin): `{"workflows": [{"id", "name", "position"}…], "steps": [{"id", "workflow", "name", "skill", "position", "x", "y"}…], "connectors": [{"from", "to", "name", "position"}…], "moves": {deleted Step id: Step}}`, Workflows, Steps and Skills by name or id, `to` any Step of any Workflow or left out for Done |
 | `label create <name> --color #rrggbb [--project p]`, `label list`, `label update`, `label delete` | the Organisation's and a Project's Labels |
 | `label set <task> <label,…>` | set the Labels a Task carries (`""` for none) |
 

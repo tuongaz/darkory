@@ -71,9 +71,12 @@ const (
 	taskJSON = `{"id":"t3","key":"WEB-3","project_id":"p1","parent_id":"t1","kind":"work","title":"Build","description":"","state":"open",` +
 		`"owner_id":"m1","step_id":"st3","blocked":false,"breakdown":false,"auto_complete":false,"acceptance":false,"filed_by":"m1",` +
 		`"waiting_since":"2026-10-06T00:00:00Z","created_at":"2026-10-06T00:00:00Z"}`
-	workflowJSON = `{"project_id":"p1","steps":[{"id":"st1","name":"Backlog","position":1,"x":0,"y":0,"tasks":0,"working":0,"takers":[]},` +
-		`{"id":"st3","name":"Build","skill_id":"s1","position":2,"x":448,"y":0,"tasks":1,"working":0,"takers":[]}],` +
-		`"connectors":[{"id":"k1","from_step_id":"st1","to_step_id":"st3","name":"ready","position":1},{"id":"k2","from_step_id":"st3","name":"pass","position":1}]}`
+	workflowJSON = `{"project_id":"p1","workflows":[{"id":"w1","name":"Work","position":1},{"id":"w2","name":"Bugs","position":2}],` +
+		`"steps":[{"id":"st1","workflow_id":"w1","name":"Backlog","position":1,"x":0,"y":0,"tasks":0,"working":0,"takers":[]},` +
+		`{"id":"st3","workflow_id":"w1","name":"Build","skill_id":"s1","position":2,"x":448,"y":0,"tasks":1,"working":0,"takers":[]},` +
+		`{"id":"st4","workflow_id":"w2","name":"Fix","skill_id":"s1","position":1,"x":0,"y":0,"tasks":0,"working":0,"takers":[]}],` +
+		`"connectors":[{"id":"k1","from_step_id":"st1","to_step_id":"st3","name":"ready","position":1},{"id":"k2","from_step_id":"st3","name":"pass","position":1},` +
+		`{"id":"k3","from_step_id":"st3","to_step_id":"st4","name":"bug","position":2},{"id":"k4","from_step_id":"st4","name":"done","position":1}]}`
 	evidenceJSON = `{"id":"ev1","task_id":"t3","filename":"shot.png","content_type":"image/png","size":4,"sha256":"x","attached_by":"m1","created_at":"2026-10-06T00:00:00Z"}`
 	fileJSON     = `{"id":"f1","name":"shot.png","content_type":"image/png","size":4,"sha256":"x","purpose":"avatar","created_by":"m1","created_at":"2026-10-06T00:00:00Z"}`
 	memberJSON   = `{"id":"m2","name":"qa","kind":"agent","admin":false,"avatar_file_id":"f1","created_at":"2026-10-06T00:00:00Z"}`
@@ -219,6 +222,8 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 			method: "POST", path: "/v1/tasks", body: `{"parent":"WEB-3","title":"Half","note":"split in two"}`},
 		{name: "tasks at a Step", args: []string{"tasks", "--project", "WEB", "--step", "Backlog", "--parent", "WEB-1"},
 			method: "GET", path: "/v1/tasks", query: "project=WEB&parent=WEB-1&step=Backlog"},
+		{name: "tasks in a Workflow", args: []string{"tasks", "--project", "WEB", "--workflow", "Bugs"},
+			method: "GET", path: "/v1/tasks", query: "project=WEB&workflow=Bugs"},
 		{name: "tasks filtered", args: []string{"tasks", "--filter", "label:in:l1", "--filter", "top:is:true"},
 			method: "GET", path: "/v1/tasks", query: "filter=label%3Ain%3Al1&filter=top%3Ais%3Atrue"},
 		{name: "project create", args: []string{"project", "create", "WEB", "Web", "--copy-from", "MAIN", "--member", "bob", "--member", "carol", "--auto-complete"},
@@ -232,6 +237,7 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 		{name: "project add", args: []string{"project", "add", "WEB", "bob"}, method: "PUT", path: "/v1/projects/WEB/members/bob"},
 		{name: "project remove", args: []string{"project", "remove", "WEB", "bob"}, method: "DELETE", path: "/v1/projects/WEB/members/bob"},
 		{name: "workflow show", args: []string{"workflow", "show", "WEB"}, method: "GET", path: "/v1/projects/WEB/workflow"},
+		{name: "workflow show one Workflow", args: []string{"workflow", "show", "WEB", "--workflow", "Bugs"}, method: "GET", path: "/v1/projects/WEB/workflow"},
 		{name: "workflow set", args: []string{"workflow", "set", "WEB", "--file", wf},
 			method: "PUT", path: "/v1/projects/WEB/workflow", body: `{"workflows":[{"id":"w1","name":"Work","position":1}],"steps":[{"id":"st1","workflow":"Work","name":"Backlog","position":1},{"workflow":"Work","name":"Build","skill":"engineer","position":2,"x":448,"y":0}],` +
 				`"connectors":[{"from":"Backlog","to":"Build","name":"ready","position":1},{"from":"Build","name":"pass","position":1}],"moves":{"st9":"Build"}}`},
@@ -623,6 +629,94 @@ func TestWorkflowCommands(t *testing.T) {
 		bob.ok("label", "set", "WEB-1", "")
 		if out := bob.ok("show", "WEB-1"); strings.Contains(out, "Labels") {
 			t.Fatalf("show after the Labels were cleared:\n%s", out)
+		}
+
+		// Two Workflows: Triage, whose bug outcome leads into Bugs, and Bugs. WEB-1 ends Done
+		// first, so the Steps it stood at can go.
+		bob.ok("advance", "WEB-1", "pass")
+		ada.ok("skill", "create", "triage", "--kind", "generic", "--body", "Sort it.")
+		ada.stdin = `{"workflows": [{"name": "Triage", "position": 1}, {"name": "Bugs", "position": 2}],
+ "steps": [{"workflow": "Triage", "name": "Triage", "skill": "triage"},
+  {"workflow": "Bugs", "name": "Investigate", "skill": "engineer"}, {"workflow": "Bugs", "name": "Fix", "skill": "engineer"}],
+ "connectors": [{"from": "Triage", "to": "Investigate", "name": "bug"}, {"from": "Triage", "name": "question"},
+  {"from": "Investigate", "to": "Fix", "name": "fix"}, {"from": "Fix", "name": "done"}]}`
+		out = ada.ok("workflow", "set", "WEB", "--file", "-")
+		two := "Triage\n" +
+			"1   Triage           triage           0 waiting, 0 working  nobody holds its Skill\n" +
+			"      bug → Bugs › Investigate\n" +
+			"      question → Done\n" +
+			"Bugs\n" +
+			"1   Investigate      engineer         0 waiting, 0 working  taken by bob (agent)\n" +
+			"      fix → Fix\n" +
+			"2   Fix              engineer         0 waiting, 0 working  taken by bob (agent)\n" +
+			"      done → Done\n"
+		if out != two {
+			t.Fatalf("workflow set with two Workflows:\n%s\nwant:\n%s", out, two)
+		}
+		if out := bob.ok("workflow", "show", "WEB"); out != two {
+			t.Fatalf("workflow show with two Workflows:\n%s\nwant:\n%s", out, two)
+		}
+		bugs := "1   Investigate      engineer         0 waiting, 0 working  taken by bob (agent)\n" +
+			"      fix → Fix\n" +
+			"2   Fix              engineer         0 waiting, 0 working  taken by bob (agent)\n" +
+			"      done → Done\n"
+		if out := bob.ok("workflow", "show", "WEB", "--workflow", "bugs"); out != bugs {
+			t.Fatalf("workflow show --workflow bugs:\n%s\nwant:\n%s", out, bugs)
+		}
+		var narrowed client.Workflows
+		bob.json(&narrowed, "workflow", "show", "WEB", "--workflow", "Bugs")
+		if len(narrowed.Workflows) != 1 || narrowed.Workflows[0].Name != "Bugs" || len(narrowed.Steps) != 2 || narrowed.Steps[0].Name != "Investigate" || len(narrowed.Connectors) != 2 {
+			t.Fatalf("workflow show --workflow Bugs --json: %+v", narrowed)
+		}
+		if out := bob.ok("workflow", "show", "WEB", "--workflow", narrowed.Workflows[0].ID); out != bugs {
+			t.Fatalf("workflow show --workflow <id>:\n%s", out)
+		}
+		if res := bob.fails(ExitFailed, "workflow", "show", "WEB", "--workflow", "Ops"); !strings.Contains(res.stderr, `WEB has no Workflow "Ops"`) {
+			t.Fatalf("workflow show --workflow with no such Workflow: %s", res.stderr)
+		}
+		bob.fails(ExitUsage, "workflow", "show", "WEB", "--workflow", "Bugs", "--body")
+
+		// The body as printed, sent back, changes nothing.
+		changes := func() int {
+			t.Helper()
+			var page client.ActivityPage
+			ada.json(&page, "activity", "--project", "WEB", "--kind", "workflow.changed")
+			return len(page.Items)
+		}
+		before := changes()
+		var round client.SetWorkflowBody
+		ada.json(&round, "workflow", "show", "WEB", "--body")
+		if len(round.Workflows) != 2 || round.Workflows[1].Name != "Bugs" || round.Steps[1].Workflow != "Bugs" || deref(round.Connectors[0].To) != "Investigate" {
+			t.Fatalf("workflow show --body with two Workflows: %+v", round)
+		}
+		b, err = json.Marshal(round)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if out := ada.ok("workflow", "set", "WEB", "--file", file); out != two {
+			t.Fatalf("workflow set from its own body:\n%s", out)
+		}
+		if after := changes(); after != before {
+			t.Fatalf("the body sent back as read was recorded as %d changes", after-before)
+		}
+
+		// A Task at Triage offers its crossing outcome by Workflow and Step; advanced along it, it
+		// is in Bugs.
+		ada.ok("grant", "bob", "triage")
+		bob.ok("file", "--project", "WEB", "--title", "Crash on save")
+		if out := bob.ok("show", "WEB-2"); !strings.Contains(out, "\n  Advance    bug → Bugs › Investigate · question → Done\n") {
+			t.Fatalf("show at Triage:\n%s", out)
+		}
+		bob.ok("next", "--wait", "0", "--timeout", "0")
+		bob.ok("advance", "WEB-2", "bug")
+		if out := bob.ok("tasks", "--workflow", "Bugs", "--project", "WEB"); !strings.HasPrefix(out, "WEB-2     open          Investigate") || strings.Count(out, "\n") != 1 {
+			t.Fatalf("tasks --workflow Bugs:\n%s", out)
+		}
+		if out := bob.ok("tasks", "--workflow", "Triage", "--project", "WEB", "--state", "open"); out != "No Tasks.\n" {
+			t.Fatalf("tasks --workflow Triage:\n%s", out)
 		}
 	})
 }
