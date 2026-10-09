@@ -1,5 +1,5 @@
 import type { Activity, Member, RunnerSession, Skill, Task, TaskBrief, TaskDetail, Workflows } from "@/api/client";
-import { onShownWorkflow, type ShownWorkflow } from "@/components/pickedWorkflow";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import { isOnReportingLine } from "@/me";
 import { atHold, liveClaim } from "@/work";
 
@@ -65,7 +65,7 @@ export type NeedsInput = {
   open: Task[];
   /** Narrows the items to one Project (id); none is every Project. */
   projectId?: string;
-  /** Narrows them further to the Workflow a page of the Project shows: its Tasks, and those at no Step. */
+  /** Narrows them further to the Workflow a page of the Project shows: the Tasks its board shows. */
   shown?: ShownWorkflow;
   /** Each Project's Workflow by Project id: the Steps' Skills and takers. */
   workflows: Map<string, Workflows | undefined>;
@@ -152,7 +152,7 @@ export function byOrder(a: NeedItem, b: NeedItem): number {
  */
 export function needsOf(input: NeedsInput): NeedItem[] {
   const { me, now, open, projectId, workflows, members, projectMembers, details, skills } = input;
-  const inScope = open.filter((t) => t.state === "open" && (!projectId || t.project_id === projectId) && onShownWorkflow(t, input.shown));
+  const inScope = open.filter((t) => t.state === "open" && (!projectId || t.project_id === projectId) && (!input.shown || input.shown.shows(t)));
   const stepOf = (t: Task) => (t.step_id ? workflows.get(t.project_id)?.steps.find((s) => s.id === t.step_id) : undefined);
   const lapseOf = new Map<string, Activity>();
   for (const e of input.lapses) {
@@ -271,7 +271,7 @@ export function agentNeedsOf(input: Pick<NeedsInput, "me" | "open" | "projectId"
     if (s.state !== "waiting" && s.state !== "stalled") continue;
     const task = open.find((t) => t.id === s.task_id);
     const agent = members.get(s.member_id);
-    if (!task || !agent || (projectId && task.project_id !== projectId) || !onShownWorkflow(task, input.shown)) continue;
+    if (!task || !agent || (projectId && task.project_id !== projectId) || (input.shown && !input.shown.shows(task))) continue;
     out.push({
       agent,
       task,

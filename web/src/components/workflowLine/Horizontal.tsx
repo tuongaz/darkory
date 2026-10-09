@@ -447,7 +447,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const dashed = tone === "next" || (!a.back && tone !== "trace");
     const sw = tone === "trace" ? 2.6 : a.back ? (a.id.startsWith("track:") ? 1.8 : 1.6) : 1.3;
     return (
-      <g key={a.id} data-route={a.id} className={cn(tone === "dim" && "wl-dim")}>
+      <g key={a.id} data-route={a.id} data-connectors={JSON.stringify(a.connectorIds)} className={cn(tone === "dim" && "wl-dim")}>
         <path d={smooth(a.line)} fill="none" stroke={stroke(tone, base)} strokeWidth={sw} strokeDasharray={dashed ? "4 3" : undefined} />
         <path d={arrowhead(a.arrow.x, a.arrow.y, a.arrow.dir)} fill="none" stroke={stroke(tone, base)} strokeWidth={1.5} />
         {!branch && a.id.startsWith("track:")
@@ -491,6 +491,7 @@ export function HorizontalLine(props: HorizontalProps) {
         key={k}
         {...hover(l.hint)}
         data-box="label"
+        data-connector={l.connectorId}
         data-lit={l.connectorId && (lit.has(l.connectorId) || loopLit([l.connectorId])) ? "true" : undefined}
         className={cn(
           "absolute -translate-y-1/2 rounded bg-background px-1.5 text-[11px] whitespace-nowrap",
@@ -811,7 +812,9 @@ export function HorizontalLine(props: HorizontalProps) {
           data-connector={c.connectorId}
           {...hover(c.hint)}
           className={cn(
-            "absolute rounded-full border border-dashed bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap text-muted-foreground",
+            // An entry reads as the mark over a head does; the rest as words beside their Step.
+            "absolute rounded-full border bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap",
+            c.kind === "entry" ? "font-medium" : "border-dashed text-muted-foreground",
             c.align === "right" && "-translate-x-full",
             c.align === "center" && "-translate-x-1/2",
             (dimOthers || props.litLoop) && "wl-dim",
@@ -844,13 +847,14 @@ export function HorizontalLine(props: HorizontalProps) {
             <span
               {...hover(h.entry.arrow.label.hint)}
               data-box="entry"
+              data-connectors={JSON.stringify(h.entry.arrow.connectorIds)}
               className={cn("absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap", h.entry.arrow.label.lines && "flex flex-col")}
               style={{ left: h.entry.arrow.label.x, top: h.entry.arrow.label.y }}
             >
               {h.entry.arrow.label.lines ? h.entry.arrow.label.lines.map((l) => <span key={l}>{l}</span>) : h.entry.arrow.label.text}
             </span>
           )}
-          {h.entry.arrivals?.map((m) => markTag(m, m.hint, { "data-arrival": m.stepId }, m.stepId))}
+          {h.entry.arrivals?.map((m) => markTag(m, m.hint, { "data-arrival": m.stepId, "data-connectors": JSON.stringify(m.connectorIds) }, m.stepId))}
           {h.entry.mark && markTag(h.entry.mark, h.entry.mark.hint, { "data-entry-mark": true, "aria-label": ENTRY_LABEL })}
           {h.entry.before && (
             <>

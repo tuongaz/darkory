@@ -46,7 +46,13 @@ export function WorkflowPage() {
   const workflows = useWorkflow(project.key).data?.workflows;
   const picked = usePickedWorkflow(project, workflows);
   const { data } = useLineData(project.key, picked.id, scope, filter.matches);
-  const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.drawnSteps);
+  const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.shown);
+  // A Parent or Task scoped to stays in scope across a pick only where it is listed, as on the board.
+  const pick = (next: string) => {
+    const scoped = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? data.scope.id : undefined;
+    const at = scoped ? data?.shown?.of(scoped) : undefined;
+    picked.set(next, at && !at.has(next) ? { also: (p) => p.delete("scope") } : undefined);
+  };
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
@@ -54,7 +60,7 @@ export function WorkflowPage() {
         crumbs={[
           projectCrumb(project),
           // The Workflow drawn, at every width: on a phone too it is the way to another.
-          ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={picked.set} /> }] : []),
+          ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={pick} /> }] : []),
           { label: "Workflow" },
           ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
         ]}

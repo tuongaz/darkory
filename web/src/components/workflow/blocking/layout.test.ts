@@ -30,12 +30,13 @@ describe("analyseBlocking", () => {
     expect([a.edges.length, a.blocked, a.nodes.length, a.shown]).toEqual([5, 4, 7, 11]);
   });
 
-  it("on the page of one Workflow of several, makes its own only the Tasks at its Steps: another Workflow's join as outside Tasks", () => {
+  it("on the page of one Workflow of several, makes its own only the Tasks the page shows: another Workflow's join as outside Tasks", () => {
     // As if MAIN's Steps were split: the page's Workflow holds the Steps of MAIN-11 alone.
     const eleven = mainTasks.find((t) => t.key === "MAIN-11")!;
     const steps = new Set([eleven.stepId!]);
     const here = mainTasks.filter((t) => t.projectId === "p-main" && !t.parent && (!t.stepId || steps.has(t.stepId)));
-    const b = analyseBlocking(mainTasks, { projectId: "p-main", me: me.id, steps });
+    const byId = new Map(mainTasks.map((t) => [t.id, t]));
+    const b = analyseBlocking(mainTasks, { projectId: "p-main", me: me.id, shows: (id) => !byId.get(id)!.stepId || steps.has(byId.get(id)!.stepId!) });
     expect(b.shown).toBe(here.length);
     expect(b.shown).toBeLessThan(a.shown);
     // What blocks MAIN-11, at another Workflow's Step, stands outside.

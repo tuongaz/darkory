@@ -16,7 +16,6 @@ import { lineText, onDrawnLine, trailLine, type FlowContext } from "./flowEvents
 import { LineText } from "./LineText";
 import type { LineView } from "./lineView";
 import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from "./panels";
-import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
 
 /**
@@ -45,9 +44,7 @@ export function LiveWorkflow({
 }) {
   const { data, error } = useLineData(project.key, workflowId, scope, filter);
   // Of a Project of several Workflows the page is the drawn one's: its panels list its Tasks.
-  const drawn = data?.facts.drawn;
-  const steps = data?.drawnSteps;
-  const shown = useMemo<ShownWorkflow | undefined>(() => (drawn && steps ? { id: drawn, steps } : undefined), [drawn, steps]);
+  const shown = data?.shown;
   const now = useNow();
   const [, setParams] = useSearchParams();
   const openTask = useCallback(
@@ -78,7 +75,7 @@ export function LiveWorkflow({
         <BlockingView
           project={project}
           scope={data.scope.kind === "parent" ? data.scope.id : undefined}
-          workflowSteps={data.drawnSteps}
+          shown={data.shown}
           onShowOnLine={(id) => {
             setSelected(id);
             onView?.("line");

@@ -42,11 +42,6 @@ export function lineTasks(tasks: readonly Task[], ctx: { member: MemberOf; sessi
     });
 }
 
-/** The Blocking among open Tasks: how many Tasks wait on how many. "Blocking 5" counts relations. */
-export function blockingCount(tasks: readonly LineTask[]): number {
-  return tasks.reduce((n, t) => n + t.blockers.length, 0);
-}
-
 /* ------------------------------------------------------------------------------------------ */
 /* Scope.                                                                                       */
 /* ------------------------------------------------------------------------------------------ */

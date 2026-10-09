@@ -92,6 +92,14 @@ export type Chip = { kind: "chip" | "exit" | "entry"; stepId: string; connector:
 /** An exit or an entry: a Connector crossing into or out of the Workflow drawn. */
 export type Crossing = Chip & { kind: "exit" | "entry" };
 
+/**
+ * A Step's Connectors in words, as both renderers stand them beside it: those the drawing cannot
+ * route, its exits, then its entries.
+ */
+export function chipsAt(t: Pick<LineTopology, "chips" | "exits" | "entries">, stepId: string): Chip[] {
+  return [...t.chips, ...t.exits, ...t.entries].filter((c) => c.stepId === stepId);
+}
+
 /** A list of chips (or marks) by the Step they stand at, each Step's in the list's order. */
 export function byStep<T extends { stepId: string }>(list: readonly T[]): Map<string, T[]> {
   const out = new Map<string, T[]>();
@@ -482,7 +490,7 @@ export type Zone = {
   /** The right edge of all of it. */
   right: number;
   /** The breakdown Step's words left of it: its outcomes, those crossing into or out of the Workflow, and where its Subtasks start when no arrow can say it. */
-  chips: { kind: Chip["kind"]; text: string; connectorId?: string; hint?: string }[];
+  chips: { kind: Chip["kind"]; text: string; connectorId?: string; hint: string }[];
 };
 
 const ZONE_L = 16;
@@ -534,9 +542,11 @@ export function zoneOf(t: LineTopology, measure: Measure = estimate, labelWidth?
   let px = 0;
   let joinX = 0;
   if (t.before) {
-    for (const c of t.chips.filter((c) => c.stepId === t.before)) chips.push({ kind: "chip", text: c.text, connectorId: c.connector.id });
-    for (const c of [...t.exits, ...t.entries].filter((c) => c.stepId === t.before)) chips.push({ kind: c.kind, text: c.text, connectorId: c.connector.id, hint: c.hint });
-    if (!entry && t.start) chips.push({ kind: "chip", text: FILES_LABEL });
+    // Its own outcomes say, on hover, where the Subtasks it files start.
+    const name = nameOf(t);
+    const start = t.start !== undefined ? name(t.start) : undefined;
+    for (const c of chipsAt(t, t.before)) chips.push({ kind: c.kind, text: c.text, connectorId: c.connector.id, hint: c.kind === "chip" ? breakdownOutcomeHint(c.connector, name, start) : c.hint });
+    if (!entry && t.start) chips.push({ kind: "chip", text: FILES_LABEL, hint: filesHint(name(t.before), start) });
     const widest = Math.max(0, ...chips.map((c) => chipW(c.text, measure)));
     px = Math.round(ZONE_L + (widest ? widest + 14 : 6));
     const nameW = labelWidth?.(t.before) ?? nameLine(t.steps.get(t.before), measure);
@@ -717,7 +727,7 @@ export type Horizontal = {
     loops: DrawnArc[];
     labels: Label[];
   };
-  chips: { kind: Chip["kind"]; stepId: string; x: number; y: number; text: string; align: "left" | "right" | "center"; connectorId?: string; hint?: string }[];
+  chips: { kind: Chip["kind"]; stepId: string; x: number; y: number; text: string; align: "left" | "right" | "center"; connectorId?: string; hint: string }[];
   /** Each exit drawn at the end of a short leg down from its Step: the leg, from the station to its chip. */
   exits: ExitLeg[];
   /** Where Tasks enter the line, when it draws an entry (see `Zone`). */
@@ -996,9 +1006,8 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       board.fix({ id: "breakdown", kind: "note", text: BREAKDOWN_BRANCH, x: px - 6, y: py - NAME_TOP - TOKEN_HALO - 20, w: measure(BREAKDOWN_BRANCH, "note"), h: 16 });
       board.fix({ id: `name:${id}`, kind: "name", text: name(id), x: px - 6, y: py - NAME_TOP - TOKEN_HALO, w: opts.labelWidth?.(id) ?? nameLine(t.steps.get(id), measure), h: NAME_H + 2 * TOKEN_HALO });
       zone.chips.forEach((c, m) => {
-        const connector = c.connectorId ? t.connectors.get(c.connectorId) : undefined;
         const w = chipW(c.text, measure);
-        const chip = { kind: c.kind, stepId: id, x: px - 14, y: py - 9 + m * 22, text: c.text, align: "right" as const, connectorId: c.connectorId, hint: c.hint ?? (connector ? breakdownOutcomeHint(connector, name, start) : hint) };
+        const chip = { kind: c.kind, stepId: id, x: px - 14, y: py - 9 + m * 22, text: c.text, align: "right" as const, connectorId: c.connectorId, hint: c.hint };
         chips.push(chip);
         board.fix({ id: `chip:${id}:${m}`, kind: "chip", text: c.text, x: chip.x - w, y: chip.y, w, h: CHIP_H });
         // A crossing goes by its chip: out of the Step into it, or out of it into the Step.
@@ -1219,21 +1228,19 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
     // left of its row's first Step, else under it.
     stations.forEach((s) => {
       const first = !stations.some((o) => o.row === s.row && o.x < s.x);
-      [...t.chips, ...t.exits, ...t.entries]
-        .filter((c) => c.stepId === s.id)
-        .forEach((c, m) => {
-          const w = chipW(c.text, measure);
-          const placed = board.place(
-            { id: `chip:${c.connector.id}`, kind: "chip", text: c.text, w, h: CHIP_H },
-            (function* () {
-              if (first) yield [s.x - 14 - w, s.y - 9 + m * 22] as Pt;
-              for (let k = 0; k < 6; k++) yield [s.x + 8, s.y + 10 + (m + k) * 22] as Pt;
-              for (let k = 0; k < 6; k++) yield [s.x - w - 8, s.y + 10 + (m + k) * 22] as Pt;
-            })(),
-          );
-          chips.push({ kind: c.kind, stepId: s.id, x: placed.x, y: placed.y, text: c.text, align: "left", connectorId: c.connector.id, hint: c.hint });
-          if (c.kind !== "chip") routes.set(c.connector.id, chipRoute(c.kind, s, { x: placed.x + w / 2, y: placed.y + CHIP_H / 2 }));
-        });
+      chipsAt(t, s.id).forEach((c, m) => {
+        const w = chipW(c.text, measure);
+        const placed = board.place(
+          { id: `chip:${c.connector.id}`, kind: "chip", text: c.text, w, h: CHIP_H },
+          (function* () {
+            if (first) yield [s.x - 14 - w, s.y - 9 + m * 22] as Pt;
+            for (let k = 0; k < 6; k++) yield [s.x + 8, s.y + 10 + (m + k) * 22] as Pt;
+            for (let k = 0; k < 6; k++) yield [s.x - w - 8, s.y + 10 + (m + k) * 22] as Pt;
+          })(),
+        );
+        chips.push({ kind: c.kind, stepId: s.id, x: placed.x, y: placed.y, text: c.text, align: "left", connectorId: c.connector.id, hint: c.hint });
+        if (c.kind !== "chip") routes.set(c.connector.id, chipRoute(c.kind, s, { x: placed.x + w / 2, y: placed.y + CHIP_H / 2 }));
+      });
     });
     const leftmost = Math.min(...stations.map((s) => s.x));
     const titleText = opts.branchLabel ?? AFTER_BRANCH;
@@ -1354,7 +1361,7 @@ function placeExits(
       d.polylines.push({ id: pid, points: c.leg });
       d.exits.push({ connectorId: c.e.connector.id, stepId: id, points: c.leg });
       d.hints.set(pid, c.e.hint);
-      d.routes.set(c.e.connector.id, `M${x} ${lineY} V${c.cy} H${x + EXIT_TICK + c.box.w / 2}`);
+      d.routes.set(c.e.connector.id, chipRoute("exit", { x, y: lineY }, { x: c.box.x + c.box.w / 2, y: c.cy }));
       d.chips.push({ kind: "exit", stepId: id, x: c.box.x, y: c.box.y, text: c.e.text, align: "left", connectorId: c.e.connector.id, hint: c.e.hint });
     }
   }

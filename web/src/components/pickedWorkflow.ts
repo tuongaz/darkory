@@ -2,9 +2,10 @@
 // this browser last picked in the Project, else the first. WorkflowChip picks it.
 import { useCallback } from "react";
 import { useSearchParams } from "react-router";
-import type { Project, Task, Workflow } from "@/api/client";
+import type { Project, Task, Workflow, WorkflowStep } from "@/api/client";
 import { workflowsInOrder } from "@/components/workflowLine/model";
 import { toShort } from "@/lib/shortid";
+import { boardContext, stepsInOrder, workflowsOf } from "@/screens/board/derive";
 
 /** The search parameter naming the Workflow a page shows of a Project of several. */
 export const workflowParam = "workflow";
@@ -72,16 +73,44 @@ export function usePickedWorkflow(
   return { id, set };
 }
 
-/** The Workflow a page shows of a Project of several, as its lists read it: its id and its Steps' ids. */
-export type ShownWorkflow = { id: string; steps: ReadonlySet<string> };
+/** A Project's Workflows and Steps, as `GET …/workflow` serves them: what places a Task at no Step. */
+export type WorkflowGraph = { workflows: readonly Pick<Workflow, "id" | "position">[]; steps: readonly Pick<WorkflowStep, "id" | "workflow_id" | "position">[] };
 
 /**
- * Whether a Task is listed on the page of the Workflow shown: one at a Step of it, or ended at
- * one; a Task at no Step and of no Workflow (a Parent, a question with a Member) on every page.
- * Every Task when none is shown.
+ * The Workflow a page shows of a Project of several, as its lists read it: its id, its Steps' ids,
+ * whether a Task is listed there (`shows`), and the Workflows a Task the page has, by id, is
+ * listed on (`of`; undefined for every one, or a Task it does not have).
  */
-export function onShownWorkflow(task: Pick<Task, "step_id" | "workflow_id">, shown: ShownWorkflow | undefined): boolean {
-  if (!shown) return true;
-  if (task.step_id) return shown.steps.has(task.step_id);
-  return !task.workflow_id || task.workflow_id === shown.id;
+export type ShownWorkflow = {
+  id: string;
+  steps: ReadonlySet<string>;
+  graph: WorkflowGraph;
+  shows: (task: Task) => boolean;
+  of: (taskId: string) => ReadonlySet<string> | undefined;
+};
+
+/**
+ * The Workflow `id` of `graph` as a page shows it, its Tasks placed as its board places them
+ * (`workflowsOf`): one at a Step of it or ended in it; an open Parent where its least advanced
+ * open Subtask is; a Task aimed at a Member beside the Task it blocks, else with its Parent, else
+ * on every page. `tasks` are the Tasks the page has, open and any ended it read: a Parent's
+ * Subtasks and the Blocking among them are read off them.
+ */
+export function shownWorkflow(id: string, graph: WorkflowGraph, tasks: readonly Task[]): ShownWorkflow {
+  const ordered = { workflows: graph.workflows, steps: stepsInOrder(graph) };
+  const ctx = boardContext(ordered, tasks);
+  const steps = new Set(graph.steps.filter((s) => s.workflow_id === id).map((s) => s.id));
+  return {
+    id,
+    steps,
+    graph,
+    shows: (task) => {
+      const at = workflowsOf(task, ctx);
+      return !at || at.has(id);
+    },
+    of: (taskId) => {
+      const task = ctx.byId.get(taskId);
+      return task && workflowsOf(task, ctx);
+    },
+  };
 }

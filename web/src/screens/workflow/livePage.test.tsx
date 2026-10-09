@@ -344,6 +344,65 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
     expect(screen.queryByText(/New Tasks start at/)).toBeNull();
   });
 
+  it("counts under Done only the Tasks done today in the Workflow drawn", async () => {
+    const today = new Date().toISOString();
+    several([
+      at(1, "Sort the inbox", wfStep.triage, wfId.triage),
+      at(3, "Sorted", wfStep.triage, wfId.triage, { state: "done", step_id: undefined, last_step_id: wfStep.triage, ended_at: today }),
+      at(4, "Fixed", wfStep.verify, wfId.bugs, { state: "done", step_id: undefined, last_step_id: wfStep.verify, ended_at: today }),
+      at(5, "Also fixed", wfStep.verify, wfId.bugs, { state: "done", step_id: undefined, last_step_id: wfStep.verify, ended_at: today }),
+    ]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(within(line()).getByText("1 today")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Bugs" }));
+    await waitFor(() => expect(within(line()).getByText("2 today")).toBeInTheDocument());
+  });
+
+  it("lists a Parent in the scope menu of the one page its board shows it on: where its least advanced Subtask is", async () => {
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
+    several([parent, at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: parent.id }), at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
+    // WEB-2, a Subtask of WEB-9, is on Bugs' line; WEB-9 itself is on Triage's page, as on Triage's board.
+    await userEvent.click(screen.getByRole("button", { name: "Scope: All Tasks" }));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["All Tasks1", "No Parent0"]);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Bugs" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: "Scope: All Tasks" }));
+    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["All Tasks1", "WEB-9Launch1 open", "No Parent0"]);
+  });
+
+  it("lists a question beside the Task it blocks, else with its Parent, else on every page", async () => {
+    const q = (n: number, title: string, extra: Partial<Task> = {}) => task(n, { title, step_id: undefined, step_since: undefined, skill_id: undefined, aimed_at_id: ada.id, ...extra });
+    const blocked = (by: Task) => ({ blocked: true, open_blockers: [{ id: by.id, key: by.key, title: by.title }] });
+    const forBugs = q(20, "Which build crashed?");
+    const loose = q(21, "Anyone seen this?");
+    several([forBugs, loose, at(2, "Crash on save", wfStep.investigate, wfId.bugs, blocked(forBugs))]);
+    renderApp(`/projects/WEB/workflow?view=text`);
+    const withMember = await screen.findByRole("region", { name: "With a Member" });
+    expect(within(withMember).queryByText("Which build crashed?")).toBeNull();
+    expect(within(withMember).getByText("Anyone seen this?")).toBeInTheDocument();
+  });
+
+  it("drops the scope on a pick of a Workflow its Task is not on, and keeps it where it is", async () => {
+    several([at(1, "Sort the inbox", wfStep.triage, wfId.triage), at(2, "Crash on save", wfStep.investigate, wfId.bugs)]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}&scope=k-2`);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scope: WEB-2 Crash on save" })).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Bugs" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scope: All Tasks" })).toBeInTheDocument());
+    // No Parent is a scope of every page.
+    await userEvent.click(screen.getByRole("button", { name: "Scope: All Tasks" }));
+    await userEvent.click(await screen.findByRole("option", { name: /No Parent/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Bugs" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Scope: No Parent" })).toBeInTheDocument();
+  });
+
   it("a Task advancing out along an exit travels the exit's route, and is gone from the line", async () => {
     const { list } = several([at(2, "Crash on save", wfStep.triage, wfId.triage)]);
     renderApp("/projects/WEB/workflow");

@@ -7,7 +7,8 @@ import { startOf } from "@/components/filters/dates";
 import { MeContext } from "@/me";
 import { useTakeableIds, useTaskPath } from "@/screens/task/queries";
 import { useLiveCanvas } from "@/screens/workflow/canvasData";
-import { blockingCount, lineTasks, scopedLine, traceOf, type LineScope, type ScopedLine, type ScopeParent, type Trace } from "./data";
+import { lineTasks, scopedLine, traceOf, type LineScope, type ScopedLine, type ScopeParent, type Trace } from "./data";
+import { shownWorkflow, type ShownWorkflow } from "@/components/pickedWorkflow";
 import { drawnSteps, drawnWorkflow, type LineFacts, type LineTask } from "./model";
 
 /** A Parent the scope menu offers: its key and title, and how many of its Subtasks are open. */
@@ -20,6 +21,8 @@ export type LineData = {
   all: LineTask[];
   /** The Steps the line draws, by id (the picked Workflow's); none when it draws every Step. */
   drawnSteps?: ReadonlySet<string>;
+  /** The Workflow the page shows, of a Project of several: which Tasks its panels and views list. */
+  shown?: ShownWorkflow;
   /** The records behind `all`, for actions that take a Task. */
   records: Task[];
   scope: LineScope;
@@ -27,9 +30,8 @@ export type LineData = {
   scoped: ScopedLine;
   /** A single Task's path, when the scope is one Task. */
   trace?: Trace;
+  /** The Tasks that reached Done today, in the Workflow drawn when it is one of several. */
   doneToday?: number;
-  /** Open Blocking relations among the Project's Tasks: the toggle's "Blocking 5". */
-  blocking: number;
   /** For the scope menu: the Parents with open Subtasks on the line, and the open Tasks there with no Parent. */
   parents: ScopeChoice[];
   noParent: number;
@@ -87,7 +89,7 @@ export function useLineData(
     queries: missing.map((id) => ({ queryKey: keys.task(id), queryFn: () => call(api.GET("/v1/tasks/{task}", { params: { path: { task: id } } })) })),
   });
   const endedParents = ended.map((q) => q.data?.task).filter((t): t is Task => !!t);
-  const endedKey = endedParents.map((t) => t.id).join();
+  const endedKey = ended.map((q) => q.dataUpdatedAt).join();
 
   // The Workflow drawn and its Steps, kept the same between ticks of the clock: what reads them
   // (the Blocking view's layout, the panels) recomputes only when the Workflow or its Steps change.
@@ -95,6 +97,16 @@ export function useLineData(
   const graph = record.data;
   const drawn = useMemo(() => (graph ? drawnWorkflow(graph, workflowId) : undefined), [graph, workflowId]);
   const steps = useMemo(() => (graph ? drawnSteps({ steps: graph.steps, drawn }) : undefined), [graph, drawn]);
+  // Which Tasks are this Workflow's page's, placed as its board places them: read off the open
+  // Tasks and the ended Parents still holding some, with their Subtasks.
+  const shown = useMemo(() => {
+    if (!graph || !drawn || !open.data) return undefined;
+    const tasks = new Map<string, Task>();
+    for (const q of ended) for (const t of [...(q.data?.subtasks ?? []), ...(q.data ? [q.data.task] : [])]) tasks.set(t.id, t);
+    for (const t of open.data) tasks.set(t.id, t);
+    return shownWorkflow(drawn, graph, [...tasks.values()]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `ended` is new each render; `endedKey` stands for it.
+  }, [graph, drawn, open.data, endedKey]);
 
   const data = useMemo<LineData | undefined>(() => {
     if (!facts || !open.data) return undefined;
@@ -128,32 +140,38 @@ export function useLineData(
     let trace: Trace | undefined;
     if (scope.kind === "task" && detail) trace = traceOf(detail.task, path, detail.claims, lineFacts, (id) => byMember.get(id), now);
 
-    // The scope menu: Parents with open Subtasks on the line (an ended Parent's Retrospective
-    // included), and the rest there; another Workflow's Tasks are on its own line.
+    // The scope menu: the Parents on this Workflow's page, as on its board (an ended one still
+    // holding its Retrospective included), with their open Subtasks on the line; and the rest
+    // there. Another Workflow's Tasks are on its own line.
     const onLine = (t: LineTask) => !steps || (!!t.stepId && steps.has(t.stepId));
     const counts = new Map<string, number>();
     for (const t of all) if (t.parentId && onLine(t)) counts.set(t.parentId, (counts.get(t.parentId) ?? 0) + 1);
     const recordOf = new Map([...endedParents, ...open.data].map((t) => [t.id, t]));
-    const parents: ScopeChoice[] = [...counts].map(([id, n]) => {
-      const r = recordOf.get(id) ?? (detail?.task.id === id ? detail.task : undefined);
-      return { id, key: r?.key ?? "…", title: r?.title ?? "", open: n };
-    });
+    const parents: ScopeChoice[] = [...counts]
+      .filter(([id]) => {
+        const r = recordOf.get(id);
+        return !shown || !r || shown.shows(r);
+      })
+      .map(([id, n]) => {
+        const r = recordOf.get(id) ?? (detail?.task.id === id ? detail.task : undefined);
+        return { id, key: r?.key ?? "…", title: r?.title ?? "", open: n };
+      });
     return {
       facts: lineFacts,
       all,
       ...(steps ? { drawnSteps: steps } : {}),
+      ...(shown ? { shown } : {}),
       records: open.data,
       scope,
       scoped: narrowed,
       trace,
-      doneToday: done.data?.length,
-      blocking: blockingCount(all),
+      doneToday: done.data?.filter((t) => !drawn || t.workflow_id === drawn).length,
       parents,
       noParent: all.filter((t) => t.stepId && onLine(t) && !t.parentId).length,
       me: { id: me?.member.id ?? "", takeable: takeable.data ?? noTakeable },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `endedParents` is rebuilt each render; `endedKey` names its records.
-  }, [facts, drawn, steps, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
+  }, [facts, drawn, steps, shown, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
 
   return { data, error: record.error ?? open.error, loading: !data && !record.error && !open.error };
 }

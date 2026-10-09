@@ -70,11 +70,11 @@ function keyNumber(key: string): number {
 /**
  * What the Blocking view shows of `projectId`'s open Tasks, or of `scope`'s: a Parent's
  * Subtasks, or one Task with what blocks it and what it blocks, all the way along. `tasks` is
- * every open Task known; `me` the signed-in Member. `steps`, on the page of one Workflow of
- * several, are its Steps: the Project's Tasks at another Workflow's show only as outside Tasks
- * joined to these, as another Project's do.
+ * every open Task known; `me` the signed-in Member. `shows`, on the page of one Workflow of
+ * several, says which of the Project's Tasks are that page's (`ShownWorkflow.shows`): the rest
+ * show only as outside Tasks joined to these, as another Project's do.
  */
-export function analyseBlocking(tasks: readonly BlockingTask[], { projectId, scope, me, steps }: { projectId: string; scope?: string; me: string; steps?: ReadonlySet<string> }): BlockingAnalysis {
+export function analyseBlocking(tasks: readonly BlockingTask[], { projectId, scope, me, shows }: { projectId: string; scope?: string; me: string; shows?: (id: string) => boolean }): BlockingAnalysis {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const worked = (id: string) => byId.has(id) && !byId.get(id)!.parent;
   // Every Blocking between open worked Tasks, both ways.
@@ -103,7 +103,7 @@ export function analyseBlocking(tasks: readonly BlockingTask[], { projectId, sco
   // What is shown.
   const scoped = scope ? byId.get(scope) : undefined;
   let shownIds: string[];
-  if (!scoped) shownIds = tasks.filter((t) => t.projectId === projectId && !t.parent && (!steps || !t.stepId || steps.has(t.stepId))).map((t) => t.id);
+  if (!scoped) shownIds = tasks.filter((t) => t.projectId === projectId && !t.parent && (!shows || shows(t.id))).map((t) => t.id);
   else if (scoped.parent) shownIds = tasks.filter((t) => t.parentId === scoped.id && !t.parent).map((t) => t.id);
   else shownIds = [scoped.id, ...reach(scoped.id, ins), ...reach(scoped.id, outs)];
   const shown = new Set(shownIds);

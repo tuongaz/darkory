@@ -3,6 +3,7 @@ import type { Activity, RunnerSession, Task } from "@/api/client";
 import type { Workflow as Model } from "@/components/workflow/model";
 import { ada, bob, builder, parentTask, step, subtask, task, web, workflow } from "@/test/fixtures";
 import type { FlowContext } from "../flowEvents";
+import { shownWorkflow } from "@/components/pickedWorkflow";
 import { entriesOf, isQuiet, segmentsOf, storiesOf, type StoriesInput } from "./stories";
 
 const now = Date.parse("2026-10-08T10:42:05");
@@ -77,12 +78,21 @@ describe("What's happening", () => {
     ]);
   });
 
-  it("on the page of one Workflow of several, tells only its Tasks' stories and those at no Step", () => {
+  it("on the page of one Workflow of several, tells only the stories of the Tasks its board shows", () => {
     const { input } = morning();
-    // As if WEB's Steps were split: the page shows a Workflow of Build alone.
-    const shown = { id: "wf-shown", steps: new Set<string>([step.build]) };
-    // WEB-9 and WEB-6 are at Review now, another Workflow's; the Parent WEB-7 is at no Step.
+    // As if WEB's Steps were split: the page shows a Workflow of Build alone, after the rest.
+    const shown = shownWorkflow(
+      "wf-shown",
+      { workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }], steps: record.steps.map((s) => ({ ...s, workflow_id: s.id === step.build ? "wf-shown" : "wf-other" })) },
+      [...input.tasks.values()],
+    );
+    // WEB-9 and WEB-6 are at Review now, another Workflow's; the Parent WEB-7 is where its open
+    // Subtask WEB-18 is, at Build.
     expect(storiesOf({ ...input, shown }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12", "WEB-7"]);
+    // With WEB-18 at Review, WEB-7 is on Review's page, as on its board.
+    const s18 = [...input.tasks.values()].find((t) => t.key === "WEB-18")!;
+    const moved = new Map(input.tasks).set(s18.id, { ...s18, step_id: step.review });
+    expect(storiesOf({ ...input, tasks: moved, shown }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12"]);
     // A Task not read yet goes by the Step its latest entry leaves it at.
     const unknown = { ...input, tasks: new Map(), shown };
     expect(storiesOf(unknown).map((s) => s.key)).not.toContain("WEB-9");

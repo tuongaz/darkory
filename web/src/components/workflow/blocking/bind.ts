@@ -1,5 +1,6 @@
 // Binds the record to the Blocking view's shapes: the Organisation's open Tasks as `BlockingTask`s.
 import type { Member, RunnerSession, Task } from "@/api/client";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import { workingOf } from "@/lib/work";
 import { liveClaim } from "@/work";
 import type { BlockingTask } from "./layout";
@@ -41,3 +42,15 @@ export function blockingTasks(
     });
 }
 
+
+/**
+ * Whether a Task, by id, is the page's own, of the Workflow `shown` (`ShownWorkflow.shows`) read
+ * off its record; every Task when none is shown, and a Task with no record here.
+ */
+export function shownBy(shown: ShownWorkflow | undefined, byId: ReadonlyMap<string, Task>): ((id: string) => boolean) | undefined {
+  if (!shown) return undefined;
+  return (id) => {
+    const task = byId.get(id);
+    return !task || shown.shows(task);
+  };
+}

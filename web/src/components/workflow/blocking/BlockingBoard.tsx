@@ -22,8 +22,8 @@ export type BlockingBoardProps = {
   projectId: string;
   /** A Task's id: a Parent's Subtasks, or one Task's chain. */
   scope?: string;
-  /** The Steps of the Workflow shown, on the page of one of several: the Project's Tasks elsewhere join only as outside Tasks. */
-  workflowSteps?: ReadonlySet<string>;
+  /** On the page of one Workflow of several, whether a Task is that page's: the Project's others join only as outside Tasks. */
+  shows?: (id: string) => boolean;
   /** The signed-in Member's id. */
   me: string;
   now: number;
@@ -254,12 +254,12 @@ function Keys({ ids, keyOf }: { ids: string[]; keyOf: (id: string) => string }) 
  * Tasks with no Blocking. A node selects its chain and opens a card that says what it waits on,
  * with Show on line and Open. On a phone it runs down, the side cards above and below.
  */
-export function BlockingBoard({ tasks, projectId, scope, workflowSteps, me, now, steps, parents, projects, onOpen, onShowOnLine, graphLink }: BlockingBoardProps) {
+export function BlockingBoard({ tasks, projectId, scope, shows, me, now, steps, parents, projects, onOpen, onShowOnLine, graphLink }: BlockingBoardProps) {
   const [rootRef, rootWidth] = useWidth<HTMLDivElement>();
   const width = rootWidth || 1200;
   const phone = width < PHONE;
   const byId = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
-  const a = useMemo(() => analyseBlocking(tasks, { projectId, scope, me, steps: workflowSteps }), [tasks, projectId, scope, me, workflowSteps]);
+  const a = useMemo(() => analyseBlocking(tasks, { projectId, scope, me, shows }), [tasks, projectId, scope, me, shows]);
   const side = a.depths >= 4 ? SIDE_NARROW : SIDE_W;
   const fit = phone ? width : width - side - SIDE_GAP;
   const layout = useMemo(() => placeBlocking(byId, a, phone ? downGeometry : acrossGeometry, { projectId, scope, fit }), [byId, a, phone, projectId, scope, fit]);

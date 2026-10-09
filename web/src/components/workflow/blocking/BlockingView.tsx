@@ -11,7 +11,8 @@ import { inProjectOrder } from "@/components/workflowLine/model";
 import { useCurrentMe } from "@/me";
 import type { GraphStep } from "../graph";
 import { BlockingBoard, type BandParent } from "./BlockingBoard";
-import { blockingTasks } from "./bind";
+import { blockingTasks, shownBy } from "./bind";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 
 const dataOf = <T,>(results: { data?: T }[]) => results.map((r) => r.data);
 
@@ -24,13 +25,13 @@ const dataOf = <T,>(results: { data?: T }[]) => results.map((r) => r.data);
 export function BlockingView({
   project,
   scope,
-  workflowSteps,
+  shown,
   onShowOnLine,
 }: {
   project: Project;
   scope?: string;
-  /** The Steps of the Workflow the page shows, of a Project of several: only its Tasks are the view's own. */
-  workflowSteps?: ReadonlySet<string>;
+  /** The Workflow the page shows, of a Project of several: only the Tasks its board shows are the view's own. */
+  shown?: ShownWorkflow;
   onShowOnLine: (taskId: string) => void;
 }) {
   const open = useOpenTasks();
@@ -45,6 +46,7 @@ export function BlockingView({
   const takeableByMe = useMemo(() => new Set((takeable ?? []).map((t) => t.id)), [takeable]);
   const tasks = useMemo(() => blockingTasks(open.data ?? [], { members, now, sessions, takeableByMe }), [open.data, members, now, sessions, takeableByMe]);
   const byId = useMemo(() => new Map((open.data ?? []).map((t) => [t.id, t])), [open.data]);
+  const shows = useMemo(() => shownBy(shown, byId), [shown, byId]);
 
   // The Workflows of the Projects drawn: this one, and any a Blocking reaches into.
   const projectKeys = useMemo(() => {
@@ -114,7 +116,7 @@ export function BlockingView({
       tasks={tasks}
       projectId={project.id}
       scope={scope}
-      workflowSteps={workflowSteps}
+      shows={shows}
       me={me}
       now={now}
       steps={steps}

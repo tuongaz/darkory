@@ -30,7 +30,13 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
     if (!s) return "a Step";
     return drawn && !drawn.has(s.id) ? `${workflowOf(s.id)} › ${s.name}` : s.name;
   };
-  const questions = data.all.filter((t) => t.aimedAt && !t.stepId);
+  // The questions this Workflow's board shows: beside the Task each blocks, else with its Parent, else on every page.
+  const shown = data.shown;
+  const listed = (id: string) => {
+    const at = shown?.of(id);
+    return !shown || !at || at.has(shown.id);
+  };
+  const questions = data.all.filter((t) => t.aimedAt && !t.stepId && listed(t.id));
   const sides = sideSteps(data.facts);
   // Where New Tasks start, when it is on this list.
   const start = sides.start !== undefined && (!drawn || drawn.has(sides.start)) ? name(sides.start) : undefined;

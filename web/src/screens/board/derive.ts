@@ -352,6 +352,39 @@ export function withWorkflowsOf(task: Task, ctx: BoardContext): ReadonlySet<stri
 }
 
 /**
+ * The Workflows whose board and Workflow page show a Task; undefined for every one. The board and
+ * the page read it alike, so a Task is found in one place:
+ *
+ * - an open Task at a Step: that Step's Workflow;
+ * - an open Parent: the Workflow of its least advanced open Subtask's Step (`placeOf`); waiting
+ *   with a Member, where its Subtasks last ended (`withWorkflowsOf`);
+ * - an ended Task, a Parent included: the Workflow it ended in (`endedWorkflowOf`);
+ * - an open Task aimed at a Member: the Workflows of the Tasks it blocks, else its Parent's, else
+ *   every one (`withWorkflowsOf`).
+ */
+export function workflowsOf(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
+  if (task.state !== "open") {
+    const at = endedWorkflowOf(task, ctx);
+    return at ? new Set([at]) : undefined;
+  }
+  const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
+  const place = placeOf(task, { children: ctx.children, position });
+  if (place.kind === "step") {
+    const at = ctx.steps.find((s) => s.id === place.stepId)?.workflow_id;
+    return new Set(at ? [at] : []);
+  }
+  return withWorkflowsOf(task, ctx);
+}
+
+/**
+ * What places a Task at no Step, from the Project's Workflows and Steps (its Steps in its order,
+ * `stepsInOrder`) and the Tasks a page has: the open ones, and any ended ones it read.
+ */
+export function boardContext(graph: Pick<BoardContext, "workflows" | "steps">, tasks: readonly Task[]): BoardContext {
+  return { workflows: graph.workflows, steps: graph.steps, children: childrenOf(tasks), byId: new Map(tasks.map((t) => [t.id, t])), blocks: blocking(tasks) };
+}
+
+/**
  * The board of one Workflow (`workflow`): its Steps in order (empty ones too, so a card can be
  * dragged there), then "With <Member>" for each Member an open card shown here is aimed at
  * (`withWorkflowsOf`), then Done, then Dropped, each collapsed to its header unless the Display
@@ -374,15 +407,17 @@ export function boardColumns(
   const columns: Column[] = ctx.steps
     .filter((s) => s.workflow_id === ctx.workflow)
     .map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
+  // Who waits with a Member and what ended show where `workflowsOf` places them: the page's rules too.
+  const isHere = (t: Task) => workflowsOf(t, ctx)?.has(ctx.workflow) ?? true;
   const withHere = new Map<string, Task[]>();
   for (const [k, list] of places) {
     if (!k.startsWith("with:")) continue;
-    const here = list.filter((t) => withWorkflowsOf(t, ctx)?.has(ctx.workflow) ?? true);
+    const here = list.filter(isHere);
     if (here.length > 0) withHere.set(k.slice(5), here);
   }
   const withIds = [...withHere.keys()].sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
   for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: withHere.get(id)! });
-  const ended = (state: "done" | "dropped") => (places.get(state) ?? []).filter((t) => endedWorkflowOf(t, ctx) === ctx.workflow);
+  const ended = (state: "done" | "dropped") => (places.get(state) ?? []).filter(isHere);
   columns.push({ kind: "done", id: "done", tasks: ended("done"), collapsed: !ctx.display.showDone });
   columns.push({ kind: "dropped", id: "dropped", tasks: ended("dropped"), collapsed: !ctx.display.showDropped });
   return columns;

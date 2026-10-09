@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Activity, Member, RunnerSession, Task, TaskDetail, Workflows } from "@/api/client";
 import { ada, bob, builder, detail, engineer, parentTask, retro, skills, step, subtask, task, web, workflow } from "@/test/fixtures";
 import { ageText } from "@/lib/time";
+import { shownWorkflow } from "@/components/pickedWorkflow";
 import { agentNeedsOf, consequence, needsOf, type NeedsInput } from "./needs";
 
 const now = Date.parse("2026-10-08T10:42:05Z");
@@ -146,23 +147,40 @@ describe("Needs you", () => {
 
 describe("Needs you on the page of one Workflow of several", () => {
   // As if WEB's Steps were split: the page shows a Workflow of Build and Review only.
-  const shown = { id: "wf-shown", steps: new Set<string>([step.build, step.review]) };
+  const split = (tasks: Task[]) => {
+    const graph = workflow(web);
+    return shownWorkflow("wf-shown", {
+      workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }],
+      steps: graph.steps.map((s) => ({ ...s, workflow_id: s.id === step.build || s.id === step.review ? "wf-shown" : "wf-other" })),
+    }, tasks);
+  };
 
-  it("lists only the Tasks at its Steps, or ended in it, and those at no Step: a hold or a Retrospective of another Workflow is on its own page", () => {
+  it("lists the Tasks its board shows: a hold or a Retrospective of another Workflow is on its own page", () => {
     const { open, details, lapses } = heavyDay();
-    const items = needsOf(input(open, { details, lapses, shown }));
-    // WEB-5 waits at Backlog, WEB-17 and WEB-14 at Retro: not this Workflow's.
+    const items = needsOf(input(open, { details, lapses, shown: split(open) }));
+    // WEB-5 waits at Backlog, WEB-17 and WEB-14 at Retro: not this Workflow's. WEB-13 blocks
+    // WEB-4, at Build; WEB-16 waits with its Owner, its Subtasks' ends not read: every page's.
     expect(items.map((i) => i.task.key)).toEqual(["WEB-13", "WEB-16"]);
-    const ended = task(30, { state: "open", step_id: undefined, step_since: undefined, workflow_id: "wf-other", aimed_at_id: ada.id, skill_id: undefined });
-    expect(needsOf(input([ended], { shown })).map((i) => i.task.key)).toEqual([]);
-    expect(needsOf(input([{ ...ended, workflow_id: shown.id }], { shown })).map((i) => i.task.key)).toEqual(["WEB-30"]);
+  });
+
+  it("lists a question beside the Task it blocks, else with its Parent, else on every page", () => {
+    const question = (n: number, extra: Partial<Task> = {}) => task(n, { step_id: undefined, step_since: undefined, aimed_at_id: ada.id, skill_id: undefined, ...extra });
+    const heldUp = (n: number, at: string, by: Task) => task(n, { step_id: at, blocked: true, open_blockers: [{ id: by.id, key: by.key, title: by.title }] });
+    const here = question(30);
+    const there = question(31);
+    const parent = parentTask(40, { open: 1, working: 0, done: 0, dropped: 0 });
+    const under = question(32, { parent_id: parent.id });
+    const sibling = task(41, { step_id: step.plan, parent_id: parent.id });
+    const loose = question(33);
+    const open = [here, heldUp(34, step.review, here), there, heldUp(35, step.plan, there), parent, under, sibling, loose];
+    expect(needsOf(input(open, { shown: split(open) })).map((i) => i.task.key)).toEqual(["WEB-30", "WEB-33"]);
   });
 
   it("lists only the agents waiting on its Tasks", () => {
     const sessionOn = (taskId: string): RunnerSession => ({ task_id: taskId, member_id: builder.id, session_id: "s", host: "h", started_at: ago(3), state: "waiting", state_since: ago(3), log_path: "/l" });
     const here = task(6, { claim: { id: "c", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: ago(22) } });
     const there = task(7, { step_id: step.retro, claim: { id: "c", task_id: "k-7", holder_id: builder.id, session_id: "s", started_at: ago(5) } });
-    const out = agentNeedsOf({ me: ada, open: [here, there], projectId: web.id, shown, members, sessions: [sessionOn(here.id), sessionOn(there.id)] });
+    const out = agentNeedsOf({ me: ada, open: [here, there], projectId: web.id, shown: split([here, there]), members, sessions: [sessionOn(here.id), sessionOn(there.id)] });
     expect(out.map((a) => a.task.key)).toEqual(["WEB-6"]);
   });
 });

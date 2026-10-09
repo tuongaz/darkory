@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Claim } from "@/api/client";
-import { blockingCount, chainOf, scopedLine, traceOf, unblocksWhen } from "./data";
+import { chainOf, scopedLine, traceOf, unblocksWhen } from "./data";
 import { workflowsSkills, workflowsFixture } from "@/test/fixtures";
 import { MAIN } from "./fixtures";
 import { startStep, stepsOf, type LineTask, type LineWorkflow } from "./model";
@@ -25,10 +25,6 @@ const all: LineTask[] = [
 const me = { id: "m-tu", takeable: new Set(["k-12"]) };
 
 describe("Blocking on the line", () => {
-  it("counts the Blockings, not the blocked Tasks: Blocking 5", () => {
-    expect(blockingCount(all)).toBe(5);
-  });
-
   it("MAIN-19's chain: MAIN-13 → MAIN-4 and MAIN-12, unblocks when both end, first answer MAIN-13", () => {
     const c = chainOf("k-19", all, me)!;
     expect(c.upstream.map((p) => p.map((x) => x.key))).toEqual([["MAIN-12"], ["MAIN-13", "MAIN-4"]]);
