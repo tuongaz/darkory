@@ -473,7 +473,8 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     await expect(page.getByRole("button", { name: "View: Board" })).toBeVisible();
     await expect(page.getByRole("button", { name: "More" })).toBeInViewport({ ratio: 1 });
     for (const action of ["Views", "Filter", "Display"]) {
-      const button = page.getByRole("button", { name: action, exact: true });
+      // Hidden by display:none on a phone, so the role query must include hidden elements to count it.
+      const button = page.getByRole("button", { name: action, exact: true, includeHidden: true });
       await expect(button).toHaveCount(1);
       await expect(button).toBeHidden();
     }
