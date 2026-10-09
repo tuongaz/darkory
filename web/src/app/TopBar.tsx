@@ -18,7 +18,8 @@ export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: bo
  * The bar over every screen: where you are on the first row (the crumbs; on a phone the button that
  * opens the sidebar), then, when the page has any, a second row named "Page" of what the page does: the view
  * switch and the scope at the left, the actions and the one primary at the right. Every page
- * renders one as its first child; one hairline runs under its last row.
+ * renders one as its first child. Each row has its own hairline: one under the crumbs when a second
+ * row follows, and one under the last row.
  *
  * The first crumb is the area (a Project, Settings, Inbox) and reads strong; the rest are muted.
  */
@@ -45,7 +46,7 @@ export function TopBar({
   const [viewRef, overflowing] = useOverflow<HTMLDivElement>();
   return (
     <header className="flex flex-none flex-col border-b">
-      <div className="flex h-11 items-center gap-2 px-4">
+      <div className={cn("flex h-11 items-center gap-2 px-4", second && "border-b")}>
         <SidebarTrigger className="-ml-1.5 text-muted-foreground md:hidden" />
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
           {crumbs.map((c, i) => (
