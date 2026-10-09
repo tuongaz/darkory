@@ -58,7 +58,7 @@ describe("the shell", () => {
       ["Workflows", "/projects/WEB/workflows"],
       ["Agents", "/projects/WEB/agents"],
       ["Activity", "/projects/WEB/activity"],
-      ["Settings", "/settings/projects/WEB/general"],
+      ["Settings", "/projects/WEB/settings/general"],
     ]);
     expect(within(projectsNav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
     // Nothing at the foot: no Member row, no caption saying what the Member is.
@@ -110,6 +110,18 @@ describe("the shell", () => {
     act(() => FakeEventSource.latest().emit("activity", entry, 7));
 
     expect(await within(projectsNav()).findByRole("button", { name: "Platform" })).toBeInTheDocument();
+  });
+
+  it("draws the page as a bordered card beside a flat sidebar, from md up", async () => {
+    mockApi(signedIn());
+    renderApp("/inbox");
+    await screen.findByRole("navigation", { name: "Main" });
+    // The kit's sidebar is a <div data-slot="sidebar">, with no landmark role of its own.
+    expect(sidebar()).toHaveAttribute("data-variant", "inset");
+    const main = document.querySelector('[data-slot="sidebar-inset"]')!;
+    expect(main.className).toMatch(/(^|\s)md:peer-data-\[variant=inset\]:border(\s|$)/);
+    expect(main.className).toMatch(/(^|\s)md:peer-data-\[variant=inset\]:rounded-lg(\s|$)/);
+    expect(main.className).not.toMatch(/rounded-xl|shadow-sm/);
   });
 });
 
@@ -333,9 +345,9 @@ describe("the addresses before Projects", () => {
     ["/admin/members", "Settings/Members"],
     ["/admin/members/m-bob", "Settings/Members/bob"],
     ["/admin/skills/engineer", "Settings/Skills/engineer"],
-    ["/admin/teams/OPS", "Settings/Ops/General"],
-    ["/admin/workflow", "Settings/Web/Workflows"],
-    ["/admin/workspaces", "Settings/Web/Workspaces"],
+    ["/admin/teams/OPS", "Ops/Settings"],
+    ["/admin/workflow", "Web/Workflows"],
+    ["/admin/workspaces", "Web/Settings"],
     ["/account", "Settings/Account"],
     ["/teams/OPS/features", "Ops/Tasks"],
     ["/agents", "Web/Agents"],
@@ -525,7 +537,7 @@ describe("keys", () => {
       "Settings › Skills",
       "Settings › Labels",
       "Settings › Install",
-      "Settings › Web",
+      "Web › Settings",
     ]);
   });
 
@@ -541,6 +553,19 @@ describe("keys", () => {
     expect(within(search).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
+  });
+
+  it("⌘K switches from a Project's settings to the other Project's General", async () => {
+    mockApi(records());
+    renderApp("/projects/WEB/settings/members");
+    await screen.findByRole("navigation", { name: "Project settings" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "OPS");
+    await userEvent.click(await within(search).findByRole("option", { name: /^OpsOPS/ }));
+    const general = () => within(screen.getByRole("navigation", { name: "Project settings" })).getByRole("link", { name: "General" });
+    await waitFor(() => expect(general()).toHaveAttribute("href", "/projects/OPS/settings/general"));
+    expect(general()).toHaveAttribute("aria-current", "page");
   });
 
   it("⌘K goes to each Workflow's board of a Project of several", async () => {
@@ -692,38 +717,59 @@ describe("keys", () => {
 describe("Settings", () => {
   const nav = () => screen.getByRole("navigation", { name: "Settings pages" });
 
-  it("has its own nav, which leads Back to the page you came from", async () => {
+  it("has its own nav of the Account and the Organisation, which leads Back to the page you came from", async () => {
     mockApi(signedIn());
     renderApp("/projects/OPS/workflows");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
-    await userEvent.click(within(sidebar()).getByRole("link", { name: "Settings" }));
+    const menu = await openOrganisationMenu();
+    await userEvent.click(within(menu).getByRole("menuitem", { name: /^Settings/ }));
 
-    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Ops/General"));
+    // An admin's Settings opens on the Organisation's Members.
+    await waitFor(() => expect(crumbs().textContent).toBe("Settings/Members"));
     expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
     expect(within(nav()).getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
     const organisation = within(nav()).getByRole("list", { name: "Organisation" });
     expect(within(organisation).getAllByRole("link").map((l) => l.textContent)).toEqual(["Members", "Agents", "Skills", "Labels", "Install"]);
     expect(within(organisation).getByRole("link", { name: "Members" })).toHaveAttribute("href", "/settings/organisation/members");
-    // The Project in the address is unfolded onto its pages.
-    const ops = within(nav()).getByRole("list", { name: "Ops" });
-    expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Workflows", "Members", "Labels", "Workspaces"]);
-    expect(within(ops).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
+    // A Project's settings are under the Project in the app, not here.
+    expect(within(nav()).queryByRole("list", { name: "Projects" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByRole("button", { name: "Ops" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();
+    // The Settings shell draws the same flat sidebar beside the page card.
+    expect(nav().closest("[data-slot=sidebar]")).toHaveAttribute("data-variant", "inset");
 
     await userEvent.click(screen.getByRole("link", { name: "Back" }));
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
   });
 
-  it("shows a Member who is not an admin their Account and the Projects they are in, and refuses the Organisation's pages", async () => {
+  it("shows a Member who is not an admin their Account alone, and refuses the Organisation's pages", async () => {
     mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
     renderApp("/settings");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
     expect(within(nav()).queryByRole("list", { name: "Organisation" })).not.toBeInTheDocument();
-    expect(within(within(nav()).getByRole("list", { name: "Projects" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["WWeb"]);
+    expect(within(nav()).queryByRole("list", { name: "Projects" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByRole("button", { name: "Web" })).not.toBeInTheDocument();
     expect(within(nav()).queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();
 
     renderApp("/settings/organisation/members");
     expect(await screen.findByRole("heading", { name: "Admins only" })).toBeInTheDocument();
+  });
+
+  it("of a Project opens under the Project from the sidebar, beside the app's sidebar, marked there on every page", async () => {
+    mockApi(signedIn());
+    renderApp("/projects/OPS/workflows");
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
+    const settings = within(within(projectsNav()).getByRole("list", { name: "Ops" })).getByRole("link", { name: "Settings" });
+    expect(settings).toHaveAttribute("href", "/projects/OPS/settings/general");
+    await userEvent.click(settings);
+
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Settings"));
+    expect(screen.queryByRole("navigation", { name: "Settings pages" })).not.toBeInTheDocument();
+    expect(settings).toHaveAttribute("aria-current", "page");
+    const tabs = () => screen.getByRole("navigation", { name: "Project settings" });
+    await userEvent.click(within(tabs()).getByRole("link", { name: "Members" }));
+    await waitFor(() => expect(within(tabs()).getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page"));
+    expect(within(within(projectsNav()).getByRole("list", { name: "Ops" })).getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   });
 });
 

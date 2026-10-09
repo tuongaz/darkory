@@ -662,3 +662,9 @@ What changed, on branch `workflows-list`:
 - **One Workflow's editor.** The built editor without the rail, headed by the Workflow's name as a field saved with the draft; Save opens its live page, Cancel the list. `WorkflowsRail.tsx` is gone.
 
 Why: the list is the way in and shows every Workflow's state at once; the address names the Workflow; acts on the list happen when asked, while a Workflow's design stays a reviewed draft. The decisions are in `decisions.md` under Named Workflows, "Round 2".
+
+---
+
+## Round 3 (2026-10-09): the shell, the bar, the Project's pages
+
+The owner reviewed round 2 on a running Install and named three things: a Project of one landed on one Workflow under a plural item, the list's acts lived only in Settings, and a Project's pages sat in two navigations. The round-3 board (https://claude.ai/artifact/DNm5PuVXwRj6rJPnCLXFA9) answered with the shell after Linear, a two-row bar, Workflows always a list carrying its acts with the editor in the app, and a Project's settings under the Project (direction B); the plan, the per-task review record and the decisions are in `docs/build/shell-navigation-plan.md` and `decisions.md` under Named Workflows, "Round 3".

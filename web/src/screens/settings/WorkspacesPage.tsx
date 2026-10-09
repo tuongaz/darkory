@@ -12,6 +12,7 @@ import { InfoTip } from "@/components/InfoTip";
 import { Loaded, Refusal } from "@/components/Refusal";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
+import { BarAction } from "@/app/TopBar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -19,9 +20,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { SettingsFrame, tableHead } from "./frame";
+import { tableHead } from "./frame";
 import { count, defaultOf, modeNames, naming, workspaceNamePattern } from "./model";
 import { ConfirmDialog, Fact, Facts, MoreMenu, Segmented } from "./parts";
+import { ProjectSettingsFrame } from "./ProjectFrame";
 import { createWorkspace, removeWorkspace, updateWorkspace } from "@/api/writes";
 
 // Name · Kind · Path · Mode · Default branch · Default of · Open Tasks · ⋯. A phone keeps Name,
@@ -32,7 +34,7 @@ const wide = "hidden lg:flex";
 type Change = { workspace: Workspace; body: Partial<Pick<Workspace, "path" | "mode" | "default_branch">> };
 
 /**
- * Settings › a Project › Workspaces: the places a session works in, how work lands in each, and
+ * A Project › Settings › Workspaces: the places a session works in, how work lands in each, and
  * who uses it. Workspaces belong to the Install, so every Project lists the same ones; this
  * Project's default is marked, and ⋯ makes another its default. Admins change them; anyone else
  * reads.
@@ -57,15 +59,13 @@ export function WorkspacesPage() {
   const shown = (w: Workspace): Workspace => (save.isPending && save.variables.workspace.id === w.id ? { ...w, ...save.variables.body } : w);
 
   return (
-    <SettingsFrame
-      crumbs={[{ label: project.name, wide: true }, { label: "Workspaces" }]}
+    <ProjectSettingsFrame
+      project={project}
+      page="workspaces"
       pad={false}
       primary={
         admin && (
-          <Button onClick={() => setAdding(true)}>
-            <PlusIcon />
-            New Workspace
-          </Button>
+          <BarAction icon={<PlusIcon />} label="New Workspace" onClick={() => setAdding(true)} />
         )
       }
     >
@@ -134,7 +134,7 @@ export function WorkspacesPage() {
       </Loaded>
       {adding && <NewWorkspaceDialog onClose={() => setAdding(false)} />}
       {removing && <RemoveWorkspaceDialog workspace={removing} projects={projects.data ?? []} onClose={() => setRemoving(null)} />}
-    </SettingsFrame>
+    </ProjectSettingsFrame>
   );
 }
 

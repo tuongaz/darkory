@@ -5,10 +5,11 @@ import { useLabels, useProject, useProjectLabels } from "@/api/queries";
 import { useRouteProject } from "@/app/currentProject";
 import { LabelPill } from "@/components/LabelPill";
 import { Refusal } from "@/components/Refusal";
-import { Button } from "@/components/ui/button";
+import { BarAction } from "@/app/TopBar";
 import { useCurrentMe } from "@/me";
 import { SettingsFrame } from "./frame";
 import { LabelsEditor } from "./LabelsEditor";
+import { ProjectSettingsFrame } from "./ProjectFrame";
 
 /** Settings › Organisation › Labels: the Labels every Project's Tasks may carry. Admins only, as the route is. */
 export function OrganisationLabelsPage() {
@@ -18,12 +19,7 @@ export function OrganisationLabelsPage() {
     <SettingsFrame
       crumbs={[{ label: "Labels" }]}
       pad={false}
-      primary={
-        <Button onClick={() => setAdding(true)} disabled={adding}>
-          <PlusIcon />
-          New Label
-        </Button>
-      }
+      primary={<BarAction icon={<PlusIcon />} label="New Label" onClick={() => setAdding(true)} disabled={adding} />}
     >
       <Refusal error={labels.error} className="px-6 py-4" />
       <LabelsEditor
@@ -38,7 +34,7 @@ export function OrganisationLabelsPage() {
 }
 
 /**
- * Settings › a Project › Labels: the Project's own, which only its Tasks may carry, with the
+ * A Project › Settings › Labels: the Project's own, which only its Tasks may carry, with the
  * Organisation's under them for the names they share. Its Members and admins change them, as /v1
  * allows; anyone else reads.
  */
@@ -51,15 +47,13 @@ export function ProjectLabelsPage() {
   const editable = me.member.admin || !!members?.some((m) => m.id === me.member.id);
   const [adding, setAdding] = useState(false);
   return (
-    <SettingsFrame
-      crumbs={[{ label: project.name, wide: true }, { label: "Labels" }]}
+    <ProjectSettingsFrame
+      project={project}
+      page="labels"
       pad={false}
       primary={
         editable && (
-          <Button onClick={() => setAdding(true)} disabled={adding}>
-            <PlusIcon />
-            New Label
-          </Button>
+          <BarAction icon={<PlusIcon />} label="New Label" onClick={() => setAdding(true)} disabled={adding} />
         )
       }
     >
@@ -92,6 +86,6 @@ export function ProjectLabelsPage() {
           </ul>
         </section>
       )}
-    </SettingsFrame>
+    </ProjectSettingsFrame>
   );
 }

@@ -8,7 +8,7 @@ import { FakeEventSource } from "@/test/eventSource";
 import { renderApp } from "@/test/render";
 
 // The live Workflow page as the line draws it (Direction D): each open Task a token at its Step,
-// the panels under it, the toggle Line | Blocking (N) | Text, the scope in the breadcrumb, a
+// the panels under it, the toggle Line | Blocking (N) | Text, the scope after it on the bar's second row, a
 // selected token's chain, a pickup tagged "now" and a move carried along its Connector.
 
 const claim = (holder: string, started = new Date(Date.now() - 20 * 60_000).toISOString()) => ({ id: `c-${holder}`, task_id: "", holder_id: holder, session_id: "s", started_at: started });
@@ -54,7 +54,7 @@ afterEach(() => restore?.());
 describe("the Workflow page", () => {
   it("draws every open Task as a token at its Step, held first, and leaves a Parent off the line", async () => {
     serve([task(1, { claim: claim(builder.id), title: "Normalise names" }), task(2), task(5, { step_id: step.review }), task(6, { step_id: undefined, title: "A Parent", subtask_counts: { open: 0, working: 0, done: 1, dropped: 0 } })]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
     expect(tokenOf("WEB-1")).toHaveAccessibleName("WEB-1 Normalise names, held by builder (agent)");
     expect(tokenOf("WEB-1")).toHaveAttribute("data-state", "held");
@@ -67,7 +67,7 @@ describe("the Workflow page", () => {
 
   it("says where Tasks enter: the arrow into Build, Plan on Break down, Backlog parked with its Tasks", async () => {
     serve([task(2), task(3, { step_id: step.backlog, title: "Later" }), task(4, { step_id: step.plan, title: "Break down: Big thing", kind: "breakdown" })]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
     expect(within(line()).getByText("New Tasks start here")).toBeInTheDocument();
     expect(within(line()).getByText("Break down")).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("the Workflow page", () => {
 
   it("explains every line on hover, in words", async () => {
     serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     const segment = line().querySelector<SVGPathElement>('path[data-hint^="Build → Review"]')!;
     await userEvent.hover(segment);
@@ -100,7 +100,7 @@ describe("the Workflow page", () => {
 
   it("the Text view says where new Tasks start, what Plan does, and that Backlog's Tasks move by hand", async () => {
     serve([task(2)]);
-    renderApp("/projects/WEB/workflows?view=text");
+    renderApp("/projects/WEB/workflows/wf-work?view=text");
     expect(await screen.findByText("New Tasks start at Build, unless the filer names another Step.")).toBeInTheDocument();
     expect(screen.getByText(/^Break down: a Task filed with Break down on gets its Breakdown Subtask here; whoever takes it files the other Subtasks, each at the Step its filer names, Build when they name none\.$/)).toBeInTheDocument();
     expect(screen.getByText(/^A hold: no one is offered its Tasks/)).toBeInTheDocument();
@@ -108,22 +108,22 @@ describe("the Workflow page", () => {
 
   it("mounts Needs you and What's happening under the line, and Edit for an admin only", async () => {
     serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     expect(await screen.findByRole("region", { name: "Needs you" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "What's happening" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Edit the Workflows" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work/edit");
   });
 
   it("offers no Edit to a Member who is not an admin", async () => {
     serve([task(2)], bob);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
-    expect(screen.queryByRole("link", { name: "Edit the Workflows" })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^Edit / })).toBeNull();
   });
 
   it("marks a blocked token with what it waits on, and counts the Blockings on the toggle", async () => {
     serve([task(2), task(3, blockedBy(2)), task(4, blockedBy(2, 3))]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
     expect(tokenOf("WEB-3")).toHaveTextContent("by WEB-2");
     expect(tokenOf("WEB-4")).toHaveTextContent("by 2");
@@ -132,7 +132,7 @@ describe("the Workflow page", () => {
 
   it("leaves Blocking off the toggle when nothing blocks", async () => {
     serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     expect(screen.queryByRole("button", { name: /^Blocking/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Text" })).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("the Workflow page", () => {
 
   it("selecting a blocked token says its chain, when it unblocks, and what comes first", async () => {
     serve([task(2, { aimed_at_id: ada.id, step_id: undefined, title: "Which format?" }), task(3, blockedBy(2)), task(4, blockedBy(3))]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-4")).not.toBeNull());
     await userEvent.click(tokenOf("WEB-4")!);
     const callout = await screen.findByRole("dialog", { name: "WEB-4 Blocking" });
@@ -156,7 +156,7 @@ describe("the Workflow page", () => {
 
   it("a blocker selected says what it holds up", async () => {
     serve([task(2), task(3, blockedBy(2)), task(4, blockedBy(3))]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     await userEvent.click(tokenOf("WEB-2")!);
     const callout = await screen.findByRole("dialog", { name: "WEB-2 Blocking" });
@@ -166,7 +166,7 @@ describe("the Workflow page", () => {
 
   it("opens a selected Task's peek from its callout", async () => {
     serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     await userEvent.click(tokenOf("WEB-2")!);
     await userEvent.click(await screen.findByRole("button", { name: /Open WEB-2/ }));
@@ -181,7 +181,7 @@ describe("the Workflow page", () => {
       task(10),
       task(11),
     ]);
-    renderApp("/projects/WEB/workflows?scope=k-7");
+    renderApp("/projects/WEB/workflows/wf-work?scope=k-7");
     await waitFor(() => expect(tokenOf("WEB-8")).not.toBeNull());
     expect(tokenOf("WEB-10")).toBeNull();
     expect(within(line()).getByLabelText("2 more Tasks outside this scope")).toBeInTheDocument();
@@ -196,7 +196,7 @@ describe("the Workflow page", () => {
 
   it("the Filter narrows the tokens like a scope: what it leaves out counts into its Step's +N", async () => {
     serve([task(2), task(3, blockedBy(2)), task(4, { step_id: step.review })]);
-    renderApp(`/projects/WEB/workflows?filter.tasks=${encodeURIComponent("blocked:is:true")}`);
+    renderApp(`/projects/WEB/workflows/wf-work?filter.tasks=${encodeURIComponent("blocked:is:true")}`);
     await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
     expect(tokenOf("WEB-2")).toBeNull();
     expect(tokenOf("WEB-4")).toBeNull();
@@ -207,7 +207,7 @@ describe("the Workflow page", () => {
 
   it("the scope menu lists All Tasks, the Parents with open Subtasks and No Parent, and narrows on a pick", async () => {
     serve([task(7, { step_id: undefined, title: "Emoji reactions", subtask_counts: { open: 1, working: 0, done: 0, dropped: 0 } }), task(8, { parent_id: "k-7", rank: undefined }), task(10)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await userEvent.click(await screen.findByRole("button", { name: "Scope: All Tasks" }));
     const options = await screen.findAllByRole("option");
     expect(options.map((o) => o.textContent)).toEqual(["All Tasks2", "WEB-7Emoji reactions1 open", "No Parent1"]);
@@ -218,7 +218,7 @@ describe("the Workflow page", () => {
 
   it("lists each Step's Tasks in the text view, held first, and the questions with a Member", async () => {
     serve([task(2), task(3, { claim: claim(builder.id) }), task(4, { aimed_at_id: ada.id, step_id: undefined, title: "Which format?" })]);
-    renderApp("/projects/WEB/workflows?view=text");
+    renderApp("/projects/WEB/workflows/wf-work?view=text");
     const list = await screen.findByRole("list", { name: "Tasks at Build" });
     expect(within(list).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["WEB-3 Task 3, held by builder", "WEB-2 Task 2, waiting"]);
     expect(screen.getByRole("region", { name: "With a Member" })).toHaveTextContent("WEB-4Which format?With you");
@@ -228,7 +228,7 @@ describe("the Workflow page", () => {
 describe("the line as it happens", () => {
   it("a Task filed shows its token at its Step, tagged with who filed it", async () => {
     const { list } = serve([]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await screen.findByRole("region", { name: "Workflow" });
     list.tasks = [task(2)];
     deliver(entry(5, "task.filed", "k-2", { key: "WEB-2", project_id: "p-web", step_id: step.build }, ada.id));
@@ -239,7 +239,7 @@ describe("the line as it happens", () => {
 
   it("a pickup reads 'now' on the token with its tag: who picked it up and how long it waited", async () => {
     const { list } = serve([task(2, { step_since: new Date(Date.now() - 43 * 60_000).toISOString() })]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     list.tasks = [task(2, { step_since: new Date(Date.now() - 43 * 60_000).toISOString(), claim: claim(builder.id, new Date().toISOString()) })];
     deliver(entry(6, "task.claimed", "k-2", { step_id: step.build }, builder.id));
@@ -251,7 +251,7 @@ describe("the line as it happens", () => {
 
   it("an advance carries a token along its Connector, its outcome lit, and the Task lands at its next Step", async () => {
     const { list } = serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     list.tasks = [task(2, { step_id: step.review })];
     deliver(entry(7, "task.advanced", "k-2", { from: step.build, to: step.review, outcome: "pass" }, builder.id));
@@ -265,7 +265,7 @@ describe("the line as it happens", () => {
   it("with reduced motion nothing travels: the token simply appears at its next Step", async () => {
     restore = reducedMotion(true);
     const { list } = serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     list.tasks = [task(2, { step_id: step.review })];
     deliver(entry(7, "task.advanced", "k-2", { from: step.build, to: step.review, outcome: "pass" }, builder.id));
@@ -278,7 +278,7 @@ describe("the scope menu of a Project of one Workflow", () => {
   it("lists an ended Parent with an open Retrospective on the line by its key and title", async () => {
     const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, ended_at: new Date().toISOString(), subtask_counts: { open: 1, working: 0, done: 1, dropped: 0 } });
     serve([parent, task(10, { title: "Retrospective: Launch", parent_id: parent.id, kind: "retrospective", step_id: step.retro }), task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-10")).not.toBeNull());
     // The open Tasks leave the ended Parent out; the page reads it, so the menu names it.
     await userEvent.click(screen.getByRole("button", { name: /^Scope: / }));
@@ -331,7 +331,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
 
   it("a Project of one Workflow has no chip", async () => {
     serve([task(2)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp("/projects/WEB/workflows/wf-work");
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
   });

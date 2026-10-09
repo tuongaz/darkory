@@ -264,8 +264,8 @@ export function useProjectLabels(project: string | undefined) {
   });
 }
 
-export function useSkills() {
-  return useQuery({ queryKey: keys.skills, queryFn: () => call(api.GET("/v1/skills")).then((r) => r.items) });
+export function useSkills(options: { enabled?: boolean } = {}) {
+  return useQuery({ queryKey: keys.skills, queryFn: () => call(api.GET("/v1/skills")).then((r) => r.items), enabled: options.enabled });
 }
 
 function byId<T extends { id: string }>(items: T[] | undefined): Map<string, T> {

@@ -121,7 +121,7 @@ describe("Settings › Organisation › Labels", () => {
   });
 });
 
-describe("Settings › a Project › Labels", () => {
+describe("a Project › Settings › Labels", () => {
   // bob is in WEB, not in OPS.
   const asBob = (org: Label[], own: Label[] = []) =>
     routes(org, own, {
@@ -132,7 +132,7 @@ describe("Settings › a Project › Labels", () => {
   it("lets a Member of the Project define its own Labels, with the Organisation's under them", async () => {
     const user = userEvent.setup();
     const api = mockApi(asBob([bug], [clientX]));
-    renderApp("/settings/projects/WEB/labels");
+    renderApp("/projects/WEB/settings/labels");
     const table = await screen.findByRole("table", { name: "Labels" });
     expect(within(table).getByRole("row", { name: "client-x" })).toBeInTheDocument();
     expect(within(screen.getByRole("region", { name: "The Organisation's Labels" })).getByText("bug")).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe("Settings › a Project › Labels", () => {
 
   it("shows another Project's Labels to a Member outside it, without changing them", async () => {
     mockApi(asBob([bug], [{ ...clientX, project_id: ops.id }]));
-    renderApp("/settings/projects/OPS/labels");
+    renderApp("/projects/OPS/settings/labels");
     const table = await screen.findByRole("table", { name: "Labels" });
     expect(within(table).getByRole("row", { name: "client-x" })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole("button", { name: "New Label" })).not.toBeInTheDocument());

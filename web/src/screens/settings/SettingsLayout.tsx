@@ -1,27 +1,10 @@
-import {
-  ArrowLeftIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  CircleUserIcon,
-  GraduationCapIcon,
-  PlusIcon,
-  ServerIcon,
-  ShieldIcon,
-  TagIcon,
-  UsersIcon,
-  ZapIcon,
-} from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { ArrowLeftIcon, CircleUserIcon, GraduationCapIcon, ServerIcon, ShieldIcon, TagIcon, UsersIcon, ZapIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link, Outlet, useMatch } from "react-router";
-import type { Project } from "@/api/client";
-import { useProjects } from "@/api/queries";
-import { projectSettingsPath, type ProjectSettingsPage } from "@/app/currentProject";
-import { sendIntent } from "@/app/intents";
 import { appReturnPath } from "@/app/returnTo";
 import { Frame } from "@/app/Shell";
 import { Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
-import { ProjectMark } from "@/components/ProjectMark";
 import {
   Sidebar,
   SidebarContent,
@@ -31,9 +14,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useCurrentMe } from "@/me";
@@ -55,35 +35,20 @@ const organisationPages = [
   { path: "install", label: "Install", icon: <ServerIcon /> },
 ];
 
-const projectPages: { page: ProjectSettingsPage; label: string }[] = [
-  { page: "general", label: "General" },
-  { page: "workflows", label: "Workflows" },
-  { page: "members", label: "Members" },
-  { page: "labels", label: "Labels" },
-  { page: "workspaces", label: "Workspaces" },
-];
-
 /**
  * Settings' nav: Back to the app page you came from, then Account; the Organisation's pages for
- * admins; and the Projects, each opening onto its own pages, with "+ New Project" for admins. A
- * Member who is not an admin sees the Projects they are in. On a phone it is the sheet the top
- * bar's button opens, as the app's sidebar is.
+ * admins. A Project's own settings are under the Project in the app. On a phone it is the sheet the
+ * top bar's button opens, as the app's sidebar is.
  */
 function SettingsNav() {
-  const me = useCurrentMe();
-  const admin = me.member.admin;
-  const projects = useProjects();
+  const admin = useCurrentMe().member.admin;
   const { setOpenMobile } = useSidebar();
-  const shown = admin ? (projects.data ?? []) : me.projects;
-  const inUrl = useMatch("/settings/projects/:key/*")?.params.key;
-  // Only the Project being viewed unfolds: on the Account and Organisation pages none does.
-  const open = shown.find((p) => p.key === inUrl);
   const closeOnLink = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("a")) setOpenMobile(false);
   };
 
   return (
-    <Sidebar aria-label="Settings">
+    <Sidebar aria-label="Settings" variant="inset">
       <SidebarHeader className="gap-0 p-2 pb-1" onClickCapture={closeOnLink}>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -109,19 +74,6 @@ function SettingsNav() {
               ))}
             </NavGroup>
           )}
-          <NavGroup label="Projects">
-            {shown.map((p) => (
-              <ProjectItem key={`${p.id}:${p.id === open?.id}`} project={p} open={p.id === open?.id} />
-            ))}
-            {admin && (
-              <SidebarMenuItem>
-                <SidebarMenuButton className="text-muted-foreground" onClick={() => sendIntent({ kind: "new-project" })}>
-                  <PlusIcon />
-                  <span>New Project</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
-          </NavGroup>
         </nav>
       </SidebarContent>
     </Sidebar>
@@ -150,44 +102,6 @@ function NavLink({ to, icon, label }: { to: string; icon: ReactNode; label: stri
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
-  );
-}
-
-/** A Project in Settings' nav, unfolding onto its pages. */
-function ProjectItem({ project, open: initiallyOpen }: { project: Project; open: boolean }) {
-  const [open, setOpen] = useState(initiallyOpen);
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <ProjectMark project={project} />
-        <span>{project.name}</span>
-        {open ? (
-          <ChevronDownIcon className="ml-auto size-3.5! text-muted-foreground" />
-        ) : (
-          <ChevronRightIcon className="ml-auto size-3.5! text-muted-foreground" />
-        )}
-      </SidebarMenuButton>
-      {open && (
-        <SidebarMenuSub aria-label={project.name} className="mx-0 translate-x-0 gap-0.5 border-l-0 px-0 py-0.5">
-          {projectPages.map((p) => (
-            <ProjectPageLink key={p.page} to={projectSettingsPath(project, p.page)} label={p.label} />
-          ))}
-        </SidebarMenuSub>
-      )}
-    </SidebarMenuItem>
-  );
-}
-
-function ProjectPageLink({ to, label }: { to: string; label: string }) {
-  const active = useMatch({ path: to, end: false }) !== null;
-  return (
-    <SidebarMenuSubItem>
-      <SidebarMenuSubButton asChild isActive={active} className="h-[30px] pl-[30px]">
-        <Link to={to} aria-current={active ? "page" : undefined}>
-          <span>{label}</span>
-        </Link>
-      </SidebarMenuSubButton>
-    </SidebarMenuSubItem>
   );
 }
 

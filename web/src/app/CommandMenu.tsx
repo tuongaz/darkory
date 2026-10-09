@@ -103,7 +103,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
           run: go(`/settings/organisation/${page.toLowerCase()}`),
         }))
       : []),
-    ...(project ? [{ id: "project-settings", title: `Settings › ${project.name}`, icon: <SettingsIcon />, run: go(projectSettingsPath(project)) }] : []),
+    ...(project ? [{ id: "project-settings", title: `${project.name} › Settings`, icon: <SettingsIcon />, run: go(projectSettingsPath(project)) }] : []),
   ].map((p) => ({ ...p, key: "" }));
   const actions: Named[] = [
     { id: "file-task", key: "", title: "File a Task", icon: <PlusIcon />, keys: ["C"], run: () => sendIntent({ kind: "file-task", project: project?.key }) },
@@ -121,8 +121,8 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
         {p.id === project?.id && <span className="ml-auto text-xs text-muted-foreground">Current</span>}
       </>
     ),
-    // To the same place in the other Project, or its Tasks.
-    run: go(projectPath(p, area ?? "tasks")),
+    // To the same place in the other Project, or its Tasks; from settings straight to its General.
+    run: go(area === "settings" ? projectSettingsPath(p) : projectPath(p, area ?? "tasks")),
   });
   const words = query.trim();
   // With nothing typed, the actions, the Projects and the places; else what matches, best group first.

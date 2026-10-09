@@ -7,7 +7,7 @@ import { liveClaim } from "@/work";
 /*
  * The Project's Workflow as `/v1` serves it (`WorkflowRecord`, `GET …/workflow`) bound to the shapes the
  * canvas draws (`components/workflow/model.ts`), and back again as the one body `PUT …/workflow`
- * takes. Every edit the Settings canvas makes is a function of the record (edits.ts); the body is
+ * takes. Every edit the editor's canvas makes is a function of the record (edits.ts); the body is
  * built from the result, so what the canvas shows and what is sent never differ.
  */
 

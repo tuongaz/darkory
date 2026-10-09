@@ -38,25 +38,36 @@ const keys = {
   abn: byTitle("Invoice PDF shows the wrong ABN"),
 };
 
+/** A Project's first Workflow's page (`/projects/:key/workflows/:id`): the line is one Workflow's, the list's address only lists them. */
+async function firstWorkflow(key) {
+  const { workflows } = await v1("GET", `/v1/projects/${key}/workflow`);
+  const first = [...workflows].sort((a, b) => a.position - b.position)[0];
+  if (!first) throw new Error(`${key} has no Workflow`);
+  return `/projects/${key}/workflows/${first.id}`;
+}
+const sam = await firstWorkflow("SAM");
+const big = await firstWorkflow("BIG");
+
 /** Each screen: its name, the mockup it answers, the size, how to reach it, and what stays different. */
 const screens = [
-  { name: "page", mock: "r2-final-1.png", size: "desktop", go: "/projects/SAM/workflows" },
+  { name: "page", mock: "r2-final-1.png", size: "desktop", go: sam },
   {
     name: "selected",
     mock: "r2-final-2.png",
     size: "desktop",
-    go: "/projects/SAM/workflows",
+    go: sam,
     act: async (page) => page.locator(`button[data-task="${keys.exportReactions}"]`).click(),
   },
-  { name: "blocking", mock: "r2-deps-6.png", size: "desktop", go: "/projects/SAM/workflows?view=blocking" },
-  { name: "big-line", mock: "d-11.png", size: "desktop", go: "/projects/BIG/workflows" },
-  { name: "big-blocking", mock: "r2-deps-8.png", size: "desktop", go: "/projects/BIG/workflows?view=blocking" },
+  { name: "blocking", mock: "r2-deps-6.png", size: "desktop", go: `${sam}?view=blocking` },
+  { name: "big-line", mock: "d-11.png", size: "desktop", go: big },
+  { name: "big-blocking", mock: "r2-deps-8.png", size: "desktop", go: `${big}?view=blocking` },
   {
     name: "scope-menu",
     mock: "r2-scope-6.png",
     size: "desktop",
-    go: "/projects/SAM/workflows",
+    go: sam,
     act: async (page) => {
+      // The ScopeChip's button, named "Scope: <what the line shows>".
       await page.getByRole("button", { name: /^Scope: / }).click();
       await page.getByRole("option", { name: new RegExp(keys.emoji) }).hover();
     },
@@ -64,9 +75,9 @@ const screens = [
   { name: "parent-line", mock: "r2-scope-3.png", size: "desktop", go: `/tasks/${keys.emoji}?view=line` },
   { name: "subtask-peek", mock: "r2-scope-4.png", size: "desktop", go: `/projects/SAM/tasks?view=board&task=${keys.picker}` },
   { name: "standalone", mock: "r2-scope-5.png", size: "desktop", go: `/tasks/${keys.abn}` },
-  { name: "editor", mock: "d-6.png", size: "desktop", go: "/settings/projects/SAM/workflows" },
+  { name: "editor", mock: "d-6.png", size: "desktop", go: `${sam}/edit` },
   { name: "inbox", mock: null, size: "desktop", go: "/inbox" },
-  { name: "phone", mock: "r2-final-5.png", size: "phone", go: "/projects/SAM/workflows" },
+  { name: "phone", mock: "r2-final-5.png", size: "phone", go: sam },
 ];
 
 const sizes = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };

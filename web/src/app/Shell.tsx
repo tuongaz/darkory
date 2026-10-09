@@ -68,7 +68,8 @@ export function Frame({ sidebar, children }: { sidebar: ReactNode; children: Rea
   return (
     <>
       {sidebar}
-      <SidebarInset className="min-w-0 overflow-hidden">
+      {/* The page is a card on the window ground from md up: a border, not the kit's shadow; on a phone it fills the screen. */}
+      <SidebarInset className="min-w-0 overflow-hidden md:peer-data-[variant=inset]:rounded-lg md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none">
         <UpdateBanner />
         <div id="main" className="flex min-h-0 flex-1 flex-col">
           {children}

@@ -11,9 +11,9 @@ screens, each in its own folder. Use these pieces rather than drawing your own, 
 |---|---|---|
 | `src/screens/board/` | M4b Tasks | `TasksPage` (`/projects/:key/tasks?view=list\|board`), `BoardDialogs` (File a Task, for the `file-task` intent; mounted once by the shell) |
 | `src/screens/task/` | M4b Task | `TaskPage` (`/tasks/:task`), `TaskPeek` (`?task=<key>` over any page). Both must call `useReportProject(task.project_id)`. The Shift panel, its terminal and `terminal.ts` are already here. |
-| `src/screens/workflow/` | M4c Workflow | `WorkflowsPage` (`/projects/:key/workflows`, the list, or the one Workflow's page in place), `WorkflowPage` (`/projects/:key/workflows/:workflow`, live), `WorkflowsSettingsPage` (`/settings/projects/:key/workflows`, Settings' list), `WorkflowSettingsPage` (`/settings/projects/:key/workflows/:workflow`, editing, drawn inside Settings' frame) |
+| `src/screens/workflow/` | M4c Workflow | `WorkflowsPage` (`/projects/:key/workflows`, the list with its acts), `WorkflowPage` (`/projects/:key/workflows/:workflow`, live), `WorkflowEditPage` (`/projects/:key/workflows/:workflow/edit`, editing, in the app) |
 | `src/screens/inbox/` | M4d Inbox | `InboxPage` (`/inbox`, after the Install checklist), `MyWorkPage` (`/my-work`), `AgentsPage` (`/projects/:key/agents`, `?agent=<name>` opens one), `ActivityPage` (`/projects/:key/activity`) |
-| `src/screens/settings/` | M4a Settings | `SettingsLayout` (`/settings/*`, its own nav), the Account, Organisation and Project pages |
+| `src/screens/settings/` | M4a Settings | `SettingsLayout` (`/settings/*`, its own nav of the Account and the Organisation's pages), those pages, and a Project's settings in the app (`/projects/:key/settings/general\|members\|labels\|workspaces`, in `ProjectSettingsFrame`, the pages as tabs on the bar) |
 | `src/app/`, `src/api/`, `src/components/`, `src/lib/` | M4a | the shell, the route table, the API layer, the primitives |
 
 `src/app/routes.tsx` is the only file that imports the screens. Keep each export's name; put
@@ -25,7 +25,7 @@ and so on. What their R3 phase added (`docs/build/agents-plan.md`) carries over 
 
 | Screen | Holds |
 |---|---|
-| Settings › a Project › Workspaces | Each Workspace: name, kind, path (cut in the middle so its folder shows), mode (Local or Pull request), default branch, the Projects it is the default of, the open Tasks naming it. |
+| A Project › Settings › Workspaces | Each Workspace: name, kind, path (cut in the middle so its folder shows), mode (Local or Pull request), default branch, the Projects it is the default of, the open Tasks naming it. |
 | Settings › Agents, an agent | The Agent card: command (its placeholders under it), arguments, model, environment, progress file, Paused, Unattended; each saved alone (`PATCH /v1/members/{member}/agent`). |
 | File a Task (`BoardDialogs`) | Workspaces (`MultiCombobox`, chips), starting at the Project's default (a Subtask: its Parent's); not shown while the Install has none. |
 | A Task's properties (`task/`) | The Task's Workspaces and branch (`taskBranch` in `@/lib/branch`, `main-7-support-emoji`, the plan's name until M3's Runner lands). |
@@ -46,7 +46,7 @@ and so on. What their R3 phase added (`docs/build/agents-plan.md`) carries over 
   the others disabled since /v1 has no switch; then, after a line, Account settings (`/settings/account`).
 - **Inbox, My work**, then **Projects**: the Projects the Member is in (`me.projects`), and the
   current Project when the Member is not in it, each a row (mark, name, chevron) unfolding onto
-  Tasks, Workflow, Agents (its live count), Activity, Settings. The current Project unfolds whenever
+  Tasks, Workflows, Agents (its live count), Activity, Settings. The current Project unfolds whenever
   it becomes current; what else is unfolded or folded is remembered by the browser
   (`darkory.sidebar.projects`). "+ New Project" ends the group for admins. The address decides the
   current Project; ⌘K lists every Project to switch to.
@@ -61,15 +61,30 @@ with the Project (`projectCrumb(project)` from `@/app/crumbs`):
 ```tsx
 <TopBar
   crumbs={[projectCrumb(project, false), { label: "Tasks" }]}
-  view={<ListBoardSwitch />}            // the segmented switcher, after the crumbs
+  view={<ListBoardSwitch />}            // the segmented switcher, at the left of the second row
   actions={<><FilterButton /><DisplayButton /></>}
-  primary={<Button><PlusIcon />File Task<Kbd>C</Kbd></Button>}   // the screen's one primary
+  primary={<BarAction icon={<PlusIcon />} label="File Task" />}   // the screen's one primary
 />
 <Content pad>…</Content>                 // scrolls; `pad` is the kit's 20px × 24px
 ```
 
 A Task's page: `[projectCrumb(project), { label: "Tasks", to: projectPath(project, "tasks"), wide: true }, { label: key }]`.
-Settings' pages: `[{ label: "Settings" }, { label: project.name }, { label: "Workflow" }]`.
+A Project's settings: `[projectCrumb(project), { label: "Settings" }]`, the pages as tabs on the second row.
+The Organisation's and the Account's settings pages: `[{ label: "Settings" }, { label: page }]`.
+
+The bar is one header of two rows. The first is where you are: the crumbs, and on a phone the
+button that opens the sidebar. The second, `role="group"` named "Page", comes when the page has any
+of it: the view switch, the scope and the filter chips at the left (`view`), the actions and the
+one primary at the right. A page with nothing for it has the first row alone.
+
+What a new page puts on the second row follows the row's width, never the viewport's:
+
+- Every act there is a `BarAction` (`@/app/TopBar`): its icon, then its label once the row has
+  42rem; on a narrower row a 32px icon square, still named by its label.
+- A view too long for the row scrolls inside it under a fade at its right edge, which clears once
+  scrolled to the end; the acts stay at the right.
+- Nothing on the second row hides by a viewport breakpoint (`sm:`, `lg:`); what steps aside does so
+  by the row's container (`@2xl/page:`).
 
 The first crumb reads strong (the area), the rest muted. On a phone the TopBar carries the button
 that opens the sidebar (Settings' nav, in Settings). Nothing may make the page scroll sideways at
@@ -78,14 +93,13 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 
 ## Shell services
 
-- **The Project** (`@/app/currentProject`): under `/projects/:key/…` and
-  `/settings/projects/:key/…` a page calls `useRouteProject()` (the `Project`; `ProjectScope` has
-  already refused a key that names none). Anywhere, `useCurrentProject()` is the Project the app is
+- **The Project** (`@/app/currentProject`): under `/projects/:key/…` a page calls
+  `useRouteProject()` (the `Project`; `ProjectScope` has already refused a key that names none). Anywhere, `useCurrentProject()` is the Project the app is
   in: the address's, else the one a Task's page or peek reported, else the one last shown in this
   browser, else the Member's first, else the Organisation's first. A Task's page and peek call
   `useReportProject(task.project_id)` so the current Project follows the record. Addresses:
-  `projectPath(project, "tasks" | "workflow" | "agents" | "activity", view?)`,
-  `projectSettingsPath(project, "general" | "workflow" | "members" | "labels" | "workspaces")`,
+  `projectPath(project, "tasks" | "workflows" | "agents" | "activity" | "settings", view?)`,
+  `projectSettingsPath(project, "general" | "members" | "labels" | "workspaces")`,
   `findProject(projects, idOrKey)`.
 - **Intents** (`@/app/intents`): `sendIntent(intent)`, `useIntent(kind, handler)`; the DOM event
   is `darkory:intent`.
@@ -107,7 +121,7 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
   toast naming the rule ("Only builder, or whoever may take it back, moves WEB-17").
 - **Keys** (`shortcutList` in `@/app/shortcuts`, which the ? sheet lists), and no others: ⌘K /
   Ctrl K search, C file a Task, G then P the current Project's row in the sidebar, G then I / M the
-  Inbox and My work, G then T / B / W / A the current Project's Tasks, board, Workflow and Agents,
+  Inbox and My work, G then T / B / W / A the current Project's Tasks, board, Workflows and Agents,
   G then S Settings (an admin's Organisation, anyone else's Account), O then W Switch Organisation, ⌥⇧Q (Alt Shift Q) Log out, ? the shortcuts;
   on a list of Tasks J / ↓ and K / ↑ move the ring, Enter opens the ringed Task's peek, Esc closes
   it and returns the focus to its row, and with the peek open J and K move it along the list. They

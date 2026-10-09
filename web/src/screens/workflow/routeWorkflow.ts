@@ -6,8 +6,8 @@ import { toShort } from "@/lib/shortid";
 import { same } from "./bind";
 
 /**
- * The Workflow an address names (`/projects/:key/workflows/:workflow`, and its editor's under
- * Settings): its id, read long or short, else its name, ignoring case. Undefined when it names
+ * The Workflow an address names (`/projects/:key/workflows/:workflow`, and its editor's at
+ * `…/edit`): its id, read long or short, else its name, ignoring case. Undefined when it names
  * none of `workflows` (one since deleted).
  */
 export function workflowNamed<W extends Pick<Workflow, "id" | "name">>(workflows: readonly W[], ref: string): W | undefined {

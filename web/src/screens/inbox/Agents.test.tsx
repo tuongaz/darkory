@@ -90,6 +90,12 @@ describe("a Project's Agents", () => {
     expect(screen.queryByRole("link", { name: "ada" })).not.toBeInTheDocument();
   });
 
+  it("of a Project with no agent, points an admin at the Project's Members", async () => {
+    recordApi({ tasks: [], extra: { "GET /v1/projects/:project": { project: web, members: [ada] } } });
+    renderApp("/projects/WEB/agents");
+    expect(await screen.findByRole("link", { name: "Add a Member" })).toHaveAttribute("href", "/projects/WEB/settings/members");
+  });
+
   it("reads a paused agent's Paused beside its name and its other Projects whole on the line under it", async () => {
     agentsApi({ paused: true });
     renderApp("/projects/WEB/agents");

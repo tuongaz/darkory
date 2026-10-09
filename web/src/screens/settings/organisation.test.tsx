@@ -399,21 +399,12 @@ describe("Settings › Account's CLI line", () => {
 });
 
 describe("Settings › nav", () => {
-  it("unfolds only the Project being viewed: none on an Organisation page", async () => {
+  it("lists the Account and the Organisation's pages, and no Projects: a Project's settings are under the Project", async () => {
     mockApi({ ...signedIn(), ...details });
     renderApp("/settings/organisation/agents");
     const nav = await screen.findByRole("navigation", { name: "Settings pages" });
-    const projects = within(nav).getByRole("list", { name: "Projects" });
-    await within(projects).findByRole("button", { name: "Web" });
-    expect(within(projects).getAllByRole("button").filter((b) => b.getAttribute("aria-expanded") === "true")).toEqual([]);
-    expect(within(nav).queryByRole("list", { name: "Web" })).not.toBeInTheDocument();
-  });
-
-  it("unfolds the Project whose page is open, and only it", async () => {
-    mockApi({ ...signedIn(), ...details });
-    renderApp("/settings/projects/OPS/general");
-    const nav = await screen.findByRole("navigation", { name: "Settings pages" });
-    expect(await within(nav).findByRole("button", { name: "Ops" })).toHaveAttribute("aria-expanded", "true");
-    expect(within(nav).getByRole("button", { name: "Web" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(nav).getAllByRole("link").map((l) => l.textContent)).toEqual(["Account", "Members", "Agents", "Skills", "Labels", "Install"]);
+    expect(within(nav).queryByRole("list", { name: "Projects" })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole("button")).not.toBeInTheDocument();
   });
 });

@@ -3,9 +3,9 @@ import { useCallback, type MouseEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { Activity, Member, MemberDetail, Project, RunnerSession, Task } from "@/api/client";
 import { useDirectory, useOpenTasks, useProject, useRunnerSessions, useWorkflow } from "@/api/queries";
-import { projectPath, useRouteProject } from "@/app/currentProject";
+import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
-import { Content, TopBar } from "@/app/TopBar";
+import { BarAction, Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
@@ -97,12 +97,9 @@ export function AgentsPage() {
         crumbs={[projectCrumb(project), { label: "Agents" }]}
         primary={
           me.member.admin && (
-            <Button asChild>
-              <Link to="/settings/organisation/agents?new=1">
-                <PlusIcon />
-                <span className="hidden sm:inline">New agent</span>
-              </Link>
-            </Button>
+            <BarAction asChild icon={<PlusIcon />} label="New agent">
+              <Link to="/settings/organisation/agents?new=1" />
+            </BarAction>
           )
         }
       />
@@ -124,7 +121,7 @@ export function AgentsPage() {
                 action={
                   me.member.admin && (
                     <Button asChild variant="outline">
-                      <Link to={`/settings/projects/${encodeURIComponent(project.key)}/members`}>Add a Member</Link>
+                      <Link to={projectSettingsPath(project, "members")}>Add a Member</Link>
                     </Button>
                   )
                 }

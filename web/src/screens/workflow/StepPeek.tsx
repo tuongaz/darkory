@@ -1,8 +1,8 @@
-import { ArrowRightIcon, SettingsIcon, TriangleAlertIcon } from "lucide-react";
+import { ArrowRightIcon, PencilIcon, TriangleAlertIcon } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import type { Project } from "@/api/client";
 import { useMembers, useRunnerSessions, useTasks } from "@/api/queries";
-import { workflowsSettingsPath } from "@/app/currentProject";
+import { workflowEditPath } from "@/app/currentProject";
 import { peekParam } from "@/app/peek";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
@@ -26,8 +26,8 @@ export const stepParam = "step";
 
 /**
  * A Step opened from the live canvas: the Tasks at it now (each opens its own peek), who takes
- * them, the median time a Task spends there, and the outcomes out of it; for an admin, Edit in
- * Settings, which opens the same Step on the editing canvas.
+ * them, the median time a Task spends there, and the outcomes out of it; for an admin, Edit, which
+ * opens the same Step in its Workflow's editor (`/projects/:key/workflows/:workflow/edit`).
  */
 export function StepPeek({ project, workflow, step, onClose }: { project: Project; workflow: Workflow; step: Step; onClose: () => void }) {
   const admin = useCurrentMe().member.admin;
@@ -46,9 +46,9 @@ export function StepPeek({ project, workflow, step, onClose }: { project: Projec
       actions={
         admin && (
           <Button asChild variant="outline" size="xs">
-            <Link to={workflowsSettingsPath(project, step.workflow_id, { [stepParam]: step.id })}>
-              <SettingsIcon />
-              Edit in Settings
+            <Link to={workflowEditPath(project, step.workflow_id, { [stepParam]: step.id })} aria-label={`Edit ${step.name}`}>
+              <PencilIcon />
+              Edit
             </Link>
           </Button>
         )

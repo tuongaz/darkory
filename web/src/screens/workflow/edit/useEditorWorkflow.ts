@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Project } from "@/api/client";
-import { workflowsSettingsPath } from "@/app/currentProject";
+import { workflowEditPath } from "@/app/currentProject";
 import { toShort } from "@/lib/shortid";
 import { useGoToWorkflow, useWorkflowSegment, workflowNamed } from "../routeWorkflow";
 import { stepParam } from "../StepPeek";
@@ -8,7 +8,7 @@ import type { RecordWorkflow, Draft } from "./draft";
 import type { WorkflowRecord } from "../bind";
 
 /**
- * The Workflow the editor shows (`/settings/projects/:key/workflows/:workflow`): the segment read
+ * The Workflow the editor shows (`/projects/:key/workflows/:workflow/edit`): the segment read
  * against the record as read (`base`), by id, long or short, or by name ignoring case; else, by
  * its id, one only the draft has (a Step moved into a Workflow not saved yet). Read against the
  * record, a rename in the draft never loses the address. `redirect` is the id when the segment
@@ -28,7 +28,7 @@ export function useEditorWorkflow(
   const id = read?.id ?? (segment && draft ? draft.wf.workflows.find((w) => w.id === toShort(segment) || w.id === segment)?.id : undefined);
   const workflow = id ? draft?.wf.workflows.find((w) => w.id === id) : undefined;
   const redirect = read && segment !== read.id ? read.id : undefined;
-  const goTo = useGoToWorkflow((w) => workflowsSettingsPath(project, w), project, { remember: false });
+  const goTo = useGoToWorkflow((w) => workflowEditPath(project, w), project, { remember: false });
   const pick = useCallback(
     (next: string, step?: string) =>
       goTo(next, {

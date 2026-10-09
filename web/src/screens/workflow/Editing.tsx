@@ -46,7 +46,7 @@ import { useEditorWorkflow } from "./edit/useEditorWorkflow";
 import { WorkflowName } from "./edit/WorkflowName";
 
 /**
- * Settings › a Project › Workflows › one Workflow (the address names it): its name, a field an
+ * One Workflow's editor, `/projects/:key/workflows/:workflow/edit` (the address names it): its name, a field an
  * admin renames it in; its line (behind a toggle on a phone); then its Steps as a text list beside
  * the picked Step's panel. None is picked until the address names one or a
  * Step is picked — in the list, with ↑/↓, or on the line — which opens it in the panel and puts
@@ -260,7 +260,7 @@ export function EditingWorkflow({
           onDone={() => editor?.settle()}
         />
       )}
-      <section aria-label="Preview" className="flex-none border-b bg-sidebar">
+      <section aria-label="Preview" className="flex-none border-b bg-muted">
         <div className="flex items-center gap-2 px-5 pt-2.5 text-xs text-muted-foreground max-md:px-4 max-md:py-2.5">
           {phone ? (
             <button

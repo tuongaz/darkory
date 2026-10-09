@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { web } from "@/test/fixtures";
 import { projectCrumb } from "./crumbs";
-import { type Crumb, TopBar } from "./TopBar";
+import { BarAction, type Crumb, TopBar } from "./TopBar";
 
 // jsdom lays nothing out: these check the bar's structure only (what it renders, the `sm:` classes).
 // Playwright's test 9 (workflows.spec.ts, the phone boards at 390 px) guards the phone link's name
@@ -53,5 +53,50 @@ describe("TopBar on a phone, beside the Workflow chip", () => {
     expect(phoneHidden(within(link).getByText(web.name))).toBe(false);
     expect(link.querySelector("[data-hue]")!.parentElement).toBe(link);
     expect(phoneHidden(within(nav).getByText("/"))).toBe(false);
+  });
+});
+
+describe("TopBar in two rows", () => {
+  it("draws the view, the actions and the primary on a second row inside the header, under the crumbs", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} view={<span>View</span>} actions={<button type="button">Filter</button>} primary={<button type="button">Save</button>} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    const header = screen.getByRole("banner");
+    const row = within(header).getByRole("group", { name: "Page" });
+    expect(row.compareDocumentPosition(within(header).getByRole("navigation", { name: "Breadcrumb" })) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(within(row).getByText("View")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Filter" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("hides its acts' labels by the row's width, and fades the view only when it overflows", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} view={<span>View</span>} primary={<BarAction icon={<svg aria-hidden />} label="File Task" />} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    const row = screen.getByRole("group", { name: "Page" });
+    expect(row).toHaveClass("@container/page");
+    const act = within(row).getByRole("button", { name: "File Task" });
+    expect(within(act).getByText("File Task")).toHaveClass("hidden", "@2xl/page:inline");
+    // jsdom lays nothing out, so nothing overflows: a fitting view is never faded.
+    expect(within(row).getByText("View").parentElement).not.toHaveAttribute("data-overflow");
+  });
+
+  it("has no second row when the page has nothing for it", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
   });
 });
