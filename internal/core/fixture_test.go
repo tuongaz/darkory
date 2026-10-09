@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -72,13 +73,23 @@ func (f *fixture) project(key string) string {
 	return p.Project.ID
 }
 
-// chain replaces the Project's Workflow with steps, each a name and a Skill ("" for a hold), in
-// order, each leading to the next ("pass") and the last into Done ("pass").
+// inWork is in with one Workflow, Work, holding every Step of it.
+func inWork(in core.WorkflowsInput) core.WorkflowsInput {
+	in.Workflows = []core.WorkflowInput{{Name: core.WorkflowFirstName, Position: 1}}
+	in.Steps = slices.Clone(in.Steps)
+	for i := range in.Steps {
+		in.Steps[i].Workflow = core.WorkflowFirstName
+	}
+	return in
+}
+
+// chain replaces the Project's Workflows with one, Work, of steps, each a name and a Skill (""
+// for a hold), in order, each leading to the next ("pass") and the last into Done ("pass").
 func (f *fixture) chain(project string, steps ...[2]string) core.Workflows {
 	f.t.Helper()
-	var in core.WorkflowsInput
+	in := core.WorkflowsInput{Workflows: []core.WorkflowInput{{Name: core.WorkflowFirstName, Position: 1}}}
 	for i, st := range steps {
-		si := core.StepInput{Name: st[0], Position: int64(i + 1)}
+		si := core.StepInput{Workflow: core.WorkflowFirstName, Name: st[0], Position: int64(i + 1)}
 		if st[1] != "" {
 			si.Skill = ptrStr(st[1])
 		}

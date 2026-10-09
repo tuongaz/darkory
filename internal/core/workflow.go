@@ -121,7 +121,8 @@ func (w Workflows) findWorkflow(ref string) (Workflow, bool) {
 	return Workflow{}, false
 }
 
-// stepOf resolves ref to a Step of the Project's Workflow, refusing a name it does not have.
+// stepOf resolves ref to a Step of the Project, in any of its Workflows, refusing a name it does
+// not have.
 func stepOf(ctx context.Context, r store.Reader, orgID, projectID, ref string) (Step, error) {
 	if strings.TrimSpace(ref) == "" {
 		return Step{}, refuse(CodeInvalid, "a Step reference is empty")
@@ -132,7 +133,7 @@ func stepOf(ctx context.Context, r store.Reader, orgID, projectID, ref string) (
 	}
 	st, ok := w.find(ref)
 	if !ok {
-		return Step{}, refuse(CodeNotFound, "the Workflow has no Step %q", ref)
+		return Step{}, refuse(CodeNotFound, "the Project has no Step %q", ref)
 	}
 	return st, nil
 }
@@ -270,28 +271,34 @@ var emptyWorkflow = struct {
 // row, at its position's place.
 const stepSpacing = 448
 
-// seedWorkflow gives a new Project its first Workflow inside a write: the default one, the empty
-// one, or a copy of another Project's.
+// seedWorkflow gives a new Project its first Workflows inside a write: the default one or the
+// empty one, each a single Workflow named Work, or a copy of another Project's, Workflows and all.
 func seedWorkflow(t *tx, projectID, kind, from string) error {
-	var steps []StepInput
-	var connectors []ConnectorInput
+	in := WorkflowsInput{Workflows: []WorkflowInput{{Name: WorkflowFirstName, Position: 1}}}
 	switch kind {
 	case WorkflowCopy:
 		w, err := getWorkflow(t.ctx, t, t.caller.OrgID, from)
 		if err != nil {
 			return err
 		}
+		in.Workflows = nil
+		wfName := map[string]string{}
+		for _, wf := range w.Workflows {
+			wfName[wf.ID] = wf.Name
+			in.Workflows = append(in.Workflows, WorkflowInput{Name: wf.Name, Position: wf.Position})
+		}
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name
-			steps = append(steps, StepInput{Name: s.Name, Skill: s.SkillID, Position: s.Position, X: ptr(s.X), Y: ptr(s.Y)})
+			in.Steps = append(in.Steps, StepInput{Workflow: wfName[s.WorkflowID], Name: s.Name, Skill: s.SkillID, Position: s.Position,
+				X: ptr(s.X), Y: ptr(s.Y)})
 		}
 		for _, k := range w.Connectors {
 			ci := ConnectorInput{From: names[k.FromStepID], Name: k.Name, Position: k.Position}
 			if k.ToStepID != nil {
 				ci.To = ptr(names[*k.ToStepID])
 			}
-			connectors = append(connectors, ci)
+			in.Connectors = append(in.Connectors, ci)
 		}
 	default:
 		plan := defaultWorkflow
@@ -299,25 +306,25 @@ func seedWorkflow(t *tx, projectID, kind, from string) error {
 			plan = emptyWorkflow
 		}
 		for i, ps := range plan.steps {
-			in := StepInput{Name: ps.name, Position: int64(i + 1), X: ptr(ps.x), Y: ptr(ps.y)}
+			si := StepInput{Workflow: WorkflowFirstName, Name: ps.name, Position: int64(i + 1), X: ptr(ps.x), Y: ptr(ps.y)}
 			if ps.skill != "" {
 				id, err := ensureSkill(t, ps.skill)
 				if err != nil {
 					return err
 				}
-				in.Skill = &id
+				si.Skill = &id
 			}
-			steps = append(steps, in)
+			in.Steps = append(in.Steps, si)
 		}
 		for _, pc := range plan.connectors {
 			ci := ConnectorInput{From: pc.from, Name: pc.name}
 			if pc.to != "" {
 				ci.To = ptr(pc.to)
 			}
-			connectors = append(connectors, ci)
+			in.Connectors = append(in.Connectors, ci)
 		}
 	}
-	_, err := replaceWorkflow(t, projectID, WorkflowsInput{Steps: steps, Connectors: connectors})
+	_, err := replaceWorkflow(t, projectID, in)
 	return err
 }
 
@@ -397,9 +404,9 @@ type StepInput struct {
 }
 
 // ConnectorInput is one Connector of the graph being set. From and To name Steps of the body by
-// id or name, To in any of its Workflows; To nil is Done. ID names one the Workflow has now, and may be left out:
-// a Connector out of the same Step with the same name keeps its id. Position is its place among
-// the Connectors out of its Step, as a Step's is among the Steps.
+// id or name, To in any of its Workflows; To nil is Done. ID names one the Project has now, and
+// may be left out: a Connector out of the same Step with the same name keeps its id. Position is
+// its place among the Connectors out of its Step, as a Step's is among its Workflow's Steps.
 type ConnectorInput struct {
 	ID       string
 	From     string
@@ -408,13 +415,16 @@ type ConnectorInput struct {
 	Position int64
 }
 
-// SetWorkflow replaces a Project's Workflow with w (admin) and returns it as GetWorkflow does,
-// with its live facts. A Step left out is deleted; the open Tasks at it go where w.Moves says,
-// and are refused step_in_use when it does not say. A Step's Skill may change: the Tasks at it
-// keep their place, and the next `next` reads the new Skill. A connector naming a Step the new
-// Workflow does not have, two Connectors out of one Step with one name, and two Steps, or two
-// Connectors out of one Step, at one position are refused invalid. The Tasks moved keep their
-// Claims. A Workflow may have no Steps: filing in the Project is then refused no_step.
+// SetWorkflow replaces a Project's Workflows with w, its whole graph (admin), and returns them as
+// GetWorkflow does, with their live facts. A Workflow left out is deleted, with the Steps the body
+// leaves out; a Step left out is deleted, and the open Tasks at it go where w.Moves says, to a
+// Step of any Workflow, and are refused step_in_use when it does not say. A Step's Skill and
+// Workflow may change: the Tasks at it keep their place, and the next `next` reads the new Skill.
+// No Workflow at all, two Workflows named alike, a Step naming a Workflow not in the body, a
+// Connector naming a Step not in it, two Connectors out of one Step with one name, and two
+// Workflows, two Steps of one Workflow or two Connectors out of one Step at one position are
+// refused invalid. The Tasks moved keep their Claims. A Workflow may have no Steps: filing in a
+// Project with none at all is then refused no_step.
 func (s *Service) SetWorkflow(ctx context.Context, c *auth.Caller, projectRef string, w WorkflowsInput, idem Idem) (WorkflowsDetail, error) {
 	if err := mustAdmin(c); err != nil {
 		return WorkflowsDetail{}, err
@@ -514,17 +524,18 @@ func changeTakers(t *tx, projectID string, w WorkflowsInput) error {
 	return nil
 }
 
-// resolvedWorkflow is a WorkflowInput checked against the record: every Step and Connector with
-// its id, Skill and place.
+// resolvedWorkflow is a WorkflowsInput checked against the record: every Workflow, Step and
+// Connector with its id, Skill and place, each list in the Project's order.
 type resolvedWorkflow struct {
+	workflows  []Workflow
 	steps      []Step
 	connectors []Connector
 	// moves maps a deleted Step's id to the id of the Step its Tasks go to.
 	moves map[string]string
 }
 
-// replaceWorkflow puts w in place of the Project's Workflow inside a write, recording
-// workflow.changed, and returns it; an unchanged Workflow writes nothing.
+// replaceWorkflow puts w in place of the Project's Workflows inside a write, recording
+// workflow.changed, and returns them; unchanged Workflows write nothing.
 func replaceWorkflow(t *tx, projectID string, w WorkflowsInput) (Workflows, error) {
 	ctx, org := t.ctx, t.caller.OrgID
 	current, err := getWorkflow(ctx, t, org, projectID)
@@ -545,6 +556,16 @@ func replaceWorkflow(t *tx, projectID string, w WorkflowsInput) (Workflows, erro
 			deleted = append(deleted, st)
 		}
 	}
+	keptWF := map[string]bool{}
+	for _, wf := range next.workflows {
+		keptWF[wf.ID] = true
+	}
+	var deletedWF []Workflow
+	for _, wf := range current.Workflows {
+		if !keptWF[wf.ID] {
+			deletedWF = append(deletedWF, wf)
+		}
+	}
 	at := map[string][]string{}
 	for _, st := range deleted {
 		ids, err := collect(ctx, t, func(row interface{ Scan(...any) error }) (string, error) {
@@ -563,10 +584,28 @@ func replaceWorkflow(t *tx, projectID string, w WorkflowsInput) (Workflows, erro
 		return current, nil
 	}
 
-	// Names are unique in a Project, so a rename lands only once every Step there now has let go
-	// of its name: each first takes its id, which no name can be. Connectors are put back whole.
+	// Names are unique in a Project, so a rename lands only once every Workflow, and every Step,
+	// there now has let go of its name: each first takes its id, which no name can be. Connectors
+	// are put back whole. A kept Step takes its Workflow before a deleted Workflow goes, as it may
+	// have been in one.
 	if _, err := t.Exec(ctx, `DELETE FROM connectors WHERE org_id = $1 AND project_id = $2`, org, projectID); err != nil {
 		return Workflows{}, err
+	}
+	if _, err := t.Exec(ctx, `UPDATE workflows SET name = id WHERE org_id = $1 AND project_id = $2`, org, projectID); err != nil {
+		return Workflows{}, err
+	}
+	wasWF := map[string]bool{}
+	for _, wf := range current.Workflows {
+		wasWF[wf.ID] = true
+	}
+	for _, wf := range next.workflows {
+		if wasWF[wf.ID] {
+			continue
+		}
+		if _, err := t.Exec(ctx, `INSERT INTO workflows (id, org_id, project_id, name, position, created_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+			wf.ID, org, projectID, wf.ID, wf.Position, ms(t.now)); err != nil {
+			return Workflows{}, err
+		}
 	}
 	if _, err := t.Exec(ctx, `UPDATE steps SET name = id WHERE org_id = $1 AND project_id = $2`, org, projectID); err != nil {
 		return Workflows{}, err
@@ -579,8 +618,8 @@ func replaceWorkflow(t *tx, projectID string, w WorkflowsInput) (Workflows, erro
 		if was[st.ID] {
 			continue
 		}
-		if _, err := t.Exec(ctx, `INSERT INTO steps (id, org_id, project_id, name, skill_id, position, x, y, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, st.ID, org, projectID, st.ID, st.SkillID, st.Position, st.X, st.Y, ms(t.now)); err != nil {
+		if _, err := t.Exec(ctx, `INSERT INTO steps (id, org_id, project_id, workflow_id, name, skill_id, position, x, y, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, st.ID, org, projectID, st.WorkflowID, st.ID, st.SkillID, st.Position, st.X, st.Y, ms(t.now)); err != nil {
 			return Workflows{}, err
 		}
 	}
@@ -596,6 +635,11 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, st.ID, org, projectID, st.ID, st.S
 			}
 			moved++
 		}
+		// The Tasks that ended at it follow, so each lands on the board of the Workflow it is
+		// moved into; with no move, deleting the Step sets theirs null.
+		if _, err := t.Exec(ctx, `UPDATE tasks SET last_step_id = $1 WHERE org_id = $2 AND last_step_id = $3`, to, org, st.ID); err != nil {
+			return Workflows{}, err
+		}
 	}
 	for _, st := range deleted {
 		if _, err := t.Exec(ctx, `DELETE FROM steps WHERE org_id = $1 AND id = $2`, org, st.ID); err != nil {
@@ -603,8 +647,18 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`, st.ID, org, projectID, st.ID, st.S
 		}
 	}
 	for _, st := range next.steps {
-		if _, err := t.Exec(ctx, `UPDATE steps SET name = $1, skill_id = $2, position = $3, x = $4, y = $5 WHERE org_id = $6 AND id = $7`,
-			st.Name, st.SkillID, st.Position, st.X, st.Y, org, st.ID); err != nil {
+		if _, err := t.Exec(ctx, `UPDATE steps SET name = $1, skill_id = $2, workflow_id = $3, position = $4, x = $5, y = $6 WHERE org_id = $7 AND id = $8`,
+			st.Name, st.SkillID, st.WorkflowID, st.Position, st.X, st.Y, org, st.ID); err != nil {
+			return Workflows{}, err
+		}
+	}
+	for _, wf := range deletedWF {
+		if _, err := t.Exec(ctx, `DELETE FROM workflows WHERE org_id = $1 AND id = $2`, org, wf.ID); err != nil {
+			return Workflows{}, err
+		}
+	}
+	for _, wf := range next.workflows {
+		if _, err := t.Exec(ctx, `UPDATE workflows SET name = $1, position = $2 WHERE org_id = $3 AND id = $4`, wf.Name, wf.Position, org, wf.ID); err != nil {
 			return Workflows{}, err
 		}
 	}
@@ -619,15 +673,19 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, k.ID, org, projectID, k.FromStepID, k.
 	if err != nil {
 		return Workflows{}, err
 	}
+	workflows := make([]map[string]any, len(after.Workflows))
+	for i, wf := range after.Workflows {
+		workflows[i] = map[string]any{"id": wf.ID, "name": wf.Name, "position": wf.Position}
+	}
 	steps := make([]map[string]any, len(after.Steps))
 	for i, st := range after.Steps {
-		steps[i] = map[string]any{"id": st.ID, "name": st.Name, "skill_id": st.SkillID, "position": st.Position}
+		steps[i] = map[string]any{"id": st.ID, "workflow_id": st.WorkflowID, "name": st.Name, "skill_id": st.SkillID, "position": st.Position}
 	}
 	connectors := make([]map[string]any, len(after.Connectors))
 	for i, k := range after.Connectors {
 		connectors[i] = map[string]any{"id": k.ID, "from": k.FromStepID, "to": k.ToStepID, "name": k.Name}
 	}
-	payload := map[string]any{"steps": steps, "connectors": connectors}
+	payload := map[string]any{"workflows": workflows, "steps": steps, "connectors": connectors}
 	if len(next.moves) > 0 {
 		payload["moves"], payload["tasks_moved"] = next.moves, moved
 	}
@@ -637,15 +695,101 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, k.ID, org, projectID, k.FromStepID, k.
 	return after, nil
 }
 
-// resolveWorkflow checks w on its own and against the Workflow it replaces and the Skills.
+// resolveWorkflows checks the body's Workflows on their own and against the Project's now, and
+// returns them with their ids and places, by position.
+func resolveWorkflows(current Workflows, in []WorkflowInput) ([]Workflow, error) {
+	if len(in) == 0 {
+		return nil, refuse(CodeInvalid, "no Workflow at all; a Project has one at least")
+	}
+	at, err := places("two Workflows", len(in), func(i int) int64 { return in[i].Position })
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Workflow, len(in))
+	names := map[string]bool{}
+	given := map[string]bool{}
+	for i, wi := range in {
+		name := strings.TrimSpace(wi.Name)
+		if err := validWorkflowName("a Workflow's name", name); err != nil {
+			return nil, err
+		}
+		if names[strings.ToLower(name)] {
+			return nil, refuse(CodeInvalid, "two Workflows are named %q; names are unique, ignoring case", name)
+		}
+		names[strings.ToLower(name)] = true
+		out[i] = Workflow{Name: name, Position: at[i]}
+		if wi.ID == "" {
+			continue
+		}
+		id := shortid.Canonical(wi.ID) // either form (ADR 0017)
+		if !slices.ContainsFunc(current.Workflows, func(wf Workflow) bool { return wf.ID == id }) {
+			return nil, refuse(CodeInvalid, "the Project has no Workflow %s; a new Workflow has no id", id)
+		}
+		if given[id] {
+			return nil, refuse(CodeInvalid, "Workflow %s is in the body twice", id)
+		}
+		given[id] = true
+		out[i].ID = id
+	}
+	// A Workflow sent without its id keeps the id of the one with its name, so a body put back as
+	// read, or a preset run again, is unchanged; unless another Workflow of the body carries that
+	// id, as when Work is renamed and a new Work added in one write.
+	for i := range out {
+		if out[i].ID != "" {
+			continue
+		}
+		for _, cur := range current.Workflows {
+			if !given[cur.ID] && strings.EqualFold(cur.Name, out[i].Name) {
+				out[i].ID, given[cur.ID] = cur.ID, true
+				break
+			}
+		}
+		if out[i].ID == "" {
+			out[i].ID = newID()
+		}
+	}
+	slices.SortFunc(out, func(a, b Workflow) int { return cmp.Compare(a.Position, b.Position) })
+	return out, nil
+}
+
+// resolveWorkflow checks w on its own and against the Workflows it replaces and the Skills.
 func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkflow, error) {
 	var out resolvedWorkflow
-	names := map[string]bool{}
-	ids := map[string]bool{}
-	stepAt, err := places("two Steps", len(w.Steps), func(i int) int64 { return w.Steps[i].Position })
-	if err != nil {
+	var err error
+	if out.workflows, err = resolveWorkflows(current, w.Workflows); err != nil {
 		return out, err
 	}
+	body := Workflows{Workflows: out.workflows}
+	wfPos := map[string]int64{}
+	for _, wf := range out.workflows {
+		wfPos[wf.ID] = wf.Position
+	}
+
+	// Each Step's Workflow, then each Workflow's Steps take their places among themselves.
+	stepWF := make([]Workflow, len(w.Steps))
+	group := map[string][]int{}
+	for i, in := range w.Steps {
+		wf, ok := body.findWorkflow(in.Workflow)
+		if !ok {
+			return out, refuse(CodeInvalid, "a Step names %q, which is not a Workflow of the body", in.Workflow)
+		}
+		stepWF[i] = wf
+		group[wf.ID] = append(group[wf.ID], i)
+	}
+	stepAt := make([]int64, len(w.Steps))
+	for _, wf := range out.workflows {
+		is := group[wf.ID]
+		at, err := places("two Steps in "+wf.Name, len(is), func(j int) int64 { return w.Steps[is[j]].Position })
+		if err != nil {
+			return out, err
+		}
+		for j, i := range is {
+			stepAt[i] = at[j]
+		}
+	}
+
+	names := map[string]bool{}
+	ids := map[string]bool{}
 	for i, in := range w.Steps {
 		name := strings.TrimSpace(in.Name)
 		if err := validWorkflowName("a Step's name", name); err != nil {
@@ -655,14 +799,14 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 			return out, refuse(CodeInvalid, "two Steps are named %q; names are unique, ignoring case", name)
 		}
 		names[strings.ToLower(name)] = true
-		st := Step{ID: in.ID, Name: name, Position: stepAt[i], X: (stepAt[i] - 1) * stepSpacing}
+		st := Step{ID: in.ID, WorkflowID: stepWF[i].ID, Name: name, Position: stepAt[i], X: (stepAt[i] - 1) * stepSpacing}
 		if in.ID != "" {
 			j := slices.IndexFunc(current.Steps, func(s Step) bool { return s.ID == in.ID })
 			if j < 0 {
-				return out, refuse(CodeInvalid, "the Workflow has no Step %s; a new Step has no id", in.ID)
+				return out, refuse(CodeInvalid, "the Project has no Step %s; a new Step has no id", in.ID)
 			}
 			if ids[in.ID] {
-				return out, refuse(CodeInvalid, "Step %s is in the Workflow twice", in.ID)
+				return out, refuse(CodeInvalid, "Step %s is in the body twice", in.ID)
 			}
 			ids[in.ID] = true
 			st.X, st.Y = current.Steps[j].X, current.Steps[j].Y
@@ -684,12 +828,15 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		}
 		out.steps = append(out.steps, st)
 	}
-	slices.SortFunc(out.steps, func(a, b Step) int { return cmp.Compare(a.Position, b.Position) })
-	next := Workflows{Steps: out.steps}
+	// The Project's order: the Workflow's place, then the Step's.
+	slices.SortFunc(out.steps, func(a, b Step) int {
+		return cmp.Or(cmp.Compare(wfPos[a.WorkflowID], wfPos[b.WorkflowID]), cmp.Compare(a.Position, b.Position))
+	})
+	next := Workflows{Workflows: out.workflows, Steps: out.steps}
 	find := func(what, ref string) (string, error) {
 		st, ok := next.find(ref)
 		if !ok {
-			return "", refuse(CodeInvalid, "%s names %q, which is not a Step of the Workflow", what, ref)
+			return "", refuse(CodeInvalid, "%s names %q, which is not a Step of the body", what, ref)
 		}
 		return st.ID, nil
 	}
@@ -698,10 +845,10 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 	for _, in := range w.Connectors {
 		if in.ID != "" {
 			if !slices.ContainsFunc(current.Connectors, func(k Connector) bool { return k.ID == in.ID }) {
-				return out, refuse(CodeInvalid, "the Workflow has no Connector %s; a new Connector has no id", in.ID)
+				return out, refuse(CodeInvalid, "the Project has no Connector %s; a new Connector has no id", in.ID)
 			}
 			if claimed[in.ID] {
-				return out, refuse(CodeInvalid, "Connector %s is in the Workflow twice", in.ID)
+				return out, refuse(CodeInvalid, "Connector %s is in the body twice", in.ID)
 			}
 			claimed[in.ID] = true
 		}
@@ -720,6 +867,7 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		}
 		k := Connector{ID: in.ID, FromStepID: from, Name: name}
 		if in.To != nil {
+			// Into any Step of the body, of the Step's Workflow or of another.
 			to, err := find("a Connector", *in.To)
 			if err != nil {
 				return out, err
@@ -736,7 +884,7 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		outs[from][strings.ToLower(name)] = true
 		given[from] = append(given[from], in.Position)
 		if k.ID == "" {
-			// A Connector sent back without its id keeps it, so a Workflow put back as read is
+			// A Connector sent back without its id keeps it, so Workflows put back as read are
 			// unchanged.
 			for _, old := range current.Connectors {
 				if !claimed[old.ID] && old.FromStepID == from && strings.EqualFold(old.Name, name) {
@@ -750,7 +898,7 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		}
 		out.connectors = append(out.connectors, k)
 	}
-	// Each Step's Connectors take their places among themselves, in the order of the Steps.
+	// Each Step's Connectors take their places among themselves, in the Project's order of Steps.
 	at := map[string][]int64{}
 	for from, ps := range given {
 		st, _ := next.find(from)
@@ -764,12 +912,12 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		out.connectors[i].Position = at[from][seen[from]]
 		seen[from]++
 	}
-	stepPos := map[string]int64{}
-	for _, st := range out.steps {
-		stepPos[st.ID] = st.Position
+	order := map[string]int{}
+	for i, st := range out.steps {
+		order[st.ID] = i
 	}
 	slices.SortFunc(out.connectors, func(a, b Connector) int {
-		return cmp.Or(cmp.Compare(stepPos[a.FromStepID], stepPos[b.FromStepID]), cmp.Compare(a.Position, b.Position))
+		return cmp.Or(cmp.Compare(order[a.FromStepID], order[b.FromStepID]), cmp.Compare(a.Position, b.Position))
 	})
 
 	out.moves = map[string]string{}
@@ -787,9 +935,9 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 	return out, nil
 }
 
-// places numbers n Steps, or n Connectors out of one Step, 1 to n in the order of their
-// positions, pos(i) for the i-th in the list; a position of 0 reads as its place in the list.
-// Two at one position, or one below 0, are refused invalid.
+// places numbers n Workflows, the n Steps of one Workflow, or the n Connectors out of one Step, 1
+// to n in the order of their positions, pos(i) for the i-th in the list; a position of 0 reads as
+// its place in the list. Two at one position, or one below 0, are refused invalid.
 func places(what string, n int, pos func(i int) int64) ([]int64, error) {
 	given := make([]int64, n)
 	order := make([]int, n)
@@ -825,15 +973,21 @@ func validWorkflowName(what, name string) error {
 	return nil
 }
 
-// sameWorkflow reports whether next is the current Workflow as it is.
+// sameWorkflow reports whether next is the Project's Workflows as they are.
 func sameWorkflow(current Workflows, next resolvedWorkflow) bool {
-	if len(next.moves) > 0 || len(current.Steps) != len(next.steps) || len(current.Connectors) != len(next.connectors) {
+	if len(next.moves) > 0 || len(current.Workflows) != len(next.workflows) || len(current.Steps) != len(next.steps) ||
+		len(current.Connectors) != len(next.connectors) {
 		return false
+	}
+	for i, wf := range next.workflows {
+		if cur := current.Workflows[i]; wf.ID != cur.ID || wf.Name != cur.Name || wf.Position != cur.Position {
+			return false
+		}
 	}
 	for i, st := range next.steps {
 		cur := current.Steps[i]
-		if st.ID != cur.ID || st.Name != cur.Name || !sameRef(st.SkillID, cur.SkillID) || st.Position != cur.Position ||
-			st.X != cur.X || st.Y != cur.Y {
+		if st.ID != cur.ID || st.WorkflowID != cur.WorkflowID || st.Name != cur.Name || !sameRef(st.SkillID, cur.SkillID) ||
+			st.Position != cur.Position || st.X != cur.X || st.Y != cur.Y {
 			return false
 		}
 	}

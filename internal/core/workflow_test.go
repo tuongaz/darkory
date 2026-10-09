@@ -11,30 +11,46 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// workflowText writes a Workflow as its Steps with their Skills, then its Connectors.
+// workflowText writes a Project's Workflows as their Steps with their Skills, then the
+// Connectors. With two Workflows or more, each Workflow's Steps follow its name, and the
+// Workflows are apart by " / ": "Triage: Triage (triage) / Bugs: Investigate · Fix | …".
 func workflowText(skills []core.Skill, w core.Workflows) string {
 	skill := map[string]string{}
 	for _, s := range skills {
 		skill[s.ID] = s.Name
 	}
 	name := map[string]string{}
-	var steps, connectors []string
+	of := map[string][]string{}
+	var steps []string
 	for _, st := range w.Steps {
 		name[st.ID] = st.Name
-		if st.SkillID == nil {
-			steps = append(steps, st.Name)
-		} else {
-			steps = append(steps, st.Name+" ("+skill[*st.SkillID]+")")
+		text := st.Name
+		if st.SkillID != nil {
+			text += " (" + skill[*st.SkillID] + ")"
 		}
+		steps = append(steps, text)
+		of[st.WorkflowID] = append(of[st.WorkflowID], text)
 	}
-	for _, k := range w.Connectors {
+	if len(w.Workflows) > 1 {
+		steps = nil
+		for _, wf := range w.Workflows {
+			steps = append(steps, wf.Name+": "+strings.Join(of[wf.ID], " · "))
+		}
+		return strings.Join(steps, " / ") + " | " + connectorsText(name, w.Connectors)
+	}
+	return strings.Join(steps, " · ") + " | " + connectorsText(name, w.Connectors)
+}
+
+func connectorsText(name map[string]string, ks []core.Connector) string {
+	var connectors []string
+	for _, k := range ks {
 		to := "Done"
 		if k.ToStepID != nil {
 			to = name[*k.ToStepID]
 		}
 		connectors = append(connectors, name[k.FromStepID]+" -"+k.Name+"-> "+to)
 	}
-	return strings.Join(steps, " · ") + " | " + strings.Join(connectors, " · ")
+	return strings.Join(connectors, " · ")
 }
 
 // defaultWorkflowText is the default Workflow (model-v2-plan.md, "The default Workflow").
@@ -194,12 +210,13 @@ func TestSetWorkflow(t *testing.T) {
 		// connector keeps its id though sent without it. The lists are out of order, and the
 		// positions have gaps.
 		next := core.WorkflowsInput{
+			Workflows: []core.WorkflowInput{{Name: "Work", Position: 1}},
 			Steps: []core.StepInput{
-				{ID: id["Retro"], Name: "Retro", Skill: ptrStr(core.SkillRetro), Position: 50},
-				{ID: id["Backlog"], Name: "Backlog", Position: 1}, {ID: id["Plan"], Name: "Plan", Skill: ptrStr(core.SkillBreakdown), Position: 2, X: ptrInt(240)},
-				{ID: id["Build"], Name: "Make", Skill: ptrStr(core.SkillEngineer), Position: 3, X: ptrInt(480), Y: ptrInt(40)},
-				{Name: "QA", Skill: ptrStr("qa"), Position: 4},
-				{ID: id["Skill review"], Name: "Skill review", Skill: ptrStr(core.SkillSkillReview), Position: 60},
+				{ID: id["Retro"], Workflow: "Work", Name: "Retro", Skill: ptrStr(core.SkillRetro), Position: 50},
+				{ID: id["Backlog"], Workflow: "work", Name: "Backlog", Position: 1}, {ID: id["Plan"], Workflow: "Work", Name: "Plan", Skill: ptrStr(core.SkillBreakdown), Position: 2, X: ptrInt(240)},
+				{ID: id["Build"], Workflow: "Work", Name: "Make", Skill: ptrStr(core.SkillEngineer), Position: 3, X: ptrInt(480), Y: ptrInt(40)},
+				{Workflow: "Work", Name: "QA", Skill: ptrStr("qa"), Position: 4},
+				{ID: id["Skill review"], Workflow: before.Steps[0].WorkflowID, Name: "Skill review", Skill: ptrStr(core.SkillSkillReview), Position: 60},
 			},
 			Connectors: []core.ConnectorInput{
 				{From: "Plan", Name: "done", Position: 1},
@@ -226,14 +243,16 @@ func TestSetWorkflow(t *testing.T) {
 			func(w *core.WorkflowsInput) {
 				w.Connectors = append(w.Connectors, core.ConnectorInput{From: "QA", Name: "PASS"})
 			},
-			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Name: "qa"}) },
-			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Name: " "}) },
-			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Name: id["Plan"]}) },
+			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Workflow: "Work", Name: "qa"}) },
+			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Workflow: "Work", Name: " "}) },
 			func(w *core.WorkflowsInput) {
-				w.Steps = append(w.Steps, core.StepInput{ID: store.NewID(), Name: "Ghost"})
+				w.Steps = append(w.Steps, core.StepInput{Workflow: "Work", Name: id["Plan"]})
 			},
 			func(w *core.WorkflowsInput) {
-				w.Steps = append(w.Steps, core.StepInput{ID: id["Plan"], Name: "Plan again"})
+				w.Steps = append(w.Steps, core.StepInput{ID: store.NewID(), Workflow: "Work", Name: "Ghost"})
+			},
+			func(w *core.WorkflowsInput) {
+				w.Steps = append(w.Steps, core.StepInput{ID: id["Plan"], Workflow: "Work", Name: "Plan again"})
 			},
 			func(w *core.WorkflowsInput) { w.Connectors[0].ID = store.NewID() },
 			// Two Steps at one place; two Connectors out of QA at one place; a place below 1.
@@ -242,8 +261,27 @@ func TestSetWorkflow(t *testing.T) {
 			func(w *core.WorkflowsInput) { w.Steps[1].Position = -1 },
 			func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Plan"]: "QA"} },
 			func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Review"]: "Nowhere"} },
+			// No Workflow at all; two alike, ignoring case; one at a place below 1; a name that
+			// is not one; a Step naming a Workflow not in the body, or none; an id the Project
+			// does not have, or given twice.
+			func(w *core.WorkflowsInput) { w.Workflows = nil },
+			func(w *core.WorkflowsInput) {
+				w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "WORK", Position: 2})
+			},
+			func(w *core.WorkflowsInput) { w.Workflows[0].Position = -1 },
+			func(w *core.WorkflowsInput) { w.Workflows[0].Name = " " },
+			func(w *core.WorkflowsInput) { w.Workflows[0].Name = strings.Repeat("w", 51) },
+			func(w *core.WorkflowsInput) { w.Workflows[0].Name = before.Steps[0].WorkflowID },
+			func(w *core.WorkflowsInput) { w.Steps[0].Workflow = "Bugs" },
+			func(w *core.WorkflowsInput) { w.Steps[0].Workflow = "" },
+			func(w *core.WorkflowsInput) { w.Workflows[0].ID = store.NewID() },
+			func(w *core.WorkflowsInput) {
+				w.Workflows[0].ID = before.Steps[0].WorkflowID
+				w.Workflows = append(w.Workflows, core.WorkflowInput{ID: before.Steps[0].WorkflowID, Name: "Bugs", Position: 2})
+			},
 		} {
 			in := next
+			in.Workflows = slices.Clone(next.Workflows)
 			in.Steps = slices.Clone(next.Steps)
 			in.Connectors = slices.Clone(next.Connectors)
 			bad(&in)
@@ -251,7 +289,7 @@ func TestSetWorkflow(t *testing.T) {
 			wantCode(t, err, core.CodeInvalid)
 		}
 		bad := next
-		bad.Steps = append(slices.Clone(next.Steps), core.StepInput{Name: "Ops", Skill: ptrStr("no-such-skill")})
+		bad.Steps = append(slices.Clone(next.Steps), core.StepInput{Workflow: "Work", Name: "Ops", Skill: ptrStr("no-such-skill")})
 		_, err = f.svc.SetWorkflow(ctx, f.admin, "WEB", bad, core.Idem{})
 		wantCode(t, err, core.CodeNotFound)
 
@@ -308,13 +346,17 @@ func TestSetWorkflow(t *testing.T) {
 			t.Fatalf("workflow.changed %+v", last)
 		}
 
-		// Put back as read, the Workflow is unchanged and writes nothing.
+		// Put back as read, the Workflows unchanged and write nothing: a Workflow sent without its
+		// id keeps it by its name, as a Connector does.
 		n := f.checkActivity()
 		var same core.WorkflowsInput
+		for _, wf := range after.Workflows.Workflows {
+			same.Workflows = append(same.Workflows, core.WorkflowInput{Name: wf.Name, Position: wf.Position})
+		}
 		name := map[string]string{}
 		for _, s := range after.Steps {
 			name[s.ID] = s.Name
-			same.Steps = append(same.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
+			same.Steps = append(same.Steps, core.StepInput{ID: s.ID, Workflow: s.WorkflowID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
 		}
 		for _, k := range after.Connectors {
 			ci := core.ConnectorInput{From: k.FromStepID, Name: k.Name, Position: k.Position}
@@ -336,11 +378,14 @@ func TestSetWorkflow(t *testing.T) {
 	})
 }
 
-// asSet is a Workflow as SetWorkflow takes it, unchanged.
+// asSet is a Project's Workflows as SetWorkflow takes them, unchanged.
 func asSet(w core.Workflows) core.WorkflowsInput {
 	var in core.WorkflowsInput
+	for _, wf := range w.Workflows {
+		in.Workflows = append(in.Workflows, core.WorkflowInput{ID: wf.ID, Name: wf.Name, Position: wf.Position})
+	}
 	for _, s := range w.Steps {
-		in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
+		in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Workflow: s.WorkflowID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
 	}
 	for _, k := range w.Connectors {
 		in.Connectors = append(in.Connectors, core.ConnectorInput{ID: k.ID, From: k.FromStepID, To: k.ToStepID, Name: k.Name, Position: k.Position})
@@ -531,6 +576,357 @@ func TestWorkflowFacts(t *testing.T) {
 		f.clock.Advance(31 * 24 * time.Hour)
 		if d, err := f.svc.GetWorkflow(ctx, lead, "WEB"); err != nil || d.Facts[2].MedianMS != nil {
 			t.Fatalf("a month on: %+v %v", d.Facts[2], err)
+		}
+	})
+}
+
+// workflowIDs maps each of the Project's Workflows' names to its id.
+func (f *fixture) workflowIDs(project string) map[string]string {
+	f.t.Helper()
+	d, err := f.svc.GetWorkflow(f.t.Context(), f.admin, project)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, wf := range d.Workflows.Workflows {
+		out[wf.Name] = wf.ID
+	}
+	return out
+}
+
+// A Project's Steps are grouped into named Workflows (ADR 0019): a new Project has one, Work.
+// The Workflows' positions order the Project's Steps before the Steps' own, so a filed Task's
+// default entry and the builtin Steps follow the Workflows' order; two Steps of different
+// Workflows may share a position; a Connector may lead into a Step of another Workflow, and
+// advancing along it takes the Task there. Two Workflows may swap their names in one write.
+func TestWorkflowsHaveNamesAndOrder(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		web, err := f.svc.GetWorkflow(ctx, f.admin, "WEB")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if wfs := web.Workflows.Workflows; len(wfs) != 1 || wfs[0].Name != core.WorkflowFirstName || wfs[0].Position != 1 {
+			t.Fatalf("a new Project's Workflows: %+v", wfs)
+		}
+		for _, s := range web.Steps {
+			if s.WorkflowID != web.Workflows.Workflows[0].ID {
+				t.Fatalf("Step %s is in Workflow %s", s.Name, s.WorkflowID)
+			}
+		}
+
+		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "SUP", Name: "Support", Workflow: core.WorkflowEmpty}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		f.skill("triage")
+		lead := f.member("lead", []string{"SUP"}, nil)
+		router := f.member("router", []string{"SUP"}, []string{"triage"})
+		in := core.WorkflowsInput{
+			Workflows: []core.WorkflowInput{{Name: "Bugs", Position: 2}, {Name: "Triage", Position: 1}},
+			Steps: []core.StepInput{
+				{Workflow: "Bugs", Name: "Fix", Skill: ptrStr(core.SkillEngineer), Position: 2},
+				{Workflow: "Bugs", Name: "Investigate", Skill: ptrStr(core.SkillEngineer), Position: 1},
+				{Workflow: "triage", Name: "Triage", Skill: ptrStr("triage"), Position: 1},
+			},
+			Connectors: []core.ConnectorInput{
+				{From: "Triage", To: ptrStr("Investigate"), Name: "bug", Position: 1}, {From: "Triage", Name: "done", Position: 2},
+				{From: "Investigate", To: ptrStr("Fix"), Name: "pass"}, {From: "Fix", Name: "pass"},
+			},
+		}
+		sup, err := f.svc.SetWorkflow(ctx, f.admin, "SUP", in, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		const want = "Triage: Triage (triage) / Bugs: Investigate (engineer) · Fix (engineer) | " +
+			"Triage -bug-> Investigate · Triage -done-> Done · Investigate -pass-> Fix · Fix -pass-> Done"
+		if got := f.workflowText("SUP"); got != want {
+			t.Fatalf("two Workflows read back:\n%s", got)
+		}
+		// Work, left out, is gone with its Backlog.
+		if n := f.count(`SELECT COUNT(*) FROM workflows WHERE project_id = $1`, sup.ProjectID); n != 2 {
+			t.Fatalf("SUP has %d Workflows", n)
+		}
+		ids := f.workflowIDs("SUP")
+		places := map[string][3]any{"Triage": {ids["Triage"], int64(1), int64(0)}, "Investigate": {ids["Bugs"], int64(1), int64(0)}, "Fix": {ids["Bugs"], int64(2), int64(448)}}
+		for _, s := range sup.Steps {
+			if p := places[s.Name]; s.WorkflowID != p[0] || s.Position != p[1] || s.X != p[2] {
+				t.Fatalf("Step %s in %s at %d (x %d)", s.Name, s.WorkflowID, s.Position, s.X)
+			}
+		}
+
+		// A filed Task starts at the first Step of the first Workflow; advancing along a
+		// Connector into another Workflow takes it there.
+		routed := f.fileTask(lead, core.NewTask{Project: ptrStr("SUP"), Title: "Login fails"}).Task
+		if got := f.at(routed.Key); got != "Triage" {
+			t.Fatalf("filed at %s", got)
+		}
+		f.claim(router, routed.Key, noTimeout)
+		f.advance(router, routed.Key, "bug")
+		if d := f.get(routed.Key); d.Step == nil || d.Step.Name != "Investigate" || d.Step.WorkflowID != ids["Bugs"] {
+			t.Fatalf("advanced along bug to %+v", d.Step)
+		}
+
+		// Swapping the Workflows' positions swaps the Project's order, and where a Task starts.
+		w := asSet(f.workflows("SUP"))
+		w.Workflows[0].Position, w.Workflows[1].Position = 2, 1
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "SUP", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.workflowText("SUP"); got != "Bugs: Investigate (engineer) · Fix (engineer) / Triage: Triage (triage) | "+
+			"Investigate -pass-> Fix · Fix -pass-> Done · Triage -bug-> Investigate · Triage -done-> Done" {
+			t.Fatalf("swapped:\n%s", got)
+		}
+		if got := f.at(f.fileTask(lead, core.NewTask{Project: ptrStr("SUP"), Title: "Slow page"}).Task.Key); got != "Investigate" {
+			t.Fatalf("filed at %s once Bugs is first", got)
+		}
+
+		// Two Workflows swap their names in one write: each lets go of its name first.
+		w = asSet(f.workflows("SUP"))
+		w.Workflows[0].Name, w.Workflows[1].Name = w.Workflows[1].Name, w.Workflows[0].Name
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "SUP", w, core.Idem{}); err != nil {
+			t.Fatalf("swapping two Workflows' names: %v", err)
+		}
+		if got := f.workflowIDs("SUP"); got["Triage"] != ids["Bugs"] || got["Bugs"] != ids["Triage"] {
+			t.Fatalf("swapped names: %v, were %v", got, ids)
+		}
+
+		// The Breakdown and the Acceptance are filed at the first Step carrying their Skill, by
+		// the Workflows' order.
+		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "BRK", Name: "Breaks", Workflow: core.WorkflowEmpty, Members: []string{"lead"},
+			Acceptance: ptrBool(true)}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		brk := core.WorkflowsInput{
+			Workflows: []core.WorkflowInput{{Name: "Alpha", Position: 1}, {Name: "Beta", Position: 2}},
+			Steps: []core.StepInput{
+				{Workflow: "Alpha", Name: "Plan A", Skill: ptrStr(core.SkillBreakdown), Position: 1},
+				{Workflow: "Alpha", Name: "Accept A", Skill: ptrStr(core.SkillAcceptance), Position: 2},
+				{Workflow: "Beta", Name: "Plan B", Skill: ptrStr(core.SkillBreakdown), Position: 1},
+				{Workflow: "Beta", Name: "Accept B", Skill: ptrStr(core.SkillAcceptance), Position: 2},
+			},
+			Connectors: []core.ConnectorInput{
+				{From: "Plan A", Name: "done"}, {From: "Accept A", Name: "pass"}, {From: "Plan B", Name: "done"}, {From: "Accept B", Name: "pass"},
+			},
+		}
+		builtins := func(in core.WorkflowsInput, want string) {
+			t.Helper()
+			if _, err := f.svc.SetWorkflow(ctx, f.admin, "BRK", in, core.Idem{}); err != nil {
+				t.Fatal(err)
+			}
+			d := f.fileTask(lead, core.NewTask{Project: ptrStr("BRK"), Title: "Split " + want, Breakdown: true})
+			if got := f.at(d.Subtasks[0].Key); got != "Plan "+want {
+				t.Fatalf("the Breakdown is at %s, want Plan %s", got, want)
+			}
+			f.claim(lead, d.Subtasks[0].Key, noTimeout)
+			f.complete(lead, d.Subtasks[0].Key)
+			subs := f.get(d.Task.Key).Subtasks
+			if len(subs) != 2 || subs[1].Kind != "acceptance" {
+				t.Fatalf("Subtasks of %s: %+v", d.Task.Key, subs)
+			}
+			if got := f.at(subs[1].Key); got != "Accept "+want {
+				t.Fatalf("the Acceptance is at %s, want Accept %s", got, want)
+			}
+		}
+		builtins(brk, "A")
+		brk = asSet(f.workflows("BRK"))
+		brk.Workflows[0].Position, brk.Workflows[1].Position = 2, 1
+		builtins(brk, "B")
+
+		// A copy takes the Workflows with their names and order, each Step in its own.
+		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "SUP2", Name: "Support two", Workflow: core.WorkflowCopy,
+			CopyFrom: ptrStr("SUP")}, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if a, b := f.workflowText("SUP"), f.workflowText("SUP2"); a != b || !strings.HasPrefix(b, "Triage: Investigate") {
+			t.Fatalf("the copy:\n%s\nof\n%s", b, a)
+		}
+		f.checkActivity()
+	})
+}
+
+// workflows reads the Project's Workflows.
+func (f *fixture) workflows(project string) core.Workflows {
+	f.t.Helper()
+	d, err := f.svc.GetWorkflow(f.t.Context(), f.admin, project)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return d.Workflows
+}
+
+// The write puts a Project's whole graph in place, its Workflows with it. A Workflow renamed
+// alone records workflow.changed, with the Workflows and each Step's Workflow. A Workflow left
+// out is deleted with the Steps the body leaves out; a Step of it the body keeps moves into
+// another Workflow; the open Tasks at its deleted Steps need moves (step_in_use), which may carry
+// them into a Step of another Workflow. A Workflow sent without an id keeps the id of the one
+// with its name unless another entry of the body carries that id; sent back as read without
+// their ids, the Workflows are unchanged and write nothing.
+func TestSetWorkflows(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		lead := f.member("lead", []string{"WEB"}, nil)
+
+		// Bugs joins Work: Investigate leads into Work's Build, and both Workflows have a Step at 1.
+		w := asSet(f.workflows("WEB"))
+		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 2})
+		w.Steps = append(w.Steps, core.StepInput{Workflow: "Bugs", Name: "Investigate", Skill: ptrStr(core.SkillEngineer), Position: 1},
+			core.StepInput{Workflow: "Bugs", Name: "Verify", Position: 2})
+		w.Connectors = append(w.Connectors, core.ConnectorInput{From: "Investigate", To: ptrStr("Build"), Name: "fix it"},
+			core.ConnectorInput{From: "Verify", Name: "done"})
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		const two = "Work: Backlog · Plan (breakdown) · Build (engineer) · Review (review) · Retro (retro) · Skill review (skill-review) / " +
+			"Bugs: Investigate (engineer) · Verify | " +
+			"Plan -done-> Done · Build -pass-> Review · Review -pass-> Done · Review -needs changes-> Build · " +
+			"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro · " +
+			"Investigate -fix it-> Build · Verify -done-> Done"
+		if got := f.workflowText("WEB"); got != two {
+			t.Fatalf("with Bugs:\n%s", got)
+		}
+		ids := f.workflowIDs("WEB")
+
+		// Sent back as read without the Workflows' ids, nothing changes.
+		n := f.checkActivity()
+		w = asSet(f.workflows("WEB"))
+		for i := range w.Workflows {
+			w.Workflows[i].ID = ""
+		}
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil || f.checkActivity() != n {
+			t.Fatalf("unchanged Workflows wrote %d entries (%v)", f.checkActivity()-n, err)
+		}
+
+		// Renaming a Workflow alone is a change, recorded with the Workflows and each Step's.
+		w = asSet(f.workflows("WEB"))
+		w.Workflows[1].Name = "Defects"
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		changed := f.activity("workflow.changed")
+		last := changed[len(changed)-1].Payload
+		wfs, _ := last["workflows"].([]any)
+		if len(wfs) != 2 {
+			t.Fatalf("workflow.changed's workflows: %+v", last["workflows"])
+		}
+		if d := wfs[1].(map[string]any); d["id"] != ids["Bugs"] || d["name"] != "Defects" || d["position"] != float64(2) {
+			t.Fatalf("workflow.changed's second Workflow: %+v", d)
+		}
+		for _, s := range last["steps"].([]any) {
+			if id, _ := s.(map[string]any)["workflow_id"].(string); id != ids["Work"] && id != ids["Bugs"] {
+				t.Fatalf("a Step of workflow.changed without its Workflow: %+v", s)
+			}
+		}
+
+		// Defects is left out: Investigate goes with it, while Verify is kept and moves into Work.
+		// The open Task at Investigate needs moves; moved into Build, it changes Workflow.
+		stuck := f.task(lead, "WEB", "Stuck", "Investigate")
+		waiting := f.task(lead, "WEB", "Waiting", "Verify")
+		investigate, verify := f.step("WEB", "Investigate"), f.step("WEB", "Verify")
+		w = asSet(f.workflows("WEB"))
+		w.Workflows = w.Workflows[:1]
+		w.Steps = slices.DeleteFunc(w.Steps, func(s core.StepInput) bool { return s.ID == investigate })
+		for i := range w.Steps {
+			if w.Steps[i].ID == verify {
+				w.Steps[i].Workflow, w.Steps[i].Position = "Work", 7
+			}
+		}
+		w.Connectors = slices.DeleteFunc(w.Connectors, func(k core.ConnectorInput) bool { return k.From == investigate })
+		_, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
+		wantCode(t, err, core.CodeStepInUse)
+		if !strings.Contains(err.Error(), "1 open Tasks are at Investigate") {
+			t.Fatalf("the refusal reads %v", err)
+		}
+		w.Moves = map[string]string{investigate: "Build"}
+		after, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if wfs := after.Workflows.Workflows; len(wfs) != 1 || wfs[0].ID != ids["Work"] {
+			t.Fatalf("Workflows after Defects left: %+v", wfs)
+		}
+		if f.count(`SELECT COUNT(*) FROM steps WHERE id = $1`, investigate) != 0 {
+			t.Fatal("Investigate outlived its Workflow")
+		}
+		if d := f.get(stuck.Key); d.Step == nil || d.Step.Name != "Build" || d.Step.WorkflowID != ids["Work"] {
+			t.Fatalf("the stuck Task is at %+v", d.Step)
+		}
+		if d := f.get(waiting.Key); d.Step == nil || d.Step.ID != verify || d.Step.WorkflowID != ids["Work"] || d.Step.Position != 7 {
+			t.Fatalf("Verify, kept, is %+v", d.Step)
+		}
+		moved := f.activity("task.moved")
+		if m := moved[len(moved)-1]; m.SubjectID != stuck.ID || m.Payload["workflow_changed"] != true || m.Payload["from"] != investigate {
+			t.Fatalf("task.moved %+v", m)
+		}
+
+		// Work renamed Main by its id, and a new Workflow named Work: the new one does not take
+		// Main's id, which the body carries.
+		w = asSet(f.workflows("WEB"))
+		w.Workflows[0].Name = "Main"
+		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Work", Position: 2})
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.workflowIDs("WEB"); got["Main"] != ids["Work"] || got["Work"] == "" || got["Work"] == ids["Work"] {
+			t.Fatalf("Main and a new Work: %v (Work was %s)", got, ids["Work"])
+		}
+		f.checkActivity()
+	})
+}
+
+// An ended Task at a deleted Step goes where moves says, as the open ones do: its last_step_id
+// becomes the target; with no moves for it, it becomes null.
+func TestSetWorkflowMovesEndedTasks(t *testing.T) {
+	t.Skip("Task 5: last_step_id is set when a Task ends")
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		lead := f.member("lead", []string{"WEB"}, nil)
+		w := asSet(f.workflows("WEB"))
+		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 2})
+		w.Steps = append(w.Steps, core.StepInput{Workflow: "Bugs", Name: "Investigate", Position: 1},
+			core.StepInput{Workflow: "Bugs", Name: "Verify", Position: 2})
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		lastStep := func(task string) string {
+			t.Helper()
+			var id *string
+			if err := f.st.QueryRow(ctx, `SELECT last_step_id FROM tasks WHERE id = $1`, task).Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			if id == nil {
+				return "-"
+			}
+			return *id
+		}
+		moved := f.task(lead, "WEB", "Ended at Investigate", "Investigate")
+		dropped := f.task(lead, "WEB", "Ended at Verify", "Verify")
+		for _, task := range []core.Task{moved, dropped} {
+			if _, err := f.svc.DropTask(ctx, lead, task.Key, nil, core.Idem{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		investigate, verify := f.step("WEB", "Investigate"), f.step("WEB", "Verify")
+		if lastStep(moved.ID) != investigate || lastStep(dropped.ID) != verify {
+			t.Fatalf("ended at %s and %s", lastStep(moved.ID), lastStep(dropped.ID))
+		}
+		w = asSet(f.workflows("WEB"))
+		w.Workflows = w.Workflows[:1]
+		w.Steps = slices.DeleteFunc(w.Steps, func(s core.StepInput) bool { return s.ID == investigate || s.ID == verify })
+		w.Moves = map[string]string{investigate: "Build"}
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := lastStep(moved.ID); got != f.step("WEB", "Build") {
+			t.Fatalf("the ended Task moved off Investigate ended at %s", got)
+		}
+		if got := lastStep(dropped.ID); got != "-" {
+			t.Fatalf("the ended Task at Verify, which moves did not name, ended at %s", got)
 		}
 	})
 }

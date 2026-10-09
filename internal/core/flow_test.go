@@ -53,13 +53,13 @@ func qaFlow(f *fixture) {
 	f.project("WEB")
 	f.skill("build")
 	f.skill("qa")
-	if _, err := f.svc.SetWorkflow(f.t.Context(), f.admin, "WEB", core.WorkflowsInput{
+	if _, err := f.svc.SetWorkflow(f.t.Context(), f.admin, "WEB", inWork(core.WorkflowsInput{
 		Steps: []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "QA", Skill: ptrStr("qa")}},
 		Connectors: []core.ConnectorInput{
 			{From: "Build", To: ptrStr("QA"), Name: "pass"},
 			{From: "QA", Name: "pass"}, {From: "QA", To: ptrStr("Build"), Name: "fail"},
 		},
-	}, core.Idem{}); err != nil {
+	}), core.Idem{}); err != nil {
 		f.t.Fatal(err)
 	}
 }
