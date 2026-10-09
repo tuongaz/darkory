@@ -14,7 +14,11 @@ const shots = fileURLToPath(new URL("./screenshots/workflows/", import.meta.url)
 type Who = { token: string; session: string };
 type Task = { id: string; key: string; title: string; state: string; step_id?: string; workflow_id?: string };
 type Detail = { task: Task };
-type Graph = { workflows: { id: string; name: string; position: number }[]; steps: { id: string; name: string; workflow_id: string }[] };
+type Graph = {
+  workflows: { id: string; name: string; position: number }[];
+  steps: { id: string; name: string; workflow_id: string; skill_id?: string; position: number }[];
+  connectors: { id: string; from_step_id: string; to_step_id?: string; name: string; position: number }[];
+};
 
 let stop: (() => Promise<void>) | undefined;
 let base = "";
@@ -30,6 +34,8 @@ const as: Record<"ada" | "cleo" | "bob" | "dan", Who> = {
 let graph: Graph;
 const wf = (name: string) => graph.workflows.find((w) => w.name === name)!.id;
 const stepOf = (name: string) => graph.steps.find((s) => s.name === name)!.id;
+/** The address of a page of this Install, anchored: nothing before `base`. */
+const address = (path: string) => new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${path}`);
 
 /** A /v1 call as a Member's token and Session; a refusal throws with its body. */
 async function v1<T = unknown>(who: Who, method: string, path: string, body?: unknown): Promise<T> {
@@ -137,6 +143,20 @@ test.afterAll(async () => {
   await stop?.();
 });
 
+/** ACC's graph as `/v1` serves it now. */
+const readGraph = () => v1<Graph>(as.ada, "GET", "/v1/projects/ACC/workflow");
+
+/** Renames one of ACC's Workflows through `/v1`: its whole graph sent back, every id carried. */
+async function renameWorkflow(from: string, to: string) {
+  const g = await readGraph();
+  graph = await v1<Graph>(as.ada, "PUT", "/v1/projects/ACC/workflow", {
+    workflows: g.workflows.map((w) => ({ id: w.id, name: w.name === from ? to : w.name, position: w.position })),
+    steps: g.steps.map((st) => ({ id: st.id, workflow: st.workflow_id, name: st.name, ...(st.skill_id ? { skill: st.skill_id } : {}), position: st.position })),
+    connectors: g.connectors.map((c) => ({ id: c.id, from: c.from_step_id, ...(c.to_step_id ? { to: c.to_step_id } : {}), name: c.name, position: c.position })),
+  });
+  expect(graph.workflows.map((w) => w.name)).toContain(to);
+}
+
 /** A page signed in as ada at `path`, collecting what it logs as an error. */
 async function open(browser: Browser, path: string, size = { width: 1440, height: 900 }) {
   const ctx = await browser.newContext({ storageState: signedIn, viewport: size });
@@ -226,15 +246,19 @@ test("4 · completed at Verify, its card sits in Bugs' Done and in no other Work
   await advance(as.cleo, "ready", "Review");
   await advance(as.bob, "pass", "Verify");
   await advance(as.dan, "pass", "Done");
-  await expect(page.getByRole("region", { name: "Done", exact: true }).locator(`[data-task="${filed.key}"]`)).toBeVisible();
+  const done = page.getByRole("region", { name: "Done", exact: true });
+  await expect(done.locator(`[data-task="${filed.key}"]`)).toBeVisible();
   const ended = (await v1<Detail>(as.ada, "GET", `/v1/tasks/${filed.key}`)).task;
   expect(ended.state).toBe("done");
+  expect(ended.workflow_id).toBe(wf("Bugs"));
+  await done.scrollIntoViewIfNeeded();
   await shot(page, "board-bugs-done");
 
   for (const other of ["Triage", "Features", "Prototypes", "Support"]) {
     await page.goto(`${base}${board(wf(other))}`);
     await expect(chip(page)).toHaveText(other);
-    await expect(page.getByRole("region", { name: "Done", exact: true })).toBeVisible();
+    // The board has read its Tasks: its Done column counts none of them.
+    await expect(page.getByRole("region", { name: "Done", exact: true }).locator(".tabular-nums").first()).toHaveText("0");
     await expect(card(page, filed.key)).toHaveCount(0);
   }
   expect(errors).toEqual([]);
@@ -257,7 +281,7 @@ test("5 · the line of Triage shows an exit chip per crossing outcome; Bugs' sho
   await ctx.close();
 });
 
-test("6 · the editor's rail: a Workflow added with a Step and saved, the chip shows six; deleted with a Task, it asks where the Task goes", async ({ browser }) => {
+test("6 · the editor's rail: a Workflow added, renamed and moved first, the chip reads the order saved; deleted with a Task and an outcome into it, it asks where each goes", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, "/settings/projects/ACC/workflow");
   const rail = page.getByRole("list", { name: "Workflows" });
   await expect(rail.getByRole("listitem")).toHaveCount(5);
@@ -279,9 +303,8 @@ test("6 · the editor's rail: a Workflow added with a Step and saved, the chip s
   await page.getByRole("option", { name: /^devops/ }).click();
   await expect(page.getByRole("button", { name: "Editing · 2 changes: list them" })).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(/\/projects\/ACC\/workflow\?workflow=/);
-  graph = await v1<Graph>(as.ada, "GET", "/v1/projects/ACC/workflow");
-  expect(graph.workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support", "Ops"]);
+  await expect(page).toHaveURL(address("/projects/ACC/workflow\\?workflow="));
+  await expect.poll(async () => (graph = await readGraph()).workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support", "Ops"]);
   expect(graph.steps.find((s) => s.name === "Deploy")?.workflow_id).toBe(wf("Ops"));
 
   // The board's chip lists six.
@@ -297,23 +320,69 @@ test("6 · the editor's rail: a Workflow added with a Step and saved, the chip s
   await shot(page, "editor-outcome-groups");
   await page.keyboard.press("Escape");
 
-  // A Task at Deploy: deleting Ops asks where it goes; it goes to Triage.
-  const deploying = (await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "ACC", title: "Roll the ledger service", step: "Deploy" })).task;
+  // Ops renamed with the pencil, Enter keeping the name; a second rename, Escape puts it back.
   await page.goto(`${base}/settings/projects/ACC/workflow?workflow=${wf("Ops")}`);
   await expect(rail.getByRole("button", { name: "Ops", exact: true })).toHaveAttribute("aria-current", "true");
-  await rail.getByRole("button", { name: "Delete Ops" }).click();
-  const dialog = page.getByRole("dialog", { name: "Delete Ops" });
+  await rail.getByRole("button", { name: "Rename Ops" }).click();
+  await name.fill("Releases");
+  await name.press("Enter");
+  await expect(rail.getByRole("button", { name: "Releases", exact: true })).toHaveAttribute("aria-current", "true");
+  await rail.getByRole("button", { name: "Rename Releases" }).click();
+  await name.fill("Ship it");
+  await name.press("Escape");
+  await expect(name).toHaveCount(0);
+  await expect(rail.getByRole("button", { name: "Releases", exact: true })).toBeVisible();
+  await expect(rail.getByRole("button", { name: "Ship it", exact: true })).toHaveCount(0);
+
+  // Moved to the front with ←, Deploy is where New Tasks start: said under the changes.
+  for (let i = 0; i < 5; i++) await rail.getByRole("button", { name: "Move Releases left" }).click();
+  await expect(rail.getByRole("listitem")).toHaveText(["Releases", "Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  await expect(rail.getByRole("button", { name: "Move Releases left" })).toBeDisabled();
+  await page.getByRole("button", { name: /^Editing · \d+ changes?: list them$/ }).click();
+  await expect(page.getByText("New Tasks start at Deploy.", { exact: false })).toBeVisible();
+  await shot(page, "editor-reordered");
+  await page.keyboard.press("Escape");
+
+  // An outcome out of Triage into Deploy: a crossing the delete must ask about.
+  await rail.getByRole("button", { name: "Triage", exact: true }).click();
+  await page.getByRole("list", { name: "Steps" }).getByRole("button", { name: "1. Triage" }).click();
+  await page.getByRole("button", { name: "Add an outcome out of Triage" }).click();
+  await page.getByRole("textbox", { name: "Outcome out of Triage" }).last().fill("release");
+  await page.getByRole("combobox", { name: "Where release out of Triage leads" }).click();
+  await page.getByRole("option", { name: "Deploy", exact: true }).click();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page).toHaveURL(address("/projects/ACC/workflow\\?workflow="));
+  await expect.poll(async () => (graph = await readGraph()).workflows.map((w) => w.name)).toEqual(["Releases", "Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  const release = () => graph.connectors.find((c) => c.from_step_id === stepOf("Triage") && c.name === "release");
+  expect(release()?.to_step_id).toBe(stepOf("Deploy"));
+
+  // The board's chip reads the saved order.
+  await boardPage.page.goto(`${base}${board(wf("Bugs"))}`);
+  await chip(boardPage.page).click();
+  await expect(boardPage.page.getByRole("option")).toHaveText(["Releases", "Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  await boardPage.page.keyboard.press("Escape");
+
+  // A Task at Deploy: deleting Releases asks where it goes (to Triage) and where release leads
+  // instead (nowhere: the outcome is removed).
+  const deploying = (await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "ACC", title: "Roll the ledger service", step: "Deploy" })).task;
+  await page.goto(`${base}/settings/projects/ACC/workflow?workflow=${wf("Releases")}`);
+  await expect(rail.getByRole("button", { name: "Releases", exact: true })).toHaveAttribute("aria-current", "true");
+  await rail.getByRole("button", { name: "Delete Releases" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete Releases" });
   await expect(dialog.getByText("1 Task at Deploy")).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Delete Ops" })).toBeDisabled();
+  await expect(dialog.getByRole("combobox", { name: "Where release out of Triage leads instead" })).toHaveText("Remove this outcome");
+  await expect(dialog.getByRole("button", { name: "Delete Releases" })).toBeDisabled();
   await dialog.getByRole("combobox", { name: "Step that receives the Tasks at Deploy" }).click();
   await page.getByRole("option", { name: "Triage", exact: true }).click();
-  await dialog.getByRole("button", { name: "Delete Ops" }).click();
+  await shot(page, "editor-delete-asks");
+  await dialog.getByRole("button", { name: "Delete Releases" }).click();
   await expect(rail.getByRole("listitem")).toHaveCount(5);
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(/\/projects\/ACC\/workflow/);
+  await expect(page).toHaveURL(address("/projects/ACC/workflow"));
   await expect.poll(async () => (await v1<Detail>(as.ada, "GET", `/v1/tasks/${deploying.key}`)).task.step_id).toBe(stepOf("Triage"));
-  graph = await v1<Graph>(as.ada, "GET", "/v1/projects/ACC/workflow");
-  expect(graph.workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  await expect.poll(async () => (graph = await readGraph()).workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  expect(release()).toBeUndefined();
+  expect(graph.connectors.filter((c) => c.from_step_id === stepOf("Triage")).map((c) => c.name)).toEqual(["bug", "feature", "prototype", "question"]);
 
   expect([...errors, ...boardPage.errors]).toEqual([]);
   await boardPage.ctx.close();
@@ -333,10 +402,23 @@ test("7 · File Task's Step picker groups the Steps by Workflow; the list heads 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 
+  // The list is the whole Project: each Step group headed with its Workflow, in the Project's
+  // order; Done is no Workflow's and carries no prefix.
   await page.goto(`${base}/projects/ACC/tasks?view=list`);
   await expect(page.getByRole("main").getByRole("region", { name: "Bugs › Investigate" })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("region", { name: "Triage › Triage" })).toBeVisible();
+  await expect.poll(() => columnNames(page)).toEqual(["Triage › Triage", "Bugs › Investigate", "Done"]);
   await shot(page, "list-headings");
+  expect(errors).toEqual([]);
+  await ctx.close();
+});
+
+test("8 · a Project of one Workflow has no chip; its board renders", async ({ browser }) => {
+  const { page, errors, ctx } = await open(browser, "/projects/MAIN/tasks?view=board");
+  await expect(columns(page).first()).toBeVisible();
+  await expect(chip(page)).toHaveCount(0);
+  const names = await columnNames(page);
+  expect(names.slice(-2)).toEqual(["Done", "Dropped"]);
+  expect(names.length).toBeGreaterThan(2);
   expect(errors).toEqual([]);
   await ctx.close();
 });
@@ -346,30 +428,72 @@ async function chipReadsWhole(page: Page, name: string) {
   await expect(chip(page)).toBeVisible();
   await expect(chip(page)).toHaveText(name);
   const label = chip(page).locator("span").first();
+  await expect(chip(page)).toBeInViewport({ ratio: 1 });
+  await expect(chip(page).locator("svg")).toBeInViewport({ ratio: 1 });
   // Not clipped: the name's text fits its box, and the chip its own.
   expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await chip(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await insideThePhone(page, label);
+}
+
+/** The chip, its name and its caret inside 390 px and inside the breadcrumb; the page does not scroll sideways. */
+async function insideThePhone(page: Page, label: ReturnType<Page["locator"]>) {
   for (const box of [await chip(page).boundingBox(), await label.boundingBox(), await chip(page).locator("svg").boundingBox()]) {
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
-  // Nothing in the bar is cut by what holds it: the chip ends inside the breadcrumb.
+  // Nothing in the bar is cut by what holds it: the chip ends inside the breadcrumb, before the
+  // view switch beside it.
   const crumbs = await page.getByRole("navigation", { name: "Breadcrumb" }).boundingBox();
   const whole = await chip(page).boundingBox();
   expect(whole!.x + whole!.width).toBeLessThanOrEqual(crumbs!.x + crumbs!.width + 0.5);
+  const view = await page.getByRole("button", { name: /^View: / }).boundingBox();
+  expect(whole!.x + whole!.width).toBeLessThan(view!.x);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
 }
 
-test("8 · on a phone, Bugs' board does not scroll sideways and the chip reads whole", async ({ browser }) => {
+test("9 · on a phone, every Workflow's board and page reads the chip whole; a long name truncates before its caret", async ({ browser }) => {
   const { page, errors, ctx } = await open(browser, board(wf("Bugs")), { width: 390, height: 844 });
-  await expect(page.getByRole("region", { name: "Investigate", exact: true })).toBeVisible();
-  await chipReadsWhole(page, "Bugs");
-  await shot(page, "phone-board-bugs");
+  for (const name of ["Triage", "Bugs", "Features", "Prototypes", "Support"]) {
+    await page.goto(`${base}${board(wf(name))}`);
+    await expect(columns(page).first()).toBeVisible();
+    await chipReadsWhole(page, name);
+    // Beside the chip the List | Board switch is a menu.
+    await expect(page.getByRole("button", { name: "View: Board" })).toBeVisible();
+    await shot(page, `phone-board-${name.toLowerCase()}`);
+  }
   await page.goto(`${base}/projects/ACC/workflow?workflow=${wf("Bugs")}`);
   await expect(page.getByRole("region", { name: "Workflow" })).toBeVisible();
   await chipReadsWhole(page, "Bugs");
   await shot(page, "phone-workflow-bugs");
+
+  // A long name stops before the caret with an ellipsis; the caret stays in view.
+  await renameWorkflow("Prototypes", "Prototypes and experiments");
+  try {
+    await page.goto(`${base}${board(wf("Prototypes and experiments"))}`);
+    await expect(columns(page).first()).toBeVisible();
+    await expect(chip(page)).toHaveText("Prototypes and experiments");
+    const label = chip(page).locator("span").first();
+    expect(await label.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    expect(await label.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+    await expect(chip(page)).toBeInViewport({ ratio: 1 });
+    await expect(chip(page).locator("svg")).toBeInViewport({ ratio: 1 });
+    await insideThePhone(page, label);
+    await shot(page, "phone-board-long-name");
+  } finally {
+    await renameWorkflow("Prototypes and experiments", "Prototypes");
+  }
+  expect(errors).toEqual([]);
+  await ctx.close();
+});
+
+test("10 · on a phone, a board with no chip keeps the List | Board switch as two icons", async ({ browser }) => {
+  const { page, errors, ctx } = await open(browser, "/projects/MAIN/tasks?view=board", { width: 390, height: 844 });
+  await expect(columns(page).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "View" }).getByRole("link")).toHaveCount(2);
+  await expect(page.getByRole("navigation", { name: "View" })).toBeInViewport({ ratio: 1 });
   expect(errors).toEqual([]);
   await ctx.close();
 });
