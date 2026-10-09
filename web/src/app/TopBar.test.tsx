@@ -73,6 +73,18 @@ describe("TopBar in two rows", () => {
     expect(within(row).getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 
+  it("draws a hairline under the crumbs' row when a second row follows", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} view={<span>View</span>} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).parentElement).toHaveClass("border-b");
+    expect(screen.getByRole("banner")).toHaveClass("border-b");
+  });
+
   it("hides its acts' labels by the row's width, and fades the view only when it overflows", () => {
     render(
       <MemoryRouter>
@@ -98,5 +110,8 @@ describe("TopBar in two rows", () => {
       </MemoryRouter>,
     );
     expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
+    // The header alone carries the one hairline then.
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).parentElement).not.toHaveClass("border-b");
+    expect(screen.getByRole("banner")).toHaveClass("border-b");
   });
 });
