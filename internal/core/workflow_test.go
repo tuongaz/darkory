@@ -237,6 +237,7 @@ func TestSetWorkflow(t *testing.T) {
 		// What the Workflow says on its own, and against the record: each refused by its own rule,
 		// its message naming it.
 		work := before.Steps[0].WorkflowID
+		ghost := store.NewID()
 		for _, c := range []struct {
 			name   string
 			mutate func(w *core.WorkflowsInput)
@@ -271,11 +272,26 @@ func TestSetWorkflow(t *testing.T) {
 			{"two Steps at one place", func(w *core.WorkflowsInput) { w.Steps[1].Position = 50 }, "two Steps in Work are at position 50"},
 			{"two Connectors out of QA at one place", func(w *core.WorkflowsInput) { w.Connectors[2].Position = 3 },
 				"two Connectors out of QA are at position 3"},
-			{"a Step's place below 1", func(w *core.WorkflowsInput) { w.Steps[1].Position = -1 }, "a position is 1 or more, not -1"},
+			{"a Step's place below 1", func(w *core.WorkflowsInput) { w.Steps[1].Position = -1 }, "the position of a Step in Work is 1 or more, not -1"},
 			{"moves from a kept Step", func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Plan"]: "QA"} },
 				"moves names " + id["Plan"] + ", which is not a Step being deleted"},
 			{"moves into no Step", func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Review"]: "Nowhere"} },
 				`moves names "Nowhere", which is not a Step of the body`},
+			{"moves from no Step at all", func(w *core.WorkflowsInput) { w.Moves = map[string]string{ghost: "QA"} },
+				"moves names " + ghost + ", which is not a Step being deleted"},
+			{"moves naming one Step twice", func(w *core.WorkflowsInput) {
+				w.Moves = map[string]string{id["Review"]: "QA", shortid.Short(id["Review"]): "Make"}
+			}, "moves names Step " + id["Review"] + " twice"},
+			{"a Step name on two lines", func(w *core.WorkflowsInput) {
+				w.Steps = append(w.Steps, core.StepInput{Workflow: "Work", Name: "Q\nA"})
+			}, "a Step's name is 1 to 50 characters, on one line"},
+			{"a Step name too long", func(w *core.WorkflowsInput) {
+				w.Steps = append(w.Steps, core.StepInput{Workflow: "Work", Name: strings.Repeat("s", 51)})
+			}, "a Step's name is 1 to 50"},
+			{"a Connector's place below 1", func(w *core.WorkflowsInput) { w.Connectors[0].Position = -1 },
+				"the position of a Connector out of Plan is 1 or more, not -1"},
+			{"a Connector name spelled as an id", func(w *core.WorkflowsInput) { w.Connectors[0].Name = store.NewID() },
+				"a Connector's name cannot be spelled as an id"},
 			{"no Workflow at all", func(w *core.WorkflowsInput) { w.Workflows = nil }, "no Workflow at all"},
 			{"two Workflows named alike", func(w *core.WorkflowsInput) {
 				w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "WORK", Position: 2})
@@ -283,7 +299,7 @@ func TestSetWorkflow(t *testing.T) {
 			{"two Workflows at one place", func(w *core.WorkflowsInput) {
 				w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 1})
 			}, "two Workflows are at position 1"},
-			{"a Workflow's place below 1", func(w *core.WorkflowsInput) { w.Workflows[0].Position = -1 }, "a position is 1 or more, not -1"},
+			{"a Workflow's place below 1", func(w *core.WorkflowsInput) { w.Workflows[0].Position = -1 }, "the position of a Workflow is 1 or more, not -1"},
 			// The Workflow named by its id, and its Steps naming it by id, so a broken name trips
 			// only the rule on names.
 			{"a blank Workflow name", func(w *core.WorkflowsInput) { byID(w, work); w.Workflows[0].Name = " " }, "a Workflow's name is 1 to 50"},
@@ -1081,6 +1097,25 @@ func TestSetWorkflowReadsShortIDs(t *testing.T) {
 		}
 		if got := f.checkActivity(); got != n || len(f.activity("workflow.changed")) != 1 {
 			t.Fatalf("short ids wrote %d entries", got-n)
+		}
+
+		// A moves key in the short form names the Step being deleted.
+		lead := f.member("lead", []string{"WEB"}, nil)
+		held := asSet(f.workflows("WEB"))
+		held.Steps = append(held.Steps, core.StepInput{Workflow: core.WorkflowFirstName, Name: "Hold", Position: int64(len(held.Steps) + 1)})
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", held, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		hold := f.step("WEB", "Hold")
+		task := f.task(lead, "WEB", "Held", "Hold")
+		gone := asSet(f.workflows("WEB"))
+		gone.Steps = slices.DeleteFunc(gone.Steps, func(s core.StepInput) bool { return s.ID == hold })
+		gone.Moves = map[string]string{shortid.Short(hold): "Backlog"}
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", gone, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.get(task.Key).Task; got.StepID == nil || *got.StepID != f.step("WEB", "Backlog") {
+			t.Fatalf("the Task held at Hold is at %v, want Backlog", got.StepID)
 		}
 	})
 }

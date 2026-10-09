@@ -570,8 +570,9 @@ export interface paths {
          *     that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
          *     `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
          *     `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-         *     empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
-         *     deleted, or a value that is not a Step of the body), `step_in_use`.
+         *     empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
+         *     1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+         *     not a Step of the body), `step_in_use`.
          */
         put: operations["setWorkflow"];
         post?: never;

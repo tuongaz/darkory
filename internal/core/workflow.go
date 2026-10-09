@@ -70,19 +70,25 @@ WHERE k.org_id = $1 AND k.from_step_id = $2 ORDER BY k.position, k.id`, orgID, s
 func getWorkflow(ctx context.Context, r store.Reader, orgID, projectID string) (Workflows, error) {
 	w := Workflows{ProjectID: projectID}
 	var err error
-	if w.Workflows, err = collect(ctx, r, func(row interface{ Scan(...any) error }) (Workflow, error) {
-		var wf Workflow
-		return wf, row.Scan(&wf.ID, &wf.Name, &wf.Position)
-	}, `SELECT id, name, position FROM workflows WHERE org_id = $1 AND project_id = $2 ORDER BY position, id`, orgID, projectID); err != nil {
+	if w.Workflows, err = getWorkflowRows(ctx, r, orgID, projectID); err != nil {
 		return w, err
 	}
 	if w.Steps, err = getSteps(ctx, r, orgID, projectID); err != nil {
 		return w, err
 	}
 	w.Connectors, err = collect(ctx, r, scanConnector, `SELECT `+connectorCols+` FROM connectors k
-JOIN steps st ON st.id = k.from_step_id JOIN workflows w ON w.id = st.workflow_id
+JOIN steps st ON st.org_id = k.org_id AND st.id = k.from_step_id
+JOIN workflows w ON w.org_id = st.org_id AND w.id = st.workflow_id
 WHERE k.org_id = $1 AND k.project_id = $2 ORDER BY w.position, st.position, k.position, k.id`, orgID, projectID)
 	return w, err
+}
+
+// getWorkflowRows reads a Project's Workflows alone, by position.
+func getWorkflowRows(ctx context.Context, r store.Reader, orgID, projectID string) ([]Workflow, error) {
+	return collect(ctx, r, func(row interface{ Scan(...any) error }) (Workflow, error) {
+		var wf Workflow
+		return wf, row.Scan(&wf.ID, &wf.Name, &wf.Position)
+	}, `SELECT id, name, position FROM workflows WHERE org_id = $1 AND project_id = $2 ORDER BY position, id`, orgID, projectID)
 }
 
 // getSteps reads a Project's Steps in the Project's order: by their Workflow's position, then
@@ -145,11 +151,11 @@ func workflowOf(ctx context.Context, r store.Reader, orgID, projectID, ref strin
 	if strings.TrimSpace(ref) == "" {
 		return Workflow{}, refuse(CodeInvalid, "a Workflow reference is empty")
 	}
-	w, err := getWorkflow(ctx, r, orgID, projectID)
+	wfs, err := getWorkflowRows(ctx, r, orgID, projectID)
 	if err != nil {
 		return Workflow{}, err
 	}
-	wf, ok := w.findWorkflow(ref)
+	wf, ok := Workflows{Workflows: wfs}.findWorkflow(ref)
 	if !ok {
 		return Workflow{}, refuse(CodeNotFound, "the Project has no Workflow %q", ref)
 	}
@@ -736,7 +742,7 @@ func resolveWorkflows(current Workflows, in []WorkflowInput) ([]Workflow, error)
 	if len(in) == 0 {
 		return nil, refuse(CodeInvalid, "no Workflow at all; a Project has one at least")
 	}
-	at, err := places("two Workflows", len(in), func(i int) int64 { return in[i].Position })
+	at, err := places("two Workflows", "a Workflow", len(in), func(i int) int64 { return in[i].Position })
 	if err != nil {
 		return nil, err
 	}
@@ -814,7 +820,7 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 	stepAt := make([]int64, len(w.Steps))
 	for _, wf := range out.workflows {
 		is := group[wf.ID]
-		at, err := places("two Steps in "+wf.Name, len(is), func(j int) int64 { return w.Steps[is[j]].Position })
+		at, err := places("two Steps in "+wf.Name, "a Step in "+wf.Name, len(is), func(j int) int64 { return w.Steps[is[j]].Position })
 		if err != nil {
 			return out, err
 		}
@@ -938,7 +944,7 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 	at := map[string][]int64{}
 	for from, ps := range given {
 		st, _ := next.find(from)
-		if at[from], err = places("two Connectors out of "+st.Name, len(ps), func(i int) int64 { return ps[i] }); err != nil {
+		if at[from], err = places("two Connectors out of "+st.Name, "a Connector out of "+st.Name, len(ps), func(i int) int64 { return ps[i] }); err != nil {
 			return out, err
 		}
 	}
@@ -962,6 +968,9 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		if ids[from] || !slices.ContainsFunc(current.Steps, func(s Step) bool { return s.ID == from }) {
 			return out, refuse(CodeInvalid, "moves names %s, which is not a Step being deleted", from)
 		}
+		if _, twice := out.moves[from]; twice { // its long and short forms both given
+			return out, refuse(CodeInvalid, "moves names Step %s twice", from)
+		}
 		id, err := find("moves", to)
 		if err != nil {
 			return out, err
@@ -973,15 +982,16 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 
 // places numbers n Workflows, the n Steps of one Workflow, or the n Connectors out of one Step, 1
 // to n in the order of their positions, pos(i) for the i-th in the list; a position of 0 reads as
-// its place in the list. Two at one position, or one below 0, are refused invalid.
-func places(what string, n int, pos func(i int) int64) ([]int64, error) {
+// its place in the list. Two at one position, or one below 0, are refused invalid; what names
+// two of them and one names one, for the refusals.
+func places(what, one string, n int, pos func(i int) int64) ([]int64, error) {
 	given := make([]int64, n)
 	order := make([]int, n)
 	taken := map[int64]bool{}
 	for i := range n {
 		given[i], order[i] = pos(i), i
 		if given[i] < 0 {
-			return nil, refuse(CodeInvalid, "a position is 1 or more, not %d", given[i])
+			return nil, refuse(CodeInvalid, "the position of %s is 1 or more, not %d", one, given[i])
 		}
 		if given[i] == 0 {
 			given[i] = int64(i + 1)
