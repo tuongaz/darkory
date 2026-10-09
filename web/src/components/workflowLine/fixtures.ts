@@ -10,15 +10,18 @@ import softwareJSON from "./workflows/software.json";
  * (examples/workflows/software/workflow.json): 14 Steps, loops into Design and Build, skips.
  */
 
+/** The one Workflow of a fixture written here. */
+const WORK = { id: "work", name: "Work", position: 1 };
+
 function workflow(steps: [id: string, name: string, skill: string | null][], connectors: [from: string, name: string, to: string | null][]): LineWorkflow {
-  const s: LineStep[] = steps.map(([id, name, skill], i) => ({ id, name, position: i + 1, ...(skill ? { skill: { name: skill } } : {}) }));
+  const s: LineStep[] = steps.map(([id, name, skill], i) => ({ id, workflow_id: WORK.id, name, position: i + 1, ...(skill ? { skill: { name: skill } } : {}) }));
   const count = new Map<string, number>();
   const c: LineConnector[] = connectors.map(([from, name, to]) => {
     const position = (count.get(from) ?? 0) + 1;
     count.set(from, position);
     return { id: `${from}:${name}`, from, to, name, position };
   });
-  return { steps: s, connectors: c };
+  return { workflows: [WORK], steps: s, connectors: c };
 }
 
 export const MAIN = workflow(
@@ -89,9 +92,10 @@ export const BIG = workflow(
   ],
 );
 
-/** A workflow.json as `darkory workflow set --file` reads it: Steps and Connectors by name. */
+/** A workflow.json as `darkory workflow set --file` reads it: Workflows, Steps and Connectors by name. */
 type WorkflowFile = {
-  steps: { name: string; skill?: string; position: number }[];
+  workflows: { name: string; position: number }[];
+  steps: { workflow: string; name: string; skill?: string; position: number }[];
   connectors: { from: string; to?: string; name: string; position: number }[];
 };
 
@@ -99,7 +103,8 @@ const slug = (name: string) => name.toLowerCase().replace(/\W+/g, "-");
 
 function fromFile(file: WorkflowFile): LineWorkflow {
   return {
-    steps: file.steps.map((s) => ({ id: slug(s.name), name: s.name, position: s.position, ...(s.skill ? { skill: { name: s.skill } } : {}) })),
+    workflows: file.workflows.map((w) => ({ id: slug(w.name), name: w.name, position: w.position })),
+    steps: file.steps.map((s) => ({ id: slug(s.name), workflow_id: slug(s.workflow), name: s.name, position: s.position, ...(s.skill ? { skill: { name: s.skill } } : {}) })),
     connectors: file.connectors.map((c) => ({ id: `${slug(c.from)}:${c.name}`, from: slug(c.from), to: c.to ? slug(c.to) : null, name: c.name, position: c.position })),
   };
 }

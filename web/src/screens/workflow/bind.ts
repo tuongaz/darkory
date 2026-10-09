@@ -1,4 +1,4 @@
-import type { RunnerSession, Schemas, Skill, Task, Workflow as WorkflowRecord } from "@/api/client";
+import type { RunnerSession, Schemas, Skill, Task, Workflows as WorkflowRecord } from "@/api/client";
 import type { Connector, Step, Taker, TaskChip, Workflow } from "@/components/workflow/model";
 import { workingOf, type MemberKind, type Working } from "@/lib/work";
 import { liveClaim } from "@/work";
@@ -93,6 +93,7 @@ export function toCanvas(
     const takers: Taker[] = s.takers.map((t) => ({ id: t.id, name: t.name, kind: t.kind, working: ringed?.get(t.id) }));
     return {
       id: s.id,
+      workflow_id: s.workflow_id,
       name: s.name,
       skill: s.skill_id ? { id: s.skill_id, name: skill?.name ?? "…" } : undefined,
       position: s.position,
@@ -112,7 +113,7 @@ export function toCanvas(
     name: c.name,
     position: c.position,
   }));
-  return { steps, connectors };
+  return { workflows: record.workflows.map(({ id, name, position }) => ({ id, name, position })), steps, connectors };
 }
 
 /**
@@ -140,8 +141,10 @@ export function toBody(record: WorkflowRecord, moves?: Record<string, string>): 
       };
     });
   const body: SetWorkflowBody = {
+    workflows: record.workflows.map(({ id, name, position }) => ({ id, name, position })),
     steps: steps.map((s, i) => ({
       ...(isNew(s.id) ? {} : { id: s.id }),
+      workflow: s.workflow_id,
       name: s.name,
       ...(s.skill_id ? { skill: s.skill_id } : {}),
       position: i + 1,

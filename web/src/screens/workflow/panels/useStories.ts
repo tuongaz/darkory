@@ -11,7 +11,7 @@ import { isQuiet, storiesOf, type Story } from "./stories";
 import { useNeeds } from "./useNeeds";
 import { useSeen, type Seen } from "./useSeen";
 
-const none: Workflow = { steps: [], connectors: [] };
+const none: Workflow = { workflows: [], steps: [], connectors: [] };
 
 /** The words' context for a Project's entries (its Workflow, Tasks and Members by id), and its Tasks. */
 export function useFlowContext(project: Project): { ctx: FlowContext; tasks: Map<string, Task> } {

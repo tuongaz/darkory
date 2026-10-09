@@ -82,10 +82,10 @@ describe("inserting a Step", () => {
     expect(listed(setSkill(draft, id, { id: engineer.id }))).toBe("main");
   });
 
-  it("sends the new Step by name, with no outcome", () => {
+  it("sends the new Step by name, in the Workflow of the Step it follows, with no outcome", () => {
     const { draft, id } = insertStep(d0(), step.review, "main");
     const body = toBody(renameStep(draft, id, "Security review").wf);
-    expect(body.steps[4]).toEqual({ name: "Security review", position: 5 });
+    expect(body.steps[4]).toEqual({ workflow: "wf-work", name: "Security review", position: 5 });
     expect(body.connectors.filter((c) => c.from === "Security review")).toEqual([]);
   });
 });

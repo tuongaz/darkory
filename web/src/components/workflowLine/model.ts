@@ -5,14 +5,20 @@ import { durationText } from "@/lib/time";
  * What the Workflow line draws (Direction D, docs: mock-workflow/frag-d.html): a Project's Steps
  * on one left-to-right line in Workflow order, and the Tasks at them as tokens. The shapes are
  * structural, so the canvas's `Workflow` (components/workflow/model.ts) passes as a `LineWorkflow`.
+ * A Project has one or more named Workflows (ADR 0019); each Step belongs to one, and the
+ * Project's order is its Workflows' order, then each Workflow's Steps'.
  */
 
 /** The station every line ends on. A Connector with no `to` leads into it. */
 export const DONE_STATION = "done";
 
-export type LineStep = { id: string; name: string; position: number; skill?: { name: string } };
+/** A named Workflow of the Project: its place among them, 1 first. */
+export type LineWorkflowName = { id: string; name: string; position: number };
+/** A Step: its place in its Workflow (`workflow_id`), 1 first. */
+export type LineStep = { id: string; workflow_id: string; name: string; position: number; skill?: { name: string } };
 export type LineConnector = { id: string; from: string; to: string | null; name: string; position: number };
-export type LineWorkflow = { steps: readonly LineStep[]; connectors: readonly LineConnector[] };
+/** A Project's Workflows, every Step of them and every Connector, one into another Workflow's Step too. */
+export type LineWorkflow = { workflows: readonly LineWorkflowName[]; steps: readonly LineStep[]; connectors: readonly LineConnector[] };
 
 /**
  * The Skills of the Steps where Darkory files what a Parent needs once its Subtasks end: they sit
@@ -26,12 +32,26 @@ export const breakdownSkill = "breakdown";
 /** The Organisation's builtin Skills, by name: no Step carrying one is where a Project's own work starts. */
 export const builtinSkills: readonly string[] = [breakdownSkill, ...branchSkills];
 
-const inPosition = (workflow: LineWorkflow) => [...workflow.steps].sort((a, b) => a.position - b.position);
+/**
+ * The Project's Steps in its order: by their Workflow's position, then their own (the order the
+ * server returns them in, and the one "the first Step" reads). A Step of no Workflow listed comes last.
+ */
+function inPosition<S extends LineStep>(workflow: { workflows: readonly LineWorkflowName[]; steps: readonly S[] }): S[] {
+  const rank = new Map(workflow.workflows.map((w) => [w.id, w.position]));
+  const of = (s: LineStep) => rank.get(s.workflow_id) ?? Number.POSITIVE_INFINITY;
+  return [...workflow.steps].sort((a, b) => of(a) - of(b) || a.position - b.position);
+}
+
+/** One Workflow's Steps in its order; none for a Workflow the Project does not have. */
+export function stepsOf<S extends LineStep>(workflow: { workflows: readonly LineWorkflowName[]; steps: readonly S[] }, workflowId: string): S[] {
+  return inPosition(workflow).filter((s) => s.workflow_id === workflowId);
+}
 
 /**
- * Where a Task filed with no Step named starts: the first Step whose Skill is the Project's own
- * work (not breakdown, acceptance, retro or skill-review); else the first Step with any Skill; else
- * the first Step. The same rule as the server's `defaultStep` (internal/core/workflow.go).
+ * Where a Task filed with no Step named starts: the first Step, in the Project's order, whose
+ * Skill is the Project's own work (not breakdown, acceptance, retro or skill-review); else the
+ * first Step with any Skill; else the first Step. The same rule as the server's `defaultStep`
+ * (internal/core/workflow.go).
  */
 export function startStep(workflow: LineWorkflow): string | undefined {
   const steps = inPosition(workflow);
@@ -95,7 +115,7 @@ export type LineMember = { id: string; name: string; kind: MemberKind; working?:
 
 /** A Step with what the line says under its name: who takes its Tasks, and their median time there. */
 export type LineStepFacts = LineStep & { takers?: readonly LineMember[]; medianMs?: number };
-export type LineFacts = { steps: readonly LineStepFacts[]; connectors: readonly LineConnector[] };
+export type LineFacts = { workflows: readonly LineWorkflowName[]; steps: readonly LineStepFacts[]; connectors: readonly LineConnector[] };
 
 /** A Task named by its key: a blocker on a token's "by MAIN-10". */
 export type LineBrief = { id: string; key: string; title: string };

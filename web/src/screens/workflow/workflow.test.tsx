@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import type { Schemas, Workflow } from "@/api/client";
+import type { Schemas, Workflows } from "@/api/client";
 import { mockApi, refuse, type Call } from "@/test/api";
 import { ada, bob, builder, engineer, memberDetail, ops, review, skillReview, skills, step, web, workflow } from "@/test/fixtures";
 import { signedIn } from "@/test/fixtures";
@@ -11,13 +11,23 @@ import { addOutcome, deleteStep, fromRecord, insertStep, makeMain, moveStepTo, r
 
 type Body = Schemas["SetWorkflowBody"];
 
-/** The record a PUT body makes of `wf`, as /v1 answers: new Steps and Connectors get ids, the facts stay. */
-function answer(wf: Workflow, body: Body): Workflow {
+/**
+ * The record a PUT body makes of `wf`, as /v1 answers: a Workflow without an id keeps that of the
+ * one named alike, ignoring case, else is new; new Steps and Connectors get ids; the facts stay.
+ */
+function answer(wf: Workflows, body: Body): Workflows {
   let n = 0;
+  const workflows = body.workflows.map((w) => ({
+    id: w.id ?? wf.workflows.find((x) => x.name.toLowerCase() === w.name.toLowerCase())?.id ?? `wf-made-${++n}`,
+    name: w.name,
+    position: w.position,
+  }));
+  const workflowOf = (ref: string) => (workflows.find((w) => w.id === ref) ?? workflows.find((w) => w.name.toLowerCase() === ref.toLowerCase()))!.id;
   const steps = body.steps.map((s) => {
     const was = wf.steps.find((x) => x.id === s.id);
     return {
       id: s.id ?? `st-made-${++n}`,
+      workflow_id: workflowOf(s.workflow),
       name: s.name,
       skill_id: s.skill,
       position: s.position,
@@ -31,13 +41,14 @@ function answer(wf: Workflow, body: Body): Workflow {
   const ref = (r?: string) => (r === undefined ? undefined : (steps.find((s) => s.id === r || s.name === r)?.id ?? r));
   return {
     project_id: wf.project_id,
+    workflows,
     steps,
     connectors: body.connectors.map((c) => ({ id: c.id ?? `c-made-${++n}`, from_step_id: ref(c.from)!, to_step_id: ref(c.to), name: c.name, position: c.position })),
   };
 }
 
 /** Signed in as `who`, WEB's Workflow served from `record` and replaced by each PUT, which is recorded. */
-function serve(record: Workflow = workflow(), who = ada, extra: Record<string, unknown> = {}) {
+function serve(record: Workflows = workflow(), who = ada, extra: Record<string, unknown> = {}) {
   let current = record;
   const puts: Body[] = [];
   const api = mockApi({
@@ -172,7 +183,7 @@ describe("Settings › Workflow", () => {
   it("sends the new Skill again with the Workflow after a refusal: nothing was made", async () => {
     let refusing = true;
     const { api, puts } = serve();
-    const put = api.routes["PUT /v1/projects/:project/workflow"] as (call: Call) => Workflow;
+    const put = api.routes["PUT /v1/projects/:project/workflow"] as (call: Call) => Workflows;
     api.routes["PUT /v1/projects/:project/workflow"] = (call: Call) => (refusing ? ((refusing = false), refuse(409, "conflict", "Try again.")) : put(call));
     await openList();
     await pick("4. Review");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Activity, Member, RunnerSession, Task, TaskDetail, Workflow } from "@/api/client";
+import type { Activity, Member, RunnerSession, Task, TaskDetail, Workflows } from "@/api/client";
 import { ada, bob, builder, detail, engineer, parentTask, retro, skills, step, subtask, task, web, workflow } from "@/test/fixtures";
 import { ageText } from "@/lib/time";
 import { agentNeedsOf, consequence, needsOf, type NeedsInput } from "./needs";
@@ -11,7 +11,7 @@ const ago = (m: number) => new Date(now - m * 60_000).toISOString();
 const retroAgent: Member = { id: "m-retro", name: "retro", kind: "agent", admin: false, created_at: ago(9000), agent: { command: "claude", args: [], model: "m", env: {}, unattended: true, paused: true } };
 const members = new Map([ada, bob, builder, retroAgent].map((m) => [m.id, m]));
 
-function wf(): Workflow {
+function wf(): Workflows {
   return workflow(web, { retro: { takers: [{ id: retroAgent.id, name: retroAgent.name, kind: "agent" }] } });
 }
 

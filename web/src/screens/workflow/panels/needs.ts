@@ -1,4 +1,4 @@
-import type { Activity, Member, RunnerSession, Skill, Task, TaskBrief, TaskDetail, Workflow } from "@/api/client";
+import type { Activity, Member, RunnerSession, Skill, Task, TaskBrief, TaskDetail, Workflows } from "@/api/client";
 import { isOnReportingLine } from "@/me";
 import { atHold, liveClaim } from "@/work";
 
@@ -65,7 +65,7 @@ export type NeedsInput = {
   /** Narrows the items to one Project (id); none is every Project. */
   projectId?: string;
   /** Each Project's Workflow by Project id: the Steps' Skills and takers. */
-  workflows: Map<string, Workflow | undefined>;
+  workflows: Map<string, Workflows | undefined>;
   members: Map<string, Member>;
   /** Each Project's Members by Project id, while known. */
   projectMembers: Map<string, Member[]>;

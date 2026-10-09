@@ -121,12 +121,13 @@ describe("the line on BIG, 12 Steps and 7 loops", () => {
 
 describe("the rules on Workflows of other shapes", () => {
   const wf = (steps: string[], connectors: [string, string, string | null][]): LineWorkflow => ({
-    steps: steps.map((id, i) => ({ id, name: id, position: i + 1, skill: { name: id } })),
+    workflows: [{ id: "work", name: "Work", position: 1 }],
+    steps: steps.map((id, i) => ({ id, workflow_id: "work", name: id, position: i + 1, skill: { name: id } })),
     connectors: connectors.map(([from, name, to], i) => ({ id: `c${i}`, from, to, name, position: i + 1 })),
   });
 
   it("a Workflow with no Steps is just Done", () => {
-    const t = lineTopology({ steps: [], connectors: [] });
+    const t = lineTopology({ workflows: [], steps: [], connectors: [] });
     expect(t.main).toEqual([DONE_STATION]);
     const h = horizontal(t, { width: 600, column: 0 });
     expect(h.at.get(DONE_STATION)?.x).toBe(300);
@@ -158,10 +159,11 @@ describe("the rules on Workflows of other shapes", () => {
 
   it("a main Step leading into a branch Step keeps that Step on the main line", () => {
     const t = lineTopology({
+      workflows: [{ id: "work", name: "Work", position: 1 }],
       steps: [
-        { id: "build", name: "Build", position: 1, skill: { name: "engineer" } },
-        { id: "acc", name: "Acceptance", position: 2, skill: { name: "acceptance" } },
-        { id: "retro", name: "Retro", position: 3, skill: { name: "retro" } },
+        { id: "build", workflow_id: "work", name: "Build", position: 1, skill: { name: "engineer" } },
+        { id: "acc", workflow_id: "work", name: "Acceptance", position: 2, skill: { name: "acceptance" } },
+        { id: "retro", workflow_id: "work", name: "Retro", position: 3, skill: { name: "retro" } },
       ],
       connectors: [
         { id: "1", from: "build", to: "acc", name: "pass", position: 1 },

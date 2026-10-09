@@ -13,7 +13,8 @@ const startOfToday = Date.parse("2026-10-08T00:00:00");
 // WEB's default Workflow as the canvas model has it: Backlog · Plan · Build · Review · Retro · Skill review.
 const record = workflow(web);
 const model: Model = {
-  steps: record.steps.map((s) => ({ id: s.id, name: s.name, position: s.position, x: s.x, y: s.y, takers: [], tasks: 0, working: 0, skill: s.skill_id ? { id: s.skill_id, name: s.skill_id } : undefined })),
+  workflows: record.workflows,
+  steps: record.steps.map((s) => ({ id: s.id, workflow_id: s.workflow_id, name: s.name, position: s.position, x: s.x, y: s.y, takers: [], tasks: 0, working: 0, skill: s.skill_id ? { id: s.skill_id, name: s.skill_id } : undefined })),
   connectors: record.connectors.map((c) => ({ id: c.id, from: c.from_step_id, to: c.to_step_id ?? null, name: c.name, position: c.position })),
 };
 

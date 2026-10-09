@@ -68,7 +68,8 @@ export function groupsOf(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "na
 /** The record as the Workflow line takes it: Skills by name, a Connector into Done with `to` null. */
 export function asLine(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>): LineWorkflow {
   return {
-    steps: wf.steps.map((s) => ({ id: s.id, name: s.name, position: s.position, ...(s.skill_id ? { skill: { name: skills.get(s.skill_id)?.name ?? "…" } } : {}) })),
+    workflows: wf.workflows,
+    steps: wf.steps.map((s) => ({ id: s.id, workflow_id: s.workflow_id, name: s.name, position: s.position, ...(s.skill_id ? { skill: { name: skills.get(s.skill_id)?.name ?? "…" } } : {}) })),
     connectors: wf.connectors.map((c) => ({ id: c.id, from: c.from_step_id, to: c.to_step_id ?? null, name: c.name.trim(), position: c.position })),
   };
 }
@@ -104,6 +105,8 @@ export function insertStep(d: Draft, after: string | undefined, group?: Group): 
   const id = fresh();
   const step: RecordStep = {
     id,
+    // Into the Workflow of the Step it follows; with none, the Project's first.
+    workflow_id: prev?.workflow_id ?? [...wf.workflows].sort((a, b) => a.position - b.position)[0].id,
     name: "",
     position: 0,
     x: prev ? prev.x : 0,

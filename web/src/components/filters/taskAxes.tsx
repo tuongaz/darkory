@@ -20,7 +20,7 @@ import {
   UserRoundIcon,
   UserRoundPenIcon,
 } from "lucide-react";
-import type { Activity, Label, Member, Project, Skill, Task, Taker, Workflow, Workspace } from "@/api/client";
+import type { Activity, Label, Member, Project, Skill, Task, Taker, Workflows, Workspace } from "@/api/client";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
@@ -76,7 +76,7 @@ export function kindValue(task: Pick<Task, "kind" | "aimed_at_id">): KindValue {
 export type StepInfo = { skill_id?: string; takers: Pick<Taker, "kind">[] };
 
 /** The Steps of the Workflows `workflows` holds, by id. */
-export function stepsOf(workflows: Iterable<Workflow | undefined>): Map<string, StepInfo> {
+export function stepsOf(workflows: Iterable<Workflows | undefined>): Map<string, StepInfo> {
   const out = new Map<string, StepInfo>();
   for (const wf of workflows) for (const s of wf?.steps ?? []) out.set(s.id, { skill_id: s.skill_id, takers: s.takers });
   return out;
@@ -319,7 +319,7 @@ const waitingGlyph = { glyph: "waiting" } as const;
  * The Steps of each Project's Workflow in its order, each named with the Skill it carries (or Hold),
  * grouped by Project, each group headed by its Project's name when there is more than one.
  */
-export function stepOptions(projects: readonly Project[], workflows: ReadonlyMap<string, Workflow | undefined>, skills: ReadonlyMap<string, Pick<Skill, "name">>): FilterOption[] {
+export function stepOptions(projects: readonly Project[], workflows: ReadonlyMap<string, Workflows | undefined>, skills: ReadonlyMap<string, Pick<Skill, "name">>): FilterOption[] {
   const many = projects.length > 1;
   return projects.flatMap((p) =>
     [...(workflows.get(p.id)?.steps ?? [])]
@@ -379,7 +379,7 @@ export type TaskOptionsContext = {
   /** The Projects whose Tasks the list holds, in the order their Steps are listed. */
   projects: readonly Project[];
   /** Each Project's Workflow, by Project id. */
-  workflows: ReadonlyMap<string, Workflow | undefined>;
+  workflows: ReadonlyMap<string, Workflows | undefined>;
   /** The Tasks the list holds: their Parents are Parent's values. */
   tasks: readonly Task[];
   /** The Labels the Projects' Tasks can carry: the Projects' own and the Organisation's. */

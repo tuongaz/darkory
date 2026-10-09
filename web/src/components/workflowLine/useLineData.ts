@@ -83,6 +83,7 @@ export function useLineData(project: string, scopeParam: string | null, filter?:
   const data = useMemo<LineData | undefined>(() => {
     if (!facts || !open.data) return undefined;
     const lineFacts: LineFacts = {
+      workflows: facts.workflows,
       steps: facts.steps.map((s) => ({ ...s, takers: s.takers.map((t) => ({ ...t, paused: byMember.get(t.id)?.agent?.paused })) })),
       connectors: facts.connectors,
     };
