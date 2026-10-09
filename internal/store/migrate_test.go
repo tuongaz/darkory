@@ -434,6 +434,10 @@ VALUES ('ghost', 'o', 'p2', 'TWO-1', 'work', 'Ghost', 'dropped', 'm', 1, 0, 0, 5
 					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 2, 'm', 'task.completed', 'done', '{"from":"s1a","since":1}', 2)`,
 					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 3, 'm', 'task.completed', 'done', '{"from":"s1b","since":1}', 3)`,
 					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 4, 'm', 'task.dropped', 'ghost', '{"from":"gone","since":1}', 4)`,
+					// A Parent completed by its last Subtask: at no Step, its ending names none.
+					`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, owner_id, rank, waiting_since, created_at, ended_at)
+VALUES ('parent', 'o', 'p2', 'TWO-2', 'work', 'Parent', 'done', 'm', 2, 0, 0, 6)`,
+					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 5, 'm', 'task.completed', 'parent', '{"auto_complete":true}', 5)`,
 				} {
 					if _, err := tx.Exec(ctx, q); err != nil {
 						return fmt.Errorf("%s: %w", q, err)
@@ -449,22 +453,25 @@ VALUES ('ghost', 'o', 'p2', 'TWO-1', 'work', 'Ghost', 'dropped', 'm', 1, 0, 0, 5
 			}
 
 			workflow := map[string]string{} // project → its Workflow
-			rows, err := s.Query(ctx, `SELECT id, org_id, project_id, name, position FROM workflows ORDER BY project_id`)
+			rows, err := s.Query(ctx, `SELECT w.id, w.org_id, w.project_id, w.name, w.position, p.created_at
+FROM workflows w JOIN projects p ON p.id = w.project_id ORDER BY w.project_id`)
 			if err != nil {
 				t.Fatal(err)
 			}
 			for rows.Next() {
 				var id, org, project, name string
 				var position int
-				if err := rows.Scan(&id, &org, &project, &name, &position); err != nil {
+				var created int64
+				if err := rows.Scan(&id, &org, &project, &name, &position, &created); err != nil {
 					t.Fatal(err)
 				}
 				if org != "o" || name != "Work" || position != 1 {
 					t.Errorf("Project %s's Workflow is org %s, %q at %d; want o, Work at 1", project, org, name, position)
 				}
-				// A UUIDv7 whose time is its Project's created_at (10 and 20).
-				if !regexp.MustCompile(`^0{8}-00(0a|14)-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(id) {
-					t.Errorf("Project %s's Workflow id %q is not a UUIDv7 of the Project's created_at", project, id)
+				// A UUIDv7 whose time, its first 48 bits, is its own Project's created_at.
+				prefix := fmt.Sprintf("%08x-%04x-7", created>>16, created&0xffff)
+				if !strings.HasPrefix(id, prefix) || !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(id) {
+					t.Errorf("Project %s's Workflow id %q is not a UUIDv7 of its created_at %d (%s…)", project, id, created, prefix)
 				}
 				if workflow[project] != "" {
 					t.Errorf("Project %s has two Workflows", project)
@@ -510,7 +517,7 @@ VALUES ('ghost', 'o', 'p2', 'TWO-1', 'work', 'Ghost', 'dropped', 'm', 1, 0, 0, 5
 				last[id] = step.String
 			}
 			rows.Close()
-			if want := map[string]string{"open": "", "done": "s1b", "ghost": ""}; fmt.Sprint(last) != fmt.Sprint(want) {
+			if want := map[string]string{"open": "", "done": "s1b", "ghost": "", "parent": ""}; fmt.Sprint(last) != fmt.Sprint(want) {
 				t.Fatalf("last_step_id %v, want %v", last, want)
 			}
 

@@ -46,6 +46,17 @@ func TestSchemaIsTheSameOnBothEngines(t *testing.T) {
 	}
 }
 
+// The parity above compares each foreign key with its delete rule; this pins the one rule that is
+// not NO ACTION: an ended Task's last Step, deleted with no move for it, leaves last_step_id null.
+func TestTheLastStepIsSetNullWhenItsStepGoes(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, s *store.Store) {
+		tasks := describe(t, s)["tasks"]
+		if tasks == nil || !slices.Contains(tasks.ForeignKeys, "last_step_id → steps.id on delete SET NULL") {
+			t.Fatalf("tasks' foreign keys %q lack last_step_id → steps.id on delete SET NULL", tasks.ForeignKeys)
+		}
+	})
+}
+
 // Every query filters by org_id (plan invariant 5), so every table carries it. The exceptions
 // hold no Organisation's data: organisations itself and the migration record.
 func TestEveryTableCarriesOrgID(t *testing.T) {
@@ -203,7 +214,7 @@ func describeSQLite(ctx context.Context, s *store.Store) (schema, error) {
 			tb.Indexes[i.name] = indexKind(i.unique, i.partial, cols)
 		}
 
-		fks, err := strings1(ctx, s, `SELECT "from" || ' → ' || "table" || '.' || "to" FROM pragma_foreign_key_list($1)`, name)
+		fks, err := strings1(ctx, s, `SELECT "from" || ' → ' || "table" || '.' || "to" || ' on delete ' || on_delete FROM pragma_foreign_key_list($1)`, name)
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +280,9 @@ func describePostgres(ctx context.Context, s *store.Store) (schema, error) {
 		}
 		rows.Close()
 
-		fks, err := strings1(ctx, s, `SELECT a.attname || ' → ' || ft.relname || '.' || fa.attname
+		fks, err := strings1(ctx, s, `SELECT a.attname || ' → ' || ft.relname || '.' || fa.attname || ' on delete ' ||
+				CASE k.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE'
+					WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' ELSE 'unknown ' || k.confdeltype::text END
 			FROM pg_constraint k
 			JOIN pg_class ft ON ft.oid = k.confrelid
 			JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = k.conkey[1]
