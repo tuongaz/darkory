@@ -1899,9 +1899,10 @@ type Task struct {
 	// WaitingSince When the Task was filed or last reached a Step; `next` gives a tie to the Task that has waited longest.
 	WaitingSince time.Time `json:"waiting_since"`
 
-	// WorkflowID The Workflow of the Step the Task is at, or of the Step it ended at. Absent on a
-	// Parent, on a Task aimed at a Member, and when that Step was since deleted with no
-	// `moves` for it.
+	// WorkflowID The Workflow the Task is listed in: that of the Step it is at or ended at; for a
+	// Parent, of its least-advanced open Subtask, or once ended of the Subtask that ended
+	// last at or before it; for a Task aimed at a Member, of the Task it blocks, else of its
+	// Parent. Absent when none gives one.
 	WorkflowID *string `json:"workflow_id,omitempty"`
 
 	// WorkspaceIds The Workspaces the Task names, in the order named. Absent when it names none.
@@ -2587,7 +2588,9 @@ type ListTasksParams struct {
 	// Step Only Tasks at this Step, by id, or by name together with `project`.
 	Step *string `form:"step,omitempty" json:"step,omitempty"`
 
-	// Workflow Only Tasks at a Step of this Workflow or ended at one, by id, or by name together with `project`.
+	// Workflow Only Tasks listed in this Workflow, as each Task's `workflow_id` reads: those at or
+	// ended at one of its Steps, and the Parents and Tasks aimed at a Member placed in it. By
+	// id, or by name together with `project`.
 	Workflow *string `form:"workflow,omitempty" json:"workflow,omitempty"`
 
 	// AimedAt Only Tasks aimed at this Member.
@@ -2613,12 +2616,12 @@ type ListTasksParams struct {
 	// `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
 	// match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
 	// Parent, a Task aimed at a Member, an ended Task; `workflow:not:<id>` matches a Task with no
-	// Workflow: a Parent, a Task aimed at a Member, an ended Task whose last Step was since
-	// deleted), and on a field with several values (`label`, `workspace`) match a Task none of
+	// `workflow_id`: a Task aimed at a Member that blocks no Task at a Step and has no Parent
+	// placed, an ended Task whose last Step was since deleted), and on a field with several values (`label`, `workspace`) match a Task none of
 	// whose values is one given.
 	//
 	// Fields: `project` (Project id) · `step` (Step id the Task is at) · `workflow` (Workflow
-	// id of the Step the Task is at, or of the Step it ended at) · `skill` (Skill id
+	// id the Task is listed in, as its `workflow_id` reads) · `skill` (Skill id
 	// carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
 	// `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
 	// (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`

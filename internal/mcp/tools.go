@@ -112,7 +112,7 @@ type listTasksIn struct {
 	Parent   string   `json:"parent,omitempty" jsonschema:"only this Parent's Subtasks"`
 	State    string   `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
 	Step     string   `json:"step,omitempty" jsonschema:"only Tasks at this Step: its id, or its name with project"`
-	Workflow string   `json:"workflow,omitempty" jsonschema:"only Tasks at a Step of this Workflow or ended at one: its id, or its name with project"`
+	Workflow string   `json:"workflow,omitempty" jsonschema:"only Tasks listed in this Workflow, as their workflow_id reads (at or ended at its Steps, and the Parents and Tasks aimed at a Member placed in it): its id, or its name with project"`
 	AimedAt  string   `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
 	Holder   string   `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
 	Mine     bool     `json:"mine,omitempty" jsonschema:"only Tasks you hold"`

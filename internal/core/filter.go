@@ -200,12 +200,12 @@ func takenBy(kind string) func(*sqlQuery) string {
 	}
 }
 
-// inWorkflows holds when the Task t's Step, or the Step it ended at, is in one of the Workflows
-// ids; never null, so a Task at no Step and with no last Step (a Parent, a Task aimed at a
-// Member, an ended Task whose last Step was since deleted) is matched by its NOT.
+// inWorkflows holds when the Workflow the Task t is listed in (workflowOfSQL) is one of ids;
+// never null, so a Task in no Workflow (a Task aimed at a Member that blocks no Task at a Step
+// and has no Parent placed, an ended Task whose last Step was since deleted) is matched by its
+// NOT.
 func inWorkflows(q *sqlQuery, ids []string) string {
-	return `EXISTS (SELECT 1 FROM steps xwf WHERE xwf.org_id = t.org_id AND xwf.id = COALESCE(t.step_id, t.last_step_id)
-	AND xwf.workflow_id IN (` + q.list(ids) + "))"
+	return `COALESCE(` + workflowOfSQL("t") + ` IN (` + q.list(ids) + `), FALSE)`
 }
 
 // taskFields are the fields listTasks filters by, over a Task t.

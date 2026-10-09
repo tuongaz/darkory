@@ -536,7 +536,8 @@ func (s *Service) GetTask(ctx context.Context, c *auth.Caller, ref string) (Task
 
 // TaskFilter narrows ListTasks; nil fields do not. Step names a Step by id, or by name with
 // Project, since names are unique only within a Project. Workflow names a Workflow the same way,
-// and keeps the Tasks at one of its Steps or ended at one. Filters are `filter` tokens
+// and keeps the Tasks listed in it (workflowOfSQL), Parents and Tasks aimed at a Member placed in
+// it too. Filters are `filter` tokens
 // (filter.go), where the Step's Skill is `skill`; SessionTasks are the ids of the Tasks a Runner
 // beside the server runs a session for now, which `claim:is:session` matches.
 type TaskFilter struct {

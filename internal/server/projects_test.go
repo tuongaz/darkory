@@ -376,6 +376,19 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 			ended.WorkflowID == nil || *ended.WorkflowID != bugs {
 			t.Fatalf("ended at Fix: %+v", ended)
 		}
+
+		// A Parent whose only Subtask is at Investigate is listed in Bugs, as its workflow_id
+		// reads, beside the Task that ended at Fix.
+		parent := got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptrStr("WEB"), Title: "Totals",
+			Step: ptrStr("Build")})).want(t, http.StatusCreated).JSON201.Task
+		got(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Parent: &parent.Key, Title: "Rounding",
+			Step: ptrStr("Investigate")})).want(t, http.StatusCreated)
+		if p := got(peer.GetTaskWithResponse(ctx, parent.Key)).want(t, http.StatusOK).JSON200.Task; p.StepID != nil || p.WorkflowID == nil || *p.WorkflowID != bugs {
+			t.Fatalf("the Parent at %v is in Workflow %v, want %s", p.StepID, p.WorkflowID, bugs)
+		}
+		if ks := at(client.ListTasksParams{Project: ptrStr("WEB"), Workflow: ptrStr("Bugs")}); !slices.Contains(ks, parent.Key) || !slices.Contains(ks, later.Key) {
+			t.Fatalf("tasks?workflow=Bugs lists %v, want the Parent %s and %s among them", ks, parent.Key, later.Key)
+		}
 	})
 }
 

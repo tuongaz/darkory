@@ -73,11 +73,11 @@ func scanSkill(row interface{ Scan(...any) error }) (Skill, error) {
 	return s, err
 }
 
-// taskCols reads a Task with its Step's Skill, the Workflow of its Step or of the Step it ended
-// at, the Workflow of its Step alone (for the guards), and its current Claim; scanTask shows the
-// Claim only while it is live.
-const taskCols = `t.id, t.display_key, t.project_id, t.parent_id, t.kind, t.title, t.description, t.state,
-t.step_id, t.step_since, ts.skill_id, t.last_step_id, COALESCE(ts.workflow_id, ls.workflow_id), ts.workflow_id, t.aimed_at_id, t.owner_id, t.rank, t.breakdown, t.auto_complete, t.acceptance,
+// taskCols reads a Task with its Step's Skill, the Workflow it is listed in (workflowOfSQL), the
+// Workflow of its Step alone (for the guards), and its current Claim; scanTask shows the Claim
+// only while it is live.
+var taskCols = `t.id, t.display_key, t.project_id, t.parent_id, t.kind, t.title, t.description, t.state,
+t.step_id, t.step_since, ts.skill_id, t.last_step_id, ` + workflowOfSQL("t") + `, ts.workflow_id, t.aimed_at_id, t.owner_id, t.rank, t.breakdown, t.auto_complete, t.acceptance,
 t.from_retrospective_task_id, t.filed_by, t.waiting_since, t.created_at, t.ended_at,
 t.claim_id, t.claim_holder_id, cs.chosen_id, t.claim_skill_id, cc.skill_version, cc.model_label,
 t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
@@ -85,9 +85,53 @@ EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
 	WHERE b.org_id = t.org_id AND b.task_id = t.id AND bt.state = 'open')`
 
 const taskFrom = `tasks t LEFT JOIN steps ts ON ts.id = t.step_id AND ts.org_id = t.org_id
-LEFT JOIN steps ls ON ls.id = t.last_step_id AND ls.org_id = t.org_id
 LEFT JOIN claims cc ON cc.id = t.claim_id
 LEFT JOIN sessions cs ON cs.id = t.claim_session_id`
+
+// workflowOfSQL is the Workflow the Task a is listed in, read and never stored (ADR 0019), null
+// when no rule gives one; the list, the workflow filter and ListTasks' workflow all read it:
+//
+//  1. the Workflow of the Step a is at, or of the Step it ended at;
+//  2. for a Parent, by its Subtasks (subtaskWorkflowSQL);
+//  3. for a Task aimed at a Member, while open, the Workflow of the first open Task it blocks at
+//     a Step, by Project order (Workflow position, then Step position); else its Parent's, by
+//     rule 2.
+//
+// COALESCE stops at the first that gives one on both engines, so a Task at a Step reads one
+// Step by its key and nothing more.
+func workflowOfSQL(a string) string {
+	return `COALESCE(
+	(SELECT wfs.workflow_id FROM steps wfs WHERE wfs.org_id = ` + a + `.org_id AND wfs.id = COALESCE(` + a + `.step_id, ` + a + `.last_step_id)),
+	` + subtaskWorkflowSQL(a) + `,
+	CASE WHEN ` + a + `.aimed_at_id IS NOT NULL THEN COALESCE(
+		CASE WHEN ` + a + `.state = 'open' THEN (SELECT wfs.workflow_id FROM blocks wfb
+			JOIN tasks wfc ON wfc.org_id = wfb.org_id AND wfc.id = wfb.task_id
+			JOIN steps wfs ON wfs.org_id = wfc.org_id AND wfs.id = wfc.step_id
+			JOIN workflows wfw ON wfw.org_id = wfs.org_id AND wfw.id = wfs.workflow_id
+			WHERE wfb.org_id = ` + a + `.org_id AND wfb.blocker_task_id = ` + a + `.id AND wfc.state = 'open'
+			ORDER BY wfw.position, wfs.position LIMIT 1) END,
+		(SELECT ` + subtaskWorkflowSQL("wfp") + ` FROM tasks wfp WHERE wfp.org_id = ` + a + `.org_id AND wfp.id = ` + a + `.parent_id)) END)`
+}
+
+// subtaskWorkflowSQL is the Workflow the Task p is listed in by its Subtasks, null when it has
+// none that gives one. Open: that of its least-advanced open Subtask at a Step, by Project order
+// (Workflow position, then Step position); with none, the Workflow its most recently ended
+// Subtask ended in. Ended: the Workflow of the Subtask that ended most recently at or before p
+// and ended at a Step, ties by Project order, least advanced first, so a Retrospective ended
+// later does not move a done Parent.
+func subtaskWorkflowSQL(p string) string {
+	sub := func(at, where, order string) string {
+		return `(SELECT wfs.workflow_id FROM tasks wfc
+			JOIN steps wfs ON wfs.org_id = wfc.org_id AND wfs.id = wfc.` + at + `
+			JOIN workflows wfw ON wfw.org_id = wfs.org_id AND wfw.id = wfs.workflow_id
+			WHERE wfc.org_id = ` + p + `.org_id AND wfc.parent_id = ` + p + `.id AND ` + where + `
+			ORDER BY ` + order + ` LIMIT 1)`
+	}
+	return `CASE WHEN ` + p + `.state = 'open' THEN COALESCE(
+		` + sub("step_id", "wfc.state = 'open'", "wfw.position, wfs.position") + `,
+		` + sub("last_step_id", "wfc.state <> 'open'", "wfc.ended_at DESC, wfw.position, wfs.position") + `)
+	ELSE ` + sub("last_step_id", "wfc.state <> 'open' AND wfc.ended_at <= "+p+".ended_at", "wfc.ended_at DESC, wfw.position, wfs.position") + ` END`
+}
 
 func scanTask(row interface{ Scan(...any) error }, now time.Time) (Task, error) {
 	var t Task

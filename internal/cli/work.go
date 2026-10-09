@@ -692,7 +692,7 @@ func cmdTasks(c *call) error {
 	project := c.fs.String("project", "", "only this Project's Tasks")
 	parent := c.fs.String("parent", "", "only this Parent's Subtasks")
 	state := c.fs.String("state", "", "only Tasks in this state: open, done or dropped")
-	workflow := c.fs.String("workflow", "", "only Tasks at a Step of this Workflow, or ended at one: its id, or its name with --project")
+	workflow := c.fs.String("workflow", "", "only Tasks listed in this Workflow, Parents and questions placed in it too: its id, or its name with --project")
 	step := c.fs.String("step", "", "only Tasks at this Step: its id, or its name with --project")
 	aimed := c.fs.String("aimed-at", "", "only Tasks aimed at this Member")
 	holder := c.fs.String("holder", "", "only Tasks this Member holds")

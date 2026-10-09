@@ -96,6 +96,15 @@ func TestWorkflows(t *testing.T) {
 		t.Fatalf("tasks --workflow Bugs --state done: %v, want [%s]", keys, key)
 	}
 
+	// A Parent is at no Step: the server lists it in the Workflow of its least-advanced open
+	// Subtask, here Investigate's Bugs.
+	var parent, sub client.TaskDetail
+	ada.json(&parent, "file", "--project", "ACC", "--title", "Rounding")
+	ada.json(&sub, "file", "--parent", parent.Task.Key, "--title", "Find the rounding", "--step", "Investigate")
+	if keys := listed("--workflow", "Bugs", "--state", "open"); !slices.Equal(keys, []string{parent.Task.Key, sub.Task.Key}) {
+		t.Fatalf("tasks --workflow Bugs --state open: %v, want the Parent %s and its Subtask %s", keys, parent.Task.Key, sub.Task.Key)
+	}
+
 	// The same body again, as a preset re-run sends it: each Step with its id, as a Step sent
 	// without one is new, and no Workflow or Connector id, as each keeps its id by name; so
 	// nothing is written. Its skills entry is left out: it creates a Skill, and triage is there.

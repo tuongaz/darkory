@@ -216,11 +216,13 @@ type Task struct {
 	SkillID *string
 	// LastStepID is the Step an ended Task ended at; nil while it is open, on a Task that ended at
 	// no Step (a Parent, a Task aimed at a Member), and once that Step is deleted with no move for
-	// it. WorkflowID is the Workflow of its Step, or of its last Step: nil wherever both are.
+	// it. WorkflowID is the Workflow the Task is listed in, read by workflowOfSQL: that of its
+	// Step or last Step; a Parent's by its Subtasks; a Task aimed at a Member's by the Task it
+	// blocks, else by its Parent; nil when none gives one.
 	LastStepID *string
 	WorkflowID *string
 	// StepWorkflowID is the Workflow of the Step the Task is at, nil wherever StepID is. The
-	// guards a write's batch ends with bind it, never WorkflowID, which also reads LastStepID; the
+	// guards a write's batch ends with bind it, never WorkflowID, which also reads other Tasks; the
 	// API does not show it.
 	StepWorkflowID *string
 	AimedAtID      *string

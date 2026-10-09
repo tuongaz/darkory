@@ -537,3 +537,40 @@ FROM workflows w JOIN projects p ON p.id = w.project_id ORDER BY w.project_id`)
 		})
 	}
 }
+
+// Migration 0007 keys a Task's Subtasks by its Organisation first, replacing tasks_parent, and
+// SQLite, which keeps no statistics, reads a Parent's open Subtasks through it rather than
+// through tasks_open_step, every open Task of the Organisation.
+func TestMigration0007KeysSubtasksByOrganisation(t *testing.T) {
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.Open(t, e)
+			index := `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = $1`
+			if e == store.Postgres {
+				index = `SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = $1`
+			}
+			for name, want := range map[string]int{"tasks_org_parent": 1, "tasks_parent": 0} {
+				var n int
+				if err := s.QueryRow(ctx, index, name).Scan(&n); err != nil {
+					t.Fatal(err)
+				}
+				if n != want {
+					t.Errorf("index %s: %d, want %d", name, n, want)
+				}
+			}
+			if e != store.SQLite {
+				return
+			}
+			var id, parent, notused int
+			var plan string
+			if err := s.QueryRow(ctx, `EXPLAIN QUERY PLAN SELECT 1 FROM tasks c WHERE c.org_id = 'o' AND c.parent_id = 'p' AND c.state = 'open'`).
+				Scan(&id, &parent, &notused, &plan); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(plan, "tasks_org_parent (org_id=? AND parent_id=? AND state=?)") {
+				t.Errorf("a Parent's open Subtasks are read by %q", plan)
+			}
+		})
+	}
+}
