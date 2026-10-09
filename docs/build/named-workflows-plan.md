@@ -645,3 +645,20 @@ git push
 8. The bots' software and accounting presets run green on both engines.
 9. The board at 390 px does not scroll sideways on any Workflow.
 10. `make check`, `make web-check`, `make e2e`, `make e2e-pg`, Playwright: green on the final head.
+
+---
+
+## Round 2 (2026-10-09): list first
+
+The owner reviewed the shipped pages on the mockup board (https://claude.ai/artifact/6UxCV2JLD99ujD5dVSW3A8) and picked direction B, "list first", over A (a rail). The board named three defects: the sidebar and crumbs said Workflow for a Project of five; the editor's rail sat under the Preview and read as its tabs; nothing showed the five at a glance.
+
+What changed, on branch `workflows-list`:
+
+- **The word.** Workflows in the sidebar, the crumbs, Settings' nav, ⌘K, G then W and the Edit button; README's keys row.
+- **Addresses.** `/projects/:key/workflows` and `/projects/:key/workflows/:workflow`, `/settings/projects/:key/workflows` and `/settings/projects/:key/workflows/:workflow`; the old `/workflow` addresses redirect, `?workflow=` becoming the segment.
+- **The live list.** Workflow · Steps · Waiting · Working · Done today, 36 px rows, a row opening that Workflow's page. No Median: none exists per Workflow, and a median of medians would be false. A Project of one Workflow shows its page in place.
+- **One Workflow's page.** The line and panels as built, the chip switching to a sibling's address, the "Workflows" crumb back to the list.
+- **Settings' list.** Workflow · Steps · Order · delete; `+ Workflow`, ‹ › and the trash each write at once, one PUT of the whole graph, toasted.
+- **One Workflow's editor.** The built editor without the rail, headed by the Workflow's name as a field saved with the draft; Save opens its live page, Cancel the list. `WorkflowsRail.tsx` is gone.
+
+Why: the list is the way in and shows every Workflow's state at once; the address names the Workflow; acts on the list happen when asked, while a Workflow's design stays a reviewed draft. The decisions are in `decisions.md` under Named Workflows, "Round 2".
