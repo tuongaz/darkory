@@ -234,7 +234,7 @@ func (o *owner) holdID(ctx context.Context, project string) (string, error) {
 		return "", err
 	}
 	for _, s := range res.JSON200.Steps {
-		if s.Name == o.crew.Preset.Hold() {
+		if strings.EqualFold(s.Name, o.crew.Preset.Hold()) {
 			return s.ID, nil
 		}
 	}

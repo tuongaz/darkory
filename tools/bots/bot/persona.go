@@ -183,8 +183,11 @@ func (h *Person) look(ctx context.Context) error {
 				continue
 			}
 			to, err := h.stepFor(ctx, c, parent)
-			if err != nil || to == "" {
+			if err != nil {
 				return err
+			}
+			if to == "" {
+				continue
 			}
 			return h.move(ctx, c.Key, to, "out of "+hold)
 		}

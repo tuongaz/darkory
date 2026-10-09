@@ -382,7 +382,7 @@ func where(d *client.TaskDetail) string {
 	return "no Step"
 }
 
-// workflow reads a Project's Workflow and remembers its Steps.
+// workflow reads a Project's Workflows and remembers their Steps.
 func (a *agent) workflow(ctx context.Context, project string) (*client.Workflows, error) {
 	res, err := a.c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
@@ -401,7 +401,7 @@ func (a *agent) workflow(ctx context.Context, project string) (*client.Workflows
 	return res.JSON200, nil
 }
 
-// stepName names a Step of a Project's Workflow by id for the bot's reports; "no Step" for none.
+// stepName names a Step of a Project's Workflows by id for the bot's reports; "no Step" for none.
 func (a *agent) stepName(ctx context.Context, project string, id *string) string {
 	if id == nil {
 		return "no Step"

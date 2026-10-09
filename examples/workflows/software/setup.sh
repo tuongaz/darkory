@@ -5,6 +5,11 @@
 # keeps its Steps' ids, so Tasks in flight stay where they are, and the Project's other Workflows
 # are left as they are.
 #
+# Before it writes anything it refuses a Project where a Step of another Workflow has the name,
+# ignoring case, of one of the preset's Steps, naming each. A Connector out of one of the preset's
+# Steps into another Workflow whose name, ignoring case, is that of one of the preset's outcomes out
+# of that Step is replaced by the preset's, and said so on standard error.
+#
 # Needs DARKORY_URL and DARKORY_TOKEN (an admin's) and DATA (the Install's data directory, where
 # the Runner reads <DATA>/agents/<agent>.token). Optional: PROJECT (key, default SW),
 # PROJECT_NAME (default Software), REPO (a git repository to work in), WORKSPACE (its name,
@@ -18,6 +23,92 @@ project_name=${PROJECT_NAME:-Software}
 mode=${MODE:-plain}
 export DARKORY_NO_UPDATE_CHECK=1
 command -v jq >/dev/null || { echo "setup.sh needs jq" >&2; exit 2; }
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# The Workflow, Software, planned against the Project's current body ($cur, as workflow show
+# --body prints it): {clashes, dropped, body}. The body is the Project's whole graph, and a
+# Workflow left out of it is deleted with its Steps, so the preset owns Software alone and carries
+# every other Workflow across untouched.
+# - Software takes the id of the Workflow it becomes, much as the bots bind theirs but with the
+#   name before the Steps, so naming a Workflow Software chooses it: the Project's only
+#   one (a Project made empty, or from before Workflows were named, has one named Work); else the
+#   one named Software, ignoring case; else the one holding the most of the preset's Step names,
+#   ignoring case, the first in order on a tie; else none, and Software is new. So a re-run never
+#   deletes and remakes it.
+# - clashes: the Steps of every other Workflow named, ignoring case, as one of the preset's, as
+#   "<Workflow> › <Step>". The body would hold two Steps of one name, so nothing is written.
+# - Software comes first, so a Task filed without a Step starts at its first work Step, Triage
+#   (Backlog is a hold); every other Workflow follows in its order, with its id, its Steps (ids,
+#   places, Skills) and the Connectors out of them, as they are. One of those leading into a Step
+#   of the old Software that the preset does not have leads into Backlog instead, where that Step's
+#   Tasks go.
+# - The preset's Steps keep the ids of the Steps of the same name, ignoring case, in the Workflow
+#   it becomes. Its other Steps are deleted, their open Tasks moved to Backlog.
+# - The preset's Connectors replace those out of its Steps, except one leading into another
+#   Workflow (such as bug → Bugs › Investigate), which is kept, after the preset's own; dropped
+#   lists those of them that share a name with one of the preset's outcomes out of the same Step,
+#   which replaces them.
+# Written for jq 1.5 and later: any/2 in place of IN, which is 1.6's.
+plan=$(cat <<'JQ'
+def lc: ascii_downcase;
+def among($xs): . as $x | any($xs[]; . == $x);
+def plan($c):
+  . as $preset
+  | [.steps[].name | lc] as $ours
+  | [.connectors[] | [(.from | lc), (.name | lc)]] as $outcomes
+  | ($c.workflows | sort_by(.position)) as $all
+  | (if ($all | length) == 1 then $all[0]
+     else first($all[] | select(.name | lc == "software"))
+       // (reduce ($all[] | .name as $w
+                  | {w: ., n: ([$c.steps[] | select(.workflow == $w and (.name | lc | among($ours)))] | length)}) as $x
+             (null; if $x.n > 0 and (. == null or $x.n > .n) then $x else . end)
+           | .w)
+     end) as $old
+  | ($old.name // null) as $oldName
+  | [$c.steps[] | select(.workflow == $oldName)] as $oldSteps
+  | [$c.steps[] | select(.workflow != $oldName)] as $keptSteps
+  | [$keptSteps[].name | lc] as $kept
+  | ($oldSteps | map({key: (.name | lc), value: .id}) | from_entries) as $ids
+  | (.steps | map({key: (.name | lc), value: .name}) | from_entries) as $ourName
+  | (reduce .connectors[] as $k ({}; .[$k.from | lc] += 1)) as $count
+  | [$c.connectors[] | select((.from | lc | among($ours)) and .to and (.to | lc | among($kept)))] as $crossing
+  | {
+      clashes: [$keptSteps[] | select(.name | lc | among($ours)) | "\(.workflow) › \(.name)"],
+      dropped: [$crossing[] | select([(.from | lc), (.name | lc)] | among($outcomes))
+        | "connector \($ourName[.from | lc]) \(.name): replaced by the preset's outcome of that name"],
+      body: ($preset
+        | .workflows = [.workflows[0] + (if $old then {id: $old.id} else {} end) + {position: 1}]
+            + [$all | map(select(.name != $oldName)) | to_entries[] | {id: .value.id, name: .value.name, position: (.key + 2)}]
+        | .steps = (.steps | map(if $ids[.name | lc] then . + {id: $ids[.name | lc]} else . end)) + $keptSteps
+        | .connectors += [$c.connectors[] | select(.from | lc | among($kept))
+            | if .to == null then .
+              elif .to | lc | among($ours) then .to = $ourName[.to | lc]
+              elif .to | lc | among($kept) then .
+              else .to = "Backlog" end]
+        | .connectors += [$crossing | map(select([(.from | lc), (.name | lc)] | among($outcomes) | not))
+            | group_by(.from | lc)[] | sort_by(.position) | to_entries[] | .key as $i | .value
+            | (.from | lc) as $f | . + {from: $ourName[$f], position: (($count[$f] // 0) + $i + 1)}]
+        | .moves = ([$oldSteps[] | select(.name | lc | among($ours) | not) | {key: .id, value: "Backlog"}] | from_entries))
+    };
+plan($cur[0])
+JQ
+)
+planned() { # writes the plan against the Project's current body to $tmp/plan.json
+  $dk workflow show "$project" --body > "$tmp/current.json"
+  jq --slurpfile cur "$tmp/current.json" "$plan" "$here/workflow.json" > "$tmp/plan.json"
+}
+refuse_clashes() {
+  if jq -e '.clashes | length > 0' "$tmp/plan.json" >/dev/null; then
+    {
+      echo "setup.sh: $project has Steps in other Workflows named as Steps of the preset's Software:"
+      jq -r '.clashes[] | "  " + .' "$tmp/plan.json"
+      echo 'rename them, or name the Workflow to become Software "Software"'
+    } >&2
+    exit 1
+  fi
+}
+if $dk project show "$project" >/dev/null 2>&1; then planned; refuse_clashes; fi
 
 # The generic Skills each Step carries, then this Project's company Skill on each, whose text the
 # Runner puts first in a session's prompt and a Retrospective may propose changes to.
@@ -82,50 +173,9 @@ while IFS=$'\t' read -r name model manager skills; do
   fi
 done
 
-# The Workflow, Software. The body is the Project's whole graph, and a Workflow left out of it is
-# deleted with its Steps, so the preset owns Software alone and carries every other Workflow
-# across untouched.
-# - Software takes the id of the Workflow it becomes: the Project's only one (a Project made
-#   empty, or from before Workflows were named, has one named Work); else the one named Software,
-#   ignoring case; else the one holding a Step named Backlog or Triage; else none, and Software is
-#   new. So a re-run never deletes and remakes it.
-# - Software comes first, so its Backlog is where a Task filed without a Step starts; every other
-#   Workflow follows in its order, with its id, its Steps (ids, places, Skills) and the Connectors
-#   out of them, as they are. One of those leading into a Step of the old Software that the preset
-#   does not have leads into Backlog instead, where that Step's Tasks go.
-# - The preset's Steps keep the ids of the Steps of the same name, ignoring case, in the Workflow
-#   it becomes; a Step of that name in another Workflow is not taken, and the set is refused as
-#   two Steps sharing a name. Its other Steps are deleted, their open Tasks moved to Backlog.
-# - The preset's Connectors replace those out of its Steps, except one leading into another
-#   Workflow (such as bug → Bugs › Investigate), which is kept, after the preset's own.
-current=$($dk workflow show "$project" --body)
-jq --argjson cur "$current" '
-  def lc: ascii_downcase;
-  ([.steps[].name | lc]) as $ours
-  | ($cur.workflows | sort_by(.position)) as $all
-  | (if ($all | length) == 1 then $all[0]
-     else (first($all[] | select(.name | lc == "software"))
-           // first(["backlog", "triage"][] as $n | $cur.steps[] | select(.name | lc == $n) | .workflow as $w | $all[] | select(.name == $w))
-           // null)
-     end) as $old
-  | ($old.name // null) as $oldName
-  | [$cur.steps[] | select(.workflow == $oldName)] as $oldSteps
-  | ($oldSteps | map({key: (.name | lc), value: .id}) | from_entries) as $ids
-  | [$cur.steps[] | select(.workflow != $oldName)] as $keptSteps
-  | ([$keptSteps[].name | lc]) as $kept
-  | (.steps | map({key: (.name | lc), value: .name}) | from_entries) as $ourName
-  | (reduce .connectors[] as $k ({}; .[$k.from | lc] += 1)) as $count
-  | .workflows = [.workflows[0] + (if $old then {id: $old.id} else {} end) + {position: 1}]
-      + [$all | map(select(.name != $oldName)) | to_entries[] | {id: .value.id, name: .value.name, position: (.key + 2)}]
-  | .steps = (.steps | map(if $ids[.name | lc] then . + {id: $ids[.name | lc]} else . end)) + $keptSteps
-  | .connectors += [$cur.connectors[] | select(.from | lc | IN($kept[]))
-      | if .to and ((.to | lc | IN($ours[], $kept[])) | not) then .to = "Backlog" else . end]
-  | .connectors as $preset
-  | .connectors += [$cur.connectors
-      | map(select((.from | lc | IN($ours[])) and .to and (.to | lc | IN($kept[])))
-          | (.from | lc) as $f | select(.name | lc | IN($preset[] | select(.from | lc == $f) | .name | lc) | not))
-      | group_by(.from | lc)[] | sort_by(.position) | to_entries[] | .key as $i | .value
-      | (.from | lc) as $f | . + {from: $ourName[$f], position: (($count[$f] // 0) + $i + 1)}]
-  | .moves = ([$oldSteps[] | select(.name | lc | IN($ours[]) | not) | {key: .id, value: "Backlog"}] | from_entries)
-' "$here/workflow.json" | $dk workflow set "$project" --file - >/dev/null
+# The Workflow, Software, against the body as it is now.
+planned
+refuse_clashes
+jq -r '.dropped[]' "$tmp/plan.json" >&2
+jq '.body' "$tmp/plan.json" | $dk workflow set "$project" --file - >/dev/null
 $dk workflow show "$project"

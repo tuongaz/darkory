@@ -334,6 +334,36 @@ func TestListTasksByWorkflow(t *testing.T) {
 		if len(list.Items) != 1 || list.Items[0].Title != "Crash on save" {
 			t.Fatalf("list_tasks in Bugs: %+v", list.Items)
 		}
+		crash := list.Items[0].Key
+
+		// By id, without project; and a Task that ended at one of its Steps.
+		var wf client.Workflows
+		ok(t, cs, &wf, "workflow", map[string]any{"project": "OPS"})
+		bugs := ""
+		for _, w := range wf.Workflows {
+			if w.Name == "Bugs" {
+				bugs = w.ID
+			}
+		}
+		var d client.TaskDetail
+		ok(t, cs, &d, "claim", map[string]any{"task": crash, "heartbeat_timeout_seconds": 60})
+		var advanced client.Task
+		ok(t, cs, &advanced, "advance", map[string]any{"task": crash, "outcome": "done"})
+		if advanced.State != client.TaskStateDone {
+			t.Fatalf("%s after done: %+v", crash, advanced)
+		}
+		for _, args := range []map[string]any{{"workflow": bugs}, {"workflow": bugs, "state": "done"}, {"workflow": "Bugs", "project": "OPS", "state": "done"}} {
+			list = taskListOut{}
+			ok(t, cs, &list, "list_tasks", args)
+			if len(list.Items) != 1 || list.Items[0].Key != crash {
+				t.Fatalf("list_tasks %v: %+v", args, list.Items)
+			}
+		}
+		list = taskListOut{}
+		ok(t, cs, &list, "list_tasks", map[string]any{"workflow": bugs, "state": "open"})
+		if len(list.Items) != 0 {
+			t.Fatalf("list_tasks open in Bugs: %+v", list.Items)
+		}
 	})
 }
 

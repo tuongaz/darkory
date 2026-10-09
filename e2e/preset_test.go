@@ -15,19 +15,29 @@ import (
 
 // The software preset's setup.sh, run twice on a Project with two Workflows (ADR 0019): the first
 // run turns the Project's Workflow into Software, keeping its id and the Steps it shares by name,
-// and leaves Bugs, its Step and the Connector crossing into it as they were; the second writes
-// nothing.
+// moving the Tasks at the Steps it drops to Backlog, and leaves Bugs, its Step, its Tasks and the
+// Connectors out of it and crossing into it as they were, one into a dropped Step led into
+// Backlog instead; the second writes nothing. A third, once Bugs has a Step named as one of the
+// preset's, is refused before it writes.
 func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
+	if _, err := exec.LookPath("jq"); err != nil {
+		t.Skip("the software preset's setup.sh needs jq, which is not on PATH")
+	}
 	in := newInstall(t)
 	ada := in.ada
 	in.project("OLD", "Old", "")
 
-	var filed client.TaskDetail
-	ada.json(&filed, "file", "--project", "OLD", "--title", "Short links expire", "--step", "Build")
-	key := filed.Task.Key
-	if filed.Step == nil || filed.Step.Name != "Build" {
-		t.Fatalf("%s was filed at %s", key, where(filed))
+	file := func(title, step string) string {
+		t.Helper()
+		var filed client.TaskDetail
+		ada.json(&filed, "file", "--project", "OLD", "--title", title, "--step", step)
+		if filed.Step == nil || filed.Step.Name != step {
+			t.Fatalf("%s was filed at %s, want %s", filed.Task.Key, where(filed), step)
+		}
+		return filed.Task.Key
 	}
+	key := file("Short links expire", "Build")
+	reviewing := file("Shorter links", "Review")
 
 	// A second Workflow, Bugs, with Investigate, and a bug outcome from Build into it.
 	var body client.SetWorkflowBody
@@ -42,12 +52,15 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	}
 	body.Workflows = append(body.Workflows, client.WorkflowInput{Name: "Bugs", Position: ptr(int64(2))})
 	body.Steps = append(body.Steps, client.StepInput{Workflow: "Bugs", Name: "Investigate", Skill: ptr("engineer"), Position: ptr(int64(1))})
-	body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Build", To: ptr("Investigate"), Name: "bug", Position: ptr(fromBuild + 1)})
+	body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Build", To: ptr("Investigate"), Name: "bug", Position: ptr(fromBuild + 1)},
+		client.ConnectorInput{From: "Investigate", To: ptr("Review"), Name: "fixed", Position: ptr(int64(1))},
+		client.ConnectorInput{From: "Investigate", Name: "done", Position: ptr(int64(2))})
 	b, err := json.Marshal(body)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ada.ok("workflow", "set", "OLD", "--file", writeFile(t, filepath.Join(in.dir, "OLD-bugs.json"), string(b)))
+	investigating := file("Crash on save", "Investigate")
 
 	var before client.Workflows
 	ada.json(&before, "workflow", "show", "OLD")
@@ -58,13 +71,18 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	for _, s := range before.Steps {
 		step[s.Name] = s.ID
 	}
-	bug := ""
+	bug, fixed, done := "", "", client.Connector{}
 	for _, k := range before.Connectors {
-		if k.Name == "bug" && k.FromStepID == step["Build"] && deref(k.ToStepID) == step["Investigate"] {
+		switch {
+		case k.Name == "bug" && k.FromStepID == step["Build"] && deref(k.ToStepID) == step["Investigate"]:
 			bug = k.ID
+		case k.Name == "fixed" && k.FromStepID == step["Investigate"] && deref(k.ToStepID) == step["Review"]:
+			fixed = k.ID
+		case k.Name == "done" && k.FromStepID == step["Investigate"] && k.ToStepID == nil:
+			done = k
 		}
 	}
-	if workflow["Work"] == "" || workflow["Bugs"] == "" || step["Investigate"] == "" || bug == "" {
+	if workflow["Work"] == "" || workflow["Bugs"] == "" || step["Investigate"] == "" || step["Review"] == "" || bug == "" || fixed == "" || done.ID == "" {
 		t.Fatalf("OLD before the preset: %+v", before)
 	}
 
@@ -90,7 +108,7 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	setup := func(run int) {
+	run := func() (string, error) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 		defer cancel()
@@ -98,8 +116,13 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 		cmd.Env = append(ada.env(), "DARKORY="+bin, "DATA="+in.dir, "PROJECT=OLD")
 		var out bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &out
-		if err := cmd.Run(); err != nil {
-			t.Fatalf("setup.sh, run %d: %v\n%s", run, err, out.String())
+		err := cmd.Run()
+		return out.String(), err
+	}
+	setup := func(n int) {
+		t.Helper()
+		if out, err := run(); err != nil {
+			t.Fatalf("setup.sh, run %d: %v\n%s", n, err, out)
 		}
 	}
 
@@ -113,7 +136,9 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	ids := map[string]string{}
 	for _, w := range ws {
 		if m, ok := w.(map[string]any); ok {
-			ids[m["name"].(string)], _ = m["id"].(string)
+			name, _ := m["name"].(string)
+			id, _ := m["id"].(string)
+			ids[name] = id
 		}
 	}
 	if len(ws) != 2 || ids["Software"] != workflow["Work"] || ids["Bugs"] != workflow["Bugs"] {
@@ -132,6 +157,14 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	for _, s := range after.Steps {
 		stepAfter[s.Name] = s
 	}
+	ada.json(&task, "show", reviewing)
+	if backlog := stepAfter["Backlog"].ID; backlog == "" || deref(task.Task.StepID) != backlog {
+		t.Fatalf("%s, at Review, after the preset: %s, want Backlog %s", reviewing, where(task), backlog)
+	}
+	ada.json(&task, "show", investigating)
+	if deref(task.Task.StepID) != step["Investigate"] {
+		t.Fatalf("%s after the preset: %s, want Investigate %s", investigating, where(task), step["Investigate"])
+	}
 	if s := stepAfter["Investigate"]; s.ID != step["Investigate"] || s.WorkflowID != workflow["Bugs"] {
 		t.Fatalf("Investigate after the preset: %+v, want %s in Bugs %s", s, step["Investigate"], workflow["Bugs"])
 	}
@@ -141,14 +174,25 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	if _, ok := stepAfter["Review"]; ok {
 		t.Fatal("Review, which the preset does not have, is still there")
 	}
-	kept := false
+	kept, repointed, doneKept := false, false, false
 	for _, k := range after.Connectors {
-		if k.ID == bug {
+		switch k.ID {
+		case bug:
 			kept = k.Name == "bug" && k.FromStepID == step["Build"] && deref(k.ToStepID) == step["Investigate"]
+		case fixed:
+			repointed = k.Name == "fixed" && k.FromStepID == step["Investigate"] && deref(k.ToStepID) == stepAfter["Backlog"].ID
+		case done.ID:
+			doneKept = k.Name == "done" && k.FromStepID == step["Investigate"] && k.ToStepID == nil && k.Position == done.Position
 		}
 	}
 	if !kept {
 		t.Fatalf("the crossing bug → Bugs › Investigate (%s) is not kept: %+v", bug, after.Connectors)
+	}
+	if !repointed {
+		t.Fatalf("Investigate's fixed → Review (%s) does not lead into Backlog: %+v", fixed, after.Connectors)
+	}
+	if !doneKept {
+		t.Fatalf("Investigate's done into Done (%s, at %d) is not kept: %+v", done.ID, done.Position, after.Connectors)
 	}
 	if out := ada.ok("workflow", "show", "OLD"); !strings.Contains(out, "\n      bug → Bugs › Investigate\n") {
 		t.Fatalf("workflow show OLD after the preset:\n%s", out)
@@ -158,6 +202,47 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	setup(2)
 	if got := changes(last); len(got) != 0 {
 		t.Fatalf("setup.sh run 2 recorded %d workflow.changed, want none: %+v", len(got), got)
+	}
+
+	// Run 3, with Software's QA renamed Testing and a Step of Bugs named qa: refused, naming it,
+	// before any write.
+	body = client.SetWorkflowBody{}
+	if out := ada.ok("workflow", "show", "OLD", "--body"); json.Unmarshal([]byte(out), &body) != nil {
+		t.Fatalf("workflow show OLD --body:\n%s", out)
+	}
+	rename := func(s string) string {
+		if s == "QA" {
+			return "Testing"
+		}
+		return s
+	}
+	for i := range body.Steps {
+		body.Steps[i].Name = rename(body.Steps[i].Name)
+	}
+	for i, k := range body.Connectors {
+		body.Connectors[i].From = rename(k.From)
+		if k.To != nil {
+			body.Connectors[i].To = ptr(rename(*k.To))
+		}
+	}
+	body.Steps = append(body.Steps, client.StepInput{Workflow: "Bugs", Name: "qa", Skill: ptr("engineer"), Position: ptr(int64(2))})
+	if b, err = json.Marshal(body); err != nil {
+		t.Fatal(err)
+	}
+	ada.ok("workflow", "set", "OLD", "--file", writeFile(t, filepath.Join(in.dir, "OLD-clash.json"), string(b)))
+	var activity client.ActivityPage
+	ada.json(&activity, "activity")
+	out, err := run()
+	if err == nil || !strings.Contains(out, "Bugs › qa") || !strings.Contains(out, `name the Workflow to become Software "Software"`) {
+		t.Fatalf("setup.sh with Bugs › qa: %v\n%s", err, out)
+	}
+	if strings.Contains(out, "skill ") {
+		t.Fatalf("setup.sh with Bugs › qa went on before refusing:\n%s", out)
+	}
+	var since client.ActivityPage
+	ada.json(&since, "activity")
+	if since.LastSeq != activity.LastSeq {
+		t.Fatalf("setup.sh with Bugs › qa recorded Activity: %d → %d", activity.LastSeq, since.LastSeq)
 	}
 }
 

@@ -128,7 +128,7 @@ func (crew *Crew) ProjectKey(key string) string { return or(crew.keys[key], key)
 // Setup makes the Projects, Skills, Workflows, Workspaces and Members the preset needs, as the
 // admin c acts for, and issues each agent, and each persona when asked, a token. It is
 // idempotent on names: what exists is kept, what is missing is created, a deactivated Member is
-// reactivated, a Project's Workflow is written only when it differs from the preset's, and a
+// reactivated, a Project's Workflows are written only when they differ from the preset's, and a
 // Workspace whose repository is missing gets a new one where the Workspace says; only the tokens
 // are new on every run.
 func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew, error) {
@@ -455,41 +455,60 @@ func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project str
 }
 
 // bindWorkflows gives each Workflow of want the id of the Project's Workflow it is, or "" for a new
-// one: the Project's only Workflow when want has one; else the Workflow holding most of its Steps
-// by name, ignoring case; else the one of its name, ignoring case. No two share one.
+// one, no two sharing one. The Project's only Workflow when both have and want are one. Otherwise
+// every (want, have) pair is scored by the Steps they share by name, ignoring case, then by
+// whether their names match, ignoring case; a pair sharing neither is never bound. Of the
+// bindings, the one sharing the most Steps in all wins, then the one matching the most names,
+// then the first found taking the Project's Workflows in order for want's in order. Scoring the
+// whole binding rather than the best pair first keeps a Workflow that one want shares a Step with
+// from taking the only one another want could have: A{X,Y} and B{Z} for W0{Z,X} and W1{Y} bind
+// W0 to B and W1 to A.
 func bindWorkflows(have client.Workflows, want []WorkflowSpec) []string {
 	bound := make([]string, len(want))
 	if len(have.Workflows) == 1 && len(want) == 1 {
 		bound[0] = have.Workflows[0].ID
 		return bound
 	}
-	taken := map[string]bool{}
+	type score struct{ steps, names int }
+	scores := make([][]score, len(want))
 	for i, w := range want {
-		best, most := "", 0
-		for _, h := range have.Workflows {
-			if taken[h.ID] {
-				continue
-			}
-			n := 0
+		scores[i] = make([]score, len(have.Workflows))
+		for j, h := range have.Workflows {
 			for _, st := range have.Steps {
 				if st.WorkflowID == h.ID && slices.ContainsFunc(w.Steps, func(s StepSpec) bool { return strings.EqualFold(s.Name, st.Name) }) {
-					n++
+					scores[i][j].steps++
 				}
 			}
-			if n > most {
-				best, most = h.ID, n
+			if strings.EqualFold(h.Name, w.Name) {
+				scores[i][j].names = 1
 			}
 		}
-		if best == "" {
-			for _, h := range have.Workflows {
-				if !taken[h.ID] && strings.EqualFold(h.Name, w.Name) {
-					best = h.ID
-					break
-				}
+	}
+	best, bestScore := make([]int, len(want)), score{-1, -1}
+	cur, used := make([]int, len(want)), make([]bool, len(have.Workflows))
+	var walk func(i int, total score)
+	walk = func(i int, total score) {
+		if i == len(want) {
+			if total.steps > bestScore.steps || total.steps == bestScore.steps && total.names > bestScore.names {
+				copy(best, cur)
+				bestScore = total
+			}
+			return
+		}
+		for j := range have.Workflows {
+			if sc := scores[i][j]; !used[j] && (sc.steps > 0 || sc.names > 0) {
+				used[j], cur[i] = true, j
+				walk(i+1, score{total.steps + sc.steps, total.names + sc.names})
+				used[j] = false
 			}
 		}
-		if best != "" {
-			bound[i], taken[best] = best, true
+		cur[i] = -1
+		walk(i+1, total)
+	}
+	walk(0, score{})
+	for i, j := range best {
+		if j >= 0 {
+			bound[i] = have.Workflows[j].ID
 		}
 	}
 	return bound
