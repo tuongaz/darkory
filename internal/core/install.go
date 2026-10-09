@@ -23,7 +23,7 @@ const (
 
 // What `darkory init` seeds on a Local Install: Project MAIN on the default Workflows, always, and
 // unless told --no-agents the roster, so it comes up with agents ready (docs/build/agents-plan.md,
-// D4): four agents in MAIN reporting to the first Member, each with agent settings and a token.
+// D4): five agents in MAIN reporting to the first Member, each with agent settings and a token.
 // The generic Skills engineer, review, triage and qa, which the default Workflows' Steps carry,
 // are seeded whether or not the roster is.
 const (
@@ -61,12 +61,11 @@ var seededSkills = []struct {
 	{SkillReview, "Review the work a Task describes: read the change on its branch and its Evidence, run the tests, and check it does " +
 		"what the Task asks. Advance it when it is right, with a Note saying what you checked; advance it back with a Note saying what " +
 		"to fix when it is not. Nobody reviews their own work.", false},
-	{SkillTriage, "Triage a reported problem. Read the Task, reproduce what it describes and record what you saw as a Note. Advance it " +
-		"along bug when it is a defect to fix, along feature when it asks for something new, or along not a bug when there is nothing " +
-		"to change, each with a Note saying why.", false},
-	{SkillQA, "Verify a fix. Read the Task and the Notes of the Fix and Code review, run the change on its branch, reproduce the original " +
-		"report and confirm it no longer happens, and attach what you ran as Evidence. Advance it along pass when the fix holds; along " +
-		"fail with a Note saying what still happens.", false},
+	{SkillTriage, "Triage a reported problem. Read the Task, reproduce what it describes and record what you saw as a Note; commit " +
+		"nothing on its branch. Advance it along the outcome that names what you found, with a Note saying why.", false},
+	{SkillQA, "Verify a fix. Read the Task and its Notes, run the change on its branch, reproduce the original report and confirm it " +
+		"no longer happens, and attach what you ran as Evidence. Advance it along the outcome that says whether the fix holds, with a " +
+		"Note of what still happens when it does not.", false},
 }
 
 // RosterAgent is one agent of the roster: its Skills and model.
@@ -80,7 +79,8 @@ type RosterAgent struct {
 var Roster = []RosterAgent{
 	{Name: "planner", Skills: []string{SkillBreakdown, SkillTriage}, Model: "claude-opus-5-5"},
 	{Name: "builder", Skills: []string{SkillEngineer}, Model: "claude-sonnet-5-5"},
-	{Name: "reviewer", Skills: []string{SkillReview, SkillSkillReview, SkillQA}, Model: "claude-opus-5-5"},
+	{Name: "reviewer", Skills: []string{SkillReview, SkillSkillReview}, Model: "claude-opus-5-5"},
+	{Name: "tester", Skills: []string{SkillQA}, Model: "claude-sonnet-5-5"},
 	{Name: "retro", Skills: []string{SkillRetro}, Model: "claude-opus-5-5"},
 }
 

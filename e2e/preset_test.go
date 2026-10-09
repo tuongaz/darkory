@@ -14,7 +14,9 @@ import (
 )
 
 // workFlow is one Workflow, Work, holding the Steps of a default Project's Implementation: a
-// Project as one was before the default had two Workflows.
+// Project as one was before the default had two Workflows. OLD is built by hand from it because a
+// Project on today's default Workflows is refused by the preset: their Triage and Code review
+// share names with the preset's Steps.
 const workFlow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [
   {"workflow": "Work", "name": "Backlog", "position": 1},
   {"workflow": "Work", "name": "Plan", "skill": "breakdown", "position": 2},

@@ -89,7 +89,7 @@ func gitOK(dir string, args ...string) bool {
 }
 
 // runnerInstall is an Install init seeded with its roster in a fresh repository: Project MAIN, the
-// repository as its default Workspace, and planner, builder, reviewer and retro, each with a
+// repository as its default Workspace, and planner, builder, reviewer, tester and retro, each with a
 // token in <data>/agents and the fake agent as its command.
 type runnerInstall struct {
 	*install

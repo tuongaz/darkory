@@ -16,7 +16,7 @@ import (
 // A fresh Install: an empty database takes the migrations, 0001 to 0007, and `darkory init` (the
 // roster on) yields the Organisation, its first Member an admin, the builtin Skills breakdown,
 // retro, skill-review and acceptance, the generic engineer, review, triage and qa, the roster's
-// four agents, and Project MAIN on the default Workflows, Implementation then Bug triage, each
+// five agents, and Project MAIN on the default Workflows, Implementation then Bug triage, each
 // Step at its decided place on the canvas and taken by the agent holding its Skill.
 func TestFreshInit(t *testing.T) {
 	for _, engine := range storetest.Engines() {
@@ -67,12 +67,12 @@ func TestFreshInit(t *testing.T) {
 				}
 			}
 
-			// The roster: the first Member and the four agents in MAIN, each with its Skills.
+			// The roster: the first Member and the five agents in MAIN, each with its Skills.
 			held := map[string]string{}
 			for _, a := range out.Agents {
 				held[a.Member.Name] = strings.Join(a.Skills, " ")
 			}
-			if want := map[string]string{"planner": "breakdown triage", "builder": "engineer", "reviewer": "review skill-review qa", "retro": "retro"}; !maps.Equal(held, want) {
+			if want := map[string]string{"planner": "breakdown triage", "builder": "engineer", "reviewer": "review skill-review", "tester": "qa", "retro": "retro"}; !maps.Equal(held, want) {
 				t.Fatalf("the roster holds %v, want %v", held, want)
 			}
 			project, err := f.svc.GetProject(ctx, f.admin, "MAIN")
@@ -83,7 +83,7 @@ func TestFreshInit(t *testing.T) {
 			for _, m := range project.Members {
 				members = append(members, m.Name+"/"+m.Kind)
 			}
-			if !slices.Equal(members, []string{"builder/agent", "planner/agent", "retro/agent", "reviewer/agent", "tuongaz/human"}) ||
+			if !slices.Equal(members, []string{"builder/agent", "planner/agent", "retro/agent", "reviewer/agent", "tester/agent", "tuongaz/human"}) ||
 				project.Project.AutoComplete || project.Project.Acceptance || project.Project.DefaultWorkspaceID != nil {
 				t.Fatalf("MAIN %+v holds %v", project.Project, members)
 			}
@@ -100,7 +100,7 @@ func TestFreshInit(t *testing.T) {
 			checkDefaultPlaces(t, w.Workflows)
 			takers := map[string]string{
 				"Backlog": "", "Plan": "planner", "Build": "builder", "Review": "reviewer", "Retro": "retro", "Skill review": "reviewer",
-				"Triage": "planner", "Fix": "builder", "Code review": "reviewer", "Verify": "reviewer",
+				"Triage": "planner", "Fix": "builder", "Code review": "reviewer", "Verify": "tester",
 			}
 			for i, s := range w.Steps {
 				var names []string

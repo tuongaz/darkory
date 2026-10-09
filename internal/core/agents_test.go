@@ -356,7 +356,7 @@ func TestAgentSettings(t *testing.T) {
 }
 
 // InitWith seeds the roster in Init's one write: Project MAIN on the default Workflow with the
-// first Member, the Workspace as its default, and the four agents in MAIN with their Skills,
+// first Member, the Workspace as its default, and the five agents in MAIN with their Skills,
 // reporting to the first Member, with agent settings and a token whose Claims lapse after five
 // minutes without a Heartbeat.
 func TestInitSeedsTheRoster(t *testing.T) {
@@ -386,7 +386,7 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		for _, m := range project.Members {
 			names = append(names, m.Name)
 		}
-		if !slices.Equal(names, []string{"ada", "builder", "planner", "retro", "reviewer"}) {
+		if !slices.Equal(names, []string{"ada", "builder", "planner", "retro", "reviewer", "tester"}) {
 			t.Fatalf("MAIN holds %v", names)
 		}
 		want := map[string]struct {
@@ -395,10 +395,11 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		}{
 			"planner":  {[]string{"breakdown", "triage"}, "claude-opus-5-5"},
 			"builder":  {[]string{"engineer"}, "claude-sonnet-5-5"},
-			"reviewer": {[]string{"qa", "review", "skill-review"}, "claude-opus-5-5"},
+			"reviewer": {[]string{"review", "skill-review"}, "claude-opus-5-5"},
+			"tester":   {[]string{"qa"}, "claude-sonnet-5-5"},
 			"retro":    {[]string{"retro"}, "claude-opus-5-5"},
 		}
-		if len(out.Agents) != 4 {
+		if len(out.Agents) != 5 {
 			t.Fatalf("%d agents", len(out.Agents))
 		}
 		for _, sa := range out.Agents {

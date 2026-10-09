@@ -75,9 +75,10 @@ func (f *fixture) project(key string) string {
 	return p.Project.ID
 }
 
-// workProject creates a Project of one Workflow, Work, holding the Steps of a default Project's
-// Implementation with their Skills, Connectors and places, and returns its id: a graph for the
-// tests of SetWorkflow to change that does not follow what a new Project starts with.
+// workProject creates a Project of one Workflow, Work, holding the six Steps of a default
+// Project's Implementation with their Skills, Connectors and places, and returns its id. It is
+// frozen on purpose: the tests of SetWorkflow's mechanics change this graph, so they do not
+// depend on what a new Project starts with.
 func (f *fixture) workProject(key string) string {
 	f.t.Helper()
 	ctx := f.t.Context()

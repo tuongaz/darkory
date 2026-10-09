@@ -205,9 +205,9 @@ func builtinStepSQL(skill string) string {
 
 // defaultStep is the Step a Task is filed at when its filer names none (CONTEXT.md, Workflow):
 // the first Step whose Skill is the Project's own work rather than a builtin one Darkory files its
-// own Subtasks at (Build in a default Project's Implementation), else the first Step that carries a Skill, else
-// the first Step, each in the Project's order across its Workflows. Break down is a switch on
-// filing, never where a Task lands. Nil when the Project has no Steps.
+// own Subtasks at (Build in a default Project's Implementation), else the first Step that carries
+// a Skill, else the first Step, each in the Project's order across its Workflows. Break down is a
+// switch on filing, never where a Task lands. Nil when the Project has no Steps.
 func defaultStep(w Workflows, builtin map[string]bool) *Step {
 	for _, s := range w.Steps {
 		if s.SkillID != nil && !builtin[*s.SkillID] {

@@ -36,7 +36,7 @@ import (
 // imply.
 func TestBots(t *testing.T) {
 	// On an Install init seeded with its roster: Setup keeps planner, reviewer and retro, which
-	// init made with the same names and Skills.
+	// init made with the same names, with exactly the preset's Skills.
 	in := newInstallWith(t)
 	ada := in.ada
 	if out := ada.ok("agent", "list"); !strings.Contains(out, "planner ") || !strings.Contains(out, "builder ") {

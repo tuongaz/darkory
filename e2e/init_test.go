@@ -13,7 +13,7 @@ import (
 
 // TestInitSeedsTheRoster runs darkory init without --no-agents in a git repository of its own, as
 // a person starting a Local Install does: Project MAIN, on the default Workflow, holds ada and the
-// four agents, reporting to
+// five agents, reporting to
 // her with their Skills and agent settings; the repository is MAIN's default Workspace with the
 // branch it was made on; each agent's token is in <data>/agents/<name>.token, readable by its
 // user alone, never printed, and works.
@@ -36,10 +36,11 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		"\nProject MAIN (Main), on the default Workflows, holds ada and the agents below.\n",
 		"Workspace shop: " + root + " (git, default branch trunk), Project MAIN's default.\n",
 		"Agents, reporting to ada, each with a token in " + filepath.Join(in.dir, "agents", "<name>.token") + ":\n",
-		"  planner   breakdown, triage          claude-opus-5-5\n",
-		"  builder   engineer                   claude-sonnet-5-5\n",
-		"  reviewer  review, skill-review, qa   claude-opus-5-5\n",
-		"  retro     retro                      claude-opus-5-5\n",
+		"  planner   breakdown, triage      claude-opus-5-5\n",
+		"  builder   engineer               claude-sonnet-5-5\n",
+		"  reviewer  review, skill-review   claude-opus-5-5\n",
+		"  tester    qa                     claude-sonnet-5-5\n",
+		"  retro     retro                  claude-opus-5-5\n",
 	} {
 		if !strings.Contains(in.initOutput, want) {
 			t.Fatalf("init printed no %q:\n%s", want, in.initOutput)
@@ -52,7 +53,7 @@ func TestInitSeedsTheRoster(t *testing.T) {
 	for _, m := range project.Members {
 		names = append(names, m.Name)
 	}
-	if strings.Join(names, " ") != "ada builder planner retro reviewer" {
+	if strings.Join(names, " ") != "ada builder planner retro reviewer tester" {
 		t.Fatalf("MAIN holds %v", names)
 	}
 	var workspaces client.WorkspaceList
@@ -92,8 +93,9 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		}
 	}
 
-	models := map[string]string{"planner": "claude-opus-5-5", "builder": "claude-sonnet-5-5", "reviewer": "claude-opus-5-5", "retro": "claude-opus-5-5"}
-	skills := map[string]string{"planner": "breakdown triage", "builder": "engineer", "reviewer": "qa review skill-review", "retro": "retro"}
+	models := map[string]string{"planner": "claude-opus-5-5", "builder": "claude-sonnet-5-5", "reviewer": "claude-opus-5-5", "tester": "claude-sonnet-5-5",
+		"retro": "claude-opus-5-5"}
+	skills := map[string]string{"planner": "breakdown triage", "builder": "engineer", "reviewer": "review skill-review", "tester": "qa", "retro": "retro"}
 	for name, model := range models {
 		path := filepath.Join(in.dir, "agents", name+".token")
 		info, err := os.Stat(path)
