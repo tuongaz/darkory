@@ -327,7 +327,7 @@ export function BlockingBoard({ tasks, projectId, scope, shows, me, now, steps, 
                 </div>
               ))}
               {layout.bands.map((b) => (
-                <div key={b.id} aria-hidden className="absolute rounded-[10px] border bg-sidebar" style={{ left: b.x, top: b.y, width: b.w, height: b.h }} />
+                <div key={b.id} aria-hidden className="absolute rounded-[10px] border bg-muted" style={{ left: b.x, top: b.y, width: b.w, height: b.h }} />
               ))}
               <Arrows layout={layout} lit={chain?.edges} heavy={!chain} />
               {layout.bands.map((b) => (
@@ -416,7 +416,7 @@ function BandHeader({
 }) {
   const where = band.outside ? (project ? `In ${project.name}` : "Outside") : project ? project.name : undefined;
   return (
-    <div className="absolute flex max-w-full items-center gap-2 rounded bg-sidebar pr-1 text-xs whitespace-nowrap" style={{ left: band.x + 12, top: band.y + 7, maxWidth: band.w - 24 }}>
+    <div className="absolute flex max-w-full items-center gap-2 rounded bg-muted pr-1 text-xs whitespace-nowrap" style={{ left: band.x + 12, top: band.y + 7, maxWidth: band.w - 24 }}>
       {where && <span className="text-muted-foreground">{where} ·</span>}
       {band.parentId ? (
         <>

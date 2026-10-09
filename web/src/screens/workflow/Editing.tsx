@@ -260,7 +260,7 @@ export function EditingWorkflow({
           onDone={() => editor?.settle()}
         />
       )}
-      <section aria-label="Preview" className="flex-none border-b bg-sidebar">
+      <section aria-label="Preview" className="flex-none border-b bg-muted">
         <div className="flex items-center gap-2 px-5 pt-2.5 text-xs text-muted-foreground max-md:px-4 max-md:py-2.5">
           {phone ? (
             <button

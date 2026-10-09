@@ -119,8 +119,8 @@ describe("the shell", () => {
     // The kit's sidebar is a <div data-slot="sidebar">, with no landmark role of its own.
     expect(sidebar()).toHaveAttribute("data-variant", "inset");
     const main = document.querySelector('[data-slot="sidebar-inset"]')!;
-    expect(main.className).toMatch(/md:peer-data-\[variant=inset\]:border\b/);
-    expect(main.className).toMatch(/md:peer-data-\[variant=inset\]:rounded-lg\b/);
+    expect(main.className).toMatch(/(^|\s)md:peer-data-\[variant=inset\]:border(\s|$)/);
+    expect(main.className).toMatch(/(^|\s)md:peer-data-\[variant=inset\]:rounded-lg(\s|$)/);
     expect(main.className).not.toMatch(/rounded-xl|shadow-sm/);
   });
 });
@@ -721,6 +721,8 @@ describe("Settings", () => {
     expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Workflows", "Members", "Labels", "Workspaces"]);
     expect(within(ops).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
     expect(within(nav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
+    // The Settings shell draws the same flat sidebar beside the page card.
+    expect(nav().closest("[data-slot=sidebar]")).toHaveAttribute("data-variant", "inset");
 
     await userEvent.click(screen.getByRole("link", { name: "Back" }));
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
