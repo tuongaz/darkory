@@ -258,7 +258,7 @@ test("4 · completed at Verify, its card sits in Bugs' Done and in no other Work
     await page.goto(`${base}${board(wf(other))}`);
     await expect(chip(page)).toHaveText(other);
     // The board has read its Tasks: its Done column counts none of them.
-    await expect(page.getByRole("region", { name: "Done", exact: true }).locator(".tabular-nums").first()).toHaveText("0");
+    await expect(page.getByRole("region", { name: "Done", exact: true }).getByLabel("0 Tasks", { exact: true })).toBeVisible();
     await expect(card(page, filed.key)).toHaveCount(0);
   }
   expect(errors).toEqual([]);
@@ -436,9 +436,19 @@ async function chipReadsWhole(page: Page, name: string) {
   await insideThePhone(page, label);
 }
 
-/** The chip, its name and its caret inside 390 px and inside the breadcrumb; the page does not scroll sideways. */
+/**
+ * The chip, its name and its caret inside 390 px and inside the breadcrumb, the Project's mark
+ * before it and the Project's name out of the bar; the page does not scroll sideways.
+ */
 async function insideThePhone(page: Page, label: ReturnType<Page["locator"]>) {
-  for (const box of [await chip(page).boundingBox(), await label.boundingBox(), await chip(page).locator("svg").boundingBox()]) {
+  const crumbNav = page.getByRole("navigation", { name: "Breadcrumb" });
+  const mark = crumbNav.locator("[data-hue]");
+  await expect(mark).toBeInViewport({ ratio: 1 });
+  await expect(crumbNav.getByText("Accounts", { exact: true })).not.toBeInViewport();
+  const markBox = await mark.boundingBox();
+  expect(markBox!.width).toBeGreaterThanOrEqual(19);
+  expect(markBox!.x + markBox!.width).toBeLessThan((await chip(page).boundingBox())!.x);
+  for (const box of [markBox, await chip(page).boundingBox(), await label.boundingBox(), await chip(page).locator("svg").boundingBox()]) {
     expect(box).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
@@ -459,13 +469,35 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     await page.goto(`${base}${board(wf(name))}`);
     await expect(columns(page).first()).toBeVisible();
     await chipReadsWhole(page, name);
-    // Beside the chip the List | Board switch is a menu.
+    // Beside the chip the List | Board switch is a menu, and Views, Filter and Display are one.
     await expect(page.getByRole("button", { name: "View: Board" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "More" })).toBeInViewport({ ratio: 1 });
+    for (const action of ["Views", "Filter", "Display"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeHidden();
     await shot(page, `phone-board-${name.toLowerCase()}`);
+  }
+  // Each folded menu opens under the fold's trigger, inside the phone.
+  for (const [item, opens] of [
+    ["Views", "Views"],
+    ["Filter", "Filters"],
+    ["Display", "Display"],
+  ]) {
+    await page.getByRole("button", { name: "More" }).click();
+    await page.getByRole("menuitem", { name: item }).click();
+    const menu = page.getByRole("dialog", { name: opens });
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    expect((await menu.boundingBox())!.y).toBeGreaterThanOrEqual((await page.getByRole("button", { name: "More" }).boundingBox())!.y + 28);
+    if (item === "Filter") await shot(page, "phone-board-filter-folded");
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(page.getByRole("button", { name: "More" })).toBeFocused();
   }
   await page.goto(`${base}/projects/ACC/workflow?workflow=${wf("Bugs")}`);
   await expect(page.getByRole("region", { name: "Workflow" })).toBeVisible();
   await chipReadsWhole(page, "Bugs");
+  // Here the Project's crumb is a link, and on a phone its mark is all of it.
+  const toProject = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Accounts", exact: true });
+  await expect(toProject).toBeInViewport({ ratio: 1 });
+  await expect(toProject).toHaveAttribute("href", "/projects/ACC/tasks");
   await shot(page, "phone-workflow-bugs");
 
   // A long name stops before the caret with an ellipsis; the caret stays in view.
@@ -494,6 +526,9 @@ test("10 · on a phone, a board with no chip keeps the List | Board switch as tw
   await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "View" }).getByRole("link")).toHaveCount(2);
   await expect(page.getByRole("navigation", { name: "View" })).toBeInViewport({ ratio: 1 });
+  // And Views, Filter and Display as three buttons.
+  await expect(page.getByRole("button", { name: "More" })).toHaveCount(0);
+  for (const action of ["Views", "Filter", "Display"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeInViewport({ ratio: 1 });
   expect(errors).toEqual([]);
   await ctx.close();
 });

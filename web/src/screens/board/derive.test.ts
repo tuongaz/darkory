@@ -262,7 +262,8 @@ describe("the board of one Workflow among several", () => {
   it("stands an open Parent at a Step (`placeOf`) of the Workflow the server lists it in", () => {
     // The server's rule and the board's Step rule read the same Subtask: the least advanced open
     // one at a Step, by Workflow position, then Step position. A Parent's `workflow_id` below is
-    // what `/v1` serves for it (workflowOfSQL); its card stands at a Step of that Workflow.
+    // what `/v1` serves for it (workflowOfSQL); its card stands at a Step of that Workflow. The
+    // server side of the pair is TestEveryTaskListedInAWorkflow in internal/core/workflow_test.go.
     const stepWorkflow = new Map(steps.map((s) => [s.id, s.workflow_id]));
     const cases: [stepIds: string[], listed: string][] = [
       [[wfStep.verify, wfStep.fix], wfId.bugs],

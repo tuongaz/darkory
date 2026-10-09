@@ -4,6 +4,8 @@
 // are the caller's (the address, through useFilterState); the bar only reads and writes them.
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon, XIcon } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import type { Fold } from "@/components/BarFold";
+import { useFolded } from "@/components/useFolded";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
@@ -86,6 +88,20 @@ function barOf(props: FilterBarProps) {
   };
 }
 
+/** The count of Filters set beside Filter, wherever its button is (in the bar, or folded on a phone); none with none set. */
+export function FilterCount(props: FilterBarProps) {
+  const n = barOf(props).activeCount;
+  return n > 0 && <Count n={n} />;
+}
+
+function Count({ n }: { n: number }) {
+  return (
+    <span aria-hidden className="-mr-0.5 inline-grid h-4 min-w-4 place-items-center rounded-[4px] bg-muted px-1 text-2xs font-medium tabular-nums text-foreground">
+      {n}
+    </span>
+  );
+}
+
 /** One value's words: its option's label, or the value itself when nothing names it. */
 function labelOf(options: readonly FilterOption[] | undefined, value: string): string {
   return options?.find((o) => o.value === value)?.label ?? value;
@@ -99,8 +115,10 @@ function labelOf(options: readonly FilterOption[] | undefined, value: string): s
 export function FilterMenuButton({
   open: openProp,
   onOpenChange,
+  fold,
   ...props
-}: FilterBarProps & { open?: boolean; onOpenChange?: (open: boolean) => void }) {
+}: FilterBarProps & { open?: boolean; onOpenChange?: (open: boolean) => void; fold?: Fold }) {
+  const { own: foldOwn, hide: foldHide, anchor: foldAnchor, onCloseAutoFocus: foldClose } = useFolded(fold);
   const bar = barOf(props);
   const { labels } = bar;
   const [openState, setOpenState] = useState(false);
@@ -158,15 +176,17 @@ export function FilterMenuButton({
   const count = bar.activeCount;
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      {foldAnchor}
       <PopoverTrigger asChild>
-        <Button variant="outline" aria-label={count > 0 ? `${labels.filter}, ${count} set` : labels.filter} className="data-[state=open]:bg-accent">
+        <Button
+          ref={foldOwn}
+          variant="outline"
+          aria-label={count > 0 ? `${labels.filter}, ${count} set` : labels.filter}
+          className={cn("data-[state=open]:bg-accent", foldHide)}
+        >
           <FilterIcon />
           <span className="hidden sm:inline">{labels.filter}</span>
-          {count > 0 && (
-            <span aria-hidden className="-mr-0.5 inline-grid h-4 min-w-4 place-items-center rounded-[4px] bg-muted px-1 text-2xs font-medium tabular-nums text-foreground">
-              {count}
-            </span>
-          )}
+          {count > 0 && <Count n={count} />}
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -174,6 +194,7 @@ export function FilterMenuButton({
         align="end"
         aria-label={labels.filters}
         onKeyDown={onListKeyDown}
+        onCloseAutoFocus={foldClose}
         className={cn("flex w-72 flex-col overflow-hidden p-0", page?.type === "date" && "w-auto")}
       >
         {page ? (

@@ -3,6 +3,8 @@
 import { CheckIcon, ChevronDownIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
+import type { Fold } from "@/components/BarFold";
+import { useFolded } from "@/components/useFolded";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -127,13 +129,31 @@ const orders: { order: Order; label: string }[] = [
 ];
 
 /** Display: the layout's grouping (the list), the order within a group or column, and what to show. */
-export function DisplayMenu({ display, change, view }: { display: Display; change: (c: Partial<Display>) => void; view: Layout }) {
+export function DisplayMenu({
+  display,
+  change,
+  view,
+  open,
+  onOpenChange,
+  fold,
+}: {
+  display: Display;
+  change: (c: Partial<Display>) => void;
+  view: Layout;
+  /** Its open state, when the page opens it too (from the bar's fold). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Folded on a phone into the bar's menu (the board beside the Workflow chip). */
+  fold?: Fold;
+}) {
+  const { own: foldOwn, hide: foldHide, anchor: foldAnchor, onCloseAutoFocus: foldClose } = useFolded(fold);
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
+      {foldAnchor}
       <PopoverTrigger asChild>
-        <BarButton icon={<SlidersHorizontalIcon />} label="Display" className="data-[state=open]:bg-accent" />
+        <BarButton ref={foldOwn} icon={<SlidersHorizontalIcon />} label="Display" className={cn("data-[state=open]:bg-accent", foldHide)} />
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="Display" className="w-[280px] p-1">
+      <PopoverContent align="end" aria-label="Display" className="w-[280px] p-1" onCloseAutoFocus={foldClose}>
         {view === "list" && (
           <div role="group" aria-label="Group by">
             <SectionLabel>Group by</SectionLabel>

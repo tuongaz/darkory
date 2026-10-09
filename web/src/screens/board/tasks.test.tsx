@@ -491,6 +491,40 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(screen.getByRole("navigation", { name: "View" })).not.toHaveClass("hidden");
   });
 
+  it("folds Views, Filter and Display into one menu on a phone beside the chip; each item opens its menu", async () => {
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    // One trigger on a phone; the three buttons are for a wider screen.
+    const more = screen.getByRole("button", { name: "More" });
+    expect(more).toHaveClass("sm:hidden");
+    for (const name of ["Views", "Filter", "Display"]) expect(screen.getByRole("button", { name })).toHaveClass("max-sm:hidden");
+    for (const [item, opens] of [
+      ["Views", "Views"],
+      ["Filter", "Filters"],
+      ["Display", "Display"],
+    ]) {
+      await userEvent.click(more);
+      const items = await screen.findAllByRole("menuitem");
+      expect(items.map((i) => i.textContent)).toEqual(["Views", "Filter", "Display"]);
+      await userEvent.click(screen.getByRole("menuitem", { name: item }));
+      expect(await screen.findByRole("dialog", { name: opens })).toBeInTheDocument();
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: opens })).not.toBeInTheDocument());
+    }
+    // F opens the Filters as it does from the button.
+    await userEvent.keyboard("f");
+    expect(await screen.findByRole("dialog", { name: "Filters" })).toBeInTheDocument();
+  });
+
+  it("keeps Views, Filter and Display as three buttons with no chip in the bar", async () => {
+    mockApi(routes());
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-2/);
+    expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
+    for (const name of ["Views", "Filter", "Display"]) expect(screen.getByRole("button", { name })).not.toHaveClass("max-sm:hidden");
+  });
+
   it("grouped by other than Step, a row's Step reads with its Workflow", async () => {
     localStorage.setItem("darkory.tasks.display", JSON.stringify({ group: "owner" }));
     mockApi(several());
