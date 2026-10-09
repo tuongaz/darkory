@@ -186,8 +186,8 @@ test("New Project from the sidebar, then Members and Skills from Settings", asyn
 });
 
 test("scenario 10: a Project's settings under it, Settings from the Organisation menu, old addresses land, a non-admin sees Account only", async ({ browser }) => {
-  // OPS is a second Project, with ada in it but not Mai.
-  await ada("POST", "/v1/projects", { key: "OPS", name: "Operations", members: ["ada"] });
+  // OPS is a second Project, with ada in it but not Mai: an empty one, a Project of one Workflow.
+  await ada("POST", "/v1/projects", { key: "OPS", name: "Operations", members: ["ada"], workflow: "empty" });
   const { ctx, page, errors } = await open(browser);
 
   await test.step("the Project's Settings in the sidebar opens its General page, its pages as tabs on the bar", async () => {
@@ -230,10 +230,16 @@ test("scenario 10: a Project's settings under it, Settings from the Organisation
 
   await test.step("every /admin address lands on its Settings page", async () => {
     const mai = (await ada<{ items: { id: string; name: string }[] }>("GET", "/v1/members")).items.find((m) => m.name === "Mai Tran")!;
-    // WEB, made here, has the one Workflow a new Project starts with.
-    const { workflows } = await ada<{ workflows: { id: string; position: number }[] }>("GET", "/v1/projects/WEB/workflow");
-    expect(workflows).toHaveLength(1);
+    // WEB, made here on the dialog's Default, has the two Workflows a new Project starts with.
+    const workflowsOf = async (key: string) =>
+      [...(await ada<{ workflows: { id: string; name: string; position: number }[] }>("GET", `/v1/projects/${key}/workflow`)).workflows].sort((a, b) => a.position - b.position);
+    const workflows = await workflowsOf("WEB");
+    expect(workflows.map((w) => w.name)).toEqual(["Implementation", "Bug triage"]);
     const work = `/projects/WEB/workflows/${workflows[0].id}`;
+    // OPS, empty, has one: Work.
+    const opsWorkflows = await workflowsOf("OPS");
+    expect(opsWorkflows.map((w) => w.name)).toEqual(["Work"]);
+    const opsWork = `/projects/OPS/workflows/${opsWorkflows[0].id}`;
     const redirects: [string, string][] = [
       ["/admin", "/settings/organisation/members"],
       ["/admin/members", "/settings/organisation/members"],
@@ -254,11 +260,14 @@ test("scenario 10: a Project's settings under it, Settings from the Organisation
       ["/settings/projects/WEB/workflows", "/projects/WEB/workflows"],
       // Settings' one Workflow: its editor in the app.
       [`/settings/projects/WEB/workflows/${workflows[0].id}`, `${work}/edit`],
-      // An address saying the line's view, of a Project of one: that Workflow's page.
-      ["/projects/WEB/workflow?view=text", `${work}?view=text`],
-      ["/projects/WEB/workflows?view=text", `${work}?view=text`],
+      // An address saying the line's view, of a Project of several: its Workflows' list.
+      ["/projects/WEB/workflow?view=text", "/projects/WEB/workflows?view=text"],
+      ["/projects/WEB/workflows?view=text", "/projects/WEB/workflows?view=text"],
       ["/account", "/settings/account"],
-      // Last: a page under OPS makes OPS the current Project.
+      // Last: a page under OPS makes OPS the current Project. An address saying the line's view,
+      // of a Project of one: that Workflow's page.
+      ["/projects/OPS/workflow?view=text", `${opsWork}?view=text`],
+      ["/projects/OPS/workflows?view=text", `${opsWork}?view=text`],
       ["/admin/teams/OPS", "/projects/OPS/settings/general"],
       ["/settings/projects/ops/labels", "/projects/OPS/settings/labels"],
       // A Project's settings page makes that Project current: /admin/teams now lands on OPS's.

@@ -100,7 +100,7 @@ test.afterAll(async () => {
 
 test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance, the Parent completes itself, its Retro filed", async ({ browser }) => {
   // The Sacca shape: the default Workflow's Steps with QA between Build and Review, and Acceptance.
-  await skill("qa", "Test the change against what the Task asks for.");
+  // qa is init's, seeded beside engineer and review for Bug triage's Verify (sample-workflows-plan.md).
   await ask("POST", "/v1/projects", { key: "SAC", name: "Sacca", members: ["ada"], workflow: "empty" });
   await ask("PUT", "/v1/projects/SAC/workflow", {
     // Its one Workflow, Work, as the empty Project started it (ADR 0019).

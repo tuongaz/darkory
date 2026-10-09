@@ -4,7 +4,8 @@ import { startInstall, type Install } from "./server";
 
 // Scenario 11 of docs/build/model-v2-plan.md in the browser: a fresh `darkory init` with its roster
 // (outside a git repository, so no Workspace) makes the Organisation, the builtin Skills,
-// engineer and review, the agents, and MAIN on the default Workflow, and prints a login link; the
+// engineer, review, triage and qa, the agents, and MAIN on the default Workflows (Implementation and
+// Bug triage, docs/build/sample-workflows-plan.md), and prints a login link; the
 // Install checklist leads from there to the first Task. Init on each engine is e2e/init_test.go's
 // (`make e2e`, `make e2e-pg`); this is the SQLite Install the web suite runs.
 const shots = fileURLToPath(new URL("./screenshots/init/", import.meta.url));
@@ -36,16 +37,16 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
   await test.step("init says what it made", async () => {
     expect(install.init).toContain('Initialised the Organisation "E2E Organisation"');
     expect(install.init).toContain("First Member: ada (human, admin)");
-    expect(install.init).toContain("Project MAIN (Main), on the default Workflow, holds ada and the agents below.");
+    expect(install.init).toContain("Project MAIN (Main), on the default Workflows, holds ada and the agents below.");
     expect(install.init).toContain("No Workspace: init ran outside a git repository.");
-    for (const line of [/planner\s+breakdown/, /builder\s+engineer/, /reviewer\s+review, skill-review/, /retro\s+retro/]) expect(install.init).toMatch(line);
+    for (const line of [/planner\s+breakdown, triage/, /builder\s+engineer/, /reviewer\s+review, skill-review, qa/, /retro\s+retro/]) expect(install.init).toMatch(line);
     expect(install.init).toMatch(/http:\/\/\S+\/v1\/login-links\/\S+/);
   });
 
-  await test.step("the record: the builtin Skills, engineer and review, the roster, MAIN's default Workflow", async () => {
+  await test.step("the record: the builtin Skills, engineer, review, triage and qa, the roster, MAIN's two default Workflows", async () => {
     const skills = (await ask<{ items: { name: string; builtin: boolean }[] }>("/v1/skills")).items;
     expect(skills.filter((s) => s.builtin).map((s) => s.name).sort()).toEqual(["acceptance", "breakdown", "retro", "skill-review"]);
-    expect(skills.filter((s) => !s.builtin).map((s) => s.name).sort()).toEqual(["engineer", "review"]);
+    expect(skills.filter((s) => !s.builtin).map((s) => s.name).sort()).toEqual(["engineer", "qa", "review", "triage"]);
     const members = (await ask<{ items: { name: string; kind: string; manager_id?: string; id: string }[] }>("/v1/members")).items;
     const ada = members.find((m) => m.name === "ada")!;
     const agents = members.filter((m) => m.kind === "agent");
@@ -53,8 +54,12 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     expect(agents.every((m) => m.manager_id === ada.id)).toBe(true);
     const projects = (await ask<{ items: { key: string }[] }>("/v1/projects")).items;
     expect(projects.map((p) => p.key)).toEqual(["MAIN"]);
-    const wf = await ask<{ steps: { name: string }[] }>("/v1/projects/MAIN/workflow");
-    expect(wf.steps.map((s) => s.name)).toEqual(["Backlog", "Plan", "Build", "Review", "Retro", "Skill review"]);
+    const wf = await ask<{ workflows: { id: string; name: string; position: number }[]; steps: { name: string; workflow_id: string; position: number }[] }>("/v1/projects/MAIN/workflow");
+    const workflows = [...wf.workflows].sort((a, b) => a.position - b.position);
+    expect(workflows.map((w) => w.name)).toEqual(["Implementation", "Bug triage"]);
+    const stepsOf = (id: string) => wf.steps.filter((s) => s.workflow_id === id).sort((a, b) => a.position - b.position).map((s) => s.name);
+    expect(stepsOf(workflows[0].id)).toEqual(["Backlog", "Plan", "Build", "Review", "Retro", "Skill review"]);
+    expect(stepsOf(workflows[1].id)).toEqual(["Triage", "Fix", "Code review", "Verify"]);
   });
 
   await test.step("init's printed link signs in once serve runs", async () => {
@@ -94,9 +99,13 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     await page.goto(`${install.base}/projects/MAIN/tasks?view=board`);
     await expect(page.getByRole("region", { name: "Build", exact: true }).locator("[data-task=MAIN-1]")).toContainText("Write the README");
     await shot(page, "04-first-task-on-the-board");
-    // MAIN's Workflows list its one; its row opens its page, the line.
+    // MAIN's Workflows list its two, Implementation first; its row opens its page, the line.
     await page.goto(`${install.base}/projects/MAIN/workflows`);
-    await page.getByRole("table", { name: "Workflows" }).getByRole("row").nth(1).getByRole("link").first().click();
+    const rows = page.getByRole("table", { name: "Workflows" }).getByRole("row");
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(1).getByRole("link").first()).toHaveText("Implementation");
+    await expect(rows.nth(2).getByRole("link").first()).toHaveText("Bug triage");
+    await rows.nth(1).getByRole("link").first().click();
     await expect(page).toHaveURL(new RegExp(`^${install.base}/projects/MAIN/workflows/[^/?]+$`));
     await expect(page.getByRole("region", { name: "Workflow", exact: true }).locator('button[data-task="MAIN-1"]')).toBeVisible();
     await shot(page, "05-default-workflow");
