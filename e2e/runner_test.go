@@ -133,8 +133,8 @@ func newRunnerInstall(t *testing.T, setup func(ri *runnerInstall), serveArgs ...
 		t.Fatalf("init made the Workspaces %+v, not the repository it ran in", list.Items)
 	}
 	ri.ws = list.Items[0].Name
-	// On the default Workflow: the planner advances its Breakdown along Plan's one way, the
-	// builder from Build to Review, the reviewer into Done, and retro into Done.
+	// On Implementation, one of the default Workflows: the planner advances its Breakdown along
+	// Plan's one way, the builder from Build to Review, the reviewer into Done, and retro into Done.
 	ri.fake("planner", "advance")
 	ri.fake("builder", "advance")
 	ri.fake("reviewer", "advance", "FAKEAGENT_OUTCOME=pass")

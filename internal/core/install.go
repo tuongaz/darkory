@@ -61,11 +61,13 @@ var seededSkills = []struct {
 	{SkillReview, "Review the work a Task describes: read the change on its branch and its Evidence, run the tests, and check it does " +
 		"what the Task asks. Advance it when it is right, with a Note saying what you checked; advance it back with a Note saying what " +
 		"to fix when it is not. Nobody reviews their own work.", false},
-	{SkillTriage, "Triage a reported problem. Read the Task, reproduce what it describes and record what you saw as a Note; commit " +
-		"nothing on its branch. Advance it along the outcome that names what you found, with a Note saying why.", false},
-	{SkillQA, "Verify a fix. Read the Task and its Notes, run the change on its branch, reproduce the original report and confirm it " +
-		"no longer happens, and attach what you ran as Evidence. Advance it along the outcome that says whether the fix holds, with a " +
-		"Note of what still happens when it does not.", false},
+	{SkillTriage, "Triage a newly filed Task. Read it; when it reports a problem, reproduce it and record what you saw as a Note; " +
+		"make its outcome checkable and judge its risk; commit nothing on its branch. Advance it along the outcome that names what " +
+		"you found, with a Note saying why.", false},
+	{SkillQA, "Verify what a Task changed, from its user's side. Read the Task and its Notes, run the change on its branch the way " +
+		"its user would, including the edges and the failure cases; when it fixes a report, reproduce the report and confirm it no " +
+		"longer happens. Attach what you ran as Evidence; never fix the code yourself. Advance it along the outcome that says " +
+		"whether the change holds, with a Note of what still happens when it does not.", false},
 }
 
 // RosterAgent is one agent of the roster: its Skills and model.

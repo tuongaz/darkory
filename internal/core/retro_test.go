@@ -10,9 +10,9 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// retroFixture is Project WEB on the default Workflow with a completed Parent whose Build Subtask
-// left an Observation, its Retrospective open at Retro, a company Skill qa-acme at version 1,
-// retro writers in WEB and a reviewer in OPS.
+// retroFixture is Project WEB on the default Workflows with a completed Parent whose Build
+// Subtask left an Observation, its Retrospective open at Retro, a company Skill qa-acme at
+// version 1, retro writers in WEB and a reviewer in OPS.
 type retroFixture struct {
 	*fixture
 	owner, builder, checker, retro, retro2, reviewer *auth.Caller

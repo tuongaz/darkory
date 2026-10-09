@@ -14,7 +14,7 @@ export type Install = { base: string; link: string; token: string; data: string;
 /**
  * Builds the darkory binary from this checkout (embedding web/dist/app, which `npm run e2e` has
  * just built), runs `darkory init` in a fresh data directory, and starts `darkory serve` on a free
- * port. init always makes the Organisation, ada and Project MAIN on the default Workflow; without
+ * port. init always makes the Organisation, ada and Project MAIN on the default Workflows; without
  * `roster` it seeds no agents (--no-agents), with it the roster's agents too. init runs in the
  * data directory, outside any git repository, so MAIN has no Workspace.
  */

@@ -123,7 +123,7 @@ The Workflow fits Darkory's rules as they are. Where the research asks for somet
 
 The preset holds:
 - `workflow.json`: Steps, Skills, Connectors and canvas positions, in the form `darkory workflow set` reads.
-- `<skill>.md`: five generic Skills (`triage`, `architecture`, `security`, `qa`, `devops`), and the Project's company Skill on each role (`software-*`), whose text the Runner puts first in a Shift's prompt and which a Retrospective may propose changes to.
+- `<skill>.md`: the generic Skills `architecture`, `security` and `devops`, and the Project's company Skill on each role (`software-*`), whose text the Runner puts first in a Shift's prompt and which a Retrospective may propose changes to. `darkory init` seeds `triage` and `qa`, and the preset keeps them, as it does `engineer` and `review`; its `triage.md` and `qa.md` carry init's text, for an Install without them.
 - `agents.json`: the roster, with each agent's name, Skills, model and Reporting line. `@owner` is the admin running setup.
 - `setup.sh`: applies all of it.
 

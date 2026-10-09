@@ -3450,13 +3450,10 @@ type ClientInterface interface {
 	// CreateProjectWithBody Create a Project with its Workflows (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-	// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-	// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-	// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-	// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-	// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-	// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+	// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+	// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+	// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+	// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 	// `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 	// put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 	// `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -3472,13 +3469,10 @@ type ClientInterface interface {
 	// CreateProject Create a Project with its Workflows (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-	// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-	// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-	// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-	// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-	// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-	// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+	// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+	// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+	// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+	// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 	// `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 	// put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 	// `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -5429,13 +5423,10 @@ func (c *Client) ListProjects(ctx context.Context, reqEditors ...RequestEditorFn
 // CreateProjectWithBody Create a Project with its Workflows (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 // `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 // put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 // `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -5461,13 +5452,10 @@ func (c *Client) CreateProjectWithBody(ctx context.Context, params *CreateProjec
 // CreateProject Create a Project with its Workflows (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 // `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 // put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 // `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -12742,13 +12730,10 @@ type ClientWithResponsesInterface interface {
 	// CreateProjectWithBodyWithResponse Create a Project with its Workflows (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-	// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-	// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-	// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-	// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-	// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-	// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+	// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+	// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+	// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+	// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 	// `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 	// put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 	// `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -12764,13 +12749,10 @@ type ClientWithResponsesInterface interface {
 	// CreateProjectWithResponse Create a Project with its Workflows (admin)
 	//
 	// The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-	// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-	// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-	// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-	// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-	// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-	// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-	// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+	// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+	// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+	// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+	// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 	// `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 	// put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 	// `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -18806,13 +18788,10 @@ func (c *ClientWithResponses) ListProjectsWithResponse(ctx context.Context, reqE
 // CreateProjectWithBodyWithResponse Create a Project with its Workflows (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 // `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 // put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 // `acceptance` are what a Task filed in the Project takes when its filer does not say; both
@@ -18834,13 +18813,10 @@ func (c *ClientWithResponses) CreateProjectWithBodyWithResponse(ctx context.Cont
 // CreateProjectWithResponse Create a Project with its Workflows (admin)
 //
 // The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-// changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
-// a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
-// Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
-// Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
-// Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
-// review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
-// "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+// changes. The Project starts with its Workflows: `default`, two Workflows, Implementation and
+// Bug triage, with the Steps, Skills and Connectors `NewWorkflow` describes, where a Task
+// filed without a Step starts at Build; `empty`, one Workflow named Work (Backlog, a hold, →
+// Done "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
 // `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
 // put in the Project in the same write; the creator is not, unless named. `auto_complete` and
 // `acceptance` are what a Task filed in the Project takes when its filer does not say; both
