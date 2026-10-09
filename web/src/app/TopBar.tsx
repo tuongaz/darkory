@@ -60,10 +60,10 @@ export function TopBar({
                 <Link
                   to={c.to}
                   aria-label={mark(i, c) && typeof c.label === "string" ? c.label : undefined}
-                  className="flex min-w-0 items-center gap-1.5 hover:underline"
+                  className="group flex min-w-0 items-center gap-1.5"
                 >
                   {icon(i, c)}
-                  <span className={cn("truncate", mark(i, c) && "hidden sm:inline")}>{c.label}</span>
+                  <span className={cn("truncate group-hover:underline", mark(i, c) && "hidden sm:inline")}>{c.label}</span>
                 </Link>
               ) : (
                 <>

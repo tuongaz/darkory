@@ -6,8 +6,9 @@ import { web } from "@/test/fixtures";
 import { projectCrumb } from "./crumbs";
 import { type Crumb, TopBar } from "./TopBar";
 
-// jsdom lays nothing out: these read what the bar renders at each width (the `sm:` classes);
-// Playwright's phone boards (workflows.spec.ts, `insideThePhone`) read where it lands at 390 px.
+// jsdom lays nothing out: these check the bar's structure only (what it renders, the `sm:` classes).
+// Playwright's test 9 (workflows.spec.ts, the phone boards at 390 px) guards the phone link's name
+// and where it lands.
 function bar(crumbs: Crumb[]) {
   render(
     <MemoryRouter>

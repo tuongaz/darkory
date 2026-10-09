@@ -249,9 +249,10 @@ function BoardColumn({
     >
       <div className="flex h-7 min-w-0 items-center gap-2 px-1 font-medium">
         <ColumnHead column={c} model={model} />
-        <span className="font-normal text-muted-foreground tabular-nums" aria-label={tasksCount(c.tasks.length)}>
+        <span className="font-normal text-muted-foreground tabular-nums" aria-hidden>
           {c.tasks.length}
         </span>
+        <span className="sr-only">{tasksCount(c.tasks.length)}</span>
         {c.kind === "step" && (
           <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground" aria-label={`File a Task at ${c.step.name}`} onClick={() => onAdd(c.step.id)}>
             <PlusIcon />

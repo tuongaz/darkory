@@ -1,8 +1,5 @@
 import { useState } from "react";
-import { FoldAnchor, type Fold } from "@/components/BarFold";
-
-/** Whether a trigger is laid out (not hidden on a phone by its fold). */
-const shown = (el: HTMLElement | null) => (el?.getBoundingClientRect().width ?? 0) > 0;
+import { FoldAnchor, shown, type Fold } from "@/components/BarFold";
 
 /**
  * What a folded bar menu needs: a ref callback for its own trigger, the class that hides that

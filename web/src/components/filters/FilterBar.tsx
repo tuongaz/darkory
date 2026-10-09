@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { dateBounds, dateText, datePresets, pillDays, presetText } from "./dates";
 import type { FilterPill } from "./filterState";
 import { filterLabels, type FilterLabels } from "./labels";
+import { filterName, setCount } from "./names";
 import {
   commitOp,
   dateMode,
@@ -70,7 +71,6 @@ function barOf(props: FilterBarProps) {
   const pillFor = (key: string) => pills.find((p) => p.field === key);
   // The free-text axis (`q`): the menu's Search field and the Search chip, never a checklist.
   const text = fields.find((f) => f.type === "text");
-  const known = new Set(fields.map((f) => f.key));
   return {
     labels: props.labels ?? filterLabels,
     pillFor,
@@ -83,8 +83,7 @@ function barOf(props: FilterBarProps) {
     },
     set: fields.filter((f) => f.type !== "text" && pillFor(f.key)),
     folded: fields.filter((f) => f.type !== "text" && !pillFor(f.key)),
-    // A pill for an axis this page does not know (a hand-edited address) is ignored, not counted.
-    activeCount: pills.filter((p) => known.has(p.field)).length,
+    activeCount: setCount(props),
   };
 }
 
@@ -181,7 +180,7 @@ export function FilterMenuButton({
         <Button
           ref={foldOwn}
           variant="outline"
-          aria-label={count > 0 ? `${labels.filter}, ${count} set` : labels.filter}
+          aria-label={filterName(props)}
           className={cn("data-[state=open]:bg-accent", foldHide)}
         >
           <FilterIcon />

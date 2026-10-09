@@ -8,7 +8,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { PopoverAnchor } from "@/components/ui/popover";
 
 /** Whether a trigger is laid out (not hidden on a phone by its fold). */
-const shown = (el: HTMLElement | null) => (el?.getBoundingClientRect().width ?? 0) > 0;
+// eslint-disable-next-line react-refresh/only-export-components -- the fold's one test of a trigger shown, which `useFolded` reads too.
+export const shown = (el: HTMLElement | null) => (el?.getBoundingClientRect().width ?? 0) > 0;
 
 /** A menu's place in a fold: the fold's trigger, which it opens under on a phone. */
 export type Fold = { anchor: HTMLButtonElement | null };
@@ -19,18 +20,22 @@ export type Fold = { anchor: HTMLButtonElement | null };
  */
 export function BarFold({
   anchor,
+  name,
   items,
   badge,
 }: {
   anchor: (el: HTMLButtonElement | null) => void;
-  items: { label: string; icon: ReactNode; open: () => void; badge?: ReactNode }[];
+  /** The trigger's accessible name: "More", with what its badge counts. */
+  name: string;
+  /** `name`, an item's accessible name where its badge counts something (else its label). */
+  items: { label: string; name?: string; icon: ReactNode; open: () => void; badge?: ReactNode }[];
   badge?: ReactNode;
 }) {
   const next = useRef<(() => void) | null>(null);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button ref={anchor} variant="outline" aria-label="More" className="data-[state=open]:bg-accent sm:hidden">
+        <Button ref={anchor} variant="outline" aria-label={name} className="data-[state=open]:bg-accent sm:hidden">
           <EllipsisIcon />
           {badge}
         </Button>
@@ -47,7 +52,7 @@ export function BarFold({
         }}
       >
         {items.map((item) => (
-          <DropdownMenuItem key={item.label} onSelect={() => (next.current = item.open)}>
+          <DropdownMenuItem key={item.label} aria-label={item.name} onSelect={() => (next.current = item.open)}>
             {item.icon}
             {item.label}
             {item.badge}

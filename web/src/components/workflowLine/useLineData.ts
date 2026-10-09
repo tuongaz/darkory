@@ -107,7 +107,7 @@ export function useLineData(
     if (!graph || !drawn) return undefined;
     const tasks = new Map<string, Task>();
     for (const t of [...endedParents, ...(done.data ?? []), ...(open.data ?? [])]) tasks.set(t.id, t);
-    // The scoped Task's own record only fills a gap: a list read since is fresher.
+    // The lists' record of a Task wins; the scoped Task's detail only fills a gap in them.
     if (detail && !tasks.has(detail.task.id)) tasks.set(detail.task.id, detail.task);
     return shownWorkflow(drawn, graph, [...tasks.values()]);
   }, [graph, drawn, endedParents, done.data, open.data, detail]);

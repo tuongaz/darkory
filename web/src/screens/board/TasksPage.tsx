@@ -12,6 +12,7 @@ import { Content, TopBar } from "@/app/TopBar";
 import { BarFold } from "@/components/BarFold";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChipRow, FilterCount, FilterMenuButton } from "@/components/filters/FilterBar";
+import { filterName, foldName } from "@/components/filters/names";
 import { useSavedViews } from "@/components/filters/useSavedViews";
 import { useTaskFilter } from "@/components/filters/useTaskFilter";
 import { AppliedView, ViewsMenu } from "@/components/filters/ViewsMenu";
@@ -106,10 +107,11 @@ export function TasksPage() {
             {barFold && (
               <BarFold
                 anchor={setMore}
+                name={foldName(filter.bar)}
                 badge={<FilterCount {...filter.bar} />}
                 items={[
                   { label: "Views", icon: <BookmarkIcon />, open: () => setViewsOpen(true) },
-                  { label: "Filter", icon: <FilterIcon />, open: () => filter.setOpen(true), badge: <FilterCount {...filter.bar} /> },
+                  { label: "Filter", name: filterName(filter.bar), icon: <FilterIcon />, open: () => filter.setOpen(true), badge: <FilterCount {...filter.bar} /> },
                   { label: "Display", icon: <SlidersHorizontalIcon />, open: () => setDisplayOpen(true) },
                 ]}
               />

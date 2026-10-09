@@ -258,7 +258,7 @@ test("4 · completed at Verify, its card sits in Bugs' Done and in no other Work
     await page.goto(`${base}${board(wf(other))}`);
     await expect(chip(page)).toHaveText(other);
     // The board has read its Tasks: its Done column counts none of them.
-    await expect(page.getByRole("region", { name: "Done", exact: true }).getByLabel("0 Tasks", { exact: true })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Done", exact: true }).getByText("0 Tasks", { exact: true })).toBeVisible();
     await expect(card(page, filed.key)).toHaveCount(0);
   }
   expect(errors).toEqual([]);
@@ -472,7 +472,11 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     // Beside the chip the List | Board switch is a menu, and Views, Filter and Display are one.
     await expect(page.getByRole("button", { name: "View: Board" })).toBeVisible();
     await expect(page.getByRole("button", { name: "More" })).toBeInViewport({ ratio: 1 });
-    for (const action of ["Views", "Filter", "Display"]) await expect(page.getByRole("button", { name: action, exact: true })).toBeHidden();
+    for (const action of ["Views", "Filter", "Display"]) {
+      const button = page.getByRole("button", { name: action, exact: true });
+      await expect(button).toHaveCount(1);
+      await expect(button).toBeHidden();
+    }
     await shot(page, `phone-board-${name.toLowerCase()}`);
   }
   // Each folded menu opens under the fold's trigger, inside the phone.

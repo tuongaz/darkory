@@ -517,6 +517,16 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(await screen.findByRole("dialog", { name: "Filters" })).toBeInTheDocument();
   });
 
+  it("names the count of Filters set on the fold's trigger and its Filter item, in the words the Filter button uses", async () => {
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}&filter.tasks=kind:is:task&filter.tasks=blocked:is:false`);
+    const more = await screen.findByRole("button", { name: "More, 2 Filters set" });
+    expect(screen.getByRole("button", { name: "Filter, 2 set" })).toHaveClass("max-sm:hidden");
+    await userEvent.click(more);
+    expect(await screen.findByRole("menuitem", { name: "Filter, 2 set" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Views" })).toBeInTheDocument();
+  });
+
   it("keeps Views, Filter and Display as three buttons with no chip in the bar", async () => {
     mockApi(routes());
     renderApp("/projects/WEB/tasks?view=board");
