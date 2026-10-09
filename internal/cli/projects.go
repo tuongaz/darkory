@@ -271,19 +271,19 @@ func (c *call) workflowBody(wf client.Workflows) client.SetWorkflowBody {
 	workflows := map[string]string{}
 	for _, w := range wf.Workflows {
 		workflows[w.ID] = w.Name
-		body.Workflows = append(body.Workflows, client.WorkflowInput{ID: ptr(w.ID), Name: w.Name, Position: w.Position})
+		body.Workflows = append(body.Workflows, client.WorkflowInput{ID: ptr(w.ID), Name: w.Name, Position: ptr(w.Position)})
 	}
 	names := map[string]string{}
 	for _, s := range wf.Steps {
 		names[s.ID] = s.Name
-		in := client.StepInput{ID: ptr(s.ID), Workflow: workflows[s.WorkflowID], Name: s.Name, Position: s.Position, X: ptr(s.X), Y: ptr(s.Y)}
+		in := client.StepInput{ID: ptr(s.ID), Workflow: workflows[s.WorkflowID], Name: s.Name, Position: ptr(s.Position), X: ptr(s.X), Y: ptr(s.Y)}
 		if s.SkillID != nil {
 			in.Skill = ptr(c.skillName(*s.SkillID))
 		}
 		body.Steps = append(body.Steps, in)
 	}
 	for _, k := range wf.Connectors {
-		in := client.ConnectorInput{ID: ptr(k.ID), From: names[k.FromStepID], Name: k.Name, Position: k.Position}
+		in := client.ConnectorInput{ID: ptr(k.ID), From: names[k.FromStepID], Name: k.Name, Position: ptr(k.Position)}
 		if k.ToStepID != nil {
 			in.To = ptr(names[*k.ToStepID])
 		}

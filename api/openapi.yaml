@@ -3065,7 +3065,7 @@ components:
           description: The Skill, by id or name; one in `skills` by its name.
     WorkflowInput:
       type: object
-      required: [name, position]
+      required: [name]
       properties:
         id:
           type: string
@@ -3081,7 +3081,7 @@ components:
           description: Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
     StepInput:
       type: object
-      required: [workflow, name, position]
+      required: [workflow, name]
       properties:
         id:
           type: string
@@ -3109,7 +3109,7 @@ components:
           description: Left out, a Step of the Project now keeps its place, and a new one is drawn at 0.
     ConnectorInput:
       type: object
-      required: [from, name, position]
+      required: [from, name]
       properties:
         id:
           type: string

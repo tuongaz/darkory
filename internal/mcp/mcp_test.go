@@ -61,12 +61,12 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	must(t)(tok, err)
 	f := &fixture{t: t, srv: srv, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
 	must(t)(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, client.SetWorkflowBody{
-		Workflows: []client.WorkflowInput{{Name: "Work", Position: 1}},
-		Steps: []client.StepInput{{Workflow: "Work", Name: "Plan", Skill: ptr("breakdown"), Position: 1}, {Workflow: "Work", Name: "Build", Skill: ptr("build"), Position: 2},
-			{Workflow: "Work", Name: "Retro", Skill: ptr("retro"), Position: 3}, {Workflow: "Work", Name: "Skill review", Skill: ptr("skill-review"), Position: 4}},
-		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: 1}, {From: "Build", Name: "pass", Position: 1},
-			{From: "Retro", Name: "done", Position: 1}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: 2},
-			{From: "Skill review", Name: "publish", Position: 1}},
+		Workflows: []client.WorkflowInput{{Name: "Work", Position: ptr(int64(1))}},
+		Steps: []client.StepInput{{Workflow: "Work", Name: "Plan", Skill: ptr("breakdown"), Position: ptr(int64(1))}, {Workflow: "Work", Name: "Build", Skill: ptr("build"), Position: ptr(int64(2))},
+			{Workflow: "Work", Name: "Retro", Skill: ptr("retro"), Position: ptr(int64(3))}, {Workflow: "Work", Name: "Skill review", Skill: ptr("skill-review"), Position: ptr(int64(4))}},
+		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: ptr(int64(1))}, {From: "Build", Name: "pass", Position: ptr(int64(1))},
+			{From: "Retro", Name: "done", Position: ptr(int64(1))}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: ptr(int64(2))},
+			{From: "Skill review", Name: "publish", Position: ptr(int64(1))}},
 	}))
 	bob := dial(t, ts.URL, f.bob, "bob-seed")
 	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("WEB"), Title: "Search", Breakdown: ptr(true)}))

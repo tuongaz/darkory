@@ -893,7 +893,7 @@ type ConnectorInput struct {
 	Name string  `json:"name"`
 
 	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
-	Position int64 `json:"position"`
+	Position *int64 `json:"position,omitempty"`
 
 	// To The Step it leads to, by its id or its name in `steps`, in any Workflow of the body. Left out, it leads into Done.
 	To *string `json:"to,omitempty"`
@@ -1767,7 +1767,7 @@ type StepInput struct {
 	Name string  `json:"name"`
 
 	// Position The Step's place in its Workflow; distinct among that Workflow's Steps, numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
-	Position int64 `json:"position"`
+	Position *int64 `json:"position,omitempty"`
 
 	// Skill Skill id or name the Step carries. Left out, the Step is a hold.
 	Skill *string `json:"skill,omitempty"`
@@ -2116,7 +2116,7 @@ type WorkflowInput struct {
 	Name string  `json:"name"`
 
 	// Position Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
-	Position int64 `json:"position"`
+	Position *int64 `json:"position,omitempty"`
 }
 
 // WorkflowSkillInput defines model for WorkflowSkillInput.

@@ -83,13 +83,13 @@ func (s *Server) SetWorkflow(w http.ResponseWriter, r *http.Request, project gen
 	}
 	in := core.WorkflowsInput{
 		Workflows: each(body.Workflows, func(wf gen.WorkflowInput) core.WorkflowInput {
-			return core.WorkflowInput{ID: deref(shortid.StringPtr(wf.ID)), Name: wf.Name, Position: wf.Position}
+			return core.WorkflowInput{ID: deref(shortid.StringPtr(wf.ID)), Name: wf.Name, Position: deref(wf.Position)}
 		}),
 		Steps: each(body.Steps, func(st gen.StepInput) core.StepInput {
-			return core.StepInput{ID: deref(shortid.StringPtr(st.ID)), Workflow: st.Workflow, Name: st.Name, Skill: st.Skill, Position: st.Position, X: st.X, Y: st.Y}
+			return core.StepInput{ID: deref(shortid.StringPtr(st.ID)), Workflow: st.Workflow, Name: st.Name, Skill: st.Skill, Position: deref(st.Position), X: st.X, Y: st.Y}
 		}),
 		Connectors: each(body.Connectors, func(k gen.ConnectorInput) core.ConnectorInput {
-			return core.ConnectorInput{ID: deref(shortid.StringPtr(k.ID)), From: k.From, To: k.To, Name: k.Name, Position: k.Position}
+			return core.ConnectorInput{ID: deref(shortid.StringPtr(k.ID)), From: k.From, To: k.To, Name: k.Name, Position: deref(k.Position)}
 		}),
 	}
 	if body.Moves != nil {
@@ -165,9 +165,11 @@ func (s *Server) DeleteLabel(w http.ResponseWriter, r *http.Request, label gen.L
 	s.respond(w, r, noContent, nil, s.core.DeleteLabel(r.Context(), c, string(label), idem))
 }
 
-func deref(p *string) string {
+// deref reads p, or the zero value when it is left out.
+func deref[T any](p *T) T {
 	if p == nil {
-		return ""
+		var zero T
+		return zero
 	}
 	return *p
 }

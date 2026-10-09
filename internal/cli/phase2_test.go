@@ -556,10 +556,10 @@ func TestWorkflowCommands(t *testing.T) {
 			}
 		}
 		for i := range body.Steps {
-			body.Steps[i].Position++
+			body.Steps[i].Position = ptr(*body.Steps[i].Position + 1)
 		}
-		body.Steps = append(body.Steps, client.StepInput{Workflow: "Work", Name: "Backlog", Position: 1})
-		body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Backlog", To: ptr("Build"), Name: "ready", Position: 1})
+		body.Steps = append(body.Steps, client.StepInput{Workflow: "Work", Name: "Backlog", Position: ptr(int64(1))})
+		body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Backlog", To: ptr("Build"), Name: "ready", Position: ptr(int64(1))})
 		b, err := json.Marshal(body)
 		if err != nil {
 			t.Fatal(err)
