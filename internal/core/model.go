@@ -219,8 +219,12 @@ type Task struct {
 	// it. WorkflowID is the Workflow of its Step, or of its last Step: nil wherever both are.
 	LastStepID *string
 	WorkflowID *string
-	AimedAtID  *string
-	OwnerID    string
+	// StepWorkflowID is the Workflow of the Step the Task is at, nil wherever StepID is. The
+	// guards a write's batch ends with bind it, never WorkflowID, which also reads LastStepID; the
+	// API does not show it.
+	StepWorkflowID *string
+	AimedAtID      *string
+	OwnerID        string
 	// Rank is the Task's place in its Project's Rank, 1 first; nil on a Subtask, which sorts by
 	// its Parent's.
 	Rank *int64

@@ -1244,17 +1244,18 @@ func TestEndedTaskKeepsItsLastStep(t *testing.T) {
 	})
 }
 
-// A held write reads its Task, then sends one batch; the Workflow its response names is the one
-// its Step was in at the read. A Workflow edit committed in between that moves the Step into
-// another Workflow must refuse the batch, which runHeldWrite then reads again, as an edit that
+// A claim and a held write read their Task, then send one batch; the Workflow the response names
+// is the one its Step was in at the read. A Workflow edit committed in between that moves the
+// Step into another Workflow must refuse the batch, which is then read again, as an edit that
 // changes the Step's Skill does. The race cannot be interposed from outside the batch, so this
-// runs the guards the batch ends with against the edit: each holds before it, and refuses after.
+// runs the guards the batches end with against the edit: each holds before it, and refuses after.
+// Each binds the Workflow of the Step the Task is at, so a Task at no Step holds with none.
 func TestBatchGuardsTheStepsWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
 		f.project("WEB")
-		lead := f.member("lead", []string{"WEB"}, nil)
+		lead := f.member("lead", []string{"WEB"}, []string{"engineer"})
 		w := asSet(f.workflows("WEB"))
 		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 2})
 		w.Steps = append(w.Steps, core.StepInput{Workflow: "Bugs", Name: "Verify", Position: 1})
@@ -1275,18 +1276,33 @@ func TestBatchGuardsTheStepsWorkflow(t *testing.T) {
 			t.Fatal("no Connector out of Build")
 		}
 		task := f.task(lead, "WEB", "Held", "Build")
-		pre := f.get(task.Key).Task
-		if pre.WorkflowID == nil || *pre.WorkflowID != work {
-			t.Fatalf("the Task at Build is in Workflow %v, want %s", pre.WorkflowID, work)
+		str := func(p *string) string {
+			if p == nil {
+				return "-"
+			}
+			return *p
 		}
-		args := map[string]any{"org": f.admin.OrgID, "task": task.ID}
-		guards := func() map[string]store.Stmt {
+		f.claim(lead, task.Key, core.ClaimOptions{})
+		pre := f.get(task.Key).Task
+		if pre.WorkflowID == nil || *pre.WorkflowID != work || pre.StepWorkflowID == nil || *pre.StepWorkflowID != work {
+			t.Fatalf("the Task at Build is in Workflow %v at a Step in %v, want %s", str(pre.WorkflowID), str(pre.StepWorkflowID), work)
+		}
+		if pre.Claim == nil {
+			t.Fatal("the Task is not held")
+		}
+		// The guards of the claim batch, of a held write answering with its Task (Release), and of
+		// an advance along out, each bound from pre as its caller binds it.
+		guards := func(pre core.Task, k *core.Connector) map[string]store.Stmt {
+			args := map[string]any{"org": f.admin.OrgID, "task": pre.ID}
 			return map[string]store.Stmt{
-				"step guard": core.StepGuard(args, pre.StepID, pre.SkillID, pre.WorkflowID),
-				"from guard": core.FromGuard(args, pre, out),
+				"claim guard": core.ClaimGuard(map[string]any{"org": f.admin.OrgID, "task": pre.ID, "claim": pre.Claim.ID,
+					"step": pre.StepID, "skill": pre.SkillID, "workflow": pre.StepWorkflowID, "version": pre.Claim.SkillVersion,
+					"claims": int64(1), "open": int64(1)}),
+				"step guard": core.StepGuard(args, pre.StepID, pre.SkillID, pre.StepWorkflowID),
+				"from guard": core.FromGuard(args, pre, k),
 			}
 		}
-		for name, g := range guards() {
+		for name, g := range guards(pre, out) {
 			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); err != nil {
 				t.Fatalf("%s before the edit: %v", name, err)
 			}
@@ -1304,20 +1320,47 @@ func TestBatchGuardsTheStepsWorkflow(t *testing.T) {
 		}
 		now := f.get(task.Key).Task
 		if now.StepID == nil || *now.StepID != build || now.SkillID == nil || pre.SkillID == nil || *now.SkillID != *pre.SkillID ||
-			now.WorkflowID == nil || *now.WorkflowID != bugs {
-			t.Fatalf("after the edit the Task is at %v with Skill %v in Workflow %v; want Build, the same Skill, Bugs",
-				now.StepID, now.SkillID, now.WorkflowID)
+			now.WorkflowID == nil || *now.WorkflowID != bugs || now.StepWorkflowID == nil || *now.StepWorkflowID != bugs {
+			t.Fatalf("after the edit the Task is at %v with Skill %v in Workflow %v at a Step in %v; want Build, the same Skill, Bugs",
+				str(now.StepID), str(now.SkillID), str(now.WorkflowID), str(now.StepWorkflowID))
 		}
-		for name, g := range guards() {
+		if now.Claim == nil || now.Claim.ID != pre.Claim.ID || now.Claim.SkillVersion == nil || pre.Claim.SkillVersion == nil ||
+			*now.Claim.SkillVersion != *pre.Claim.SkillVersion {
+			t.Fatalf("after the edit the Claim is %+v, want %+v", now.Claim, pre.Claim)
+		}
+		// The Connector still leads out of Build to the same Step, so only the Workflow refuses.
+		var moved *core.Connector
+		for _, k := range f.workflows("WEB").Connectors {
+			if k.ID == out.ID {
+				moved = &k
+			}
+		}
+		if moved == nil || moved.FromStepID != build || str(moved.ToStepID) != str(out.ToStepID) {
+			t.Fatalf("after the edit the Connector out is %+v, want from Build to %s", moved, str(out.ToStepID))
+		}
+		for name, g := range guards(pre, out) {
 			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); !errors.Is(err, store.ErrConditionFailed) {
 				t.Errorf("%s after the Step moved Workflow: %v, want refused", name, err)
 			}
 		}
-		// Read again, as runHeldWrite does, the guards hold.
-		pre = now
-		for name, g := range guards() {
+		// Read again, as the claim path and runHeldWrite do, the guards hold.
+		for name, g := range guards(now, moved) {
 			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); err != nil {
 				t.Errorf("%s on a fresh read: %v", name, err)
+			}
+		}
+
+		// A Task aimed at a Member is at no Step: each guard binds no Workflow, and holds.
+		aimed := f.aimed(lead, "WEB", "Which provider?", "lead")
+		f.claim(lead, aimed.Key, core.ClaimOptions{})
+		ap := f.get(aimed.Key).Task
+		if ap.StepID != nil || ap.StepWorkflowID != nil || ap.WorkflowID != nil || ap.Claim == nil {
+			t.Fatalf("the aimed Task is at %v in %v at a Step in %v, held by %+v; want no Step, no Workflow, held",
+				str(ap.StepID), str(ap.WorkflowID), str(ap.StepWorkflowID), ap.Claim)
+		}
+		for name, g := range guards(ap, nil) {
+			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); err != nil {
+				t.Errorf("%s on the aimed Task: %v", name, err)
 			}
 		}
 	})

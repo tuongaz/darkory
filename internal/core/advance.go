@@ -140,9 +140,9 @@ func (s *Service) connectorFor(ctx context.Context, c *auth.Caller, pre Task, ou
 }
 
 // fromGuard holds while the Task is at the Step @from it was read at, still in the Workflow
-// @workflow it was read in, and the Connector @connector still leads from there to @to: a Task
-// moved, or a Workflow edited, since the read is refused and read again. A Task at no Step has no
-// Connector.
+// @workflow it was read in (that Step's own, pre.StepWorkflowID), and the Connector @connector
+// still leads from there to @to: a Task moved, or a Workflow edited, since the read is refused and
+// read again. A Task at no Step has no Connector.
 func fromGuard(args map[string]any, pre Task, k *Connector) store.Stmt {
 	if k == nil {
 		return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.step_id IS NULL`, args))
@@ -151,7 +151,7 @@ func fromGuard(args map[string]any, pre Task, k *Connector) store.Stmt {
 JOIN connectors k ON k.org_id = t.org_id AND k.from_step_id = t.step_id
 WHERE t.org_id = @org AND t.id = @task AND t.step_id = @from AND fs.workflow_id IS NOT DISTINCT FROM @workflow
 AND k.id = @connector AND k.to_step_id IS NOT DISTINCT FROM @to`,
-		with(args, map[string]any{"from": pre.StepID, "workflow": pre.WorkflowID, "connector": k.ID, "to": k.ToStepID})))
+		with(args, map[string]any{"from": pre.StepID, "workflow": pre.StepWorkflowID, "connector": k.ID, "to": k.ToStepID})))
 }
 
 // advanceStmts move pre along k to its Step to: the Claim ends advanced, and the Task waits at
@@ -159,7 +159,7 @@ AND k.id = @connector AND k.to_step_id IS NOT DISTINCT FROM @to`,
 func advanceStmts(c *auth.Caller, pre Task, k Connector, to Step, note *string, extra map[string]any, args map[string]any, now time.Time) (Task, []store.Stmt) {
 	out := pre
 	out.Claim, out.StepID, out.StepSince, out.WaitingSince, out.SkillID = nil, k.ToStepID, &now, now, to.SkillID
-	out.WorkflowID = &to.WorkflowID
+	out.WorkflowID, out.StepWorkflowID = &to.WorkflowID, &to.WorkflowID
 	a := with(args, map[string]any{"to": k.ToStepID})
 	stmts := []store.Stmt{fromGuard(args, pre, &k)}
 	if note != nil && *note != "" {
@@ -222,7 +222,7 @@ func (s *Service) sendBack(ctx context.Context, c *auth.Caller, pre Task, stale 
 // Acceptance or complete itself (parentStmts).
 func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Connector, ps []SkillProposal, note *string, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 	out := pre
-	out.Claim, out.State, out.EndedAt, out.StepID, out.StepSince, out.SkillID = nil, "done", &now, nil, nil, nil
+	out.Claim, out.State, out.EndedAt, out.StepID, out.StepSince, out.SkillID, out.StepWorkflowID = nil, "done", &now, nil, nil, nil, nil
 	out.LastStepID = pre.StepID // its WorkflowID stays that Step's
 	stmts := []store.Stmt{fromGuard(args, pre, k)}
 	for _, p := range ps {

@@ -1,5 +1,5 @@
 {
-  "workflows": [{"workflow": "Work", "name": "Work", "position": 1}],
+  "workflows": [{"name": "Work", "position": 1}],
   "steps": [
     {"workflow": "Work", "name": "Backlog",      "position": 1, "x": 0,   "y": 0},
     {"workflow": "Work", "name": "Plan",         "skill": "breakdown",    "position": 2, "x": 0,   "y": 128},

@@ -21,8 +21,8 @@ var projectCommands = []command{
 	{path: "project add", args: "<project> <member>", short: "add a Member to a Project (admin)", run: cmdProjectAdd},
 	{path: "project remove", args: "<project> <member>", short: "remove a Member from a Project (admin)", run: cmdProjectRemove},
 	{path: "project set", args: "<project> [--name n] [--color 0-11] [--workspace ws|\"\"] [--auto-complete=true|false] [--acceptance=true|false]", short: "change a Project's name, colour and the defaults a Task filed in it takes (admin)", run: cmdProjectSet},
-	{path: "workflow show", args: "<project> [--body]", short: "show a Project's Workflow: its Steps, their Skills, the Connectors out of each, and what is at each now", run: cmdWorkflowShow},
-	{path: "workflow set", args: "<project> --file path|-", short: "replace a Project's Workflow with the body in a file, as workflow show --body prints it (admin)", run: cmdWorkflowSet},
+	{path: "workflow show", args: "<project> [--workflow w] [--body]", short: "show a Project's Workflows, or one: their Steps, the Skills, the Connectors out of each, and what is at each now", run: cmdWorkflowShow},
+	{path: "workflow set", args: "<project> --file path|-", short: "replace a Project's Workflows with the body in a file, as workflow show --body prints it (admin)", run: cmdWorkflowSet},
 	{path: "label create", args: "<name> --color #rrggbb [--project p]", short: "define a Label for a Project, or for the Organisation (admin)", run: cmdLabelCreate},
 	{path: "label list", args: "[--project p]", short: "list the Organisation's Labels, and a Project's own", run: cmdLabelList},
 	{path: "label update", args: "<label> [--name n] [--color #rrggbb] [--project p]", short: "rename or recolour a Label", run: cmdLabelUpdate},
@@ -196,10 +196,14 @@ func (c *call) printProjectDetail(w io.Writer, d client.ProjectDetail) {
 }
 
 func cmdWorkflowShow(c *call) error {
-	asBody := c.fs.Bool("body", false, "print the Workflow as the JSON body workflow set reads, with Skills and Steps by name, to edit and send back")
+	only := c.fs.String("workflow", "", "only this Workflow, by name or id")
+	asBody := c.fs.Bool("body", false, "print the Project's Workflows as the JSON body workflow set reads, with Workflows, Skills and Steps by name, to edit and send back")
 	args, err := c.args(1, 1)
 	if err != nil {
 		return err
+	}
+	if *only != "" && *asBody {
+		return usagef("--body prints every Workflow, as workflow set takes them all; leave out --workflow")
 	}
 	conn, err := c.dial(oneOff)
 	if err != nil {
@@ -216,11 +220,52 @@ func cmdWorkflowShow(c *call) error {
 		}
 		return printJSON(c.env.Stdout, b)
 	}
-	return c.show(res.Body, func(w io.Writer) { c.printWorkflow(w, *res.JSON200) })
+	if *only == "" {
+		return c.show(res.Body, func(w io.Writer) { c.printWorkflow(w, *res.JSON200) })
+	}
+	narrowed, ok := oneWorkflow(*res.JSON200, *only)
+	if !ok {
+		return fmt.Errorf("%s has no Workflow %q", args[0], *only)
+	}
+	b, err := json.Marshal(narrowed)
+	if err != nil {
+		return err
+	}
+	return c.show(b, func(w io.Writer) { c.printWorkflow(w, narrowed) })
 }
 
-// workflowBody turns a Workflow as read into the body that sets it again, naming Skills and Steps
-// by name so a person can edit it; ids are kept, so a renamed Step stays the same Step.
+// oneWorkflow narrows a Project's Workflows to the one named, ignoring case, or given by id in
+// either form: its Steps, and the Connectors out of them, wherever they lead.
+func oneWorkflow(wf client.Workflows, ref string) (client.Workflows, bool) {
+	out := wf
+	out.Workflows, out.Steps, out.Connectors = nil, []client.WorkflowStep{}, []client.Connector{}
+	for _, w := range wf.Workflows {
+		if strings.EqualFold(w.Name, ref) || shortid.Canonical(w.ID) == shortid.Canonical(ref) {
+			out.Workflows = []client.Workflow{w}
+			break
+		}
+	}
+	if out.Workflows == nil {
+		return wf, false
+	}
+	in := map[string]bool{}
+	for _, s := range wf.Steps {
+		if s.WorkflowID == out.Workflows[0].ID {
+			out.Steps = append(out.Steps, s)
+			in[s.ID] = true
+		}
+	}
+	for _, k := range wf.Connectors {
+		if in[k.FromStepID] {
+			out.Connectors = append(out.Connectors, k)
+		}
+	}
+	return out, true
+}
+
+// workflowBody turns a Project's Workflows as read into the body that sets them again, naming
+// Workflows, Skills and Steps by name so a person can edit it; ids are kept, so a renamed Step
+// stays the same Step.
 func (c *call) workflowBody(wf client.Workflows) client.SetWorkflowBody {
 	body := client.SetWorkflowBody{Workflows: []client.WorkflowInput{}, Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
 	workflows := map[string]string{}
@@ -248,12 +293,15 @@ func (c *call) workflowBody(wf client.Workflows) client.SetWorkflowBody {
 }
 
 // workflowSetHelp documents the body workflow set reads.
-const workflowSetHelp = `the Workflow as JSON; - reads standard input. The body is
-{"steps": [{"id": kept Step's id (leave out for a new Step), "name": "Build", "skill": Skill name or id (leave out for a hold), "position": 1, "x": 0, "y": 0}…],
- "connectors": [{"from": Step name or id, "to": Step name or id (leave out for Done), "name": "pass", "position": 1}…],
+const workflowSetHelp = `the Project's Workflows as JSON; - reads standard input. The body is
+{"workflows": [{"id": kept Workflow's id (leave out for a new one, or to keep the one of that name), "name": "Work", "position": 1}…],
+ "steps": [{"id": kept Step's id (leave out for a new Step), "workflow": Workflow name or id, "name": "Build", "skill": Skill name or id (leave out for a hold), "position": 1, "x": 0, "y": 0}…],
+ "connectors": [{"from": Step name or id, "to": Step name or id in any Workflow (leave out for Done), "name": "pass", "position": 1}…],
  "moves": {deleted Step's id: Step name or id its Tasks go to}}.
-position places each Step (1 first, each its own) and each Connector among those out of its Step;
-x and y may be left out. darkory workflow show <project> --body prints the current one`
+A Workflow left out is deleted with its Steps. position places each Workflow, each Step in its
+Workflow and each Connector among those out of its Step (1 first, each its own); left out or 0, it
+is the item's place in its list. x and y may be left out.
+darkory workflow show <project> --body prints the current one`
 
 func cmdWorkflowSet(c *call) error {
 	file := c.fs.String("file", "", workflowSetHelp)
@@ -277,6 +325,9 @@ func cmdWorkflowSet(c *call) error {
 	if err := json.Unmarshal(text, &body); err != nil {
 		return usagef("--file is not a Workflow body (see --help): %v", err)
 	}
+	if body.Workflows == nil {
+		body.Workflows = []client.WorkflowInput{}
+	}
 	if body.Steps == nil {
 		body.Steps = []client.StepInput{}
 	}
@@ -295,17 +346,43 @@ func cmdWorkflowSet(c *call) error {
 }
 
 // printWorkflow prints each Step in order with its Skill, what is at it now, who can take its
-// Tasks, and the Connectors out of it.
+// Tasks, and the Connectors out of it; with two Workflows or more, each Workflow's Steps under its
+// name, and a Connector into another Workflow as that Workflow › its Step.
 func (c *call) printWorkflow(w io.Writer, wf client.Workflows) {
-	if len(wf.Steps) == 0 {
+	if len(wf.Steps) == 0 && len(wf.Workflows) < 2 {
 		fmt.Fprintln(w, "No Steps: nothing can be filed in this Project until it has one.")
 		return
 	}
-	names := map[string]string{}
-	for _, s := range wf.Steps {
-		names[s.ID] = s.Name
+	names, workflows, of := map[string]string{}, map[string]string{}, map[string]string{}
+	for _, x := range wf.Workflows {
+		workflows[x.ID] = x.Name
 	}
 	for _, s := range wf.Steps {
+		names[s.ID], of[s.ID] = s.Name, s.WorkflowID
+	}
+	if len(wf.Workflows) < 2 {
+		c.printSteps(w, wf.Steps, wf.Connectors, names, workflows, of)
+		return
+	}
+	for _, x := range wf.Workflows {
+		fmt.Fprintln(w, one(x.Name))
+		var steps []client.WorkflowStep
+		for _, s := range wf.Steps {
+			if s.WorkflowID == x.ID {
+				steps = append(steps, s)
+			}
+		}
+		if len(steps) == 0 {
+			fmt.Fprintln(w, "    No Steps.")
+		}
+		c.printSteps(w, steps, wf.Connectors, names, workflows, of)
+	}
+}
+
+// printSteps prints Steps of one Workflow with the Connectors out of each; names, workflows and of
+// give every Step's name, every Workflow's name and the Workflow each Step is in.
+func (c *call) printSteps(w io.Writer, steps []client.WorkflowStep, connectors []client.Connector, names, workflows, of map[string]string) {
+	for _, s := range steps {
 		skill := "hold"
 		if s.SkillID != nil {
 			skill = c.skill(*s.SkillID)
@@ -322,17 +399,26 @@ func (c *call) printWorkflow(w io.Writer, wf client.Workflows) {
 			line += fmt.Sprintf("  median %s", humanMS(*s.MedianMs))
 		}
 		fmt.Fprintln(w, line)
-		for _, k := range wf.Connectors {
+		for _, k := range connectors {
 			if k.FromStepID != s.ID {
 				continue
 			}
 			to := "Done"
 			if k.ToStepID != nil {
-				to = one(names[*k.ToStepID])
+				to = target(s.WorkflowID, of[*k.ToStepID], workflows[of[*k.ToStepID]], names[*k.ToStepID])
 			}
 			fmt.Fprintf(w, "      %s → %s\n", one(k.Name), to)
 		}
 	}
+}
+
+// target names the Step a Connector leads to for human output: the Step alone within the
+// Workflow it leads out of, and as Workflow › Step into another.
+func target(fromWorkflow, toWorkflow, workflow, step string) string {
+	if toWorkflow == "" || toWorkflow == fromWorkflow || workflow == "" {
+		return one(step)
+	}
+	return one(workflow) + " › " + one(step)
 }
 
 func names2(ts []client.Taker) string {

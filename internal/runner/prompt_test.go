@@ -4,10 +4,12 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/cli/remote"
 )
 
@@ -66,6 +68,13 @@ func TestBuildPrompt(t *testing.T) {
 	if !strings.Contains(got, "`darkory complete WEB-12 --note <what you did>` is the same as advancing along `pass`, the one way into Done") {
 		t.Error("the review Task's prompt does not offer complete")
 	}
+	// An outcome into another Workflow names the Workflow and Step it reaches.
+	cross := p
+	cross.Task.Step, cross.Task.Skill = "Triage", "triage"
+	cross.Task.Outcomes = []PromptOutcome{{Name: "bug", To: "Bugs › Investigate"}, {Name: "pass"}, {Name: "question", Done: true}}
+	if got := BuildPrompt(cross); !strings.Contains(got, "one of `bug` (to Bugs › Investigate), `pass`, `question` (into Done):") {
+		t.Errorf("the crossing outcome is not named by its Workflow and Step:\n%s", got)
+	}
 	two := review
 	two.Task.Outcomes = []PromptOutcome{{Name: "pass", Done: true}, {Name: "wontfix", Done: true}}
 	if strings.Contains(BuildPrompt(two), "darkory complete WEB-12") {
@@ -100,5 +109,26 @@ func golden(t *testing.T, name, got string) {
 	}
 	if got != string(want) {
 		t.Errorf("%s differs; run go test ./internal/runner -run %s -update and read the diff. Got:\n%s", name, t.Name(), got)
+	}
+}
+
+// An outcome names the Workflow and Step it reaches only when that Step is in another Workflow
+// than the Task's.
+func TestOutcomesNameAnotherWorkflow(t *testing.T) {
+	investigate, review := "st2", "st3"
+	d := &client.TaskDetail{Step: &client.Step{ID: "st1", WorkflowID: "w1", Name: "Triage"}, Connectors: []client.Connector{
+		{FromStepID: "st1", ToStepID: &investigate, Name: "bug"},
+		{FromStepID: "st1", ToStepID: &review, Name: "pass"},
+		{FromStepID: "st1", Name: "question"},
+	}}
+	wf := &client.Workflows{Workflows: []client.Workflow{{ID: "w1", Name: "Triage", Position: 1}, {ID: "w2", Name: "Bugs", Position: 2}},
+		Steps: []client.WorkflowStep{{ID: "st1", WorkflowID: "w1", Name: "Triage"}, {ID: "st2", WorkflowID: "w2", Name: "Investigate"},
+			{ID: "st3", WorkflowID: "w1", Name: "Review"}}}
+	want := []PromptOutcome{{Name: "bug", To: "Bugs › Investigate"}, {Name: "pass"}, {Name: "question", Done: true}}
+	if got := outcomes(d, wf); !slices.Equal(got, want) {
+		t.Fatalf("outcomes: %+v, want %+v", got, want)
+	}
+	if !leadsToAStep(d) || leadsToAStep(&client.TaskDetail{Connectors: []client.Connector{{Name: "done"}}}) {
+		t.Fatal("leadsToAStep reads the Connectors wrong")
 	}
 }

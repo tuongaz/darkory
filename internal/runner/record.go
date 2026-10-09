@@ -90,6 +90,8 @@ type Record interface {
 	AllWorkspaces(ctx context.Context) ([]Workspace, error)
 	Skill(ctx context.Context, ref string) (*client.SkillDetail, error)
 	Skills(ctx context.Context) ([]client.Skill, error)
+	// Workflows reads a Project's Workflows: every Workflow, Step and Connector.
+	Workflows(ctx context.Context, project string) (*client.Workflows, error)
 	Members(ctx context.Context) ([]client.Member, error)
 	Heartbeat(ctx context.Context, task string) (client.HeartbeatStatus, error)
 	Release(ctx context.Context, task, note string) error
@@ -251,6 +253,14 @@ func (r *conn) Skills(ctx context.Context) ([]client.Skill, error) {
 		return nil, err
 	}
 	return res.JSON200.Items, nil
+}
+
+func (r *conn) Workflows(ctx context.Context, project string) (*client.Workflows, error) {
+	res, err := r.c.GetWorkflowWithResponse(ctx, project)
+	if err := remote.Check(res, err, http.StatusOK); err != nil {
+		return nil, err
+	}
+	return res.JSON200, nil
 }
 
 func (r *conn) Members(ctx context.Context) ([]client.Member, error) {

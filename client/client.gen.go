@@ -892,7 +892,7 @@ type ConnectorInput struct {
 	ID   *string `json:"id,omitempty"`
 	Name string  `json:"name"`
 
-	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
+	// Position Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
 	Position int64 `json:"position"`
 
 	// To The Step it leads to, by its id or its name in `steps`, in any Workflow of the body. Left out, it leads into Done.
@@ -1766,7 +1766,7 @@ type StepInput struct {
 	ID   *string `json:"id,omitempty"`
 	Name string  `json:"name"`
 
-	// Position The Step's place in its Workflow; distinct among that Workflow's Steps, numbered 1, 2, 3… in this order.
+	// Position The Step's place in its Workflow; distinct among that Workflow's Steps, numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
 	Position int64 `json:"position"`
 
 	// Skill Skill id or name the Step carries. Left out, the Step is a hold.
@@ -2115,7 +2115,7 @@ type WorkflowInput struct {
 	ID   *string `json:"id,omitempty"`
 	Name string  `json:"name"`
 
-	// Position Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order.
+	// Position Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
 	Position int64 `json:"position"`
 }
 
@@ -3625,8 +3625,8 @@ type ClientInterface interface {
 	// Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 	// out of the same Step with the same name exists, which it then keeps. A Connector may lead
 	// into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-	// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+	// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 	// next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 	// `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 	// their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -3649,8 +3649,8 @@ type ClientInterface interface {
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-	// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-	// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+	// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+	// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 	// not a Step of the body), `step_in_use`.
 	//
 	// Takes any type of body and a specified content type.
@@ -3670,8 +3670,8 @@ type ClientInterface interface {
 	// Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 	// out of the same Step with the same name exists, which it then keeps. A Connector may lead
 	// into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-	// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+	// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 	// next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 	// `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 	// their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -3694,8 +3694,8 @@ type ClientInterface interface {
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-	// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-	// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+	// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+	// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 	// not a Step of the body), `step_in_use`.
 	//
 	// Takes a body of the `application/json` content type.
@@ -5744,8 +5744,8 @@ func (c *Client) GetWorkflow(ctx context.Context, project ProjectRef, reqEditors
 // Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 // out of the same Step with the same name exists, which it then keeps. A Connector may lead
 // into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 // next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 // `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 // their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -5768,8 +5768,8 @@ func (c *Client) GetWorkflow(ctx context.Context, project ProjectRef, reqEditors
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 // `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 // not a Step of the body), `step_in_use`.
 //
 // Takes any type of body and a specified content type.
@@ -5799,8 +5799,8 @@ func (c *Client) SetWorkflowWithBody(ctx context.Context, project ProjectRef, pa
 // Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 // out of the same Step with the same name exists, which it then keeps. A Connector may lead
 // into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 // next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 // `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 // their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -5823,8 +5823,8 @@ func (c *Client) SetWorkflowWithBody(ctx context.Context, project ProjectRef, pa
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 // `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 // not a Step of the body), `step_in_use`.
 //
 // Takes a body of the `application/json` content type.
@@ -12929,8 +12929,8 @@ type ClientWithResponsesInterface interface {
 	// Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 	// out of the same Step with the same name exists, which it then keeps. A Connector may lead
 	// into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-	// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+	// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 	// next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 	// `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 	// their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -12953,8 +12953,8 @@ type ClientWithResponsesInterface interface {
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-	// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-	// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+	// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+	// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 	// not a Step of the body), `step_in_use`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -12974,8 +12974,8 @@ type ClientWithResponsesInterface interface {
 	// Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 	// out of the same Step with the same name exists, which it then keeps. A Connector may lead
 	// into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-	// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+	// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+	// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 	// next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 	// `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 	// their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -12998,8 +12998,8 @@ type ClientWithResponsesInterface interface {
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-	// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-	// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+	// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+	// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 	// not a Step of the body), `step_in_use`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -19077,8 +19077,8 @@ func (c *ClientWithResponses) GetWorkflowWithResponse(ctx context.Context, proje
 // Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 // out of the same Step with the same name exists, which it then keeps. A Connector may lead
 // into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 // next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 // `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 // their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -19101,8 +19101,8 @@ func (c *ClientWithResponses) GetWorkflowWithResponse(ctx context.Context, proje
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 // `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 // not a Step of the body), `step_in_use`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -19128,8 +19128,8 @@ func (c *ClientWithResponses) SetWorkflowWithBodyWithResponse(ctx context.Contex
 // Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
 // out of the same Step with the same name exists, which it then keeps. A Connector may lead
 // into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
-// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is not
-// read. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+// Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+// only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
 // next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
 // `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
 // their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
@@ -19152,8 +19152,8 @@ func (c *ClientWithResponses) SetWorkflowWithBodyWithResponse(ctx context.Contex
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
 // `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
-// empty, over 50 characters, on more than one line, or spelled as an id; a `position` below
-// 1; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+// empty, over 50 characters, on more than one line, or spelled as an id; a negative
+// `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
 // not a Step of the body), `step_in_use`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).

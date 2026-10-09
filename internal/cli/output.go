@@ -149,11 +149,15 @@ func (c *call) printTaskDetail(w io.Writer, d client.TaskDetail) {
 		fmt.Fprintln(w)
 	}
 	if len(d.Connectors) > 0 {
+		from := deref(t.WorkflowID)
+		if d.Step != nil {
+			from = d.Step.WorkflowID
+		}
 		var outs []string
 		for _, k := range d.Connectors {
 			to := "Done"
 			if k.ToStepID != nil {
-				to = c.step(t.ProjectID, *k.ToStepID)
+				to = c.stepFrom(t.ProjectID, from, *k.ToStepID)
 			}
 			outs = append(outs, one(k.Name)+" → "+to)
 		}
