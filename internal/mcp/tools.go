@@ -108,16 +108,17 @@ type done struct {
 }
 
 type listTasksIn struct {
-	Project string   `json:"project,omitempty" jsonschema:"only this Project's Tasks, by key such as WEB"`
-	Parent  string   `json:"parent,omitempty" jsonschema:"only this Parent's Subtasks"`
-	State   string   `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
-	Step    string   `json:"step,omitempty" jsonschema:"only Tasks at this Step: its id, or its name with project"`
-	AimedAt string   `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
-	Holder  string   `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
-	Mine    bool     `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
-	Filter  []string `json:"filter,omitempty" jsonschema:"only Tasks matching every one of these field:op:values tokens, such as holder:is:none, skill:is:<id>, top:is:true or filed_at:last:7d; references are ids, each value percent-encoded"`
-	Limit   int      `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
-	Cursor  string   `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
+	Project  string   `json:"project,omitempty" jsonschema:"only this Project's Tasks, by key such as WEB"`
+	Parent   string   `json:"parent,omitempty" jsonschema:"only this Parent's Subtasks"`
+	State    string   `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
+	Step     string   `json:"step,omitempty" jsonschema:"only Tasks at this Step: its id, or its name with project"`
+	Workflow string   `json:"workflow,omitempty" jsonschema:"only Tasks at a Step of this Workflow or ended at one: its id, or its name with project"`
+	AimedAt  string   `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
+	Holder   string   `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
+	Mine     bool     `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
+	Filter   []string `json:"filter,omitempty" jsonschema:"only Tasks matching every one of these field:op:values tokens, such as holder:is:none, skill:is:<id>, workflow:is:<id>, top:is:true or filed_at:last:7d; references are ids, each value percent-encoded"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
+	Cursor   string   `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
 }
 
 // stepOut is a Step of a listed Task's Project, with the Workflow it is in and the outcomes out
@@ -368,7 +369,7 @@ func (s *Server) addTools() {
 	tool(s, "list_tasks", "List Tasks by Project and Rank, filtered, with the Steps their step_id names (each with its outcomes) and the Parents their parent_id names.",
 		func(ctx context.Context, in listTasksIn) (taskListOut, error) {
 			params := &client.ListTasksParams{Project: opt(in.Project), Parent: opt(in.Parent), Step: opt(in.Step),
-				AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Cursor: opt(in.Cursor)}
+				Workflow: opt(in.Workflow), AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Cursor: opt(in.Cursor)}
 			if len(in.Filter) > 0 {
 				params.Filter = &in.Filter
 			}

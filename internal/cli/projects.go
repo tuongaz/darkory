@@ -221,7 +221,7 @@ func cmdWorkflowShow(c *call) error {
 		return printJSON(c.env.Stdout, b)
 	}
 	if *only == "" {
-		return c.show(res.Body, func(w io.Writer) { c.printWorkflow(w, *res.JSON200) })
+		return c.show(res.Body, func(w io.Writer) { c.printWorkflow(w, *res.JSON200, "") })
 	}
 	narrowed, ok := oneWorkflow(*res.JSON200, *only)
 	if !ok {
@@ -231,7 +231,8 @@ func cmdWorkflowShow(c *call) error {
 	if err != nil {
 		return err
 	}
-	return c.show(b, func(w io.Writer) { c.printWorkflow(w, narrowed) })
+	// The text names a Connector's target in another Workflow, so it reads the whole Project's.
+	return c.show(b, func(w io.Writer) { c.printWorkflow(w, *res.JSON200, narrowed.Workflows[0].ID) })
 }
 
 // oneWorkflow narrows a Project's Workflows to the one named, ignoring case, or given by id in
@@ -298,9 +299,10 @@ const workflowSetHelp = `the Project's Workflows as JSON; - reads standard input
  "steps": [{"id": kept Step's id (leave out for a new Step), "workflow": Workflow name or id, "name": "Build", "skill": Skill name or id (leave out for a hold), "position": 1, "x": 0, "y": 0}…],
  "connectors": [{"from": Step name or id, "to": Step name or id in any Workflow (leave out for Done), "name": "pass", "position": 1}…],
  "moves": {deleted Step's id: Step name or id its Tasks go to}}.
-A Workflow left out is deleted with its Steps. position places each Workflow, each Step in its
-Workflow and each Connector among those out of its Step (1 first, each its own); left out or 0, it
-is the item's place in its list. x and y may be left out.
+A Workflow left out is deleted with its Steps, whose Tasks need moves as any deleted Step's.
+position places each Workflow, each Step in its Workflow and each Connector among those out of its
+Step (1 first, each its own); left out or 0, it is the item's place in its list. x and y may be
+left out.
 darkory workflow show <project> --body prints the current one`
 
 func cmdWorkflowSet(c *call) error {
@@ -342,14 +344,15 @@ func cmdWorkflowSet(c *call) error {
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
 	}
-	return c.show(res.Body, func(w io.Writer) { c.printWorkflow(w, *res.JSON200) })
+	return c.show(res.Body, func(w io.Writer) { c.printWorkflow(w, *res.JSON200, "") })
 }
 
 // printWorkflow prints each Step in order with its Skill, what is at it now, who can take its
 // Tasks, and the Connectors out of it; with two Workflows or more, each Workflow's Steps under its
-// name, and a Connector into another Workflow as that Workflow › its Step.
-func (c *call) printWorkflow(w io.Writer, wf client.Workflows) {
-	if len(wf.Steps) == 0 && len(wf.Workflows) < 2 {
+// name, and a Connector into another Workflow as that Workflow › its Step. With only, a Workflow's
+// id, it prints that Workflow's Steps alone, still naming the Steps of others its Connectors reach.
+func (c *call) printWorkflow(w io.Writer, wf client.Workflows, only string) {
+	if len(wf.Steps) == 0 && (len(wf.Workflows) < 2 || only != "") {
 		fmt.Fprintln(w, "No Steps: nothing can be filed in this Project until it has one.")
 		return
 	}
@@ -359,6 +362,19 @@ func (c *call) printWorkflow(w io.Writer, wf client.Workflows) {
 	}
 	for _, s := range wf.Steps {
 		names[s.ID], of[s.ID] = s.Name, s.WorkflowID
+	}
+	if only != "" {
+		var steps []client.WorkflowStep
+		for _, s := range wf.Steps {
+			if s.WorkflowID == only {
+				steps = append(steps, s)
+			}
+		}
+		if len(steps) == 0 {
+			fmt.Fprintln(w, "No Steps.")
+		}
+		c.printSteps(w, steps, wf.Connectors, names, workflows, of)
+		return
 	}
 	if len(wf.Workflows) < 2 {
 		c.printSteps(w, wf.Steps, wf.Connectors, names, workflows, of)

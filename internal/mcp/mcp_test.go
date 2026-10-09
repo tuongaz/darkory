@@ -308,6 +308,35 @@ func TestNextClaimComplete(t *testing.T) {
 	})
 }
 
+// list_tasks takes a Workflow by name with project: the Tasks at its Steps, not those at another
+// Workflow's.
+func TestListTasksByWorkflow(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st, server.Options{})
+		ctx := t.Context()
+		ada := dial(t, f.url, f.ada, "ada-1")
+		empty := client.NewWorkflowEmpty
+		must(t)(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "OPS", Name: "Ops", Workflow: &empty,
+			Members: &[]string{"ada", "bob"}}))
+		must(t)(ada.SetWorkflowWithResponse(ctx, "OPS", &client.SetWorkflowParams{}, client.SetWorkflowBody{
+			Workflows: []client.WorkflowInput{{Name: "Triage", Position: ptr(int64(1))}, {Name: "Bugs", Position: ptr(int64(2))}},
+			Steps: []client.StepInput{{Workflow: "Triage", Name: "Triage", Skill: ptr("build"), Position: ptr(int64(1))},
+				{Workflow: "Bugs", Name: "Investigate", Skill: ptr("build"), Position: ptr(int64(1))}},
+			Connectors: []client.ConnectorInput{{From: "Triage", To: ptr("Investigate"), Name: "bug", Position: ptr(int64(1))},
+				{From: "Investigate", Name: "done", Position: ptr(int64(1))}},
+		}))
+		must(t)(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("OPS"), Title: "Sort me", Step: ptr("Triage")}))
+		must(t)(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("OPS"), Title: "Crash on save", Step: ptr("Investigate")}))
+		_, cs := f.connect("bob-mcp", Options{})
+
+		var list taskListOut
+		ok(t, cs, &list, "list_tasks", map[string]any{"workflow": "Bugs", "project": "OPS"})
+		if len(list.Items) != 1 || list.Items[0].Title != "Crash on save" {
+			t.Fatalf("list_tasks in Bugs: %+v", list.Items)
+		}
+	})
+}
+
 func deref[T any](p *T) T {
 	var z T
 	if p == nil {
