@@ -55,10 +55,39 @@ func connectorsText(name map[string]string, ks []core.Connector) string {
 	return strings.Join(connectors, " · ")
 }
 
-// defaultWorkflowText is the default Workflow (model-v2-plan.md, "The default Workflow").
-const defaultWorkflowText = "Backlog · Plan (breakdown) · Build (engineer) · Review (review) · Retro (retro) · Skill review (skill-review) | " +
+// defaultWorkflowText is the two Workflows a default Project starts with (sample-workflows-plan.md):
+// Implementation, the default Workflow of model-v2-plan.md, then Bug triage, whose Triage leads
+// into Implementation's Build along feature.
+const defaultWorkflowText = "Implementation: Backlog · Plan (breakdown) · Build (engineer) · Review (review) · Retro (retro) · Skill review (skill-review) / " +
+	"Bug triage: Triage (triage) · Fix (engineer) · Code review (review) · Verify (qa) | " +
 	"Plan -done-> Done · Build -pass-> Review · Review -pass-> Done · Review -needs changes-> Build · " +
-	"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro"
+	"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro · " +
+	"Triage -bug-> Fix · Triage -not a bug-> Done · Triage -feature-> Build · Fix -ready-> Code review · " +
+	"Code review -pass-> Verify · Code review -needs changes-> Fix · Verify -pass-> Done · Verify -fail-> Fix"
+
+// defaultPlaces is where the canvas draws each Step of a default Project.
+var defaultPlaces = map[string][2]int64{
+	"Backlog": {0, 0}, "Plan": {0, 128}, "Build": {0, 256}, "Review": {448, 256}, "Retro": {0, 384}, "Skill review": {448, 384},
+	"Triage": {0, 0}, "Fix": {448, 0}, "Code review": {896, 0}, "Verify": {1344, 0},
+}
+
+// checkDefaultPlaces fails unless w is a default Project's two Workflows, Implementation then Bug
+// triage, each Step at its place and numbered from 1 within its Workflow.
+func checkDefaultPlaces(t *testing.T, w core.Workflows) {
+	t.Helper()
+	if wfs := w.Workflows; len(wfs) != 2 || wfs[0].Name != core.WorkflowImplementation || wfs[0].Position != 1 ||
+		wfs[1].Name != core.WorkflowBugTriage || wfs[1].Position != 2 {
+		t.Fatalf("a default Project's Workflows: %+v", wfs)
+	}
+	next := map[string]int64{}
+	for _, s := range w.Steps {
+		next[s.WorkflowID]++
+		p, ok := defaultPlaces[s.Name]
+		if !ok || s.Position != next[s.WorkflowID] || [2]int64{s.X, s.Y} != p {
+			t.Errorf("Step %s at %d (%d, %d), want %d (%d, %d)", s.Name, s.Position, s.X, s.Y, next[s.WorkflowID], p[0], p[1])
+		}
+	}
+}
 
 func (f *fixture) workflowText(project string) string {
 	f.t.Helper()
@@ -73,10 +102,12 @@ func (f *fixture) workflowText(project string) string {
 	return workflowText(skills, w.Workflows)
 }
 
-// A new Project starts with the default Workflow, laid out compact, unless its creator picks
-// Empty (Backlog → Done) or a copy of another Project's, places and all; the default's engineer
-// and review Skills are made when an Organisation lacks them. It starts with the Members, default
-// Workspace, auto_complete and acceptance its creator names, and without its creator unless named.
+// A new Project starts with the default Workflows, Implementation and Bug triage, laid out
+// compact, a Task filed without a Step starting at Build, unless its creator picks Empty (one
+// Workflow, Work: Backlog → Done) or a copy of another Project's, places and all; the default's
+// engineer, review, triage and qa Skills are made when an Organisation lacks them. It starts
+// with the Members, default Workspace, auto_complete and acceptance its creator names, and
+// without its creator unless named.
 func TestNewProjectsWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
@@ -86,14 +117,15 @@ func TestNewProjectsWorkflow(t *testing.T) {
 			t.Fatalf("the default Workflow:\n%s", got)
 		}
 		w, _ := f.svc.GetWorkflow(ctx, f.admin, "WEB")
-		places := [][2]int64{{0, 0}, {0, 128}, {0, 256}, {448, 256}, {0, 384}, {448, 384}}
-		for i, s := range w.Steps {
-			if s.Position != int64(i+1) || s.X != places[i][0] || s.Y != places[i][1] {
-				t.Fatalf("Step %s at %d (%d, %d)", s.Name, s.Position, s.X, s.Y)
-			}
-		}
+		checkDefaultPlaces(t, w.Workflows)
 		if got := f.kinds(web); got != "project.created workflow.changed" {
 			t.Fatalf("Activity: %s", got)
+		}
+		// A Task filed without a Step starts at Build, the first Step of the first Workflow that
+		// carries a Skill Darkory does not file its own Subtasks at.
+		if d := f.fileTask(f.member("lead", []string{"WEB"}, nil), core.NewTask{Project: ptrStr("WEB"), Title: "Support emoji"}); d.Step == nil || d.Step.Name != "Build" ||
+			d.Step.WorkflowID != w.Workflows.Workflows[0].ID {
+			t.Fatalf("filed %+v at %+v", d.Task, d.Step)
 		}
 
 		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "TAX", Name: "Tax", Workflow: core.WorkflowEmpty}, core.Idem{}); err != nil {
@@ -101,6 +133,9 @@ func TestNewProjectsWorkflow(t *testing.T) {
 		}
 		if got := f.workflowText("TAX"); got != "Backlog | Backlog -done-> Done" {
 			t.Fatalf("the empty Workflow: %s", got)
+		}
+		if w, _ := f.svc.GetWorkflow(ctx, f.admin, "TAX"); len(w.Workflows.Workflows) != 1 || w.Workflows.Workflows[0].Name != core.WorkflowFirstName {
+			t.Fatalf("the empty Project's Workflows: %+v", w.Workflows.Workflows)
 		}
 		if w, _ := f.svc.GetWorkflow(ctx, f.admin, "TAX"); w.Steps[0].X != 0 || w.Steps[0].Y != 0 {
 			t.Fatalf("the empty Workflow's Backlog at (%d, %d)", w.Steps[0].X, w.Steps[0].Y)
@@ -162,8 +197,9 @@ func TestNewProjectsWorkflow(t *testing.T) {
 			wantCode(t, err, core.CodeNotFound)
 		}
 
-		// An Install from before model v2 may lack engineer and review: the default makes them.
-		f.exec(`UPDATE skills SET name = name || '-old' WHERE name IN ('engineer', 'review')`)
+		// An Install from before model v2 may lack engineer and review, and one from before the
+		// sample Workflows triage and qa: the default makes them.
+		f.exec(`UPDATE skills SET name = name || '-old' WHERE name IN ('engineer', 'review', 'triage', 'qa')`)
 		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "NEW", Name: "New"}, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
@@ -185,8 +221,7 @@ func TestSetWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.project("WEB")
-		f.skill("qa")
+		f.workProject("WEB")
 		lead := f.member("lead", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer, "qa"})
 		before, err := f.svc.GetWorkflow(ctx, f.admin, "WEB")
@@ -470,7 +505,7 @@ func TestSetWorkflowTakers(t *testing.T) {
 		gone.Connectors = slices.DeleteFunc(gone.Connectors, func(k core.ConnectorInput) bool {
 			return k.From == before.Steps[3].ID || (k.To != nil && *k.To == before.Steps[3].ID)
 		})
-		gone.Skills = []core.WorkflowSkill{{Name: "triage", Body: "triage well"}}
+		gone.Skills = []core.WorkflowSkill{{Name: "support", Body: "support well"}}
 		gone.Joins = []string{"outsider"}
 		gone.Grants = []core.SkillGrant{{Member: "lead", Skill: core.SkillEngineer}}
 		gone.Revokes = []core.SkillGrant{{Member: "builder", Skill: core.SkillEngineer}}
@@ -478,7 +513,7 @@ func TestSetWorkflowTakers(t *testing.T) {
 		_, err = f.svc.SetWorkflow(ctx, f.admin, "WEB", gone, core.Idem{})
 		wantCode(t, err, core.CodeStepInUse)
 		if has(lead.MemberID, core.SkillEngineer) || !has(builder.MemberID, core.SkillEngineer) ||
-			f.count(`SELECT COUNT(*) FROM skills WHERE name = 'triage'`) != 0 ||
+			f.count(`SELECT COUNT(*) FROM skills WHERE name = 'support'`) != 0 ||
 			f.count(`SELECT COUNT(*) FROM project_members WHERE member_id = $1`, outsider.MemberID) != 0 || f.checkActivity() != n {
 			t.Fatal("a refused Save made some of what it carried")
 		}
@@ -497,7 +532,7 @@ func TestSetWorkflowTakers(t *testing.T) {
 			_, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
 			wantCode(t, err, code)
 		}
-		for _, name := range []string{"Triage", "a b"} {
+		for _, name := range []string{"Support", "a b"} {
 			w := in()
 			w.Skills = []core.WorkflowSkill{{Name: name}}
 			_, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
@@ -507,13 +542,13 @@ func TestSetWorkflowTakers(t *testing.T) {
 			t.Fatal("a refused Save wrote Activity")
 		}
 
-		// Backlog takes the new triage Skill, which lead is given by its name; outsider joins and
+		// Backlog takes the new support Skill, which lead is given by its name; outsider joins and
 		// takes Build; builder no longer does.
 		w := in()
-		w.Steps[0].Skill = ptrStr("triage")
-		w.Skills = []core.WorkflowSkill{{Name: "triage", Body: "triage well"}}
+		w.Steps[0].Skill = ptrStr("support")
+		w.Skills = []core.WorkflowSkill{{Name: "support", Body: "support well"}}
 		w.Joins = []string{outsider.MemberID}
-		w.Grants = []core.SkillGrant{{Member: lead.MemberID, Skill: "triage"}, {Member: "outsider", Skill: core.SkillEngineer}}
+		w.Grants = []core.SkillGrant{{Member: lead.MemberID, Skill: "support"}, {Member: "outsider", Skill: core.SkillEngineer}}
 		w.Revokes = []core.SkillGrant{{Member: builder.MemberID, Skill: core.SkillEngineer}}
 		after, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{})
 		if err != nil {
@@ -545,12 +580,12 @@ func TestSetWorkflowTakers(t *testing.T) {
 
 		// Only who takes changes: the Workflow records nothing, the revoke is made.
 		w = asSet(after.Workflows)
-		w.Revokes = []core.SkillGrant{{Member: "lead", Skill: "triage"}}
+		w.Revokes = []core.SkillGrant{{Member: "lead", Skill: "support"}}
 		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		if has(lead.MemberID, "triage") || f.checkActivity() != n+1 || len(f.activity("workflow.changed")) != changed {
-			t.Fatalf("revoking alone: lead keeps triage %v, %d entries", has(lead.MemberID, "triage"), f.checkActivity()-n)
+		if has(lead.MemberID, "support") || f.checkActivity() != n+1 || len(f.activity("workflow.changed")) != changed {
+			t.Fatalf("revoking alone: lead keeps support %v, %d entries", has(lead.MemberID, "support"), f.checkActivity()-n)
 		}
 		if got := f.activity("member.skill_revoked"); got[len(got)-1].SubjectID != lead.MemberID {
 			t.Fatalf("the last revoke is %+v", got[len(got)-1])
@@ -644,7 +679,8 @@ func (f *fixture) workflowIDs(project string) map[string]string {
 	return out
 }
 
-// A Project's Steps are grouped into named Workflows (ADR 0019): a new Project has one, Work.
+// A Project's Steps are grouped into named Workflows (ADR 0019): a new Project has two,
+// Implementation and Bug triage, the first six Steps Implementation's.
 // The Workflows' positions order the Project's Steps before the Steps' own, so a filed Task's
 // default entry and the builtin Steps follow the Workflows' order; two Steps of different
 // Workflows may share a position; a Connector may lead into a Step of another Workflow, and
@@ -658,19 +694,20 @@ func TestWorkflowsHaveNamesAndOrder(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if wfs := web.Workflows.Workflows; len(wfs) != 1 || wfs[0].Name != core.WorkflowFirstName || wfs[0].Position != 1 {
+		wfs := web.Workflows.Workflows
+		if len(wfs) != 2 || wfs[0].Name != core.WorkflowImplementation || wfs[0].Position != 1 || wfs[1].Name != core.WorkflowBugTriage ||
+			wfs[1].Position != 2 {
 			t.Fatalf("a new Project's Workflows: %+v", wfs)
 		}
-		for _, s := range web.Steps {
-			if s.WorkflowID != web.Workflows.Workflows[0].ID {
-				t.Fatalf("Step %s is in Workflow %s", s.Name, s.WorkflowID)
+		for i, s := range web.Steps {
+			if in := wfs[min(i/6, 1)].ID; s.WorkflowID != in {
+				t.Fatalf("Step %s is in Workflow %s, want %s", s.Name, s.WorkflowID, in)
 			}
 		}
 
 		if _, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: "SUP", Name: "Support", Workflow: core.WorkflowEmpty}, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
-		f.skill("triage")
 		lead := f.member("lead", []string{"SUP"}, nil)
 		router := f.member("router", []string{"SUP"}, []string{"triage"})
 		in := core.WorkflowsInput{
@@ -817,7 +854,7 @@ func TestSetWorkflows(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.project("WEB")
+		f.workProject("WEB")
 		lead := f.member("lead", []string{"WEB"}, nil)
 
 		// Bugs joins Work: Investigate leads into Work's Build, and both Workflows have a Step at 1.
@@ -1000,7 +1037,7 @@ func TestSetWorkflowMovesEndedTasks(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.project("WEB")
+		f.workProject("WEB")
 		lead := f.member("lead", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
 		w := asSet(f.workflows("WEB"))
@@ -1102,7 +1139,7 @@ func TestSetWorkflowReadsShortIDs(t *testing.T) {
 		// A moves key in the short form names the Step being deleted.
 		lead := f.member("lead", []string{"WEB"}, nil)
 		held := asSet(f.workflows("WEB"))
-		held.Steps = append(held.Steps, core.StepInput{Workflow: core.WorkflowFirstName, Name: "Hold", Position: int64(len(held.Steps) + 1)})
+		held.Steps = append(held.Steps, core.StepInput{Workflow: core.WorkflowImplementation, Name: "Hold", Position: int64(len(held.Steps) + 1)})
 		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", held, core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
@@ -1129,7 +1166,7 @@ func TestEndedTaskKeepsItsLastStep(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.project("WEB")
+		f.workProject("WEB")
 		lead := f.member("lead", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
 		w := asSet(f.workflows("WEB"))
@@ -1256,7 +1293,7 @@ func TestEveryTaskListedInAWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.project("WEB")
+		f.workProject("WEB")
 		lead := f.member("lead", []string{"WEB"}, nil)
 		builder := f.member("builder", []string{"WEB"}, []string{core.SkillEngineer})
 		retro := f.member("retro", []string{"WEB"}, []string{core.SkillRetro})
@@ -1380,7 +1417,7 @@ func TestBatchGuardsTheStepsWorkflow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
-		f.project("WEB")
+		f.workProject("WEB")
 		lead := f.member("lead", []string{"WEB"}, []string{"engineer"})
 		w := asSet(f.workflows("WEB"))
 		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 2})

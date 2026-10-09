@@ -9,6 +9,7 @@ import (
 	"github.com/tuongaz/darkory/internal/core"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
+	"github.com/tuongaz/darkory/internal/wake"
 )
 
 // Helpers for the flow tests.
@@ -52,7 +53,6 @@ func (f *fixture) manager(member, manager string) {
 func qaFlow(f *fixture) {
 	f.project("WEB")
 	f.skill("build")
-	f.skill("qa")
 	if _, err := f.svc.SetWorkflow(f.t.Context(), f.admin, "WEB", inWork(core.WorkflowsInput{
 		Steps: []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "QA", Skill: ptrStr("qa")}},
 		Connectors: []core.ConnectorInput{
@@ -446,6 +446,72 @@ func TestMove(t *testing.T) {
 		}
 		_, err = f.svc.MoveTask(ctx, lead, q.Key, "Build", nil, core.Idem{})
 		wantCode(t, err, core.CodeEnded)
+		f.checkActivity()
+	})
+}
+
+// A bug filed at Triage in a fresh init's MAIN reaches Done with the seeded agents alone, each
+// taking its Step through next: the planner triages it along bug, the builder fixes it along
+// ready, the reviewer passes Code review, and the tester passes Verify. The reviewer, who held the
+// Task under review, never takes Verify, even holding qa (ADR 0001): that is why qa is the
+// tester's.
+func TestSeededAgentsWalkABugToDone(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		ctx := t.Context()
+		f := &fixture{t: t, st: st, clock: clockAt(epoch), secrets: map[string]string{}}
+		f.svc = core.New(st, f.clock, wake.New(), nil)
+		f.auth = auth.New(st, f.clock)
+		out, err := f.svc.InitWith(ctx, "Acme", "ada", core.InitOptions{Roster: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.secrets[out.Member.ID] = out.Token.Secret
+		f.admin = f.session(out.Member.ID, "ada-1")
+		agents := map[string]*auth.Caller{}
+		for _, a := range out.Agents {
+			f.secrets[a.Member.ID] = a.Token.Secret
+			agents[a.Member.Name] = f.session(a.Member.ID, a.Member.Name+"-1")
+		}
+		bug := f.task(f.admin, "MAIN", "Checkout fails on an empty cart", "Triage")
+
+		// next hands each agent the bug at its Step; it advances along outcome to the Step after.
+		walk := func(agent, at, outcome, then string) {
+			t.Helper()
+			d, ok, err := f.svc.Next(ctx, agents[agent], 0, noTimeout, core.Idem{})
+			if err != nil || !ok || d.Task.ID != bug.ID || d.Step == nil || d.Step.Name != at {
+				t.Fatalf("%s's next at %s: %+v at %+v, %v, %v", agent, at, d.Task, d.Step, ok, err)
+			}
+			f.advance(agents[agent], bug.Key, outcome)
+			if got := f.at(bug.Key); got != then {
+				t.Fatalf("%s advanced along %s to %s, want %s", agent, outcome, got, then)
+			}
+		}
+		walk("planner", "Triage", "bug", "Fix")
+		walk("builder", "Fix", "ready", "Code review")
+		walk("reviewer", "Code review", "pass", "Verify")
+
+		// At Verify: the reviewer cannot take it, and given qa still cannot, having held it under
+		// review; the tester can.
+		if f.takeable(agents["reviewer"])[bug.ID] {
+			t.Fatal("the reviewer can take Verify")
+		}
+		if err := f.svc.GrantSkill(ctx, f.admin, "reviewer", core.SkillQA, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		reviewer := f.session(agents["reviewer"].MemberID, "reviewer-2")
+		if f.takeable(reviewer)[bug.ID] {
+			t.Fatal("the reviewer, holding qa, can take Verify of a Task it reviewed")
+		}
+		_, err = f.svc.Claim(ctx, reviewer, bug.Key, noTimeout, core.Idem{})
+		wantCode(t, err, core.CodeNotTakeable)
+		if !f.takeable(agents["tester"])[bug.ID] {
+			t.Fatal("the tester cannot take Verify")
+		}
+		walk("tester", "Verify", "pass", "-")
+
+		if done := f.get(bug.Key).Task; done.State != "done" || done.StepID != nil || done.EndedAt == nil || done.Claim != nil {
+			t.Fatalf("the bug ended %+v", done)
+		}
 		f.checkActivity()
 	})
 }

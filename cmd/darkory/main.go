@@ -132,7 +132,7 @@ func openStore(ctx context.Context, cfg config.Store, migrate bool, log *slog.Lo
 }
 
 // initInstall creates the Install's Organisation, its first Member as a human admin, and the
-// built-in Skills and Project MAIN on the default Workflow, and prints that Member's first token
+// built-in Skills and Project MAIN on the default Workflows, and prints that Member's first token
 // and a login link (ADR 0006). Unless told --no-agents it seeds the roster too
 // (docs/build/agents-plan.md, D4): the git repository init runs in as MAIN's default Workspace,
 // and the agents, whose tokens it writes to <data>/agents/<name>.token for the Runner.
@@ -189,11 +189,11 @@ Sign in with a browser within %d minutes, once darkory serve is running:
 // printSeeded says what init seeded besides the first Member: Project MAIN, and the roster.
 func printSeeded(w io.Writer, out core.Initialised, tokens string) {
 	if len(out.Agents) == 0 {
-		fmt.Fprintf(w, "\nProject %s (%s), on the default Workflow, holds %s. No agents and no Workspace: init ran with --no-agents.\n",
+		fmt.Fprintf(w, "\nProject %s (%s), on the default Workflows, holds %s. No agents and no Workspace: init ran with --no-agents.\n",
 			out.Project.Key, out.Project.Name, out.Member.Name)
 		return
 	}
-	fmt.Fprintf(w, "\nProject %s (%s), on the default Workflow, holds %s and the agents below.\n", out.Project.Key, out.Project.Name, out.Member.Name)
+	fmt.Fprintf(w, "\nProject %s (%s), on the default Workflows, holds %s and the agents below.\n", out.Project.Key, out.Project.Name, out.Member.Name)
 	if ws := out.Workspace; ws != nil {
 		fmt.Fprintf(w, "Workspace %s: %s (git, default branch %s), Project %s's default.\n", ws.Name, ws.Path, ws.DefaultBranch, out.Project.Key)
 	} else {
@@ -201,8 +201,12 @@ func printSeeded(w io.Writer, out core.Initialised, tokens string) {
 			"then make it the Project's default with darkory project set %s --workspace <name>.\n", out.Project.Key)
 	}
 	fmt.Fprintf(w, "Agents, reporting to %s, each with a token in %s:\n", out.Member.Name, filepath.Join(tokens, "<name>.token"))
+	width := 0
 	for _, a := range out.Agents {
-		fmt.Fprintf(w, "  %-9s %-22s %s\n", a.Member.Name, strings.Join(a.Skills, ", "), a.Member.Agent.Model)
+		width = max(width, len(strings.Join(a.Skills, ", ")))
+	}
+	for _, a := range out.Agents {
+		fmt.Fprintf(w, "  %-9s %-*s   %s\n", a.Member.Name, width, strings.Join(a.Skills, ", "), a.Member.Agent.Model)
 	}
 }
 

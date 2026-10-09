@@ -317,10 +317,11 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 	}
 }
 
-// The work commands end to end against a real server on both engines, on the default Workflow:
-// Break down, Subtasks, Notes, Observations, Evidence, a question that blocks, advance along the
-// outcomes (and the refusals naming them), take-back, Rank and ownership, the Owner completing
-// the Parent, and its Retrospective proposing a Skill version that skill-review publishes.
+// The work commands end to end against a real server on both engines, on Implementation, one of
+// the default Workflows: Break down, Subtasks, Notes, Observations, Evidence, a question that
+// blocks, advance along the outcomes (and the refusals naming them), take-back, Rank and
+// ownership, the Owner completing the Parent, and its Retrospective proposing a Skill version
+// that skill-review publishes.
 func TestPhase2Flow(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		in := newInstall(t, st)
@@ -634,7 +635,6 @@ func TestWorkflowCommands(t *testing.T) {
 		// Two Workflows: Triage, whose bug outcome leads into Bugs, and Bugs. WEB-1 ends Done
 		// first, so the Steps it stood at can go.
 		bob.ok("advance", "WEB-1", "pass")
-		ada.ok("skill", "create", "triage", "--kind", "generic", "--body", "Sort it.")
 		ada.stdin = `{"workflows": [{"name": "Triage", "position": 1}, {"name": "Bugs", "position": 2}],
  "steps": [{"workflow": "Triage", "name": "Triage", "skill": "triage"},
   {"workflow": "Bugs", "name": "Investigate", "skill": "engineer"}, {"workflow": "Bugs", "name": "Fix", "skill": "engineer"}],

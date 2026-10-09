@@ -18,7 +18,6 @@ func TestTakeableRule(t *testing.T) {
 		f.project("WEB")
 		f.project("API")
 		f.skill("build")
-		f.skill("qa")
 		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", inWork(core.WorkflowsInput{Steps: []core.StepInput{
 			{Name: "Backlog"}, {Name: "Plan", Skill: ptrStr(core.SkillBreakdown)}, {Name: "Build", Skill: ptrStr("build")},
 			{Name: "QA", Skill: ptrStr("qa")}, {Name: "Skill review", Skill: ptrStr(core.SkillSkillReview)},

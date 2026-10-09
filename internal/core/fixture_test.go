@@ -62,12 +62,55 @@ func (f *fixture) skillID(name string) string {
 	return d.Skill.ID
 }
 
-// project creates a Project on the default Workflow — Backlog (hold), Plan (breakdown), Build
-// (engineer), Review (review), Retro (retro), Skill review (skill-review) — and returns its id.
+// project creates a Project on the default Workflows and returns its id: Implementation —
+// Backlog (hold), Plan (breakdown), Build (engineer), Review (review), Retro (retro), Skill review
+// (skill-review) — then Bug triage — Triage (triage), Fix (engineer), Code review (review),
+// Verify (qa).
 func (f *fixture) project(key string) string {
 	f.t.Helper()
 	p, err := f.svc.CreateProject(f.t.Context(), f.admin, core.NewProject{Key: key, Name: "Project " + key}, core.Idem{})
 	if err != nil {
+		f.t.Fatal(err)
+	}
+	return p.Project.ID
+}
+
+// workProject creates a Project of one Workflow, Work, holding the six Steps of a default
+// Project's Implementation with their Skills, Connectors and places, and returns its id. It is
+// frozen on purpose: the tests of SetWorkflow's mechanics change this graph, so they do not
+// depend on what a new Project starts with.
+func (f *fixture) workProject(key string) string {
+	f.t.Helper()
+	ctx := f.t.Context()
+	p, err := f.svc.CreateProject(ctx, f.admin, core.NewProject{Key: key, Name: "Project " + key, Workflow: core.WorkflowEmpty}, core.Idem{})
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	in := core.WorkflowsInput{Workflows: []core.WorkflowInput{{Name: core.WorkflowFirstName, Position: 1}}}
+	for i, s := range []struct {
+		name, skill string
+		x, y        int64
+	}{
+		{"Backlog", "", 0, 0}, {"Plan", core.SkillBreakdown, 0, 128}, {"Build", core.SkillEngineer, 0, 256},
+		{"Review", core.SkillReview, 448, 256}, {"Retro", core.SkillRetro, 0, 384}, {"Skill review", core.SkillSkillReview, 448, 384},
+	} {
+		si := core.StepInput{Workflow: core.WorkflowFirstName, Name: s.name, Position: int64(i + 1), X: ptrInt(s.x), Y: ptrInt(s.y)}
+		if s.skill != "" {
+			si.Skill = ptrStr(s.skill)
+		}
+		in.Steps = append(in.Steps, si)
+	}
+	for _, k := range [][3]string{
+		{"Plan", "", "done"}, {"Build", "Review", "pass"}, {"Review", "", "pass"}, {"Review", "Build", "needs changes"},
+		{"Retro", "", "done"}, {"Retro", "Skill review", "propose"}, {"Skill review", "", "publish"}, {"Skill review", "Retro", "needs changes"},
+	} {
+		ci := core.ConnectorInput{From: k[0], Name: k[2]}
+		if k[1] != "" {
+			ci.To = ptrStr(k[1])
+		}
+		in.Connectors = append(in.Connectors, ci)
+	}
+	if _, err := f.svc.SetWorkflow(ctx, f.admin, key, in, core.Idem{}); err != nil {
 		f.t.Fatal(err)
 	}
 	return p.Project.ID

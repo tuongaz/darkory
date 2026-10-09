@@ -531,7 +531,7 @@ for (const tmux of ["on", "off"] as const) {
           paused: false,
           progress_file: progress,
         });
-        for (const name of ["planner", "reviewer", "retro"]) await ada("PATCH", `/v1/members/${name}/agent`, { paused: true });
+        for (const name of ["planner", "reviewer", "tester", "retro"]) await ada("PATCH", `/v1/members/${name}/agent`, { paused: true });
       });
     });
 

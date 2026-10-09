@@ -106,9 +106,10 @@ function fiveWorkflows() {
     ["Approve", "declined", "Support"],
   ];
   const connectors = outs.map(([from, name, to]) => ({ from, name, ...(to ? { to } : {}) }));
-  const created = ["triage", "qa", "devops", "design", "support", "ops", "finance"];
+  // init seeds engineer, review, triage and qa; the rest are ACC's own, made in the same write.
+  const created = ["devops", "design", "support", "ops", "finance"];
   const skills = created.map((name) => ({ name, body: `The ${name} work of ACC.` }));
-  const every = [...created, "engineer", "review"];
+  const every = [...created, "engineer", "review", "triage", "qa"];
   const grants = [
     ...every.map((skill) => ({ member: "ada", skill })),
     { member: "cleo", skill: "engineer" },
@@ -131,6 +132,8 @@ test.beforeAll(async ({ browser }) => {
   await v1(as.ada, "POST", "/v1/projects", { key: "ACC", name: "Accounts", workflow: "empty", members: ["ada"] });
   graph = await v1<Graph>(as.ada, "PUT", "/v1/projects/ACC/workflow", fiveWorkflows());
   expect(graph.workflows.map((w) => w.name)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  // A Project of one Workflow: an empty one's, Work. MAIN starts with two (sample-workflows-plan.md).
+  await v1(as.ada, "POST", "/v1/projects", { key: "ONE", name: "One", workflow: "empty", members: ["ada"] });
 
   const { url } = await v1<{ url: string }>(as.ada, "POST", "/v1/members/ada/login-links");
   const ctx = await browser.newContext();
@@ -417,7 +420,7 @@ test("7 · File Task's Step picker groups the Steps by Workflow; the list heads 
 });
 
 test("8 · a Project of one Workflow has no chip; its board renders", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, "/projects/MAIN/tasks?view=board");
+  const { page, errors, ctx } = await open(browser, "/projects/ONE/tasks?view=board");
   await expect(columns(page).first()).toBeVisible();
   await expect(chip(page)).toHaveCount(0);
   const names = await columnNames(page);
@@ -526,7 +529,7 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
 });
 
 test("10 · on a phone, a board with no chip keeps the List | Board switch as two icons", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, "/projects/MAIN/tasks?view=board", { width: 390, height: 844 });
+  const { page, errors, ctx } = await open(browser, "/projects/ONE/tasks?view=board", { width: 390, height: 844 });
   await expect(columns(page).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "View" }).getByRole("link")).toHaveCount(2);
@@ -604,7 +607,7 @@ test("12 · a row opens Bugs' page; the chip goes to Support's; Edit opens its e
 });
 
 test("13 · a Project of one Workflow lists it, with + Workflow", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
+  const { page, errors, ctx } = await open(browser, "/projects/ONE/workflows");
   await expect(workflowsTable(page).getByRole("row")).toHaveCount(2);
   await expect(page.getByRole("group", { name: "Page" }).getByRole("button", { name: "Workflow", exact: true })).toBeEnabled();
   // The last Workflow stays: its trash is off.
@@ -615,11 +618,11 @@ test("13 · a Project of one Workflow lists it, with + Workflow", async ({ brows
   const row = workflowsTable(page).getByRole("row").nth(1);
   const name = (await row.getByRole("link").first().textContent())!.trim();
   await row.getByRole("link").first().click();
-  await expect(page).toHaveURL(address("/projects/MAIN/workflows/[^/?]+$"));
+  await expect(page).toHaveURL(address("/projects/ONE/workflows/[^/?]+$"));
   await expect(page.getByRole("region", { name: "Workflow", exact: true })).toBeVisible();
   await expect(chip(page)).toHaveCount(0);
   const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
-  await expect(crumbs.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/MAIN/workflows");
+  await expect(crumbs.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/ONE/workflows");
   await expect(crumbs).toContainText(name);
   await expect(crumbs.getByRole("link", { name, exact: true })).toHaveCount(0);
   await shot(page, "page-one");

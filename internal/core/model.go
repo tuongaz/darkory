@@ -144,8 +144,8 @@ type Workflow struct {
 	Position int64
 }
 
-// WorkflowFirstName names the one Workflow a default or empty Project starts with, as migration
-// 0006 named every Project's (decisions.md).
+// WorkflowFirstName names the one Workflow an empty Project starts with, as migration 0006 named
+// every existing Workflow (decisions.md).
 const WorkflowFirstName = "Work"
 
 // Workflows is a Project's whole graph: its Workflows by position, its Steps in the Project's

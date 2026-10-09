@@ -12,9 +12,9 @@ import (
 // triageAndBugs is a Project of two Workflows: Triage, whose bug outcome leads into Bugs, and
 // Bugs, where a bug is investigated and fixed.
 const triageAndBugs = `{"workflows": [{"name": "Triage", "position": 1}, {"name": "Bugs", "position": 2}],
- "skills": [{"name": "triage", "body": "Route it."}],
+ "skills": [{"name": "route", "body": "Route it."}],
  "steps": [
-   {"workflow": "Triage", "name": "Triage", "skill": "triage", "position": 1},
+   {"workflow": "Triage", "name": "Triage", "skill": "route", "position": 1},
    {"workflow": "Bugs", "name": "Investigate", "skill": "engineer", "position": 1},
    {"workflow": "Bugs", "name": "Fix", "skill": "engineer", "position": 2}],
  "connectors": [
@@ -22,7 +22,7 @@ const triageAndBugs = `{"workflows": [{"name": "Triage", "position": 1}, {"name"
    {"from": "Triage", "name": "question", "position": 2},
    {"from": "Investigate", "to": "Fix", "name": "fix", "position": 1},
    {"from": "Fix", "name": "done", "position": 1}],
- "grants": [{"member": "ada", "skill": "triage"}, {"member": "ada", "skill": "engineer"}]}`
+ "grants": [{"member": "ada", "skill": "route"}, {"member": "ada", "skill": "engineer"}]}`
 
 // A Project with two Workflows, through the CLI (ADR 0019): workflow show heads each Workflow and
 // names the one a crossing outcome reaches; a Task filed starts at the Project's first Step,
@@ -57,9 +57,9 @@ func TestWorkflows(t *testing.T) {
 		t.Fatalf("%s was filed at %s", key, where(filed))
 	}
 
-	// Along bug, into Bugs: listed there and not in Triage. tri triages it, since one who has
+	// Along bug, into Bugs: listed there and not in Triage. tri routes it, since one who has
 	// held a Task under one Skill takes it again only under that Skill, and ada fixes it.
-	tri := in.agent("tri", []string{"ACC"}, []string{"triage"})
+	tri := in.agent("tri", []string{"ACC"}, []string{"route"})
 	tri.ok("claim", key, "--timeout", "0")
 	tri.ok("advance", key, "bug")
 	listed := func(args ...string) []string {
@@ -107,8 +107,8 @@ func TestWorkflows(t *testing.T) {
 
 	// The same body again, as a preset re-run sends it: each Step with its id, as a Step sent
 	// without one is new, and no Workflow or Connector id, as each keeps its id by name; so
-	// nothing is written. Its skills entry is left out: it creates a Skill, and triage is there.
-	bare := strings.Replace(triageAndBugs, "\n \"skills\": [{\"name\": \"triage\", \"body\": \"Route it.\"}],", "", 1)
+	// nothing is written. Its skills entry is left out: it creates a Skill, and route is there.
+	bare := strings.Replace(triageAndBugs, "\n \"skills\": [{\"name\": \"route\", \"body\": \"Route it.\"}],", "", 1)
 	again := bare
 	for name, id := range step {
 		again = strings.Replace(again, `", "name": "`+name+`", "skill"`, `", "id": "`+id+`", "name": "`+name+`", "skill"`, 1)

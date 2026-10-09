@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { startInstall } from "./server";
 
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
-// their own (init's MAIN with the default Workflow and the roster's agents):
+// their own (init's MAIN with the default Workflows, Implementation and Bug triage, and the roster's
+// agents; the scenarios edit Implementation):
 //   6. Workflow editing in the list and panel: rename a Step, add one between two with a new Skill
 //      and wire it, delete one with Tasks (asked where they go and where the outcome into it
 //      leads), the changes listed, all saved in one go; the open board's columns follow; then who
@@ -67,7 +68,7 @@ async function open(browser: Browser, path: string, size = { width: 1440, height
   return { ctx, page, errors };
 }
 
-/** The address of the one Workflow's page of a Project of one: its Workflows open on a list. */
+/** The address of a Project's first Workflow's page (MAIN's Implementation): its Workflows open on a list. */
 async function workflowPage(key: string): Promise<string> {
   const { workflows } = (await v1("GET", `/v1/projects/${key}/workflow`)) as { workflows: { id: string; position: number }[] };
   // The first by position, as `compare.mjs`'s firstWorkflow takes it.
@@ -163,9 +164,9 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
   // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
-  // MAIN's Workflows list its one, Work; its row's pencil opens its editor.
+  // MAIN's Workflows list Implementation and Bug triage; Implementation's pencil opens its editor.
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
-  await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Edit Work" }).click();
+  await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Edit Implementation" }).click();
   const list = page.getByRole("list", { name: "Steps" });
   await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
   await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
@@ -197,11 +198,12 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toBeFocused();
   await expect(page.getByRole("region", { name: "Step 4: New Step" })).toContainText("By hand");
   await page.getByRole("textbox", { name: "Name of Step 4" }).fill("QA");
-  // Its Skill, new, created on Save; then its way on, and Make's main outcome into it.
+  // Its Skill, new, created on Save (usability: init seeds qa, which tester holds); then its way
+  // on, and Make's main outcome into it.
   await page.getByRole("combobox", { name: "Skill of QA" }).click();
-  await page.getByPlaceholder("Find or name a Skill").fill("qa");
-  await page.getByRole("option", { name: /New Skill “qa”/ }).click();
-  const skillDialog = page.getByRole("dialog", { name: "New Skill “qa”" });
+  await page.getByPlaceholder("Find or name a Skill").fill("usability");
+  await page.getByRole("option", { name: /New Skill “usability”/ }).click();
+  const skillDialog = page.getByRole("dialog", { name: "New Skill “usability”" });
   await skillDialog.getByRole("textbox", { name: "Text" }).fill("Try it as a user would.");
   await skillDialog.getByRole("button", { name: "Use this Skill" }).click();
   await expect(page.getByRole("region", { name: "Outcomes" }).getByText("No way out", { exact: true })).toBeVisible();
@@ -247,16 +249,23 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(board.page.getByText("Build", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${shots}6-08-saved.png`, animations: "disabled" });
   const moved = (await v1("GET", "/v1/tasks?project=MAIN&state=open")) as { items: { title: string; step_id?: string }[] };
-  const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { workflows: { id: string }[]; steps: { id: string; name: string; skill_id?: string }[]; connectors: { from_step_id: string; to_step_id?: string; name: string }[] };
+  const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { workflows: { id: string; name: string }[]; steps: { id: string; name: string; workflow_id: string; position: number; skill_id?: string }[]; connectors: { from_step_id: string; to_step_id?: string; name: string }[] };
   const madeStep = wf.steps.find((s) => s.name === "Make")!;
   const qaStep = wf.steps.find((s) => s.name === "QA")!;
   expect(moved.items.filter((t) => t.title.startsWith("Check the")).every((t) => t.step_id === madeStep.id)).toBe(true);
   expect(wf.connectors.find((c) => c.from_step_id === qaStep.id && c.name === "pass")!.to_step_id).toBeUndefined();
   const { items: skillList } = (await v1("GET", "/v1/skills")) as { items: { id: string; name: string }[] };
-  expect(qaStep.skill_id).toBe(skillList.find((s) => s.name === "qa")!.id);
+  expect(qaStep.skill_id).toBe(skillList.find((s) => s.name === "usability")!.id);
+  // Implementation's Save sent MAIN's whole graph: Bug triage comes back whole, its feature into Make.
+  const bugTriage = wf.workflows.find((w) => w.name === "Bug triage")!;
+  const bugSteps = wf.steps.filter((s) => s.workflow_id === bugTriage.id).sort((a, b) => a.position - b.position);
+  expect(bugSteps.map((s) => s.name)).toEqual(["Triage", "Fix", "Code review", "Verify"]);
+  expect(wf.connectors.filter((c) => bugSteps.some((s) => s.id === c.from_step_id))).toHaveLength(8);
+  const triage = bugSteps.find((s) => s.name === "Triage")!;
+  expect(wf.connectors.find((c) => c.from_step_id === triage.id && c.name === "feature")!.to_step_id).toBe(madeStep.id);
 
   // C3: QA's Skill exists now and nobody has it: its Owner takes it. A new agent for it, at once: its token shows once.
-  const work = wf.workflows[0].id;
+  const work = wf.workflows.find((w) => w.name === "Implementation")!.id;
   await page.goto(`${base}/projects/MAIN/workflows/${work}/edit?step=${qaStep.id}`);
   const takenBy = page.getByRole("region", { name: "Step 4: QA" }).getByRole("region", { name: "Taken by" });
   await expect(takenBy).toContainText("Nobody");
@@ -269,7 +278,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(page.getByRole("textbox", { name: "Secret of qa-bot's token" })).toHaveValue(/^dk_/);
   await page.screenshot({ path: `${shots}6-10-agent-token-once.png`, animations: "disabled" });
   await page.getByRole("button", { name: "Done" }).click();
-  await expect(takenBy.getByRole("list", { name: "Members with qa" })).toContainText("qa-bot");
+  await expect(takenBy.getByRole("list", { name: "Members with usability" })).toContainText("qa-bot");
 
   // ada takes Make's Tasks, added from its panel; builder no longer does, removed by its ×. Both
   // are the draft's: listed, sent on Save with the Workflow.
@@ -282,6 +291,10 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await makeTakers.getByRole("button", { name: "Remove builder" }).hover();
   await page.screenshot({ path: `${shots}6-11-remove-hover.png`, animations: "disabled" });
   await makeTakers.getByRole("button", { name: "Remove builder" }).click();
+  // builder takes engineer at Bug triage's Fix too: removing it asks first, naming that Step.
+  const removeBuilder = page.getByRole("dialog", { name: "Remove builder from engineer?" });
+  await expect(removeBuilder).toContainText("builder also takes engineer at Fix.");
+  await removeBuilder.getByRole("button", { name: "Remove" }).click();
   await expect(engineers).not.toContainText("builder");
   await page.getByRole("button", { name: "Editing · 2 changes: list them" }).click();
   await expect(page.getByRole("list", { name: "Changes" })).toContainText("Addedada to engineer");
@@ -301,6 +314,9 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   // A removal cancelled is discarded: ada keeps engineer.
   await page.goto(`${base}/projects/MAIN/workflows/${work}/edit?step=${madeStep.id}`);
   await makeTakers.getByRole("button", { name: "Remove ada" }).click();
+  const removeAda = page.getByRole("dialog", { name: "Remove ada from engineer?" });
+  await expect(removeAda).toContainText("ada also takes engineer at Fix.");
+  await removeAda.getByRole("button", { name: "Remove" }).click();
   await expect(makeTakers).toContainText("Nobody");
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("dialog", { name: "Discard 1 change?" }).getByRole("button", { name: "Discard" }).click();
@@ -340,12 +356,12 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await expect(ada).not.toHaveAttribute("data-working");
   await page.screenshot({ path: `${shots}9-01-marks.png`, animations: "disabled" });
 
-  // Hovering the step-head mark opens qa-bot's card: an agent with the qa Skill, holding the Task.
+  // Hovering the step-head mark opens qa-bot's card: an agent with the usability Skill, holding the Task.
   await mark.hover();
   const card = page.locator('[data-slot="hover-card-content"]');
   await expect(card.locator("[data-member-card]")).toHaveAttribute("data-member-card", "qa-bot");
   await expect(card.getByText("Agent", { exact: true })).toBeVisible();
-  await expect(card.locator("dd").getByText("qa", { exact: true })).toBeVisible();
+  await expect(card.locator("dd").getByText("usability", { exact: true })).toBeVisible();
   await expect(card.getByRole("link", { name: new RegExp(`${filed.key}\\s*Test the ledger`) })).toBeVisible();
   await expect(card.getByText(/^Working for /)).toBeVisible();
   await expect(card.getByRole("link", { name: "Open profile" })).toHaveAttribute("href", "/settings/organisation/agents/qa-bot");

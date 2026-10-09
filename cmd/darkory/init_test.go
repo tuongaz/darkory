@@ -72,7 +72,7 @@ func ptr[T any](v T) *T { return &v }
 var firstToken = regexp.MustCompile(`(?m)^\s+(dk_\S+)$`)
 
 // Inside a git repository, init seeds Project MAIN, the repository as its default Workspace and the
-// four agents, writes each agent's token to <data>/agents/<name>.token readable by its user
+// five agents, writes each agent's token to <data>/agents/<name>.token readable by its user
 // alone, and lists them; the first token it prints is still the first Member's.
 func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
@@ -93,12 +93,13 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 	root, _ := filepath.EvalSymlinks(repo)
 	for _, want := range []string{
 		"First Member: ada (human, admin)",
-		"\nProject MAIN (Main), on the default Workflow, holds ada and the agents below.\n",
+		"\nProject MAIN (Main), on the default Workflows, holds ada and the agents below.\n",
 		"Workspace shop: " + root + " (git, default branch trunk), Project MAIN's default.\n",
 		"Agents, reporting to ada, each with a token in " + filepath.Join(data, "agents", "<name>.token") + ":\n",
-		"  planner   breakdown              claude-opus-5-5\n",
+		"  planner   breakdown, triage      claude-opus-5-5\n",
 		"  builder   engineer               claude-sonnet-5-5\n",
 		"  reviewer  review, skill-review   claude-opus-5-5\n",
+		"  tester    qa                     claude-sonnet-5-5\n",
 		"  retro     retro                  claude-opus-5-5\n",
 		"\ndarkory serve prints a fresh login link every time it starts.\n",
 	} {
@@ -111,7 +112,7 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 		t.Fatalf("no token printed:\n%s", out)
 	}
 	var names []string
-	for _, name := range []string{"planner", "builder", "reviewer", "retro"} {
+	for _, name := range []string{"planner", "builder", "reviewer", "tester", "retro"} {
 		path := filepath.Join(data, "agents", name+".token")
 		info, err := os.Stat(path)
 		if err != nil {
@@ -156,7 +157,7 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 }
 
 // Outside a git repository the roster is seeded with no Workspace, and init says how to add one;
-// --no-agents seeds Project MAIN on the default Workflow with the first Member, and no agents.
+// --no-agents seeds Project MAIN on the default Workflows with the first Member, and no agents.
 func TestInitOutsideAGitRepository(t *testing.T) {
 	data := t.TempDir()
 	out := initIn(t, t.TempDir(), data)
@@ -165,13 +166,13 @@ func TestInitOutsideAGitRepository(t *testing.T) {
 		t.Fatalf("init outside a repository printed:\n%s", out)
 	}
 	agents, ws := agentsOf(t, data, firstToken.FindStringSubmatch(out)[1])
-	if len(agents) != 4 || len(ws) != 0 {
+	if len(agents) != 5 || len(ws) != 0 {
 		t.Fatalf("%d agents, Workspaces %+v", len(agents), ws)
 	}
 
 	data = t.TempDir()
 	out = initIn(t, t.TempDir(), data, "--no-agents")
-	if !strings.Contains(out, "\nProject MAIN (Main), on the default Workflow, holds ada. No agents and no Workspace: init ran with --no-agents.\n") ||
+	if !strings.Contains(out, "\nProject MAIN (Main), on the default Workflows, holds ada. No agents and no Workspace: init ran with --no-agents.\n") ||
 		strings.Contains(out, "Agents") {
 		t.Fatalf("init --no-agents printed:\n%s", out)
 	}

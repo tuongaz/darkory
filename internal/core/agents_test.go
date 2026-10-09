@@ -355,8 +355,8 @@ func TestAgentSettings(t *testing.T) {
 	})
 }
 
-// InitWith seeds the roster in Init's one write: Project MAIN on the default Workflow with the
-// first Member, the Workspace as its default, and the four agents in MAIN with their Skills,
+// InitWith seeds the roster in Init's one write: Project MAIN on the default Workflows with the
+// first Member, the Workspace as its default, and the five agents in MAIN with their Skills,
 // reporting to the first Member, with agent settings and a token whose Claims lapse after five
 // minutes without a Heartbeat.
 func TestInitSeedsTheRoster(t *testing.T) {
@@ -386,19 +386,20 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		for _, m := range project.Members {
 			names = append(names, m.Name)
 		}
-		if !slices.Equal(names, []string{"ada", "builder", "planner", "retro", "reviewer"}) {
+		if !slices.Equal(names, []string{"ada", "builder", "planner", "retro", "reviewer", "tester"}) {
 			t.Fatalf("MAIN holds %v", names)
 		}
 		want := map[string]struct {
 			skills []string
 			model  string
 		}{
-			"planner":  {[]string{"breakdown"}, "claude-opus-5-5"},
+			"planner":  {[]string{"breakdown", "triage"}, "claude-opus-5-5"},
 			"builder":  {[]string{"engineer"}, "claude-sonnet-5-5"},
 			"reviewer": {[]string{"review", "skill-review"}, "claude-opus-5-5"},
+			"tester":   {[]string{"qa"}, "claude-sonnet-5-5"},
 			"retro":    {[]string{"retro"}, "claude-opus-5-5"},
 		}
-		if len(out.Agents) != 4 {
+		if len(out.Agents) != 5 {
 			t.Fatalf("%d agents", len(out.Agents))
 		}
 		for _, sa := range out.Agents {
@@ -430,10 +431,10 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		for _, s := range skills {
 			skillNames = append(skillNames, s.Name)
 		}
-		if !slices.Equal(skillNames, []string{"acceptance", "breakdown", "engineer", "retro", "review", "skill-review"}) {
+		if !slices.Equal(skillNames, []string{"acceptance", "breakdown", "engineer", "qa", "retro", "review", "skill-review", "triage"}) {
 			t.Fatalf("Skills %v", skillNames)
 		}
-		// MAIN is on the default Workflow; filed in it with Break down, the Breakdown is at Plan
+		// MAIN is on the default Workflows; filed in it with Break down, the Breakdown is at Plan
 		// and names the Workspace.
 		w, err := svc.GetWorkflow(ctx, ada, "MAIN")
 		if err != nil || workflowText(skills, w.Workflows) != defaultWorkflowText {

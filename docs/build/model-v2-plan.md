@@ -35,6 +35,8 @@ Decided with the owner on 2026-10-07 in a question-by-question session (nine dec
 
 ### The default Workflow
 
+> **2026-10-09:** a new Project now starts with two Workflows, Implementation (the Steps below) and Bug triage; `docs/build/sample-workflows-plan.md` and `decisions.md` › Sample Workflows.
+
 `darkory init` seeds, beside the builtin Skills (`breakdown`, `retro`, `skill-review`, and now `acceptance`), the generic Skills `engineer` and `review` whether or not it seeds the roster. A new Project — `init`'s MAIN, "+ New Project", `project create` — starts with the **default Workflow** unless the creator picks **Copy from <Project>** or **Empty** (Backlog → Done, for a Project that builds its own):
 
 ```
@@ -43,7 +45,7 @@ Plan → Done "done" · Build → Review "pass" · Review → Done "pass" · Rev
 Retro → Done "done" · Retro → Skill review "propose" · Skill review → Done "publish" · Skill review → Retro "needs changes"
 ```
 
-No Acceptance step by default and `acceptance` off on the Project: a Project that wants one adds the step and turns it on. The roster's agents are as today (planner, builder, reviewer with `review` + `skill-review`, retro).
+No Acceptance step by default and `acceptance` off on the Project: a Project that wants one adds the step and turns it on. The roster's agents are as today (planner, builder, reviewer with `review` + `skill-review`, retro). Sample Workflows (2026-10-09): the planner also holds `triage`, and a fifth agent, `tester`, holds `qa`.
 
 `darkory migrate` keeps its `--dry-run` for the releases to come; with one migration it applies 0001 to an empty database and nothing else.
 

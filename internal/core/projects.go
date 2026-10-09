@@ -37,7 +37,7 @@ type NewProject struct {
 	Acceptance       *bool
 }
 
-// CreateProject creates a Project (admin) with its first Workflow, its settings and its Members,
+// CreateProject creates a Project (admin) with its Workflows, its settings and its Members,
 // and returns it with its Members. Its key prefixes the display keys of its Tasks.
 func (s *Service) CreateProject(ctx context.Context, c *auth.Caller, np NewProject, idem Idem) (ProjectDetail, error) {
 	if err := mustAdmin(c); err != nil {
@@ -117,7 +117,7 @@ type projectRow struct {
 	autoComplete, acceptance  bool
 }
 
-// createProject creates a Project and its first Workflow inside a write, recording
+// createProject creates a Project and its Workflows inside a write, recording
 // project.created and workflow.changed.
 func createProject(t *tx, r projectRow) (string, error) {
 	if err := projectNameFree(t, "", r.key, r.name); err != nil {

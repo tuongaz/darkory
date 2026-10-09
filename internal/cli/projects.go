@@ -16,7 +16,7 @@ import (
 // Projects with their Members and Workflows (ADR 0015, ADR 0016), and Labels.
 
 var projectCommands = []command{
-	{path: "project create", args: "<KEY> <name> [--workflow default|empty|copy] [--copy-from p] [--member m]… [--workspace ws] [--color 0-11] [--auto-complete] [--acceptance]", short: "create a Project with its first Workflow (admin)", run: cmdProjectCreate},
+	{path: "project create", args: "<KEY> <name> [--workflow default|empty|copy] [--copy-from p] [--member m]… [--workspace ws] [--color 0-11] [--auto-complete] [--acceptance]", short: "create a Project with its Workflows (admin)", run: cmdProjectCreate},
 	{path: "project list", short: "list the Organisation's Projects", run: cmdProjectList},
 	{path: "project show", args: "<project>", short: "show a Project, its defaults and its Members", run: cmdProjectShow},
 	{path: "project add", args: "<project> <member>", short: "add a Member to a Project (admin)", run: cmdProjectAdd},
@@ -32,7 +32,7 @@ var projectCommands = []command{
 }
 
 func cmdProjectCreate(c *call) error {
-	workflow := c.fs.String("workflow", "", "the first Workflow: default, empty (Backlog into Done), or copy (with --copy-from)")
+	workflow := c.fs.String("workflow", "", "the Workflows: default (Implementation and Bug triage), empty (Backlog into Done), or copy (with --copy-from)")
 	copyFrom := c.fs.String("copy-from", "", "the Project whose Workflows are copied")
 	var members strs
 	c.fs.Var(&members, "member", "a Member put in the Project; give it once per Member (you are not added unless named)")

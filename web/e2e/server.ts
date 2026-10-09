@@ -14,7 +14,7 @@ export type Install = { base: string; link: string; token: string; data: string;
 /**
  * Builds the darkory binary from this checkout (embedding web/dist/app, which `npm run e2e` has
  * just built), runs `darkory init` in a fresh data directory, and starts `darkory serve` on a free
- * port. init always makes the Organisation, ada and Project MAIN on the default Workflow; without
+ * port. init always makes the Organisation, ada and Project MAIN on the default Workflows; without
  * `roster` it seeds no agents (--no-agents), with it the roster's agents too. init runs in the
  * data directory, outside any git repository, so MAIN has no Workspace.
  */
@@ -78,7 +78,7 @@ const runnerTimings = "wait=1s,timeout=2m,tick=500ms,stale=2m,nudge=5m,exit=3s,p
 /**
  * Starts an Install that runs agent sessions, as e2e/runner_test.go does: `darkory init` in a fresh
  * git repository seeds its roster (Team MAIN, the repository as its Workspace, planner, builder,
- * reviewer and retro with tokens in <data>/agents); `setup` readies the agents through /v1 on a
+ * reviewer, tester and retro with tokens in <data>/agents); `setup` readies the agents through /v1 on a
  * first `serve --runner=off`, so no session ever starts the roster's default command (Claude
  * Code); then `serve --runner=on` takes over the same data. `tmux` is DARKORY_RUNNER_TMUX: "on"
  * runs sessions in tmux, "off" as child processes. setup gets the fake agent (tools/fakeagent,

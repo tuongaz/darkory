@@ -1,1 +1,1 @@
-Decide what a newly filed Task needs before anyone builds it. Read it, make its outcome checkable, judge its risk, and send it on the shortest path that is still safe: straight to building when the change is small and clear, through a design first when it is not.
+Triage a newly filed Task. Read it; when it reports a problem, reproduce it and record what you saw as a Note; make its outcome checkable and judge its risk; commit nothing on its branch. Advance it along the outcome that names what you found, with a Note saying why.

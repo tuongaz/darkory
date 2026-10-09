@@ -13,6 +13,24 @@ import (
 	"github.com/tuongaz/darkory/client"
 )
 
+// workFlow is one Workflow, Work, holding the Steps of a default Project's Implementation: a
+// Project as one was before the default had two Workflows. OLD is built by hand from it because a
+// Project on today's default Workflows is refused by the preset: their Triage and Code review
+// share names with the preset's Steps.
+const workFlow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [
+  {"workflow": "Work", "name": "Backlog", "position": 1},
+  {"workflow": "Work", "name": "Plan", "skill": "breakdown", "position": 2},
+  {"workflow": "Work", "name": "Build", "skill": "engineer", "position": 3},
+  {"workflow": "Work", "name": "Review", "skill": "review", "position": 4},
+  {"workflow": "Work", "name": "Retro", "skill": "retro", "position": 5},
+  {"workflow": "Work", "name": "Skill review", "skill": "skill-review", "position": 6}],
+ "connectors": [
+  {"from": "Plan", "name": "done", "position": 1},
+  {"from": "Build", "to": "Review", "name": "pass", "position": 1},
+  {"from": "Review", "name": "pass", "position": 1}, {"from": "Review", "to": "Build", "name": "needs changes", "position": 2},
+  {"from": "Retro", "name": "done", "position": 1}, {"from": "Retro", "to": "Skill review", "name": "propose", "position": 2},
+  {"from": "Skill review", "name": "publish", "position": 1}, {"from": "Skill review", "to": "Retro", "name": "needs changes", "position": 2}]}`
+
 // The software preset's setup.sh, run twice on a Project with two Workflows (ADR 0019): the first
 // run turns the Project's Workflow into Software, keeping its id and the Steps it shares by name,
 // moving the Tasks at the Steps it drops to Backlog, and leaves Bugs, its Step, its Tasks and the
@@ -25,7 +43,7 @@ func TestSoftwarePresetKeepsOtherWorkflows(t *testing.T) {
 	}
 	in := newInstall(t)
 	ada := in.ada
-	in.project("OLD", "Old", "")
+	in.project("OLD", "Old", workFlow)
 
 	file := func(title, step string) string {
 		t.Helper()

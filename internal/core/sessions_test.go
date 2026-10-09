@@ -279,7 +279,6 @@ func TestDeactivatedMembersLeaveTheSkillPools(t *testing.T) {
 		ctx := t.Context()
 		f.project("WEB")
 		f.project("OPS")
-		f.skill("qa")
 		f.chain("WEB", [2]string{"QA", "qa"}, [2]string{"Skill review", core.SkillSkillReview})
 		owner := f.member("owner", []string{"WEB"}, nil)
 		f.member("tester", []string{"WEB"}, []string{"qa"})
