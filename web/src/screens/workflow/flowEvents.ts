@@ -1,7 +1,6 @@
 import type { Activity, ActivityKind } from "@/api/client";
 import { DONE, DROPPED, type Tone, type Travel, type Who } from "@/components/workflow/live";
 import type { Workflow } from "@/components/workflow/model";
-import { inProjectOrder } from "@/components/workflowLine/model";
 
 // What the live Workflow makes of an Activity entry about one of its Tasks, kept free of React so
 // the tests read it as data: the callout above a Step ("builder picked up MAIN-7"), the chip that
@@ -44,9 +43,8 @@ export type FlowEffect = {
 /** What the Workflow knows to name an entry's ids. */
 export type FlowContext = {
   projectId: string;
-  /** The Steps and Connectors the entries name: the canvas's Workflow or the line's; with its Workflows, read in the Project's order. */
+  /** The Steps and Connectors the entries name: the canvas's Workflow or the line's; each Step with its Workflow. */
   workflow: {
-    workflows?: readonly Pick<Workflow["workflows"][number], "id" | "position">[];
     steps: readonly (Pick<Workflow["steps"][number], "id" | "name" | "position"> & { workflow_id?: string })[];
     connectors: readonly Pick<Workflow["connectors"][number], "id" | "from" | "to" | "name">[];
   };
@@ -114,12 +112,14 @@ function connectorOf(ctx: FlowContext, from: string | undefined, outcome: string
   return ctx.workflow.connectors.find((c) => c.from === from && c.name === outcome && c.to === to)?.id;
 }
 
-/** Whether a Connector leads back: into a Step earlier in the Project's order (its Workflow's, then its own). */
+/**
+ * Whether a Connector leads back: into an earlier Step of its own Workflow. A Connector into
+ * another Workflow's Step is an advance whichever Workflow comes first in the Project.
+ */
 function leadsBack(ctx: FlowContext, from: string | undefined, to: string | undefined): boolean {
   const [a, b] = [ctx.workflow.steps.find((s) => s.id === from), ctx.workflow.steps.find((s) => s.id === to)];
-  if (!a || !b) return false;
-  const order = inProjectOrder(ctx.workflow.workflows ?? []);
-  return order({ workflow_id: b.workflow_id ?? "", position: b.position }, { workflow_id: a.workflow_id ?? "", position: a.position }) < 0;
+  if (!a || !b || (a.workflow_id ?? "") !== (b.workflow_id ?? "")) return false;
+  return b.position < a.position;
 }
 
 const toneOf = (who: Who | undefined): Tone => (who?.kind === "agent" ? "agent" : "human");

@@ -5,7 +5,7 @@ import { FIVE } from "@/components/workflowLine/fixtures";
 import { handRoute, horizontal, leaveRoute, lineTopology } from "@/components/workflowLine/layout";
 import { task, wfId, wfStep } from "@/test/fixtures";
 import { chipsAt } from "./bind";
-import { effectOf, lineText, trailLine, type FlowContext } from "./flowEvents";
+import { effectOf, lineText, storyVerb, trailLine, type FlowContext } from "./flowEvents";
 import { ARRIVE_MS, CALLOUT_MS, flowState, GLOW_MS, nextChange, TRAVEL_MS, type Active } from "./useLiveFlow";
 
 const members = new Map([
@@ -246,9 +246,15 @@ describe("a Task crossing between Workflows, on the line of one (ADR 0019)", () 
     expect(effectOf(entry("task.claimed", { step_id: wfStep.fix }, "m-builder", "k-2"), on(wfId.bugs))?.callout?.stepId).toBe(wfStep.fix);
   });
 
-  it("reads a crossing forward or back by the Project's order: Triage into Bugs is forward though both are first in their Workflows", () => {
+  it("reads a crossing into another Workflow as an advance, whichever comes first; only a Connector back within one Workflow sends a Task back", () => {
     const words = (from: string, to: string, outcome: string) => lineText(trailLine(entry("task.advanced", { from, to, outcome }, "m-builder", "k-2"), on(wfId.triage))!);
+    const verb = (from: string, to: string, outcome: string) => storyVerb(entry("task.advanced", { from, to, outcome }, "m-builder", "k-2"), on(wfId.triage));
     expect(words(wfStep.triage, wfStep.investigate, "bug")).toBe("builder advanced WEB-2 along bug to Investigate");
-    expect(words(wfStep.support, wfStep.investigate, "bug")).toBe("builder sent WEB-2 back along bug to Investigate");
+    // Support is the Project's last Workflow, Bugs its second: the crossing is still an advance.
+    expect(words(wfStep.support, wfStep.investigate, "bug")).toBe("builder advanced WEB-2 along bug to Investigate");
+    expect(verb(wfStep.support, wfStep.investigate, "bug")).toBe("builder advanced along bug");
+    expect(words(wfStep.review, wfStep.fix, "needs changes")).toBe("builder sent WEB-2 back along needs changes to Fix");
+    expect(verb(wfStep.review, wfStep.fix, "needs changes")).toBe("builder sent back along needs changes");
+    expect(words(wfStep.fix, wfStep.review, "ready")).toBe("builder advanced WEB-2 along ready to Review");
   });
 });
