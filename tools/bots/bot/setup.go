@@ -128,9 +128,10 @@ func (crew *Crew) ProjectKey(key string) string { return or(crew.keys[key], key)
 // Setup makes the Projects, Skills, Workflows, Workspaces and Members the preset needs, as the
 // admin c acts for, and issues each agent, and each persona when asked, a token. It is
 // idempotent on names: what exists is kept, what is missing is created, a deactivated Member is
-// reactivated, a Project's Workflows are written only when they differ from the preset's, and a
-// Workspace whose repository is missing gets a new one where the Workspace says; only the tokens
-// are new on every run.
+// reactivated, an agent holds exactly the Skills its Spec names (one `darkory init` seeded may
+// hold others, which are taken away, so it takes no Step its role does not work), a Project's
+// Workflows are written only when they differ from the preset's, and a Workspace whose repository
+// is missing gets a new one where the Workspace says; only the tokens are new on every run.
 func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew, error) {
 	p := o.Preset
 	if p == nil {
@@ -277,6 +278,26 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 		}
 		return nil
 	}
+	// hold grants m skills and takes away every other Skill it holds.
+	hold := func(m client.Member, skills []string) error {
+		if err := grant(m, skills); err != nil {
+			return err
+		}
+		res, err := c.GetMemberWithResponse(ctx, m.ID)
+		if err := check(res, err, http.StatusOK); err != nil {
+			return fmt.Errorf("reading %s: %w", m.Name, err)
+		}
+		for _, sk := range res.JSON200.Skills {
+			if slices.Contains(skills, sk.Name) {
+				continue
+			}
+			rres, err := c.RevokeSkillWithResponse(ctx, m.ID, sk.ID, &client.RevokeSkillParams{})
+			if err := check(rres, err, http.StatusNoContent); err != nil {
+				return fmt.Errorf("taking %s from %s: %w", sk.Name, m.Name, err)
+			}
+		}
+		return nil
+	}
 	issue := func(m client.Member) error {
 		body := client.IssueTokenBody{Name: o.TokenName}
 		if o.Timeout > 0 {
@@ -337,7 +358,7 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 				return nil, err
 			}
 		}
-		if err := grant(m, s.Skills); err != nil {
+		if err := hold(m, s.Skills); err != nil {
 			return nil, err
 		}
 		mres, err := c.SetManagerWithResponse(ctx, m.ID, &client.SetManagerParams{}, client.SetManagerBody{Manager: crew.Manager})
