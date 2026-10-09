@@ -27,7 +27,9 @@ export function ScopeChip({
     onPreview?.(null);
     onScope(s);
   };
-  const atSteps = data.all.filter((t) => t.stepId).length;
+  // The open Tasks at the Steps the line draws: those the scope can name.
+  const onLine = data.all.filter((t) => t.stepId && (!data.drawnSteps || data.drawnSteps.has(t.stepId)));
+  const atSteps = onLine.length;
   const named = data.scope.kind === "parent" || data.scope.kind === "task" ? data.scope.id : undefined;
   const task = named ? (data.all.find((t) => t.id === named) ?? data.parents.find((p) => p.id === named)) : undefined;
   const label = data.scope.kind === "all" ? "All Tasks" : data.scope.kind === "none" ? "No Parent" : task ? `${task.key} ${task.title}` : "One Task";
@@ -92,18 +94,16 @@ export function ScopeChip({
                   <span className="ml-auto text-xs text-muted-foreground tabular-nums">{data.noParent}</span>
                 </CommandItem>
               </CommandGroup>
-              {/* Found only by typing: any open Task at a Step, its path traced on the line. */}
+              {/* Found only by typing: any open Task at a Step on the line, its path traced there. */}
               {query.trim() && (
                 <CommandGroup heading="Tasks">
-                  {data.all
-                    .filter((t) => t.stepId)
-                    .map((t) => (
-                      <CommandItem key={t.id} value={`task ${t.id}`} keywords={[t.key, t.title]} onSelect={() => pick(t.id)}>
-                        <CheckIcon aria-hidden className={cn("size-3.5", named !== t.id && "invisible")} />
-                        <span className="flex-none font-mono text-[11px] text-muted-foreground">{t.key}</span>
-                        <span className="min-w-0 truncate">{t.title}</span>
-                      </CommandItem>
-                    ))}
+                  {onLine.map((t) => (
+                    <CommandItem key={t.id} value={`task ${t.id}`} keywords={[t.key, t.title]} onSelect={() => pick(t.id)}>
+                      <CheckIcon aria-hidden className={cn("size-3.5", named !== t.id && "invisible")} />
+                      <span className="flex-none font-mono text-[11px] text-muted-foreground">{t.key}</span>
+                      <span className="min-w-0 truncate">{t.title}</span>
+                    </CommandItem>
+                  ))}
                 </CommandGroup>
               )}
             </CommandList>

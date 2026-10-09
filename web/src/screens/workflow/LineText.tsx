@@ -12,17 +12,28 @@ import { cn } from "@/lib/utils";
  * the scope's "+N" and the Connectors out of it; then the Steps after a Parent, and the questions
  * waiting with a Member at no Step. It says what the line draws: where new Tasks start, the
  * breakdown Step and what its Subtasks do, and that a hold's Tasks move on by hand. A Task opens
- * its peek.
+ * its peek. Of a Project of several Workflows it lists the one drawn: an outcome into another
+ * names it ("bug → Bugs › Investigate"), and a Step Tasks reach from another says so ("from Triage
+ * · bug").
  */
 export function LineText({ data, now, onTask }: { data: LineData; now: number; onTask: (key: string) => void }) {
-  const steps = [...data.facts.steps].sort(inProjectOrder(data.facts.workflows));
+  const every = [...data.facts.steps].sort(inProjectOrder(data.facts.workflows));
+  const drawn = data.drawnSteps;
+  const steps = drawn ? every.filter((s) => drawn.has(s.id)) : every;
+  const workflowOf = (id: string) => data.facts.workflows.find((w) => w.id === every.find((s) => s.id === id)?.workflow_id)?.name ?? "Another Workflow";
   const at = new Map<string, LineTask[]>();
   for (const t of data.scoped.drawn) at.set(t.stepId!, [...(at.get(t.stepId!) ?? []), t]);
   for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
-  const name = (to: string | null) => (to === null ? "Done" : (steps.find((s) => s.id === to)?.name ?? "a Step"));
+  const name = (to: string | null) => {
+    if (to === null) return "Done";
+    const s = every.find((x) => x.id === to);
+    if (!s) return "a Step";
+    return drawn && !drawn.has(s.id) ? `${workflowOf(s.id)} › ${s.name}` : s.name;
+  };
   const questions = data.all.filter((t) => t.aimedAt && !t.stepId);
   const sides = sideSteps(data.facts);
-  const start = sides.start !== undefined ? name(sides.start) : undefined;
+  // Where New Tasks start, when it is on this list.
+  const start = sides.start !== undefined && (!drawn || drawn.has(sides.start)) ? name(sides.start) : undefined;
 
   const row = (t: LineTask, s: LineStepFacts) => {
     const state = tokenState(t, !s.skill);
@@ -58,6 +69,7 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
     const list = at.get(s.id) ?? [];
     const hidden = data.scoped.hidden.get(s.id) ?? 0;
     const out = data.facts.connectors.filter((c) => c.from === s.id).sort((a, b) => a.position - b.position);
+    const entries = drawn ? data.facts.connectors.filter((c) => c.to === s.id && !drawn.has(c.from)) : [];
     return (
       <li key={s.id} className={cn("rounded-lg border bg-card", !s.skill && "border-dashed")}>
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 px-3 pt-2.5 pb-1.5">
@@ -71,6 +83,15 @@ export function LineText({ data, now, onTask }: { data: LineData; now: number; o
             {s.medianMs !== undefined && ` · median ${spanText(s.medianMs)}`}
           </span>
         </div>
+        {entries.length > 0 && (
+          <ul aria-label={`Into ${s.name} from other Workflows`} className="flex flex-wrap gap-x-4 gap-y-0.5 px-3 pb-1.5 text-xs text-muted-foreground">
+            {entries.map((c) => (
+              <li key={c.id}>
+                from {workflowOf(c.from)} · {c.name}
+              </li>
+            ))}
+          </ul>
+        )}
         {(!s.skill || sides.before.has(s.id)) && <p className="px-3 pb-1.5 text-xs text-muted-foreground">{s.skill ? breakdownSentence(start) : holdSentence()}</p>}
         {list.length > 0 && (
           <ul aria-label={`Tasks at ${s.name}`} className="flex flex-col border-t px-1.5 py-1">

@@ -20,6 +20,7 @@ import { AnsweredLine, NeedCard, type Answered } from "./NeedCard";
 import { type AgentNeed, type NeedItem } from "./needs";
 import { ageText } from "@/lib/time";
 import { useNeeds } from "./useNeeds";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 
 /** How many cards Needs you shows at rest; the rest wait behind "+N more". */
 export const atRest = 3;
@@ -34,10 +35,11 @@ type Hover = (taskId: string | null) => void;
  * move, then the rest, oldest first), three at rest with "+N more" in the header; under them the
  * agents whose sessions wait on someone, with Take back and Stop session. On a phone, the first
  * card and a line that opens the rest as a sheet. Hovering a card or an agent's row tells the page
- * which Task to ring on the line.
+ * which Task to ring on the line. On the page of one Workflow of several (`workflow`), only its Tasks
+ * and those at no Step.
  */
-export function NeedsYouPanel({ project, onHover }: { project: Project; onHover: Hover }) {
-  const needs = useNeeds(project);
+export function NeedsYouPanel({ project, workflow, onHover }: { project: Project; workflow?: ShownWorkflow; onHover: Hover }) {
+  const needs = useNeeds(project, workflow);
   const mobile = useIsMobile();
   const [more, setMore] = useState(false);
   const [answered, setAnswered] = useState<Answered[]>([]);

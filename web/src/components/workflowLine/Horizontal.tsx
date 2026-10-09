@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
-import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology, type Mark } from "./layout";
+import { handRoute, horizontal as layOut, leaveRoute, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology, type Mark } from "./layout";
 import { estimate, type Measure } from "./measure";
 import { blockedBy, DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { spanText } from "@/lib/time";
@@ -600,7 +600,8 @@ export function HorizontalLine(props: HorizontalProps) {
     .map((tk) => {
       if (tk.travel.to === DROPPED) return undefined;
       const to = tk.travel.to === DONE ? DONE_STATION : tk.travel.to;
-      const route = (tk.travel.connectorId && h.routes.get(tk.travel.connectorId)) || handRoute(h, tk.travel.from, to);
+      // Along its Connector; else straight, by hand; else, into a Step the line does not draw, off it.
+      const route = (tk.travel.connectorId && h.routes.get(tk.travel.connectorId)) || handRoute(h, tk.travel.from, to) || (h.at.has(to) ? undefined : leaveRoute(h, tk.travel.from));
       if (!route) return undefined;
       const outcome = tk.travel.connectorId ? facts.connectors.find((c) => c.id === tk.travel.connectorId)?.name : "by hand";
       return { id: tk.id, key: tk.key, route, outcome, hand: !tk.travel.connectorId };

@@ -2,7 +2,7 @@
 // this browser last picked in the Project, else the first. WorkflowChip picks it.
 import { useCallback } from "react";
 import { useSearchParams } from "react-router";
-import type { Project, Workflow } from "@/api/client";
+import type { Project, Task, Workflow } from "@/api/client";
 import { toShort } from "@/lib/shortid";
 
 /** The search parameter naming the Workflow a page shows of a Project of several. */
@@ -51,4 +51,18 @@ export function usePickedWorkflow(project: Pick<Project, "key">, workflows: read
     [project.key, setParams],
   );
   return { id, set };
+}
+
+/** The Workflow a page shows of a Project of several, as its lists read it: its id and its Steps' ids. */
+export type ShownWorkflow = { id: string; steps: ReadonlySet<string> };
+
+/**
+ * Whether a Task is listed on the page of the Workflow shown: one at a Step of it, or ended at
+ * one; a Task at no Step and of no Workflow (a Parent, a question with a Member) on every page.
+ * Every Task when none is shown.
+ */
+export function onShownWorkflow(task: Pick<Task, "step_id" | "workflow_id">, shown: ShownWorkflow | undefined): boolean {
+  if (!shown) return true;
+  if (task.step_id) return shown.steps.has(task.step_id);
+  return !task.workflow_id || task.workflow_id === shown.id;
 }

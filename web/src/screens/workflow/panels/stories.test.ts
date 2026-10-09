@@ -77,6 +77,17 @@ describe("What's happening", () => {
     ]);
   });
 
+  it("on the page of one Workflow of several, tells only its Tasks' stories and those at no Step", () => {
+    const { input } = morning();
+    // As if WEB's Steps were split: the page shows a Workflow of Build alone.
+    const shown = { id: "wf-shown", steps: new Set<string>([step.build]) };
+    // WEB-9 and WEB-6 are at Review now, another Workflow's; the Parent WEB-7 is at no Step.
+    expect(storiesOf({ ...input, shown }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12", "WEB-7"]);
+    // A Task not read yet goes by the Step its latest entry leaves it at.
+    const unknown = { ...input, tasks: new Map(), shown };
+    expect(storiesOf(unknown).map((s) => s.key)).not.toContain("WEB-9");
+  });
+
   it("reads 'now' for a change under a minute old, flags a waiting session as nudged, and gives a Needs-you Task no row", () => {
     const stories = storiesOf(morning().input);
     expect(stories.filter((s) => s.now).map((s) => s.key)).toEqual(["WEB-10"]);

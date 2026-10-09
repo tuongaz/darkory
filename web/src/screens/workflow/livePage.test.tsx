@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import type { Activity, ActivityKind, Task } from "@/api/client";
 import { mockApi } from "@/test/api";
-import { ada, bob, builder, signedIn, step, task } from "@/test/fixtures";
+import { ada, bob, builder, signedIn, step, task, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { FakeEventSource } from "@/test/eventSource";
 import { renderApp } from "@/test/render";
 
@@ -271,5 +271,94 @@ describe("the line as it happens", () => {
     deliver(entry(7, "task.advanced", "k-2", { from: step.build, to: step.review, outcome: "pass" }, builder.id));
     await waitFor(() => expect(tokenOf("WEB-2")).toHaveAttribute("data-arrived"));
     expect(document.querySelector("[data-travel]")).toBeNull();
+  });
+});
+
+describe("the Workflow page of a Project of several Workflows (ADR 0019)", () => {
+  afterEach(() => localStorage.clear());
+  const at = (n: number, title: string, stepId: string, workflowId: string, extra: Partial<Task> = {}) => task(n, { title, step_id: stepId, workflow_id: workflowId, skill_id: undefined, ...extra });
+  /** WEB as ADR 0019's five Workflows, with `tasks` open. */
+  function several(tasks: Task[]) {
+    const { api, list } = serve(tasks);
+    api.routes["GET /v1/projects/:project/workflow"] = workflowsFixture();
+    api.routes["GET /v1/skills"] = { items: workflowsSkills };
+    return { api, list };
+  }
+  const heads = () => [...line().querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"));
+  const bug = workflowsFixture().connectors.find((c) => c.from_step_id === wfStep.triage && c.name === "bug")!;
+
+  it("the chip lists the five; picking Bugs redraws the line with Investigate first and an entry from Triage", async () => {
+    several([at(1, "Sort the inbox", wfStep.triage, wfId.triage), at(2, "Crash on save", wfStep.investigate, wfId.bugs)]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
+    expect(heads()).toEqual(["Triage", "Done"]);
+    // Triage's four outcomes leave the line as exits; WEB-2, at Investigate, is on Bugs' line.
+    expect(within(line()).getByText("bug → Bugs › Investigate")).toHaveAttribute("data-chip", "exit");
+    expect(tokenOf("WEB-2")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    const options = await screen.findAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+    await userEvent.click(screen.getByRole("option", { name: "Bugs" }));
+    await waitFor(() => expect(heads()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]));
+    expect(within(line()).getByText("from Triage · bug")).toBeInTheDocument();
+    expect(tokenOf("WEB-2")).not.toBeNull();
+    expect(tokenOf("WEB-1")).toBeNull();
+    expect(screen.getByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
+  });
+
+  it("opens on the Workflow ?workflow= names, the one the board shows", async () => {
+    several([at(2, "Crash on save", wfStep.investigate, wfId.bugs)]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
+    expect(heads()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
+    // At every width: a phone has no other way to another Workflow.
+    expect(screen.getByRole("button", { name: "Workflow: Bugs" }).closest(".hidden")).toBeNull();
+  });
+
+  it("a Project of one Workflow has no chip", async () => {
+    serve([task(2)]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
+    expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
+  });
+
+  it("counts as hidden only the drawn Workflow's Tasks the scope leaves out", async () => {
+    several([
+      at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: "k-9" }),
+      at(3, "Another to sort", wfStep.triage, wfId.triage),
+      at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: "k-9" }),
+    ]);
+    renderApp("/projects/WEB/workflow?scope=none");
+    await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
+    // WEB-1 is left out here; WEB-2, also a Subtask, is on Bugs' line and not counted.
+    expect(screen.getByText("1 hidden")).toBeInTheDocument();
+  });
+
+  it("the Text view lists the drawn Workflow's Steps, naming where an outcome crosses and where Tasks enter", async () => {
+    several([at(2, "Crash on save", wfStep.investigate, wfId.bugs)]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}&view=text`);
+    const steps = await screen.findByRole("list", { name: "Steps" });
+    expect(within(steps).getAllByRole("listitem").filter((li) => li.parentElement === steps).map((li) => li.querySelector(".font-semibold")?.textContent)).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
+    expect(within(steps).getByRole("list", { name: "Into Investigate from other Workflows" })).toHaveTextContent("from Triage · bug");
+    // New Tasks start at Triage, not on this list.
+    expect(screen.queryByText(/New Tasks start at/)).toBeNull();
+  });
+
+  it("a Task advancing out along an exit travels the exit's route, and is gone from the line", async () => {
+    const { list } = several([at(2, "Crash on save", wfStep.triage, wfId.triage)]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
+    list.tasks = [at(2, "Crash on save", wfStep.investigate, wfId.bugs)];
+    deliver(entry(7, "task.advanced", "k-2", { from: wfStep.triage, to: wfStep.investigate, outcome: "bug" }, builder.id));
+    const travel = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>("[data-travel]");
+      expect(el).toHaveTextContent("WEB-2bug");
+      return el!;
+    });
+    const station = line().querySelector(`[data-station="${wfStep.triage}"]`)!;
+    expect(travel.style.offsetPath).toMatch(new RegExp(`^path\\("M${station.getAttribute("cx")} ${station.getAttribute("cy")} V[\\d.]+ H[\\d.]+"\\)$`));
+    expect(line().querySelector(`[data-exit="${bug.id}"]`)).not.toBeNull();
+    await waitFor(() => expect(document.querySelector("[data-travel]")).toBeNull(), { timeout: 3000 });
+    expect(tokenOf("WEB-2")).toBeNull();
   });
 });

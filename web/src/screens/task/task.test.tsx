@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Activity, Member, Task, TaskDetail } from "@/api/client";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
-import { ada, bob, builder, bug, clientX, detail, step } from "@/test/fixtures";
+import { ada, bob, builder, bug, clientX, detail, step, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { basket, cart, checkout, copy, liveClaimOf, payment, receipt, routes } from "../board/testData";
 
@@ -230,6 +230,22 @@ describe("a Parent's page", () => {
     renderApp("/tasks/WEB-3");
     const third = await screen.findByRole("region", { name: "Subtasks" });
     expect(within(third).getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("of a Project of several Workflows, draws the Workflow of its first open Subtask and says where the others are", async () => {
+    // In ADR 0019's five Workflows Review is Bugs' and Build is Features': WEB-5 waits at Review,
+    // WEB-4 is worked at Build. Bugs comes first, so the line draws Bugs.
+    mockApi(taskRoutes({ "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } }));
+    renderApp("/tasks/WEB-3?view=line");
+    const section = await screen.findByRole("region", { name: "Subtasks" });
+    const line = await within(section).findByRole("region", { name: "Subtask line" });
+    await waitFor(() => expect(line.querySelector('button[data-task="WEB-5"]')).not.toBeNull());
+    expect([...line.querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"))).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
+    expect(line.querySelector('button[data-task="WEB-4"]')).toBeNull();
+    // WEB-4 does not vanish: the header says it is on Features' line.
+    expect(section.querySelector("[data-elsewhere]")).toHaveTextContent("· 1 in Features");
+    await userEvent.click(within(section).getByRole("button", { name: "List" }));
+    expect(section.querySelector("[data-elsewhere]")).toBeNull();
   });
 
   it("opens the Blocking among its Subtasks from the old graph's address", async () => {

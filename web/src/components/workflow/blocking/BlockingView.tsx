@@ -20,7 +20,18 @@ const dataOf = <T,>(results: { data?: T }[]) => results.map((r) => r.data);
  * open Tasks, live with the record. A node's Open opens its Task's peek (`?task=`); Show on line
  * hands its id to `onShowOnLine`.
  */
-export function BlockingView({ project, scope, onShowOnLine }: { project: Project; scope?: string; onShowOnLine: (taskId: string) => void }) {
+export function BlockingView({
+  project,
+  scope,
+  workflowSteps,
+  onShowOnLine,
+}: {
+  project: Project;
+  scope?: string;
+  /** The Steps of the Workflow the page shows, of a Project of several: only its Tasks are the view's own. */
+  workflowSteps?: ReadonlySet<string>;
+  onShowOnLine: (taskId: string) => void;
+}) {
   const open = useOpenTasks();
   const { members, projects, skills } = useDirectory();
   const runner = useRunnerSessions().data?.items;
@@ -104,6 +115,7 @@ export function BlockingView({ project, scope, onShowOnLine }: { project: Projec
       tasks={tasks}
       projectId={project.id}
       scope={scope}
+      workflowSteps={workflowSteps}
       me={me}
       now={now}
       steps={steps}

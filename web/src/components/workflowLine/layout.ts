@@ -1368,6 +1368,12 @@ export function handRoute(h: Horizontal, from: string, to: string): string | und
   return `M${a.x} ${a.y} L${b.x} ${b.y}`;
 }
 
+/** A Task moved by hand off the line, into a Step it does not draw (another Workflow's): down from its station, as an exit's leg runs. */
+export function leaveRoute(h: Horizontal, from: string): string | undefined {
+  const a = h.at.get(from);
+  return a && `M${a.x} ${a.y} V${a.y + EXIT_TOP}`;
+}
+
 /** Corners rounded: the SVG path of a polyline. */
 export function rounded(points: Point[], r = 7): string {
   if (points.length < 2) return "";

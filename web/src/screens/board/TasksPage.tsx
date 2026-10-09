@@ -87,8 +87,9 @@ export function TasksPage() {
       <TopBar
         crumbs={[
           projectCrumb(project, false),
-          // The board shows one Workflow; the list, the whole Project.
-          ...(view === "board" && model.workflows.length > 1 ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} />, wide: true }] : []),
+          // The board shows one Workflow, picked here at every width (a phone has no other way to
+          // another); the list, the whole Project.
+          ...(view === "board" && model.workflows.length > 1 ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} /> }] : []),
           { label: "Tasks", wide: true },
         ]}
         view={<ViewSwitch view={view} />}

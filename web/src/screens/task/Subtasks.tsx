@@ -2,7 +2,7 @@
 // still to come for the Parent), as a list, or as the Blocking among them (`?view=line|list|blocking`
 // on the page; the choice is remembered by this browser; the line first).
 import { GitForkIcon, ListIcon, ListPlusIcon, WorkflowIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import type { Task, TaskDetail } from "@/api/client";
 import { useDirectory, useProjects, useRunnerSessions } from "@/api/queries";
@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { kindLabel, liveClaim, taskWorkGlyph } from "@/work";
 import { progressText } from "../board/derive";
 import { useTaskWorkflow } from "./queries";
+import { subtaskLine, type SubtaskLine } from "./subtaskLine";
 
 type SubtaskView = "list" | "line" | "blocking";
 const viewKey = "darkory.task.subtasks";
@@ -74,6 +75,8 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
   const { task, subtasks } = detail;
   const [view, setView] = useSubtaskView(page);
   const counts = task.subtask_counts;
+  const { steps, workflows } = useTaskWorkflow(task.project_id);
+  const line = useMemo(() => subtaskLine(subtasks, steps, [...workflows].sort((a, b) => a.position - b.position)), [subtasks, steps, workflows]);
   const seg = (v: SubtaskView, icon: ReactNode, label: string) => (
     <button
       type="button"
@@ -99,6 +102,7 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
                 {progressText(counts)} done{counts.dropped ? ` · ${counts.dropped} dropped` : ""}
               </span>
             )}
+            {view === "line" && <Elsewhere line={line} />}
           </span>
         }
         actions={
@@ -118,7 +122,7 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
         }
       />
       {view === "line" ? (
-        <ParentLine detail={detail} />
+        <ParentLine detail={detail} workflow={line.workflow} />
       ) : view === "blocking" ? (
         <ParentBlocking detail={detail} onShowOnLine={() => setView("line")} />
       ) : (
@@ -136,13 +140,32 @@ function ParentBlocking({ detail, onShowOnLine }: { detail: TaskDetail; onShowOn
 }
 
 /**
+ * Where the line's header says the open Subtasks it does not draw stand: "2 in Bugs", a Workflow
+ * at a time. A Subtask never vanishes from the line silently.
+ */
+function Elsewhere({ line }: { line: SubtaskLine }) {
+  if (line.elsewhere.length === 0) return null;
+  return (
+    <span data-elsewhere className="font-normal text-muted-foreground tabular-nums">
+      {line.elsewhere.map((w) => (
+        <span key={w.id} title={`${w.n} open ${w.n === 1 ? "Subtask" : "Subtasks"} at Steps of ${w.name}`}>
+          {" · "}
+          {w.n} in {w.name}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
  * The Parent's Subtasks on its Project's line (r2-scope F2): each open one at its Step, those
  * ended Done green at Done, the rest of the Project a faint "+N" per Step, and on the branch what
  * is still to come for the Parent ("when 4 open end Done", "when MAIN-7 ends"). A Parent with
- * nothing on the main line any more folds it to a strip of names. A token opens its peek.
+ * nothing on the main line any more folds it to a strip of names. A token opens its peek. Of a
+ * Project of several Workflows it draws `workflow` (`subtaskLine`); the header counts the rest.
  */
-function ParentLine({ detail }: { detail: TaskDetail }) {
-  const { data } = useLineData(detail.task.project_id, undefined, detail.task.key);
+function ParentLine({ detail, workflow }: { detail: TaskDetail; workflow: string | undefined }) {
+  const { data } = useLineData(detail.task.project_id, workflow, detail.task.key);
   const now = useNow();
   const navigate = useNavigate();
   const peek = usePeekLink();

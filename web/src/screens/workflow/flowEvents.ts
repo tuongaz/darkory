@@ -1,6 +1,7 @@
 import type { Activity, ActivityKind } from "@/api/client";
 import { DONE, DROPPED, type Tone, type Travel, type Who } from "@/components/workflow/live";
 import type { Workflow } from "@/components/workflow/model";
+import { inProjectOrder } from "@/components/workflowLine/model";
 
 // What the live Workflow makes of an Activity entry about one of its Tasks, kept free of React so
 // the tests read it as data: the callout above a Step ("builder picked up MAIN-7"), the chip that
@@ -43,11 +44,18 @@ export type FlowEffect = {
 /** What the Workflow knows to name an entry's ids. */
 export type FlowContext = {
   projectId: string;
-  /** The Steps and Connectors the entries name: the canvas's Workflow or the line's. */
+  /** The Steps and Connectors the entries name: the canvas's Workflow or the line's; with its Workflows, read in the Project's order. */
   workflow: {
-    steps: readonly Pick<Workflow["steps"][number], "id" | "name" | "position">[];
+    workflows?: readonly Pick<Workflow["workflows"][number], "id" | "position">[];
+    steps: readonly (Pick<Workflow["steps"][number], "id" | "name" | "position"> & { workflow_id?: string })[];
     connectors: readonly Pick<Workflow["connectors"][number], "id" | "from" | "to" | "name">[];
   };
+  /**
+   * The Steps the line draws, of a Project of several Workflows: what happens at another
+   * Workflow's Steps plays on its own line, and a Task crossing between the two leaves or arrives
+   * by the Connector's chip. Every Step when unsaid.
+   */
+  drawn?: ReadonlySet<string>;
   task: (id: string) => { key: string; step_id?: string; project_id?: string } | undefined;
   member: (id: string) => Who | undefined;
 };
@@ -74,12 +82,25 @@ export function aboutThisFlow(e: Activity, ctx: FlowContext): boolean {
   return stepsNamed(e).some((id) => ids.has(id));
 }
 
+/**
+ * Whether an entry is about the line drawn: it names one of its Steps (or the Task's record is at
+ * one), or names no Step at all. Every entry when the line draws every Step.
+ */
+export function onDrawnLine(e: Activity, ctx: FlowContext): boolean {
+  if (!ctx.drawn) return true;
+  const ids = [...stepsNamed(e), ...[ctx.task(e.subject_id)?.step_id].filter((x): x is string => !!x)];
+  return ids.length === 0 || ids.some((id) => ctx.drawn!.has(id));
+}
+
 const someone = (id: string | undefined, ctx: FlowContext): Who | undefined =>
   id ? (ctx.member(id) ?? { id, name: "a Member", kind: "human" }) : undefined;
 
 function keyOf(e: Activity, ctx: FlowContext): string {
   return ctx.task(e.subject_id)?.key ?? text(e.payload, "key") ?? "a Task";
 }
+
+/** A Step the line draws, or nothing. */
+const here = (id: string | undefined, ctx: FlowContext) => (id && (!ctx.drawn || ctx.drawn.has(id)) ? id : undefined);
 
 /** The Step a Task is at when the entry does not say: its record's. */
 function stepOf(e: Activity, ctx: FlowContext): string | undefined {
@@ -93,12 +114,12 @@ function connectorOf(ctx: FlowContext, from: string | undefined, outcome: string
   return ctx.workflow.connectors.find((c) => c.from === from && c.name === outcome && c.to === to)?.id;
 }
 
-const position = (ctx: FlowContext, id: string | undefined) => ctx.workflow.steps.find((s) => s.id === id)?.position;
-
-/** Whether a Connector leads back: into a Step earlier in the Workflow's order. */
+/** Whether a Connector leads back: into a Step earlier in the Project's order (its Workflow's, then its own). */
 function leadsBack(ctx: FlowContext, from: string | undefined, to: string | undefined): boolean {
-  const [a, b] = [position(ctx, from), position(ctx, to)];
-  return a !== undefined && b !== undefined && b < a;
+  const [a, b] = [ctx.workflow.steps.find((s) => s.id === from), ctx.workflow.steps.find((s) => s.id === to)];
+  if (!a || !b) return false;
+  const order = inProjectOrder(ctx.workflow.workflows ?? []);
+  return order({ workflow_id: b.workflow_id ?? "", position: b.position }, { workflow_id: a.workflow_id ?? "", position: a.position }) < 0;
 }
 
 const toneOf = (who: Who | undefined): Tone => (who?.kind === "agent" ? "agent" : "human");
@@ -110,11 +131,13 @@ export function effectOf(e: Activity, ctx: FlowContext): FlowEffect | null {
   const key = keyOf(e, ctx);
   const base = { seq: e.seq, taskId: e.subject_id, key };
   const actor = someone(e.actor_id, ctx);
-  const at = stepOf(e, ctx);
+  // What happens at a Step the line does not draw plays on its own Workflow's line.
+  const at = here(stepOf(e, ctx), ctx);
   const known = (id: string | undefined) => (id && ctx.workflow.steps.some((s) => s.id === id) ? id : undefined);
+  const drawn = (id: string | undefined) => here(known(id), ctx);
   switch (e.kind) {
     case "task.filed": {
-      const step = known(text(p, "step_id"));
+      const step = drawn(text(p, "step_id"));
       if (!step) return null;
       const said = actor ? `${actor.name} filed ${key}` : `${key} filed`;
       return { ...base, arrive: step, callout: { stepId: step, tone: "filed", who: actor, text: said } };
@@ -145,30 +168,32 @@ export function effectOf(e: Activity, ctx: FlowContext): FlowEffect | null {
         pulse: { stepId: at, tone: "back" },
         callout: { stepId: at, tone: "back", who: actor, text: `${actor?.name ?? "a Member"} took ${key} back` },
       };
-    case "task.advanced": {
-      const [from, to] = [known(text(p, "from")), known(text(p, "to"))];
-      if (!from || !to) return null;
-      return { ...base, travel: { from, to, connectorId: connectorOf(ctx, from, text(p, "outcome"), to) } };
-    }
+    case "task.advanced":
     case "task.moved": {
+      // Along a Connector into another Workflow, a Task leaves by its exit chip; from another, it
+      // arrives by its entry. Moved by hand into another Workflow it leaves the same way; moved
+      // in from one, or from no Step, it appears at its Step.
       const [from, to] = [known(text(p, "from")), known(text(p, "to"))];
       if (!to) return null;
-      if (!from) return { ...base, arrive: to };
-      return { ...base, travel: { from, to, connectorId: connectorOf(ctx, from, text(p, "outcome"), to) } };
+      const connectorId = from && connectorOf(ctx, from, text(p, "outcome"), to);
+      const [out, into] = [!!drawn(from), !!drawn(to)];
+      if (!out && !into) return null;
+      if (!from || (!out && !connectorId)) return { ...base, arrive: to };
+      return { ...base, travel: { from, to, connectorId } };
     }
     case "task.completed": {
       // A Parent completing is at no Step: nothing travels.
-      const from = known(text(p, "from"));
+      const from = drawn(text(p, "from"));
       if (!from) return null;
       return { ...base, travel: { from, to: DONE, connectorId: connectorOf(ctx, from, text(p, "outcome"), null) } };
     }
     case "task.dropped": {
-      const from = known(text(p, "from"));
+      const from = drawn(text(p, "from"));
       if (!from) return null;
       return { ...base, travel: { from, to: DROPPED } };
     }
     case "task.became_parent": {
-      const from = known(text(p, "from"));
+      const from = drawn(text(p, "from"));
       if (!from) return null;
       return { ...base, callout: { stepId: from, tone: "neutral", who: actor, text: `${key} became a Parent` } };
     }

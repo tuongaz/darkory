@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 /**
  * The Workflow in the breadcrumb, for a Project of two or more: the picked one's name and a
  * caret; its menu lists the Project's Workflows in order, a check on the picked one. Nothing for a
- * Project of one. The pick is `usePickedWorkflow`'s (pickedWorkflow.ts).
+ * Project of one. It shows at every width: on a phone it is the only way to another Workflow, so a
+ * long name truncates there before the caret does. The pick is `usePickedWorkflow`'s (pickedWorkflow.ts).
  */
 export function WorkflowChip({ workflows, picked, onPick }: { workflows: readonly Workflow[]; picked: string | undefined; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +22,7 @@ export function WorkflowChip({ workflows, picked, onPick }: { workflows: readonl
         <button
           type="button"
           aria-label={`Workflow: ${current.name}`}
-          className="inline-flex h-7 max-w-[220px] min-w-0 items-center gap-1 rounded-md border bg-background px-2 text-[13px] font-medium text-foreground"
+          className="inline-flex h-7 max-w-[132px] min-w-0 items-center gap-1 rounded-md border bg-background px-2 text-[13px] font-medium text-foreground sm:max-w-[220px]"
         >
           <span className="truncate">{current.name}</span>
           <ChevronDownIcon aria-hidden className="size-3 flex-none text-muted-foreground" />

@@ -8,7 +8,7 @@ import { MeContext } from "@/me";
 import { useTakeableIds, useTaskPath } from "@/screens/task/queries";
 import { useLiveCanvas } from "@/screens/workflow/canvasData";
 import { blockingCount, lineTasks, scopedLine, traceOf, type LineScope, type ScopedLine, type ScopeParent, type Trace } from "./data";
-import { drawnWorkflow, type LineFacts, type LineTask } from "./model";
+import { drawnSteps, drawnWorkflow, type LineFacts, type LineTask } from "./model";
 
 /** A Parent the scope menu offers: its key and title, and how many of its Subtasks are open. */
 export type ScopeChoice = { id: string; key: string; title: string; open: number };
@@ -18,6 +18,8 @@ export type LineData = {
   facts: LineFacts;
   /** Every open Task of the Project, the questions with a Member included. */
   all: LineTask[];
+  /** The Steps the line draws, by id (the picked Workflow's); none when it draws every Step. */
+  drawnSteps?: ReadonlySet<string>;
   /** The records behind `all`, for actions that take a Task. */
   records: Task[];
   scope: LineScope;
@@ -28,7 +30,7 @@ export type LineData = {
   doneToday?: number;
   /** Open Blocking relations among the Project's Tasks: the toggle's "Blocking 5". */
   blocking: number;
-  /** For the scope menu: the Parents with open Subtasks, and the open Tasks with no Parent. */
+  /** For the scope menu: the Parents with open Subtasks on the line, and the open Tasks there with no Parent. */
   parents: ScopeChoice[];
   noParent: number;
   me: { id: string; takeable: ReadonlySet<string> };
@@ -87,9 +89,15 @@ export function useLineData(
   const endedParents = ended.map((q) => q.data?.task).filter((t): t is Task => !!t);
   const endedKey = endedParents.map((t) => t.id).join();
 
+  // The Workflow drawn and its Steps, kept the same between ticks of the clock: what reads them
+  // (the Blocking view's layout, the panels) recomputes only when the Workflow or its Steps change.
+  // (The facts are new on each tick, with their rings; the record is not.)
+  const graph = record.data;
+  const drawn = useMemo(() => (graph ? drawnWorkflow(graph, workflowId) : undefined), [graph, workflowId]);
+  const steps = useMemo(() => (graph ? drawnSteps({ steps: graph.steps, drawn }) : undefined), [graph, drawn]);
+
   const data = useMemo<LineData | undefined>(() => {
     if (!facts || !open.data) return undefined;
-    const drawn = drawnWorkflow(facts, workflowId);
     const lineFacts: LineFacts = {
       workflows: facts.workflows,
       steps: facts.steps.map((s) => ({ ...s, takers: s.takers.map((t) => ({ ...t, paused: byMember.get(t.id)?.agent?.paused })) })),
@@ -120,9 +128,11 @@ export function useLineData(
     let trace: Trace | undefined;
     if (scope.kind === "task" && detail) trace = traceOf(detail.task, path, detail.claims, lineFacts, (id) => byMember.get(id), now);
 
-    // The scope menu: Parents with open Subtasks (an ended Parent's Retrospective included), and the rest.
+    // The scope menu: Parents with open Subtasks on the line (an ended Parent's Retrospective
+    // included), and the rest there; another Workflow's Tasks are on its own line.
+    const onLine = (t: LineTask) => !steps || (!!t.stepId && steps.has(t.stepId));
     const counts = new Map<string, number>();
-    for (const t of all) if (t.parentId) counts.set(t.parentId, (counts.get(t.parentId) ?? 0) + 1);
+    for (const t of all) if (t.parentId && onLine(t)) counts.set(t.parentId, (counts.get(t.parentId) ?? 0) + 1);
     const recordOf = new Map([...endedParents, ...open.data].map((t) => [t.id, t]));
     const parents: ScopeChoice[] = [...counts].map(([id, n]) => {
       const r = recordOf.get(id) ?? (detail?.task.id === id ? detail.task : undefined);
@@ -131,6 +141,7 @@ export function useLineData(
     return {
       facts: lineFacts,
       all,
+      ...(steps ? { drawnSteps: steps } : {}),
       records: open.data,
       scope,
       scoped: narrowed,
@@ -138,11 +149,11 @@ export function useLineData(
       doneToday: done.data?.length,
       blocking: blockingCount(all),
       parents,
-      noParent: all.filter((t) => t.stepId && !t.parentId).length,
+      noParent: all.filter((t) => t.stepId && onLine(t) && !t.parentId).length,
       me: { id: me?.member.id ?? "", takeable: takeable.data ?? noTakeable },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `endedParents` is rebuilt each render; `endedKey` names its records.
-  }, [facts, workflowId, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
+  }, [facts, drawn, steps, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
 
   return { data, error: record.error ?? open.error, loading: !data && !record.error && !open.error };
 }

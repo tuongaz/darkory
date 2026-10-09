@@ -2,6 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { Project, Task } from "@/api/client";
 import { useMembers, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { useNow } from "@/clock";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import type { Workflow } from "@/components/workflow/model";
 import { startOfDay } from "@/screens/inbox/derive";
 import { useRecentActivity, useTaskMap } from "@/screens/inbox/queries";
@@ -62,13 +63,16 @@ export type Stories = {
   error: Error | null;
 };
 
-/** What's happening in `project`: its stories, the seen mark they divide at, and whether it is quiet. */
-export function useStories(project: Project): Stories {
+/**
+ * What's happening in `project` (to the Tasks of the Workflow `shown`, when its page shows one):
+ * its stories, the seen mark they divide at, and whether it is quiet.
+ */
+export function useStories(project: Project, shown?: ShownWorkflow): Stories {
   const { ctx, tasks } = useFlowContext(project);
   const now = useNow();
   const recent = useRecentActivity({ project: project.key, kind: [...flowKinds] }, (e) => aboutThisFlow(e, ctx));
   const seen = useSeen(project.key);
-  const needs = useNeeds(project);
+  const needs = useNeeds(project, shown);
   const sessions = useRunnerSessions();
   const opened = useOpened(project.key);
   const open = useCallback((o: boolean) => setOpened(project.key, o), [project.key]);
@@ -84,6 +88,7 @@ export function useStories(project: Project): Stories {
       now,
       from: startOfDay(now),
       seenSeq,
+      shown,
     };
     const stories = storiesOf(input);
     const latest = storiesOf({ ...input, exclude: new Set(), from: 0, seenSeq: Number.MAX_SAFE_INTEGER })[0];
@@ -101,7 +106,7 @@ export function useStories(project: Project): Stories {
       loading: recent.query.isPending && !recent.query.isError,
       error: recent.query.error,
     };
-  }, [entries, ctx, tasks, needs.taskIds, sessions.data, now, seen, opened, open, recent.query.isPending, recent.query.isError, recent.query.error]);
+  }, [entries, ctx, tasks, shown, needs.taskIds, sessions.data, now, seen, opened, open, recent.query.isPending, recent.query.isError, recent.query.error]);
 }
 
 /**
@@ -109,6 +114,6 @@ export function useStories(project: Project): Stories {
  * nor since the Member last looked, and not opened by hand. The page lets Needs you take the full
  * width while it is.
  */
-export function useStoriesQuiet(project: Project): boolean {
-  return useStories(project).quiet;
+export function useStoriesQuiet(project: Project, shown?: ShownWorkflow): boolean {
+  return useStories(project, shown).quiet;
 }

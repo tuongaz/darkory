@@ -348,7 +348,8 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]);
     const doneCol = within(main()).getByRole("region", { name: "Done" });
     expect(within(doneCol).getAllByRole("link").map((l) => l.getAttribute("data-task"))).toEqual(["WEB-3", "WEB-5", "WEB-6"]);
-    expect(screen.getByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
+    // At every width: a phone has no other way to another Workflow.
+    expect(screen.getByRole("button", { name: "Workflow: Bugs" }).closest(".hidden")).toBeNull();
   });
 
   it("reads an old link's long id in ?workflow= as the short id the API gives", async () => {

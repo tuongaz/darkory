@@ -75,6 +75,12 @@ export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[]
   return [...workflow.workflows].sort((a, b) => a.position - b.position)[0].id;
 }
 
+/** The Steps a line of the Project draws (`LineWorkflow.drawn`'s), by id; none said is every Step. */
+export function drawnSteps(workflow: Pick<LineWorkflow, "steps" | "drawn">): ReadonlySet<string> | undefined {
+  if (workflow.drawn === undefined) return undefined;
+  return new Set(workflow.steps.filter((s) => s.workflow_id === workflow.drawn).map((s) => s.id));
+}
+
 /**
  * Where a Task filed with no Step named starts: the first Step, in the Project's order, whose
  * Skill is the Project's own work (not breakdown, acceptance, retro or skill-review); else the

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, ActivityKind, RunnerSession } from "@/api/client";
 import { sampleWorkflow } from "@/components/workflow/samples";
-import { task } from "@/test/fixtures";
+import { FIVE } from "@/components/workflowLine/fixtures";
+import { handRoute, horizontal, leaveRoute, lineTopology } from "@/components/workflowLine/layout";
+import { task, wfId, wfStep } from "@/test/fixtures";
 import { chipsAt } from "./bind";
 import { effectOf, lineText, trailLine, type FlowContext } from "./flowEvents";
 import { ARRIVE_MS, CALLOUT_MS, flowState, GLOW_MS, nextChange, TRAVEL_MS, type Active } from "./useLiveFlow";
@@ -188,5 +190,65 @@ describe("the canvas over time", () => {
     expect(nextChange(active, 1000)).toBe(1000 + TRAVEL_MS);
     expect(nextChange(active, 1000 + TRAVEL_MS)).toBe(1000 + TRAVEL_MS + ARRIVE_MS);
     expect(nextChange(active, 1000 + TRAVEL_MS + ARRIVE_MS)).toBeUndefined();
+  });
+});
+
+describe("a Task crossing between Workflows, on the line of one (ADR 0019)", () => {
+  // The five Workflows' graph, as the line has it; the Triage line draws Triage's one Step.
+  const five = FIVE();
+  const stepsOf = (id: string) => new Set(five.steps.filter((s) => s.workflow_id === id).map((s) => s.id));
+  const on = (workflow: string): FlowContext => ({
+    projectId: "p-web",
+    workflow: five,
+    drawn: stepsOf(workflow),
+    task: () => ({ key: "WEB-2", project_id: "p-web" }),
+    member: (id) => members.get(id),
+  });
+  const bug = five.connectors.find((c) => c.from === wfStep.triage && c.name === "bug")!;
+  const advance = entry("task.advanced", { from: wfStep.triage, to: wfStep.investigate, outcome: "bug" }, "m-builder", "k-2");
+
+  it("leaves Triage's line along its exit: the token travels the bug Connector and is gone from the line", () => {
+    const e = effectOf(advance, on(wfId.triage))!;
+    expect(e.travel).toEqual({ from: wfStep.triage, to: wfStep.investigate, connectorId: bug.id });
+    const moving = flowState([{ effect: e, at: 0 }], 500, false);
+    expect([...moving.transit]).toEqual(["k-2"]);
+    expect([...moving.lit]).toEqual([bug.id]);
+    // The route it travels is the exit's: down Triage's leg into its chip.
+    const h = horizontal(lineTopology(FIVE(wfId.triage)), { width: 1160, column: 66 });
+    const x = h.at.get(wfStep.triage)!.x;
+    expect(h.routes.get(bug.id)).toMatch(new RegExp(`^M${x} ${h.lineY} V[\\d.]+ H[\\d.]+$`));
+    expect(h.exits.map((l) => l.connectorId)).toContain(bug.id);
+  });
+
+  it("arrives on Bugs' line along its entry, the arrow into Investigate", () => {
+    const e = effectOf(advance, on(wfId.bugs))!;
+    expect(e.travel).toEqual({ from: wfStep.triage, to: wfStep.investigate, connectorId: bug.id });
+    const h = horizontal(lineTopology(FIVE(wfId.bugs)), { width: 1160, column: 66 });
+    expect(h.entry?.arrow?.connectorIds).toEqual([bug.id]);
+    expect(h.routes.get(bug.id)).toBe(`M${h.entry!.arrow!.line[0][0]} ${h.lineY} H${h.at.get(wfStep.investigate)!.x}`);
+  });
+
+  it("moved by hand into another Workflow's Step it leaves too, straight down off the line; moved in from one, it appears", () => {
+    const out = effectOf(entry("task.moved", { from: wfStep.triage, to: wfStep.support }, "m-ada", "k-2"), on(wfId.triage))!;
+    expect(out.travel).toEqual({ from: wfStep.triage, to: wfStep.support, connectorId: undefined });
+    const h = horizontal(lineTopology(FIVE(wfId.triage)), { width: 1160, column: 66 });
+    const at = h.at.get(wfStep.triage)!;
+    expect(handRoute(h, wfStep.triage, wfStep.support)).toBeUndefined();
+    expect(leaveRoute(h, wfStep.triage)).toBe(`M${at.x} ${at.y} V${at.y + 30}`);
+    const into = effectOf(entry("task.moved", { from: wfStep.investigate, to: wfStep.support }, "m-ada", "k-2"), on(wfId.support))!;
+    expect(into.travel).toBeUndefined();
+    expect(into.arrive).toBe(wfStep.support);
+  });
+
+  it("plays nothing of another Workflow's Steps: a pickup at Fix is not on Triage's line", () => {
+    expect(effectOf(entry("task.claimed", { step_id: wfStep.fix }, "m-builder", "k-2"), on(wfId.triage))).toBeNull();
+    expect(effectOf(entry("task.advanced", { from: wfStep.investigate, to: wfStep.fix, outcome: "fix" }, "m-builder", "k-2"), on(wfId.triage))).toBeNull();
+    expect(effectOf(entry("task.claimed", { step_id: wfStep.fix }, "m-builder", "k-2"), on(wfId.bugs))?.callout?.stepId).toBe(wfStep.fix);
+  });
+
+  it("reads a crossing forward or back by the Project's order: Triage into Bugs is forward though both are first in their Workflows", () => {
+    const words = (from: string, to: string, outcome: string) => lineText(trailLine(entry("task.advanced", { from, to, outcome }, "m-builder", "k-2"), on(wfId.triage))!);
+    expect(words(wfStep.triage, wfStep.investigate, "bug")).toBe("builder advanced WEB-2 along bug to Investigate");
+    expect(words(wfStep.support, wfStep.investigate, "bug")).toBe("builder sent WEB-2 back along bug to Investigate");
   });
 });

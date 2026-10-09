@@ -144,6 +144,29 @@ describe("Needs you", () => {
   });
 });
 
+describe("Needs you on the page of one Workflow of several", () => {
+  // As if WEB's Steps were split: the page shows a Workflow of Build and Review only.
+  const shown = { id: "wf-shown", steps: new Set<string>([step.build, step.review]) };
+
+  it("lists only the Tasks at its Steps, or ended in it, and those at no Step: a hold or a Retrospective of another Workflow is on its own page", () => {
+    const { open, details, lapses } = heavyDay();
+    const items = needsOf(input(open, { details, lapses, shown }));
+    // WEB-5 waits at Backlog, WEB-17 and WEB-14 at Retro: not this Workflow's.
+    expect(items.map((i) => i.task.key)).toEqual(["WEB-13", "WEB-16"]);
+    const ended = task(30, { state: "open", step_id: undefined, step_since: undefined, workflow_id: "wf-other", aimed_at_id: ada.id, skill_id: undefined });
+    expect(needsOf(input([ended], { shown })).map((i) => i.task.key)).toEqual([]);
+    expect(needsOf(input([{ ...ended, workflow_id: shown.id }], { shown })).map((i) => i.task.key)).toEqual(["WEB-30"]);
+  });
+
+  it("lists only the agents waiting on its Tasks", () => {
+    const sessionOn = (taskId: string): RunnerSession => ({ task_id: taskId, member_id: builder.id, session_id: "s", host: "h", started_at: ago(3), state: "waiting", state_since: ago(3), log_path: "/l" });
+    const here = task(6, { claim: { id: "c", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: ago(22) } });
+    const there = task(7, { step_id: step.retro, claim: { id: "c", task_id: "k-7", holder_id: builder.id, session_id: "s", started_at: ago(5) } });
+    const out = agentNeedsOf({ me: ada, open: [here, there], projectId: web.id, shown, members, sessions: [sessionOn(here.id), sessionOn(there.id)] });
+    expect(out.map((a) => a.task.key)).toEqual(["WEB-6"]);
+  });
+});
+
 describe("Agents need you", () => {
   const session = (taskId: string, state: RunnerSession["state"]): RunnerSession => ({ task_id: taskId, member_id: builder.id, session_id: "s", host: "h", started_at: ago(3), state, state_since: ago(3), log_path: "/l" });
 
