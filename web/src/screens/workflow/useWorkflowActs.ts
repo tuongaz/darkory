@@ -86,10 +86,13 @@ export function useWorkflowActs(project: Project, admin: boolean) {
   };
 
   /** Deletes `w` as its dialog says: where its Tasks go (`moves`) and where outcomes into it lead instead (`repoint`). */
-  const remove = (w: RecordWorkflow, moves: Record<string, string>, repoint: Repoint) =>
+  const remove = (w: RecordWorkflow, moves: Record<string, string>, repoint: Repoint, then?: () => void) =>
     act(
       (d) => deleteWorkflow(d, w.id, moves, repoint),
-      () => toast(`Deleted ${w.name}`),
+      () => {
+        toast(`Deleted ${w.name}`);
+        then?.();
+      },
     );
 
   return { query, graph, skillMap, busy, add, move, remove };

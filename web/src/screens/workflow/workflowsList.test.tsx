@@ -262,6 +262,30 @@ describe("the Workflows page of a Project of several", () => {
     expect(await screen.findByText("Deleted Bugs")).toBeInTheDocument();
   });
 
+  it("deletes from the Workflow's own page too: the same dialog and one write, then the list", async () => {
+    const { puts } = serve([]);
+    renderApp(`/projects/WEB/workflows/${wfId.bugs}`);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete Bugs" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Delete Bugs" }));
+    expect(puts).toEqual([]);
+    await userEvent.click(dialog.getByRole("combobox", { name: "Step that receives the Tasks at Investigate" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    await userEvent.click(dialog.getByRole("combobox", { name: "Step that receives the Tasks at Fix" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Delete Bugs" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0].workflows.map((w) => w.name)).toEqual(["Triage", "Features", "Prototypes", "Support"]);
+    expect((await screen.findAllByText("Deleted Bugs")).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+  });
+
+  it("offers a Member who is not an admin no Delete on a Workflow's page", async () => {
+    serve([], graph(), bob);
+    renderApp(`/projects/WEB/workflows/${wfId.bugs}`);
+    expect(await screen.findByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Delete / })).toBeNull();
+  });
+
   it("says in a toast what /v1 refuses, in its words, and the list stays", async () => {
     const api = serve([]);
     api.routes["PUT /v1/projects/:project/workflow"] = refuse(400, "invalid", 'two Workflows are named "Bugs"; names are unique, ignoring case');
