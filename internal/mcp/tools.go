@@ -49,7 +49,7 @@ type advanceIn struct {
 
 type moveIn struct {
 	Task string `json:"task" jsonschema:"the Task's display key or id"`
-	Step string `json:"step" jsonschema:"the Step of its Project's Workflow to move it to, by name or id; workflow lists them"`
+	Step string `json:"step" jsonschema:"the Step to move it to, in any of its Project's Workflows, by name or id; workflow lists them"`
 	Note string `json:"note,omitempty" jsonschema:"why it moves, added as a Note before the move"`
 }
 
@@ -120,10 +120,12 @@ type listTasksIn struct {
 	Cursor  string   `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
 }
 
-// stepOut is a Step of a listed Task's Workflow, with the outcomes out of it.
+// stepOut is a Step of a listed Task's Project, with the Workflow it is in and the outcomes out
+// of it.
 type stepOut struct {
 	ID        string   `json:"id"`
 	ProjectID string   `json:"project_id"`
+	Workflow  string   `json:"workflow" jsonschema:"the name of the Workflow the Step is in"`
 	Name      string   `json:"name"`
 	SkillID   *string  `json:"skill_id,omitempty" jsonschema:"the Skill that takes a Task at it; absent on a hold"`
 	Outcomes  []string `json:"outcomes" jsonschema:"the outcomes a holder advances along, in order"`
@@ -134,7 +136,7 @@ type stepOut struct {
 type taskListOut struct {
 	Items      []client.Task      `json:"items"`
 	NextCursor *string            `json:"next_cursor,omitempty" jsonschema:"pass as cursor for the next page; absent on the last"`
-	Steps      []stepOut          `json:"steps" jsonschema:"the Steps of the listed Tasks' Workflows, by Project, in order"`
+	Steps      []stepOut          `json:"steps" jsonschema:"the Steps of the listed Tasks' Projects, by Project, in each Project's order"`
 	Parents    []client.TaskBrief `json:"parents" jsonschema:"the Parents of the listed Subtasks"`
 }
 
@@ -251,7 +253,7 @@ func (s *Server) addTools() {
 			s.keeper.Forget(res.JSON200.ID)
 			return *res.JSON200, nil
 		})
-	tool(s, "move_step", "Move a Task to another Step of its Workflow by hand: out of a hold such as Backlog, or anywhere a person decides. "+
+	tool(s, "move_step", "Move a Task by hand to another Step, a Step of any of its Project's Workflows: out of a hold such as Backlog, or anywhere a person decides. "+
 		"A Task someone holds moves only for its Owner or someone above the holder, and their Claim ends.",
 		func(ctx context.Context, in moveIn) (client.Task, error) {
 			res, err := c.MoveTaskWithResponse(ctx, in.Task, &client.MoveTaskParams{}, client.MoveTaskBody{Step: in.Step, Note: opt(in.Note)})
@@ -410,8 +412,9 @@ func (s *Server) addTools() {
 			}
 			return out, nil
 		}, enum("state", "open", "done", "dropped"))
-	tool(s, "workflow", "Read a Project's Workflow: its Steps in order, the Skill each carries (none on a hold), the Connectors out of each "+
-		"(the outcomes; to_step_id absent means into Done), and what is at each Step now.",
+	tool(s, "workflow", "Read a Project's Workflows: each Workflow's Steps in order, the Connectors out of each Step, and what is happening at each Step now. "+
+		"Each Step names its workflow_id and the Skill it carries (none on a hold); a Connector's outcome may lead into a Step of another "+
+		"Workflow, and to_step_id absent means into Done.",
 		func(ctx context.Context, in projectRef) (client.Workflows, error) {
 			res, err := c.GetWorkflowWithResponse(ctx, in.Project)
 			if err := check(res, err, http.StatusOK); err != nil {
@@ -513,11 +516,15 @@ func (s *Server) addTools() {
 		})
 }
 
-// stepsOf lists a Workflow's Steps with the outcomes out of each.
+// stepsOf lists a Project's Steps with the Workflow each is in and the outcomes out of each.
 func stepsOf(wf client.Workflows) []stepOut {
+	workflows := map[string]string{}
+	for _, w := range wf.Workflows {
+		workflows[w.ID] = w.Name
+	}
 	var out []stepOut
 	for _, st := range wf.Steps {
-		so := stepOut{ID: st.ID, ProjectID: wf.ProjectID, Name: st.Name, SkillID: st.SkillID, Outcomes: []string{}}
+		so := stepOut{ID: st.ID, ProjectID: wf.ProjectID, Workflow: workflows[st.WorkflowID], Name: st.Name, SkillID: st.SkillID, Outcomes: []string{}}
 		for _, k := range wf.Connectors {
 			if k.FromStepID == st.ID {
 				so.Outcomes = append(so.Outcomes, k.Name)

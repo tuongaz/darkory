@@ -183,6 +183,15 @@ func TestToolsAndRules(t *testing.T) {
 			t.Errorf("no tool %s in %v", want, names)
 		}
 	}
+	described := map[string]string{
+		"workflow":  "Read a Project's Workflows: each Workflow's Steps in order, the Connectors out of each Step, and what is happening at each Step now",
+		"move_step": "a Step of any of its Project's Workflows",
+	}
+	for _, tl := range tools.Tools {
+		if want, ok := described[tl.Name]; ok && !strings.Contains(tl.Description, want) {
+			t.Errorf("%s says %q, not %q", tl.Name, tl.Description, want)
+		}
+	}
 	for _, gone := range []string{"handover", "set_status", "feature_show"} {
 		if slices.Contains(names, gone) {
 			t.Errorf("tool %s is still listed", gone)
@@ -281,9 +290,14 @@ func TestNextClaimComplete(t *testing.T) {
 			list.Steps[1].Name != "Build" || !slices.Equal(list.Steps[1].Outcomes, []string{"pass"}) || list.Steps[1].ProjectID != list.Items[0].ProjectID {
 			t.Fatalf("list_tasks: %+v", list)
 		}
+		for _, st := range list.Steps {
+			if st.Workflow != "Work" {
+				t.Fatalf("list_tasks puts %s in Workflow %q, want Work", st.Name, st.Workflow)
+			}
+		}
 		var wf client.Workflows
 		ok(t, cs, &wf, "workflow", map[string]any{"project": "WEB"})
-		if len(wf.Steps) != 4 || wf.Steps[2].Name != "Retro" || len(wf.Connectors) != 5 {
+		if len(wf.Workflows) != 1 || wf.Workflows[0].Name != "Work" || len(wf.Steps) != 4 || wf.Steps[2].Name != "Retro" || len(wf.Connectors) != 5 {
 			t.Fatalf("workflow: %+v", wf)
 		}
 		var page client.ActivityPage
