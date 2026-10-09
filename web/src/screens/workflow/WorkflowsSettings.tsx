@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon, Trash2Icon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
-import { invalidateAll, keys, useWorkflow } from "@/api/queries";
+import { invalidateAll, keys, useSkills, useWorkflow } from "@/api/queries";
 import { setWorkflow } from "@/api/writes";
 import { useRouteProject, workflowsSettingsPath } from "@/app/currentProject";
 import { Refusal } from "@/components/Refusal";
@@ -16,7 +16,7 @@ import { refusalToast } from "@/screens/inbox/toast";
 import { SettingsFrame } from "@/screens/settings/frame";
 import { same, type WorkflowRecord } from "./bind";
 import { DeleteWorkflowDialog } from "./edit/DeleteWorkflow";
-import { addWorkflow, deleteWorkflow, fromRecord, moveWorkflowTo, problem, saveBody, stepsIn, workflowsOf, type Draft, type RecordWorkflow } from "./edit/draft";
+import { addWorkflow, deleteWorkflow, fromRecord, moveWorkflowTo, problem, saveBody, startMoves, stepsIn, workflowsOf, type Draft, type RecordWorkflow } from "./edit/draft";
 import type { EditorState } from "./routeWorkflow";
 
 // Workflow · Steps · Order · delete for an admin; Workflow · Steps for anyone else.
@@ -25,10 +25,11 @@ const cols = (admin: boolean) =>
 
 /**
  * /settings/projects/:key/workflows: the Project's Workflows in their order, always a list, each
- * row opening its editor. An admin adds one (`+ Workflow`, named "Workflow 2", "Workflow 3"…, its
- * editor opened with the name to type), moves one earlier or later (‹ ›) and deletes one (the
- * last stays). Each is written at once, one `PUT …/workflow` of the whole graph, and said in a
- * toast; what `/v1` refuses is said in its words.
+ * row opening its editor. An admin adds one (`+ Workflow`, named "Workflow <count + 1>", its
+ * editor opened with the name to type), moves one earlier or later (‹ ›, the toast naming where
+ * New Tasks start when the move changes it) and deletes one (the last stays). Each is written at
+ * once, one `PUT …/workflow` of the whole graph, and said in a toast; what `/v1` refuses is said
+ * in its words. None is undone here: the editor's ⌘Z covers only its own draft.
  */
 export function WorkflowsSettingsPage() {
   const project = useRouteProject();
@@ -38,7 +39,11 @@ export function WorkflowsSettingsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [deleting, setDeleting] = useState<RecordWorkflow | undefined>();
-  // One write at a time: the controls wait while one is on its way.
+  const skills = useSkills().data;
+  const skillMap = useMemo(() => skills && new Map(skills.map((s) => [s.id, s])), [skills]);
+  // One write at a time: the controls wait while one is on its way, and a second click in the
+  // same moment, before they are drawn waiting, sends nothing.
+  const sending = useRef(false);
   const write = useMutation({
     mutationFn: (draft: Draft) => setWorkflow(project.key, saveBody(draft)),
     onSuccess: (reply) => {
@@ -46,15 +51,19 @@ export function WorkflowsSettingsPage() {
       invalidateAll(qc);
     },
     onError: refusalToast,
+    onSettled: () => {
+      sending.current = false;
+    },
   });
   const busy = write.isPending;
 
   /** Writes the graph `edit` makes of the one read; `then` says what it did. */
   const act = (edit: (d: Draft) => Draft, then: (reply: WorkflowRecord, sent: Draft) => void) => {
-    if (!graph || busy) return;
+    if (!graph || busy || sending.current) return;
     const next = edit(fromRecord(graph));
     const said = problem(next, graph, []);
     if (said) return void toast.error(said);
+    sending.current = true;
     write.mutate(next, { onSuccess: (reply) => then(reply, next) });
   };
 
@@ -74,11 +83,20 @@ export function WorkflowsSettingsPage() {
       },
     );
   };
-  const move = (w: RecordWorkflow, onto: RecordWorkflow, by: -1 | 1) =>
+  // A move that changes the first Workflow may change where New Tasks start (`startStep`'s rule):
+  // the toast says where they start now.
+  const move = (w: RecordWorkflow, onto: RecordWorkflow, by: -1 | 1) => {
+    const read = graph;
+    if (!read || !skillMap) return;
     act(
       (d) => moveWorkflowTo(d, w.id, onto.id),
-      () => toast(`Moved ${w.name} ${by < 0 ? "earlier" : "later"}`),
+      (_, sent) => {
+        const moved = `Moved ${w.name} ${by < 0 ? "earlier" : "later"}`;
+        const start = sent.wf.steps.length > 0 ? startMoves(read, sent.wf, skillMap) : undefined;
+        toast(start ? `${moved}. ${start}.` : moved);
+      },
     );
+  };
 
   const workflows = graph ? workflowsOf(graph) : [];
   return (
@@ -118,11 +136,10 @@ export function WorkflowsSettingsPage() {
           </div>
           {workflows.map((w, i) => (
             <div role="row" key={w.id} aria-label={w.name} className={cn(cols(admin), "relative h-9 items-center border-b hover:bg-accent/60")}>
-              <span role="cell" className="flex min-w-0 items-center gap-1">
+              <span role="cell" className="flex min-w-0 items-center">
                 <Link to={workflowsSettingsPath(project, w.id)} className="truncate font-medium outline-none after:absolute after:inset-0 focus-visible:underline">
                   {w.name}
                 </Link>
-                <ChevronRightIcon aria-hidden className="size-3.5 flex-none text-muted-foreground" />
               </span>
               <span role="cell" className="text-right tabular-nums">
                 {stepsIn(graph, w.id).length}
@@ -130,10 +147,10 @@ export function WorkflowsSettingsPage() {
               {admin && (
                 <>
                   <span role="cell" className="relative z-10 flex items-center justify-center">
-                    <IconButton label={`Move ${w.name} earlier`} disabled={busy || i === 0} onClick={() => move(w, workflows[i - 1], -1)}>
+                    <IconButton label={`Move ${w.name} earlier`} disabled={busy || !skillMap || i === 0} onClick={() => move(w, workflows[i - 1], -1)}>
                       <ChevronLeftIcon />
                     </IconButton>
-                    <IconButton label={`Move ${w.name} later`} disabled={busy || i === workflows.length - 1} onClick={() => move(w, workflows[i + 1], 1)}>
+                    <IconButton label={`Move ${w.name} later`} disabled={busy || !skillMap || i === workflows.length - 1} onClick={() => move(w, workflows[i + 1], 1)}>
                       <ChevronRightIcon />
                     </IconButton>
                   </span>

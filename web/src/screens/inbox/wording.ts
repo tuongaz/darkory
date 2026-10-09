@@ -382,7 +382,7 @@ function partText(part: Part): string {
  * The sentence as plain text, as a screen reader reads the row: "builder advanced WEB-4 Payment
  * form along pass to Review · from Build".
  */
-export function sentenceText(s: Sentence, workflowName = "the Workflow"): string {
+export function sentenceText(s: Sentence, workflowName = "the Workflows"): string {
   const words: string[] = [s.actorName];
   if (s.mark) words.push(markWords[s.mark]);
   if (s.verb) words.push(s.verb);

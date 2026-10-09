@@ -90,7 +90,7 @@ export function EditingWorkflow({
   const fromAddress = params.get(stepParam);
   const asked = (fromAddress && toShort(fromAddress)) ?? focusStep;
   const [opened, setOpened] = useState(!!focusStep);
-  const shown = useEditorWorkflow(project, draft);
+  const shown = useEditorWorkflow(project, draft, base);
   const workflowId = shown.id;
   const topology = useMemo(() => (draft ? lineTopology(asLine(draft.wf, skillMap)) : undefined), [draft, skillMap]);
   // The Steps listed: the picked Workflow's, in its order.

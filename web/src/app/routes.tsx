@@ -1,6 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router";
-import { useAnyTask, useWorkflow } from "@/api/queries";
+import { useAnyTask, useTask, useWorkflow } from "@/api/queries";
 import { Loaded } from "@/components/Refusal";
 import { toShort } from "@/lib/shortid";
 import { BoardDialogs, TasksPage } from "@/screens/board";
@@ -147,7 +147,9 @@ function FromTeam() {
  * /projects/:key/workflow and /settings/projects/:key/workflow, the addresses of one Workflow per
  * Project: the Workflows' now. A `?workflow=` becomes the `:workflow` segment; with none, a
  * `?step=` names the Workflow of its Step (Edit from a Step on the live page, as it was linked);
- * everything else the address says (`?step=`, `?scope=`, `?view=`…) is kept.
+ * with neither, a `?scope=` naming a Task, of a Project of several, names the Workflow that Task
+ * is listed in (its `workflow_id`), else the list; everything else the address says (`?step=`,
+ * `?scope=`, `?view=`…) is kept.
  */
 export function FromWorkflow({ settings = false }: { settings?: boolean }) {
   const { key = "" } = useParams();
@@ -155,10 +157,22 @@ export function FromWorkflow({ settings = false }: { settings?: boolean }) {
   const params = new URLSearchParams(search);
   const named = params.get("workflow");
   const step = params.get("step");
+  const scope = params.get("scope");
   const byStep = !named && !!step;
-  const graph = useWorkflow(byStep ? key : undefined);
-  if (byStep && graph.isPending) return null;
-  const workflow = named ? toShort(named) : step ? graph.data?.steps.find((s) => s.id === toShort(step))?.workflow_id : undefined;
+  const byScope = !named && !step && !!scope && scope !== "none";
+  const graph = useWorkflow(byStep || byScope ? key : undefined);
+  const scoped = useTask(byScope ? toShort(scope) : undefined);
+  if ((byStep || byScope) && graph.isPending) return null;
+  const several = (graph.data?.workflows.length ?? 0) > 1;
+  if (byScope && several && scoped.isPending) return null;
+  const listedIn = scoped.data?.task.workflow_id;
+  const workflow = named
+    ? toShort(named)
+    : step
+      ? graph.data?.steps.find((s) => s.id === toShort(step))?.workflow_id
+      : byScope && several && listedIn && graph.data?.workflows.some((w) => w.id === listedIn)
+        ? listedIn
+        : undefined;
   params.delete("workflow");
   const rest = params.toString();
   const pathname = `${settings ? "/settings" : ""}/projects/${encodeURIComponent(key)}/workflows${workflow ? `/${encodeURIComponent(workflow)}` : ""}`;

@@ -18,15 +18,30 @@ const graph = () =>
     fix: { tasks: 1, working: 0 },
     support: { tasks: 3, working: 2 },
   });
-const doneToday = (n: number, extra: Partial<Task> = {}) =>
-  task(n, { state: "done", step_id: undefined, ended_at: new Date().toISOString(), ...extra });
+const doneAt = (n: number, at: Date, extra: Partial<Task> = {}) => task(n, { state: "done", step_id: undefined, ended_at: at.toISOString(), ...extra });
+const doneToday = (n: number, extra: Partial<Task> = {}) => doneAt(n, new Date(), extra);
+const yesterday = () => new Date(Date.now() - 36 * 3600 * 1000);
+
+/**
+ * The `/v1/tasks` the page reads, as `/v1` answers it: `state=`, and each `completed_at:gte:<time>`
+ * filter, when the Task ended done, which a Task of the client reads as its `ended_at`.
+ */
+function listed(tasks: Task[], query: URLSearchParams): Task[] {
+  const since = query
+    .getAll("filter")
+    .map((f) => /^completed_at:gte:(.+)$/.exec(f)?.[1])
+    .filter((x): x is string => !!x);
+  return tasks.filter(
+    (t) => (!query.get("state") || t.state === query.get("state")) && since.every((at) => t.state === "done" && !!t.ended_at && Date.parse(t.ended_at) >= Date.parse(at)),
+  );
+}
 
 function serve(tasks: Task[], record = graph()) {
   return mockApi({
     ...signedIn(ada),
     "GET /v1/projects/:project/workflow": record,
     "GET /v1/skills": { items: workflowsSkills },
-    "GET /v1/tasks": ({ query }) => ({ items: tasks.filter((t) => !query.get("state") || t.state === query.get("state")) }),
+    "GET /v1/tasks": ({ query }) => ({ items: listed(tasks, query) }),
     "GET /v1/activity": { items: [], last_seq: 0 },
     "GET /v1/runner/sessions": { items: [], runner: false },
   });
@@ -39,8 +54,9 @@ afterEach(() => localStorage.clear());
 
 describe("the Workflows page of a Project of several", () => {
   it("lists each Workflow in order with its Steps, waiting, working and done today", async () => {
-    // One done in Bugs; one the server places in no Workflow, listed in the first, as on the board.
-    serve([doneToday(7, { workflow_id: wfId.bugs }), doneToday(8)]);
+    // One done in Bugs; one the server places in no Workflow, listed in the first, as on the board;
+    // one done in Bugs yesterday, not counted.
+    const { calls } = serve([doneToday(7, { workflow_id: wfId.bugs }), doneToday(8), doneAt(9, yesterday(), { workflow_id: wfId.bugs })]);
     renderApp("/projects/WEB/workflows");
     const list = await table();
     expect(within(list).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Workflow", "Steps", "Waiting", "Working", "Done today"]);
@@ -53,6 +69,8 @@ describe("the Workflows page of a Project of several", () => {
       ["Prototypes", "2", "0", "0", "0"],
       ["Support", "4", "1", "2", "0"],
     ]);
+    const read = calls.find((c) => c.path === "/v1/tasks" && c.query.get("state") === "done");
+    expect(read?.query.getAll("filter")).toEqual([expect.stringMatching(/^completed_at:gte:/)]);
     // No chip: the list is every Workflow.
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
     expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText("Workflows")).toBeInTheDocument();

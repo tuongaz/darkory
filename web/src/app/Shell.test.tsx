@@ -334,7 +334,7 @@ describe("the addresses before Projects", () => {
     ["/admin/members/m-bob", "Settings/Members/bob"],
     ["/admin/skills/engineer", "Settings/Skills/engineer"],
     ["/admin/teams/OPS", "Settings/Ops/General"],
-    ["/admin/workflow", "Settings/Web/Workflow"],
+    ["/admin/workflow", "Settings/Web/Workflows"],
     ["/admin/workspaces", "Settings/Web/Workspaces"],
     ["/account", "Settings/Account"],
     ["/teams/OPS/features", "Ops/Tasks"],

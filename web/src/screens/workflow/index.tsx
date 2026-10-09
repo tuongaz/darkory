@@ -47,6 +47,8 @@ export function WorkflowsPage() {
   const query = useWorkflow(project.key);
   const { search } = useLocation();
   const graph = query.data;
+  // Until the record is read, neither page is known: a bare skeleton, no bar of either.
+  if (!graph && !query.isError) return <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />;
   if (graph && graph.workflows.length < 2) return <WorkflowPage />;
   const params = new URLSearchParams(search);
   const named = params.get(workflowParam);
@@ -74,10 +76,8 @@ export function WorkflowsPage() {
       <Content className="overflow-auto">
         {query.isError ? (
           <Refusal error={query.error} className="m-6" />
-        ) : graph ? (
-          <WorkflowsList project={project} graph={graph} />
         ) : (
-          <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />
+          graph && <WorkflowsList project={project} graph={graph} />
         )}
       </Content>
     </>
@@ -177,7 +177,9 @@ function ReadingPage() {
   const query = useWorkflow(project.key);
   const skills = useSkills();
   const draft = useMemo(() => query.data && fromRecord(query.data), [query.data]);
-  const shown = useEditorWorkflow(project, draft);
+  const shown = useEditorWorkflow(project, draft, query.data);
+  const { search, state } = useLocation();
+  if (shown.redirect) return <Navigate to={{ pathname: workflowsSettingsPath(project, shown.redirect), search }} state={state} replace />;
   if (draft && !shown.id) return <NotFound crumbs={editorCrumbs(project)} />;
   return (
     <>
@@ -185,7 +187,7 @@ function ReadingPage() {
       <p className="border-b bg-muted/50 px-4 py-2 text-muted-foreground sm:px-6">
         Only an admin changes {project.name}'s Workflows.{" "}
         <Link to={workflowsPath(project, shown.id)} className="text-foreground underline-offset-2 hover:underline">
-          Open it in {project.name}
+          Open {shown.workflow?.name ?? "it"} in {project.name}
         </Link>
       </p>
       <Content className="flex flex-col overflow-hidden">
@@ -205,11 +207,11 @@ function EditingPage() {
     const id = params.get(stepParam);
     return id ? toShort(id) : undefined; // an old link's long id reads as the short one
   });
-  const { state } = useLocation();
+  const { state, search } = useLocation();
   const [focusName] = useState(() => !focusStep && !!(state as EditorState | null)?.rename);
   const [discarding, setDiscarding] = useState(false);
   const list = workflowsSettingsPath(project);
-  const shown = useEditorWorkflow(project, editor.draft);
+  const shown = useEditorWorkflow(project, editor.draft, editor.base);
   const save = async () => {
     const id = shown.id;
     const reply = await editor.save();
@@ -220,6 +222,8 @@ function EditingPage() {
     navigate(saved && reply.workflows.length > 1 ? workflowsPath(project, saved.id) : workflowsPath(project));
   };
   const n = editor.changes;
+  // An address naming the Workflow by name goes to its id first: a rename then keeps the address.
+  if (shown.redirect) return <Navigate to={{ pathname: workflowsSettingsPath(project, shown.redirect), search }} state={state} replace />;
   if (editor.draft && !shown.id) return <NotFound crumbs={editorCrumbs(project)} />;
   return (
     <>

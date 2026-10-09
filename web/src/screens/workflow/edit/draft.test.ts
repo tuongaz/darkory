@@ -12,7 +12,6 @@ import {
   moveWorkflowTo,
   newWorkflowName,
   renameWorkflow,
-  reorderWorkflow,
   startMoves,
   stepsIn,
   workflowsOf,
@@ -364,7 +363,7 @@ describe("Workflows in the draft", () => {
   });
 
   it("reorders the Workflows as one change, and says New Tasks start at Investigate once Bugs is first", () => {
-    const d = reorderWorkflow(five(), wfId.bugs, -1);
+    const d = moveWorkflowTo(five(), wfId.bugs, wfId.triage);
     expect(named(d)).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]);
     expect(describeChanges(workflowsFixture(), d.wf)).toEqual([{ kind: "Workflows reordered", text: "Bugs, Triage, Features, Prototypes, Support" }]);
     const all = new Map(workflowsSkills.map((s) => [s.id, s]));
@@ -394,11 +393,14 @@ describe("Workflows in the draft", () => {
     expect(led.wf.connectors.find((c) => c.id === triageBug)?.to_step_id).toBe(wfStep.build);
   });
 
-  it("names a new Workflow past those taken, ignoring case", () => {
+  it("names a new Workflow by the count, past those taken, ignoring case", () => {
     const a = addWorkflow(d0());
     const d = renameWorkflow(a.draft, a.id, "workflow 2");
     expect(newWorkflowName(d.wf)).toBe("Workflow 3");
     expect(named(addWorkflow(d).draft)).toEqual(["Work", "workflow 2", "Workflow 3"]);
+    // Five add "Workflow 6"; one already called "workflow 6" steps it up to 7.
+    expect(newWorkflowName(five().wf)).toBe("Workflow 6");
+    expect(newWorkflowName(renameWorkflow(five(), wfId.support, "workflow 6").wf)).toBe("Workflow 7");
   });
 
   it("sends a Step with an id moved into a Workflow not saved yet with its id and the Workflow's name", () => {
@@ -419,15 +421,7 @@ describe("Workflows in the draft", () => {
       ["Features", 4],
       ["Prototypes", 5],
     ]);
-    const swapped = saveBody(reorderWorkflow(five(), wfId.bugs, 1));
-    expect(swapped.workflows.map((w) => [w.name, w.position])).toEqual([
-      ["Triage", 1],
-      ["Features", 2],
-      ["Bugs", 3],
-      ["Prototypes", 4],
-      ["Support", 5],
-    ]);
-    expect(swapped.steps.filter((s) => s.workflow === wfId.bugs).map((s) => s.position)).toEqual([1, 2, 3, 4]);
+    expect(body.steps.filter((s) => s.workflow === wfId.bugs).map((s) => s.position)).toEqual([1, 2, 3, 4]);
   });
 
   it("says when no Step is left where New Tasks start", () => {

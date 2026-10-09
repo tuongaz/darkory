@@ -1,11 +1,15 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
 import type { Schemas, Workflows } from "@/api/client";
 import { mockApi, refuse, type Call } from "@/test/api";
 import { ada, bob, builder, engineer, memberDetail, ops, review, skillReview, skills, step, web, wfId, wfStep, workflow, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { signedIn } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { LiveActivity } from "@/api/live";
+import { Providers, Root } from "@/App";
+import { newQueryClient } from "@/queryClient";
 import { toBody } from "./bind";
 import { addOutcome, deleteStep, fromRecord, insertStep, makeMain, moveStepTo, renameOutcome, renameStep, reorderStep, setSkill, setTarget, removeOutcome, groupsOf } from "./edit/draft";
 
@@ -110,6 +114,23 @@ const save = () => userEvent.click(screen.getByRole("button", { name: "Save" }))
 const pick = (row: string) => userEvent.click(within(screen.getByRole("list", { name: "Steps" })).getByRole("button", { name: row }));
 const panel = (name: RegExp | string) => within(screen.getByRole("region", { name }));
 const header = () => screen.getByRole("status", { name: "Editing" });
+
+function Address() {
+  const l = useLocation();
+  return <output aria-label="Address">{l.pathname + l.search}</output>;
+}
+/** The whole app at `path`, with where it is now read out beside it. */
+function renderWithAddress(path: string) {
+  render(
+    <Providers client={newQueryClient()} live={new LiveActivity()}>
+      <MemoryRouter initialEntries={[path]}>
+        <Root />
+        <Address />
+      </MemoryRouter>
+    </Providers>,
+  );
+}
+const address = () => screen.getByLabelText("Address").textContent;
 
 describe("Settings › Workflow", () => {
   it("shows a Member who is not an admin the list and the panel read-only, saying only an admin changes it", async () => {
@@ -645,15 +666,15 @@ describe("Settings › Workflows, the list", () => {
       { id: wfId.features, name: "Features", position: 3 },
       { id: wfId.prototypes, name: "Prototypes", position: 4 },
       { id: wfId.support, name: "Support", position: 5 },
-      { name: "Workflow 2", position: 6 },
+      { name: "Workflow 6", position: 6 },
     ]);
     expect(puts[0].steps).toHaveLength(five().steps.length);
     const name = await screen.findByRole("textbox", { name: "Name of the Workflow" });
-    expect(name).toHaveValue("Workflow 2");
+    expect(name).toHaveValue("Workflow 6");
     await waitFor(() => expect(name).toHaveFocus());
     expect(within(screen.getByRole("list", { name: "Steps" })).queryAllByRole("listitem")).toEqual([]);
-    expect(await screen.findByText("Added Workflow 2")).toBeInTheDocument();
-    expect(current().workflows.map((w) => w.name)).toContain("Workflow 2");
+    expect(await screen.findByText("Added Workflow 6")).toBeInTheDocument();
+    expect(current().workflows.map((w) => w.name)).toContain("Workflow 6");
     // Named at once and saved with the draft.
     await userEvent.clear(name);
     await userEvent.type(name, "Ops{Enter}");
@@ -673,10 +694,29 @@ describe("Settings › Workflows, the list", () => {
       { id: wfId.triage, name: "Triage", position: 2 },
     ]);
     await waitFor(async () => expect(await names()).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]));
-    expect(await screen.findByText("Moved Triage later")).toBeInTheDocument();
+    // Bugs first: New Tasks start at its first Step now, and the toast says so.
+    expect(await screen.findByText("Moved Triage later. New Tasks start at Investigate.")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Move Support earlier" }));
     await waitFor(() => expect(puts).toHaveLength(2));
     await waitFor(async () => expect(await names()).toEqual(["Bugs", "Triage", "Features", "Support", "Prototypes"]));
+    // Where New Tasks start is unchanged: the move alone is said.
+    expect(await screen.findByText("Moved Support earlier")).toBeInTheDocument();
+    expect(screen.queryByText(/^Moved Support earlier\./)).toBeNull();
+  });
+
+  it("sends one PUT for two clicks in the same moment", async () => {
+    const { puts } = serve(five(), ada, withSkills);
+    renderApp("/settings/projects/WEB/workflows");
+    await table();
+    const later = screen.getByRole("button", { name: "Move Features later" });
+    await waitFor(() => expect(later).toBeEnabled());
+    // Both in one moment: React draws nothing between them.
+    act(() => {
+      later.click();
+      later.click();
+    });
+    await waitFor(async () => expect(await names()).toEqual(["Triage", "Bugs", "Prototypes", "Features", "Support"]));
+    expect(puts).toHaveLength(1);
   });
 
   it("deletes a Workflow through its dialog: its Tasks need a Step of another, the outcome into it is removed unless led on; then one PUT", async () => {
@@ -783,6 +823,29 @@ describe("Settings › a Workflow's editor", () => {
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0].workflows[1]).toEqual({ id: wfId.bugs, name: "Defects", position: 2 });
     expect(await screen.findByRole("button", { name: "Workflow: Defects" })).toBeInTheDocument();
+  });
+
+  it("opened by its name, goes to its id first: a rename keeps the editor", async () => {
+    serve(five(), ada, withSkills);
+    renderWithAddress(`/settings/projects/WEB/workflows/bugs?step=${wfStep.fix}`);
+    await screen.findByRole("list", { name: "Steps" });
+    await waitFor(() => expect(address()).toBe(`/settings/projects/WEB/workflows/${wfId.bugs}?step=${wfStep.fix}`));
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), "Defects");
+    expect(nameField()).toHaveValue("Defects");
+    expect(screen.queryByText("Not found")).toBeNull();
+    expect(rows()).toEqual(["1. Investigate", "2. Fix", "3. Review", "4. Verify"]);
+    expect(address()).toBe(`/settings/projects/WEB/workflows/${wfId.bugs}?step=${wfStep.fix}`);
+  });
+
+  it("refuses a name another Workflow has in another case, before anything is sent", async () => {
+    const { puts } = serve(five(), ada, withSkills);
+    await openList(`/settings/projects/WEB/workflows/${wfId.bugs}`);
+    await userEvent.clear(nameField());
+    await userEvent.type(nameField(), "support{Enter}");
+    await save();
+    expect(await screen.findByText("Two Workflows are called support: a name is used once in a Project, whatever its case.")).toBeInTheDocument();
+    expect(puts).toEqual([]);
   });
 
   it("puts the name back with Escape, nothing changed; a name typed and left is kept", async () => {

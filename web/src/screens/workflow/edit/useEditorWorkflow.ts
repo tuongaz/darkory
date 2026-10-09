@@ -1,20 +1,33 @@
 import { useCallback } from "react";
 import type { Project } from "@/api/client";
 import { workflowsSettingsPath } from "@/app/currentProject";
+import { toShort } from "@/lib/shortid";
 import { useGoToWorkflow, useWorkflowSegment, workflowNamed } from "../routeWorkflow";
 import { stepParam } from "../StepPeek";
-import type { Draft } from "./draft";
+import type { RecordWorkflow, Draft } from "./draft";
+import type { WorkflowRecord } from "../bind";
 
 /**
- * The Workflow the editor shows, of the draft's: the one the address names
- * (`/settings/projects/:key/workflows/:workflow`, by id or name); undefined until the draft is
- * read, and when it names none. `pick` opens another's editor in place of the address, the draft
- * kept: Back leaves the editor rather than walking the picks. The picked Step is cleared, being of
- * the Workflow left, unless `step` names one of the Workflow picked (a Step moved into it).
+ * The Workflow the editor shows (`/settings/projects/:key/workflows/:workflow`): the segment read
+ * against the record as read (`base`), by id, long or short, or by name ignoring case; else, by
+ * its id, one only the draft has (a Step moved into a Workflow not saved yet). Read against the
+ * record, a rename in the draft never loses the address. `redirect` is the id when the segment
+ * said it otherwise (a name, a long id): the page goes there in place before drawing the editor.
+ * `id` is undefined until both are read, and when the segment names none. `pick` opens another's
+ * editor in place of the address, the draft kept: Back leaves the editor rather than walking the
+ * picks. The picked Step is cleared, being of the Workflow left, unless `step` names one of the
+ * Workflow picked (a Step moved into it).
  */
-export function useEditorWorkflow(project: Pick<Project, "key">, draft: Draft | undefined): { id: string | undefined; pick: (id: string, step?: string) => void } {
+export function useEditorWorkflow(
+  project: Pick<Project, "key">,
+  draft: Draft | undefined,
+  base: Pick<WorkflowRecord, "workflows"> | undefined,
+): { id: string | undefined; workflow: RecordWorkflow | undefined; redirect: string | undefined; pick: (id: string, step?: string) => void } {
   const segment = useWorkflowSegment();
-  const id = segment && draft ? workflowNamed(draft.wf.workflows, segment)?.id : undefined;
+  const read = segment && base && draft ? workflowNamed(base.workflows, segment) : undefined;
+  const id = read?.id ?? (segment && draft ? draft.wf.workflows.find((w) => w.id === toShort(segment) || w.id === segment)?.id : undefined);
+  const workflow = id ? draft?.wf.workflows.find((w) => w.id === id) : undefined;
+  const redirect = read && segment !== read.id ? read.id : undefined;
   const goTo = useGoToWorkflow((w) => workflowsSettingsPath(project, w), project, { remember: false });
   const pick = useCallback(
     (next: string, step?: string) =>
@@ -27,5 +40,5 @@ export function useEditorWorkflow(project: Pick<Project, "key">, draft: Draft | 
       }),
     [goTo, id],
   );
-  return { id, pick };
+  return { id, workflow, redirect, pick };
 }

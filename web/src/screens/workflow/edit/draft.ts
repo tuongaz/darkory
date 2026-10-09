@@ -415,9 +415,12 @@ export function moveStepToWorkflow(d: Draft, id: string, workflowId: string): Dr
   return withWf(d, withSteps(left, workflowId, [...stepsIn(left, workflowId), { ...own, workflow_id: workflowId }]));
 }
 
-/** The name a new Workflow is given: the first of "Workflow 2", "Workflow 3"… the Project does not use, ignoring case. */
+/**
+ * The name a new Workflow is given: "Workflow <count + 1>" (a Project of five adds "Workflow 6"),
+ * stepping up while the Project uses the name, ignoring case.
+ */
 export function newWorkflowName(wf: Pick<WorkflowRecord, "workflows">): string {
-  for (let n = 2; ; n++) {
+  for (let n = wf.workflows.length + 1; ; n++) {
     const name = `Workflow ${n}`;
     if (!wf.workflows.some((w) => same(w.name, name))) return name;
   }
@@ -432,16 +435,6 @@ export function addWorkflow(d: Draft): { draft: Draft; id: string } {
 
 export function renameWorkflow(d: Draft, id: string, name: string): Draft {
   return withWf(d, { ...d.wf, workflows: d.wf.workflows.map((w) => (w.id === id ? { ...w, name } : w)) });
-}
-
-/** One place earlier (-1) or later (+1) among the Workflows. */
-export function reorderWorkflow(d: Draft, id: string, by: -1 | 1): Draft {
-  const list = workflowsOf(d.wf);
-  const i = list.findIndex((w) => w.id === id);
-  const j = i + by;
-  if (i < 0 || j < 0 || j >= list.length) return d;
-  [list[i], list[j]] = [list[j], list[i]];
-  return withWf(d, { ...d.wf, workflows: renumberWorkflows(list) });
 }
 
 /** A Workflow dragged onto another's place: the Workflows between shift by one. */
