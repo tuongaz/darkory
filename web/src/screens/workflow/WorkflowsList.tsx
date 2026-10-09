@@ -177,21 +177,22 @@ function Figure({ n }: { n: number | undefined }) {
 const act =
   "inline-flex size-7 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3.5";
 
-/** `why` says on the control why it is off: a disabled button takes no hover, so the Tip sits on a focusable wrapper. */
+/** `why` says on the control why it is off: the button stays focusable (aria-disabled) so its Tip shows and focus survives a re-render. */
 function ActButton({ label, why, disabled, onClick, children }: { label: string; why?: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
-  const button = (
-    <button type="button" aria-label={label} disabled={disabled} onClick={onClick} className={act}>
-      {children}
-    </button>
+  const soft = !!(disabled && why);
+  return (
+    <Tip label={soft ? why : label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-description={soft ? why : undefined}
+        disabled={disabled && !soft}
+        aria-disabled={soft || undefined}
+        onClick={soft ? undefined : onClick}
+        className={cn(act, soft && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground")}
+      >
+        {children}
+      </button>
+    </Tip>
   );
-  if (disabled && why) {
-    return (
-      <Tip label={why}>
-        <span tabIndex={0} className="inline-flex rounded-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-          {button}
-        </span>
-      </Tip>
-    );
-  }
-  return <Tip label={label}>{button}</Tip>;
 }

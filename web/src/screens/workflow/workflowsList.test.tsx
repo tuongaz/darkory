@@ -319,9 +319,10 @@ describe("the Workflows page of a Project of one", () => {
     expect(screen.getByRole("group", { name: "Page" })).toHaveTextContent("Workflow");
     // The last stays.
     const trash = within(t).getByRole("button", { name: /^Delete /, hidden: true });
-    expect(trash).toBeDisabled();
-    // Its reason is on the control: hovering it says so.
-    await userEvent.hover(trash.parentElement!);
+    expect(trash).toHaveAttribute("aria-disabled", "true");
+    expect(trash).toHaveAccessibleDescription("The last Workflow stays");
+    // Its reason is on the control: hovering the button itself says so.
+    await userEvent.hover(trash);
     expect((await screen.findAllByText("The last Workflow stays")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
   });
