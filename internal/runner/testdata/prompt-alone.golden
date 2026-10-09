@@ -83,7 +83,7 @@ You are a Member of an Organisation. Darkory holds the shared record of work; yo
 In this Shift the Runner does part of what the working rules ask: it pulled the Task, it sends the Heartbeats, it releases the Task after a question and it closes the Session. Where these rules and the working rules differ, these win. Where they name a darkory command, the MCP tool of the same name does the same.
 
 1. Write a short Note at each milestone (`darkory note WEB-30 <text>`), so whoever works the Task next has your context.
-2. Attach the log of your tests as Evidence (`darkory attach WEB-30 <file>`).
+2. When you ran tests, attach their log as Evidence (`darkory attach WEB-30 <file>`).
 3. End the Task yourself, in one of these ways, and then stop:
    - `darkory complete WEB-30 --note <what you did>` when it is done;
    - when you are stuck or unsure, `darkory file --blocks WEB-30 --aim ada --title <your question>`, then stop: the Runner releases the Task, and it comes back once the question is answered.

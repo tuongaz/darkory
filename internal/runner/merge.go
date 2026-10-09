@@ -350,7 +350,8 @@ func (r *Runner) mergeTask(ctx context.Context, rec Record, d *client.TaskDetail
 }
 
 // pullRequestLine says how a done Task's branch lands in a Workspace merged through pull requests:
-// the merged pull request whose head is the branch, or that it lands when its pull request merges.
+// the merged pull request whose head is the branch, that there was nothing to land, or that it lands
+// when its pull request merges.
 func (r *Runner) pullRequestLine(ctx context.Context, ws Workspace, branch, target, how string) string {
 	prs, err := r.gh.MergedPRs(ctx, ws.Path)
 	if err == nil {
@@ -359,6 +360,10 @@ func (r *Runner) pullRequestLine(ctx context.Context, ws Workspace, branch, targ
 				return fmt.Sprintf("%s: %s was merged into %s through pull request #%d (%s)%s.", ws.Name, branch, target, pr.Number, pr.URL, how)
 			}
 		}
+	}
+	// A branch with nothing ahead of its base carries no work: no pull request exists for it.
+	if branchExists(ctx, ws.Path, branch) && branchExists(ctx, ws.Path, target) && isAncestor(ctx, ws.Path, branch, target) {
+		return fmt.Sprintf("%s: %s has no commits ahead of %s, so nothing landed and no pull request was needed%s.", ws.Name, branch, target, how)
 	}
 	return fmt.Sprintf("%s: %s lands in %s through its pull request, not merged on GitHub yet%s.", ws.Name, branch, target, how)
 }

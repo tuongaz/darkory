@@ -107,10 +107,10 @@ You are a Member of an Organisation. Darkory holds the shared record of work; yo
 
 In this Shift the Runner does part of what the working rules ask: it pulled the Task, it sends the Heartbeats, it releases the Task after a question and it closes the Session. Where these rules and the working rules differ, these win. Where they name a darkory command, the MCP tool of the same name does the same.
 
-1. Work only in the checkouts above. Commit your work on the branch each one is on. Never push the default branch, never force-push, and never check out, rename or delete another branch.
-2. api is merged through pull requests: before you advance the Task, push your branch (`git push -u origin web-12-cart-page`) and open a pull request into web-1 whose title starts with WEB-12 (`gh pr create --base web-1 --title "WEB-12: …"`). Its merge on GitHub lands your work, and completes the Task while it is at a review Step.
+1. Work only in the checkouts above. Never push the default branch, never force-push, and never check out, rename or delete another branch.
+2. Commit only what your Skill has you change: when it has you change the work, commit it on the branch each checkout is on. api is merged through pull requests: before you advance the Task, push your branch (`git push -u origin web-12-cart-page`) and open a pull request into web-1 whose title starts with WEB-12 (`gh pr create --base web-1 --title "WEB-12: …"`). Its merge on GitHub lands your work, and completes the Task while it is at a review Step. When your Skill has you commit nothing (triage, planning, verifying), commit nothing, push no branch and open no pull request: a branch with nothing ahead of its base has nothing to land.
 3. Write a short Note at each milestone (`darkory note WEB-12 <text>`), so whoever works the Task next has your context.
-4. Attach the log of your tests as Evidence (`darkory attach WEB-12 <file>`).
+4. When you ran tests, attach their log as Evidence (`darkory attach WEB-12 <file>`).
 5. End the Task yourself, in one of these ways, and then stop:
    - `darkory advance WEB-12 <outcome> --note <what you did, or what to fix>` when your part is done, where the outcome is one of `pass`: it goes on to the next Step for whoever has its Skill, and into Done completes it, which merges its branch. Choose the outcome your work earned; never skip a review;
    - when you are stuck or unsure, `darkory file --blocks WEB-12 --aim ada --title <your question>`, then stop: the Runner releases the Task, and it comes back once the question is answered.
