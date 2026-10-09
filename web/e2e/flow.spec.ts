@@ -103,14 +103,16 @@ test("scenario 1: Break down, Subtasks through Build, QA and Review, Acceptance,
   await skill("qa", "Test the change against what the Task asks for.");
   await ask("POST", "/v1/projects", { key: "SAC", name: "Sacca", members: ["ada"], workflow: "empty" });
   await ask("PUT", "/v1/projects/SAC/workflow", {
+    // Its one Workflow, Work, as the empty Project started it (ADR 0019).
+    workflows: [{ name: "Work" }],
     steps: [
-      { name: "Backlog", position: 1 },
-      { name: "Plan", skill: "breakdown", position: 2 },
-      { name: "Build", skill: "engineer", position: 3 },
-      { name: "QA", skill: "qa", position: 4 },
-      { name: "Review", skill: "review", position: 5 },
-      { name: "Acceptance", skill: "acceptance", position: 6 },
-      { name: "Retro", skill: "retro", position: 7 },
+      { workflow: "Work", name: "Backlog", position: 1 },
+      { workflow: "Work", name: "Plan", skill: "breakdown", position: 2 },
+      { workflow: "Work", name: "Build", skill: "engineer", position: 3 },
+      { workflow: "Work", name: "QA", skill: "qa", position: 4 },
+      { workflow: "Work", name: "Review", skill: "review", position: 5 },
+      { workflow: "Work", name: "Acceptance", skill: "acceptance", position: 6 },
+      { workflow: "Work", name: "Retro", skill: "retro", position: 7 },
     ],
     connectors: [
       { from: "Plan", name: "done", position: 1 },
@@ -276,11 +278,13 @@ test("scenario 2: an accounting Project worked by humans alone: out of Backlog, 
   }
   await ask("POST", "/v1/projects", { key: "TAX", name: "Tax", members: ["ada"], workflow: "empty" });
   await ask("PUT", "/v1/projects/TAX/workflow", {
+    // Its one Workflow, Work, as the empty Project started it (ADR 0019).
+    workflows: [{ name: "Work" }],
     steps: [
-      { name: "Backlog", position: 1 },
-      { name: "Gather", skill: "client-comms", position: 2 },
-      { name: "Prepare", skill: "bookkeeping", position: 3 },
-      { name: "Partner review", skill: "partner-review", position: 4 },
+      { workflow: "Work", name: "Backlog", position: 1 },
+      { workflow: "Work", name: "Gather", skill: "client-comms", position: 2 },
+      { workflow: "Work", name: "Prepare", skill: "bookkeeping", position: 3 },
+      { workflow: "Work", name: "Partner review", skill: "partner-review", position: 4 },
     ],
     connectors: [
       { from: "Gather", to: "Prepare", name: "gathered", position: 1 },
