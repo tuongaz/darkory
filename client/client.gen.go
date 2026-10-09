@@ -3648,8 +3648,9 @@ type ClientInterface interface {
 	// name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-	// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-	// deleted, or a value that is not a Step kept), `step_in_use`.
+	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+	// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+	// deleted, or a value that is not a Step of the body), `step_in_use`.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3691,8 +3692,9 @@ type ClientInterface interface {
 	// name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-	// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-	// deleted, or a value that is not a Step kept), `step_in_use`.
+	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+	// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+	// deleted, or a value that is not a Step of the body), `step_in_use`.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5763,8 +5765,9 @@ func (c *Client) GetWorkflow(ctx context.Context, project ProjectRef, reqEditors
 // name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-// deleted, or a value that is not a Step kept), `step_in_use`.
+// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+// deleted, or a value that is not a Step of the body), `step_in_use`.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5816,8 +5819,9 @@ func (c *Client) SetWorkflowWithBody(ctx context.Context, project ProjectRef, pa
 // name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-// deleted, or a value that is not a Step kept), `step_in_use`.
+// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+// deleted, or a value that is not a Step of the body), `step_in_use`.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -12944,8 +12948,9 @@ type ClientWithResponsesInterface interface {
 	// name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-	// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-	// deleted, or a value that is not a Step kept), `step_in_use`.
+	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+	// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+	// deleted, or a value that is not a Step of the body), `step_in_use`.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12987,8 +12992,9 @@ type ClientWithResponsesInterface interface {
 	// name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 	// that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 	// `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-	// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-	// deleted, or a value that is not a Step kept), `step_in_use`.
+	// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+	// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+	// deleted, or a value that is not a Step of the body), `step_in_use`.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -19088,8 +19094,9 @@ func (c *ClientWithResponses) GetWorkflowWithResponse(ctx context.Context, proje
 // name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-// deleted, or a value that is not a Step kept), `step_in_use`.
+// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+// deleted, or a value that is not a Step of the body), `step_in_use`.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -19137,8 +19144,9 @@ func (c *ClientWithResponses) SetWorkflowWithBodyWithResponse(ctx context.Contex
 // name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
 // that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
 // `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
-// `id` the Project does not have, or given twice; a `moves` key that is not a Step being
-// deleted, or a value that is not a Step kept), `step_in_use`.
+// `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+// empty, over 50 characters, or spelled as an id; a `moves` key that is not a Step being
+// deleted, or a value that is not a Step of the body), `step_in_use`.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
