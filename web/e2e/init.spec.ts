@@ -94,7 +94,10 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     await page.goto(`${install.base}/projects/MAIN/tasks?view=board`);
     await expect(page.getByRole("region", { name: "Build", exact: true }).locator("[data-task=MAIN-1]")).toContainText("Write the README");
     await shot(page, "04-first-task-on-the-board");
+    // MAIN's Workflows list its one; its row opens its page, the line.
     await page.goto(`${install.base}/projects/MAIN/workflows`);
+    await page.getByRole("table", { name: "Workflows" }).getByRole("row").nth(1).getByRole("link").first().click();
+    await expect(page).toHaveURL(new RegExp(`^${install.base}/projects/MAIN/workflows/[^/?]+$`));
     await expect(page.getByRole("region", { name: "Workflow", exact: true }).locator('button[data-task="MAIN-1"]')).toBeVisible();
     await shot(page, "05-default-workflow");
   });
