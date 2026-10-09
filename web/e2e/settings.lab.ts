@@ -348,10 +348,10 @@ for (const width of [390, 768]) {
     expect(m.nav, "the tabs run past the row's view").toBeLessThanOrEqual(m.room);
     await expect(page.getByRole("button", { name: "New agent" })).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("button", { name: "Add Member" })).toBeInViewport({ ratio: 1 });
-    // Under 42rem of row the acts are their icons alone, 32px squares.
+    // Under 42rem of row the acts are their icons alone, 28px squares (the kit's sm: a 14px icon, 6px each side, a 1px border).
     for (const name of ["New agent", "Add Member"]) {
       const box = (await page.getByRole("button", { name }).boundingBox())!;
-      expect([box.width, box.height], `${name} is not a 32px square`).toEqual([32, 32]);
+      expect([box.width, box.height], `${name} is not a 28px square`).toEqual([28, 28]);
     }
     await context.close();
   });

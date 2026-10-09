@@ -157,7 +157,7 @@ export function WorkflowPage() {
               <span className="hidden text-xs text-muted-foreground tabular-nums @2xl/page:inline">{data.scoped.hiddenTotal} hidden</span>
             )}
             {named && named.key !== "…" && (
-              <Button asChild variant="outline" className="hidden @2xl/page:inline-flex">
+              <Button asChild variant="outline" size="sm" className="hidden text-xs @2xl/page:inline-flex">
                 <Link to={taskPagePath(named.key)}>Open {named.key}</Link>
               </Button>
             )}
@@ -252,12 +252,12 @@ function EditingPage() {
         crumbs={editorCrumbs(project, shown.workflow?.name.trim() || "…")}
         view={<ChangesChip editor={editor} />}
         actions={
-          <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(page))}>
+          <Button variant="outline" size="sm" className="text-xs" onClick={() => (n > 0 ? setDiscarding(true) : navigate(page))}>
             Cancel
           </Button>
         }
         primary={
-          <Button disabled={!editor.draft || editor.saving || n === 0} onClick={() => void save()}>
+          <Button size="sm" className="text-xs" disabled={!editor.draft || editor.saving || n === 0} onClick={() => void save()}>
             {editor.saving && <LoaderIcon aria-hidden className="animate-spin" />}
             {editor.saving ? "Saving…" : "Save"}
           </Button>

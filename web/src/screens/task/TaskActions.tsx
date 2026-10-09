@@ -7,6 +7,7 @@ import { useDirectory } from "@/api/queries";
 import { useNow } from "@/clock";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
 import { openFileTask } from "../board/state";
 import { taskActions, type TaskAction, type TaskActions } from "./actions";
@@ -52,10 +53,10 @@ export function connectorLabel(c: Connector, crossing?: string): string {
 }
 
 /**
- * What the signed-in Member can do to the Task, drawn for the peek (`xs`) or the page's top bar.
- * Nothing while the Task loads.
+ * What the signed-in Member can do to the Task, drawn for the peek (`xs`) or the page's top bar
+ * (`sm`, with 12px text: the height of the bar's second row's acts). Nothing while the Task loads.
  */
-export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "default"): TaskActionsUI {
+export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "sm"): TaskActionsUI {
   const me = useCurrentMe();
   const { members } = useDirectory();
   const takeable = useTakeableIds().data;
@@ -104,18 +105,20 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "d
     setOpen({ kind: a });
   };
 
+  // The kit's sm keeps the 14px text of the default; the bar's acts are 12px.
+  const text = size === "sm" ? "text-xs" : undefined;
   let primary: ReactNode = null;
   const p = actions.primary;
   if (p?.kind === "claim") {
     primary = (
-      <Button size={size} onClick={() => claim.mutate()} disabled={claim.isPending}>
+      <Button size={size} className={text} onClick={() => claim.mutate()} disabled={claim.isPending}>
         Claim
       </Button>
     );
   } else if (p?.kind === "complete") {
     const reason = actions.dimmed.complete;
     primary = (
-      <Button size={size} onClick={() => setOpen({ kind: "complete" })} disabled={!!reason} title={reason ? `${reason}: a Parent completes once every Subtask has ended` : undefined}>
+      <Button size={size} className={text} onClick={() => setOpen({ kind: "complete" })} disabled={!!reason} title={reason ? `${reason}: a Parent completes once every Subtask has ended` : undefined}>
         <CheckIcon />
         Complete
       </Button>
@@ -124,13 +127,13 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "d
     const into = (c: Connector) => (c.to_step_id ? <ArrowRightIcon /> : <CheckIcon />);
     primary = (
       <div className="inline-flex">
-        <Button size={size} className="rounded-r-none" onClick={() => setOpen({ kind: "advance", connector: p.connector })}>
+        <Button size={size} className={cn("rounded-r-none", text)} onClick={() => setOpen({ kind: "advance", connector: p.connector })}>
           {into(p.connector)}
           {label(p.connector)}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button size={size === "xs" ? "icon-xs" : "icon"} className="w-7 rounded-l-none border-l border-primary-foreground/20" aria-label="More ways to end the Claim">
+            <Button size={size === "xs" ? "icon-xs" : "icon-sm"} className="w-7 rounded-l-none border-l border-primary-foreground/20" aria-label="More ways to end the Claim">
               <ChevronDownIcon />
             </Button>
           </DropdownMenuTrigger>
