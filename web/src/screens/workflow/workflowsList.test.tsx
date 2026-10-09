@@ -318,7 +318,11 @@ describe("the Workflows page of a Project of one", () => {
     // The + Workflow primary.
     expect(screen.getByRole("group", { name: "Page" })).toHaveTextContent("Workflow");
     // The last stays.
-    expect(within(t).getByRole("button", { name: /^Delete /, hidden: true })).toBeDisabled();
+    const trash = within(t).getByRole("button", { name: /^Delete /, hidden: true });
+    expect(trash).toBeDisabled();
+    // Its reason is on the control: hovering it says so.
+    await userEvent.hover(trash.parentElement!);
+    expect((await screen.findAllByText("The last Workflow stays")).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
   });
 
@@ -327,7 +331,9 @@ describe("the Workflows page of a Project of one", () => {
     renderApp("/projects/WEB/workflows");
     await userEvent.click(within(await table()).getByRole("button", { name: "More for Work" }));
     const menu = within(await screen.findByRole("menu"));
-    expect(menu.getByRole("menuitem", { name: "Delete" })).toHaveAttribute("aria-disabled", "true");
+    const del = menu.getByRole("menuitem", { name: /^Delete/ });
+    expect(del).toHaveAttribute("aria-disabled", "true");
+    expect(del).toHaveTextContent("The last Workflow stays");
     expect(menu.getByRole("menuitem", { name: "Move earlier" })).toHaveAttribute("aria-disabled", "true");
     expect(menu.getByRole("menuitem", { name: "Move later" })).toHaveAttribute("aria-disabled", "true");
   });
