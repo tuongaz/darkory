@@ -392,15 +392,31 @@ function ProjectRow({ project, current, open, onOpenChange }: { project: Project
               badge={p.area === "agents" ? <LiveCount project={project} /> : undefined}
             />
           ))}
-          <PlaceLink to={projectSettingsPath(project)} icon={<SettingsIcon />} label="Settings" />
+          {/* Settings opens on General and stays marked on each of its pages. */}
+          <PlaceLink to={projectSettingsPath(project)} match={projectPath(project, "settings")} icon={<SettingsIcon />} label="Settings" />
         </SidebarMenuSub>
       )}
     </SidebarMenuItem>
   );
 }
 
-function PlaceLink({ to, icon, label, badge, active }: { to: string; icon: React.ReactNode; label: string; badge?: React.ReactNode; active?: boolean }) {
-  const path = to.split("?")[0];
+/** One of a Project's places; it is `here` under its address, or under `match` when that is wider. */
+function PlaceLink({
+  to,
+  match,
+  icon,
+  label,
+  badge,
+  active,
+}: {
+  to: string;
+  match?: string;
+  icon: React.ReactNode;
+  label: string;
+  badge?: React.ReactNode;
+  active?: boolean;
+}) {
+  const path = match ?? to.split("?")[0];
   const here = useMatch({ path, end: false }) !== null;
   return (
     <SidebarMenuSubItem>

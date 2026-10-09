@@ -13,7 +13,7 @@ screens, each in its own folder. Use these pieces rather than drawing your own, 
 | `src/screens/task/` | M4b Task | `TaskPage` (`/tasks/:task`), `TaskPeek` (`?task=<key>` over any page). Both must call `useReportProject(task.project_id)`. The Shift panel, its terminal and `terminal.ts` are already here. |
 | `src/screens/workflow/` | M4c Workflow | `WorkflowsPage` (`/projects/:key/workflows`, the list with its acts), `WorkflowPage` (`/projects/:key/workflows/:workflow`, live), `WorkflowEditPage` (`/projects/:key/workflows/:workflow/edit`, editing, in the app) |
 | `src/screens/inbox/` | M4d Inbox | `InboxPage` (`/inbox`, after the Install checklist), `MyWorkPage` (`/my-work`), `AgentsPage` (`/projects/:key/agents`, `?agent=<name>` opens one), `ActivityPage` (`/projects/:key/activity`) |
-| `src/screens/settings/` | M4a Settings | `SettingsLayout` (`/settings/*`, its own nav), the Account, Organisation and Project pages |
+| `src/screens/settings/` | M4a Settings | `SettingsLayout` (`/settings/*`, its own nav of the Account and the Organisation's pages), those pages, and a Project's settings in the app (`/projects/:key/settings/general\|members\|labels\|workspaces`, in `ProjectSettingsFrame`, the pages as tabs on the bar) |
 | `src/app/`, `src/api/`, `src/components/`, `src/lib/` | M4a | the shell, the route table, the API layer, the primitives |
 
 `src/app/routes.tsx` is the only file that imports the screens. Keep each export's name; put
@@ -83,14 +83,13 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 
 ## Shell services
 
-- **The Project** (`@/app/currentProject`): under `/projects/:key/…` and
-  `/settings/projects/:key/…` a page calls `useRouteProject()` (the `Project`; `ProjectScope` has
-  already refused a key that names none). Anywhere, `useCurrentProject()` is the Project the app is
+- **The Project** (`@/app/currentProject`): under `/projects/:key/…` a page calls
+  `useRouteProject()` (the `Project`; `ProjectScope` has already refused a key that names none). Anywhere, `useCurrentProject()` is the Project the app is
   in: the address's, else the one a Task's page or peek reported, else the one last shown in this
   browser, else the Member's first, else the Organisation's first. A Task's page and peek call
   `useReportProject(task.project_id)` so the current Project follows the record. Addresses:
-  `projectPath(project, "tasks" | "workflow" | "agents" | "activity", view?)`,
-  `projectSettingsPath(project, "general" | "workflow" | "members" | "labels" | "workspaces")`,
+  `projectPath(project, "tasks" | "workflows" | "agents" | "activity" | "settings", view?)`,
+  `projectSettingsPath(project, "general" | "members" | "labels" | "workspaces")`,
   `findProject(projects, idOrKey)`.
 - **Intents** (`@/app/intents`): `sendIntent(intent)`, `useIntent(kind, handler)`; the DOM event
   is `darkory:intent`.

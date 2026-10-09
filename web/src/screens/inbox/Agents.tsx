@@ -3,7 +3,7 @@ import { useCallback, type MouseEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import type { Activity, Member, MemberDetail, Project, RunnerSession, Task } from "@/api/client";
 import { useDirectory, useOpenTasks, useProject, useRunnerSessions, useWorkflow } from "@/api/queries";
-import { projectPath, useRouteProject } from "@/app/currentProject";
+import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
@@ -124,7 +124,7 @@ export function AgentsPage() {
                 action={
                   me.member.admin && (
                     <Button asChild variant="outline">
-                      <Link to={`/settings/projects/${encodeURIComponent(project.key)}/members`}>Add a Member</Link>
+                      <Link to={projectSettingsPath(project, "members")}>Add a Member</Link>
                     </Button>
                   )
                 }

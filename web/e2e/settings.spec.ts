@@ -2,9 +2,9 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 import { fileURLToPath } from "node:url";
 import { startInstall, type Install } from "./server";
 
-// The Settings area against the real binary (docs/build/model-v2-plan.md, scenario 10, and the
-// journeys Admin had: New Project, Members, Skills, agents, Workspaces), on an Install of its own
-// with init's MAIN only. Every step leaves a screenshot in e2e/screenshots/settings/.
+// The Settings area and a Project's settings against the real binary (docs/build/model-v2-plan.md,
+// scenario 10, and the journeys Admin had: New Project, Members, Skills, agents, Workspaces), on an
+// Install of its own with init's MAIN only. Every step leaves a screenshot in e2e/screenshots/settings/.
 test.describe.configure({ mode: "serial" });
 
 const shots = fileURLToPath(new URL("./screenshots/settings/", import.meta.url));
@@ -78,22 +78,25 @@ const nav = (page: Page) => page.getByRole("navigation", { name: "Settings pages
 /** The Organisation's button at the head of the app's sidebar. */
 const orgButton = (page: Page) => page.locator("[data-slot=sidebar-header]").getByRole("button", { name: "E2E Organisation" });
 
-test("New Project, Members and Skills from Settings", async ({ browser }) => {
+test("New Project from the sidebar, then Members and Skills from Settings", async ({ browser }) => {
   const { ctx, page, errors } = await open(browser);
 
-  await test.step("Settings offers New Project; creating Web opens its General page", async () => {
+  await test.step("the sidebar's New Project creates Web; its settings open on General", async () => {
     await page.goto(`${base}/settings`);
     await expect(page).toHaveURL(`${base}/settings/account`);
     await shot(page, "01-settings-fresh-install");
-    await nav(page).getByRole("button", { name: "New Project" }).click();
+    // Settings is the Account's and the Organisation's: a Project is made from the app's sidebar.
+    await expect(nav(page).getByRole("button", { name: "New Project" })).toHaveCount(0);
+    await page.goto(`${base}/projects/MAIN/tasks`);
+    await page.getByRole("navigation", { name: "Projects" }).getByRole("button", { name: "New Project" }).click();
     const dialog = page.getByRole("dialog", { name: "New Project" });
     await dialog.getByLabel("Name", { exact: true }).fill("Web");
     // The key is offered from the name.
     await expect(dialog.getByLabel("Key", { exact: true })).toHaveValue("WEB");
     await shot(page, "02-new-project");
     await dialog.getByRole("button", { name: "Create Project" }).click();
-    await expect(page).toHaveURL(new RegExp(`${base}/(settings/)?projects/WEB/`));
-    await page.goto(`${base}/settings/projects/WEB/general`);
+    await expect(page).toHaveURL(new RegExp(`${base}/projects/WEB/`));
+    await page.goto(`${base}/projects/WEB/settings/general`);
     await expect(page.getByRole("group", { name: "General settings of Web" })).toBeVisible();
     await shot(page, "03-project-general");
   });
@@ -132,7 +135,7 @@ test("New Project, Members and Skills from Settings", async ({ browser }) => {
 
   await test.step("a Project's Members: its creator is in it; Add Member lists who is not and adds Mai", async () => {
     await ada("POST", "/v1/projects", { key: "DOCS", name: "Docs", members: ["ada"] });
-    await page.goto(`${base}/settings/projects/DOCS/members`);
+    await page.goto(`${base}/projects/DOCS/settings/members`);
     const members = page.getByRole("table", { name: "Members of Docs" });
     await expect(members.getByRole("row", { name: "ada" })).toBeVisible();
     await page.getByRole("button", { name: "Add Member" }).click();
@@ -182,21 +185,28 @@ test("New Project, Members and Skills from Settings", async ({ browser }) => {
   await ctx.close();
 });
 
-test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-admin sees Account and their Projects only", async ({ browser }) => {
+test("scenario 10: a Project's settings under it, Settings from the Organisation menu, old addresses land, a non-admin sees Account only", async ({ browser }) => {
   // OPS is a second Project, with ada in it but not Mai.
   await ada("POST", "/v1/projects", { key: "OPS", name: "Operations", members: ["ada"] });
   const { ctx, page, errors } = await open(browser);
 
-  await test.step("the Project's Settings in the sidebar opens its General page", async () => {
+  await test.step("the Project's Settings in the sidebar opens its General page, its pages as tabs on the bar", async () => {
     await page.goto(`${base}/projects/WEB/tasks`);
     // The current Project unfolds in the sidebar's Projects onto its places, Settings last.
-    await page.getByRole("navigation", { name: "Projects" }).getByRole("list", { name: "Web" }).getByRole("link", { name: "Settings" }).click();
-    await expect(page).toHaveURL(`${base}/settings/projects/WEB/general`);
-    await expect(nav(page).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
+    const settings = page.getByRole("navigation", { name: "Projects" }).getByRole("list", { name: "Web" }).getByRole("link", { name: "Settings" });
+    await settings.click();
+    await expect(page).toHaveURL(`${base}/projects/WEB/settings/general`);
+    const tabs = page.getByRole("navigation", { name: "Project settings" });
+    await expect(tabs.getByRole("link")).toHaveText(["General", "Members", "Labels", "Workspaces"]);
+    await expect(tabs.getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
+    // The app's sidebar stays, its Settings marked; Settings' own nav is not drawn.
+    await expect(settings).toHaveAttribute("aria-current", "page");
+    await expect(nav(page)).toHaveCount(0);
     await shot(page, "13-door-project");
-    // Back returns to where Settings was opened from.
-    await page.getByRole("link", { name: "Back" }).click();
-    await expect(page).toHaveURL(`${base}/projects/WEB/tasks`);
+    await tabs.getByRole("link", { name: "Members" }).click();
+    await expect(page).toHaveURL(`${base}/projects/WEB/settings/members`);
+    await expect(tabs.getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page");
+    await expect(settings).toHaveAttribute("aria-current", "page");
   });
 
   await test.step("the Organisation menu opens Settings, Invite and manage Members, and Account settings", async () => {
@@ -230,10 +240,14 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
       [`/admin/members/${mai.id}`, `/settings/organisation/members/${mai.id}`],
       ["/admin/skills", "/settings/organisation/skills"],
       ["/admin/skills/web-engineer", "/settings/organisation/skills/web-engineer"],
-      ["/admin/teams", "/settings/projects/WEB/general"],
-      ["/admin/teams/OPS", "/settings/projects/OPS/general"],
+      ["/admin/teams", "/projects/WEB/settings/general"],
       ["/admin/workflow", "/projects/WEB/workflows"],
-      ["/admin/workspaces", "/settings/projects/WEB/workspaces"],
+      ["/admin/workspaces", "/projects/WEB/settings/workspaces"],
+      // Settings' pages of a Project: the same page under the Project, its key in the Project's case.
+      ["/settings/projects", "/projects/WEB/settings/general"],
+      ["/settings/projects/WEB", "/projects/WEB/settings/general"],
+      ["/settings/projects/WEB/members", "/projects/WEB/settings/members"],
+      ["/projects/WEB/settings", "/projects/WEB/settings/general"],
       // The one Workflow's addresses before a Project had several: its Workflows' now.
       ["/settings/projects/WEB/workflow", "/projects/WEB/workflows"],
       // Settings' Workflows list: the Project's list in the app, which carries its acts.
@@ -244,6 +258,9 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
       ["/projects/WEB/workflow?view=text", `${work}?view=text`],
       ["/projects/WEB/workflows?view=text", `${work}?view=text`],
       ["/account", "/settings/account"],
+      // Last: a page under OPS makes OPS the current Project.
+      ["/admin/teams/OPS", "/projects/OPS/settings/general"],
+      ["/settings/projects/ops/labels", "/projects/OPS/settings/labels"],
     ];
     // The current Project is the one last shown: WEB.
     await page.goto(`${base}/projects/WEB/tasks`);
@@ -254,16 +271,22 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
     await shot(page, "16-admin-redirected");
   });
 
-  await test.step("Mai, not an admin: Account and her Projects, and the Organisation's pages refused", async () => {
+  await test.step("Mai, not an admin: Account alone in Settings, her Project's settings as text, and the Organisation's pages refused", async () => {
     const mai = await open(browser, await signIn(browser, "Mai Tran"));
     await mai.page.goto(`${base}/settings`);
     await expect(mai.page).toHaveURL(`${base}/settings/account`);
     const pages = nav(mai.page);
     await expect(pages.getByRole("link", { name: "Account" })).toBeVisible();
     await expect(pages.getByRole("list", { name: "Organisation" })).toHaveCount(0);
-    await expect(pages.getByRole("button", { name: "Web" })).toBeVisible();
-    await expect(pages.getByRole("button", { name: "Operations" })).toHaveCount(0);
+    await expect(pages.getByRole("list", { name: "Projects" })).toHaveCount(0);
+    await expect(pages.getByRole("button", { name: "Web" })).toHaveCount(0);
     await expect(pages.getByRole("button", { name: "New Project" })).toHaveCount(0);
+    await mai.page.goto(`${base}/projects/WEB/settings/general`);
+    const general = mai.page.getByRole("group", { name: "General settings of Web" });
+    await expect(general).toContainText("KeyWEB");
+    await expect(general.getByRole("textbox")).toHaveCount(0);
+    await expect(general.getByRole("switch")).toHaveCount(0);
+    await expect(mai.page.getByRole("navigation", { name: "Project settings" }).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
     await shot(mai.page, "17-non-admin-settings");
     await mai.page.goto(`${base}/settings/organisation/members`);
     await expect(mai.page.getByRole("heading", { name: "Admins only" })).toBeVisible();
@@ -369,7 +392,7 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
   type Workspace = { id: string; name: string; path: string; mode: string; default_branch: string };
 
   await test.step("New Workspace adds a git Workspace in pull-request mode; its default branch is edited in place", async () => {
-    await page.goto(`${base}/settings/projects/WEB/workspaces`);
+    await page.goto(`${base}/projects/WEB/settings/workspaces`);
     await expect(page.getByRole("heading", { name: "No Workspaces yet" })).toBeVisible();
     await shot(page, "25-no-workspaces");
     await page.getByRole("button", { name: "New Workspace" }).first().click();
@@ -395,7 +418,7 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
   });
 
   await test.step("the Project's General page sets its default Workspace and Auto-complete", async () => {
-    await page.goto(`${base}/settings/projects/WEB/general`);
+    await page.goto(`${base}/projects/WEB/settings/general`);
     const general = page.getByRole("group", { name: "General settings of Web" });
     await general.getByRole("combobox", { name: "Default Workspace" }).click();
     await page.getByRole("option", { name: /shop/ }).click();
@@ -468,8 +491,10 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
   await test.step("at 390px none of them scrolls sideways", async () => {
     await page.setViewportSize({ width: 390, height: 844 });
     const screens: [string, () => ReturnType<Page["getByRole"]>][] = [
-      ["/settings/projects/WEB/workspaces", () => page.getByRole("row", { name: "shop" })],
-      ["/settings/projects/WEB/general", () => page.getByRole("group", { name: "General settings of Web" })],
+      ["/projects/WEB/settings/workspaces", () => page.getByRole("row", { name: "shop" })],
+      ["/projects/WEB/settings/general", () => page.getByRole("group", { name: "General settings of Web" })],
+      ["/projects/WEB/settings/members", () => page.getByRole("table", { name: "Members of Web" })],
+      ["/projects/WEB/settings/labels", () => page.getByRole("button", { name: "New Label" })],
       ["/settings/organisation/members", () => page.getByRole("table", { name: "Members" })],
       ["/settings/organisation/agents", () => page.getByRole("table", { name: "Agents" })],
       ["/settings/account", () => page.getByRole("row", { name: "This browser" })],
@@ -492,8 +517,8 @@ test("an ⓘ explains on hover, focus and tap, and moves nothing", async ({ brow
   const boxes = (root: string) =>
     page.locator(root).evaluate((el) => [el, ...el.querySelectorAll("*")].map((e) => JSON.stringify(e.getBoundingClientRect())));
 
-  await test.step("Settings › General: hovering Colour's ⓘ opens its explanation over the page", async () => {
-    await page.goto(`${base}/settings/projects/MAIN/general`);
+  await test.step("a Project's Settings › General: hovering Colour's ⓘ opens its explanation over the page", async () => {
+    await page.goto(`${base}/projects/MAIN/settings/general`);
     const form = page.getByRole("group", { name: "General settings of Main" });
     await expect(form).toBeVisible();
     await expect(form).not.toContainText("The colour of its mark");
@@ -536,7 +561,7 @@ test("an ⓘ explains on hover, focus and tap, and moves nothing", async ({ brow
   await test.step("on a touch screen a tap opens it and a tap elsewhere closes it", async () => {
     const touch = await browser.newContext({ storageState: adaState, viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const phone = await touch.newPage();
-    await phone.goto(`${base}/settings/projects/MAIN/general`);
+    await phone.goto(`${base}/projects/MAIN/settings/general`);
     const about = phone.getByRole("button", { name: "About Key" });
     await about.tap();
     const tip = phone.getByRole("dialog").filter({ hasText: "Starts each Task key" });

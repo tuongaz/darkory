@@ -268,10 +268,10 @@ const pages: { slug: string; path: string; ready: (page: Page) => Promise<void> 
   { slug: "settings-skill", path: "/settings/organisation/skills/web-engineer", ready: async (p) => void (await p.getByRole("region", { name: "Proposal from WEB-31" }).waitFor({ state: "attached" })) },
   { slug: "settings-labels", path: "/settings/organisation/labels", ready: async (p) => void (await p.getByRole("row", { name: "security" }).waitFor({ state: "attached" })) },
   { slug: "settings-install", path: "/settings/organisation/install", ready: async (p) => void (await p.getByText("Attached").waitFor({ state: "attached" })) },
-  { slug: "settings-project-general", path: "/settings/projects/WEB/general", ready: async (p) => void (await p.getByRole("combobox", { name: "Default Workspace" }).getByText("shop").waitFor({ state: "attached" })) },
-  { slug: "settings-project-members", path: "/settings/projects/WEB/members", ready: async (p) => void (await p.getByRole("table", { name: "Members of Web storefront" }).waitFor({ state: "attached" })) },
-  { slug: "settings-project-labels", path: "/settings/projects/WEB/labels", ready: async (p) => void (await p.getByRole("row", { name: "client-x" }).waitFor({ state: "attached" })) },
-  { slug: "settings-project-workspaces", path: "/settings/projects/WEB/workspaces", ready: async (p) => void (await p.getByRole("row", { name: "shop" }).waitFor({ state: "attached" })) },
+  { slug: "settings-project-general", path: "/projects/WEB/settings/general", ready: async (p) => void (await p.getByRole("combobox", { name: "Default Workspace" }).getByText("shop").waitFor({ state: "attached" })) },
+  { slug: "settings-project-members", path: "/projects/WEB/settings/members", ready: async (p) => void (await p.getByRole("table", { name: "Members of Web storefront" }).waitFor({ state: "attached" })) },
+  { slug: "settings-project-labels", path: "/projects/WEB/settings/labels", ready: async (p) => void (await p.getByRole("row", { name: "client-x" }).waitFor({ state: "attached" })) },
+  { slug: "settings-project-workspaces", path: "/projects/WEB/settings/workspaces", ready: async (p) => void (await p.getByRole("row", { name: "shop" }).waitFor({ state: "attached" })) },
 ];
 
 for (const scheme of ["light", "dark"] as const) {
@@ -317,7 +317,7 @@ for (const scheme of ["light", "dark"] as const) {
 
       if (size.name === "phone") {
         // Settings' nav is the sheet the top bar's button opens.
-        await page.goto("/settings/projects/WEB/general");
+        await page.goto("/settings/account");
         await page.getByRole("button", { name: "Toggle Sidebar" }).click();
         await expect(page.getByRole("navigation", { name: "Settings pages" })).toBeVisible();
         // The sheet has slid in.

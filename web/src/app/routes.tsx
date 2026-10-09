@@ -25,6 +25,7 @@ import {
 } from "@/screens/settings";
 import { TaskPage, TaskPeek } from "@/screens/task";
 import { WorkflowEditPage, WorkflowPage, WorkflowsPage } from "@/screens/workflow";
+import { projectSettingsPath, useRouteProject, type ProjectSettingsPage } from "./currentProject";
 import { NotFound } from "./NotFound";
 import { ProjectScope, ToCurrentProject } from "./ProjectScope";
 import { SetupChecklist } from "./SetupChecklist";
@@ -63,6 +64,11 @@ export function AppRoutes() {
             <Route path="workflow" element={<FromWorkflow />} />
             <Route path="agents" element={<AgentsPage />} />
             <Route path="activity" element={<ActivityPage />} />
+            <Route path="settings" element={<Navigate to="general" replace />} />
+            <Route path="settings/general" element={<ProjectGeneralPage />} />
+            <Route path="settings/members" element={<ProjectMembersPage />} />
+            <Route path="settings/labels" element={<ProjectLabelsPage />} />
+            <Route path="settings/workspaces" element={<ProjectWorkspacesPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="tasks/:task" element={<TaskPage />} />
@@ -90,16 +96,16 @@ export function AppRoutes() {
             <Route path="labels" element={<LabelsSettingsPage />} />
             <Route path="install" element={<InstallSettingsPage />} />
           </Route>
-          <Route path="projects" element={<ToCurrentProject path={(key) => `/settings/projects/${key}/general`} />} />
+          <Route path="projects" element={<ToCurrentProject path={(key) => projectSettingsPath({ key })} />} />
           <Route path="projects/:key" element={<ProjectScope />}>
-            <Route index element={<Navigate to="general" replace />} />
-            <Route path="general" element={<ProjectGeneralPage />} />
+            <Route index element={<ToProjectSettings page="general" />} />
+            <Route path="general" element={<ToProjectSettings page="general" />} />
+            <Route path="members" element={<ToProjectSettings page="members" />} />
+            <Route path="labels" element={<ToProjectSettings page="labels" />} />
+            <Route path="workspaces" element={<ToProjectSettings page="workspaces" />} />
             <Route path="workflows" element={<ToProjectWorkflows />} />
             <Route path="workflows/:workflow" element={<ToProjectWorkflows edit />} />
             <Route path="workflow" element={<FromWorkflow settings />} />
-            <Route path="members" element={<ProjectMembersPage />} />
-            <Route path="labels" element={<ProjectLabelsPage />} />
-            <Route path="workspaces" element={<ProjectWorkspacesPage />} />
           </Route>
           <Route path="*" element={<NotFound crumbs={[{ label: "Settings" }, { label: "Not found" }]} />} />
         </Route>
@@ -143,6 +149,16 @@ function FromTeam() {
   const { key = "" } = useParams();
   const { search } = useLocation();
   return <Navigate to={{ pathname: `/projects/${encodeURIComponent(key)}/tasks`, search }} replace />;
+}
+
+/**
+ * /settings/projects/:key and its pages, a Project's settings before they moved under the Project:
+ * the same page there, keeping what else the address says.
+ */
+function ToProjectSettings({ page }: { page: ProjectSettingsPage }) {
+  const project = useRouteProject();
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: projectSettingsPath(project, page), search }} replace />;
 }
 
 /**
@@ -206,13 +222,14 @@ function FromFeature() {
 
 /**
  * /admin/*: Admin is Settings now. Members and Skills are the Organisation's; a Team is a
- * Project; the Workflow is the current Project's Workflows, its Workspaces in its settings.
+ * Project, its page the Project's settings; the Workflow is the current Project's Workflows, its
+ * Workspaces in the Project's settings.
  */
 function FromAdmin() {
   const { "*": rest = "" } = useParams();
   const { search } = useLocation();
   const [page, record] = rest.split("/");
-  const projectPage = (p: string) => <ToCurrentProject path={(key) => `/settings/projects/${key}/${p}`} />;
+  const projectPage = (p: ProjectSettingsPage) => <ToCurrentProject path={(key) => projectSettingsPath({ key }, p)} />;
   const to = (pathname: string) => <Navigate to={{ pathname, search }} replace />;
   switch (page) {
     case "":
@@ -221,7 +238,7 @@ function FromAdmin() {
     case "skills":
       return to(`/settings/organisation/skills${record ? `/${record}` : ""}`);
     case "teams":
-      return to(record ? `/settings/projects/${record}/general` : "/settings/projects");
+      return record ? to(projectSettingsPath({ key: record })) : projectPage("general");
     case "workflow":
       return <ToCurrentProject area="workflows" />;
     case "workspaces":

@@ -10,7 +10,8 @@ import { NotFound } from "./NotFound";
 import { Content, TopBar } from "./TopBar";
 
 /**
- * The pages under `/projects/:key` and `/settings/projects/:key`: finds the Project the key names
+ * The pages under `/projects/:key`, and Settings' old addresses of a Project's pages
+ * (`/settings/projects/:key/…`) that lead there: finds the Project the key names
  * (an id or a key in another case is rewritten to the key), and gives it to them through
  * `useRouteProject()`. A key that names no Project is a page of its own.
  */

@@ -58,7 +58,7 @@ describe("the shell", () => {
       ["Workflows", "/projects/WEB/workflows"],
       ["Agents", "/projects/WEB/agents"],
       ["Activity", "/projects/WEB/activity"],
-      ["Settings", "/settings/projects/WEB/general"],
+      ["Settings", "/projects/WEB/settings/general"],
     ]);
     expect(within(projectsNav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
     // Nothing at the foot: no Member row, no caption saying what the Member is.
@@ -345,9 +345,9 @@ describe("the addresses before Projects", () => {
     ["/admin/members", "Settings/Members"],
     ["/admin/members/m-bob", "Settings/Members/bob"],
     ["/admin/skills/engineer", "Settings/Skills/engineer"],
-    ["/admin/teams/OPS", "Settings/Ops/General"],
+    ["/admin/teams/OPS", "Ops/Settings"],
     ["/admin/workflow", "Web/Workflows"],
-    ["/admin/workspaces", "Settings/Web/Workspaces"],
+    ["/admin/workspaces", "Web/Settings"],
     ["/account", "Settings/Account"],
     ["/teams/OPS/features", "Ops/Tasks"],
     ["/agents", "Web/Agents"],
@@ -537,7 +537,7 @@ describe("keys", () => {
       "Settings › Skills",
       "Settings › Labels",
       "Settings › Install",
-      "Settings › Web",
+      "Web › Settings",
     ]);
   });
 
@@ -704,23 +704,23 @@ describe("keys", () => {
 describe("Settings", () => {
   const nav = () => screen.getByRole("navigation", { name: "Settings pages" });
 
-  it("has its own nav, which leads Back to the page you came from", async () => {
+  it("has its own nav of the Account and the Organisation, which leads Back to the page you came from", async () => {
     mockApi(signedIn());
     renderApp("/projects/OPS/workflows");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
-    await userEvent.click(within(sidebar()).getByRole("link", { name: "Settings" }));
+    const menu = await openOrganisationMenu();
+    await userEvent.click(within(menu).getByRole("menuitem", { name: /^Settings/ }));
 
-    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Ops/General"));
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/"));
     expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
     expect(within(nav()).getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
     const organisation = within(nav()).getByRole("list", { name: "Organisation" });
     expect(within(organisation).getAllByRole("link").map((l) => l.textContent)).toEqual(["Members", "Agents", "Skills", "Labels", "Install"]);
     expect(within(organisation).getByRole("link", { name: "Members" })).toHaveAttribute("href", "/settings/organisation/members");
-    // The Project in the address is unfolded onto its pages.
-    const ops = within(nav()).getByRole("list", { name: "Ops" });
-    expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Members", "Labels", "Workspaces"]);
-    expect(within(ops).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
+    // A Project's settings are under the Project in the app, not here.
+    expect(within(nav()).queryByRole("list", { name: "Projects" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByRole("button", { name: "Ops" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();
     // The Settings shell draws the same flat sidebar beside the page card.
     expect(nav().closest("[data-slot=sidebar]")).toHaveAttribute("data-variant", "inset");
 
@@ -728,16 +728,34 @@ describe("Settings", () => {
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
   });
 
-  it("shows a Member who is not an admin their Account and the Projects they are in, and refuses the Organisation's pages", async () => {
+  it("shows a Member who is not an admin their Account alone, and refuses the Organisation's pages", async () => {
     mockApi({ ...signedIn(bob), "GET /v1/me": me(bob) });
     renderApp("/settings");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/Account"));
     expect(within(nav()).queryByRole("list", { name: "Organisation" })).not.toBeInTheDocument();
-    expect(within(within(nav()).getByRole("list", { name: "Projects" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["WWeb"]);
+    expect(within(nav()).queryByRole("list", { name: "Projects" })).not.toBeInTheDocument();
+    expect(within(nav()).queryByRole("button", { name: "Web" })).not.toBeInTheDocument();
     expect(within(nav()).queryByRole("button", { name: "New Project" })).not.toBeInTheDocument();
 
     renderApp("/settings/organisation/members");
     expect(await screen.findByRole("heading", { name: "Admins only" })).toBeInTheDocument();
+  });
+
+  it("of a Project opens under the Project from the sidebar, beside the app's sidebar, marked there on every page", async () => {
+    mockApi(signedIn());
+    renderApp("/projects/OPS/workflows");
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
+    const settings = within(within(projectsNav()).getByRole("list", { name: "Ops" })).getByRole("link", { name: "Settings" });
+    expect(settings).toHaveAttribute("href", "/projects/OPS/settings/general");
+    await userEvent.click(settings);
+
+    await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Settings"));
+    expect(screen.queryByRole("navigation", { name: "Settings pages" })).not.toBeInTheDocument();
+    expect(settings).toHaveAttribute("aria-current", "page");
+    const tabs = () => screen.getByRole("navigation", { name: "Project settings" });
+    await userEvent.click(within(tabs()).getByRole("link", { name: "Members" }));
+    await waitFor(() => expect(within(tabs()).getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page"));
+    expect(within(within(projectsNav()).getByRole("list", { name: "Ops" })).getByRole("link", { name: "Settings" })).toHaveAttribute("aria-current", "page");
   });
 });
 

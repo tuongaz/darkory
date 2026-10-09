@@ -21,20 +21,16 @@ import { Switch } from "@/components/ui/switch";
 import { markFill, markHues, markName } from "@/lib/projectHue";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
-import { SettingsFrame, tableHead, tableRow } from "./frame";
+import { tableHead, tableRow } from "./frame";
 import { groupByKind } from "./model";
 import { NewMemberDialog } from "./NewMember";
+import { ProjectSettingsFrame } from "./ProjectFrame";
 import { GroupRow, MemberName, MoreMenu, Picker, SettingsForm, SettingsRow, w320 } from "./parts";
 import { memberPath } from "./paths";
 import { useMemberDetails } from "./queries";
 
-/** The crumbs of a Project's settings page: the Project (left out on a phone), then the page. */
-function crumbs(project: Project, page: string) {
-  return [{ label: project.name, wide: true }, { label: page }];
-}
-
 /**
- * Settings › a Project › General: its name, its colour, its key (which never changes), and what a Task filed
+ * A Project › Settings › General: its name, its colour, its key (which never changes), and what a Task filed
  * in it takes when its filer does not say: the Workspace, Auto-complete and Acceptance. Admins
  * change them; anyone else reads.
  */
@@ -42,7 +38,7 @@ export function ProjectGeneralPage() {
   const project = useRouteProject();
   const admin = useCurrentMe().member.admin;
   return (
-    <SettingsFrame crumbs={crumbs(project, "General")}>
+    <ProjectSettingsFrame project={project} page="general">
       <div className="max-w-[820px]">
         <div className="flex items-center gap-2.5 pb-5">
           <ProjectMark project={project} size="lg" />
@@ -66,7 +62,7 @@ export function ProjectGeneralPage() {
           <AcceptanceRow project={project} admin={admin} />
         </SettingsForm>
       </div>
-    </SettingsFrame>
+    </ProjectSettingsFrame>
   );
 }
 
@@ -268,7 +264,7 @@ const memberCols = "grid-cols-[minmax(0,1fr)_26px] md:grid-cols-[220px_minmax(0,
 const wide = "hidden md:flex";
 
 /**
- * Settings › a Project › Members: who takes its Tasks, humans then agents, with their Skills and
+ * A Project › Settings › Members: who takes its Tasks, humans then agents, with their Skills and
  * Reporting line. An admin adds a Member, makes a new agent in it, or takes one out.
  */
 export function ProjectMembersPage() {
@@ -278,9 +274,9 @@ export function ProjectMembersPage() {
     <Loaded
       query={detail}
       loading={
-        <SettingsFrame crumbs={crumbs(project, "Members")}>
+        <ProjectSettingsFrame project={project} page="members">
           <Skeleton className="h-8 w-60" />
-        </SettingsFrame>
+        </ProjectSettingsFrame>
       }
     >
       {(d) => <ProjectMembers project={d.project} members={d.members} />}
@@ -312,12 +308,13 @@ function ProjectMembers({ project, members }: { project: Project; members: Membe
   );
 
   return (
-    <SettingsFrame
-      crumbs={crumbs(project, "Members")}
+    <ProjectSettingsFrame
+      project={project}
+      page="members"
       pad={false}
       actions={
         admin && (
-          <Button variant="outline" onClick={() => setNewAgent(true)}>
+          <Button variant="outline" aria-label="New agent" onClick={() => setNewAgent(true)}>
             <BotIcon />
             <span className="hidden sm:inline">New agent</span>
           </Button>
@@ -328,9 +325,9 @@ function ProjectMembers({ project, members }: { project: Project; members: Membe
           <Picker
             align="end"
             trigger={
-              <Button>
+              <Button aria-label="Add Member">
                 <PlusIcon />
-                Add Member
+                <span className="hidden sm:inline">Add Member</span>
               </Button>
             }
             placeholder={`Add to ${project.name}…`}
@@ -373,7 +370,7 @@ function ProjectMembers({ project, members }: { project: Project; members: Membe
         </div>
       )}
       {newAgent && <NewMemberDialog kind="agent" fixedKind project={project} onClose={() => setNewAgent(false)} />}
-    </SettingsFrame>
+    </ProjectSettingsFrame>
   );
 }
 

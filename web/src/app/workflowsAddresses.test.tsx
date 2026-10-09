@@ -185,11 +185,10 @@ describe("the word", () => {
     expect(await screen.findByRole("link", { name: "Edit Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work/edit");
   });
 
-  it("is no page of Settings' nav", async () => {
+  it("is no page of a Project's settings", async () => {
     mockApi(signedIn(ada));
-    renderApp("/settings/projects/WEB/general");
-    const nav = await screen.findByRole("navigation", { name: "Settings pages" });
-    const web = await within(nav).findByRole("list", { name: "Web" });
-    expect(within(web).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Members", "Labels", "Workspaces"]);
+    renderApp("/projects/WEB/settings/general");
+    const tabs = await screen.findByRole("navigation", { name: "Project settings" });
+    expect(within(tabs).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Members", "Labels", "Workspaces"]);
   });
 });

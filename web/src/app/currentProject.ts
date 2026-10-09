@@ -5,9 +5,9 @@ import { useProjects } from "@/api/queries";
 import { useCurrentMe } from "@/me";
 
 /** The places of a Project the sidebar lists under it, each at `/projects/:key/<area>`. */
-export type ProjectArea = "tasks" | "workflows" | "agents" | "activity";
+export type ProjectArea = "tasks" | "workflows" | "agents" | "activity" | "settings";
 
-/** The pages of a Project's settings, each at `/settings/projects/:key/<page>`. */
+/** The pages of a Project's settings, each at `/projects/:key/settings/<page>`. */
 export type ProjectSettingsPage = "general" | "members" | "labels" | "workspaces";
 
 // The Project last shown, remembered by this browser, so the app reopens where you left it.
@@ -112,9 +112,9 @@ export function projectPath(project: Pick<Project, "key">, area: ProjectArea = "
   return `/projects/${encodeURIComponent(project.key)}/${area}${search ? `?${search}` : ""}`;
 }
 
-/** The address of a Project's settings, its General page unless another is named. */
+/** The address of a Project's settings (`/projects/:key/settings/<page>`), its General page unless another is named. */
 export function projectSettingsPath(project: Pick<Project, "key">, page: ProjectSettingsPage = "general"): string {
-  return `/settings/projects/${encodeURIComponent(project.key)}/${page}`;
+  return `${projectPath(project, "settings")}/${page}`;
 }
 
 const withSearch = (path: string, params: Record<string, string>) => {

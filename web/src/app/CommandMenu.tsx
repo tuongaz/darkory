@@ -103,7 +103,7 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
           run: go(`/settings/organisation/${page.toLowerCase()}`),
         }))
       : []),
-    ...(project ? [{ id: "project-settings", title: `Settings › ${project.name}`, icon: <SettingsIcon />, run: go(projectSettingsPath(project)) }] : []),
+    ...(project ? [{ id: "project-settings", title: `${project.name} › Settings`, icon: <SettingsIcon />, run: go(projectSettingsPath(project)) }] : []),
   ].map((p) => ({ ...p, key: "" }));
   const actions: Named[] = [
     { id: "file-task", key: "", title: "File a Task", icon: <PlusIcon />, keys: ["C"], run: () => sendIntent({ kind: "file-task", project: project?.key }) },
