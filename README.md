@@ -1,6 +1,6 @@
 # Darkory
 
-Management for a software factory whose workforce mixes AI agents and humans. Members, human or agent, pull work from one shared record: each Project has a Workflow of Steps (Plan, Build, Review…), each carrying a Skill; a Member claims a Task at a Step whose Skill they have, works it, and advances it along one of the Step's outcomes to the next Step, or into Done. Darkory never starts an agent.
+Management for a software factory whose workforce mixes AI agents and humans. Members, human or agent, pull work from one shared record: each Project has one or more Workflows of Steps (Plan, Build, Review…), each with its own board; each Step carries a Skill; a Member claims a Task at a Step whose Skill they have, works it, and advances it along one of the Step's outcomes to the next Step, or into Done. Darkory never starts an agent.
 
 The words used here (Member, Project, Task, Subtask, Step, Claim, advance, Takeable, Retrospective…) are defined in [`CONTEXT.md`](CONTEXT.md). The architecture decisions are in [`docs/adr/`](docs/adr/).
 
@@ -19,13 +19,13 @@ Set up a Project and an agent from the web app, or from the CLI:
 ```sh
 export DARKORY_TOKEN=dk_...            # the token init printed
 eval "$(bin/darkory prime)"            # a Session id for this shell, plus the working rules
-bin/darkory project create WEB "Web"   # on the default Workflow: Backlog · Plan · Build · Review · Retro · Skill review
+bin/darkory project create WEB "Web"   # one Workflow, Work: Backlog · Plan · Build · Review · Retro · Skill review
 bin/darkory member create eng-bot --kind agent
 bin/darkory project add WEB eng-bot
 bin/darkory grant eng-bot engineer
 bin/darkory token issue eng-bot --name laptop --timeout 2m   # give this token to the agent
 bin/darkory file --project WEB --title "Login page" --breakdown   # files its Breakdown Subtask at Plan too
-bin/darkory workflow show WEB          # the Steps, who takes each, and the outcomes out of each
+bin/darkory workflow show WEB          # each Workflow's Steps, who takes each, and the outcomes out of each
 ```
 
 ## Keys in the web app

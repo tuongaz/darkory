@@ -2,6 +2,8 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (or superpowers:subagent-driven-development) to implement this plan task-by-task. Read `CLAUDE.md`, `CONTEXT.md`, `docs/adr/0019-named-workflows.md` and `docs/build/plan.md` first. Every word on screen, in the CLI and in the API's descriptions comes from `CONTEXT.md`.
 
+**State (2026-10-09):** Go Tasks 0–10 are done on `named-workflows`, and Task 19's docs; the web Tasks 11–16 are done on `named-workflows-web`, and Task 17 is pending. The plan was revised as review found gaps: `d1f5e48` before the record work, `431b561` after the first Core commits; each Task's review follow-ups are their own commits on the branch it reviewed. Decisions taken while building that this plan did not settle are in [`decisions.md`](decisions.md) under "Named Workflows". The body below is the plan as written, kept as the record.
+
 **Goal:** A Project's Steps and Connectors are grouped into one or more named Workflows, each with its own board and canvas; a Connector may lead into a Step of another Workflow of the same Project; a Task's Workflow is that of its Step and is never stored.
 
 **Architecture:** One new table, `workflows`, under `steps`; one write, `PUT /v1/projects/{project}/workflow`, still puts the Project's whole graph in place, with its Workflows, so a crossing Connector and the Step it reaches land in one transaction. A Workflow's `position` orders the Project's Steps (Workflow first, then Step), so "the first Step" and the builtin Steps keep their meaning. An ended Task keeps `last_step_id`, the Step it ended at, so a Done card lands on the board of the Workflow it ended in. The web shows one Workflow at a time, picked by a chip in the breadcrumb and `?workflow=`.
