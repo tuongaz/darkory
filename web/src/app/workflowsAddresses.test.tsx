@@ -69,7 +69,8 @@ describe("the word", () => {
     mockApi({ ...signedIn(ada), "GET /v1/tasks": { items: [] }, "GET /v1/activity": { items: [], last_seq: 0 }, "GET /v1/runner/sessions": { items: [], runner: false } });
     renderApp("/projects/WEB/workflows");
     await waitFor(() => expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText("Workflows")).toBeInTheDocument());
-    expect(screen.getByRole("link", { name: "Edit the Workflows" })).toHaveAttribute("href", "/settings/projects/WEB/workflows");
+    // A Project of one Workflow: Edit opens its editor.
+    expect(screen.getByRole("link", { name: "Edit the Workflows" })).toHaveAttribute("href", expect.stringMatching(/^\/settings\/projects\/WEB\/workflows\/./));
     const sidebar = screen.getAllByRole("link", { name: "Workflows" });
     expect(sidebar.some((l) => l.getAttribute("href") === "/projects/WEB/workflows")).toBe(true);
   });

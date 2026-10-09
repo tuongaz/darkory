@@ -303,7 +303,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
 
   it("the chip lists the five; picking Bugs redraws the line with Investigate first and an entry from Triage", async () => {
     several([at(1, "Sort the inbox", wfStep.triage, wfId.triage), at(2, "Crash on save", wfStep.investigate, wfId.bugs)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp(`/projects/WEB/workflows/${wfId.triage}`);
     await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
     expect(heads()).toEqual(["Triage", "Done"]);
     // Triage's four outcomes leave the line as exits; WEB-2, at Investigate, is on Bugs' line.
@@ -342,7 +342,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
       at(3, "Another to sort", wfStep.triage, wfId.triage),
       at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: "k-9" }),
     ]);
-    renderApp("/projects/WEB/workflows?scope=none");
+    renderApp(`/projects/WEB/workflows/${wfId.triage}?scope=none`);
     await waitFor(() => expect(tokenOf("WEB-3")).not.toBeNull());
     // WEB-1 is left out here; WEB-2, also a Subtask, is on Bugs' line and not counted.
     expect(screen.getByText("1 hidden")).toBeInTheDocument();
@@ -366,7 +366,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
       at(4, "Fixed", wfStep.verify, wfId.bugs, { state: "done", step_id: undefined, last_step_id: wfStep.verify, ended_at: today }),
       at(5, "Also fixed", wfStep.verify, wfId.bugs, { state: "done", step_id: undefined, last_step_id: wfStep.verify, ended_at: today }),
     ]);
-    renderApp("/projects/WEB/workflows");
+    renderApp(`/projects/WEB/workflows/${wfId.triage}`);
     await waitFor(() => expect(within(line()).getByText("1 today")).toBeInTheDocument());
     await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
     await userEvent.click(await screen.findByRole("option", { name: "Bugs" }));
@@ -484,7 +484,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
     const forBugs = q(20, "Which build crashed?", { workflow_id: wfId.bugs });
     const loose = q(21, "Anyone seen this?");
     several([forBugs, loose, at(2, "Crash on save", wfStep.investigate, wfId.bugs, blocked(forBugs))]);
-    renderApp(`/projects/WEB/workflows?view=text`);
+    renderApp(`/projects/WEB/workflows/${wfId.triage}?view=text`);
     const withMember = await screen.findByRole("region", { name: "With a Member" });
     expect(within(withMember).queryByText("Which build crashed?")).toBeNull();
     expect(within(withMember).getByText("Anyone seen this?")).toBeInTheDocument();
@@ -508,7 +508,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
 
   it("a Task advancing out along an exit travels the exit's route, and is gone from the line", async () => {
     const { list } = several([at(2, "Crash on save", wfStep.triage, wfId.triage)]);
-    renderApp("/projects/WEB/workflows");
+    renderApp(`/projects/WEB/workflows/${wfId.triage}`);
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
     list.tasks = [at(2, "Crash on save", wfStep.investigate, wfId.bugs)];
     deliver(entry(7, "task.advanced", "k-2", { from: wfStep.triage, to: wfStep.investigate, outcome: "bug" }, builder.id));

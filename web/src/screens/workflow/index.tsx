@@ -1,11 +1,13 @@
 import { LoaderIcon, PencilIcon } from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
-import { remember, usePickedWorkflow, type PickOptions } from "@/components/pickedWorkflow";
+import { remember, workflowParam } from "@/components/pickedWorkflow";
+import { Skeleton } from "@/components/ui/skeleton";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { WorkflowChip } from "@/components/WorkflowChip";
-import { projectPath, projectSettingsPath, useRouteProject, workflowsPath } from "@/app/currentProject";
+import { projectPath, projectSettingsPath, useRouteProject, workflowsPath, workflowsSettingsPath } from "@/app/currentProject";
 import { NotFound } from "@/app/NotFound";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
@@ -27,16 +29,66 @@ import { LiveWorkflow } from "./Live";
 import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
 import { ScopeChip } from "./ScopeChip";
+import { WorkflowsList } from "./WorkflowsList";
 import { useGoToWorkflow, useWorkflowSegment, workflowNamed } from "./routeWorkflow";
 import { stepParam } from "./StepPeek";
 import { ChangesChip } from "./edit/Changes";
 import { toShort } from "@/lib/shortid";
 
 /**
- * /projects/:key/workflows and /projects/:key/workflows/:workflow: a Workflow of the Project, live,
- * as one line with its panels; of a Project of several, one Workflow at a time, the one the
- * address names, else picked by the chip in the breadcrumb (`?workflow=`, shared with the board). `?scope=` narrows it to the Tasks with no Parent, a Parent's Subtasks or one
- * Task, `?view=` swaps the line for the Blocking among its Tasks or a list.
+ * /projects/:key/workflows: of a Project of two or more, its Workflows as a list, each row opening
+ * that Workflow's page; of a Project of one, that Workflow's page in place. A `?workflow=` (an
+ * address of the board's kind) opens the page of the Workflow it names.
+ */
+export function WorkflowsPage() {
+  const project = useRouteProject();
+  const admin = useCurrentMe().member.admin;
+  const query = useWorkflow(project.key);
+  const { search } = useLocation();
+  const graph = query.data;
+  if (graph && graph.workflows.length < 2) return <WorkflowPage />;
+  const params = new URLSearchParams(search);
+  const named = params.get(workflowParam);
+  const asked = named && graph ? workflowNamed(graph.workflows, named) : undefined;
+  if (asked) {
+    params.delete(workflowParam);
+    const rest = params.toString();
+    return <Navigate to={{ pathname: workflowsPath(project, asked.id), search: rest ? `?${rest}` : "" }} replace />;
+  }
+  return (
+    <>
+      <TopBar
+        crumbs={[projectCrumb(project), { label: "Workflows" }]}
+        actions={
+          admin && (
+            <Button asChild variant="outline">
+              <Link to={projectSettingsPath(project, "workflows")} aria-label="Edit the Workflows">
+                <PencilIcon />
+                <span className="hidden sm:inline">Edit</span>
+              </Link>
+            </Button>
+          )
+        }
+      />
+      <Content className="overflow-auto">
+        {query.isError ? (
+          <Refusal error={query.error} className="m-6" />
+        ) : graph ? (
+          <WorkflowsList project={project} graph={graph} />
+        ) : (
+          <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />
+        )}
+      </Content>
+    </>
+  );
+}
+
+/**
+ * /projects/:key/workflows/:workflow: one Workflow of the Project, live, as one line with its
+ * panels (and /projects/:key/workflows of a Project of one). Of a Project of several, the chip in
+ * the breadcrumb goes to another's page, remembered as the board's pick. `?scope=` narrows it to
+ * the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the line for the
+ * Blocking among its Tasks or a list.
  */
 export function WorkflowPage() {
   const project = useRouteProject();
@@ -47,13 +99,11 @@ export function WorkflowPage() {
   const filter = useTaskFilter({ projects: [project], tasks });
   const workflows = useWorkflow(project.key).data?.workflows;
   const segment = useWorkflowSegment();
-  const remembered = usePickedWorkflow(project, workflows);
-  const fixed = segment && workflows ? workflowNamed(workflows, segment) : undefined;
+  const several = !!workflows && workflows.length > 1;
+  // The Workflow the address names; of a Project of one, its one.
+  const shown = workflows && (segment ? workflowNamed(workflows, segment) : workflowsInOrder(workflows)[0]);
   const goTo = useGoToWorkflow((id) => workflowsPath(project, id), project);
-  const picked = segment
-    ? { id: fixed?.id, set: (id: string, options?: PickOptions) => goTo(id, { also: options?.also, replace: id === fixed?.id }) }
-    : remembered;
-  const { data } = useLineData(project.key, picked.id, scope, filter.matches);
+  const { data } = useLineData(project.key, shown?.id, scope, filter.matches);
   const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.shown);
   // A Task scoped to stays in scope across a pick only where it is listed, as on the board; a
   // Parent also where one of its open Subtasks is on the line, as the scope menu offers it.
@@ -62,19 +112,19 @@ export function WorkflowPage() {
     const scoped = scope && (scope.kind === "parent" || scope.kind === "task") ? scope.id : undefined;
     const at = scoped ? data?.shown?.of(scoped) : undefined;
     const working = scope?.kind === "parent" && !!data?.shown?.lines(scope.id).has(next);
-    picked.set(next, at && !at.has(next) && !working ? { also: (p) => p.delete("scope") } : undefined);
+    goTo(next, { also: at && !at.has(next) && !working ? (p) => p.delete("scope") : undefined, replace: next === shown?.id });
   };
-  if (segment && workflows && !fixed) return <NotFound />;
+  if (segment && workflows && !shown) return <NotFound />;
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
       <TopBar
         crumbs={[
           projectCrumb(project),
+          // Back to the list; on a phone it gives its room to the Project's mark and the chip.
+          { label: "Workflows", to: segment ? workflowsPath(project) : undefined, wide: several },
           // The Workflow drawn, at every width: on a phone too it is the way to another.
-          ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={pick} />, whole: true }] : []),
-          // Beside the chip on a phone, the page's name gives its room to the Project and the chip.
-          { label: "Workflows", wide: !!workflows && workflows.length > 1 },
+          ...(several ? [{ label: <WorkflowChip workflows={workflows} picked={shown?.id} onPick={pick} />, whole: true }] : []),
           ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
         ]}
         view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
@@ -91,7 +141,8 @@ export function WorkflowPage() {
             {view === "line" && <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />}
             {admin && (
               <Button asChild variant="outline">
-                <Link to={projectSettingsPath(project, "workflows")} aria-label="Edit the Workflows">
+                {/* This Workflow's editor; a Project of one names no Workflow, so its Edit says Workflows. */}
+                <Link to={workflowsSettingsPath(project, shown?.id)} aria-label={several && shown ? `Edit ${shown.name}` : "Edit the Workflows"}>
                   <PencilIcon />
                   <span className="hidden sm:inline">Edit</span>
                 </Link>
@@ -102,7 +153,7 @@ export function WorkflowPage() {
       />
       <Content className="flex flex-col overflow-hidden">
         {view === "line" && <FilterChipRow {...filter.bar} />}
-        <LiveWorkflow project={project} workflowId={picked.id} view={view} scope={scope} onView={setView} filter={filter.matches} />
+        <LiveWorkflow project={project} workflowId={shown?.id} view={view} scope={scope} onView={setView} filter={filter.matches} />
       </Content>
     </>
   );

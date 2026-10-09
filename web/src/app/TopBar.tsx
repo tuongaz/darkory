@@ -34,6 +34,8 @@ export function TopBar({
   // The area's crumb beside a whole one shows on a phone as its mark alone, about 20px, still the
   // link it was (named for the area, its name hidden).
   const mark = (i: number, c: Crumb) => i === 0 && whole && !c.whole && !!c.icon;
+  // On a phone the mark stands beside the first crumb shown after it, with no "/" between.
+  const next = crumbs.findIndex((c, i) => i > 0 && !c.wide);
   const icon = (i: number, c: Crumb) =>
     mark(i, c) ? <span className="flex flex-none max-sm:[&>*]:size-5 max-sm:[&>*]:rounded-[5px] max-sm:[&>*]:text-[11px]">{c.icon}</span> : c.icon;
   return (
@@ -43,7 +45,7 @@ export function TopBar({
         {crumbs.map((c, i) => (
           <Fragment key={i}>
             {i > 0 && (
-              <span aria-hidden className={cn("text-border", (c.wide || (i === 1 && whole)) && "hidden sm:inline")}>
+              <span aria-hidden className={cn("text-border", (c.wide || (i === next && whole)) && "hidden sm:inline")}>
                 /
               </span>
             )}
