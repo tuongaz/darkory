@@ -79,7 +79,7 @@ func TestBots(t *testing.T) {
 	}
 	web, ops := admin.workflow("WEB"), admin.workflow("OPS")
 	for _, wf := range []client.Workflows{web, ops} {
-		if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(bot.SoftwareWorkflow)) {
+		if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(&bot.Software)) {
 			t.Fatalf("a Project's Workflow is %v", names)
 		}
 	}
@@ -711,19 +711,26 @@ func orgShape(a api) []string {
 	return out
 }
 
-// stepNamesOf are a Workflow's Steps' names, in order; specStepNames a preset's.
+// stepNamesOf are a Project's Steps' names, each under its Workflow's, in the Project's order;
+// specStepNames a preset's.
 func stepNamesOf(wf client.Workflows) []string {
+	named := map[string]string{}
+	for _, w := range wf.Workflows {
+		named[w.ID] = w.Name
+	}
 	var out []string
 	for _, s := range wf.Steps {
-		out = append(out, s.Name)
+		out = append(out, named[s.WorkflowID]+" › "+s.Name)
 	}
 	return out
 }
 
-func specStepNames(w bot.WorkflowSpec) []string {
+func specStepNames(p *bot.Preset) []string {
 	var out []string
-	for _, s := range w.Steps {
-		out = append(out, s.Name)
+	for _, w := range p.Workflows {
+		for _, s := range w.Steps {
+			out = append(out, w.Name+" › "+s.Name)
+		}
 	}
 	return out
 }
@@ -753,8 +760,8 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 }
 
 // atOneStep checks the invariant that a Task is at exactly one Step or none: an open Task that
-// is not a Parent and not aimed at a Member is at one Step of its Project's Workflow; any other
-// Task is at none.
+// is not a Parent and not aimed at a Member is at one Step of a Workflow of its Project (the
+// Project's Workflows read whole, every Workflow's Steps in one list); any other Task is at none.
 func atOneStep(t *testing.T, d client.TaskDetail, workflows map[string]client.Workflows) {
 	t.Helper()
 	tk := d.Task
@@ -767,7 +774,7 @@ func atOneStep(t *testing.T, d client.TaskDetail, workflows map[string]client.Wo
 	case tk.StepID != nil:
 		wf, ok := workflows[tk.ProjectID]
 		if ok && !slices.ContainsFunc(wf.Steps, func(s client.WorkflowStep) bool { return s.ID == *tk.StepID }) {
-			t.Errorf("%s is at %s, which is no Step of its Project's Workflow", tk.Key, *tk.StepID)
+			t.Errorf("%s is at %s, which is no Step of its Project's Workflows", tk.Key, *tk.StepID)
 		}
 		if d.Step == nil || d.Step.ID != *tk.StepID {
 			t.Errorf("%s is at %s, and its detail shows %+v", tk.Key, *tk.StepID, d.Step)

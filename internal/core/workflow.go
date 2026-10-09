@@ -991,7 +991,7 @@ func places(what, one string, n int, pos func(i int) int64) ([]int64, error) {
 	for i := range n {
 		given[i], order[i] = pos(i), i
 		if given[i] < 0 {
-			return nil, refuse(CodeInvalid, "the position of %s is 1 or more, not %d", one, given[i])
+			return nil, refuse(CodeInvalid, "the position of %s is 1 or more, or left out, not %d", one, given[i])
 		}
 		if given[i] == 0 {
 			given[i] = int64(i + 1)

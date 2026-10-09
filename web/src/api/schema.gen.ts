@@ -2257,7 +2257,7 @@ export interface components {
              * Format: int64
              * @description Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
              */
-            position: number;
+            position?: number;
         };
         StepInput: {
             /**
@@ -2274,7 +2274,7 @@ export interface components {
              * Format: int64
              * @description The Step's place in its Workflow; distinct among that Workflow's Steps, numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
              */
-            position: number;
+            position?: number;
             /**
              * Format: int64
              * @description Left out, a Step of the Project now keeps its place, and a new one is drawn at (position − 1) × 448 in its Workflow.
@@ -2302,7 +2302,7 @@ export interface components {
              * Format: int64
              * @description Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
              */
-            position: number;
+            position?: number;
         };
         /**
          * @description A named, coloured mark carried by any number of Tasks: a Project's own, or the

@@ -556,10 +556,10 @@ func TestWorkflowCommands(t *testing.T) {
 			}
 		}
 		for i := range body.Steps {
-			body.Steps[i].Position++
+			body.Steps[i].Position = ptr(*body.Steps[i].Position + 1)
 		}
-		body.Steps = append(body.Steps, client.StepInput{Workflow: "Work", Name: "Backlog", Position: 1})
-		body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Backlog", To: ptr("Build"), Name: "ready", Position: 1})
+		body.Steps = append(body.Steps, client.StepInput{Workflow: "Work", Name: "Backlog", Position: ptr(int64(1))})
+		body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Backlog", To: ptr("Build"), Name: "ready", Position: ptr(int64(1))})
 		b, err := json.Marshal(body)
 		if err != nil {
 			t.Fatal(err)
@@ -668,6 +668,13 @@ func TestWorkflowCommands(t *testing.T) {
 		if len(narrowed.Workflows) != 1 || narrowed.Workflows[0].Name != "Bugs" || len(narrowed.Steps) != 2 || narrowed.Steps[0].Name != "Investigate" || len(narrowed.Connectors) != 2 {
 			t.Fatalf("workflow show --workflow Bugs --json: %+v", narrowed)
 		}
+		// Narrowed to Triage, its crossing outcome still names the Workflow and Step it reaches.
+		triage := "1   Triage           triage           0 waiting, 0 working  nobody holds its Skill\n" +
+			"      bug → Bugs › Investigate\n" +
+			"      question → Done\n"
+		if out := bob.ok("workflow", "show", "WEB", "--workflow", "Triage"); out != triage {
+			t.Fatalf("workflow show --workflow Triage:\n%s\nwant:\n%s", out, triage)
+		}
 		if out := bob.ok("workflow", "show", "WEB", "--workflow", narrowed.Workflows[0].ID); out != bugs {
 			t.Fatalf("workflow show --workflow <id>:\n%s", out)
 		}
@@ -717,6 +724,32 @@ func TestWorkflowCommands(t *testing.T) {
 		}
 		if out := bob.ok("tasks", "--workflow", "Triage", "--project", "WEB", "--state", "open"); out != "No Tasks.\n" {
 			t.Fatalf("tasks --workflow Triage:\n%s", out)
+		}
+
+		// A Workflow with no Steps says so in the words used under a heading; a Project with none
+		// says nothing can be filed in it, narrowed or not.
+		ada.json(&round, "workflow", "show", "WEB", "--body")
+		round.Workflows = append(round.Workflows, client.WorkflowInput{Name: "Ops", Position: ptr(int64(3))})
+		b, err = json.Marshal(round)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		ada.ok("workflow", "set", "WEB", "--file", file)
+		if out := bob.ok("workflow", "show", "WEB", "--workflow", "Ops"); out != "No Steps.\n" {
+			t.Fatalf("workflow show --workflow of a Workflow with no Steps:\n%s", out)
+		}
+		ada.ok("project", "create", "OPS", "Operations", "--workflow", "empty")
+		ada.stdin = `{"workflows": [{"name": "Work", "position": 1}], "steps": [], "connectors": []}`
+		ada.ok("workflow", "set", "OPS", "--file", "-")
+		none := "No Steps: nothing can be filed in this Project until it has one.\n"
+		if out := ada.ok("workflow", "show", "OPS"); out != none {
+			t.Fatalf("workflow show of a Project with no Steps:\n%s", out)
+		}
+		if out := ada.ok("workflow", "show", "OPS", "--workflow", "Work"); out != none {
+			t.Fatalf("workflow show --workflow of a Project with no Steps:\n%s", out)
 		}
 	})
 }

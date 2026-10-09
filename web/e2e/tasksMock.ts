@@ -25,6 +25,7 @@ const skills = [skill("acceptance", true), skill("breakdown", true), skill("engi
 const taker = (m: { id: string; name: string; kind: string }) => ({ id: m.id, name: m.name, kind: m.kind });
 const st = (id: string, name: string, position: number, x: number, y: number, skillName?: string, takers: { id: string; name: string; kind: string }[] = [], facts = { tasks: 0, working: 0 }) => ({
   id,
+  workflow_id: "wf-work",
   name,
   skill_id: skillName ? `s-${skillName}` : undefined,
   position,
@@ -35,6 +36,7 @@ const st = (id: string, name: string, position: number, x: number, y: number, sk
 });
 const workflow = {
   project_id: web.id,
+  workflows: [{ id: "wf-work", name: "Work", position: 1 }],
   steps: [
     st("st-backlog", "Backlog", 1, 0, 0),
     st("st-plan", "Plan", 2, 0, 128, "breakdown", [ada]),
@@ -75,9 +77,10 @@ const claim = (id: string, holder: string, extra: Record<string, unknown> = {}) 
 
 let n = 0;
 type T = Record<string, unknown> & { id: string; key: string; title: string };
+// A Task at a Step is in that Step's Workflow, the Project's one, Work.
 function task(num: number, title: string, extra: Record<string, unknown> = {}): T {
   n++;
-  return {
+  const t: T = {
     id: `k-${num}`,
     key: `WEB-${num}`,
     project_id: web.id,
@@ -100,6 +103,7 @@ function task(num: number, title: string, extra: Record<string, unknown> = {}): 
     workspace_ids: ["w-shop"],
     ...extra,
   };
+  return t.step_id ? { ...t, workflow_id: "wf-work" } : t;
 }
 const sub = (num: number, parent: T, title: string, extra: Record<string, unknown> = {}) => task(num, title, { parent_id: parent.id, rank: undefined, owner_id: parent.owner_id, ...extra });
 const parentOf = (num: number, title: string, counts: Record<string, number>, extra: Record<string, unknown> = {}) =>
@@ -184,7 +188,7 @@ function detailOf(t: T) {
     task: t,
     parent: parent && { id: parent.id, key: parent.key, title: parent.title },
     subtasks: children,
-    step: step && { id: step.id, name: step.name, skill_id: step.skill_id, position: step.position, x: step.x, y: step.y },
+    step: step && { id: step.id, workflow_id: step.workflow_id, name: step.name, skill_id: step.skill_id, position: step.position, x: step.x, y: step.y },
     connectors: workflow.connectors.filter((c) => c.from_step_id === t.step_id),
     labels: [...orgLabels, ...webLabels].filter((l) => ((t.labels as string[] | undefined) ?? []).includes(l.id)),
     workspaces: [shop],

@@ -153,10 +153,19 @@ func TestOutputEscapesEveryField(t *testing.T) {
 	ts := httptest.NewServer(rc)
 	defer ts.Close()
 	r := &runner{t: t, env: map[string]string{"DARKORY_URL": ts.URL, "DARKORY_TOKEN": "dk_test", "DARKORY_SESSION": "s"}}
+	show, workflow := r.ok("show", "WEB-3"), r.ok("workflow", "show", "WEB")
+	// The outcome into the other Workflow is named by its Workflow and Step, both cleaned, and each
+	// Workflow's heading is cleaned: the crossing path ran.
+	if crossing := one(h+"2") + " › " + one(h+"2"); !strings.Contains(show, crossing) || !strings.Contains(workflow, crossing) {
+		t.Errorf("the crossing outcome is not named %q:\n%s\n%s", crossing, show, workflow)
+	}
+	if !strings.HasPrefix(workflow, one(h)+"\n") || !strings.Contains(workflow, "\n"+one(h+"2")+"\n") {
+		t.Errorf("workflow show lacks the cleaned headings %q and %q:\n%s", one(h), one(h+"2"), workflow)
+	}
 	for name, out := range map[string]string{
-		"show":        r.ok("show", "WEB-3"),
+		"show":        show,
 		"parent show": r.ok("show", "WEB-1"),
-		"workflow":    r.ok("workflow", "show", "WEB"),
+		"workflow":    workflow,
 		"member list": r.ok("member", "list"),
 		"activity":    r.ok("activity"),
 		"error":       r.fails(ExitRefused, "claim", "WEB-3").stderr,

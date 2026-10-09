@@ -37,9 +37,9 @@ func TestMVPFlowThroughTheClient(t *testing.T) {
 
 		// WEB's Workflow: the default, with QA (qa-acme) after Build in place of Review.
 		wf := got(ada.GetWorkflowWithResponse(ctx, "WEB")).want(t, http.StatusOK).JSON200
-		in := client.SetWorkflowBody{Workflows: []client.WorkflowInput{{Name: "Work", Position: 1}}, Moves: &map[string]string{}}
+		in := client.SetWorkflowBody{Workflows: []client.WorkflowInput{{Name: "Work", Position: ptr64(1)}}, Moves: &map[string]string{}}
 		for _, s := range wf.Steps {
-			si := client.StepInput{ID: &s.ID, Workflow: "Work", Name: s.Name, Position: s.Position}
+			si := client.StepInput{ID: &s.ID, Workflow: "Work", Name: s.Name, Position: ptr64(s.Position)}
 			if s.SkillID != nil {
 				si.Skill = s.SkillID
 			}
@@ -52,7 +52,7 @@ func TestMVPFlowThroughTheClient(t *testing.T) {
 			{"Plan", "", "done"}, {"Build", "QA", "pass"}, {"QA", "", "pass"}, {"QA", "Build", "fail"},
 			{"Retro", "", "done"}, {"Retro", "Skill review", "propose"}, {"Skill review", "", "publish"}, {"Skill review", "Retro", "needs changes"},
 		} {
-			ci := client.ConnectorInput{From: k.from, Name: k.name, Position: int64(len(in.Connectors) + 1)}
+			ci := client.ConnectorInput{From: k.from, Name: k.name, Position: ptr64(int64(len(in.Connectors) + 1))}
 			if k.to != "" {
 				ci.To = ptrStr(k.to)
 			}

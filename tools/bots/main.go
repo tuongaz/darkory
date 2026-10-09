@@ -227,14 +227,14 @@ func (o *owner) projects() []string {
 	return keys
 }
 
-// holdID is the id of the Workflow's hold in the Project project, or "" when it has none.
+// holdID is the id of the preset's hold in the Project project, or "" when it has none.
 func (o *owner) holdID(ctx context.Context, project string) (string, error) {
 	res, err := o.c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return "", err
 	}
 	for _, s := range res.JSON200.Steps {
-		if s.Name == o.crew.Preset.Workflow.Hold() {
+		if s.Name == o.crew.Preset.Hold() {
 			return s.ID, nil
 		}
 	}

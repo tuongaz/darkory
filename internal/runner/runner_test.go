@@ -598,6 +598,29 @@ func TestRunnerMergesATaskStandingAlone(t *testing.T) {
 	}
 }
 
+// The prompt for a Task at a Step whose outcome leads into another Workflow names that outcome
+// by the Workflow and Step it reaches.
+func TestRunnerPromptNamesAnOutcomeIntoAnotherWorkflow(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(`{"workflows": [{"name": "Triage", "position": 1}, {"name": "Bugs", "position": 2}],
+ "steps": [{"workflow": "Triage", "name": "Triage", "skill": "engineer", "position": 1},
+  {"workflow": "Bugs", "name": "Investigate", "skill": "engineer", "position": 1}],
+ "connectors": [{"from": "Triage", "to": "Investigate", "name": "bug", "position": 1}, {"from": "Triage", "name": "question", "position": 2},
+  {"from": "Investigate", "name": "done", "position": 1}]}`)
+	f.agent("triager", "complete", "engineer")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Crash on save")
+	f.run("triager")
+
+	eventually(t, 30*time.Second, "WEB-1 done", func() bool { return f.done("WEB-1") })
+	b, err := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-1", "prompt.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "`bug` (to Bugs › Investigate), `question` (into Done)"; !strings.Contains(string(b), want) {
+		t.Fatalf("the prompt does not say %q:\n%s", want, b)
+	}
+}
+
 // After an advance the reviewer's session starts as soon as the builder's has ended, not a
 // progress check later, though the reviewer's runner claimed the Task while the builder's still
 // ran.

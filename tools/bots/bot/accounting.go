@@ -26,10 +26,11 @@ const (
 	accountingAnswerer = PersonaKai
 )
 
-// AccountingWorkflow is the accounting Project's Workflow: work filed ahead waits in Backlog, a
+// AccountingWorkflow is the accounting Project's Workflow, Work: work filed ahead waits in Backlog, a
 // hold, until the partner moves it on; then the client's documents are gathered, the return is
 // prepared, and the partner reviews it, lodging it (into Done) or sending it back to Prepare.
 var AccountingWorkflow = WorkflowSpec{
+	Name:  "Work",
 	Steps: []StepSpec{{StepBacklog, ""}, {StepGather, SkillClientComms}, {StepPrepare, SkillBookkeeping}, {StepPartnerReview, SkillPartnerReview}},
 	Connectors: []ConnectorSpec{
 		{StepGather, StepPrepare, "gathered"},
@@ -56,7 +57,7 @@ var Accounting = Preset{
 			"Check that the figures tie to the documents and that nothing is claimed without one; lodge it when it is right, " +
 			"or send it back to Prepare with one sentence saying what to fix."},
 	},
-	Workflow: AccountingWorkflow,
+	Workflows: []WorkflowSpec{AccountingWorkflow},
 	Humans: []Persona{
 		{Name: PersonaLan, Works: []string{SkillClientComms}, Skills: []string{SkillClientComms}, Projects: []string{ProjectTax}},
 		{Name: PersonaMai, Works: []string{SkillBookkeeping}, Skills: []string{SkillBookkeeping}, Projects: []string{ProjectTax}},

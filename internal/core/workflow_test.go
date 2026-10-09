@@ -272,7 +272,7 @@ func TestSetWorkflow(t *testing.T) {
 			{"two Steps at one place", func(w *core.WorkflowsInput) { w.Steps[1].Position = 50 }, "two Steps in Work are at position 50"},
 			{"two Connectors out of QA at one place", func(w *core.WorkflowsInput) { w.Connectors[2].Position = 3 },
 				"two Connectors out of QA are at position 3"},
-			{"a Step's place below 1", func(w *core.WorkflowsInput) { w.Steps[1].Position = -1 }, "the position of a Step in Work is 1 or more, not -1"},
+			{"a Step's place below 1", func(w *core.WorkflowsInput) { w.Steps[1].Position = -1 }, "the position of a Step in Work is 1 or more, or left out, not -1"},
 			{"moves from a kept Step", func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Plan"]: "QA"} },
 				"moves names " + id["Plan"] + ", which is not a Step being deleted"},
 			{"moves into no Step", func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Review"]: "Nowhere"} },
@@ -289,7 +289,7 @@ func TestSetWorkflow(t *testing.T) {
 				w.Steps = append(w.Steps, core.StepInput{Workflow: "Work", Name: strings.Repeat("s", 51)})
 			}, "a Step's name is 1 to 50"},
 			{"a Connector's place below 1", func(w *core.WorkflowsInput) { w.Connectors[0].Position = -1 },
-				"the position of a Connector out of Plan is 1 or more, not -1"},
+				"the position of a Connector out of Plan is 1 or more, or left out, not -1"},
 			{"a Connector name spelled as an id", func(w *core.WorkflowsInput) { w.Connectors[0].Name = store.NewID() },
 				"a Connector's name cannot be spelled as an id"},
 			{"no Workflow at all", func(w *core.WorkflowsInput) { w.Workflows = nil }, "no Workflow at all"},
@@ -299,7 +299,7 @@ func TestSetWorkflow(t *testing.T) {
 			{"two Workflows at one place", func(w *core.WorkflowsInput) {
 				w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 1})
 			}, "two Workflows are at position 1"},
-			{"a Workflow's place below 1", func(w *core.WorkflowsInput) { w.Workflows[0].Position = -1 }, "the position of a Workflow is 1 or more, not -1"},
+			{"a Workflow's place below 1", func(w *core.WorkflowsInput) { w.Workflows[0].Position = -1 }, "the position of a Workflow is 1 or more, or left out, not -1"},
 			// The Workflow named by its id, and its Steps naming it by id, so a broken name trips
 			// only the rule on names.
 			{"a blank Workflow name", func(w *core.WorkflowsInput) { byID(w, work); w.Workflows[0].Name = " " }, "a Workflow's name is 1 to 50"},

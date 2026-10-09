@@ -61,12 +61,12 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	must(t)(tok, err)
 	f := &fixture{t: t, srv: srv, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
 	must(t)(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, client.SetWorkflowBody{
-		Workflows: []client.WorkflowInput{{Name: "Work", Position: 1}},
-		Steps: []client.StepInput{{Workflow: "Work", Name: "Plan", Skill: ptr("breakdown"), Position: 1}, {Workflow: "Work", Name: "Build", Skill: ptr("build"), Position: 2},
-			{Workflow: "Work", Name: "Retro", Skill: ptr("retro"), Position: 3}, {Workflow: "Work", Name: "Skill review", Skill: ptr("skill-review"), Position: 4}},
-		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: 1}, {From: "Build", Name: "pass", Position: 1},
-			{From: "Retro", Name: "done", Position: 1}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: 2},
-			{From: "Skill review", Name: "publish", Position: 1}},
+		Workflows: []client.WorkflowInput{{Name: "Work", Position: ptr(int64(1))}},
+		Steps: []client.StepInput{{Workflow: "Work", Name: "Plan", Skill: ptr("breakdown"), Position: ptr(int64(1))}, {Workflow: "Work", Name: "Build", Skill: ptr("build"), Position: ptr(int64(2))},
+			{Workflow: "Work", Name: "Retro", Skill: ptr("retro"), Position: ptr(int64(3))}, {Workflow: "Work", Name: "Skill review", Skill: ptr("skill-review"), Position: ptr(int64(4))}},
+		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: ptr(int64(1))}, {From: "Build", Name: "pass", Position: ptr(int64(1))},
+			{From: "Retro", Name: "done", Position: ptr(int64(1))}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: ptr(int64(2))},
+			{From: "Skill review", Name: "publish", Position: ptr(int64(1))}},
 	}))
 	bob := dial(t, ts.URL, f.bob, "bob-seed")
 	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("WEB"), Title: "Search", Breakdown: ptr(true)}))
@@ -304,6 +304,35 @@ func TestNextClaimComplete(t *testing.T) {
 		ok(t, cs, &page, "activity", map[string]any{"after": 0})
 		if page.LastSeq == 0 || len(page.Items) == 0 {
 			t.Fatalf("activity: %+v", page)
+		}
+	})
+}
+
+// list_tasks takes a Workflow by name with project: the Tasks at its Steps, not those at another
+// Workflow's.
+func TestListTasksByWorkflow(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st, server.Options{})
+		ctx := t.Context()
+		ada := dial(t, f.url, f.ada, "ada-1")
+		empty := client.NewWorkflowEmpty
+		must(t)(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "OPS", Name: "Ops", Workflow: &empty,
+			Members: &[]string{"ada", "bob"}}))
+		must(t)(ada.SetWorkflowWithResponse(ctx, "OPS", &client.SetWorkflowParams{}, client.SetWorkflowBody{
+			Workflows: []client.WorkflowInput{{Name: "Triage", Position: ptr(int64(1))}, {Name: "Bugs", Position: ptr(int64(2))}},
+			Steps: []client.StepInput{{Workflow: "Triage", Name: "Triage", Skill: ptr("build"), Position: ptr(int64(1))},
+				{Workflow: "Bugs", Name: "Investigate", Skill: ptr("build"), Position: ptr(int64(1))}},
+			Connectors: []client.ConnectorInput{{From: "Triage", To: ptr("Investigate"), Name: "bug", Position: ptr(int64(1))},
+				{From: "Investigate", Name: "done", Position: ptr(int64(1))}},
+		}))
+		must(t)(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("OPS"), Title: "Sort me", Step: ptr("Triage")}))
+		must(t)(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("OPS"), Title: "Crash on save", Step: ptr("Investigate")}))
+		_, cs := f.connect("bob-mcp", Options{})
+
+		var list taskListOut
+		ok(t, cs, &list, "list_tasks", map[string]any{"workflow": "Bugs", "project": "OPS"})
+		if len(list.Items) != 1 || list.Items[0].Title != "Crash on save" {
+			t.Fatalf("list_tasks in Bugs: %+v", list.Items)
 		}
 	})
 }

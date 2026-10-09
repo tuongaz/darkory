@@ -157,7 +157,7 @@ func (h *Person) look(ctx context.Context) error {
 		}
 		h.say("completed", t.Key, "%q, every Subtask having ended", t.Title)
 	}
-	hold := h.preset.Workflow.Hold()
+	hold := h.preset.Hold()
 	if hold == "" {
 		return nil
 	}
