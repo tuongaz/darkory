@@ -21,7 +21,6 @@ func TestHotPathWritesAreOneRoundTripOnPostgres(t *testing.T) {
 	ctx := t.Context()
 	f.project("WEB")
 	f.skill("build")
-	f.skill("qa")
 	if _, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "company", BaseSkill: ptrStr("qa"), Body: "v1"}, core.Idem{}); err != nil {
 		t.Fatal(err)
 	}

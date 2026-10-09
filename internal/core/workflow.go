@@ -205,7 +205,7 @@ func builtinStepSQL(skill string) string {
 
 // defaultStep is the Step a Task is filed at when its filer names none (CONTEXT.md, Workflow):
 // the first Step whose Skill is the Project's own work rather than a builtin one Darkory files its
-// own Subtasks at (Build in the default Workflow), else the first Step that carries a Skill, else
+// own Subtasks at (Build in a default Project's Implementation), else the first Step that carries a Skill, else
 // the first Step, each in the Project's order across its Workflows. Break down is a switch on
 // filing, never where a Task lands. Nil when the Project has no Steps.
 func defaultStep(w Workflows, builtin map[string]bool) *Step {
@@ -267,6 +267,12 @@ const (
 	WorkflowCopy    = "copy"
 )
 
+// The two Workflows a default Project starts with (sample-workflows-plan.md).
+const (
+	WorkflowImplementation = "Implementation"
+	WorkflowBugTriage      = "Bug triage"
+)
+
 // plannedStep and plannedConnector describe a Workflow to make, by Step name and Skill name, and
 // where the canvas draws each Step.
 type plannedStep struct {
@@ -275,34 +281,61 @@ type plannedStep struct {
 }
 type plannedConnector struct{ from, to, name string }
 
-// defaultWorkflow is the Workflow a new Project starts with unless its creator picks another
-// (model-v2-plan.md, "The default Workflow"): a Backlog hold, Plan, Build, Review, and the
-// Retrospective's Steps. No Acceptance: a Project that wants one adds the Step and turns it on.
-// It is drawn compact, in the board's order: a column of Backlog, Plan, Build and Retro, with
-// Review beside Build and Skill review beside Retro, so a new Project opens with Done in view
-// (decisions.md, W0).
-var defaultWorkflow = struct {
+// plannedWorkflow is a Workflow to make: its name, its Steps in order, and the Connectors out of
+// them. A Connector's to may name a Step of another planned Workflow; Step names are unique per
+// Project, so a name is enough.
+type plannedWorkflow struct {
+	name       string
 	steps      []plannedStep
 	connectors []plannedConnector
-}{
-	steps: []plannedStep{
-		{"Backlog", "", 0, 0}, {"Plan", SkillBreakdown, 0, 128}, {"Build", SkillEngineer, 0, 256}, {"Review", SkillReview, 448, 256},
-		{"Retro", SkillRetro, 0, 384}, {"Skill review", SkillSkillReview, 448, 384},
+}
+
+// defaultWorkflows are the Workflows a new Project starts with unless its creator picks others
+// (sample-workflows-plan.md), in order.
+//
+// Implementation is the default Workflow of model-v2-plan.md ("The default Workflow"): a Backlog
+// hold, Plan, Build, Review, and the Retrospective's Steps. No Acceptance: a Project that wants
+// one adds the Step and turns it on. It is drawn compact, in the board's order: a column of
+// Backlog, Plan, Build and Retro, with Review beside Build and Skill review beside Retro, so a new
+// Project opens with Done in view (decisions.md, W0). Being first, it holds Build, where a Task
+// filed without a Step starts.
+//
+// Bug triage takes a reported problem: Triage, then Fix, Code review and Verify in a row. Triage
+// leads to Fix (bug), to Done (not a bug), or into Implementation's Build (feature). Its review
+// Step is Code review because Implementation has the Review.
+var defaultWorkflows = []plannedWorkflow{
+	{
+		name: WorkflowImplementation,
+		steps: []plannedStep{
+			{"Backlog", "", 0, 0}, {"Plan", SkillBreakdown, 0, 128}, {"Build", SkillEngineer, 0, 256}, {"Review", SkillReview, 448, 256},
+			{"Retro", SkillRetro, 0, 384}, {"Skill review", SkillSkillReview, 448, 384},
+		},
+		connectors: []plannedConnector{
+			{"Plan", "", "done"},
+			{"Build", "Review", "pass"},
+			{"Review", "", "pass"}, {"Review", "Build", "needs changes"},
+			{"Retro", "", "done"}, {"Retro", "Skill review", "propose"},
+			{"Skill review", "", "publish"}, {"Skill review", "Retro", "needs changes"},
+		},
 	},
-	connectors: []plannedConnector{
-		{"Plan", "", "done"},
-		{"Build", "Review", "pass"},
-		{"Review", "", "pass"}, {"Review", "Build", "needs changes"},
-		{"Retro", "", "done"}, {"Retro", "Skill review", "propose"},
-		{"Skill review", "", "publish"}, {"Skill review", "Retro", "needs changes"},
+	{
+		name: WorkflowBugTriage,
+		steps: []plannedStep{
+			{"Triage", SkillTriage, 0, 0}, {"Fix", SkillEngineer, 448, 0}, {"Code review", SkillReview, 896, 0}, {"Verify", SkillQA, 1344, 0},
+		},
+		connectors: []plannedConnector{
+			{"Triage", "Fix", "bug"}, {"Triage", "", "not a bug"}, {"Triage", "Build", "feature"},
+			{"Fix", "Code review", "ready"},
+			{"Code review", "Verify", "pass"}, {"Code review", "Fix", "needs changes"},
+			{"Verify", "", "pass"}, {"Verify", "Fix", "fail"},
+		},
 	},
 }
 
-// emptyWorkflow is a Backlog hold leading to Done, for a Project that draws its own.
-var emptyWorkflow = struct {
-	steps      []plannedStep
-	connectors []plannedConnector
-}{
+// emptyWorkflow is one Workflow, Work, a Backlog hold leading to Done, for a Project that draws
+// its own.
+var emptyWorkflow = plannedWorkflow{
+	name:       WorkflowFirstName,
 	steps:      []plannedStep{{"Backlog", "", 0, 0}},
 	connectors: []plannedConnector{{"Backlog", "", "done"}},
 }
@@ -312,17 +345,17 @@ var emptyWorkflow = struct {
 // row, at its position's place.
 const stepSpacing = 448
 
-// seedWorkflow gives a new Project its first Workflows inside a write: the default one or the
-// empty one, each a single Workflow named Work, or a copy of another Project's, Workflows and all.
+// seedWorkflow gives a new Project its first Workflows inside a write: the default two,
+// Implementation and Bug triage, the empty one, Work, or a copy of another Project's, Workflows
+// and all.
 func seedWorkflow(t *tx, projectID, kind, from string) error {
-	in := WorkflowsInput{Workflows: []WorkflowInput{{Name: WorkflowFirstName, Position: 1}}}
+	var in WorkflowsInput
 	switch kind {
 	case WorkflowCopy:
 		w, err := getWorkflow(t.ctx, t, t.caller.OrgID, from)
 		if err != nil {
 			return err
 		}
-		in.Workflows = nil
 		wfName := map[string]string{}
 		for _, wf := range w.Workflows {
 			wfName[wf.ID] = wf.Name
@@ -342,27 +375,30 @@ func seedWorkflow(t *tx, projectID, kind, from string) error {
 			in.Connectors = append(in.Connectors, ci)
 		}
 	default:
-		plan := defaultWorkflow
+		plan := defaultWorkflows
 		if kind == WorkflowEmpty {
-			plan = emptyWorkflow
+			plan = []plannedWorkflow{emptyWorkflow}
 		}
-		for i, ps := range plan.steps {
-			si := StepInput{Workflow: WorkflowFirstName, Name: ps.name, Position: int64(i + 1), X: ptr(ps.x), Y: ptr(ps.y)}
-			if ps.skill != "" {
-				id, err := ensureSkill(t, ps.skill)
-				if err != nil {
-					return err
+		for i, pw := range plan {
+			in.Workflows = append(in.Workflows, WorkflowInput{Name: pw.name, Position: int64(i + 1)})
+			for j, ps := range pw.steps {
+				si := StepInput{Workflow: pw.name, Name: ps.name, Position: int64(j + 1), X: ptr(ps.x), Y: ptr(ps.y)}
+				if ps.skill != "" {
+					id, err := ensureSkill(t, ps.skill)
+					if err != nil {
+						return err
+					}
+					si.Skill = &id
 				}
-				si.Skill = &id
+				in.Steps = append(in.Steps, si)
 			}
-			in.Steps = append(in.Steps, si)
-		}
-		for _, pc := range plan.connectors {
-			ci := ConnectorInput{From: pc.from, Name: pc.name}
-			if pc.to != "" {
-				ci.To = ptr(pc.to)
+			for _, pc := range pw.connectors {
+				ci := ConnectorInput{From: pc.from, Name: pc.name}
+				if pc.to != "" {
+					ci.To = ptr(pc.to)
+				}
+				in.Connectors = append(in.Connectors, ci)
 			}
-			in.Connectors = append(in.Connectors, ci)
 		}
 	}
 	_, err := replaceWorkflow(t, projectID, in)
@@ -370,8 +406,9 @@ func seedWorkflow(t *tx, projectID, kind, from string) error {
 }
 
 // ensureSkill is the id of the Skill name, creating it as a generic Skill when the Organisation
-// has none so named: the default Workflow's Build and Review Steps carry engineer and review,
-// which `darkory init` seeds but an Install from before model v2 may lack.
+// has none so named: the default Workflows' Steps carry engineer, review, triage and qa, which
+// `darkory init` seeds but an Install from before model v2, or before the sample Workflows, may
+// lack.
 func ensureSkill(t *tx, name string) (string, error) {
 	id, err := skillByName(t.ctx, t, t.caller.OrgID, name)
 	if codeOf(err) != CodeNotFound {

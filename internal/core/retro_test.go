@@ -26,7 +26,6 @@ func newRetroFixture(t *testing.T, st *store.Store) retroFixture {
 	ctx := t.Context()
 	f.project("WEB")
 	f.project("OPS")
-	f.skill("qa")
 	if _, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "company", BaseSkill: ptrStr("qa"), Body: "Test the happy path."}, core.Idem{}); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +184,10 @@ func TestProposingNeedsAWayToSkillReview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		in := core.WorkflowsInput{Workflows: []core.WorkflowInput{{Name: core.WorkflowFirstName, Position: 1}}}
+		var in core.WorkflowsInput
+		for _, wf := range w.Workflows.Workflows {
+			in.Workflows = append(in.Workflows, core.WorkflowInput{ID: wf.ID, Name: wf.Name, Position: wf.Position})
+		}
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name

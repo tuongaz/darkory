@@ -68,7 +68,10 @@ func TestAdminCommands(t *testing.T) {
 		}
 
 		var sk client.SkillDetail
-		ada.json(&sk, "skill", "create", "qa", "--kind", "generic", "--body", "Test it.")
+		ada.json(&sk, "skill", "create", "docs", "--kind", "generic", "--body", "Write it down.")
+		if sk.Skill.Kind != client.Generic || sk.Current.Body != "Write it down." || sk.Current.Version != 1 {
+			t.Fatalf("skill create: %+v", sk)
+		}
 		ada.stdin = "Test it the Acme way.\n"
 		ada.json(&sk, "skill", "create", "qa-acme", "--kind", "company", "--base", "qa", "--file", "-")
 		ada.stdin = ""

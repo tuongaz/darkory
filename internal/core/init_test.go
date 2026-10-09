@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -14,9 +15,9 @@ import (
 
 // A fresh Install: an empty database takes the migrations, 0001 to 0007, and `darkory init` (the
 // roster on) yields the Organisation, its first Member an admin, the builtin Skills breakdown,
-// retro, skill-review and acceptance, the generic engineer and review, the roster's four agents,
-// and Project MAIN on the default Workflow, each Step at its decided place on the canvas and taken
-// by the agent holding its Skill.
+// retro, skill-review and acceptance, the generic engineer, review, triage and qa, the roster's
+// four agents, and Project MAIN on the default Workflows, Implementation then Bug triage, each
+// Step at its decided place on the canvas and taken by the agent holding its Skill.
 func TestFreshInit(t *testing.T) {
 	for _, engine := range storetest.Engines() {
 		t.Run(string(engine), func(t *testing.T) {
@@ -55,7 +56,7 @@ func TestFreshInit(t *testing.T) {
 			}
 			want := map[string]bool{
 				core.SkillBreakdown: true, core.SkillRetro: true, core.SkillSkillReview: true, core.SkillAcceptance: true,
-				core.SkillEngineer: false, core.SkillReview: false,
+				core.SkillEngineer: false, core.SkillReview: false, core.SkillTriage: false, core.SkillQA: false,
 			}
 			if len(builtin) != len(want) {
 				t.Fatalf("seeded Skills %v", builtin)
@@ -67,6 +68,13 @@ func TestFreshInit(t *testing.T) {
 			}
 
 			// The roster: the first Member and the four agents in MAIN, each with its Skills.
+			held := map[string]string{}
+			for _, a := range out.Agents {
+				held[a.Member.Name] = strings.Join(a.Skills, " ")
+			}
+			if want := map[string]string{"planner": "breakdown triage", "builder": "engineer", "reviewer": "review skill-review qa", "retro": "retro"}; !maps.Equal(held, want) {
+				t.Fatalf("the roster holds %v, want %v", held, want)
+			}
 			project, err := f.svc.GetProject(ctx, f.admin, "MAIN")
 			if err != nil {
 				t.Fatal(err)
@@ -80,8 +88,8 @@ func TestFreshInit(t *testing.T) {
 				t.Fatalf("MAIN %+v holds %v", project.Project, members)
 			}
 
-			// MAIN's Workflow is the default, compact, and each Step's takers are the agents with
-			// its Skill; Backlog, a hold, has none.
+			// MAIN's Workflows are the default two, compact, and each Step's takers are the agents
+			// with its Skill; Backlog, a hold, has none.
 			w, err := f.svc.GetWorkflow(ctx, f.admin, "MAIN")
 			if err != nil {
 				t.Fatal(err)
@@ -89,16 +97,12 @@ func TestFreshInit(t *testing.T) {
 			if got := workflowText(skills, w.Workflows); got != defaultWorkflowText {
 				t.Fatalf("MAIN's Workflow:\n%s", got)
 			}
-			places := map[string][2]int64{
-				"Backlog": {0, 0}, "Plan": {0, 128}, "Build": {0, 256}, "Review": {448, 256}, "Retro": {0, 384}, "Skill review": {448, 384},
-			}
+			checkDefaultPlaces(t, w.Workflows)
 			takers := map[string]string{
 				"Backlog": "", "Plan": "planner", "Build": "builder", "Review": "reviewer", "Retro": "retro", "Skill review": "reviewer",
+				"Triage": "planner", "Fix": "builder", "Code review": "reviewer", "Verify": "reviewer",
 			}
 			for i, s := range w.Steps {
-				if s.Position != int64(i+1) || [2]int64{s.X, s.Y} != places[s.Name] {
-					t.Errorf("Step %s at %d (%d, %d), want (%d, %d)", s.Name, s.Position, s.X, s.Y, places[s.Name][0], places[s.Name][1])
-				}
 				var names []string
 				for _, tk := range w.Facts[i].Takers {
 					names = append(names, tk.Name)
@@ -108,9 +112,15 @@ func TestFreshInit(t *testing.T) {
 				}
 			}
 
-			// A Task filed in MAIN starts at Build; with Break down, its Breakdown at Plan.
-			if d := f.fileTask(f.admin, core.NewTask{Project: ptrStr("MAIN"), Title: "Support emoji"}); d.Step == nil || d.Step.Name != "Build" || d.Task.Key != "MAIN-1" {
+			// A Task filed in MAIN starts at Implementation's Build; with Break down, its Breakdown
+			// at Plan; a Task filed at Triage is in Bug triage.
+			if d := f.fileTask(f.admin, core.NewTask{Project: ptrStr("MAIN"), Title: "Support emoji"}); d.Step == nil || d.Step.Name != "Build" ||
+				d.Task.Key != "MAIN-1" || d.Step.WorkflowID != w.Workflows.Workflows[0].ID {
 				t.Fatalf("filed %+v at %+v", d.Task, d.Step)
+			}
+			if d := f.fileTask(f.admin, core.NewTask{Project: ptrStr("MAIN"), Title: "Checkout fails", Step: ptrStr("Triage")}); d.Step == nil ||
+				d.Step.Name != "Triage" || d.Step.WorkflowID != w.Workflows.Workflows[1].ID {
+				t.Fatalf("filed at Triage: %+v at %+v", d.Task, d.Step)
 			}
 			if d := f.fileTask(f.admin, core.NewTask{Project: ptrStr("MAIN"), Title: "Cart", Breakdown: true}); len(d.Subtasks) != 1 ||
 				f.at(d.Subtasks[0].Key) != "Plan" {

@@ -634,7 +634,6 @@ func TestWorkflowCommands(t *testing.T) {
 		// Two Workflows: Triage, whose bug outcome leads into Bugs, and Bugs. WEB-1 ends Done
 		// first, so the Steps it stood at can go.
 		bob.ok("advance", "WEB-1", "pass")
-		ada.ok("skill", "create", "triage", "--kind", "generic", "--body", "Sort it.")
 		ada.stdin = `{"workflows": [{"name": "Triage", "position": 1}, {"name": "Bugs", "position": 2}],
  "steps": [{"workflow": "Triage", "name": "Triage", "skill": "triage"},
   {"workflow": "Bugs", "name": "Investigate", "skill": "engineer"}, {"workflow": "Bugs", "name": "Fix", "skill": "engineer"}],

@@ -59,7 +59,6 @@ func TestMVPFlow(t *testing.T) {
 	// 1. The Organisation: two Projects, the Skills, and the specialists.
 	for _, s := range [][]string{
 		{"build", "--kind", "generic", "--body", "Build it."},
-		{"qa", "--kind", "generic", "--body", "Test it."},
 		{"qa-acme", "--kind", "company", "--base", "qa", "--body", "Test the happy path in the browser."},
 		{"ui-review", "--kind", "generic", "--body", "Review the screens."},
 		{"security-review", "--kind", "generic", "--body", "Review for security."},

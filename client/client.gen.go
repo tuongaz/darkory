@@ -939,11 +939,13 @@ type CreateProjectBody struct {
 	Members *[]string `json:"members,omitempty"`
 	Name    string    `json:"name"`
 
-	// Workflow The Workflows a new Project starts with. `default`: one Workflow named Work, Backlog · Plan
-	// · Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
-	// `retro` and `skill-review`, with their Connectors. `empty`: one Workflow named Work,
-	// Backlog, a hold, → Done. `copy`: every Workflow of another Project, with its Steps and
-	// Connectors. `default` when not given.
+	// Workflow The Workflows a new Project starts with. `default`: Implementation (Backlog · Plan ·
+	// Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
+	// `retro`, `skill-review`) and Bug triage (Triage · Fix · Code review · Verify, carrying
+	// `triage`, `engineer`, `review`, `qa`; Triage's outcomes lead to Fix, to Done, or into
+	// Implementation's Build), with their Connectors; New Tasks start at Build. `empty`: one
+	// Workflow named Work, Backlog, a hold, → Done. `copy`: every Workflow of another Project,
+	// with its Steps and Connectors. `default` when not given.
 	Workflow *NewWorkflow `json:"workflow,omitempty"`
 }
 
@@ -1304,11 +1306,13 @@ type MoveTaskBody struct {
 	Step string `json:"step"`
 }
 
-// NewWorkflow The Workflows a new Project starts with. `default`: one Workflow named Work, Backlog · Plan
-// · Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
-// `retro` and `skill-review`, with their Connectors. `empty`: one Workflow named Work,
-// Backlog, a hold, → Done. `copy`: every Workflow of another Project, with its Steps and
-// Connectors. `default` when not given.
+// NewWorkflow The Workflows a new Project starts with. `default`: Implementation (Backlog · Plan ·
+// Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
+// `retro`, `skill-review`) and Bug triage (Triage · Fix · Code review · Verify, carrying
+// `triage`, `engineer`, `review`, `qa`; Triage's outcomes lead to Fix, to Done, or into
+// Implementation's Build), with their Connectors; New Tasks start at Build. `empty`: one
+// Workflow named Work, Backlog, a hold, → Done. `copy`: every Workflow of another Project,
+// with its Steps and Connectors. `default` when not given.
 type NewWorkflow string
 
 // NextTaskBody defines model for NextTaskBody.

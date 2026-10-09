@@ -52,7 +52,6 @@ func (f *fixture) manager(member, manager string) {
 func qaFlow(f *fixture) {
 	f.project("WEB")
 	f.skill("build")
-	f.skill("qa")
 	if _, err := f.svc.SetWorkflow(f.t.Context(), f.admin, "WEB", inWork(core.WorkflowsInput{
 		Steps: []core.StepInput{{Name: "Build", Skill: ptrStr("build")}, {Name: "QA", Skill: ptrStr("qa")}},
 		Connectors: []core.ConnectorInput{

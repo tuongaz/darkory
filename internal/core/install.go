@@ -21,16 +21,18 @@ const (
 	SkillSkillReview = "skill-review"
 )
 
-// What `darkory init` seeds on a Local Install: Project MAIN on the default Workflow, always, and
+// What `darkory init` seeds on a Local Install: Project MAIN on the default Workflows, always, and
 // unless told --no-agents the roster, so it comes up with agents ready (docs/build/agents-plan.md,
 // D4): four agents in MAIN reporting to the first Member, each with agent settings and a token.
-// The generic Skills engineer and review, which the default Workflow's Build and Review Steps
-// carry, are seeded whether or not the roster is.
+// The generic Skills engineer, review, triage and qa, which the default Workflows' Steps carry,
+// are seeded whether or not the roster is.
 const (
 	RosterProjectKey  = "MAIN"
 	RosterProjectName = "Main"
 	SkillEngineer     = "engineer"
 	SkillReview       = "review"
+	SkillTriage       = "triage"
+	SkillQA           = "qa"
 	// RosterTokenName names the token each agent of the roster is issued, for the Runner.
 	RosterTokenName = "runner"
 	// RosterTokenTimeout is that token's default heartbeat timeout: the Runner sends Heartbeats
@@ -59,6 +61,12 @@ var seededSkills = []struct {
 	{SkillReview, "Review the work a Task describes: read the change on its branch and its Evidence, run the tests, and check it does " +
 		"what the Task asks. Advance it when it is right, with a Note saying what you checked; advance it back with a Note saying what " +
 		"to fix when it is not. Nobody reviews their own work.", false},
+	{SkillTriage, "Triage a reported problem. Read the Task, reproduce what it describes and record what you saw as a Note. Advance it " +
+		"along bug when it is a defect to fix, along feature when it asks for something new, or along not a bug when there is nothing " +
+		"to change, each with a Note saying why.", false},
+	{SkillQA, "Verify a fix. Read the Task and the Notes of the Fix and Code review, run the change on its branch, reproduce the original " +
+		"report and confirm it no longer happens, and attach what you ran as Evidence. Advance it along pass when the fix holds; along " +
+		"fail with a Note saying what still happens.", false},
 }
 
 // RosterAgent is one agent of the roster: its Skills and model.
@@ -70,9 +78,9 @@ type RosterAgent struct {
 
 // Roster is the agents `darkory init` seeds.
 var Roster = []RosterAgent{
-	{Name: "planner", Skills: []string{SkillBreakdown}, Model: "claude-opus-5-5"},
+	{Name: "planner", Skills: []string{SkillBreakdown, SkillTriage}, Model: "claude-opus-5-5"},
 	{Name: "builder", Skills: []string{SkillEngineer}, Model: "claude-sonnet-5-5"},
-	{Name: "reviewer", Skills: []string{SkillReview, SkillSkillReview}, Model: "claude-opus-5-5"},
+	{Name: "reviewer", Skills: []string{SkillReview, SkillSkillReview, SkillQA}, Model: "claude-opus-5-5"},
 	{Name: "retro", Skills: []string{SkillRetro}, Model: "claude-opus-5-5"},
 }
 
@@ -107,7 +115,7 @@ type SeededAgent struct {
 
 // InitOptions are what InitWith seeds besides what Init does.
 type InitOptions struct {
-	// Project seeds Project MAIN on the default Workflow with the first Member in it.
+	// Project seeds Project MAIN on the default Workflows with the first Member in it.
 	Project bool
 	// Roster seeds Project MAIN as Project does, and the Roster's agents in it, reporting to the
 	// first Member, each with agent settings and a token named RosterTokenName.
@@ -117,8 +125,8 @@ type InitOptions struct {
 }
 
 // Init creates the Install's Organisation, its first Member — a human admin — the built-in
-// Skills and the generic Skills engineer and review, a token for that Member and a login link.
-// It refuses when an Organisation exists.
+// Skills and the generic Skills engineer, review, triage and qa, a token for that Member and a
+// login link. It refuses when an Organisation exists.
 func (s *Service) Init(ctx context.Context, orgName, memberName string) (Initialised, error) {
 	return s.InitWith(ctx, orgName, memberName, InitOptions{})
 }

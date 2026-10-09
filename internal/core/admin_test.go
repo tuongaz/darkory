@@ -21,17 +21,18 @@ func TestInitCreatesTheInstallOnce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// The four builtin Skills, and engineer and review, which the default Workflow's Build and
-		// Review Steps carry, whether or not the roster is seeded.
+		// The four builtin Skills, and engineer, review, triage and qa, which the default Workflows'
+		// Steps carry, whether or not the roster is seeded.
+		generic := map[string]bool{core.SkillEngineer: true, core.SkillReview: true, core.SkillTriage: true, core.SkillQA: true}
 		var names []string
 		for _, s := range skills {
-			builtin := s.Name != core.SkillEngineer && s.Name != core.SkillReview
+			builtin := !generic[s.Name]
 			if s.Builtin != builtin || s.Kind != "generic" || s.CurrentVersion != 1 {
 				t.Errorf("seeded Skill %+v", s)
 			}
 			names = append(names, s.Name)
 		}
-		if !slices.Equal(names, []string{"acceptance", "breakdown", "engineer", "retro", "review", "skill-review"}) {
+		if !slices.Equal(names, []string{"acceptance", "breakdown", "engineer", "qa", "retro", "review", "skill-review", "triage"}) {
 			t.Fatalf("seeded Skills %v", names)
 		}
 		if me, err := f.svc.GetMe(ctx, f.admin); err != nil || len(me.Projects) != 0 || me.Organisations != nil {
@@ -58,7 +59,6 @@ func TestAdminOperationsNeedTheAdminMark(t *testing.T) {
 		f := newFixture(t, st)
 		ctx := t.Context()
 		f.project("WEB")
-		f.skill("qa")
 		bob := f.member("bob", []string{"WEB"}, nil)
 		forbidden := map[string]error{}
 		_, forbidden["createMember"] = f.svc.CreateMember(ctx, bob, core.NewMember{Name: "eve", Kind: "agent"}, core.Idem{})
@@ -84,7 +84,7 @@ func TestAdminOperationsNeedTheAdminMark(t *testing.T) {
 		if d, err := f.svc.GetProject(ctx, bob, "WEB"); err != nil || len(d.Members) != 1 {
 			t.Fatalf("project %+v, %v", d, err)
 		}
-		if w, err := f.svc.GetWorkflow(ctx, bob, "WEB"); err != nil || len(w.Steps) != 6 {
+		if w, err := f.svc.GetWorkflow(ctx, bob, "WEB"); err != nil || len(w.Steps) != 10 {
 			t.Fatalf("workflow %+v, %v", w, err)
 		}
 		if ts, err := f.svc.ListTokens(ctx, bob, "bob"); err != nil || len(ts) != 1 {
@@ -147,7 +147,7 @@ func TestMembersProjectsAndSkills(t *testing.T) {
 			t.Fatalf("%d entries for one change", n-before)
 		}
 
-		qa := f.skill("qa")
+		qa := f.skillID("qa")
 		company, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "company", BaseSkill: ptrStr("qa"), Body: "Our QA"}, core.Idem{})
 		if err != nil || company.Skill.BaseSkillID == nil || *company.Skill.BaseSkillID != qa || company.Current.Version != 1 || company.Current.Body != "Our QA" {
 			t.Fatalf("company Skill %+v, %v", company, err)

@@ -93,13 +93,13 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 	root, _ := filepath.EvalSymlinks(repo)
 	for _, want := range []string{
 		"First Member: ada (human, admin)",
-		"\nProject MAIN (Main), on the default Workflow, holds ada and the agents below.\n",
+		"\nProject MAIN (Main), on the default Workflows, holds ada and the agents below.\n",
 		"Workspace shop: " + root + " (git, default branch trunk), Project MAIN's default.\n",
 		"Agents, reporting to ada, each with a token in " + filepath.Join(data, "agents", "<name>.token") + ":\n",
-		"  planner   breakdown              claude-opus-5-5\n",
-		"  builder   engineer               claude-sonnet-5-5\n",
-		"  reviewer  review, skill-review   claude-opus-5-5\n",
-		"  retro     retro                  claude-opus-5-5\n",
+		"  planner   breakdown, triage          claude-opus-5-5\n",
+		"  builder   engineer                   claude-sonnet-5-5\n",
+		"  reviewer  review, skill-review, qa   claude-opus-5-5\n",
+		"  retro     retro                      claude-opus-5-5\n",
 		"\ndarkory serve prints a fresh login link every time it starts.\n",
 	} {
 		if !strings.Contains(out, want) {
@@ -156,7 +156,7 @@ func TestInitSeedsTheRosterInAGitRepository(t *testing.T) {
 }
 
 // Outside a git repository the roster is seeded with no Workspace, and init says how to add one;
-// --no-agents seeds Project MAIN on the default Workflow with the first Member, and no agents.
+// --no-agents seeds Project MAIN on the default Workflows with the first Member, and no agents.
 func TestInitOutsideAGitRepository(t *testing.T) {
 	data := t.TempDir()
 	out := initIn(t, t.TempDir(), data)
@@ -171,7 +171,7 @@ func TestInitOutsideAGitRepository(t *testing.T) {
 
 	data = t.TempDir()
 	out = initIn(t, t.TempDir(), data, "--no-agents")
-	if !strings.Contains(out, "\nProject MAIN (Main), on the default Workflow, holds ada. No agents and no Workspace: init ran with --no-agents.\n") ||
+	if !strings.Contains(out, "\nProject MAIN (Main), on the default Workflows, holds ada. No agents and no Workspace: init ran with --no-agents.\n") ||
 		strings.Contains(out, "Agents") {
 		t.Fatalf("init --no-agents printed:\n%s", out)
 	}
