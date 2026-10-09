@@ -198,7 +198,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toBeFocused();
   await expect(page.getByRole("region", { name: "Step 4: New Step" })).toContainText("By hand");
   await page.getByRole("textbox", { name: "Name of Step 4" }).fill("QA");
-  // Its Skill, new, created on Save (usability: init seeds qa, which reviewer holds); then its way
+  // Its Skill, new, created on Save (usability: init seeds qa, which tester holds); then its way
   // on, and Make's main outcome into it.
   await page.getByRole("combobox", { name: "Skill of QA" }).click();
   await page.getByPlaceholder("Find or name a Skill").fill("usability");

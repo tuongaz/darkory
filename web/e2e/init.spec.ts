@@ -4,7 +4,8 @@ import { startInstall, type Install } from "./server";
 
 // Scenario 11 of docs/build/model-v2-plan.md in the browser: a fresh `darkory init` with its roster
 // (outside a git repository, so no Workspace) makes the Organisation, the builtin Skills,
-// engineer, review, triage and qa, the agents, and MAIN on the default Workflows (Implementation and
+// engineer, review, triage and qa, the five agents (planner, builder, reviewer, tester and retro),
+// and MAIN on the default Workflows (Implementation and
 // Bug triage, docs/build/sample-workflows-plan.md), and prints a login link; the
 // Install checklist leads from there to the first Task. Init on each engine is e2e/init_test.go's
 // (`make e2e`, `make e2e-pg`); this is the SQLite Install the web suite runs.
@@ -39,7 +40,15 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     expect(install.init).toContain("First Member: ada (human, admin)");
     expect(install.init).toContain("Project MAIN (Main), on the default Workflows, holds ada and the agents below.");
     expect(install.init).toContain("No Workspace: init ran outside a git repository.");
-    for (const line of [/planner\s+breakdown, triage/, /builder\s+engineer/, /reviewer\s+review, skill-review, qa/, /retro\s+retro/]) expect(install.init).toMatch(line);
+    // The roster table, line by line: the reviewer holds review and skill-review alone, the tester qa.
+    for (const line of [
+      /^ {2}planner\s+breakdown, triage\s+claude-opus-5-5$/m,
+      /^ {2}builder\s+engineer\s+claude-sonnet-5-5$/m,
+      /^ {2}reviewer\s+review, skill-review\s+claude-opus-5-5$/m,
+      /^ {2}tester\s+qa\s+claude-sonnet-5-5$/m,
+      /^ {2}retro\s+retro\s+claude-opus-5-5$/m,
+    ])
+      expect(install.init).toMatch(line);
     expect(install.init).toMatch(/http:\/\/\S+\/v1\/login-links\/\S+/);
   });
 
@@ -50,7 +59,7 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     const members = (await ask<{ items: { name: string; kind: string; manager_id?: string; id: string }[] }>("/v1/members")).items;
     const ada = members.find((m) => m.name === "ada")!;
     const agents = members.filter((m) => m.kind === "agent");
-    expect(agents.map((m) => m.name).sort()).toEqual(["builder", "planner", "retro", "reviewer"]);
+    expect(agents.map((m) => m.name).sort()).toEqual(["builder", "planner", "retro", "reviewer", "tester"]);
     expect(agents.every((m) => m.manager_id === ada.id)).toBe(true);
     const projects = (await ask<{ items: { key: string }[] }>("/v1/projects")).items;
     expect(projects.map((p) => p.key)).toEqual(["MAIN"]);
