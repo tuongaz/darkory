@@ -97,7 +97,7 @@ func (p *Planner) breakDown(ctx context.Context, d *client.TaskDetail) error {
 	wctx, stop := p.hold(ctx, d)
 	defer stop()
 	items := p.Plan(d.Parent.Title, p.ask)
-	filed, waiting, ahead, err := fileItems(wctx, &p.agent, d.Parent.Key, d.Task.ProjectID, items, p.preset.Workflow.Hold())
+	filed, waiting, ahead, err := fileItems(wctx, &p.agent, d.Parent.Key, d.Task.ProjectID, items, p.preset.Hold())
 	if err != nil {
 		return gone(wctx, err)
 	}
@@ -106,7 +106,7 @@ func (p *Planner) breakDown(ctx context.Context, d *client.TaskDetail) error {
 		return nil
 	}
 	_, err = p.advance(ctx, d.Task.Key, "", fmt.Sprintf("Filed %d Subtasks (%s), with %d waiting on others and %d in %s until someone moves them.",
-		len(filed), strings.Join(filed, ", "), waiting, ahead, or(p.preset.Workflow.Hold(), "the hold")))
+		len(filed), strings.Join(filed, ", "), waiting, ahead, or(p.preset.Hold(), "the hold")))
 	return gone(ctx, err)
 }
 

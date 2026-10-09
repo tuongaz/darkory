@@ -210,7 +210,7 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 			cur = res.JSON201.Project
 			projects[t.Key] = cur
 		}
-		if err := setWorkflow(ctx, c, t.Key, p.Workflow); err != nil {
+		if err := setWorkflow(ctx, c, t.Key, p.Workflows); err != nil {
 			return nil, err
 		}
 		var body client.UpdateProjectBody
@@ -351,10 +351,12 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 	return crew, nil
 }
 
-// setWorkflow gives the Project project the Workflow want, unless it has it already: Steps are
-// kept by name, so a Step keeps its id and its Tasks; a Step the Project has and want does not is
-// deleted, its Tasks moved to want's first Step.
-func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project string, want WorkflowSpec) error {
+// setWorkflow gives the Project project the Workflows want, unless it has them already:
+// Workflows are kept by name, as the server keeps them when their ids are left out, and Steps by
+// name, so a Step keeps its id and its Tasks; a Workflow the Project has and want does not is
+// deleted, and a Step the Project has and want does not is deleted, its Tasks moved to the first
+// Step of want's first Workflow.
+func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project string, want []WorkflowSpec) error {
 	res, err := c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return err
@@ -368,52 +370,70 @@ func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project str
 	for _, sk := range skills.JSON200.Items {
 		skillName[sk.ID] = sk.Name
 	}
+	workflowName := map[string]string{}
+	for _, w := range have.Workflows {
+		workflowName[w.ID] = w.Name
+	}
 	name := map[string]string{}
 	for _, st := range have.Steps {
 		name[st.ID] = st.Name
 	}
 	// Both as lines, to compare.
 	var got, wanted []string
+	for _, w := range have.Workflows {
+		got = append(got, fmt.Sprintf("workflow %d %s", w.Position, w.Name))
+	}
 	for _, st := range have.Steps {
-		got = append(got, fmt.Sprintf("step %d %s %s", st.Position, st.Name, skillName[deref(st.SkillID)]))
+		got = append(got, fmt.Sprintf("step %s %d %s %s", workflowName[st.WorkflowID], st.Position, st.Name, skillName[deref(st.SkillID)]))
 	}
 	for _, k := range have.Connectors {
 		got = append(got, fmt.Sprintf("connector %s %s %s %d", name[k.FromStepID], name[deref(k.ToStepID)], k.Name, k.Position))
 	}
-	// One Workflow: the Project's first, kept by its id, or a new one named Work.
-	work := client.WorkflowInput{Name: "Work", Position: ptr(int64(1))}
-	if len(have.Workflows) > 0 {
-		work.ID, work.Name = ptr(have.Workflows[0].ID), have.Workflows[0].Name
+	body := client.SetWorkflowBody{Workflows: []client.WorkflowInput{}, Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
+	var wantSteps []StepSpec
+	for i, w := range want {
+		wanted = append(wanted, fmt.Sprintf("workflow %d %s", i+1, w.Name))
+		body.Workflows = append(body.Workflows, client.WorkflowInput{Name: w.Name, Position: ptr(int64(i + 1))})
 	}
-	body := client.SetWorkflowBody{Workflows: []client.WorkflowInput{work}, Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
+	for _, w := range want {
+		for i, st := range w.Steps {
+			wantSteps = append(wantSteps, st)
+			wanted = append(wanted, fmt.Sprintf("step %s %d %s %s", w.Name, i+1, st.Name, st.Skill))
+			in := client.StepInput{Workflow: w.Name, Name: st.Name, Position: ptr(int64(i + 1))}
+			if st.Skill != "" {
+				in.Skill = ptr(st.Skill)
+			}
+			if j := slices.IndexFunc(have.Steps, func(h client.WorkflowStep) bool { return strings.EqualFold(h.Name, st.Name) }); j >= 0 {
+				in.ID = ptr(have.Steps[j].ID)
+			}
+			body.Steps = append(body.Steps, in)
+		}
+	}
+	// The Connectors in the Project's order: by Workflow, then by the Step they lead out of.
 	position := map[string]int64{}
-	for i, st := range want.Steps {
-		wanted = append(wanted, fmt.Sprintf("step %d %s %s", i+1, st.Name, st.Skill))
-		in := client.StepInput{Workflow: work.Name, Name: st.Name, Position: ptr(int64(i + 1))}
-		if st.Skill != "" {
-			in.Skill = ptr(st.Skill)
+	for _, st := range wantSteps {
+		for _, w := range want {
+			for _, k := range w.Connectors {
+				if k.From != st.Name {
+					continue
+				}
+				position[k.From]++
+				wanted = append(wanted, fmt.Sprintf("connector %s %s %s %d", k.From, k.To, k.Name, position[k.From]))
+				in := client.ConnectorInput{From: k.From, Name: k.Name, Position: ptr(position[k.From])}
+				if k.To != "" {
+					in.To = ptr(k.To)
+				}
+				body.Connectors = append(body.Connectors, in)
+			}
 		}
-		if j := slices.IndexFunc(have.Steps, func(h client.WorkflowStep) bool { return strings.EqualFold(h.Name, st.Name) }); j >= 0 {
-			in.ID = ptr(have.Steps[j].ID)
-		}
-		body.Steps = append(body.Steps, in)
-	}
-	for _, k := range want.Connectors {
-		position[k.From]++
-		wanted = append(wanted, fmt.Sprintf("connector %s %s %s %d", k.From, k.To, k.Name, position[k.From]))
-		in := client.ConnectorInput{From: k.From, Name: k.Name, Position: ptr(position[k.From])}
-		if k.To != "" {
-			in.To = ptr(k.To)
-		}
-		body.Connectors = append(body.Connectors, in)
 	}
 	if slices.Equal(got, wanted) {
 		return nil
 	}
 	moves := map[string]string{}
 	for _, st := range have.Steps {
-		if !slices.ContainsFunc(want.Steps, func(w StepSpec) bool { return strings.EqualFold(w.Name, st.Name) }) && len(want.Steps) > 0 {
-			moves[st.ID] = want.Steps[0].Name
+		if !slices.ContainsFunc(wantSteps, func(w StepSpec) bool { return strings.EqualFold(w.Name, st.Name) }) && len(wantSteps) > 0 {
+			moves[st.ID] = wantSteps[0].Name
 		}
 	}
 	if len(moves) > 0 {
@@ -480,7 +500,7 @@ func (crew *Crew) workspaces(ctx context.Context, c *client.ClientWithResponses,
 func (crew *Crew) File(ctx context.Context, c *client.ClientWithResponses, t TaskTemplate, title string) (*client.TaskDetail, error) {
 	project := crew.ProjectKey(or(t.Project, crew.Preset.Projects[0].Key))
 	body := client.FileTaskBody{Project: &project, Title: or(title, t.Title), Description: &t.Description, Owner: &crew.Owner}
-	hold := crew.Preset.Workflow.Hold()
+	hold := crew.Preset.Hold()
 	switch {
 	case t.Breakdown:
 		body.Breakdown = ptr(true)

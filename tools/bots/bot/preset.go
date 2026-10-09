@@ -7,7 +7,7 @@ import (
 	"github.com/tuongaz/darkory/client"
 )
 
-// Preset is a ready-made Organisation for the bots to work: the Projects, Skills, Workflow and
+// Preset is a ready-made Organisation for the bots to work: the Projects, Skills, Workflows and
 // Workspaces Setup makes, the agent Members and human personas who work in it, and the Tasks its
 // owner files, each with the Subtasks filed for it.
 type Preset struct {
@@ -19,8 +19,8 @@ type Preset struct {
 	// has breakdown, acceptance, retro and skill-review built in, and init makes engineer and
 	// review.
 	Skills []client.CreateSkillBody
-	// Workflow is the Workflow Setup gives each of the preset's Projects.
-	Workflow WorkflowSpec
+	// Workflows are the Workflows Setup gives each of the preset's Projects, in order.
+	Workflows []WorkflowSpec
 	// Workspaces are made when missing, each a throwaway git repository.
 	Workspaces []WorkspaceSpec
 	// Agents are the bots, as agent Members.
@@ -53,9 +53,10 @@ type ProjectSpec struct {
 	AutoComplete     bool
 }
 
-// WorkflowSpec is a Workflow by names: its Steps in order, and the Connectors out of them, each
-// Step's in the order its holder is offered them.
+// WorkflowSpec is a Workflow by names: its name, its Steps in order, and the Connectors out of
+// them, each Step's in the order its holder is offered them.
 type WorkflowSpec struct {
+	Name       string
 	Steps      []StepSpec
 	Connectors []ConnectorSpec
 }
@@ -71,12 +72,14 @@ type ConnectorSpec struct {
 	From, To, Name string
 }
 
-// Hold is the Workflow's first hold, where work is filed ahead until a person moves it on; ""
-// when it has none.
-func (w WorkflowSpec) Hold() string {
-	for _, s := range w.Steps {
-		if s.Skill == "" {
-			return s.Name
+// Hold is the first hold of the preset's Workflows, in the Project's order, where work is filed
+// ahead until a person moves it on; "" when they have none.
+func (p *Preset) Hold() string {
+	for _, w := range p.Workflows {
+		for _, s := range w.Steps {
+			if s.Skill == "" {
+				return s.Name
+			}
 		}
 	}
 	return ""
@@ -213,10 +216,11 @@ const (
 	StepSkillReview = "Skill review"
 )
 
-// SoftwareWorkflow is the software preset's Workflow, for both its Projects: Backlog, a hold, then
-// a Step for each kind of work. A build goes to review; review passes it into Done or sends it
+// SoftwareWorkflow is the software preset's Workflow, Work, for both its Projects: Backlog, a
+// hold, then a Step for each kind of work. A build goes to review; review passes it into Done or sends it
 // back; a Retrospective proposes a Skill version for Skill review, which publishes it.
 var SoftwareWorkflow = WorkflowSpec{
+	Name: "Work",
 	Steps: []StepSpec{{StepBacklog, ""}, {StepPlan, SkillBreakdown}, {StepBuild, SkillCompany}, {StepDocs, SkillDocs}, {StepQA, SkillQA},
 		{StepReview, SkillReview}, {StepTriage, SkillTriage}, {StepDeploy, SkillDeploy}, {StepRetro, SkillRetro}, {StepSkillReview, SkillSkillReview}},
 	Connectors: []ConnectorSpec{
@@ -236,19 +240,19 @@ var SoftwareWorkflow = WorkflowSpec{
 // retro, a lapser, a stuck agent and a backlog prober; kai, who owns the work and directs the
 // agents, and mai, who answers their questions. Its Tasks are broken down by DefaultPlan.
 var Software = Preset{
-	Name:     "software",
-	Projects: []ProjectSpec{{Key: "WEB", Name: "Web"}, {Key: "OPS", Name: "Ops"}},
-	Skills:   skills,
-	Workflow: SoftwareWorkflow,
-	Agents:   Roster,
-	Humans:   []Persona{{Name: "kai", Owns: true, Projects: []string{"WEB"}}, {Name: "mai", Answers: true, Projects: []string{"WEB"}}},
-	Manager:  "kai",
-	Ask:      "mai",
-	Answer:   "Yes, as long as nothing is saved to their account.",
-	Tasks:    softwareTasks(),
-	Plan:     DefaultPlan,
-	Evidence: evidence,
-	Chores:   []Chore{{Project: "OPS", Step: StepTriage, Title: "Rotate the logs"}, {Project: "OPS", Step: StepDeploy, Title: "Deploy to staging"}},
+	Name:      "software",
+	Projects:  []ProjectSpec{{Key: "WEB", Name: "Web"}, {Key: "OPS", Name: "Ops"}},
+	Skills:    skills,
+	Workflows: []WorkflowSpec{SoftwareWorkflow},
+	Agents:    Roster,
+	Humans:    []Persona{{Name: "kai", Owns: true, Projects: []string{"WEB"}}, {Name: "mai", Answers: true, Projects: []string{"WEB"}}},
+	Manager:   "kai",
+	Ask:       "mai",
+	Answer:    "Yes, as long as nothing is saved to their account.",
+	Tasks:     softwareTasks(),
+	Plan:      DefaultPlan,
+	Evidence:  evidence,
+	Chores:    []Chore{{Project: "OPS", Step: StepTriage, Title: "Rotate the logs"}, {Project: "OPS", Step: StepDeploy, Title: "Deploy to staging"}},
 }
 
 // softwareTasks are the Tasks the software owner files, in turn, each broken down by the planner.

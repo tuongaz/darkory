@@ -81,11 +81,15 @@ while IFS=$'\t' read -r name model manager skills; do
   fi
 done
 
-# The Workflow, keeping the id of each Step already there by its name; the open Tasks at a Step
-# this Workflow does not have wait in the Backlog.
+# The Workflow, Software, keeping the id of each Step already there by its name; the open Tasks at
+# a Step this Workflow does not have wait in the Backlog. A Project with one Workflow keeps it,
+# renamed Software if it was not (a Project made empty, or one from before Workflows were named,
+# has one named Work), so a re-run never deletes and remakes it; with more, the one named
+# Software keeps its id.
 current=$($dk workflow show "$project" --body)
 jq --argjson cur "$current" '
-  ($cur.steps | map({key: (.name | ascii_downcase), value: .id}) | from_entries) as $ids
+  (if ($cur.workflows | length) == 1 then .workflows[0] += {id: $cur.workflows[0].id} else . end)
+  | ($cur.steps | map({key: (.name | ascii_downcase), value: .id}) | from_entries) as $ids
   | ([.steps[].name | ascii_downcase]) as $ours
   | .steps |= map(if $ids[.name | ascii_downcase] then . + {id: $ids[.name | ascii_downcase]} else . end)
   | .moves = ([$cur.steps[] | select((.name | ascii_downcase) as $n | $ours | index($n) | not) | {key: .id, value: "Backlog"}] | from_entries)

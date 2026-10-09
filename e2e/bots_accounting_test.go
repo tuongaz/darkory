@@ -60,7 +60,7 @@ func TestBotsAccounting(t *testing.T) {
 
 	// TAX's Workflow is the accounting one; there is no agent and no Workspace.
 	wf := admin.workflow(bot.ProjectTax)
-	if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(bot.AccountingWorkflow)) {
+	if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(&bot.Accounting)) {
 		t.Fatalf("TAX's Workflow is %v", names)
 	}
 	steps := map[string]client.WorkflowStep{}
