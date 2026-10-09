@@ -346,7 +346,7 @@ describe("the addresses before Projects", () => {
     ["/admin/members/m-bob", "Settings/Members/bob"],
     ["/admin/skills/engineer", "Settings/Skills/engineer"],
     ["/admin/teams/OPS", "Settings/Ops/General"],
-    ["/admin/workflow", "Settings/Web/Workflows"],
+    ["/admin/workflow", "Web/Workflows"],
     ["/admin/workspaces", "Settings/Web/Workspaces"],
     ["/account", "Settings/Account"],
     ["/teams/OPS/features", "Ops/Tasks"],
@@ -718,7 +718,7 @@ describe("Settings", () => {
     expect(within(organisation).getByRole("link", { name: "Members" })).toHaveAttribute("href", "/settings/organisation/members");
     // The Project in the address is unfolded onto its pages.
     const ops = within(nav()).getByRole("list", { name: "Ops" });
-    expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Workflows", "Members", "Labels", "Workspaces"]);
+    expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Members", "Labels", "Workspaces"]);
     expect(within(ops).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
     expect(within(nav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
     // The Settings shell draws the same flat sidebar beside the page card.

@@ -67,6 +67,12 @@ async function open(browser: Browser, path: string, size = { width: 1440, height
   return { ctx, page, errors };
 }
 
+/** The address of the one Workflow's page of a Project of one: its Workflows open on a list. */
+async function workflowPage(key: string): Promise<string> {
+  const { workflows } = (await v1("GET", `/v1/projects/${key}/workflow`)) as { workflows: { id: string }[] };
+  return `/projects/${key}/workflows/${workflows[0].id}`;
+}
+
 /** A fresh token for a roster agent, by name. */
 async function agentToken(name: string): Promise<string> {
   const { items } = (await v1("GET", "/v1/members")) as { items: { id: string; name: string }[] };
@@ -75,7 +81,7 @@ async function agentToken(name: string): Promise<string> {
 }
 
 test("live: a Task filed shows at Build on the line, its pickup reads now, it travels to Review and into Done", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
+  const { page, errors, ctx } = await open(browser, await workflowPage("MAIN"));
   const line = page.getByRole("region", { name: "Workflow", exact: true });
   await expect(line.locator('[data-head="Build"]')).toBeVisible();
   await page.screenshot({ path: `${liveShots}0-open.png` });
@@ -155,9 +161,9 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
   // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
-  // Settings › Workflows lists MAIN's one, Work; its row opens its editor.
-  const { page, errors, ctx } = await open(browser, "/settings/projects/MAIN/workflows");
-  await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Work" }).click();
+  // MAIN's Workflows list its one, Work; its row's pencil opens its editor.
+  const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
+  await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Edit Work" }).click();
   const list = page.getByRole("list", { name: "Steps" });
   await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
   await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
@@ -234,7 +240,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
 
   // Save: the Skill, then the Workflow; the live Workflow, and the board's columns follow without a reload.
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(`${base}/projects/MAIN/workflows`);
+  await expect(page).toHaveURL(new RegExp(`^${base}/projects/MAIN/workflows/[^/?]+$`));
   await expect(board.page.getByText("Make", { exact: true }).first()).toBeVisible();
   await expect(board.page.getByText("Build", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${shots}6-08-saved.png`, animations: "disabled" });
@@ -249,7 +255,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
 
   // C3: QA's Skill exists now and nobody has it: its Owner takes it. A new agent for it, at once: its token shows once.
   const work = wf.workflows[0].id;
-  await page.goto(`${base}/settings/projects/MAIN/workflows/${work}?step=${qaStep.id}`);
+  await page.goto(`${base}/projects/MAIN/workflows/${work}/edit?step=${qaStep.id}`);
   const takenBy = page.getByRole("region", { name: "Step 4: QA" }).getByRole("region", { name: "Taken by" });
   await expect(takenBy).toContainText("Nobody");
   await expect(list.getByRole("listitem", { name: "4. QA" })).toContainText("Owner takes it");
@@ -287,16 +293,16 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   };
   expect([await has("ada"), await has("builder")]).toEqual([false, true]);
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(page).toHaveURL(`${base}/projects/MAIN/workflows`);
+  await expect(page).toHaveURL(`${base}/projects/MAIN/workflows/${work}`);
   expect([await has("ada"), await has("builder")]).toEqual([true, false]);
 
   // A removal cancelled is discarded: ada keeps engineer.
-  await page.goto(`${base}/settings/projects/MAIN/workflows/${work}?step=${madeStep.id}`);
+  await page.goto(`${base}/projects/MAIN/workflows/${work}/edit?step=${madeStep.id}`);
   await makeTakers.getByRole("button", { name: "Remove ada" }).click();
   await expect(makeTakers).toContainText("Nobody");
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("dialog", { name: "Discard 1 change?" }).getByRole("button", { name: "Discard" }).click();
-  await expect(page).toHaveURL(`${base}/settings/projects/MAIN/workflows`);
+  await expect(page).toHaveURL(`${base}/projects/MAIN/workflows/${work}`);
   expect(await has("ada")).toBe(true);
 
   expect(errors).toEqual([]);
@@ -314,7 +320,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await v1("POST", `/v1/tasks/${filed.key}/claim`, { heartbeat_timeout_seconds: 600 }, secret, "qa-bot-1");
   // ada took Make's Tasks in scenario 6.
 
-  const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
+  const { page, errors, ctx } = await open(browser, await workflowPage("MAIN"));
   const line = page.getByRole("region", { name: "Workflow", exact: true });
   // The taker's mark under QA's name, ringed while it works there; the Task's token carries it too.
   const mark = line.locator('[data-head="QA"]').getByRole("img", { name: "qa-bot (agent), working" });
@@ -363,7 +369,7 @@ test("the software Workflow at 1440×900: its line and the whole Loops list show
   await v1("POST", "/v1/projects", { key: "SWL", name: "Software line", workflow: "empty", members: ["ada"] });
   await v1("PUT", "/v1/projects/SWL/workflow", workflow);
 
-  const { page, errors, ctx } = await open(browser, "/projects/SWL/workflows");
+  const { page, errors, ctx } = await open(browser, await workflowPage("SWL"));
   const loops = page.getByRole("region", { name: "Loops" });
   await expect(loops).toContainText("Loops 7");
   const rows = loops.getByRole("listitem");
@@ -383,7 +389,7 @@ test("the software Workflow at 1440×900: its line and the whole Loops list show
 
 test("the software Workflow down a phone and a 1024 window: every loop back's track keeps the gutter at the line's left edge", async ({ browser }) => {
   for (const size of [{ width: 390, height: 844 }, { width: 1024, height: 900 }]) {
-    const { page, errors, ctx } = await open(browser, "/projects/SWL/workflows", size);
+    const { page, errors, ctx } = await open(browser, await workflowPage("SWL"), size);
     const line = page.getByRole("region", { name: "Workflow" });
     await expect(line).toHaveAttribute("data-orientation", "vertical");
     const tracks = line.locator("path[data-track]");

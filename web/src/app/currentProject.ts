@@ -8,7 +8,7 @@ import { useCurrentMe } from "@/me";
 export type ProjectArea = "tasks" | "workflows" | "agents" | "activity";
 
 /** The pages of a Project's settings, each at `/settings/projects/:key/<page>`. */
-export type ProjectSettingsPage = "general" | "workflows" | "members" | "labels" | "workspaces";
+export type ProjectSettingsPage = "general" | "members" | "labels" | "workspaces";
 
 // The Project last shown, remembered by this browser, so the app reopens where you left it.
 const lastProjectKey = "darkory.project";
@@ -131,11 +131,11 @@ export function workflowsPath(project: Pick<Project, "key">, workflow?: string, 
 }
 
 /**
- * The address of a Project's Workflows in Settings (`/settings/projects/:key/workflows`), or of
- * one Workflow's editor by its id, with what else the address says (`step`).
+ * The address of one Workflow's editor by its id (`/projects/:key/workflows/:workflow/edit`), with
+ * what else the address says (`step`).
  */
-export function workflowsSettingsPath(project: Pick<Project, "key">, workflow?: string, params: Record<string, string> = {}): string {
-  return withSearch(`${projectSettingsPath(project, "workflows")}${workflow ? `/${encodeURIComponent(workflow)}` : ""}`, params);
+export function workflowEditPath(project: Pick<Project, "key">, workflow: string, params: Record<string, string> = {}): string {
+  return withSearch(`${workflowsPath(project, workflow)}/edit`, params);
 }
 
 /** Which of a Project's places the address is in, if any. */

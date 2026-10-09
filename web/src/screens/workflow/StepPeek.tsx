@@ -1,8 +1,8 @@
-import { ArrowRightIcon, SettingsIcon, TriangleAlertIcon } from "lucide-react";
+import { ArrowRightIcon, PencilIcon, TriangleAlertIcon } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import type { Project } from "@/api/client";
 import { useMembers, useRunnerSessions, useTasks } from "@/api/queries";
-import { workflowsSettingsPath } from "@/app/currentProject";
+import { workflowEditPath } from "@/app/currentProject";
 import { peekParam } from "@/app/peek";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
@@ -46,9 +46,9 @@ export function StepPeek({ project, workflow, step, onClose }: { project: Projec
       actions={
         admin && (
           <Button asChild variant="outline" size="xs">
-            <Link to={workflowsSettingsPath(project, step.workflow_id, { [stepParam]: step.id })}>
-              <SettingsIcon />
-              Edit in Settings
+            <Link to={workflowEditPath(project, step.workflow_id, { [stepParam]: step.id })}>
+              <PencilIcon />
+              Edit
             </Link>
           </Button>
         )

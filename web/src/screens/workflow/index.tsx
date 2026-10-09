@@ -1,4 +1,4 @@
-import { LoaderIcon, PencilIcon } from "lucide-react";
+import { LoaderIcon, PencilIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -8,10 +8,10 @@ import type { Project } from "@/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { workflowsInOrder } from "@/components/workflowLine/model";
 import { WorkflowChip } from "@/components/WorkflowChip";
-import { projectSettingsPath, useRouteProject, workflowsPath, workflowsSettingsPath } from "@/app/currentProject";
+import { useRouteProject, workflowEditPath, workflowsPath } from "@/app/currentProject";
 import { NotFound } from "@/app/NotFound";
 import { projectCrumb } from "@/app/crumbs";
-import { Content, TopBar } from "@/app/TopBar";
+import { Content, TopBar, type Crumb } from "@/app/TopBar";
 import { FormDialog } from "@/components/FormDialog";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,8 @@ import { useTaskFilter } from "@/components/filters/useTaskFilter";
 import { useBlockingCount } from "@/components/workflow/blocking";
 import { useLineData } from "@/components/workflowLine";
 import { taskPath as taskPagePath } from "@/screens/task/format";
-import { fromRecord } from "./edit/draft";
+import { fromRecord, type RecordWorkflow } from "./edit/draft";
+import { DeleteWorkflowDialog } from "./edit/DeleteWorkflow";
 import { useDraftEditor } from "./edit/useDraft";
 import { useEditorWorkflow } from "./edit/useEditorWorkflow";
 import { EditingWorkflow } from "./Editing";
@@ -30,28 +31,29 @@ import { useLineView, useScopeParam } from "./lineView";
 import { LineViewSwitch } from "./LineViewSwitch";
 import { ScopeChip } from "./ScopeChip";
 import { WorkflowsList } from "./WorkflowsList";
-export { WorkflowsSettingsPage } from "./WorkflowsSettings";
+import { useWorkflowActs } from "./useWorkflowActs";
 import { useGoToWorkflow, useWorkflowSegment, workflowNamed, type EditorState } from "./routeWorkflow";
 import { stepParam } from "./StepPeek";
 import { ChangesChip } from "./edit/Changes";
 import { toShort } from "@/lib/shortid";
 
 /**
- * /projects/:key/workflows: of a Project of two or more, its Workflows as a list, each row opening
- * that Workflow's page; of a Project of one, that Workflow's page in place. A `?workflow=` (an
+ * /projects/:key/workflows: the Project's Workflows as a list, a Project of one included, each row
+ * opening that Workflow's page. For an admin the list carries its acts (order, edit, delete) and
+ * the bar's primary adds a Workflow, each written at once (`useWorkflowActs`). A `?workflow=` (an
  * address of the board's kind) opens the page of the Workflow it names.
  */
 export function WorkflowsPage() {
   const project = useRouteProject();
   const admin = useCurrentMe().member.admin;
-  const query = useWorkflow(project.key);
+  const acts = useWorkflowActs(project);
+  const { query, graph } = acts;
+  const [deleting, setDeleting] = useState<RecordWorkflow | undefined>();
   const { search } = useLocation();
-  const graph = query.data;
-  // Until the record is read, neither page is known: a bare skeleton, no bar of either.
-  if (!graph && !query.isError) return <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />;
-  if (graph && graph.workflows.length < 2) return <WorkflowPage />;
   const params = new URLSearchParams(search);
   const named = params.get(workflowParam);
+  // An address naming a Workflow is that Workflow's page: nothing of the list until it is read.
+  if (named && !graph && !query.isError) return <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />;
   const asked = named && graph ? workflowNamed(graph.workflows, named) : undefined;
   if (asked) {
     params.delete(workflowParam);
@@ -62,13 +64,11 @@ export function WorkflowsPage() {
     <>
       <TopBar
         crumbs={[projectCrumb(project), { label: "Workflows" }]}
-        actions={
+        primary={
           admin && (
-            <Button asChild variant="outline">
-              <Link to={projectSettingsPath(project, "workflows")} aria-label="Edit the Workflows">
-                <PencilIcon />
-                <span className="hidden sm:inline">Edit</span>
-              </Link>
+            <Button onClick={acts.add} disabled={!graph || acts.busy}>
+              <PlusIcon />
+              Workflow
             </Button>
           )
         }
@@ -76,17 +76,31 @@ export function WorkflowsPage() {
       <Content className="overflow-auto">
         {query.isError ? (
           <Refusal error={query.error} className="m-6" />
+        ) : !graph ? (
+          <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />
         ) : (
-          graph && <WorkflowsList project={project} graph={graph} />
+          <WorkflowsList project={project} graph={graph} acts={admin ? { busy: acts.busy, skillMap: acts.skillMap, move: acts.move, onDelete: setDeleting } : undefined} />
         )}
       </Content>
+      {deleting && graph && (
+        <DeleteWorkflowDialog
+          draft={fromRecord(graph)}
+          workflow={deleting}
+          onClose={() => setDeleting(undefined)}
+          onDelete={(moves, repoint) => {
+            const gone = deleting;
+            setDeleting(undefined);
+            acts.remove(gone, moves, repoint);
+          }}
+        />
+      )}
     </>
   );
 }
 
 /**
  * /projects/:key/workflows/:workflow: one Workflow of the Project, live, as one line with its
- * panels (and /projects/:key/workflows of a Project of one). Of a Project of several, the chip in
+ * panels. Of a Project of several, the chip in
  * the breadcrumb goes to another's page, remembered as the board's pick. `?scope=` narrows it to
  * the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the line for the
  * Blocking among its Tasks or a list.
@@ -101,7 +115,7 @@ export function WorkflowPage() {
   const workflows = useWorkflow(project.key).data?.workflows;
   const segment = useWorkflowSegment();
   const several = !!workflows && workflows.length > 1;
-  // The Workflow the address names; of a Project of one, its one.
+  // The Workflow the address names; with none (a page drawn without its segment), the first.
   const shown = workflows && (segment ? workflowNamed(workflows, segment) : workflowsInOrder(workflows)[0]);
   const goTo = useGoToWorkflow((id) => workflowsPath(project, id), project);
   const { data } = useLineData(project.key, shown?.id, scope, filter.matches);
@@ -123,7 +137,7 @@ export function WorkflowPage() {
         crumbs={[
           projectCrumb(project),
           // Back to the list; on a phone it gives its room to the Project's mark and the chip.
-          { label: "Workflows", to: segment ? workflowsPath(project) : undefined, wide: several },
+          { label: "Workflows", to: workflowsPath(project), wide: several },
           // The Workflow drawn, at every width: on a phone too it is the way to another.
           ...(several ? [{ label: <WorkflowChip workflows={workflows} picked={shown?.id} onPick={pick} />, whole: true }] : []),
           ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
@@ -140,10 +154,10 @@ export function WorkflowPage() {
               </Button>
             )}
             {view === "line" && <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />}
-            {admin && (
+            {admin && shown && (
               <Button asChild variant="outline">
-                {/* This Workflow's editor; a Project of one names no Workflow, so its Edit says Workflows. */}
-                <Link to={workflowsSettingsPath(project, shown?.id)} aria-label={several && shown ? `Edit ${shown.name}` : "Edit the Workflows"}>
+                {/* This Workflow's editor, in the app. */}
+                <Link to={workflowEditPath(project, shown.id)} aria-label={`Edit ${shown.name}`}>
                   <PencilIcon />
                   <span className="hidden sm:inline">Edit</span>
                 </Link>
@@ -160,14 +174,15 @@ export function WorkflowPage() {
   );
 }
 
-/** The crumbs of a Workflow's editor: Settings › the Project › Workflows, leading back to the list. */
-const editorCrumbs = (project: Project) => [{ label: "Settings" }, { label: project.name, wide: true }, { label: "Workflows", to: workflowsSettingsPath(project) }];
+/** The crumbs of a Workflow's editor: the Project › Workflows (back to the list) › the Workflow. */
+const editorCrumbs = (project: Project, name: string): Crumb[] => [projectCrumb(project), { label: "Workflows", to: workflowsPath(project) }, { label: name }];
 
 /**
- * /settings/projects/:key/workflows/:workflow: one Workflow's editor, for an admin; the draft is
- * the Project's whole graph, saved whole on Save. Anyone else reads it.
+ * /projects/:key/workflows/:workflow/edit: one Workflow's editor, for an admin; the draft is the
+ * Project's whole graph, saved whole on Save, which lands on the Workflow's page, as Cancel does.
+ * Anyone else reads it.
  */
-export function WorkflowSettingsPage() {
+export function WorkflowEditPage() {
   const admin = useCurrentMe().member.admin;
   return admin ? <EditingPage /> : <ReadingPage />;
 }
@@ -179,11 +194,11 @@ function ReadingPage() {
   const draft = useMemo(() => query.data && fromRecord(query.data), [query.data]);
   const shown = useEditorWorkflow(project, draft, query.data);
   const { search, state } = useLocation();
-  if (shown.redirect) return <Navigate to={{ pathname: workflowsSettingsPath(project, shown.redirect), search }} state={state} replace />;
-  if (draft && !shown.id) return <NotFound crumbs={editorCrumbs(project)} />;
+  if (shown.redirect) return <Navigate to={{ pathname: workflowEditPath(project, shown.redirect), search }} state={state} replace />;
+  if (draft && !shown.id) return <NotFound crumbs={editorCrumbs(project, "Not found")} />;
   return (
     <>
-      <TopBar crumbs={editorCrumbs(project)} />
+      <TopBar crumbs={editorCrumbs(project, shown.workflow?.name.trim() || "…")} />
       <p className="border-b bg-muted/50 px-4 py-2 text-muted-foreground sm:px-6">
         Only an admin changes {project.name}'s Workflows.{" "}
         <Link to={workflowsPath(project, shown.id)} className="text-foreground underline-offset-2 hover:underline">
@@ -210,28 +225,29 @@ function EditingPage() {
   const { state, search } = useLocation();
   const [focusName] = useState(() => !focusStep && !!(state as EditorState | null)?.rename);
   const [discarding, setDiscarding] = useState(false);
-  const list = workflowsSettingsPath(project);
   const shown = useEditorWorkflow(project, editor.draft, editor.base);
+  // The Workflow's live page, where Cancel and Discard land.
+  const page = workflowsPath(project, shown.id);
   const save = async () => {
     const id = shown.id;
     const reply = await editor.save();
     if (!reply) return;
     const saved = reply.workflows.find((w) => w.id === id);
     toast(`Saved ${saved?.name ?? "the Workflows"}`);
-    // That Workflow's live page; of a Project of one, the Workflows' page, which is its.
-    navigate(saved && reply.workflows.length > 1 ? workflowsPath(project, saved.id) : workflowsPath(project));
+    // That Workflow's live page.
+    navigate(workflowsPath(project, saved?.id ?? id));
   };
   const n = editor.changes;
   // An address naming the Workflow by name goes to its id first: a rename then keeps the address.
-  if (shown.redirect) return <Navigate to={{ pathname: workflowsSettingsPath(project, shown.redirect), search }} state={state} replace />;
-  if (editor.draft && !shown.id) return <NotFound crumbs={editorCrumbs(project)} />;
+  if (shown.redirect) return <Navigate to={{ pathname: workflowEditPath(project, shown.redirect), search }} state={state} replace />;
+  if (editor.draft && !shown.id) return <NotFound crumbs={editorCrumbs(project, "Not found")} />;
   return (
     <>
       <TopBar
-        crumbs={editorCrumbs(project)}
+        crumbs={editorCrumbs(project, shown.workflow?.name.trim() || "…")}
         view={<ChangesChip editor={editor} />}
         actions={
-          <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(list))}>
+          <Button variant="outline" onClick={() => (n > 0 ? setDiscarding(true) : navigate(page))}>
             Cancel
           </Button>
         }
@@ -253,7 +269,7 @@ function EditingPage() {
           description={`${project.name}'s Workflows stay as they were saved.`}
           submitLabel="Discard"
           destructive
-          onSubmit={() => navigate(list)}
+          onSubmit={() => navigate(page)}
         >
           {null}
         </FormDialog>

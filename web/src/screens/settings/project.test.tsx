@@ -94,7 +94,7 @@ describe("Settings › a Project › General", () => {
     const first = renderApp("/settings/projects/WEB/general");
     expect(await screen.findByText(/have no Step carrying acceptance/)).toBeInTheDocument();
     const form = screen.getByRole("group", { name: "General settings of Web" });
-    expect(within(form).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/settings/projects/WEB/workflows");
+    expect(within(form).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/WEB/workflows");
     first.unmount();
 
     mockApi(routes(undefined, { "GET /v1/projects/:project/workflow": withAcceptance }));

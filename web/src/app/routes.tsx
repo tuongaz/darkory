@@ -23,7 +23,7 @@ import {
   SkillsSettingsPage,
 } from "@/screens/settings";
 import { TaskPage, TaskPeek } from "@/screens/task";
-import { WorkflowPage, WorkflowSettingsPage, WorkflowsPage, WorkflowsSettingsPage } from "@/screens/workflow";
+import { WorkflowEditPage, WorkflowPage, WorkflowsPage } from "@/screens/workflow";
 import { NotFound } from "./NotFound";
 import { ProjectScope, ToCurrentProject } from "./ProjectScope";
 import { SetupChecklist } from "./SetupChecklist";
@@ -58,6 +58,7 @@ export function AppRoutes() {
             <Route path="tasks" element={<TasksPage />} />
             <Route path="workflows" element={<WorkflowsPage />} />
             <Route path="workflows/:workflow" element={<WorkflowPage />} />
+            <Route path="workflows/:workflow/edit" element={<WorkflowEditPage />} />
             <Route path="workflow" element={<FromWorkflow />} />
             <Route path="agents" element={<AgentsPage />} />
             <Route path="activity" element={<ActivityPage />} />
@@ -92,8 +93,8 @@ export function AppRoutes() {
           <Route path="projects/:key" element={<ProjectScope />}>
             <Route index element={<Navigate to="general" replace />} />
             <Route path="general" element={<ProjectGeneralPage />} />
-            <Route path="workflows" element={<WorkflowsSettingsPage />} />
-            <Route path="workflows/:workflow" element={<WorkflowSettingsPage />} />
+            <Route path="workflows" element={<ToProjectWorkflows />} />
+            <Route path="workflows/:workflow" element={<ToProjectWorkflows edit />} />
             <Route path="workflow" element={<FromWorkflow settings />} />
             <Route path="members" element={<ProjectMembersPage />} />
             <Route path="labels" element={<ProjectLabelsPage />} />
@@ -144,12 +145,25 @@ function FromTeam() {
 }
 
 /**
+ * /settings/projects/:key/workflows and /settings/projects/:key/workflows/:workflow, Settings'
+ * Workflows pages before the list carried its acts: the Project's list in the app, and one
+ * Workflow's editor there (`edit`), keeping what else the address says (`?step=`).
+ */
+export function ToProjectWorkflows({ edit = false }: { edit?: boolean }) {
+  const { key = "", workflow = "" } = useParams();
+  const { search } = useLocation();
+  const list = `/projects/${encodeURIComponent(key)}/workflows`;
+  return <Navigate to={{ pathname: edit ? `${list}/${encodeURIComponent(workflow)}/edit` : list, search }} replace />;
+}
+
+/**
  * /projects/:key/workflow and /settings/projects/:key/workflow, the addresses of one Workflow per
  * Project: the Workflows' now. A `?workflow=` becomes the `:workflow` segment; with none, a
  * `?step=` names the Workflow of its Step (Edit from a Step on the live page, as it was linked);
- * with neither, a `?scope=` naming a Task, of a Project of several, names the Workflow that Task
- * is listed in (its `workflow_id`), else the list; everything else the address says (`?step=`,
- * `?scope=`, `?view=`…) is kept.
+ * with neither, a `?scope=` naming a Task names the Workflow that Task is listed in (its
+ * `workflow_id`) when it is one of the Project's, else the list; everything else the address says
+ * (`?step=`, `?scope=`, `?view=`…) is kept. Settings' (`settings`) goes to that Workflow's editor
+ * in the app, else the list.
  */
 export function FromWorkflow({ settings = false }: { settings?: boolean }) {
   const { key = "" } = useParams();
@@ -163,19 +177,18 @@ export function FromWorkflow({ settings = false }: { settings?: boolean }) {
   const graph = useWorkflow(byStep || byScope ? key : undefined);
   const scoped = useTask(byScope ? toShort(scope) : undefined);
   if ((byStep || byScope) && graph.isPending) return null;
-  const several = (graph.data?.workflows.length ?? 0) > 1;
-  if (byScope && several && scoped.isPending) return null;
+  if (byScope && scoped.isPending) return null;
   const listedIn = scoped.data?.task.workflow_id;
   const workflow = named
     ? toShort(named)
     : step
       ? graph.data?.steps.find((s) => s.id === toShort(step))?.workflow_id
-      : byScope && several && listedIn && graph.data?.workflows.some((w) => w.id === listedIn)
+      : byScope && listedIn && graph.data?.workflows.some((w) => w.id === listedIn)
         ? listedIn
         : undefined;
   params.delete("workflow");
   const rest = params.toString();
-  const pathname = `${settings ? "/settings" : ""}/projects/${encodeURIComponent(key)}/workflows${workflow ? `/${encodeURIComponent(workflow)}` : ""}`;
+  const pathname = `/projects/${encodeURIComponent(key)}/workflows${workflow ? `/${encodeURIComponent(workflow)}${settings ? "/edit" : ""}` : ""}`;
   return <Navigate to={{ pathname, search: rest ? `?${rest}` : "" }} replace />;
 }
 
@@ -187,7 +200,7 @@ function FromFeature() {
 
 /**
  * /admin/*: Admin is Settings now. Members and Skills are the Organisation's; a Team is a
- * Project; the Workflow and the Workspaces are the current Project's.
+ * Project; the Workflow is the current Project's Workflows, its Workspaces in its settings.
  */
 function FromAdmin() {
   const { "*": rest = "" } = useParams();
@@ -204,7 +217,7 @@ function FromAdmin() {
     case "teams":
       return to(record ? `/settings/projects/${record}/general` : "/settings/projects");
     case "workflow":
-      return projectPage("workflows");
+      return <ToCurrentProject area="workflows" />;
     case "workspaces":
       return projectPage("workspaces");
     default:

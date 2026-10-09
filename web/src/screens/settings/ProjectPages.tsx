@@ -5,7 +5,7 @@ import { Link } from "react-router";
 import type { Member, MemberDetail, Project } from "@/api/client";
 import { useDirectory, useProject, useProjects, useWorkflow, useWorkspaces } from "@/api/queries";
 import { addProjectMember, removeProjectMember, updateProject } from "@/api/writes";
-import { projectSettingsPath, useRouteProject } from "@/app/currentProject";
+import { projectSettingsPath, useRouteProject, workflowsPath } from "@/app/currentProject";
 import { EmptyState } from "@/components/EmptyState";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -245,7 +245,7 @@ function AcceptanceRow({ project, admin }: { project: Project; admin: boolean })
     workflow.data && acceptance && !hasStep ? (
       <>
         The{" "}
-        <Link to={projectSettingsPath(project, "workflows")} className="text-foreground underline-offset-2 hover:underline">
+        <Link to={workflowsPath(project)} className="text-foreground underline-offset-2 hover:underline">
           Workflows
         </Link>{" "}
         have no Step carrying acceptance, so no Acceptance is filed.
