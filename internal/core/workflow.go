@@ -76,14 +76,20 @@ func getWorkflow(ctx context.Context, r store.Reader, orgID, projectID string) (
 	}, `SELECT id, name, position FROM workflows WHERE org_id = $1 AND project_id = $2 ORDER BY position, id`, orgID, projectID); err != nil {
 		return w, err
 	}
-	if w.Steps, err = collect(ctx, r, scanStep, `SELECT `+stepCols+` FROM steps st JOIN workflows w ON w.id = st.workflow_id
-WHERE st.org_id = $1 AND st.project_id = $2 ORDER BY w.position, st.position, st.id`, orgID, projectID); err != nil {
+	if w.Steps, err = getSteps(ctx, r, orgID, projectID); err != nil {
 		return w, err
 	}
 	w.Connectors, err = collect(ctx, r, scanConnector, `SELECT `+connectorCols+` FROM connectors k
 JOIN steps st ON st.id = k.from_step_id JOIN workflows w ON w.id = st.workflow_id
 WHERE k.org_id = $1 AND k.project_id = $2 ORDER BY w.position, st.position, k.position, k.id`, orgID, projectID)
 	return w, err
+}
+
+// getSteps reads a Project's Steps in the Project's order: by their Workflow's position, then
+// their own.
+func getSteps(ctx context.Context, r store.Reader, orgID, projectID string) ([]Step, error) {
+	return collect(ctx, r, scanStep, `SELECT `+stepCols+` FROM steps st JOIN workflows w ON w.org_id = st.org_id AND w.id = st.workflow_id
+WHERE st.org_id = $1 AND st.project_id = $2 ORDER BY w.position, st.position, st.id`, orgID, projectID)
 }
 
 // find resolves a reference to one of the Project's Steps, in any of its Workflows: its id, or
@@ -156,11 +162,11 @@ func stepOf(ctx context.Context, r store.Reader, orgID, projectID, ref string) (
 	if strings.TrimSpace(ref) == "" {
 		return Step{}, refuse(CodeInvalid, "a Step reference is empty")
 	}
-	w, err := getWorkflow(ctx, r, orgID, projectID)
+	steps, err := getSteps(ctx, r, orgID, projectID)
 	if err != nil {
 		return Step{}, err
 	}
-	st, ok := w.find(ref)
+	st, ok := Workflows{Steps: steps}.find(ref)
 	if !ok {
 		return Step{}, refuse(CodeNotFound, "the Project has no Step %q", ref)
 	}
@@ -828,16 +834,17 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 			return out, refuse(CodeInvalid, "two Steps are named %q; names are unique, ignoring case", name)
 		}
 		names[strings.ToLower(name)] = true
-		st := Step{ID: in.ID, WorkflowID: stepWF[i].ID, Name: name, Position: stepAt[i], X: (stepAt[i] - 1) * stepSpacing}
-		if in.ID != "" {
-			j := slices.IndexFunc(current.Steps, func(s Step) bool { return s.ID == in.ID })
+		id := shortid.Canonical(in.ID) // either form (ADR 0017)
+		st := Step{ID: id, WorkflowID: stepWF[i].ID, Name: name, Position: stepAt[i], X: (stepAt[i] - 1) * stepSpacing}
+		if id != "" {
+			j := slices.IndexFunc(current.Steps, func(s Step) bool { return s.ID == id })
 			if j < 0 {
-				return out, refuse(CodeInvalid, "the Project has no Step %s; a new Step has no id", in.ID)
+				return out, refuse(CodeInvalid, "the Project has no Step %s; a new Step has no id", id)
 			}
-			if ids[in.ID] {
-				return out, refuse(CodeInvalid, "Step %s is in the body twice", in.ID)
+			if ids[id] {
+				return out, refuse(CodeInvalid, "Step %s is in the body twice", id)
 			}
-			ids[in.ID] = true
+			ids[id] = true
 			st.X, st.Y = current.Steps[j].X, current.Steps[j].Y
 		} else {
 			st.ID = newID()
@@ -872,14 +879,14 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 
 	claimed := map[string]bool{}
 	for _, in := range w.Connectors {
-		if in.ID != "" {
-			if !slices.ContainsFunc(current.Connectors, func(k Connector) bool { return k.ID == in.ID }) {
-				return out, refuse(CodeInvalid, "the Project has no Connector %s; a new Connector has no id", in.ID)
+		if id := shortid.Canonical(in.ID); id != "" { // either form (ADR 0017)
+			if !slices.ContainsFunc(current.Connectors, func(k Connector) bool { return k.ID == id }) {
+				return out, refuse(CodeInvalid, "the Project has no Connector %s; a new Connector has no id", id)
 			}
-			if claimed[in.ID] {
-				return out, refuse(CodeInvalid, "Connector %s is in the body twice", in.ID)
+			if claimed[id] {
+				return out, refuse(CodeInvalid, "Connector %s is in the body twice", id)
 			}
-			claimed[in.ID] = true
+			claimed[id] = true
 		}
 	}
 	out.connectors = []Connector{}
@@ -894,7 +901,7 @@ func resolveWorkflow(t *tx, current Workflows, w WorkflowsInput) (resolvedWorkfl
 		if err != nil {
 			return out, err
 		}
-		k := Connector{ID: in.ID, FromStepID: from, Name: name}
+		k := Connector{ID: shortid.Canonical(in.ID), FromStepID: from, Name: name}
 		if in.To != nil {
 			// Into any Step of the body, of the Step's Workflow or of another.
 			to, err := find("a Connector", *in.To)
@@ -1033,7 +1040,7 @@ func sameWorkflow(current Workflows, next resolvedWorkflow) bool {
 	return true
 }
 
-// GetWorkflow returns a Project's Workflow with the live facts of each Step.
+// GetWorkflow returns a Project's Workflows, with the live facts of each Step.
 func (s *Service) GetWorkflow(ctx context.Context, c *auth.Caller, projectRef string) (WorkflowsDetail, error) {
 	projectID, err := resolveProject(ctx, s.store, c.OrgID, projectRef)
 	if err != nil {
@@ -1042,7 +1049,7 @@ func (s *Service) GetWorkflow(ctx context.Context, c *auth.Caller, projectRef st
 	return workflowDetail(ctx, s.store, c.OrgID, projectID, s.clock.Now())
 }
 
-// workflowDetail reads a Project's Workflow with the live facts of each Step as of now.
+// workflowDetail reads a Project's Workflows, with the live facts of each Step as of now.
 func workflowDetail(ctx context.Context, r store.Reader, orgID, projectID string, now time.Time) (WorkflowsDetail, error) {
 	w, err := getWorkflow(ctx, r, orgID, projectID)
 	if err != nil {
