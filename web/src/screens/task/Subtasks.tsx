@@ -17,6 +17,7 @@ import { Pill } from "@/components/Pill";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { BlockingView } from "@/components/workflow/blocking";
 import { useLineData, WorkflowLine } from "@/components/workflowLine";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { kindLabel, liveClaim, taskWorkGlyph } from "@/work";
@@ -76,7 +77,7 @@ export function Subtasks({ detail, onAdd, page }: { detail: TaskDetail; onAdd?: 
   const [view, setView] = useSubtaskView(page);
   const counts = task.subtask_counts;
   const { steps, workflows } = useTaskWorkflow(task.project_id);
-  const line = useMemo(() => subtaskLine(subtasks, steps, [...workflows].sort((a, b) => a.position - b.position)), [subtasks, steps, workflows]);
+  const line = useMemo(() => subtaskLine(subtasks, steps, workflowsInOrder(workflows)), [subtasks, steps, workflows]);
   const seg = (v: SubtaskView, icon: ReactNode, label: string) => (
     <button
       type="button"

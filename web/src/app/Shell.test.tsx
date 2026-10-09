@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Activity, Project } from "@/api/client";
 import { json, mockApi, refuse, type Call } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
-import { ada, bob, builder, detail, me, ops, signedIn, task, web, workflowsFixture, workflowsSkills } from "@/test/fixtures";
+import { ada, bob, builder, detail, me, ops, signedIn, task, web, wfId, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { sendIntent } from "./intents";
 
@@ -558,6 +558,19 @@ describe("keys", () => {
     await userEvent.click(within(search).getByRole("option", { name: "Web › Bugs board" }));
     expect(await screen.findByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "Investigate" })).toBeInTheDocument();
+  });
+
+  it("⌘K shows G B on the board of the Workflow this browser last picked", async () => {
+    localStorage.setItem("darkory.workflow.WEB", wfId.support);
+    mockApi({ ...records(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } });
+    renderApp("/projects/WEB/tasks");
+    await screen.findByRole("navigation", { name: "Main" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    const entry = (name: string) => within(search).getByRole("option", { name: new RegExp(`^${name}`) });
+    await waitFor(() => expect(entry("Web › Support board")).toBeInTheDocument());
+    expect(entry("Web › Support board").textContent).toMatch(/GB$/);
+    expect(entry("Web › Triage board").textContent).toBe("Web › Triage board");
   });
 
   it("⌘K offers no Organisation settings, no New Project and no human Members to a Member who is not an admin", async () => {

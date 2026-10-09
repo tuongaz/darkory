@@ -235,7 +235,16 @@ function Board({
   onAdd: (step: string) => void;
 }) {
   const move = useMoveTask(model.project.key);
-  const columns = boardColumns(tasks, { workflows: model.workflows, workflow, steps: model.steps, children: model.children, members: model.members, display });
+  const columns = boardColumns(tasks, {
+    workflows: model.workflows,
+    workflow,
+    steps: model.steps,
+    children: model.children,
+    byId: model.byId,
+    blocks: model.blocks,
+    members: model.members,
+    display,
+  });
   const me = model.me.member.id;
 
   const refuse = (task: Task, to: Column, body: string) =>

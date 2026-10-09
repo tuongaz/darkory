@@ -6,6 +6,7 @@ import { useClaimTrails } from "@/components/filters/useTaskFilter";
 import { useCurrentMe } from "@/me";
 import { liveClaim, taskWorkGlyph } from "@/work";
 import type { WorkGlyph } from "@/lib/work";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { blocking, childrenOf, moveProblem, stepsInOrder } from "./derive";
 import { useProjectTasks } from "./queries";
 
@@ -25,7 +26,7 @@ export function useTasksModel(project: Project) {
 
   const lookups = useMemo(() => {
     const list = tasks.data ?? [];
-    const workflows = [...(workflow.data?.workflows ?? [])].sort((a, b) => a.position - b.position);
+    const workflows = workflowsInOrder(workflow.data?.workflows ?? []);
     const steps = stepsInOrder({ workflows, steps: workflow.data?.steps ?? [] });
     const workflowName = new Map(workflows.map((w) => [w.id, w.name]));
     return {

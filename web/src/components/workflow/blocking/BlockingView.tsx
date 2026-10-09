@@ -7,6 +7,7 @@ import { peekParam } from "@/app/peek";
 import { useNow } from "@/clock";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import { useCurrentMe } from "@/me";
 import type { GraphStep } from "../graph";
 import { BlockingBoard, type BandParent } from "./BlockingBoard";
@@ -69,12 +70,10 @@ export function BlockingView({
       if (!wf) continue;
       out.set(
         wf.project_id,
-        [...wf.steps]
-          .sort((x, y) => x.position - y.position)
-          .map((s) => {
-            const skill = s.skill_id ? skills.get(s.skill_id) : undefined;
-            return { id: s.id, name: s.name, skill: s.skill_id ? { id: s.skill_id, name: skill?.name ?? "" } : undefined };
-          }),
+        [...wf.steps].sort(inProjectOrder(wf.workflows)).map((s) => {
+          const skill = s.skill_id ? skills.get(s.skill_id) : undefined;
+          return { id: s.id, name: s.name, workflowId: s.workflow_id, skill: s.skill_id ? { id: s.skill_id, name: skill?.name ?? "" } : undefined };
+        }),
       );
     }
     return out;

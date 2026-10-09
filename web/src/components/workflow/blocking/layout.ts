@@ -430,3 +430,12 @@ export function placeBlocking(
     height,
   };
 }
+
+/**
+ * The Steps a node's micro-line draws, of its Project's (in the Project's order): those of the
+ * Workflow of the Step it is at, else of the Project's first Workflow.
+ */
+export function ownWorkflowSteps<S extends { id: string; workflowId?: string }>(all: readonly S[], stepId: string | undefined): readonly S[] {
+  const own = all.find((s) => s.id === stepId)?.workflowId ?? all[0]?.workflowId;
+  return own === undefined ? all : all.filter((s) => s.workflowId === own);
+}

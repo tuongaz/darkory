@@ -4,7 +4,7 @@
 // Vitest checks them without rendering.
 import type { Connector, Label, Member, Project, Task, TaskBrief, Workflow as WorkflowName, WorkflowStep } from "@/api/client";
 import type { ClaimTrail } from "@/components/filters/taskAxes";
-import { inProjectOrder, startStep, type OrderedStep } from "@/components/workflowLine/model";
+import { inProjectOrder, startStep, workflowsInOrder, type OrderedStep } from "@/components/workflowLine/model";
 import { isOnReportingLine } from "@/me";
 import { kindLabel, liveClaim } from "@/work";
 
@@ -252,38 +252,120 @@ export type Column =
   | { kind: "with"; id: string; memberId: string; member: Member | undefined; tasks: Task[] }
   | { kind: "done" | "dropped"; id: "done" | "dropped"; tasks: Task[]; collapsed: boolean };
 
+/** What says which Workflow's board a Task at no Step shows on: the Project's Workflows and Steps, and the Tasks around it. */
+export type BoardContext = {
+  workflows: readonly Pick<WorkflowName, "id" | "position">[];
+  /** The Project's Steps in its order (`stepsInOrder`). */
+  steps: readonly Pick<WorkflowStep, "id" | "workflow_id">[];
+  children: Map<string, Task[]>;
+  /** Every Task of the Project the page has, by id, filtered or not. */
+  byId: Map<string, Task>;
+  /** The open Tasks each Task blocks (`blocking`). */
+  blocks: Map<string, TaskBrief[]>;
+};
+
+/** The Project's first Workflow by position. */
+const firstWorkflow = (workflows: BoardContext["workflows"]) => workflowsInOrder(workflows)[0]?.id;
+
 /**
  * The Workflow whose board an ended Task's card lands on: the one it ended in (`workflow_id`); for
- * a Parent, which ends at no Step, the one its most recently ended Subtask ended in (by
- * `ended_at`, else the last in the list), counting only the Subtasks that ended at a Step; else,
- * as for a Task whose last Step was since deleted, the Project's first Workflow.
+ * a Parent, which ends at no Step, the one its most recently ended Subtask ended in, counting only
+ * the Subtasks that ended at a Step at or before the Parent did (a Retrospective, filed when the
+ * Parent ends, ends after it and says nothing of where the work ended). Subtasks ended together (a
+ * cascade drop) go to the least advanced in the Project's order, so the Parent stays where it was.
+ * A Task aimed at a Member, which ends at no Step, lands where its Parent does (`withWorkflowsOf`).
+ * Else, as for a Task whose last Step was since deleted, the Project's first Workflow.
  */
 export function endedWorkflowOf(
-  task: Pick<Task, "id" | "workflow_id">,
-  ctx: { workflows: readonly Pick<WorkflowName, "id" | "position">[]; children: Map<string, Task[]> },
+  task: Pick<Task, "id" | "workflow_id" | "ended_at" | "parent_id" | "aimed_at_id">,
+  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "steps" | "byId">>,
 ): string | undefined {
   const known = new Set(ctx.workflows.map((w) => w.id));
   if (task.workflow_id && known.has(task.workflow_id)) return task.workflow_id;
-  const ended = (ctx.children.get(task.id) ?? []).filter((s) => s.state !== "open" && !!s.workflow_id && known.has(s.workflow_id));
-  if (ended.length > 0) return ended.reduce((a, b) => (time(b.ended_at) >= time(a.ended_at) ? b : a)).workflow_id;
-  return [...ctx.workflows].sort((a, b) => a.position - b.position)[0]?.id;
+  const last = lastEndedSubtask(task, ctx);
+  if (last) return last.workflow_id;
+  if (task.aimed_at_id && task.parent_id && ctx.byId && ctx.steps) {
+    const parent = ctx.byId.get(task.parent_id);
+    const at = parent && parentWorkflow(parent, ctx as Pick<BoardContext, "workflows" | "children" | "steps" | "byId">);
+    if (at) return at;
+  }
+  return firstWorkflow(ctx.workflows);
+}
+
+/**
+ * The Subtask of `task` that ended last at a Step of a Workflow the Project has, at or before
+ * `task` ended (any, while `task` is open or undated); ties to the least advanced in the
+ * Project's order (its `last_step_id`, else its Workflow's place).
+ */
+function lastEndedSubtask(
+  task: Pick<Task, "id" | "ended_at">,
+  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "steps">>,
+): Task | undefined {
+  const rank = new Map(ctx.workflows.map((w) => [w.id, w.position]));
+  const until = task.ended_at ? time(task.ended_at) : Number.POSITIVE_INFINITY;
+  const ended = (ctx.children.get(task.id) ?? []).filter((s) => s.state !== "open" && !!s.workflow_id && rank.has(s.workflow_id) && time(s.ended_at) <= until);
+  if (ended.length === 0) return undefined;
+  const index = new Map((ctx.steps ?? []).map((s, i) => [s.id, i]));
+  const advance = (s: Task) => [rank.get(s.workflow_id!)!, s.last_step_id ? (index.get(s.last_step_id) ?? -1) : -1] as const;
+  const lessAdvanced = (a: Task, b: Task) => {
+    const [wa, sa] = advance(a);
+    const [wb, sb] = advance(b);
+    return wa - wb || sa - sb;
+  };
+  return ended.reduce((a, b) => {
+    const by = time(b.ended_at) - time(a.ended_at);
+    if (by !== 0) return by > 0 ? b : a;
+    return lessAdvanced(b, a) < 0 ? b : a;
+  });
+}
+
+/** The Workflow a Parent's card is on: an open one's least advanced Subtask's Step's, an ended one's `endedWorkflowOf`; none while it waits with a Member. */
+function parentWorkflow(parent: Task, ctx: Pick<BoardContext, "workflows" | "children" | "steps" | "byId">): string | undefined {
+  if (parent.state !== "open") return endedWorkflowOf(parent, ctx);
+  const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
+  const place = placeOf(parent, { children: ctx.children, position });
+  return place.kind === "step" ? ctx.steps.find((s) => s.id === place.stepId)?.workflow_id : undefined;
+}
+
+/**
+ * The Workflows whose boards show an open Task waiting with a Member at no Step, in "With
+ * <Member>"; undefined for every board. A Task aimed at a Member (a question) shows beside the
+ * Tasks it blocks, on the boards of their Workflows; blocking none, on its Parent's; else on every
+ * board. A Parent waiting with a Member shows where its Subtasks last ended, else on every board.
+ */
+export function withWorkflowsOf(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
+  if (isParent(task)) {
+    const last = lastEndedSubtask({ id: task.id, ended_at: undefined }, ctx);
+    return last ? new Set([last.workflow_id!]) : undefined;
+  }
+  const stepWorkflow = new Map(ctx.steps.map((s) => [s.id, s.workflow_id]));
+  const held = new Set<string>();
+  for (const b of ctx.blocks.get(task.id) ?? []) {
+    const t = ctx.byId.get(b.id);
+    const at = t?.step_id ? stepWorkflow.get(t.step_id) : undefined;
+    if (at) held.add(at);
+  }
+  if (held.size > 0) return held;
+  const parent = task.parent_id ? ctx.byId.get(task.parent_id) : undefined;
+  const at = parent && parentWorkflow(parent, ctx);
+  return at ? new Set([at]) : undefined;
 }
 
 /**
  * The board of one Workflow (`workflow`): its Steps in order (empty ones too, so a card can be
- * dragged there), then "With <Member>" for each Member an open card is aimed at, then Done, then
- * Dropped, each collapsed to its header unless the Display shows it. The cards are the Tasks with
- * no Subtasks; Parents, when the Display shows them, stand where `placeOf` says, so an open one
- * shows on the board of its least advanced Subtask's Step only. Done and Dropped hold the Tasks
- * that ended in this Workflow (`endedWorkflowOf`).
+ * dragged there), then "With <Member>" for each Member an open card shown here is aimed at
+ * (`withWorkflowsOf`), then Done, then Dropped, each collapsed to its header unless the Display
+ * shows it. The cards are the Tasks with no Subtasks; Parents, when the Display shows them, stand
+ * where `placeOf` says, so an open one shows on the board of its least advanced Subtask's Step
+ * only. Done and Dropped hold the Tasks that ended in this Workflow (`endedWorkflowOf`).
  */
 export function boardColumns(
   tasks: readonly Task[],
-  ctx: Pick<GroupContext, "steps" | "children" | "members"> & {
-    workflows: readonly Pick<WorkflowName, "id" | "position">[];
-    workflow: string;
-    display: Pick<Display, "showDone" | "showDropped" | "showParents">;
-  },
+  ctx: Pick<GroupContext, "steps" | "children" | "members"> &
+    BoardContext & {
+      workflow: string;
+      display: Pick<Display, "showDone" | "showDropped" | "showParents">;
+    },
 ): Column[] {
   // Where a Parent stands reads the whole Project's order; the columns are this Workflow's.
   const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
@@ -292,12 +374,17 @@ export function boardColumns(
   const columns: Column[] = ctx.steps
     .filter((s) => s.workflow_id === ctx.workflow)
     .map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
-  const withIds = [...places.keys()].filter((k) => k.startsWith("with:")).map((k) => k.slice(5));
-  withIds.sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
-  for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: places.get(`with:${id}`)! });
-  const here = (state: "done" | "dropped") => (places.get(state) ?? []).filter((t) => endedWorkflowOf(t, ctx) === ctx.workflow);
-  columns.push({ kind: "done", id: "done", tasks: here("done"), collapsed: !ctx.display.showDone });
-  columns.push({ kind: "dropped", id: "dropped", tasks: here("dropped"), collapsed: !ctx.display.showDropped });
+  const withHere = new Map<string, Task[]>();
+  for (const [k, list] of places) {
+    if (!k.startsWith("with:")) continue;
+    const here = list.filter((t) => withWorkflowsOf(t, ctx)?.has(ctx.workflow) ?? true);
+    if (here.length > 0) withHere.set(k.slice(5), here);
+  }
+  const withIds = [...withHere.keys()].sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
+  for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: withHere.get(id)! });
+  const ended = (state: "done" | "dropped") => (places.get(state) ?? []).filter((t) => endedWorkflowOf(t, ctx) === ctx.workflow);
+  columns.push({ kind: "done", id: "done", tasks: ended("done"), collapsed: !ctx.display.showDone });
+  columns.push({ kind: "dropped", id: "dropped", tasks: ended("dropped"), collapsed: !ctx.display.showDropped });
   return columns;
 }
 

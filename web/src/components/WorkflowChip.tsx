@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Workflow } from "@/api/client";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { cn } from "@/lib/utils";
 
 /**
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils";
 export function WorkflowChip({ workflows, picked, onPick }: { workflows: readonly Workflow[]; picked: string | undefined; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   if (workflows.length < 2) return null;
-  const ordered = [...workflows].sort((a, b) => a.position - b.position);
+  const ordered = workflowsInOrder(workflows);
   const current = ordered.find((w) => w.id === picked) ?? ordered[0];
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -47,7 +48,8 @@ export function WorkflowChip({ workflows, picked, onPick }: { workflows: readonl
                   keywords={[w.name]}
                   onSelect={() => {
                     setOpen(false);
-                    if (w.id !== current.id) onPick(w.id);
+                    // The one shown is picked too: remembered, with no new step in the history.
+                    onPick(w.id);
                   }}
                 >
                   <CheckIcon aria-hidden className={cn("size-3.5", w.id !== current.id && "invisible")} />

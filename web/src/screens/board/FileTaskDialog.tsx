@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
@@ -403,19 +404,22 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
           >
             <Select value={breaking || aim ? "" : stepId} onValueChange={setStep} disabled={breaking || !!aim}>
               <SelectTrigger id="file-task-step" className="w-full">
-                <SelectValue placeholder={breaking ? "None: a Parent" : aim ? `With ${name(aim)}` : steps.length ? "Choose a Step" : "This Workflow has no Steps"} />
+                <SelectValue placeholder={breaking ? "None: a Parent" : aim ? `With ${name(aim)}` : steps.length ? "Choose a Step" : `${projectName} has no Steps`} />
               </SelectTrigger>
               <SelectContent>
                 {workflows.length > 1
-                  ? // A Project of several Workflows: each one's Steps under its name, in the Project's order.
-                    [...workflows]
-                      .sort((a, b) => a.position - b.position)
-                      .map((w) => (
-                        <SelectGroup key={w.id}>
-                          <SelectLabel>{w.name}</SelectLabel>
-                          {steps.filter((s) => s.workflow_id === w.id).map(stepItem)}
-                        </SelectGroup>
-                      ))
+                  ? // A Project of several Workflows: each one's Steps under its name, in the Project's order; one with none is left out.
+                    workflowsInOrder(workflows).flatMap((w) => {
+                      const own = steps.filter((s) => s.workflow_id === w.id);
+                      return own.length
+                        ? [
+                            <SelectGroup key={w.id}>
+                              <SelectLabel>{w.name}</SelectLabel>
+                              {own.map(stepItem)}
+                            </SelectGroup>,
+                          ]
+                        : [];
+                    })
                   : steps.map(stepItem)}
               </SelectContent>
             </Select>

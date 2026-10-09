@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { Project, Task, Workflow } from "@/api/client";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { toShort } from "@/lib/shortid";
 
 /** The search parameter naming the Workflow a page shows of a Project of several. */
@@ -11,7 +12,8 @@ export const workflowParam = "workflow";
 /** Where this browser remembers the Workflow last picked in a Project. */
 export const workflowKey = (projectKey: string) => `darkory.workflow.${projectKey}`;
 
-function remembered(projectKey: string): string | undefined {
+/** The Workflow this browser last picked in the Project, if any; it may since have been deleted. */
+export function remembered(projectKey: string): string | undefined {
   try {
     return localStorage.getItem(workflowKey(projectKey)) ?? undefined;
   } catch {
@@ -31,24 +33,29 @@ function remember(projectKey: string, id: string) {
  * The Workflow a page of the Project shows: the one `?workflow=` names (an old link's long id read
  * as the short one), else the one this browser last picked in the Project, else the first by
  * position. A name that is no Workflow of the Project (one since deleted) is passed over. `set`
- * picks one: the address says it and the browser remembers it. No id until the Workflows load.
+ * picks one: the address says it and the browser remembers it; picking the one shown replaces
+ * the address rather than adding to the history. No id until the Workflows load.
  */
 export function usePickedWorkflow(project: Pick<Project, "key">, workflows: readonly Pick<Workflow, "id" | "position">[] | undefined): { id: string | undefined; set: (id: string) => void } {
   const [params, setParams] = useSearchParams();
   const named = params.get(workflowParam);
   const known = (id: string | undefined | null) => (id && workflows?.some((w) => w.id === id) ? id : undefined);
-  const first = workflows && [...workflows].sort((a, b) => a.position - b.position)[0]?.id;
+  const first = workflows && workflowsInOrder(workflows)[0]?.id;
   const id = known(named && toShort(named)) ?? known(remembered(project.key)) ?? first;
   const set = useCallback(
     (next: string) => {
       remember(project.key, next);
-      setParams((p) => {
-        const out = new URLSearchParams(p);
-        out.set(workflowParam, next);
-        return out;
-      });
+      // Picking the one shown only says it in the address, in place: Back still leaves the page.
+      setParams(
+        (p) => {
+          const out = new URLSearchParams(p);
+          out.set(workflowParam, next);
+          return out;
+        },
+        { replace: next === id },
+      );
     },
-    [project.key, setParams],
+    [project.key, setParams, id],
   );
   return { id, set };
 }

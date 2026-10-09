@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { edgeCrossings } from "../gridRoute";
 import { crosses } from "../route";
-import { acrossGeometry, analyseBlocking, downGeometry, endsText, placeBlocking, type BlockingLayout, type BlockingTask } from "./layout";
+import { acrossGeometry, analyseBlocking, downGeometry, endsText, ownWorkflowSteps, placeBlocking, type BlockingLayout, type BlockingTask } from "./layout";
 import { bigTasks, mainTasks, me } from "./samples";
 
 const keys = (tasks: BlockingTask[], ids: string[]) => ids.map((id) => tasks.find((t) => t.id === id)!.key);
@@ -214,5 +214,18 @@ describe("placeBlocking, down (a phone)", () => {
     const { layout } = run(bigTasks, "p-big", { down: true });
     expect(edgeCrossings(layout.edges)).toBe(0);
     clearOfNodes(layout);
+  });
+});
+
+describe("a node's micro-line", () => {
+  const steps = [
+    { id: "st-triage", workflowId: "wf-triage" },
+    { id: "st-investigate", workflowId: "wf-bugs" },
+    { id: "st-fix", workflowId: "wf-bugs" },
+  ];
+  it("draws the Steps of its own Workflow, else of the Project's first", () => {
+    expect(ownWorkflowSteps(steps, "st-fix").map((s) => s.id)).toEqual(["st-investigate", "st-fix"]);
+    expect(ownWorkflowSteps(steps, undefined).map((s) => s.id)).toEqual(["st-triage"]);
+    expect(ownWorkflowSteps([{ id: "a" }, { id: "b" }], "b").map((s) => s.id)).toEqual(["a", "b"]);
   });
 });

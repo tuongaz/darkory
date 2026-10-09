@@ -55,6 +55,11 @@ export function inProjectOrder(workflows: readonly Pick<LineWorkflowName, "id" |
   };
 }
 
+/** A Project's Workflows in their order, by position: the order of the rail, the chip and the Project's Steps. */
+export function workflowsInOrder<W extends Pick<LineWorkflowName, "position">>(workflows: readonly W[]): W[] {
+  return [...workflows].sort((a, b) => a.position - b.position);
+}
+
 /** The Project's Steps in its order (`inProjectOrder`). */
 function inPosition<S extends OrderedStep>(workflow: { workflows: readonly Pick<LineWorkflowName, "id" | "position">[]; steps: readonly S[] }): S[] {
   return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
@@ -72,7 +77,7 @@ export function stepsOf<S extends LineStep>(workflow: { workflows: readonly Line
 export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[] }, picked?: string): string | undefined {
   if (picked && workflow.workflows.some((w) => w.id === picked)) return picked;
   if (workflow.workflows.length < 2) return undefined;
-  return [...workflow.workflows].sort((a, b) => a.position - b.position)[0].id;
+  return workflowsInOrder(workflow.workflows)[0].id;
 }
 
 /** The Steps a line of the Project draws (`LineWorkflow.drawn`'s), by id; none said is every Step. */

@@ -11,7 +11,7 @@ import type { GraphStep } from "../graph";
 import type { Point } from "../model";
 import { roundedPath } from "../route";
 import { ageText } from "@/lib/time";
-import { acrossGeometry, analyseBlocking, downGeometry, endsText, placeBlocking, type BlockingAnalysis, type BlockingLayout, type BlockingTask, type PlacedNode } from "./layout";
+import { acrossGeometry, analyseBlocking, downGeometry, endsText, ownWorkflowSteps, placeBlocking, type BlockingAnalysis, type BlockingLayout, type BlockingTask, type PlacedNode } from "./layout";
 
 /** A Parent as a band's header names it. */
 export type BandParent = { id: string; key: string; title: string; counts?: SubtaskCounts };
@@ -265,7 +265,7 @@ export function BlockingBoard({ tasks, projectId, scope, workflowSteps, me, now,
   const layout = useMemo(() => placeBlocking(byId, a, phone ? downGeometry : acrossGeometry, { projectId, scope, fit }), [byId, a, phone, projectId, scope, fit]);
   const [selected, setSelected] = useState<string | null>(null);
   const keyOf = (id: string) => byId.get(id)?.key ?? id;
-  const stepsOf = (id: string) => steps.get(byId.get(id)!.projectId) ?? [];
+  const stepsOf = (id: string) => ownWorkflowSteps(steps.get(byId.get(id)!.projectId) ?? [], byId.get(id)!.stepId);
 
   // A selection that no longer stands (it ended, the scope changed) clears.
   const current = selected && a.nodes.includes(selected) ? selected : null;

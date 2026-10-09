@@ -326,6 +326,16 @@ describe("File a Task", () => {
     expect(within(groups[1]).getAllByRole("option").map((o) => o.getAttribute("data-value") ?? o.querySelector(".truncate")?.textContent)).toEqual(["Investigate", "Fix", "Review", "Verify"]);
   });
 
+  it("leaves out a Workflow with no Steps from the Step picker", async () => {
+    const record = workflowsFixture();
+    const withEmpty = { ...record, workflows: [...record.workflows, { id: "wf-empty", name: "Empty", position: 6 }] };
+    mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": withEmpty, "GET /v1/skills": { items: workflowsSkills } }));
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Step" }));
+    const groups = within(await screen.findByRole("listbox")).getAllByRole("group");
+    expect(groups.map((g) => document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+  });
+
   it("a Step column's + on a board of several Workflows starts the Task at that Step", async () => {
     mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } }));
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);

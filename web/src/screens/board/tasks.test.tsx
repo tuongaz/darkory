@@ -401,6 +401,58 @@ describe("Tasks of a Project of several Workflows", () => {
     await waitFor(() => expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]));
   });
 
+  it("shows the Workflow ?workflow= names over the one this browser remembers", async () => {
+    localStorage.setItem(`darkory.workflow.WEB`, wfId.support);
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]);
+  });
+
+  it("passes over a ?workflow= that is no Workflow of the Project: the first is shown", async () => {
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=board&workflow=wf-gone");
+    await row(/WEB-1 Sort the inbox/);
+    expect(regions()).toEqual(["Triage", "Done", "Dropped"]);
+    expect(screen.getByRole("button", { name: "Workflow: Triage" })).toBeInTheDocument();
+  });
+
+  it("picking the Workflow shown remembers it", async () => {
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-1/);
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    expect(localStorage.getItem("darkory.workflow.WEB")).toBe(wfId.triage);
+  });
+
+  it("keeps ?workflow= across the List and Board switch", async () => {
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    const view = () => screen.getByRole("navigation", { name: "View" });
+    expect(within(view()).getByRole("link", { name: "List" })).toHaveAttribute("href", expect.stringContaining(`workflow=${wfId.bugs}`));
+    await userEvent.click(within(view()).getByRole("link", { name: "List" }));
+    await waitFor(() => expect(regions()).toContain("Bugs › Investigate"));
+    await userEvent.click(within(view()).getByRole("link", { name: "Board" }));
+    await waitFor(() => expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]));
+  });
+
+  it("shows a question aimed at a Member in With <Member> on the board of the Task it blocks", async () => {
+    const asked = task(7, { title: "Which browser?", step_id: undefined, step_since: undefined, aimed_at_id: bob.id });
+    const held = task(8, { title: "Blank page", step_id: wfStep.fix, workflow_id: wfId.bugs, blocked: true, open_blockers: [{ id: asked.id, key: asked.key, title: asked.title }] });
+    mockApi(routes({ "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills }, "GET /v1/tasks": { items: [...tasks, asked, held] } }));
+    const bugs = renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-8 Blank page/);
+    expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "With bob", "Done", "Dropped"]);
+    expect(within(within(main()).getByRole("region", { name: "With bob" })).getByRole("link", { name: /WEB-7 Which browser\?/ })).toBeInTheDocument();
+    bugs.unmount();
+
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.triage}`);
+    await row(/WEB-1 Sort the inbox/);
+    expect(regions()).toEqual(["Triage", "Done", "Dropped"]);
+  });
+
   it("has no chip on a Project of one Workflow", async () => {
     mockApi(routes());
     renderApp("/projects/WEB/tasks?view=board");
