@@ -322,13 +322,28 @@ describe("the Workflows page of a Project of one", () => {
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
   });
 
-  it("opens its one Workflow's page from the row, with no chip", async () => {
+  it("keeps its one Workflow in the ⋯ menu too: Delete is off", async () => {
+    serve([], workflow());
+    renderApp("/projects/WEB/workflows");
+    await userEvent.click(within(await table()).getByRole("button", { name: "More for Work" }));
+    const menu = within(await screen.findByRole("menu"));
+    expect(menu.getByRole("menuitem", { name: "Delete" })).toHaveAttribute("aria-disabled", "true");
+    expect(menu.getByRole("menuitem", { name: "Move earlier" })).toHaveAttribute("aria-disabled", "true");
+    expect(menu.getByRole("menuitem", { name: "Move later" })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("opens its one Workflow's page from the row, which names it as its last crumb, with no chip", async () => {
     serve([task(2)], workflow());
     renderApp("/projects/WEB/workflows");
     await userEvent.click(within(await table()).getByRole("link", { name: "Work" }));
     await waitFor(() => expect(screen.getByRole("region", { name: "Workflow" }).querySelector('button[data-task="WEB-2"]')).not.toBeNull());
     expect(screen.queryByRole("button", { name: /^Workflow: / })).toBeNull();
-    expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/WEB/workflows");
+    const crumbs = within(screen.getByRole("navigation", { name: "Breadcrumb" }));
+    expect(crumbs.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/WEB/workflows");
+    // The Workflow's name, plain: the page it is.
+    expect(crumbs.getByText("Work").closest("a")).toBeNull();
+    // Only the Project and Workflows link away.
+    expect(crumbs.getAllByRole("link")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Edit Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work/edit");
   });
 });

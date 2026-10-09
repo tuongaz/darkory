@@ -73,67 +73,91 @@ export function WorkflowsList({ project, graph, acts }: { project: Project; grap
           </>
         )}
       </div>
-      {rows.map((r, i) => {
-        const w = graph.workflows.find((x) => x.id === r.id)!;
-        const earlier = i > 0 ? graph.workflows.find((x) => x.id === rows[i - 1].id) : undefined;
-        const later = i < rows.length - 1 ? graph.workflows.find((x) => x.id === rows[i + 1].id) : undefined;
-        const ordering = !acts || acts.busy || !acts.skillMap;
-        const last = rows.length < 2;
-        const edit = workflowEditPath(project, r.id);
-        return (
-          <div role="row" key={r.id} aria-label={r.name} className={cn(cols(admin), "relative h-9 items-center border-b hover:bg-accent/60")}>
-            <span role="cell" className="flex min-w-0 items-center gap-1">
-              <Link to={workflowsPath(project, r.id)} className="truncate font-medium outline-none after:absolute after:inset-0 focus-visible:underline">
-                {r.name}
-              </Link>
-              <ChevronRightIcon aria-hidden className="size-3.5 flex-none text-muted-foreground" />
-            </span>
-            <Figure n={r.steps} />
-            <Figure n={r.waiting} />
-            <Figure n={r.working} />
-            <Figure n={done.data ? r.doneToday : undefined} />
-            {acts && (
-              <>
-                <span role="cell" className={cn(wide, "justify-center")}>
-                  <ActButton label={`Move ${r.name} earlier`} disabled={ordering || !earlier} onClick={() => earlier && acts.move(w, earlier, -1)}>
-                    <ChevronLeftIcon />
-                  </ActButton>
-                  <ActButton label={`Move ${r.name} later`} disabled={ordering || !later} onClick={() => later && acts.move(w, later, 1)}>
-                    <ChevronRightIcon />
-                  </ActButton>
-                </span>
-                <span role="cell" className={cn(wide, "justify-end")}>
-                  <Tip label={`Edit ${r.name}`}>
-                    <Link to={edit} aria-label={`Edit ${r.name}`} className={act}>
-                      <PencilIcon />
-                    </Link>
-                  </Tip>
-                  <ActButton label={`Delete ${r.name}`} disabled={acts.busy || last} onClick={() => acts.onDelete(w)}>
-                    <Trash2Icon />
-                  </ActButton>
-                </span>
-                <span role="cell" className={narrow}>
-                  <MoreMenu label={`More for ${r.name}`} size="icon-xs">
-                    <DropdownMenuItem asChild>
-                      <Link to={edit}>Edit</Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={ordering || !earlier} onSelect={() => earlier && acts.move(w, earlier, -1)}>
-                      Move earlier
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={ordering || !later} onSelect={() => later && acts.move(w, later, 1)}>
-                      Move later
-                    </DropdownMenuItem>
-                    <DropdownMenuItem variant="destructive" disabled={acts.busy || last} onSelect={() => acts.onDelete(w)}>
-                      Delete
-                    </DropdownMenuItem>
-                  </MoreMenu>
-                </span>
-              </>
-            )}
-          </div>
-        );
-      })}
+      {rows.map((r, i) => (
+        <div role="row" key={r.id} aria-label={r.name} className={cn(cols(admin), "relative h-9 items-center border-b hover:bg-accent/60")}>
+          <span role="cell" className="flex min-w-0 items-center gap-1">
+            <Link to={workflowsPath(project, r.id)} className="truncate font-medium outline-none after:absolute after:inset-0 focus-visible:underline">
+              {r.name}
+            </Link>
+            <ChevronRightIcon aria-hidden className="size-3.5 flex-none text-muted-foreground" />
+          </span>
+          <Figure n={r.steps} />
+          <Figure n={r.waiting} />
+          <Figure n={r.working} />
+          <Figure n={done.data ? r.doneToday : undefined} />
+          {acts && <RowActs project={project} graph={graph} acts={acts} name={r.name} id={r.id} earlier={rows[i - 1]?.id} later={rows[i + 1]?.id} last={rows.length < 2} />}
+        </div>
+      ))}
     </div>
+  );
+}
+
+/**
+ * One row's acts: ‹ › (order) and ✎ 🗑 from `sm` up, the same four in one ⋯ below it. `earlier` and
+ * `later` are the neighbours' ids; `last` keeps the only Workflow from being deleted.
+ */
+function RowActs({
+  project,
+  graph,
+  acts,
+  name,
+  id,
+  earlier: before,
+  later: after,
+  last,
+}: {
+  project: Project;
+  graph: WorkflowRecord;
+  acts: Acts;
+  name: string;
+  id: string;
+  earlier?: string;
+  later?: string;
+  last: boolean;
+}) {
+  const find = (x: string | undefined) => (x ? graph.workflows.find((w) => w.id === x) : undefined);
+  const w = find(id)!;
+  const earlier = find(before);
+  const later = find(after);
+  const ordering = acts.busy || !acts.skillMap;
+  const edit = workflowEditPath(project, id);
+  return (
+    <>
+      <span role="cell" className={cn(wide, "justify-center")}>
+        <ActButton label={`Move ${name} earlier`} disabled={ordering || !earlier} onClick={() => earlier && acts.move(w, earlier, -1)}>
+          <ChevronLeftIcon />
+        </ActButton>
+        <ActButton label={`Move ${name} later`} disabled={ordering || !later} onClick={() => later && acts.move(w, later, 1)}>
+          <ChevronRightIcon />
+        </ActButton>
+      </span>
+      <span role="cell" className={cn(wide, "justify-end")}>
+        <Tip label={`Edit ${name}`}>
+          <Link to={edit} aria-label={`Edit ${name}`} className={act}>
+            <PencilIcon />
+          </Link>
+        </Tip>
+        <ActButton label={`Delete ${name}`} disabled={acts.busy || last} onClick={() => acts.onDelete(w)}>
+          <Trash2Icon />
+        </ActButton>
+      </span>
+      <span role="cell" className={narrow}>
+        <MoreMenu label={`More for ${name}`} size="icon-xs">
+          <DropdownMenuItem asChild>
+            <Link to={edit}>Edit</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={ordering || !earlier} onSelect={() => earlier && acts.move(w, earlier, -1)}>
+            Move earlier
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={ordering || !later} onSelect={() => later && acts.move(w, later, 1)}>
+            Move later
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" disabled={acts.busy || last} onSelect={() => acts.onDelete(w)}>
+            Delete
+          </DropdownMenuItem>
+        </MoreMenu>
+      </span>
+    </>
   );
 }
 

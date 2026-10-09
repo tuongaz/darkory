@@ -602,12 +602,18 @@ test("13 · a Project of one Workflow lists it, with + Workflow", async ({ brows
   await expect(workflowsTable(page).getByRole("button", { name: /^Delete / })).toBeDisabled();
   await expect(chip(page)).toHaveCount(0);
   await shot(page, "list-one");
-  // Its row opens its page, with no chip.
-  await workflowsTable(page).getByRole("row").nth(1).getByRole("link").first().click();
+  // Its row opens its page, with no chip: the last crumb is its name, plain.
+  const row = workflowsTable(page).getByRole("row").nth(1);
+  const name = (await row.getByRole("link").first().textContent())!.trim();
+  await row.getByRole("link").first().click();
   await expect(page).toHaveURL(address("/projects/MAIN/workflows/[^/?]+$"));
   await expect(page.getByRole("region", { name: "Workflow", exact: true })).toBeVisible();
   await expect(chip(page)).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/MAIN/workflows");
+  const crumbs = page.getByRole("navigation", { name: "Breadcrumb" });
+  await expect(crumbs.getByRole("link", { name: "Workflows" })).toHaveAttribute("href", "/projects/MAIN/workflows");
+  await expect(crumbs).toContainText(name);
+  await expect(crumbs.getByRole("link", { name, exact: true })).toHaveCount(0);
+  await shot(page, "page-one");
   expect(errors).toEqual([]);
   await ctx.close();
 });

@@ -220,6 +220,10 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
 
   await test.step("every /admin address lands on its Settings page", async () => {
     const mai = (await ada<{ items: { id: string; name: string }[] }>("GET", "/v1/members")).items.find((m) => m.name === "Mai Tran")!;
+    // WEB, made here, has the one Workflow a new Project starts with.
+    const { workflows } = await ada<{ workflows: { id: string; position: number }[] }>("GET", "/v1/projects/WEB/workflow");
+    expect(workflows).toHaveLength(1);
+    const work = `/projects/WEB/workflows/${workflows[0].id}`;
     const redirects: [string, string][] = [
       ["/admin", "/settings/organisation/members"],
       ["/admin/members", "/settings/organisation/members"],
@@ -234,7 +238,11 @@ test("scenario 10: Settings from both doors, /admin/* lands in Settings, a non-a
       ["/settings/projects/WEB/workflow", "/projects/WEB/workflows"],
       // Settings' Workflows list: the Project's list in the app, which carries its acts.
       ["/settings/projects/WEB/workflows", "/projects/WEB/workflows"],
-      ["/projects/WEB/workflow?view=text", "/projects/WEB/workflows?view=text"],
+      // Settings' one Workflow: its editor in the app.
+      [`/settings/projects/WEB/workflows/${workflows[0].id}`, `${work}/edit`],
+      // An address saying the line's view, of a Project of one: that Workflow's page.
+      ["/projects/WEB/workflow?view=text", `${work}?view=text`],
+      ["/projects/WEB/workflows?view=text", `${work}?view=text`],
       ["/account", "/settings/account"],
     ];
     // The current Project is the one last shown: WEB.

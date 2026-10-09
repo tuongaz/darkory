@@ -1,7 +1,9 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
+import { LiveActivity } from "@/api/live";
+import { Providers, Root } from "@/App";
 import { mockApi } from "@/test/api";
 import type { Task, Workflows } from "@/api/client";
 import { ada, signedIn, task, web, wfId, wfStep, workflow, workflowsFixture } from "@/test/fixtures";
@@ -92,6 +94,58 @@ describe("the Workflow's old addresses", () => {
 
   it("keep ?view= on the way to the list", async () => {
     expect(await address("/projects/WEB/workflow?view=text")).toBe("/projects/WEB/workflows?view=text");
+  });
+
+  it("lead the line's ?view= of a Project of one to its one Workflow's page", async () => {
+    expect(await address("/projects/WEB/workflow?view=text", workflow())).toBe("/projects/WEB/workflows/wf-work?view=text");
+  });
+
+  it("lead a Filter of a Project of one to its one Workflow's page", async () => {
+    expect(await address("/projects/WEB/workflow?filter.tasks=title%3Acontains%3Ax", workflow())).toBe("/projects/WEB/workflows/wf-work?filter.tasks=title%3Acontains%3Ax");
+  });
+
+  it("lead Settings' old address of a Project of one with ?view= to the list, not the editor", async () => {
+    expect(await address("/settings/projects/WEB/workflow?view=text", workflow())).toBe("/projects/WEB/workflows?view=text");
+  });
+});
+
+/** The whole app at `path`, WEB's Workflows `record`, with where it is now read out beside it. */
+function appAt(path: string, record: Workflows) {
+  mockApi({
+    ...signedIn(ada),
+    "GET /v1/projects/:project/workflow": record,
+    "GET /v1/tasks": { items: [] },
+    "GET /v1/activity": { items: [], last_seq: 0 },
+    "GET /v1/runner/sessions": { items: [], runner: false },
+  });
+  render(
+    <Providers client={newQueryClient()} live={new LiveActivity()}>
+      <MemoryRouter initialEntries={[path]}>
+        <Root />
+        <Address />
+      </MemoryRouter>
+    </Providers>,
+  );
+}
+const here = () => screen.getByLabelText("Address").textContent;
+
+describe("the Workflows list's address of round 2", () => {
+  it("is the one Workflow's page of a Project of one when it says the line's ?view=", async () => {
+    appAt("/projects/WEB/workflows?view=text", workflow());
+    await waitFor(() => expect(here()).toBe("/projects/WEB/workflows/wf-work?view=text"));
+    expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
+  });
+
+  it("stays the list of a Project of several, ?view= and all", async () => {
+    appAt("/projects/WEB/workflows?view=text", workflowsFixture(web));
+    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(here()).toBe("/projects/WEB/workflows?view=text");
+  });
+
+  it("stays the list of a Project of one when it says nothing of the line", async () => {
+    appAt("/projects/WEB/workflows", workflow());
+    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(here()).toBe("/projects/WEB/workflows");
   });
 });
 

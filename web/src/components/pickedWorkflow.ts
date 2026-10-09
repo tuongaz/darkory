@@ -10,6 +10,16 @@ import { listedOn } from "@/screens/board/derive";
 /** The search parameter naming the Workflow a page shows of a Project of several. */
 export const workflowParam = "workflow";
 
+/**
+ * Whether an address says what only one Workflow's page reads: its view (`?view=`), its scope
+ * (`?scope=`), its picked Step (`?step=`, StepPeek's `stepParam`) or a Filter (`?filter.<entity>=`).
+ * A Project of one sent to its Workflows list with any of them (an address of round 2, when the
+ * list's address was that one Workflow's page) goes to that Workflow's page instead.
+ */
+export function asksForTheLine(params: URLSearchParams): boolean {
+  return [...params.keys()].some((k) => k === "view" || k === "scope" || k === "step" || k.startsWith("filter."));
+}
+
 /** Where this browser remembers the Workflow last picked in a Project. */
 export const workflowKey = (projectKey: string) => `darkory.workflow.${projectKey}`;
 

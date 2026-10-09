@@ -26,8 +26,8 @@ export const stepParam = "step";
 
 /**
  * A Step opened from the live canvas: the Tasks at it now (each opens its own peek), who takes
- * them, the median time a Task spends there, and the outcomes out of it; for an admin, Edit in
- * Settings, which opens the same Step on the editing canvas.
+ * them, the median time a Task spends there, and the outcomes out of it; for an admin, Edit, which
+ * opens the same Step in its Workflow's editor (`/projects/:key/workflows/:workflow/edit`).
  */
 export function StepPeek({ project, workflow, step, onClose }: { project: Project; workflow: Workflow; step: Step; onClose: () => void }) {
   const admin = useCurrentMe().member.admin;
@@ -46,7 +46,7 @@ export function StepPeek({ project, workflow, step, onClose }: { project: Projec
       actions={
         admin && (
           <Button asChild variant="outline" size="xs">
-            <Link to={workflowEditPath(project, step.workflow_id, { [stepParam]: step.id })}>
+            <Link to={workflowEditPath(project, step.workflow_id, { [stepParam]: step.id })} aria-label={`Edit ${step.name}`}>
               <PencilIcon />
               Edit
             </Link>

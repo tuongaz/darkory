@@ -8,7 +8,7 @@ import { setWorkflow } from "@/api/writes";
 import { workflowEditPath } from "@/app/currentProject";
 import { refusalToast } from "@/screens/inbox/toast";
 import { same, type WorkflowRecord } from "./bind";
-import { addWorkflow, deleteWorkflow, fromRecord, moveWorkflowTo, problem, saveBody, startMoves, workflowsOf, type Draft, type RecordWorkflow, type Repoint } from "./edit/draft";
+import { addWorkflow, deleteWorkflow, fromRecord, moveWorkflowTo, problem, saveBody, startMoves, type Draft, type RecordWorkflow, type Repoint } from "./edit/draft";
 import type { EditorState } from "./routeWorkflow";
 
 /**
@@ -16,14 +16,16 @@ import type { EditorState } from "./routeWorkflow";
  * 1>", its editor opened with the name to type), move one earlier or later (the toast naming where
  * New Tasks start when the move changes it) and delete one (the last stays). Each is written at
  * once, one `PUT …/workflow` of the whole graph, and said in a toast; what `/v1` refuses is said in
- * its words. None is undone here: the editor's ⌘Z covers only its own draft.
+ * its words. None is undone here: the editor's ⌘Z covers only its own draft. `admin` says whether
+ * the acts are offered at all; anyone else reads the list alone.
  */
-export function useWorkflowActs(project: Project) {
+export function useWorkflowActs(project: Project, admin: boolean) {
   const query = useWorkflow(project.key);
   const graph = query.data;
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const skills = useSkills().data;
+  // The Skills only tell a move's toast where New Tasks start: read for an admin alone.
+  const skills = useSkills({ enabled: admin }).data;
   const skillMap = useMemo(() => skills && new Map(skills.map((s) => [s.id, s])), [skills]);
   // One write at a time: the controls wait while one is on its way, and a second click in the
   // same moment, before they are drawn waiting, sends nothing.
@@ -90,8 +92,7 @@ export function useWorkflowActs(project: Project) {
       () => toast(`Deleted ${w.name}`),
     );
 
-  const workflows = graph ? workflowsOf(graph) : [];
-  return { query, graph, workflows, skillMap, busy, add, move, remove };
+  return { query, graph, skillMap, busy, add, move, remove };
 }
 
 export type WorkflowActs = ReturnType<typeof useWorkflowActs>;

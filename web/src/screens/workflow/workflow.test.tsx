@@ -129,6 +129,17 @@ describe("a Workflow's editor", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Save" })).toBeNull());
   });
 
+  it("lands a Project of one on its Workflow's page after Save, not the list", async () => {
+    const { puts } = serve();
+    renderWithAddress(`/projects/WEB/workflows/wf-work/edit?step=${step.build}`);
+    const name = await screen.findByRole("textbox", { name: "Name of Step 3" });
+    await userEvent.clear(name);
+    await userEvent.type(name, "Make");
+    await save();
+    await waitFor(() => expect(puts).toHaveLength(1));
+    await waitFor(() => expect(address()).toBe("/projects/WEB/workflows/wf-work"));
+  });
+
   it("changes a Step's Skill, and makes a hold of another", async () => {
     const { puts } = serve();
     await openList();

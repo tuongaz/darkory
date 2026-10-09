@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router";
 import { useAnyTask, useTask, useWorkflow } from "@/api/queries";
+import { asksForTheLine } from "@/components/pickedWorkflow";
 import { Loaded } from "@/components/Refusal";
 import { toShort } from "@/lib/shortid";
 import { BoardDialogs, TasksPage } from "@/screens/board";
@@ -161,9 +162,10 @@ export function ToProjectWorkflows({ edit = false }: { edit?: boolean }) {
  * Project: the Workflows' now. A `?workflow=` becomes the `:workflow` segment; with none, a
  * `?step=` names the Workflow of its Step (Edit from a Step on the live page, as it was linked);
  * with neither, a `?scope=` naming a Task names the Workflow that Task is listed in (its
- * `workflow_id`) when it is one of the Project's, else the list; everything else the address says
- * (`?step=`, `?scope=`, `?view=`…) is kept. Settings' (`settings`) goes to that Workflow's editor
- * in the app, else the list.
+ * `workflow_id`) when it is one of the Project's. Of a Project of one, an address saying what only
+ * a Workflow's page reads (`asksForTheLine`: `?view=`, `?scope=`, `?step=`, a Filter) names that
+ * one; else the list. Everything else the address says is kept. Settings' (`settings`) goes to
+ * that Workflow's editor in the app, else the list.
  */
 export function FromWorkflow({ settings = false }: { settings?: boolean }) {
   const { key = "" } = useParams();
@@ -174,18 +176,22 @@ export function FromWorkflow({ settings = false }: { settings?: boolean }) {
   const scope = params.get("scope");
   const byStep = !named && !!step;
   const byScope = !named && !step && !!scope && scope !== "none";
-  const graph = useWorkflow(byStep || byScope ? key : undefined);
+  // The app's address of round 2 with the line's parameters, read against a Project of one.
+  const line = !named && !settings && asksForTheLine(params);
+  const graph = useWorkflow(byStep || byScope || line ? key : undefined);
   const scoped = useTask(byScope ? toShort(scope) : undefined);
-  if ((byStep || byScope) && graph.isPending) return null;
+  if ((byStep || byScope || line) && graph.isPending) return null;
   if (byScope && scoped.isPending) return null;
   const listedIn = scoped.data?.task.workflow_id;
-  const workflow = named
-    ? toShort(named)
-    : step
-      ? graph.data?.steps.find((s) => s.id === toShort(step))?.workflow_id
-      : byScope && listedIn && graph.data?.workflows.some((w) => w.id === listedIn)
-        ? listedIn
-        : undefined;
+  const only = line && graph.data?.workflows.length === 1 ? graph.data.workflows[0].id : undefined;
+  const workflow =
+    (named
+      ? toShort(named)
+      : step
+        ? graph.data?.steps.find((s) => s.id === toShort(step))?.workflow_id
+        : byScope && listedIn && graph.data?.workflows.some((w) => w.id === listedIn)
+          ? listedIn
+          : undefined) ?? only;
   params.delete("workflow");
   const rest = params.toString();
   const pathname = `/projects/${encodeURIComponent(key)}/workflows${workflow ? `/${encodeURIComponent(workflow)}${settings ? "/edit" : ""}` : ""}`;

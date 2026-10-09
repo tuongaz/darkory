@@ -3,10 +3,9 @@ import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
-import { workflowParam } from "@/components/pickedWorkflow";
+import { asksForTheLine, workflowParam } from "@/components/pickedWorkflow";
 import type { Project } from "@/api/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { workflowsInOrder } from "@/components/workflowLine/model";
 import { WorkflowChip } from "@/components/WorkflowChip";
 import { useRouteProject, workflowEditPath, workflowsPath } from "@/app/currentProject";
 import { NotFound } from "@/app/NotFound";
@@ -41,25 +40,30 @@ import { toShort } from "@/lib/shortid";
  * /projects/:key/workflows: the Project's Workflows as a list, a Project of one included, each row
  * opening that Workflow's page. For an admin the list carries its acts (order, edit, delete) and
  * the bar's primary adds a Workflow, each written at once (`useWorkflowActs`). A `?workflow=` (an
- * address of the board's kind) opens the page of the Workflow it names.
+ * address of the board's kind) opens the page of the Workflow it names; of a Project of one, an
+ * address saying what only a Workflow's page reads (`asksForTheLine`: a bookmark of round 2, when
+ * this address was that one Workflow's page) opens that page, keeping what it says.
  */
 export function WorkflowsPage() {
   const project = useRouteProject();
   const admin = useCurrentMe().member.admin;
-  const acts = useWorkflowActs(project);
+  const acts = useWorkflowActs(project, admin);
   const { query, graph } = acts;
   const [deleting, setDeleting] = useState<RecordWorkflow | undefined>();
   const { search } = useLocation();
   const params = new URLSearchParams(search);
   const named = params.get(workflowParam);
-  // An address naming a Workflow is that Workflow's page: nothing of the list until it is read.
-  if (named && !graph && !query.isError) return <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />;
+  const line = !named && asksForTheLine(params);
+  // An address that may be one Workflow's page: nothing of the list until the Workflows are read.
+  if ((named || line) && !graph && !query.isError) return <Skeleton aria-label="Loading the Workflows" className="m-6 h-[180px]" />;
   const asked = named && graph ? workflowNamed(graph.workflows, named) : undefined;
   if (asked) {
     params.delete(workflowParam);
     const rest = params.toString();
     return <Navigate to={{ pathname: workflowsPath(project, asked.id), search: rest ? `?${rest}` : "" }} replace />;
   }
+  const only = line && graph?.workflows.length === 1 ? graph.workflows[0] : undefined;
+  if (only) return <Navigate to={{ pathname: workflowsPath(project, only.id), search }} replace />;
   return (
     <>
       <TopBar
@@ -100,10 +104,10 @@ export function WorkflowsPage() {
 
 /**
  * /projects/:key/workflows/:workflow: one Workflow of the Project, live, as one line with its
- * panels. Of a Project of several, the chip in
- * the breadcrumb goes to another's page, remembered as the board's pick. `?scope=` narrows it to
- * the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the line for the
- * Blocking among its Tasks or a list.
+ * panels. Of a Project of several, the chip in the breadcrumb says which and goes to another's
+ * page, remembered as the board's pick; of a Project of one, the last crumb is its name. `?scope=`
+ * narrows it to the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the line
+ * for the Blocking among its Tasks or a list.
  */
 export function WorkflowPage() {
   const project = useRouteProject();
@@ -115,8 +119,8 @@ export function WorkflowPage() {
   const workflows = useWorkflow(project.key).data?.workflows;
   const segment = useWorkflowSegment();
   const several = !!workflows && workflows.length > 1;
-  // The Workflow the address names; with none (a page drawn without its segment), the first.
-  const shown = workflows && (segment ? workflowNamed(workflows, segment) : workflowsInOrder(workflows)[0]);
+  // The Workflow the address names (the route always has the segment).
+  const shown = workflows && segment ? workflowNamed(workflows, segment) : undefined;
   const goTo = useGoToWorkflow((id) => workflowsPath(project, id), project);
   const { data } = useLineData(project.key, shown?.id, scope, filter.matches);
   const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.shown);
@@ -129,17 +133,19 @@ export function WorkflowPage() {
     const working = scope?.kind === "parent" && !!data?.shown?.lines(scope.id).has(next);
     goTo(next, { also: at && !at.has(next) && !working ? (p) => p.delete("scope") : undefined, replace: next === shown?.id });
   };
-  if (segment && workflows && !shown) return <NotFound />;
+  if (!segment || (workflows && !shown)) return <NotFound />;
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
       <TopBar
         crumbs={[
           projectCrumb(project),
-          // Back to the list; on a phone it gives its room to the Project's mark and the chip.
+          // Back to the list; of several, on a phone it gives its room to the Project's mark and the
+          // chip; of one, it stays, the name beside it short.
           { label: "Workflows", to: workflowsPath(project), wide: several },
-          // The Workflow drawn, at every width: on a phone too it is the way to another.
-          ...(several ? [{ label: <WorkflowChip workflows={workflows} picked={shown?.id} onPick={pick} />, whole: true }] : []),
+          // The Workflow drawn, at every width: of several the chip, on a phone too the way to
+          // another; of one its name.
+          ...(several ? [{ label: <WorkflowChip workflows={workflows} picked={shown?.id} onPick={pick} />, whole: true }] : shown ? [{ label: shown.name }] : []),
           ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
         ]}
         view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
