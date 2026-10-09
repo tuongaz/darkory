@@ -11,7 +11,7 @@ screens, each in its own folder. Use these pieces rather than drawing your own, 
 |---|---|---|
 | `src/screens/board/` | M4b Tasks | `TasksPage` (`/projects/:key/tasks?view=list\|board`), `BoardDialogs` (File a Task, for the `file-task` intent; mounted once by the shell) |
 | `src/screens/task/` | M4b Task | `TaskPage` (`/tasks/:task`), `TaskPeek` (`?task=<key>` over any page). Both must call `useReportProject(task.project_id)`. The Shift panel, its terminal and `terminal.ts` are already here. |
-| `src/screens/workflow/` | M4c Workflow | `WorkflowPage` (`/projects/:key/workflow`, live), `WorkflowSettingsPage` (`/settings/projects/:key/workflow`, editing, drawn inside Settings' frame) |
+| `src/screens/workflow/` | M4c Workflow | `WorkflowsPage` (`/projects/:key/workflows`, the list, or the one Workflow's page in place), `WorkflowPage` (`/projects/:key/workflows/:workflow`, live), `WorkflowsSettingsPage` (`/settings/projects/:key/workflows`, Settings' list), `WorkflowSettingsPage` (`/settings/projects/:key/workflows/:workflow`, editing, drawn inside Settings' frame) |
 | `src/screens/inbox/` | M4d Inbox | `InboxPage` (`/inbox`, after the Install checklist), `MyWorkPage` (`/my-work`), `AgentsPage` (`/projects/:key/agents`, `?agent=<name>` opens one), `ActivityPage` (`/projects/:key/activity`) |
 | `src/screens/settings/` | M4a Settings | `SettingsLayout` (`/settings/*`, its own nav), the Account, Organisation and Project pages |
 | `src/app/`, `src/api/`, `src/components/`, `src/lib/` | M4a | the shell, the route table, the API layer, the primitives |
