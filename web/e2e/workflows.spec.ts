@@ -458,7 +458,7 @@ async function insideThePhone(page: Page, label: ReturnType<Page["locator"]>) {
   const crumbs = await page.getByRole("navigation", { name: "Breadcrumb" }).boundingBox();
   const whole = await chip(page).boundingBox();
   expect(whole!.x + whole!.width).toBeLessThanOrEqual(crumbs!.x + crumbs!.width + 0.5);
-  const second = page.getByRole("toolbar", { name: "Page" });
+  const second = page.getByRole("group", { name: "Page" });
   if ((await second.count()) > 0) expect((await second.boundingBox())!.y).toBeGreaterThanOrEqual(crumbs!.y + crumbs!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
 }
@@ -471,12 +471,12 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     await chipReadsWhole(page, name);
     // The bar's second row: the List | Board switch as its two icons, then Views, Filter and
     // Display as icon buttons and the File Task primary, nothing folded.
-    const toolbar = page.getByRole("toolbar", { name: "Page" });
+    const row = page.getByRole("group", { name: "Page" });
     await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "More", exact: true })).toHaveCount(0);
-    await expect(toolbar.getByRole("navigation", { name: "View" }).getByRole("link")).toHaveCount(2);
-    await expect(toolbar.getByRole("navigation", { name: "View" })).toBeInViewport({ ratio: 1 });
-    for (const action of ["Views", "Filter", "Display", "File Task"]) await expect(toolbar.getByRole("button", { name: action, exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(row.getByRole("navigation", { name: "View" }).getByRole("link")).toHaveCount(2);
+    await expect(row.getByRole("navigation", { name: "View" })).toBeInViewport({ ratio: 1 });
+    for (const action of ["Views", "Filter", "Display", "File Task"]) await expect(row.getByRole("button", { name: action, exact: true })).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
     await shot(page, `phone-board-${name.toLowerCase()}`);
   }
@@ -487,6 +487,9 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
   const toProject = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Accounts", exact: true });
   await expect(toProject).toBeInViewport({ ratio: 1 });
   await expect(toProject).toHaveAttribute("href", "/projects/ACC/tasks");
+  // Line | Blocking | Text stays three segments on the bar's second row, nothing folded.
+  await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Page" }).getByRole("group", { name: "View" })).toBeInViewport({ ratio: 1 });
   await shot(page, "phone-workflow-bugs");
 
   // A long name stops before the caret with an ellipsis; the caret stays in view.

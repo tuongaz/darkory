@@ -469,7 +469,7 @@ describe("Tasks of a Project of several Workflows", () => {
     const chipped = renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
     await row(/WEB-2 Crash on save/);
     expect(screen.getByRole("button", { name: /^Workflow:/ })).toBeInTheDocument();
-    const switchIn = () => within(screen.getByRole("toolbar", { name: "Page" })).getByRole("navigation", { name: "View" });
+    const switchIn = () => within(screen.getByRole("group", { name: "Page" })).getByRole("navigation", { name: "View" });
     expect(screen.queryByRole("button", { name: /^View: / })).not.toBeInTheDocument();
     expect(switchIn()).not.toHaveClass("hidden");
     const links = within(switchIn()).getAllByRole("link");
@@ -493,7 +493,7 @@ describe("Tasks of a Project of several Workflows", () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
     await row(/WEB-2 Crash on save/);
-    const toolbar = screen.getByRole("toolbar", { name: "Page" });
+    const toolbar = screen.getByRole("group", { name: "Page" });
     expect(screen.queryByRole("button", { name: /^More/ })).not.toBeInTheDocument();
     for (const name of ["Views", "Filter", "Display", "File Task"]) {
       const button = within(toolbar).getByRole("button", { name });
@@ -519,7 +519,7 @@ describe("Tasks of a Project of several Workflows", () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}&filter.tasks=kind:is:task&filter.tasks=blocked:is:false`);
     const filter = await screen.findByRole("button", { name: "Filter, 2 set" });
-    expect(screen.getByRole("toolbar", { name: "Page" })).toContainElement(filter);
+    expect(screen.getByRole("group", { name: "Page" })).toContainElement(filter);
     expect(phoneHidden(within(filter).getByText("Filter"))).toBe(true);
     expect(within(filter).getByText("2")).toBeInTheDocument();
   });

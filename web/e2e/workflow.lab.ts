@@ -43,11 +43,8 @@ for (const scheme of ["light", "dark"] as const) {
       await noSidewaysScroll(page);
       await shot(page, `live-${tag}`);
 
-      // Text view: the switch on a wide screen, its menu on a phone.
-      if (size.name === "phone") {
-        await page.getByRole("button", { name: "View: Line" }).click();
-        await page.getByRole("menuitem", { name: "Text" }).click();
-      } else await page.getByRole("button", { name: "Text" }).click();
+      // Text view: the same switch at every size.
+      await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Text" }).click();
       await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
       await noSidewaysScroll(page);
       await shot(page, `live-text-${tag}`);

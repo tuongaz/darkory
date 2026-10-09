@@ -61,7 +61,7 @@ with the Project (`projectCrumb(project)` from `@/app/crumbs`):
 ```tsx
 <TopBar
   crumbs={[projectCrumb(project, false), { label: "Tasks" }]}
-  view={<ListBoardSwitch />}            // the segmented switcher, after the crumbs
+  view={<ListBoardSwitch />}            // the segmented switcher, at the left of the second row
   actions={<><FilterButton /><DisplayButton /></>}
   primary={<Button><PlusIcon />File Task<Kbd>C</Kbd></Button>}   // the screen's one primary
 />
@@ -70,6 +70,11 @@ with the Project (`projectCrumb(project)` from `@/app/crumbs`):
 
 A Task's page: `[projectCrumb(project), { label: "Tasks", to: projectPath(project, "tasks"), wide: true }, { label: key }]`.
 Settings' pages: `[{ label: "Settings" }, { label: project.name }, { label: "Workflow" }]`.
+
+The bar is one header of two rows. The first is where you are: the crumbs, and on a phone the
+button that opens the sidebar. The second, a row named "Page", comes when the page has any of it:
+the view switch and the scope at the left, the actions and the one primary at the right. A page
+with nothing for it has the first row alone.
 
 The first crumb reads strong (the area), the rest muted. On a phone the TopBar carries the button
 that opens the sidebar (Settings' nav, in Settings). Nothing may make the page scroll sideways at

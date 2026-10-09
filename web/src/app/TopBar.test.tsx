@@ -66,11 +66,11 @@ describe("TopBar in two rows", () => {
       </MemoryRouter>,
     );
     const header = screen.getByRole("banner");
-    const toolbar = within(header).getByRole("toolbar", { name: "Page" });
-    expect(toolbar.compareDocumentPosition(within(header).getByRole("navigation", { name: "Breadcrumb" })) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
-    expect(within(toolbar).getByText("View")).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: "Filter" })).toBeInTheDocument();
-    expect(within(toolbar).getByRole("button", { name: "Save" })).toBeInTheDocument();
+    const row = within(header).getByRole("group", { name: "Page" });
+    expect(row.compareDocumentPosition(within(header).getByRole("navigation", { name: "Breadcrumb" })) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(within(row).getByText("View")).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Filter" })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 
   it("has no second row when the page has nothing for it", () => {
@@ -81,6 +81,6 @@ describe("TopBar in two rows", () => {
         </SidebarProvider>
       </MemoryRouter>,
     );
-    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Page" })).toBeNull();
   });
 });

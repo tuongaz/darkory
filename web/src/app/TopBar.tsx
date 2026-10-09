@@ -14,7 +14,7 @@ export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: bo
 
 /**
  * The bar over every screen: where you are on the first row (the crumbs; on a phone the button that
- * opens the sidebar), then, when the page has any, a second row of what the page does: the view
+ * opens the sidebar), then, when the page has any, a second row named "Page" of what the page does: the view
  * switch and the scope at the left, the actions and the one primary at the right. Every page
  * renders one as its first child; one hairline runs under its last row.
  *
@@ -42,7 +42,7 @@ export function TopBar({
   const second = !!(view || actions || primary);
   return (
     <header className="flex flex-none flex-col border-b">
-      <div className={cn("flex h-11 items-center gap-2 px-4", second && "border-b-0")}>
+      <div className="flex h-11 items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1.5 text-muted-foreground md:hidden" />
         <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
           {crumbs.map((c, i) => (
@@ -82,8 +82,8 @@ export function TopBar({
         </nav>
       </div>
       {second && (
-        <div role="toolbar" aria-label="Page" className="flex h-10 items-center gap-2 px-4">
-          {view && <div className="flex min-w-0 flex-none items-center gap-2">{view}</div>}
+        <div role="group" aria-label="Page" className="flex h-10 items-center gap-2 px-4">
+          {view && <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">{view}</div>}
           {(actions || primary) && (
             <div className="ml-auto flex flex-none items-center gap-1.5">
               {actions}
