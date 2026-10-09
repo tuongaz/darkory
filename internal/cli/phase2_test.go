@@ -751,5 +751,34 @@ func TestWorkflowCommands(t *testing.T) {
 		if out := ada.ok("workflow", "show", "OPS", "--workflow", "Work"); out != none {
 			t.Fatalf("workflow show --workflow of a Project with no Steps:\n%s", out)
 		}
+
+		// A name or Skill longer than 16 widens its column for every row printed, under every
+		// Workflow's heading and narrowed to one, so the rows still line up.
+		ada.ok("skill", "create", "software-architecture", "--kind", "generic", "--body", "Shape it.")
+		ada.stdin = `{"workflows": [{"name": "Support", "position": 1}, {"name": "Ops", "position": 2}],
+ "steps": [{"workflow": "Support", "name": "Support", "skill": "software-architecture"},
+  {"workflow": "Support", "name": "Awaiting customer"}, {"workflow": "Ops", "name": "Ops", "skill": "engineer"}],
+ "connectors": [{"from": "Support", "to": "Awaiting customer", "name": "waiting"}, {"from": "Support", "to": "Ops", "name": "account change"},
+  {"from": "Awaiting customer", "to": "Support", "name": "replied"}, {"from": "Ops", "name": "done"}]}`
+		wide := "Support\n" +
+			"1   Support           software-architecture 0 waiting, 0 working  nobody holds its Skill\n" +
+			"      waiting → Awaiting customer\n" +
+			"      account change → Ops › Ops\n" +
+			"2   Awaiting customer hold                  0 waiting, 0 working\n" +
+			"      replied → Support\n" +
+			"Ops\n" +
+			"1   Ops               engineer              0 waiting, 0 working  nobody holds its Skill\n" +
+			"      done → Done\n"
+		if out := ada.ok("workflow", "set", "OPS", "--file", "-"); out != wide {
+			t.Fatalf("workflow set with a 17-character Step and a 21-character Skill:\n%s\nwant:\n%s", out, wide)
+		}
+		if out := ada.ok("workflow", "show", "OPS"); out != wide {
+			t.Fatalf("workflow show with a 17-character Step and a 21-character Skill:\n%s\nwant:\n%s", out, wide)
+		}
+		narrow := "1   Ops              engineer         0 waiting, 0 working  nobody holds its Skill\n" +
+			"      done → Done\n"
+		if out := ada.ok("workflow", "show", "OPS", "--workflow", "Ops"); out != narrow {
+			t.Fatalf("workflow show --workflow Ops, its names short:\n%s\nwant:\n%s", out, narrow)
+		}
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/tuongaz/darkory/client"
 	"github.com/tuongaz/darkory/internal/shortid"
@@ -373,11 +374,12 @@ func (c *call) printWorkflow(w io.Writer, wf client.Workflows, only string) {
 		if len(steps) == 0 {
 			fmt.Fprintln(w, "No Steps.")
 		}
-		c.printSteps(w, steps, wf.Connectors, names, workflows, of)
+		c.printSteps(w, steps, wf.Connectors, names, workflows, of, c.columns(steps))
 		return
 	}
+	cols := c.columns(wf.Steps)
 	if len(wf.Workflows) < 2 {
-		c.printSteps(w, wf.Steps, wf.Connectors, names, workflows, of)
+		c.printSteps(w, wf.Steps, wf.Connectors, names, workflows, of, cols)
 		return
 	}
 	for _, x := range wf.Workflows {
@@ -391,19 +393,37 @@ func (c *call) printWorkflow(w io.Writer, wf client.Workflows, only string) {
 		if len(steps) == 0 {
 			fmt.Fprintln(w, "    No Steps.")
 		}
-		c.printSteps(w, steps, wf.Connectors, names, workflows, of)
+		c.printSteps(w, steps, wf.Connectors, names, workflows, of, cols)
 	}
 }
 
-// printSteps prints Steps of one Workflow with the Connectors out of each; names, workflows and of
-// give every Step's name, every Workflow's name and the Workflow each Step is in.
-func (c *call) printSteps(w io.Writer, steps []client.WorkflowStep, connectors []client.Connector, names, workflows, of map[string]string) {
+// stepColumns are the widths of a Step row's name and Skill columns.
+type stepColumns struct{ name, skill int }
+
+// columns gives the name and Skill columns the width of the longest name and Skill among steps,
+// and never less than 16, so every row printed lines up.
+func (c *call) columns(steps []client.WorkflowStep) stepColumns {
+	cols := stepColumns{16, 16}
 	for _, s := range steps {
-		skill := "hold"
-		if s.SkillID != nil {
-			skill = c.skill(*s.SkillID)
-		}
-		line := fmt.Sprintf("%-3d %-16s %-16s %d waiting, %d working", s.Position, one(s.Name), skill, s.Tasks-s.Working, s.Working)
+		cols.name = max(cols.name, utf8.RuneCountInString(one(s.Name)))
+		cols.skill = max(cols.skill, utf8.RuneCountInString(c.stepSkill(s)))
+	}
+	return cols
+}
+
+// stepSkill names a Step's Skill, or "hold" for a Step without one.
+func (c *call) stepSkill(s client.WorkflowStep) string {
+	if s.SkillID == nil {
+		return "hold"
+	}
+	return c.skill(*s.SkillID)
+}
+
+// printSteps prints Steps of one Workflow with the Connectors out of each, in cols; names,
+// workflows and of give every Step's name, every Workflow's name and the Workflow each Step is in.
+func (c *call) printSteps(w io.Writer, steps []client.WorkflowStep, connectors []client.Connector, names, workflows, of map[string]string, cols stepColumns) {
+	for _, s := range steps {
+		line := fmt.Sprintf("%-3d %-*s %-*s %d waiting, %d working", s.Position, cols.name, one(s.Name), cols.skill, c.stepSkill(s), s.Tasks-s.Working, s.Working)
 		switch {
 		case s.SkillID == nil:
 		case len(s.Takers) == 0:
