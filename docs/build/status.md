@@ -1,5 +1,7 @@
 # MVP build status
 
+**2026-10-10:** the product ran its own repository: Project DARK on the owner's Install, three Tasks (a sidebar trigger, the owner's "cannot delete a Workflow" report, and a Runner defect the run found) taken through Implementation and Bug triage by the roster and merged (PRs #7, #8, #9; main b79defb). The review, with a verdict per requirement and the UI/UX findings, is [`dogfood-2026-10-10.md`](dogfood-2026-10-10.md). Before it, the same day: the sample Workflows (PR #6, [`sample-workflows-plan.md`](sample-workflows-plan.md)).
+
 State on 2026-10-09, at the end of the first build and the Named Workflows build (ADR 0019). The plans are [`plan.md`](plan.md) and [`named-workflows-plan.md`](named-workflows-plan.md).
 
 ## Built
