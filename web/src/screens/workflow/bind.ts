@@ -1,5 +1,6 @@
 import type { RunnerSession, Schemas, Skill, Task, Workflows as WorkflowRecord } from "@/api/client";
 import type { Connector, Step, Taker, TaskChip, Workflow } from "@/components/workflow/model";
+import { inProjectOrder, workflowsInOrder } from "@/components/workflowLine/model";
 import { workingOf, type MemberKind, type Working } from "@/lib/work";
 import { liveClaim } from "@/work";
 
@@ -15,7 +16,7 @@ export type RecordStep = WorkflowRecord["steps"][number];
 export type RecordConnector = WorkflowRecord["connectors"][number];
 export type SetWorkflowBody = Schemas["SetWorkflowBody"];
 
-/** A Step or Connector drawn before `/v1` has given it an id: sent without one. */
+/** A Workflow, Step or Connector made before `/v1` has given it an id: sent without one. */
 export const newIdPrefix = "new:";
 export const isNew = (id: string) => id.startsWith(newIdPrefix);
 
@@ -117,18 +118,23 @@ export function toCanvas(
 }
 
 /**
- * The whole Workflow as `PUT …/workflow` takes it: Steps numbered 1, 2, 3… in their order, each
- * with its id unless it is new, its Skill (left out on a hold) and where it stands (left out on a
- * new one, which `/v1` places); Connectors
- * numbered among those out of their Step, naming a new Step by its name (the spec takes a Step of
- * the body by id or name, and names are unique in a Workflow), leaving `to` out into Done.
+ * The Project's Workflows as `PUT …/workflow` takes them: the Workflows numbered 1, 2, 3… in their
+ * order, each with its id unless it is new (one made in the draft is named, and its Steps name it
+ * by that name); the Steps in the Project's order, numbered 1, 2, 3… within their Workflow, each
+ * with its id unless it is new, its Workflow, its Skill (left out on a hold) and where it stands
+ * (left out on a new one, which `/v1` places); Connectors numbered among those out of their Step,
+ * naming a new Step by its name (the spec takes a Step of the body by id or name, and names are
+ * unique in a Project), leaving `to` out into Done.
  */
 export function toBody(record: WorkflowRecord, moves?: Record<string, string>): SetWorkflowBody {
-  const steps = [...record.steps].sort((a, b) => a.position - b.position);
+  const workflows = workflowsInOrder(record.workflows);
+  const workflowRef = new Map(workflows.map((w) => [w.id, isNew(w.id) ? w.name : w.id]));
+  const steps = [...record.steps].sort(inProjectOrder(record.workflows));
   const ref = new Map(steps.map((s) => [s.id, isNew(s.id) ? s.name : s.id]));
+  const at = new Map(steps.map((s, i) => [s.id, i]));
   const outPosition = new Map<string, number>();
   const connectors = [...record.connectors]
-    .sort((a, b) => (positionOf(steps, a.from_step_id) - positionOf(steps, b.from_step_id)) || a.position - b.position)
+    .sort((a, b) => (at.get(a.from_step_id) ?? 0) - (at.get(b.from_step_id) ?? 0) || a.position - b.position)
     .map((c) => {
       const n = (outPosition.get(c.from_step_id) ?? 0) + 1;
       outPosition.set(c.from_step_id, n);
@@ -140,27 +146,28 @@ export function toBody(record: WorkflowRecord, moves?: Record<string, string>): 
         position: n,
       };
     });
+  const stepPosition = new Map<string, number>();
   const body: SetWorkflowBody = {
-    workflows: record.workflows.map(({ id, name, position }) => ({ id, name, position })),
-    steps: steps.map((s, i) => ({
-      ...(isNew(s.id) ? {} : { id: s.id }),
-      workflow: s.workflow_id,
-      name: s.name,
-      ...(s.skill_id ? { skill: s.skill_id } : {}),
-      position: i + 1,
-      // A new Step is placed by /v1, clear of the others.
-      ...(isNew(s.id) ? {} : { x: s.x, y: s.y }),
-    })),
+    workflows: workflows.map((w, i) => ({ ...(isNew(w.id) ? {} : { id: w.id }), name: w.name, position: i + 1 })),
+    steps: steps.map((s) => {
+      const n = (stepPosition.get(s.workflow_id) ?? 0) + 1;
+      stepPosition.set(s.workflow_id, n);
+      return {
+        ...(isNew(s.id) ? {} : { id: s.id }),
+        workflow: workflowRef.get(s.workflow_id) ?? s.workflow_id,
+        name: s.name,
+        ...(s.skill_id ? { skill: s.skill_id } : {}),
+        position: n,
+        // A new Step is placed by /v1, clear of the others.
+        ...(isNew(s.id) ? {} : { x: s.x, y: s.y }),
+      };
+    }),
     connectors,
   };
   if (moves && Object.keys(moves).length > 0) {
     body.moves = Object.fromEntries(Object.entries(moves).map(([from, to]) => [from, ref.get(to) ?? to]));
   }
   return body;
-}
-
-function positionOf(steps: RecordStep[], id: string): number {
-  return steps.find((s) => s.id === id)?.position ?? 0;
 }
 
 /** Names compare as `/v1` compares them: ignoring case. */

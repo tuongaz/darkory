@@ -192,7 +192,9 @@ export function WorkflowLine(props: WorkflowLineProps) {
           highlight={props.highlight}
           noBranch={props.noBranch}
           measure={measure}
-          onTight={() => setTight({ width: w, topology })}
+          // Said once per width and drawing: unmeasured (a test's DOM) the line stays across, and a
+          // second word would only draw it again.
+          onTight={() => setTight((t) => (t && t.width === w && t.topology === topology ? t : { width: w, topology }))}
         />
       )}
       {heavy && !vertical && <LoopsList loops={topology.loops} onHover={setLitLoop} />}

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
-import { usePickedWorkflow } from "@/components/pickedWorkflow";
+import { remember, usePickedWorkflow, workflowParam } from "@/components/pickedWorkflow";
 import { WorkflowChip } from "@/components/WorkflowChip";
 import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
@@ -19,6 +19,8 @@ import { useLineData } from "@/components/workflowLine";
 import { taskPath as taskPagePath } from "@/screens/task/format";
 import { fromRecord } from "./edit/draft";
 import { useDraftEditor } from "./edit/useDraft";
+import { useEditorWorkflow } from "./edit/useEditorWorkflow";
+import { same } from "./bind";
 import { EditingWorkflow } from "./Editing";
 import { LiveWorkflow } from "./Live";
 import { useLineView, useScopeParam } from "./lineView";
@@ -131,11 +133,18 @@ function EditingPage() {
   });
   const [discarding, setDiscarding] = useState(false);
   const live = projectPath(project, "workflow");
+  const shown = useEditorWorkflow(project, editor.draft);
   const save = async () => {
-    if (await editor.save()) {
-      toast(`Saved ${project.name}'s Workflow`);
-      navigate(live);
-    }
+    // The Workflow edited, by name: a new one has its id only once saved.
+    const editing = editor.draft?.wf.workflows.find((w) => w.id === shown.id)?.name;
+    const reply = await editor.save();
+    if (!reply) return;
+    toast(`Saved ${project.name}'s Workflow`);
+    const saved = editing === undefined ? undefined : reply.workflows.find((w) => same(w.name, editing));
+    if (saved && reply.workflows.length > 1) {
+      remember(project.key, saved.id);
+      navigate(projectPath(project, "workflow", undefined, { [workflowParam]: saved.id }));
+    } else navigate(live);
   };
   const n = editor.changes;
   return (

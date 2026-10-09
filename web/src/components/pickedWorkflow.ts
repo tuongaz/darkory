@@ -21,7 +21,8 @@ export function remembered(projectKey: string): string | undefined {
   }
 }
 
-function remember(projectKey: string, id: string) {
+/** Remembers the Workflow picked in the Project, in this browser. */
+export function remember(projectKey: string, id: string) {
   try {
     localStorage.setItem(workflowKey(projectKey), id);
   } catch {
@@ -36,23 +37,34 @@ function remember(projectKey: string, id: string) {
  * picks one: the address says it and the browser remembers it; picking the one shown replaces
  * the address rather than adding to the history. No id until the Workflows load.
  */
-export function usePickedWorkflow(project: Pick<Project, "key">, workflows: readonly Pick<Workflow, "id" | "position">[] | undefined): { id: string | undefined; set: (id: string) => void } {
+/**
+ * How a pick is made: `remember` false leaves the browser's memory as it is (a Workflow not saved
+ * yet); `also` changes the address in the same step (the editor's picked Step, cleared); `replace`
+ * says it in place of the address, with no new step in the history (the editor's picks).
+ */
+export type PickOptions = { remember?: boolean; also?: (params: URLSearchParams) => void; replace?: boolean };
+
+export function usePickedWorkflow(
+  project: Pick<Project, "key">,
+  workflows: readonly Pick<Workflow, "id" | "position">[] | undefined,
+): { id: string | undefined; set: (id: string, options?: PickOptions) => void } {
   const [params, setParams] = useSearchParams();
   const named = params.get(workflowParam);
   const known = (id: string | undefined | null) => (id && workflows?.some((w) => w.id === id) ? id : undefined);
   const first = workflows && workflowsInOrder(workflows)[0]?.id;
   const id = known(named && toShort(named)) ?? known(remembered(project.key)) ?? first;
   const set = useCallback(
-    (next: string) => {
-      remember(project.key, next);
+    (next: string, options: PickOptions = {}) => {
+      if (options.remember !== false) remember(project.key, next);
       // Picking the one shown only says it in the address, in place: Back still leaves the page.
       setParams(
         (p) => {
           const out = new URLSearchParams(p);
           out.set(workflowParam, next);
+          options.also?.(out);
           return out;
         },
-        { replace: next === id },
+        { replace: options.replace || next === id },
       );
     },
     [project.key, setParams, id],
