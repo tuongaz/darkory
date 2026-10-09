@@ -4,7 +4,7 @@
 
 **Goal:** A new Project starts with two Workflows instead of one: **Implementation** (today's default Steps) and **Bug triage** (Triage → Fix → Code review → Verify → Done, with outcomes that drop a report or cross into Implementation). The owner (2026-10-09): "Update the sample workflows: 1. A workflow for task implementation 2. A workflow for bug triage"; shape picked from three: "Two Workflows, linked".
 
-**Architecture:** `project create --workflow default` (and init's MAIN, and + New Project) builds the graph from a planned list of Workflows instead of one planned Workflow; `empty` and `copy` are unchanged. Two generic Skills, `triage` and `qa`, join `engineer` and `review` in init's seed, and the roster's planner and reviewer hold them. The spec's `NewWorkflow` description changes (text only; the enum stays), so the generators run. No migration: existing Projects keep their Workflows.
+**Architecture:** `project create --workflow default` (and init's MAIN, and + New Project) builds the graph from a planned list of Workflows instead of one planned Workflow; `empty` and `copy` are unchanged. Two generic Skills, `triage` and `qa`, join `engineer` and `review` in init's seed; the roster's planner holds `triage` and a fifth agent, `tester`, holds `qa` (amended after Task 1's review, below: the plan first gave `qa` to the reviewer, who could never take Verify after Code review). The spec's `NewWorkflow` description changes (text only; the enum stays), so the generators run. No migration: existing Projects keep their Workflows.
 
 **Worktree:** `/Users/tuongaz/dev/darkory-wt/shell-nav`, branch `sample-workflows` from main 2f03ebc. Never `go build` at the checkout root without `-o`; never `git add -A`; commits end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Glossary words only on screen (`CONTEXT.md`): Workflow, Step, Task, Skill; the new words are names (Implementation, Bug triage, Triage, Fix, Code review, Verify) and Skill names (`triage`, `qa`), like `engineer`.
 
@@ -80,6 +80,15 @@ Roster: planner `Skills: {SkillBreakdown, SkillTriage}`; reviewer `{SkillReview,
 
 **Step 4: commit** by name: "Core: a new Project starts with two Workflows, Implementation and Bug triage; init seeds triage and qa; the planner and reviewer hold them".
 
+## Task 1, amended after review (the controller's calls)
+
+Two defects were the plan's, found at review of 71f89a6:
+
+1. **`qa` goes to a fifth roster agent, `tester` (`claude-sonnet-5-5`), not the reviewer.** A Member who held a Task under one Skill takes it again only under that Skill (ADR 0001, CONTEXT.md), so a reviewer that took Code review under `review` can never take Verify under `qa`, and the planner (triage) and builder (engineer) are barred the same way: on a fresh init every bug stopped at Verify. The roster is planner (breakdown, triage), builder (engineer), reviewer (review, skill-review), tester (qa), retro (retro); init's print and roster table gain the row; docs that say "four agents" say five. Add a core test that walks one Task through Triage → Fix → Code review → Verify → Done with each seeded agent through `next` (bug, ready, pass, pass).
+2. **The Skill names stay `triage` and `qa`; their bodies become outcome-agnostic**, in the register of `engineer` and `review`, which also name no outcome: a generic Skill is one capability shared across the Organisation, and presets (the software example, the bots, the seed) keep an existing Skill of the name, as they already do for `engineer` and `review`; a second near-name (`bug-triage`, `verify`) would put two Skills for one capability on an Install. Bodies: triage — "Triage a reported problem. Read the Task, reproduce what it describes and record what you saw as a Note; commit nothing on its branch. Advance it along the outcome that names what you found, with a Note saying why." qa — "Verify a fix. Read the Task and its Notes, run the change on its branch, reproduce the original report and confirm it no longer happens, and attach what you ran as Evidence. Advance it along the outcome that says whether the fix holds, with a Note of what still happens when it does not."
+
+Also from the review: `e2e/bots_test.go:38-39`, `docs/build/testing.md:63` and `docs/build/decisions.md:250` say Setup keeps init's agents "with the same names and Skills" / "keeps init's planner, reviewer and retro": add "with exactly the preset's Skills"; `docs/workflows/software.md` gets a sentence that a Project on the default Workflows is refused (its Triage and Code review clash with the preset's Step names) and a fresh Project through `setup.sh` works; `e2e/preset_test.go`'s OLD comment says it hand-builds Work because of that clash; `internal/core/projects.go:40,120` say "its Workflows"; the `defaultStep` comment at `workflow.go:208` is rewrapped; `workProject`'s doc says it is frozen on purpose.
+
 ## Task 2: Web — the dialog's words and the specs that knew one Workflow
 
 **Files:** `web/src/app/NewProjectDialog.tsx:32` help → "Implementation · Bug triage" (terse, the two names); `web/src/api/schema.gen.ts` from `npm run gen` (Task 1); `web/e2e/init.spec.ts`, `web/e2e/avatar.spec.ts`, `web/e2e/workflow.spec.ts`, `web/e2e/workflows.spec.ts`, `web/e2e/settings.spec.ts`, `web/e2e/*.lab.ts`, `web/e2e/compare.mjs` (fine: position-based).
@@ -97,4 +106,8 @@ Run `cd web && npm run typecheck && npm run lint && npx vitest run`, then `npm r
 
 ## State
 
-Plan written 2026-10-09 on `sample-workflows`. Tasks 1–3 pending.
+Plan written 2026-10-09 on `sample-workflows` (65a2060).
+
+- **Task 1** (Go): 71f89a6. Review found two defects that were the plan's, not the build's: Critical, the reviewer holding `qa` could never take Verify after Code review (ADR 0001's self-review rule), so every bug stopped there on a fresh init; Important, `triage`/`qa` bodies named one outcome each while a generic Skill of that name may already exist on an Install and presets keep it. Both amended above (the controller's calls: a fifth roster agent `tester`; outcome-agnostic bodies) and fixed in 40b3440 with a walk test Triage → Fix → Code review → Verify → Done on the seeded agents, plus the stale comments and docs the review listed. Bots' Setup revokes Skills a Spec does not name: 8fd0df3.
+- **Task 2** (Web): fd4e94f (the dialog's help, the specs on a two-Workflow MAIN; Project ONE on `empty` for the Project-of-one tests). Follow-up for the fifth agent: da58137 (init.spec asserts the five roster rows whole; session.spec pauses tester with the other roster agents; comments).
+- **Task 3** (Docs, gate): this commit; the gate's results are in PR #6.

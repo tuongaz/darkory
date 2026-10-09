@@ -12,7 +12,7 @@ import (
 )
 
 // TestInitSeedsTheRoster runs darkory init without --no-agents in a git repository of its own, as
-// a person starting a Local Install does: Project MAIN, on the default Workflow, holds ada and the
+// a person starting a Local Install does: Project MAIN, on the default Workflows, holds ada and the
 // five agents, reporting to
 // her with their Skills and agent settings; the repository is MAIN's default Workspace with the
 // branch it was made on; each agent's token is in <data>/agents/<name>.token, readable by its

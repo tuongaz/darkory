@@ -355,7 +355,7 @@ func TestAgentSettings(t *testing.T) {
 	})
 }
 
-// InitWith seeds the roster in Init's one write: Project MAIN on the default Workflow with the
+// InitWith seeds the roster in Init's one write: Project MAIN on the default Workflows with the
 // first Member, the Workspace as its default, and the five agents in MAIN with their Skills,
 // reporting to the first Member, with agent settings and a token whose Claims lapse after five
 // minutes without a Heartbeat.
