@@ -1,4 +1,4 @@
-import { LoaderIcon, PencilIcon, PlusIcon } from "lucide-react";
+import { LoaderIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { BarAction, Content, TopBar, type Crumb } from "@/app/TopBar";
 import { FormDialog } from "@/components/FormDialog";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
+import { Tip } from "@/components/Tip";
 import { useCurrentMe } from "@/me";
 import { FilterChipRow, FilterMenuButton } from "@/components/filters/FilterBar";
 import { useTaskFilter } from "@/components/filters/useTaskFilter";
@@ -114,7 +115,10 @@ export function WorkflowPage() {
   const [scope, setScope] = useScopeParam();
   const tasks = useTasks({ project: project.key, state: "open" }).data;
   const filter = useTaskFilter({ projects: [project], tasks });
-  const workflows = useWorkflow(project.key).data?.workflows;
+  const acts = useWorkflowActs(project, admin);
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState<RecordWorkflow | undefined>();
+  const workflows = acts.graph?.workflows;
   const segment = useWorkflowSegment();
   const several = !!workflows && workflows.length > 1;
   // The Workflow the address names (the route always has the segment).
@@ -168,6 +172,14 @@ export function WorkflowPage() {
                 <Link to={workflowEditPath(project, shown.id)} aria-label={`Edit ${shown.name}`} />
               </BarAction>
             )}
+            {admin && shown && workflows && (
+              <DeleteAct
+                name={shown.name}
+                // Why it is off, said on the control: the last Workflow stays; a write is on its way.
+                why={workflows.length < 2 ? "The last Workflow stays" : acts.busy ? "Saving…" : undefined}
+                onClick={() => setDeleting(shown)}
+              />
+            )}
           </>
         }
       />
@@ -175,7 +187,38 @@ export function WorkflowPage() {
         {view === "line" && <FilterChipRow {...filter.bar} />}
         <LiveWorkflow project={project} workflowId={shown?.id} view={view} scope={scope} onView={setView} filter={filter.matches} />
       </Content>
+      {deleting && acts.graph && (
+        <DeleteWorkflowDialog
+          draft={fromRecord(acts.graph)}
+          workflow={deleting}
+          onClose={() => setDeleting(undefined)}
+          onDelete={(moves, repoint) => {
+            const gone = deleting;
+            setDeleting(undefined);
+            // The page is gone with it: land on the list.
+            acts.remove(gone, moves, repoint, () => navigate(workflowsPath(project)));
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** Delete, beside Edit on a Workflow's page; off, it stays focusable (aria-disabled) and says why. */
+function DeleteAct({ name, why, onClick }: { name: string; why?: string; onClick: () => void }) {
+  return (
+    <Tip label={why ?? `Delete ${name}`}>
+      <BarAction
+        variant="outline"
+        icon={<Trash2Icon />}
+        label="Delete"
+        aria-label={`Delete ${name}`}
+        aria-description={why}
+        aria-disabled={why ? true : undefined}
+        className={why ? "cursor-not-allowed opacity-50" : undefined}
+        onClick={why ? undefined : onClick}
+      />
+    </Tip>
   );
 }
 

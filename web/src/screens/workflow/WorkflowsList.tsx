@@ -123,6 +123,8 @@ function RowActs({
   const later = find(after);
   const ordering = acts.busy || !acts.skillMap;
   const edit = workflowEditPath(project, id);
+  // Why the delete is off, said on the control: the last Workflow stays; a write is on its way.
+  const keep = last ? "The last Workflow stays" : acts.busy ? "Saving…" : undefined;
   return (
     <>
       <span role="cell" className={cn(wide, "justify-center")}>
@@ -139,7 +141,7 @@ function RowActs({
             <PencilIcon />
           </Link>
         </Tip>
-        <ActButton label={`Delete ${name}`} disabled={acts.busy || last} onClick={() => acts.onDelete(w)}>
+        <ActButton label={`Delete ${name}`} why={keep} disabled={!!keep} onClick={() => acts.onDelete(w)}>
           <Trash2Icon />
         </ActButton>
       </span>
@@ -154,8 +156,9 @@ function RowActs({
           <DropdownMenuItem disabled={ordering || !later} onSelect={() => later && acts.move(w, later, 1)}>
             Move later
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" disabled={acts.busy || last} onSelect={() => acts.onDelete(w)}>
+          <DropdownMenuItem variant="destructive" disabled={!!keep} onSelect={() => acts.onDelete(w)}>
             Delete
+            {keep && <span className="ml-auto pl-3 text-xs font-normal text-muted-foreground">{keep}</span>}
           </DropdownMenuItem>
         </MoreMenu>
       </span>
@@ -174,10 +177,20 @@ function Figure({ n }: { n: number | undefined }) {
 const act =
   "inline-flex size-7 items-center justify-center rounded-sm text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3.5";
 
-function ActButton({ label, disabled, onClick, children }: { label: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
+/** `why` says on the control why it is off: the button stays focusable (aria-disabled) so its Tip shows and focus survives a re-render. */
+function ActButton({ label, why, disabled, onClick, children }: { label: string; why?: string; disabled?: boolean; onClick: () => void; children: ReactNode }) {
+  const soft = !!(disabled && why);
   return (
-    <Tip label={label}>
-      <button type="button" aria-label={label} disabled={disabled} onClick={onClick} className={act}>
+    <Tip label={soft ? why : label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-description={soft ? why : undefined}
+        disabled={disabled && !soft}
+        aria-disabled={soft || undefined}
+        onClick={soft ? undefined : onClick}
+        className={cn(act, soft && "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground")}
+      >
         {children}
       </button>
     </Tip>
