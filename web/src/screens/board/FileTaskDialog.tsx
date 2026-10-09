@@ -19,9 +19,10 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
@@ -140,7 +141,8 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
   const tasks = useProjectTasks(key);
   const workflow = useWorkflow(key || undefined);
   const labels = useLabels(key || undefined);
-  const steps = stepsInOrder(workflow.data?.steps ?? []);
+  const workflows = workflow.data?.workflows ?? [];
+  const steps = stepsInOrder({ workflows, steps: workflow.data?.steps ?? [] });
 
   const [title, setTitle] = useState(preset.title ?? "");
   const [description, setDescription] = useState("");
@@ -167,17 +169,23 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
   const parent = blocksKey ? (blocked?.parent_id ? all.find((t) => t.id === blocked.parent_id) : undefined) : parentKey ? byKey.get(parentKey) : undefined;
   const subtask = !!parent || !!parentKey;
   const question = !!aim || !!blocksKey;
-  const breakdownStep = stepWithSkill(steps, "breakdown", skillName);
-  const acceptanceStep = stepWithSkill(steps, "acceptance", skillName);
+  const breakdownStep = stepWithSkill({ workflows, steps }, "breakdown", skillName);
+  const acceptanceStep = stepWithSkill({ workflows, steps }, "acceptance", skillName);
   const canBreakDown = !!breakdownStep && !subtask && !question;
   // What it does as a Parent is asked of a Task that may become one: not a Subtask, not a question.
   const parentToBe = !subtask && !question;
   const breaking = canBreakDown && breakdown;
-  const fallback = defaultFileStep(steps, skillName);
+  const fallback = defaultFileStep({ workflows, steps }, skillName);
   const stepId = steps.some((s) => s.id === chosenStep) ? chosenStep! : fallback?.id;
   const workspaceIds = chosenWorkspaces ?? defaultWorkspaces(project, parent, workspaces);
   const parentHolder = parent && !blocksKey ? liveClaim(parent, now)?.holder_id : undefined;
   const splits = !!parentHolder && parentHolder === me.member.id;
+
+  const stepItem = (s: WorkflowStep) => (
+    <SelectItem key={s.id} value={s.id}>
+      <StepOption step={s} skill={s.skill_id ? skillName(s.skill_id) : undefined} />
+    </SelectItem>
+  );
 
   const parents = all.filter((t) => t.state === "open" && !t.parent_id);
   const blockable = all.filter((t) => t.state === "open" && !isParent(t));
@@ -396,14 +404,23 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
           >
             <Select value={breaking || aim ? "" : stepId} onValueChange={setStep} disabled={breaking || !!aim}>
               <SelectTrigger id="file-task-step" className="w-full">
-                <SelectValue placeholder={breaking ? "None: a Parent" : aim ? `With ${name(aim)}` : steps.length ? "Choose a Step" : "This Workflow has no Steps"} />
+                <SelectValue placeholder={breaking ? "None: a Parent" : aim ? `With ${name(aim)}` : steps.length ? "Choose a Step" : `${projectName} has no Steps`} />
               </SelectTrigger>
               <SelectContent>
-                {steps.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <StepOption step={s} skill={s.skill_id ? skillName(s.skill_id) : undefined} />
-                  </SelectItem>
-                ))}
+                {workflows.length > 1
+                  ? // A Project of several Workflows: each one's Steps under its name, in the Project's order; one with none is left out.
+                    workflowsInOrder(workflows).flatMap((w) => {
+                      const own = steps.filter((s) => s.workflow_id === w.id);
+                      return own.length
+                        ? [
+                            <SelectGroup key={w.id}>
+                              <SelectLabel>{w.name}</SelectLabel>
+                              {own.map(stepItem)}
+                            </SelectGroup>,
+                          ]
+                        : [];
+                    })
+                  : steps.map(stepItem)}
               </SelectContent>
             </Select>
           </Field>

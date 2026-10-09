@@ -1,0 +1,1126 @@
+{
+  "horizontal": {
+    "width": 1000,
+    "height": 454,
+    "density": "tokens",
+    "at": [
+      [
+        "acceptance",
+        {
+          "x": 660,
+          "y": 352
+        }
+      ],
+      [
+        "backlog",
+        {
+          "x": 168,
+          "y": 242
+        }
+      ],
+      [
+        "build",
+        {
+          "x": 351,
+          "y": 192
+        }
+      ],
+      [
+        "done",
+        {
+          "x": 900,
+          "y": 192
+        }
+      ],
+      [
+        "plan",
+        {
+          "x": 119,
+          "y": 136
+        }
+      ],
+      [
+        "qa",
+        {
+          "x": 534,
+          "y": 192
+        }
+      ],
+      [
+        "retro",
+        {
+          "x": 159,
+          "y": 418
+        }
+      ],
+      [
+        "review",
+        {
+          "x": 717,
+          "y": 192
+        }
+      ],
+      [
+        "skill-review",
+        {
+          "x": 470,
+          "y": 418
+        }
+      ]
+    ],
+    "lineY": 192,
+    "headY": 48,
+    "columnY": 102,
+    "heads": [
+      {
+        "id": "build",
+        "x": 351,
+        "top": 48,
+        "tier": 0,
+        "w": 150,
+        "h": 44,
+        "lines": [
+          "Build"
+        ]
+      },
+      {
+        "id": "qa",
+        "x": 534,
+        "top": 48,
+        "tier": 0,
+        "w": 150,
+        "h": 44,
+        "lines": [
+          "QA"
+        ]
+      },
+      {
+        "id": "review",
+        "x": 717,
+        "top": 48,
+        "tier": 0,
+        "w": 150,
+        "h": 44,
+        "lines": [
+          "Review"
+        ]
+      },
+      {
+        "id": "done",
+        "x": 900,
+        "top": 48,
+        "tier": 0,
+        "w": 46.5,
+        "h": 44,
+        "lines": [
+          "Done"
+        ]
+      }
+    ],
+    "main": [
+      {
+        "from": "build",
+        "to": "qa",
+        "x1": 351,
+        "x2": 534,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "build:pass"
+      },
+      {
+        "from": "qa",
+        "to": "review",
+        "x1": 534,
+        "x2": 717,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "qa:pass"
+      },
+      {
+        "from": "review",
+        "to": "done",
+        "x1": 717,
+        "x2": 900,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "review:pass"
+      }
+    ],
+    "segmentLabels": [
+      {
+        "x": 442.5,
+        "y": 192,
+        "text": "pass",
+        "connectorId": "build:pass",
+        "hint": "Build → QA: when the holder says pass"
+      },
+      {
+        "x": 625.5,
+        "y": 192,
+        "text": "pass",
+        "connectorId": "qa:pass",
+        "hint": "QA → Review: when the holder says pass"
+      },
+      {
+        "x": 808.5,
+        "y": 192,
+        "text": "pass",
+        "connectorId": "review:pass",
+        "hint": "Review → Done: when the holder says pass, and the Task is complete"
+      }
+    ],
+    "arcs": [
+      {
+        "id": "qa:fail",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "qa:fail"
+        ],
+        "line": [
+          [
+            528,
+            201
+          ],
+          [
+            528,
+            234
+          ],
+          [
+            366,
+            234
+          ],
+          [
+            366,
+            201
+          ]
+        ],
+        "arrow": {
+          "x": 366,
+          "y": 201,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 447,
+            "y": 234,
+            "text": "fail",
+            "back": true,
+            "connectorId": "qa:fail",
+            "hint": "QA → Build: when the holder says fail"
+          }
+        ]
+      },
+      {
+        "id": "review:needs QA",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "review:needs QA"
+        ],
+        "line": [
+          [
+            702,
+            201
+          ],
+          [
+            702,
+            234
+          ],
+          [
+            540,
+            234
+          ],
+          [
+            540,
+            201
+          ]
+        ],
+        "arrow": {
+          "x": 540,
+          "y": 201,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 621,
+            "y": 234,
+            "text": "needs QA",
+            "back": true,
+            "connectorId": "review:needs QA",
+            "hint": "Review → QA: when the holder says needs QA"
+          }
+        ]
+      },
+      {
+        "id": "review:needs changes",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "review:needs changes"
+        ],
+        "line": [
+          [
+            711,
+            201
+          ],
+          [
+            711,
+            256
+          ],
+          [
+            357,
+            256
+          ],
+          [
+            357,
+            201
+          ]
+        ],
+        "arrow": {
+          "x": 357,
+          "y": 201,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 534,
+            "y": 256,
+            "text": "needs changes",
+            "back": true,
+            "connectorId": "review:needs changes",
+            "hint": "Review → Build: when the holder says needs changes"
+          }
+        ]
+      },
+      {
+        "id": "build:no UI change",
+        "side": "over",
+        "back": false,
+        "connectorIds": [
+          "build:no UI change"
+        ],
+        "line": [
+          [
+            357,
+            42
+          ],
+          [
+            357,
+            16
+          ],
+          [
+            711,
+            16
+          ],
+          [
+            711,
+            42
+          ]
+        ],
+        "arrow": {
+          "x": 711,
+          "y": 42,
+          "dir": "down"
+        },
+        "labels": [
+          {
+            "x": 534,
+            "y": 16,
+            "text": "no UI change",
+            "back": false,
+            "connectorId": "build:no UI change",
+            "hint": "Build → Review: when the holder says no UI change"
+          }
+        ]
+      }
+    ],
+    "branch": {
+      "label": {
+        "x": 153,
+        "y": 288
+      },
+      "stations": [
+        {
+          "id": "acceptance",
+          "x": 660,
+          "y": 352,
+          "row": 0
+        },
+        {
+          "id": "retro",
+          "x": 159,
+          "y": 418,
+          "row": 1
+        },
+        {
+          "id": "skill-review",
+          "x": 470,
+          "y": 418,
+          "row": 1
+        }
+      ],
+      "lines": [
+        {
+          "id": "row:0",
+          "points": [
+            [
+              660,
+              352
+            ],
+            [
+              870,
+              352
+            ],
+            [
+              900,
+              322
+            ],
+            [
+              900,
+              202
+            ]
+          ]
+        },
+        {
+          "id": "row:1",
+          "points": [
+            [
+              159,
+              418
+            ],
+            [
+              810,
+              418
+            ],
+            [
+              840,
+              388
+            ],
+            [
+              840,
+              382
+            ],
+            [
+              870,
+              352
+            ]
+          ]
+        },
+        {
+          "id": "skill-review:needs changes",
+          "points": [
+            [
+              464,
+              424
+            ],
+            [
+              464,
+              438
+            ],
+            [
+              165,
+              438
+            ],
+            [
+              165,
+              424
+            ]
+          ]
+        }
+      ],
+      "loops": [
+        {
+          "id": "skill-review:needs changes",
+          "side": "under",
+          "back": true,
+          "connectorIds": [
+            "skill-review:needs changes"
+          ],
+          "line": [
+            [
+              464,
+              424
+            ],
+            [
+              464,
+              438
+            ],
+            [
+              165,
+              438
+            ],
+            [
+              165,
+              424
+            ]
+          ],
+          "arrow": {
+            "x": 165,
+            "y": 424,
+            "dir": "up"
+          },
+          "labels": [
+            {
+              "x": 314.5,
+              "y": 438,
+              "text": "needs changes",
+              "back": true,
+              "connectorId": "skill-review:needs changes",
+              "hint": "Skill review → Retro: when the holder says needs changes"
+            }
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 765,
+          "y": 352,
+          "text": "pass",
+          "connectorId": "acceptance:pass",
+          "hint": "Acceptance → Done: when the holder says pass, and the Task is complete"
+        },
+        {
+          "x": 314.5,
+          "y": 418,
+          "text": "propose",
+          "connectorId": "retro:propose",
+          "hint": "Retro → Skill review: when the holder says propose"
+        },
+        {
+          "x": 640,
+          "y": 418,
+          "text": "publish",
+          "connectorId": "skill-review:publish",
+          "hint": "Skill review → Done: when the holder says publish, and the Task is complete"
+        }
+      ]
+    },
+    "chips": [
+      {
+        "kind": "chip",
+        "stepId": "plan",
+        "x": 105,
+        "y": 127,
+        "text": "done → Done",
+        "align": "right",
+        "connectorId": "plan:done",
+        "hint": "Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start each at the Step its filer names, Build when they name none"
+      },
+      {
+        "kind": "chip",
+        "stepId": "acceptance",
+        "x": 568.5,
+        "y": 343,
+        "text": "fail → Build",
+        "align": "left",
+        "connectorId": "acceptance:fail",
+        "hint": "Acceptance → Build: when the holder says fail"
+      },
+      {
+        "kind": "chip",
+        "stepId": "retro",
+        "x": 56,
+        "y": 409,
+        "text": "done → Done",
+        "align": "left",
+        "connectorId": "retro:done",
+        "hint": "Retro → Done: when the holder says done, and the Task is complete"
+      }
+    ],
+    "exits": [],
+    "entry": {
+      "holds": [
+        {
+          "id": "backlog",
+          "x": 168,
+          "y": 242,
+          "hint": "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+        }
+      ],
+      "arrow": {
+        "line": [
+          [
+            146,
+            192
+          ],
+          [
+            340,
+            192
+          ]
+        ],
+        "head": {
+          "x": 340,
+          "y": 192,
+          "dir": "right"
+        },
+        "label": {
+          "x": 16,
+          "y": 192,
+          "text": "New Tasks start here",
+          "align": "start",
+          "hint": "New Tasks start at Build, unless the filer names another Step"
+        },
+        "connectorIds": []
+      },
+      "before": {
+        "id": "plan",
+        "title": {
+          "x": 113,
+          "y": 62,
+          "hint": "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none"
+        },
+        "station": {
+          "x": 119,
+          "y": 136
+        },
+        "files": {
+          "line": [
+            [
+              126,
+              136
+            ],
+            [
+              239,
+              136
+            ],
+            [
+              239,
+              189
+            ]
+          ],
+          "head": {
+            "x": 239,
+            "y": 189,
+            "dir": "down"
+          },
+          "label": {
+            "x": 182.5,
+            "y": 136,
+            "text": "files Subtasks",
+            "hint": "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none"
+          }
+        }
+      },
+      "spine": {
+        "line": [
+          [
+            168,
+            242
+          ],
+          [
+            168,
+            195
+          ]
+        ],
+        "head": {
+          "x": 168,
+          "y": 195,
+          "dir": "up"
+        },
+        "label": {
+          "x": 174,
+          "y": 217,
+          "text": "by hand",
+          "align": "start",
+          "hint": "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+        }
+      }
+    },
+    "routes": [
+      [
+        "acceptance:fail",
+        "M660 352 L351 192"
+      ],
+      [
+        "acceptance:pass",
+        "M660 352 H870 Q900 352 900 322 V192"
+      ],
+      [
+        "build:no UI change",
+        "M351 192 L357 42 V16 H711 V42 L717 192"
+      ],
+      [
+        "build:pass",
+        "M351 192 H534"
+      ],
+      [
+        "plan:done",
+        "M119 136 L900 192"
+      ],
+      [
+        "qa:fail",
+        "M534 192 L528 201 V234 H366 V201 L351 192"
+      ],
+      [
+        "qa:pass",
+        "M534 192 H717"
+      ],
+      [
+        "retro:done",
+        "M159 418 L900 192"
+      ],
+      [
+        "retro:propose",
+        "M159 418 H470"
+      ],
+      [
+        "review:needs QA",
+        "M717 192 L702 201 V234 H540 V201 L534 192"
+      ],
+      [
+        "review:needs changes",
+        "M717 192 L711 201 V256 H357 V201 L351 192"
+      ],
+      [
+        "review:pass",
+        "M717 192 H900"
+      ],
+      [
+        "skill-review:needs changes",
+        "M470 418 L464 424 V438 H165 V424 L159 418"
+      ],
+      [
+        "skill-review:publish",
+        "M470 418 H810 Q840 418 840 388 V382 Q840 352 870 352 H870 Q900 352 900 322 V192"
+      ]
+    ],
+    "polylines": [
+      {
+        "id": "main",
+        "points": [
+          [
+            351,
+            192
+          ],
+          [
+            900,
+            192
+          ]
+        ]
+      },
+      {
+        "id": "qa:fail",
+        "points": [
+          [
+            528,
+            201
+          ],
+          [
+            528,
+            234
+          ],
+          [
+            366,
+            234
+          ],
+          [
+            366,
+            201
+          ]
+        ]
+      },
+      {
+        "id": "review:needs QA",
+        "points": [
+          [
+            702,
+            201
+          ],
+          [
+            702,
+            234
+          ],
+          [
+            540,
+            234
+          ],
+          [
+            540,
+            201
+          ]
+        ]
+      },
+      {
+        "id": "review:needs changes",
+        "points": [
+          [
+            711,
+            201
+          ],
+          [
+            711,
+            256
+          ],
+          [
+            357,
+            256
+          ],
+          [
+            357,
+            201
+          ]
+        ]
+      },
+      {
+        "id": "build:no UI change",
+        "points": [
+          [
+            357,
+            42
+          ],
+          [
+            357,
+            16
+          ],
+          [
+            711,
+            16
+          ],
+          [
+            711,
+            42
+          ]
+        ]
+      },
+      {
+        "id": "entry",
+        "points": [
+          [
+            146,
+            192
+          ],
+          [
+            340,
+            192
+          ]
+        ]
+      },
+      {
+        "id": "files",
+        "points": [
+          [
+            126,
+            136
+          ],
+          [
+            239,
+            136
+          ],
+          [
+            239,
+            189
+          ]
+        ]
+      },
+      {
+        "id": "holds",
+        "points": [
+          [
+            168,
+            242
+          ],
+          [
+            168,
+            195
+          ]
+        ]
+      },
+      {
+        "id": "row:0",
+        "points": [
+          [
+            660,
+            352
+          ],
+          [
+            870,
+            352
+          ],
+          [
+            900,
+            322
+          ],
+          [
+            900,
+            202
+          ]
+        ]
+      },
+      {
+        "id": "row:1",
+        "points": [
+          [
+            159,
+            418
+          ],
+          [
+            810,
+            418
+          ],
+          [
+            840,
+            388
+          ],
+          [
+            840,
+            382
+          ],
+          [
+            870,
+            352
+          ]
+        ]
+      },
+      {
+        "id": "skill-review:needs changes",
+        "points": [
+          [
+            464,
+            424
+          ],
+          [
+            464,
+            438
+          ],
+          [
+            165,
+            438
+          ],
+          [
+            165,
+            424
+          ]
+        ]
+      }
+    ],
+    "boxes": [
+      {
+        "id": "head:build",
+        "kind": "head",
+        "x": 276,
+        "y": 48,
+        "w": 150,
+        "h": 44
+      },
+      {
+        "id": "head:qa",
+        "kind": "head",
+        "x": 459,
+        "y": 48,
+        "w": 150,
+        "h": 44
+      },
+      {
+        "id": "head:review",
+        "kind": "head",
+        "x": 642,
+        "y": 48,
+        "w": 150,
+        "h": 44
+      },
+      {
+        "id": "head:done",
+        "kind": "head",
+        "x": 876.5,
+        "y": 48,
+        "w": 46.5,
+        "h": 44
+      },
+      {
+        "id": "seg:build",
+        "kind": "label",
+        "x": 423.5,
+        "y": 184,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:qa",
+        "kind": "label",
+        "x": 606.5,
+        "y": 184,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:review",
+        "kind": "label",
+        "x": 789.5,
+        "y": 184,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "entry",
+        "kind": "entry",
+        "x": 16,
+        "y": 184,
+        "w": 120,
+        "h": 16
+      },
+      {
+        "id": "files",
+        "kind": "label",
+        "x": 138,
+        "y": 128,
+        "w": 89.5,
+        "h": 16
+      },
+      {
+        "id": "breakdown",
+        "kind": "note",
+        "x": 113,
+        "y": 62,
+        "w": 63,
+        "h": 16
+      },
+      {
+        "id": "name:plan",
+        "kind": "name",
+        "x": 113,
+        "y": 82,
+        "w": 126.5,
+        "h": 42
+      },
+      {
+        "id": "chip:plan:0",
+        "kind": "chip",
+        "x": 16,
+        "y": 127,
+        "w": 89,
+        "h": 20
+      },
+      {
+        "id": "hold:backlog",
+        "kind": "name",
+        "x": 24,
+        "y": 232,
+        "w": 130,
+        "h": 36
+      },
+      {
+        "id": "spine",
+        "kind": "label",
+        "x": 174,
+        "y": 209,
+        "w": 56.5,
+        "h": 16
+      },
+      {
+        "id": "arc:build:no UI change",
+        "kind": "label",
+        "w": 84.5,
+        "h": 16,
+        "x": 491.5,
+        "y": 8
+      },
+      {
+        "id": "arc:qa:fail",
+        "kind": "label",
+        "w": 28.5,
+        "h": 16,
+        "x": 433,
+        "y": 226
+      },
+      {
+        "id": "arc:review:needs QA",
+        "kind": "label",
+        "w": 65,
+        "h": 16,
+        "x": 588.5,
+        "y": 226
+      },
+      {
+        "id": "arc:review:needs changes",
+        "kind": "label",
+        "w": 95.5,
+        "h": 16,
+        "x": 486,
+        "y": 248
+      },
+      {
+        "id": "name:acceptance",
+        "kind": "name",
+        "x": 654,
+        "y": 298,
+        "w": 181.5,
+        "h": 42
+      },
+      {
+        "id": "name:retro",
+        "kind": "name",
+        "x": 153,
+        "y": 364,
+        "w": 106,
+        "h": 42
+      },
+      {
+        "id": "name:skill-review",
+        "kind": "name",
+        "x": 464,
+        "y": 364,
+        "w": 192,
+        "h": 42
+      },
+      {
+        "id": "branch:0",
+        "kind": "label",
+        "x": 746,
+        "y": 344,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "branch:1",
+        "kind": "label",
+        "x": 285.5,
+        "y": 410,
+        "w": 57.5,
+        "h": 16
+      },
+      {
+        "id": "branch:2",
+        "kind": "label",
+        "x": 614,
+        "y": 410,
+        "w": 52,
+        "h": 16
+      },
+      {
+        "id": "loop:skill-review:needs changes",
+        "kind": "label",
+        "w": 95.5,
+        "h": 16,
+        "x": 266.5,
+        "y": 430
+      },
+      {
+        "id": "chip:acceptance:fail",
+        "kind": "chip",
+        "w": 77.5,
+        "h": 20,
+        "x": 568.5,
+        "y": 343
+      },
+      {
+        "id": "chip:retro:done",
+        "kind": "chip",
+        "w": 89,
+        "h": 20,
+        "x": 56,
+        "y": 409
+      },
+      {
+        "id": "branch",
+        "kind": "note",
+        "w": 77.5,
+        "h": 16,
+        "x": 153,
+        "y": 288
+      }
+    ],
+    "clashes": [],
+    "fits": true
+  }
+}

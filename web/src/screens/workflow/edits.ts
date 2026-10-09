@@ -1,4 +1,6 @@
 import { countTasks } from "@/components/workflow/model";
+import { inProjectOrder, workflowsInOrder } from "@/components/workflowLine/model";
+import { isId } from "@/lib/shortid";
 import { same, type RecordStep, type WorkflowRecord } from "./bind";
 
 /*
@@ -9,7 +11,16 @@ import { same, type RecordStep, type WorkflowRecord } from "./bind";
 export const nameMax = 50;
 
 const stepById = (wf: WorkflowRecord, id: string) => wf.steps.find((s) => s.id === id);
-const inOrder = (steps: RecordStep[]) => [...steps].sort((a, b) => a.position - b.position);
+const inOrder = (wf: WorkflowRecord): RecordStep[] => [...wf.steps].sort(inProjectOrder(wf.workflows));
+
+/** What `/v1` refuses in a Workflow's or a Step's name: none, over 50 characters, or spelled as an id. */
+export function nameProblem(what: "Workflow" | "Step", name: string): string | undefined {
+  const n = name.trim();
+  if (!n) return `A ${what} needs a name.`;
+  if (n.length > nameMax) return `A ${what}'s name is at most ${nameMax} characters.`;
+  if (isId(n)) return `A ${what}'s name cannot be spelled as an id: ${n} is one.`;
+  return undefined;
+}
 
 /**
  * What `/v1` would refuse in `next`, in words, before anything is sent; undefined when nothing.
@@ -17,14 +28,24 @@ const inOrder = (steps: RecordStep[]) => [...steps].sort((a, b) => a.position - 
  * open Tasks need a Step in `moves`.
  */
 export function problem(next: WorkflowRecord, current: WorkflowRecord, moves: Record<string, string> = {}): string | undefined {
-  const steps = inOrder(next.steps);
+  const workflows = workflowsInOrder(next.workflows);
+  if (workflows.length === 0) return "A Project has one Workflow at least.";
+  for (const w of workflows) {
+    const p = nameProblem("Workflow", w.name);
+    if (p) return p;
+  }
+  for (let i = 0; i < workflows.length; i++) {
+    const twin = workflows.slice(i + 1).find((t) => same(t.name, workflows[i].name));
+    if (twin) return `Two Workflows are called ${workflows[i].name.trim()}: a name is used once in a Project, whatever its case.`;
+  }
+  const steps = inOrder(next);
   for (const s of steps) {
-    if (!s.name.trim()) return "A Step needs a name.";
-    if (s.name.trim().length > nameMax) return `A Step's name is at most ${nameMax} characters.`;
+    const p = nameProblem("Step", s.name);
+    if (p) return p;
   }
   for (let i = 0; i < steps.length; i++) {
     const twin = steps.slice(i + 1).find((t) => same(t.name, steps[i].name));
-    if (twin) return `Two Steps are called ${steps[i].name.trim()}: a name is used once in a Workflow, whatever its case.`;
+    if (twin) return `Two Steps are called ${steps[i].name.trim()}: a name is used once in a Project, whatever its case.`;
   }
   const kept = new Set(next.steps.map((s) => s.id));
   for (const c of next.connectors) {

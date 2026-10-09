@@ -1,14 +1,15 @@
 // Binds the record to the Subtask graph's shapes (components/workflow/graph.ts): a Parent's
 // Subtasks over its Project's Steps.
-import type { Member, RunnerSession, Skill, Task, WorkflowStep } from "@/api/client";
+import type { Member, RunnerSession, Skill, Task, Workflows } from "@/api/client";
 import type { GraphStep, GraphSubtask, OutsideLink } from "@/components/workflow/graph";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import { workingOf } from "@/lib/work";
 import { liveClaim } from "@/work";
 
-/** The Workflow's Steps, in order, as the graph's columns. */
-export function graphSteps(steps: readonly WorkflowStep[], skills: Map<string, Skill>): GraphStep[] {
-  return [...steps]
-    .sort((a, b) => a.position - b.position)
+/** The Project's Steps, in its order (by Workflow, then by Step), as the graph's columns. */
+export function graphSteps(workflow: Pick<Workflows, "workflows" | "steps">, skills: Map<string, Skill>): GraphStep[] {
+  return [...workflow.steps]
+    .sort(inProjectOrder(workflow.workflows))
     .map((s) => {
       const skill = s.skill_id ? skills.get(s.skill_id) : undefined;
       return { id: s.id, name: s.name, skill: skill && { id: skill.id, name: skill.name } };

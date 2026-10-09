@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { edgeCrossings } from "../gridRoute";
 import { crosses } from "../route";
-import { acrossGeometry, analyseBlocking, downGeometry, endsText, placeBlocking, type BlockingLayout, type BlockingTask } from "./layout";
+import { acrossGeometry, analyseBlocking, downGeometry, endsText, ownWorkflowSteps, placeBlocking, type BlockingLayout, type BlockingTask } from "./layout";
 import { bigTasks, mainTasks, me } from "./samples";
 
 const keys = (tasks: BlockingTask[], ids: string[]) => ids.map((id) => tasks.find((t) => t.id === id)!.key);
@@ -28,6 +28,21 @@ describe("analyseBlocking", () => {
     expect(k(a.nodes).sort()).toEqual(["MAIN-10", "MAIN-11", "MAIN-12", "MAIN-13", "MAIN-18", "MAIN-19", "MAIN-4"].sort());
     expect(k(a.noBlocking)).toEqual(["MAIN-9", "MAIN-6", "MAIN-5", "MAIN-14"]);
     expect([a.edges.length, a.blocked, a.nodes.length, a.shown]).toEqual([5, 4, 7, 11]);
+  });
+
+  it("on the page of one Workflow of several, makes its own only the Tasks the page shows: another Workflow's join as outside Tasks", () => {
+    // As if MAIN's Steps were split: the page's Workflow holds the Steps of MAIN-11 alone.
+    const eleven = mainTasks.find((t) => t.key === "MAIN-11")!;
+    const steps = new Set([eleven.stepId!]);
+    const here = mainTasks.filter((t) => t.projectId === "p-main" && !t.parent && (!t.stepId || steps.has(t.stepId)));
+    const byId = new Map(mainTasks.map((t) => [t.id, t]));
+    const b = analyseBlocking(mainTasks, { projectId: "p-main", me: me.id, shows: (id) => !byId.get(id)!.stepId || steps.has(byId.get(id)!.stepId!) });
+    expect(b.shown).toBe(here.length);
+    expect(b.shown).toBeLessThan(a.shown);
+    // What blocks MAIN-11, at another Workflow's Step, stands outside.
+    expect(b.outside.size).toBeGreaterThan(0);
+    for (const id of b.outside) expect(here.some((t) => t.id === id)).toBe(false);
+    expect(k(b.nodes)).toContain("MAIN-11");
   });
 
   it("columns each Task by how many must end before it can", () => {
@@ -200,5 +215,18 @@ describe("placeBlocking, down (a phone)", () => {
     const { layout } = run(bigTasks, "p-big", { down: true });
     expect(edgeCrossings(layout.edges)).toBe(0);
     clearOfNodes(layout);
+  });
+});
+
+describe("a node's micro-line", () => {
+  const steps = [
+    { id: "st-triage", workflowId: "wf-triage" },
+    { id: "st-investigate", workflowId: "wf-bugs" },
+    { id: "st-fix", workflowId: "wf-bugs" },
+  ];
+  it("draws the Steps of its own Workflow, else of the Project's first", () => {
+    expect(ownWorkflowSteps(steps, "st-fix").map((s) => s.id)).toEqual(["st-investigate", "st-fix"]);
+    expect(ownWorkflowSteps(steps, undefined).map((s) => s.id)).toEqual(["st-triage"]);
+    expect(ownWorkflowSteps([{ id: "a" }, { id: "b" }], "b").map((s) => s.id)).toEqual(["a", "b"]);
   });
 });

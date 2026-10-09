@@ -2,7 +2,7 @@ import type { Activity, Claim, Task } from "@/api/client";
 import { workingOf, type MemberKind, type SessionState } from "@/lib/work";
 import { taskPath } from "@/screens/task/path";
 import { liveClaim } from "@/work";
-import { DONE_STATION, type LineBrief, type LineMember, type LineTask, type LineWorkflow } from "./model";
+import { DONE_STATION, drawnSteps, type LineBrief, type LineMember, type LineTask, type LineWorkflow } from "./model";
 
 /*
  * The facts the line draws, from the records: each open Task as a token, the scope that narrows
@@ -40,11 +40,6 @@ export function lineTasks(tasks: readonly Task[], ctx: { member: MemberOf; sessi
         openSubtasks: t.subtask_counts?.open,
       };
     });
-}
-
-/** The Blocking among open Tasks: how many Tasks wait on how many. "Blocking 5" counts relations. */
-export function blockingCount(tasks: readonly LineTask[]): number {
-  return tasks.reduce((n, t) => n + t.blockers.length, 0);
 }
 
 /* ------------------------------------------------------------------------------------------ */
@@ -86,6 +81,7 @@ export type ScopedLine = {
   drawn: LineTask[];
   /** Per Step, the open Tasks there outside the scope: its faint "+N". */
   hidden: Map<string, number>;
+  /** The open Tasks at the Steps drawn that the scope (or the Filter) leaves out: the header's "N hidden". */
   hiddenTotal: number;
   /** A Parent's Subtasks that ended Done: green tokens at Done. */
   done: { id: string; key: string; title: string }[];
@@ -98,12 +94,15 @@ export type ScopedLine = {
 
 /**
  * The line narrowed to a scope. Steps and Connectors stay drawn whatever the scope; only tokens
- * leave, each leaving a "+N" on its Step so the line never lies about load. A Parent's scope adds
+ * leave, each leaving a "+N" on its Step so the line never lies about load. Only the Tasks at the
+ * Steps the line draws count (`LineWorkflow.drawn`): another Workflow's are on its own line. A Parent's scope adds
  * its Subtasks still to come as ghosts on the branch: its Acceptance (when it has one due and the
  * Workflow a Step for it) and its Retrospective (when the Workflow has a Step for it).
  */
 export function scopedLine(all: readonly LineTask[], scope: LineScope, ctx: { workflow: LineWorkflow; parent?: ScopeParent; passes?: (id: string) => boolean }): ScopedLine {
-  const atStep = all.filter((t) => t.stepId);
+  const onLine = drawnSteps(ctx.workflow);
+  const atStep = all.filter((t) => t.stepId && (!onLine || onLine.has(t.stepId)));
+  const steps = onLine ? ctx.workflow.steps.filter((s) => onLine.has(s.id)) : ctx.workflow.steps;
   const inScope: (t: LineTask) => boolean =
     scope.kind === "all" ? () => true : scope.kind === "none" ? (t) => !t.parentId : scope.kind === "parent" ? (t) => t.parentId === scope.id : (t) => t.id === scope.id;
   // The Filter narrows tokens as a scope does: what it leaves out counts into its Step's "+N".
@@ -116,14 +115,14 @@ export function scopedLine(all: readonly LineTask[], scope: LineScope, ctx: { wo
   if (p && p.id === (scope as { id: string }).id) {
     out.done = p.subtasks.filter((s) => s.state === "done").map(({ id, key, title }) => ({ id, key, title }));
     out.branchLabel = p.ended ? `After ${p.key}` : `Next for ${p.key}`;
-    const stepWith = (skill: string) => ctx.workflow.steps.find((s) => s.skill?.name === skill);
+    const stepWith = (skill: string) => steps.find((s) => s.skill?.name === skill);
     const has = (kind: LineTask["kind"]) => p.subtasks.some((s) => s.kind === kind && s.state !== "dropped");
     const open = p.subtasks.filter((s) => s.state === "open").length;
     const acc = stepWith("acceptance");
     if (!p.ended && p.acceptance && acc && !has("acceptance")) out.ghosts.push({ stepId: acc.id, text: `when ${open} open end Done`, label: "Acceptance" });
     const retro = stepWith("retro");
     if (!p.ended && retro && !has("retrospective")) out.ghosts.push({ stepId: retro.id, text: `when ${p.key} ends`, label: "Retrospective" });
-    const branch = new Set(ctx.workflow.steps.filter((s) => s.skill && ["acceptance", "retro", "skill-review"].includes(s.skill.name)).map((s) => s.id));
+    const branch = new Set(steps.filter((s) => s.skill && ["acceptance", "retro", "skill-review"].includes(s.skill.name)).map((s) => s.id));
     out.fold = p.ended && !drawn.some((t) => !branch.has(t.stepId!));
   }
   return out;

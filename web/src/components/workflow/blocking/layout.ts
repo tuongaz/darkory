@@ -70,9 +70,11 @@ function keyNumber(key: string): number {
 /**
  * What the Blocking view shows of `projectId`'s open Tasks, or of `scope`'s: a Parent's
  * Subtasks, or one Task with what blocks it and what it blocks, all the way along. `tasks` is
- * every open Task known; `me` the signed-in Member.
+ * every open Task known; `me` the signed-in Member. `shows`, on the page of one Workflow of
+ * several, says which of the Project's Tasks are that page's (`ShownWorkflow.shows`): the rest
+ * show only as outside Tasks joined to these, as another Project's do.
  */
-export function analyseBlocking(tasks: readonly BlockingTask[], { projectId, scope, me }: { projectId: string; scope?: string; me: string }): BlockingAnalysis {
+export function analyseBlocking(tasks: readonly BlockingTask[], { projectId, scope, me, shows }: { projectId: string; scope?: string; me: string; shows?: (id: string) => boolean }): BlockingAnalysis {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const worked = (id: string) => byId.has(id) && !byId.get(id)!.parent;
   // Every Blocking between open worked Tasks, both ways.
@@ -101,7 +103,7 @@ export function analyseBlocking(tasks: readonly BlockingTask[], { projectId, sco
   // What is shown.
   const scoped = scope ? byId.get(scope) : undefined;
   let shownIds: string[];
-  if (!scoped) shownIds = tasks.filter((t) => t.projectId === projectId && !t.parent).map((t) => t.id);
+  if (!scoped) shownIds = tasks.filter((t) => t.projectId === projectId && !t.parent && (!shows || shows(t.id))).map((t) => t.id);
   else if (scoped.parent) shownIds = tasks.filter((t) => t.parentId === scoped.id && !t.parent).map((t) => t.id);
   else shownIds = [scoped.id, ...reach(scoped.id, ins), ...reach(scoped.id, outs)];
   const shown = new Set(shownIds);
@@ -427,4 +429,13 @@ export function placeBlocking(
     width,
     height,
   };
+}
+
+/**
+ * The Steps a node's micro-line draws, of its Project's (in the Project's order): those of the
+ * Workflow of the Step it is at, else of the Project's first Workflow.
+ */
+export function ownWorkflowSteps<S extends { id: string; workflowId?: string }>(all: readonly S[], stepId: string | undefined): readonly S[] {
+  const own = all.find((s) => s.id === stepId)?.workflowId ?? all[0]?.workflowId;
+  return own === undefined ? all : all.filter((s) => s.workflowId === own);
 }

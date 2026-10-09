@@ -1,7 +1,7 @@
 import { BotIcon, EllipsisIcon, PlusIcon } from "lucide-react";
 import { useCallback, type MouseEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import type { Activity, Member, MemberDetail, Project, RunnerSession, Task, WorkflowStep } from "@/api/client";
+import type { Activity, Member, MemberDetail, Project, RunnerSession, Task } from "@/api/client";
 import { useDirectory, useOpenTasks, useProject, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { projectPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
@@ -25,7 +25,7 @@ import { useCurrentMe } from "@/me";
 import { liveClaim } from "@/work";
 import { AgentMenuItems, AgentPeek, EndPill } from "./AgentPeek";
 import { agentActions, agentParam, taskOverAgents } from "./agentActions";
-import { aboutProject, agentRows, lapsesIn24h, lastActivity, lastClaimEntry, type AgentRow } from "./derive";
+import { aboutProject, agentRows, lapsesIn24h, lastActivity, lastClaimEntry, takesOf, type AgentRow } from "./derive";
 import { GroupHeader, ShortTime } from "./parts";
 import { useMemberDetails, useRecentActivity, useStepNames, useTaskMap } from "./queries";
 import { useAgentActions } from "./useAgentActions";
@@ -155,7 +155,7 @@ export function AgentsPage() {
                       project={project}
                       detail={detailOf.get(row.agent.id)}
                       runnerSession={runner.find((s) => s.member_id === row.agent.id)}
-                      takes={(workflow?.steps ?? []).filter((s) => s.takers.some((t) => t.id === row.agent.id))}
+                      takes={takesOf(workflow, row.agent.id)}
                       history={history.entries}
                       selected={selected === row.agent.name}
                       onOpen={openPeek}
@@ -216,7 +216,8 @@ function AgentTableRow({
   project: Project;
   detail: MemberDetail | undefined;
   runnerSession: RunnerSession | undefined;
-  takes: WorkflowStep[];
+  /** The Steps it takes, in the Project's order, as the page names them (`Bugs › Investigate` of several Workflows). */
+  takes: string[];
   history: Activity[];
   selected: boolean;
   onOpen: (name: string) => void;
@@ -338,8 +339,8 @@ function AgentTableRow({
       <td className={wide}>
         <span className="flex min-w-0 flex-col gap-0.5">
           <PillsFit names={detail?.skills.map((s) => s.name) ?? []} />
-          <small className="truncate text-xs text-muted-foreground" title={takes.map((s) => s.name).join(", ")}>
-            {takes.length > 0 ? takes.map((s) => s.name).join(" · ") : "takes no Step here"}
+          <small className="truncate text-xs text-muted-foreground" title={takes.join(", ")}>
+            {takes.length > 0 ? takes.join(" · ") : "takes no Step here"}
           </small>
         </span>
       </td>

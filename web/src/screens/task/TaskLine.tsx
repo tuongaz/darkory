@@ -16,7 +16,7 @@ import { workflowScopePath } from "./format";
  */
 export function TaskLine({ detail }: { detail: TaskDetail }) {
   const { task } = detail;
-  const { data } = useLineData(task.project_id, task.key);
+  const { data } = useLineData(task.project_id, task.workflow_id, task.key);
   const project = findProject(useProjects().data ?? [], task.project_id);
   const now = useNow();
   if (!data?.trace || data.trace.stays.length === 0) return null;

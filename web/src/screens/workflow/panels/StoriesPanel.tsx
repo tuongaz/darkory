@@ -20,6 +20,7 @@ import { ageText } from "@/lib/time";
 import { entriesOf, segmentsOf, type Story } from "./stories";
 import { useMarkSeenOnLeave } from "./useSeen";
 import { useStories } from "./useStories";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 
 type Hover = (taskId: string | null) => void;
 
@@ -43,9 +44,10 @@ function whenText(at: string, now: number): string {
  * sit above "Since you looked · HH:MM" on two lines, the older ones below on one. A row opens in
  * place into its Task's path; hovering one tells the page which Task to ring on the line. When
  * nothing has changed for an hour nor since they looked, it folds to one line, which opens it.
+ * On the page of one Workflow of several (`workflow`), only its Tasks' stories and those at no Step.
  */
-export function StoriesPanel({ project, onHover, onOpen }: { project: Project; onHover: Hover; onOpen?: (taskId: string | null) => void }) {
-  const s = useStories(project);
+export function StoriesPanel({ project, workflow, onHover, onOpen }: { project: Project; workflow?: ShownWorkflow; onHover: Hover; onOpen?: (taskId: string | null) => void }) {
+  const s = useStories(project, workflow);
   const now = useNow();
   const mobile = useIsMobile();
   useMarkSeenOnLeave(project.key, s.newestSeq);

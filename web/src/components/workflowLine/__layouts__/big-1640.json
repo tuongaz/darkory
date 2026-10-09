@@ -1,0 +1,1188 @@
+{
+  "horizontal": {
+    "width": 1640,
+    "height": 310,
+    "density": "beads",
+    "at": [
+      [
+        "acc",
+        {
+          "x": 1218,
+          "y": 238
+        }
+      ],
+      [
+        "backlog",
+        {
+          "x": 37,
+          "y": 238
+        }
+      ],
+      [
+        "build",
+        {
+          "x": 562,
+          "y": 238
+        }
+      ],
+      [
+        "creview",
+        {
+          "x": 693,
+          "y": 238
+        }
+      ],
+      [
+        "design",
+        {
+          "x": 431,
+          "y": 238
+        }
+      ],
+      [
+        "docs",
+        {
+          "x": 1087,
+          "y": 238
+        }
+      ],
+      [
+        "done",
+        {
+          "x": 1612,
+          "y": 238
+        }
+      ],
+      [
+        "plan",
+        {
+          "x": 300,
+          "y": 238
+        }
+      ],
+      [
+        "qa",
+        {
+          "x": 824,
+          "y": 238
+        }
+      ],
+      [
+        "release",
+        {
+          "x": 1349,
+          "y": 238
+        }
+      ],
+      [
+        "retro",
+        {
+          "x": 1480,
+          "y": 238
+        }
+      ],
+      [
+        "sec",
+        {
+          "x": 956,
+          "y": 238
+        }
+      ],
+      [
+        "triage",
+        {
+          "x": 168,
+          "y": 238
+        }
+      ]
+    ],
+    "lineY": 238,
+    "headY": 72,
+    "columnY": 142,
+    "heads": [
+      {
+        "id": "backlog",
+        "x": 37,
+        "top": 72,
+        "tier": 0,
+        "w": 50.5,
+        "h": 60,
+        "lines": [
+          "Backlog"
+        ]
+      },
+      {
+        "id": "triage",
+        "x": 168,
+        "top": 72,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Triage"
+        ]
+      },
+      {
+        "id": "plan",
+        "x": 300,
+        "top": 72,
+        "tier": 0,
+        "w": 58.5,
+        "h": 60,
+        "lines": [
+          "Plan"
+        ]
+      },
+      {
+        "id": "design",
+        "x": 431,
+        "top": 72,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Design"
+        ]
+      },
+      {
+        "id": "build",
+        "x": 562,
+        "top": 72,
+        "tier": 0,
+        "w": 52,
+        "h": 60,
+        "lines": [
+          "Build"
+        ]
+      },
+      {
+        "id": "creview",
+        "x": 693,
+        "top": 72,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Code",
+          "review"
+        ]
+      },
+      {
+        "id": "qa",
+        "x": 824,
+        "top": 72,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "QA"
+        ]
+      },
+      {
+        "id": "sec",
+        "x": 956,
+        "top": 72,
+        "tier": 0,
+        "w": 52.5,
+        "h": 60,
+        "lines": [
+          "Security",
+          "review"
+        ]
+      },
+      {
+        "id": "docs",
+        "x": 1087,
+        "top": 72,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Docs"
+        ]
+      },
+      {
+        "id": "acc",
+        "x": 1218,
+        "top": 72,
+        "tier": 0,
+        "w": 74.5,
+        "h": 60,
+        "lines": [
+          "Acceptance"
+        ]
+      },
+      {
+        "id": "release",
+        "x": 1349,
+        "top": 72,
+        "tier": 0,
+        "w": 49.5,
+        "h": 60,
+        "lines": [
+          "Release"
+        ]
+      },
+      {
+        "id": "retro",
+        "x": 1480,
+        "top": 72,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Retro"
+        ]
+      },
+      {
+        "id": "done",
+        "x": 1612,
+        "top": 72,
+        "tier": 0,
+        "w": 33,
+        "h": 30,
+        "lines": [
+          "Done"
+        ]
+      }
+    ],
+    "main": [
+      {
+        "from": "backlog",
+        "to": "triage",
+        "x1": 37,
+        "x2": 168,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "backlog:pass"
+      },
+      {
+        "from": "triage",
+        "to": "plan",
+        "x1": 168,
+        "x2": 300,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "triage:pass"
+      },
+      {
+        "from": "plan",
+        "to": "design",
+        "x1": 300,
+        "x2": 431,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "plan:pass"
+      },
+      {
+        "from": "design",
+        "to": "build",
+        "x1": 431,
+        "x2": 562,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "design:pass"
+      },
+      {
+        "from": "build",
+        "to": "creview",
+        "x1": 562,
+        "x2": 693,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "build:pass"
+      },
+      {
+        "from": "creview",
+        "to": "qa",
+        "x1": 693,
+        "x2": 824,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "creview:pass"
+      },
+      {
+        "from": "qa",
+        "to": "sec",
+        "x1": 824,
+        "x2": 956,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "qa:pass"
+      },
+      {
+        "from": "sec",
+        "to": "docs",
+        "x1": 956,
+        "x2": 1087,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "sec:pass"
+      },
+      {
+        "from": "docs",
+        "to": "acc",
+        "x1": 1087,
+        "x2": 1218,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "docs:pass"
+      },
+      {
+        "from": "acc",
+        "to": "release",
+        "x1": 1218,
+        "x2": 1349,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "acc:pass"
+      },
+      {
+        "from": "release",
+        "to": "retro",
+        "x1": 1349,
+        "x2": 1480,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "release:pass"
+      },
+      {
+        "from": "retro",
+        "to": "done",
+        "x1": 1480,
+        "x2": 1612,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "retro:pass"
+      }
+    ],
+    "segmentLabels": [
+      {
+        "x": 102.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "backlog:pass",
+        "hint": "Backlog → Triage: when the holder says pass"
+      },
+      {
+        "x": 234,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "triage:pass",
+        "hint": "Triage → Plan: when the holder says pass"
+      },
+      {
+        "x": 365.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "plan:pass",
+        "hint": "Plan → Design: when the holder says pass"
+      },
+      {
+        "x": 496.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "design:pass",
+        "hint": "Design → Build: when the holder says pass"
+      },
+      {
+        "x": 627.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "build:pass",
+        "hint": "Build → Code review: when the holder says pass"
+      },
+      {
+        "x": 758.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "creview:pass",
+        "hint": "Code review → QA: when the holder says pass"
+      },
+      {
+        "x": 890,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "qa:pass",
+        "hint": "QA → Security review: when the holder says pass"
+      },
+      {
+        "x": 1021.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "sec:pass",
+        "hint": "Security review → Docs: when the holder says pass"
+      },
+      {
+        "x": 1152.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "docs:pass",
+        "hint": "Docs → Acceptance: when the holder says pass"
+      },
+      {
+        "x": 1283.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "acc:pass",
+        "hint": "Acceptance → Release: when the holder says pass"
+      },
+      {
+        "x": 1414.5,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "release:pass",
+        "hint": "Release → Retro: when the holder says pass"
+      },
+      {
+        "x": 1546,
+        "y": 238,
+        "text": "pass",
+        "connectorId": "retro:pass",
+        "hint": "Retro → Done: when the holder says pass, and the Task is complete"
+      }
+    ],
+    "arcs": [
+      {
+        "id": "track:build",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "creview:needs changes",
+          "qa:fail",
+          "sec:fail",
+          "docs:needs changes",
+          "acc:fail"
+        ],
+        "line": [
+          [
+            1218,
+            247
+          ],
+          [
+            1218,
+            280
+          ],
+          [
+            568,
+            280
+          ],
+          [
+            568,
+            247
+          ]
+        ],
+        "arrow": {
+          "x": 568,
+          "y": 247,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 693,
+            "y": 294,
+            "text": "needs changes",
+            "back": true,
+            "connectorId": "creview:needs changes",
+            "hint": "Code review → Build: when the holder says needs changes"
+          },
+          {
+            "x": 890,
+            "y": 294,
+            "text": "fail",
+            "back": true,
+            "hint": "QA → Build: when the holder says fail. Security review → Build: when the holder says fail"
+          },
+          {
+            "x": 1087,
+            "y": 294,
+            "text": "needs changes",
+            "back": true,
+            "connectorId": "docs:needs changes",
+            "hint": "Docs → Build: when the holder says needs changes"
+          },
+          {
+            "x": 1218,
+            "y": 294,
+            "text": "fail",
+            "back": true,
+            "connectorId": "acc:fail",
+            "hint": "Acceptance → Build: when the holder says fail"
+          },
+          {
+            "x": 456,
+            "y": 280,
+            "text": "↩ Build · 5 loops",
+            "back": true,
+            "align": "start",
+            "hint": "Code review → Build: when the holder says needs changes. QA → Build: when the holder says fail. Security review → Build: when the holder says fail. Docs → Build: when the holder says needs changes. Acceptance → Build: when the holder says fail"
+          }
+        ]
+      },
+      {
+        "id": "design:rework",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "design:rework"
+        ],
+        "line": [
+          [
+            425,
+            247
+          ],
+          [
+            425,
+            280
+          ],
+          [
+            306,
+            280
+          ],
+          [
+            306,
+            247
+          ]
+        ],
+        "arrow": {
+          "x": 306,
+          "y": 247,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 365.5,
+            "y": 280,
+            "text": "rework",
+            "back": true,
+            "connectorId": "design:rework",
+            "hint": "Design → Plan: when the holder says rework"
+          }
+        ]
+      },
+      {
+        "id": "plan:no design needed",
+        "side": "over",
+        "back": false,
+        "connectorIds": [
+          "plan:no design needed"
+        ],
+        "line": [
+          [
+            306,
+            66
+          ],
+          [
+            306,
+            16
+          ],
+          [
+            556,
+            16
+          ],
+          [
+            556,
+            66
+          ]
+        ],
+        "arrow": {
+          "x": 556,
+          "y": 66,
+          "dir": "down"
+        },
+        "labels": [
+          {
+            "x": 431,
+            "y": 16,
+            "text": "no design needed",
+            "back": false,
+            "connectorId": "plan:no design needed",
+            "hint": "Plan → Build: when the holder says no design needed"
+          }
+        ]
+      },
+      {
+        "id": "release:rollback",
+        "side": "over",
+        "back": true,
+        "connectorIds": [
+          "release:rollback"
+        ],
+        "line": [
+          [
+            830,
+            66
+          ],
+          [
+            830,
+            16
+          ],
+          [
+            1343,
+            16
+          ],
+          [
+            1343,
+            66
+          ]
+        ],
+        "arrow": {
+          "x": 830,
+          "y": 66,
+          "dir": "down"
+        },
+        "labels": [
+          {
+            "x": 1086.5,
+            "y": 16,
+            "text": "rollback",
+            "back": true,
+            "connectorId": "release:rollback",
+            "hint": "Release → QA: when the holder says rollback"
+          }
+        ]
+      }
+    ],
+    "chips": [],
+    "exits": [],
+    "entry": {
+      "holds": [],
+      "mark": {
+        "x": 168,
+        "left": 28,
+        "top": 48,
+        "y": 58,
+        "arrow": "right",
+        "lines": [
+          "New Tasks start here"
+        ],
+        "hint": "New Tasks start at Triage, unless the filer names another Step"
+      }
+    },
+    "routes": [
+      [
+        "acc:fail",
+        "M1218 238 V280 H568 V247 L562 238"
+      ],
+      [
+        "acc:pass",
+        "M1218 238 H1349"
+      ],
+      [
+        "backlog:pass",
+        "M37 238 H168"
+      ],
+      [
+        "build:pass",
+        "M562 238 H693"
+      ],
+      [
+        "creview:needs changes",
+        "M693 238 V280 H568 V247 L562 238"
+      ],
+      [
+        "creview:pass",
+        "M693 238 H824"
+      ],
+      [
+        "design:pass",
+        "M431 238 H562"
+      ],
+      [
+        "design:rework",
+        "M431 238 L425 247 V280 H306 V247 L300 238"
+      ],
+      [
+        "docs:needs changes",
+        "M1087 238 V280 H568 V247 L562 238"
+      ],
+      [
+        "docs:pass",
+        "M1087 238 H1218"
+      ],
+      [
+        "plan:no design needed",
+        "M300 238 L306 66 V16 H556 V66 L562 238"
+      ],
+      [
+        "plan:pass",
+        "M300 238 H431"
+      ],
+      [
+        "qa:fail",
+        "M824 238 V280 H568 V247 L562 238"
+      ],
+      [
+        "qa:pass",
+        "M824 238 H956"
+      ],
+      [
+        "release:pass",
+        "M1349 238 H1480"
+      ],
+      [
+        "release:rollback",
+        "M1349 238 L1343 66 V16 H830 V66 L824 238"
+      ],
+      [
+        "retro:pass",
+        "M1480 238 H1612"
+      ],
+      [
+        "sec:fail",
+        "M956 238 V280 H568 V247 L562 238"
+      ],
+      [
+        "sec:pass",
+        "M956 238 H1087"
+      ],
+      [
+        "triage:pass",
+        "M168 238 H300"
+      ]
+    ],
+    "polylines": [
+      {
+        "id": "main",
+        "points": [
+          [
+            37,
+            238
+          ],
+          [
+            1612,
+            238
+          ]
+        ]
+      },
+      {
+        "id": "drop:creview:needs changes",
+        "points": [
+          [
+            693,
+            247
+          ],
+          [
+            693,
+            271
+          ],
+          [
+            684,
+            280
+          ]
+        ]
+      },
+      {
+        "id": "drop:qa:fail",
+        "points": [
+          [
+            824,
+            247
+          ],
+          [
+            824,
+            271
+          ],
+          [
+            815,
+            280
+          ]
+        ]
+      },
+      {
+        "id": "drop:sec:fail",
+        "points": [
+          [
+            956,
+            247
+          ],
+          [
+            956,
+            271
+          ],
+          [
+            947,
+            280
+          ]
+        ]
+      },
+      {
+        "id": "drop:docs:needs changes",
+        "points": [
+          [
+            1087,
+            247
+          ],
+          [
+            1087,
+            271
+          ],
+          [
+            1078,
+            280
+          ]
+        ]
+      },
+      {
+        "id": "track:build",
+        "points": [
+          [
+            1218,
+            247
+          ],
+          [
+            1218,
+            280
+          ],
+          [
+            568,
+            280
+          ],
+          [
+            568,
+            247
+          ]
+        ]
+      },
+      {
+        "id": "design:rework",
+        "points": [
+          [
+            425,
+            247
+          ],
+          [
+            425,
+            280
+          ],
+          [
+            306,
+            280
+          ],
+          [
+            306,
+            247
+          ]
+        ]
+      },
+      {
+        "id": "plan:no design needed",
+        "points": [
+          [
+            306,
+            66
+          ],
+          [
+            306,
+            16
+          ],
+          [
+            556,
+            16
+          ],
+          [
+            556,
+            66
+          ]
+        ]
+      },
+      {
+        "id": "release:rollback",
+        "points": [
+          [
+            830,
+            66
+          ],
+          [
+            830,
+            16
+          ],
+          [
+            1343,
+            16
+          ],
+          [
+            1343,
+            66
+          ]
+        ]
+      }
+    ],
+    "boxes": [
+      {
+        "id": "head:backlog",
+        "kind": "head",
+        "x": 12,
+        "y": 72,
+        "w": 50.5,
+        "h": 60
+      },
+      {
+        "id": "head:triage",
+        "kind": "head",
+        "x": 143.5,
+        "y": 72,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:plan",
+        "kind": "head",
+        "x": 270.5,
+        "y": 72,
+        "w": 58.5,
+        "h": 60
+      },
+      {
+        "id": "head:design",
+        "kind": "head",
+        "x": 406.5,
+        "y": 72,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:build",
+        "kind": "head",
+        "x": 536,
+        "y": 72,
+        "w": 52,
+        "h": 60
+      },
+      {
+        "id": "head:creview",
+        "kind": "head",
+        "x": 668.5,
+        "y": 72,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:qa",
+        "kind": "head",
+        "x": 799.5,
+        "y": 72,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:sec",
+        "kind": "head",
+        "x": 930,
+        "y": 72,
+        "w": 52.5,
+        "h": 60
+      },
+      {
+        "id": "head:docs",
+        "kind": "head",
+        "x": 1062.5,
+        "y": 72,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:acc",
+        "kind": "head",
+        "x": 1181,
+        "y": 72,
+        "w": 74.5,
+        "h": 60
+      },
+      {
+        "id": "head:release",
+        "kind": "head",
+        "x": 1324,
+        "y": 72,
+        "w": 49.5,
+        "h": 60
+      },
+      {
+        "id": "head:retro",
+        "kind": "head",
+        "x": 1455.5,
+        "y": 72,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:done",
+        "kind": "head",
+        "x": 1595.5,
+        "y": 72,
+        "w": 33,
+        "h": 30
+      },
+      {
+        "id": "mark",
+        "kind": "mark",
+        "x": 28,
+        "y": 48,
+        "w": 154,
+        "h": 20
+      },
+      {
+        "id": "seg:backlog",
+        "kind": "label",
+        "x": 83.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:triage",
+        "kind": "label",
+        "x": 215,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:plan",
+        "kind": "label",
+        "x": 346.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:design",
+        "kind": "label",
+        "x": 477.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:build",
+        "kind": "label",
+        "x": 608.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:creview",
+        "kind": "label",
+        "x": 739.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:qa",
+        "kind": "label",
+        "x": 871,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:sec",
+        "kind": "label",
+        "x": 1002.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:docs",
+        "kind": "label",
+        "x": 1133.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:acc",
+        "kind": "label",
+        "x": 1264.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:release",
+        "kind": "label",
+        "x": 1395.5,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:retro",
+        "kind": "label",
+        "x": 1527,
+        "y": 230,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "arc:plan:no design needed",
+        "kind": "label",
+        "w": 110.5,
+        "h": 16,
+        "x": 375.5,
+        "y": 8
+      },
+      {
+        "id": "arc:release:rollback",
+        "kind": "label",
+        "w": 55.5,
+        "h": 16,
+        "x": 1058.5,
+        "y": 8
+      },
+      {
+        "id": "arc:design:rework",
+        "kind": "label",
+        "w": 50.5,
+        "h": 16,
+        "x": 340,
+        "y": 272
+      },
+      {
+        "id": "drop:build:0",
+        "kind": "label",
+        "w": 95.5,
+        "h": 16,
+        "x": 645,
+        "y": 286
+      },
+      {
+        "id": "drop:build:1",
+        "kind": "label",
+        "w": 28.5,
+        "h": 16,
+        "x": 876,
+        "y": 286
+      },
+      {
+        "id": "drop:build:2",
+        "kind": "label",
+        "w": 95.5,
+        "h": 16,
+        "x": 1039,
+        "y": 286
+      },
+      {
+        "id": "drop:build:3",
+        "kind": "label",
+        "w": 28.5,
+        "h": 16,
+        "x": 1204,
+        "y": 286
+      },
+      {
+        "id": "track:build",
+        "kind": "label",
+        "w": 104,
+        "h": 16,
+        "x": 456,
+        "y": 272
+      }
+    ],
+    "clashes": [],
+    "fits": true
+  }
+}

@@ -20,7 +20,9 @@ import { cn } from "@/lib/utils";
 import { liveClaim } from "@/work";
 import { Combobox } from "../board/Combobox";
 import { isParent, stepWithSkill } from "../board/derive";
-import { useMemberName, useSkillName } from "./format";
+import { StepOptions } from "../workflow/edit/StepOptions";
+import { stepTitle } from "@/components/workflowLine/model";
+import { advanceTarget, useMemberName, useSkillName } from "./format";
 import { Avatar } from "./parts";
 import { useSkillDetail, useTaskWorkflow } from "./queries";
 
@@ -90,15 +92,17 @@ function advanceRefusal(err: unknown, key: string): unknown {
  */
 export function AdvanceDialog({ detail, connector, open, onOpenChange }: DialogProps & { connector: Connector }) {
   const { task } = detail;
-  const { steps } = useTaskWorkflow(detail.task.project_id);
+  const { workflows, steps } = useTaskWorkflow(detail.task.project_id);
   const skill = useSkillName();
   const [note, setNote] = useState("");
   const to = connector.to_step_id ? steps.find((s) => s.id === connector.to_step_id) : undefined;
   const intoDone = !connector.to_step_id;
+  // Where it goes, as `Bugs › Investigate` when that is another Workflow's Step.
+  const target = advanceTarget(connector, { workflows, steps, from: task.step_id });
   const advance = useMutation({
     mutationFn: () =>
       call(api.POST("/v1/tasks/{task}/advance", { params: { path: { task: task.id } }, body: { outcome: connector.name, note: note.trim() || undefined } })),
-    onSuccess: done(intoDone ? `${task.key} completed` : `${task.key} advanced to ${to?.name ?? "its next Step"}`, onOpenChange),
+    onSuccess: done(intoDone ? `${task.key} completed` : `${task.key} advanced to ${target}`, onOpenChange),
   });
   const pending = detail.proposals.filter((p) => p.state === "pending");
   const publishes = intoDone && skill(task.skill_id) === "skill-review" && pending.length > 0;
@@ -113,7 +117,7 @@ export function AdvanceDialog({ detail, connector, open, onOpenChange }: DialogP
           ? `Publishes ${pending.map((p) => skill(p.skill_id)).join(", ")}`
           : intoDone
             ? `${task.key} ends Done`
-            : `Waits at ${to?.name ?? "the next Step"}${to?.skill_id ? ` for ${skill(to.skill_id)}` : ""}; your Claim ends`
+            : `Waits at ${target}${to?.skill_id ? ` for ${skill(to.skill_id)}` : ""}; your Claim ends`
       }
       submitLabel={intoDone ? "Complete" : "Advance"}
       onSubmit={() => advance.mutate()}
@@ -128,14 +132,14 @@ export function AdvanceDialog({ detail, connector, open, onOpenChange }: DialogP
 /** Completes a Task aimed at its holder (at no Step), or a Parent by its Owner once every Subtask has ended. */
 export function CompleteDialog({ detail, open, onOpenChange }: DialogProps) {
   const { task } = detail;
-  const { steps } = useTaskWorkflow(detail.task.project_id);
+  const { workflows, steps } = useTaskWorkflow(detail.task.project_id);
   const skill = useSkillName();
   const [note, setNote] = useState("");
   const complete = useMutation({
     mutationFn: () => call(api.POST("/v1/tasks/{task}/complete", { params: { path: { task: task.id } }, body: { note: note.trim() || undefined } })),
     onSuccess: done(`${task.key} completed`, onOpenChange),
   });
-  const retro = isParent(task) ? stepWithSkill(steps, "retro", (id) => skill(id)) : undefined;
+  const retro = isParent(task) ? stepWithSkill({ workflows, steps }, "retro", (id) => skill(id)) : undefined;
   return (
     <FormDialog
       open={open}
@@ -183,14 +187,15 @@ export function MoveDialog({ detail, open, onOpenChange }: DialogProps) {
   const now = useNow();
   const name = useMemberName();
   const skill = useSkillName();
-  const { steps } = useTaskWorkflow(detail.task.project_id);
+  const { workflows, steps } = useTaskWorkflow(detail.task.project_id);
   const claim = liveClaim(task, now);
   const [to, setTo] = useState("");
   const [note, setNote] = useState("");
   const target = steps.find((s) => s.id === to);
+  const at = steps.find((s) => s.id === task.step_id);
   const move = useMutation({
     mutationFn: () => call(api.POST("/v1/tasks/{task}/step", { params: { path: { task: task.id } }, body: { step: to, note: note.trim() || undefined } })),
-    onSuccess: done(`${task.key} moved to ${target?.name}`, onOpenChange),
+    onSuccess: done(`${task.key} moved to ${target ? stepTitle(target, workflows, at?.workflow_id) : "its Step"}`, onOpenChange),
   });
   return (
     <FormDialog
@@ -208,17 +213,17 @@ export function MoveDialog({ detail, open, onOpenChange }: DialogProps) {
       <Field label="Step" htmlFor="move-step" help={target ? (target.skill_id ? `Waits there for ${skill(target.skill_id)}` : "A hold: no one is offered it there") : undefined}>
         <Select value={to} onValueChange={setTo}>
           <SelectTrigger id="move-step" className="w-full">
-            <SelectValue placeholder="Choose a Step" />
+            {/* The choice by its place, `Workflow › Step` of several, not the item's text with its Skill. */}
+            <SelectValue placeholder="Choose a Step">{target && stepTitle(target, workflows)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {steps
-              .filter((s) => s.id !== task.step_id)
-              .map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                  <span className="text-xs text-muted-foreground">{s.skill_id ? skill(s.skill_id) : "hold"}</span>
-                </SelectItem>
-              ))}
+            {/* Of several Workflows, each one's Steps under its name, the Task's own first. */}
+            <StepOptions
+              wf={{ workflows, steps }}
+              first={at?.workflow_id}
+              offered={(s) => s.id !== task.step_id}
+              label={(s) => <span className="text-xs text-muted-foreground">{s.skill_id ? skill(s.skill_id) : "hold"}</span>}
+            />
           </SelectContent>
         </Select>
       </Field>
@@ -307,7 +312,7 @@ export function DropTaskDialog({ detail, open, onOpenChange }: DialogProps) {
   const now = useNow();
   const claim = liveClaim(task, now);
   const name = useMemberName();
-  const { steps } = useTaskWorkflow(detail.task.project_id);
+  const { workflows, steps } = useTaskWorkflow(detail.task.project_id);
   const skill = useSkillName();
   const [reason, setReason] = useState("");
   const drop = useMutation({
@@ -315,7 +320,7 @@ export function DropTaskDialog({ detail, open, onOpenChange }: DialogProps) {
     onSuccess: done(`${task.key} dropped`, onOpenChange),
   });
   const openSubtasks = detail.subtasks.filter((s) => s.state === "open");
-  const retro = isParent(task) ? stepWithSkill(steps, "retro", (id) => skill(id)) : undefined;
+  const retro = isParent(task) ? stepWithSkill({ workflows, steps }, "retro", (id) => skill(id)) : undefined;
   const pending = detail.proposals.filter((p) => p.state === "pending");
   return (
     <FormDialog

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Activity, Project } from "@/api/client";
 import { json, mockApi, refuse, type Call } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
-import { ada, bob, builder, detail, me, ops, signedIn, task, web } from "@/test/fixtures";
+import { ada, bob, builder, detail, me, ops, signedIn, task, web, wfId, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { sendIntent } from "./intents";
 
@@ -541,6 +541,36 @@ describe("keys", () => {
     expect(within(search).getAllByRole("option")[0]).toHaveAttribute("aria-selected", "true");
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
+  });
+
+  it("⌘K goes to each Workflow's board of a Project of several", async () => {
+    mockApi({ ...records(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } });
+    renderApp("/projects/WEB/tasks");
+    await screen.findByRole("navigation", { name: "Main" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    const goTo = () =>
+      within(within(search).getByRole("group", { name: "Go to" }))
+        .getAllByRole("option")
+        .map((o) => o.textContent?.replace(/[A-Z]+$/, ""));
+    await waitFor(() => expect(goTo()).toContain("Web › Bugs board"));
+    expect(goTo().filter((n) => n?.endsWith("board"))).toEqual(["Web › Triage board", "Web › Bugs board", "Web › Features board", "Web › Prototypes board", "Web › Support board"]);
+    await userEvent.click(within(search).getByRole("option", { name: "Web › Bugs board" }));
+    expect(await screen.findByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Investigate" })).toBeInTheDocument();
+  });
+
+  it("⌘K shows G B on the board of the Workflow this browser last picked", async () => {
+    localStorage.setItem("darkory.workflow.WEB", wfId.support);
+    mockApi({ ...records(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } });
+    renderApp("/projects/WEB/tasks");
+    await screen.findByRole("navigation", { name: "Main" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    const entry = (name: string) => within(search).getByRole("option", { name: new RegExp(`^${name}`) });
+    await waitFor(() => expect(entry("Web › Support board")).toBeInTheDocument());
+    expect(entry("Web › Support board").textContent).toMatch(/GB$/);
+    expect(entry("Web › Triage board").textContent).toBe("Web › Triage board");
   });
 
   it("⌘K offers no Organisation settings, no New Project and no human Members to a Member who is not an admin", async () => {

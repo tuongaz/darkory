@@ -13,11 +13,13 @@ import {
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { useAllTasks, useDirectory, useRunnerSessions } from "@/api/queries";
+import { useAllTasks, useDirectory, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { useNow } from "@/clock";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
+import { remembered, workflowParam } from "@/components/pickedWorkflow";
+import { workflowsInOrder } from "@/components/workflowLine/model";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Kbd } from "@/components/ui/kbd";
@@ -54,6 +56,11 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
   const { projects: projectsById, projectList, memberList, members: byId } = useDirectory();
   const now = useNow();
   const admin = me.member.admin;
+  // A Project of two or more Workflows has a board for each.
+  const listed = useWorkflow(project?.key).data?.workflows;
+  const workflows = useMemo(() => workflowsInOrder(listed ?? []), [listed]);
+  // G B opens the board on the Workflow this browser last picked, else the first: its entry shows the keys.
+  const boardWorkflow = (project && workflows.find((w) => w.id === remembered(project.key))?.id) ?? workflows[0]?.id;
 
   // An admin opens a Member's settings; another Member finds the agents on the Project's Agents.
   const members = useMemo(
@@ -69,7 +76,15 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
     ...(project
       ? [
           { id: "tasks", title: `${project.name} › Tasks`, icon: <ListIcon />, keys: ["G", "T"], run: go(projectPath(project, "tasks")) },
-          { id: "board", title: `${project.name} › Tasks board`, icon: <KanbanIcon />, keys: ["G", "B"], run: go(projectPath(project, "tasks", "board")) },
+          ...(workflows.length > 1
+            ? workflows.map((w) => ({
+                id: `board ${w.id}`,
+                title: `${project.name} › ${w.name} board`,
+                icon: <KanbanIcon />,
+                ...(w.id === boardWorkflow ? { keys: ["G", "B"] } : {}),
+                run: go(projectPath(project, "tasks", "board", { [workflowParam]: w.id })),
+              }))
+            : [{ id: "board", title: `${project.name} › Tasks board`, icon: <KanbanIcon />, keys: ["G", "B"], run: go(projectPath(project, "tasks", "board")) }]),
           { id: "workflow", title: `${project.name} › Workflow`, icon: <WorkflowIcon />, keys: ["G", "W"], run: go(projectPath(project, "workflow")) },
           { id: "agents", title: `${project.name} › Agents`, icon: <ZapIcon />, keys: ["G", "A"], run: go(projectPath(project, "agents")) },
           { id: "activity", title: `${project.name} › Activity`, icon: <ActivityIcon />, run: go(projectPath(project, "activity")) },

@@ -139,7 +139,7 @@ describe("routeConnectors", () => {
   });
 
   it("routes nothing for a Connector whose ends are missing or the same", () => {
-    const w: Workflow = { steps: [], connectors: [] };
+    const w: Workflow = { workflows: [], steps: [], connectors: [] };
     expect(routesOf(w, toNodes(w, "live")).size).toBe(0);
     expect(routeConnectors(new Map([["a", { x: 0, y: 0, w: 10, h: 10 }]]), [{ id: "c", from: "a", to: "a", label: "x", order: 0 }]).size).toBe(0);
   });

@@ -9,16 +9,25 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "./bind";
 import { DeleteStepDialog } from "./edit/DeleteStep";
+import { DeleteWorkflowDialog } from "./edit/DeleteWorkflow";
 import {
   addOutcome,
   addTaker,
+  addWorkflow,
+  deleteWorkflow,
+  moveStepToWorkflow,
+  moveWorkflowTo,
+  renameWorkflow,
+  reorderWorkflow,
+  stepsIn,
+  workflowsOf,
+  type RecordWorkflow,
   holdersAt,
   removeTaker,
   asksBeforeDelete,
   asLine,
   deleteStep,
   groupsOf,
-  inOrder,
   insertStep,
   makeMain,
   moveStepTo,
@@ -39,15 +48,22 @@ import { StepPanel, type PanelActions } from "./edit/StepPanel";
 import type { DraftEditor } from "./edit/useDraft";
 import { stepParam } from "./StepPeek";
 import { toShort } from "@/lib/shortid";
+import { useEditorWorkflow } from "./edit/useEditorWorkflow";
+import { WorkflowsRail, type RailActions } from "./edit/WorkflowsRail";
 
 /**
- * Settings › a Project › Workflow: the line on top (behind a toggle on a phone), then the Steps as
- * a text list beside the picked Step's panel. None is picked until the address names one or a
+ * Settings › a Project › Workflow: the line on top (behind a toggle on a phone), then the
+ * Workflows as a rail (`?workflow=`, one edited at a time; the rail only reads with one for a
+ * Member who is not an admin), then the picked Workflow's Steps as a text list beside the picked
+ * Step's panel. None is picked until the address names one or a
  * Step is picked — in the list, with ↑/↓, or on the line — which opens it in the panel and puts
  * it in the address (`?step=`); on a phone the panel takes the list's place. Deleting the picked
  * Step picks its neighbour in its part of the list. An admin edits the draft and saves it whole; anyone else reads it. Under it,
  * what Save would be refused, in words, or what `/v1` did refuse.
  */
+/** What the rail does for a Member who is not an admin: nothing but pick. */
+const readRail: Omit<RailActions, "pick"> = { add: () => "", rename: () => {}, settle: () => {}, reorder: () => {}, moveTo: () => {}, remove: () => {} };
+
 export function EditingWorkflow({
   project,
   editor,
@@ -81,8 +97,11 @@ export function EditingWorkflow({
   const fromAddress = params.get(stepParam);
   const asked = (fromAddress && toShort(fromAddress)) ?? focusStep;
   const [opened, setOpened] = useState(!!focusStep);
+  const shown = useEditorWorkflow(project, draft);
+  const workflowId = shown.id;
   const topology = useMemo(() => (draft ? lineTopology(asLine(draft.wf, skillMap)) : undefined), [draft, skillMap]);
-  const order = useMemo(() => (draft ? inOrder(draft.wf.steps) : []), [draft]);
+  // The Steps listed: the picked Workflow's, in its order.
+  const order = useMemo(() => (draft ? stepsIn(draft.wf, workflowId) : []), [draft, workflowId]);
   const picked = order.find((s) => s.id === asked)?.id;
   const pick = useCallback(
     (id: string) => {
@@ -143,6 +162,7 @@ export function EditingWorkflow({
   }, [editor]);
 
   const [deleting, setDeleting] = useState<RecordStep | undefined>();
+  const [deletingWorkflow, setDeletingWorkflow] = useState<RecordWorkflow | undefined>();
 
   if (editor?.query.isError) return <Refusal error={editor.query.error} className="m-6" />;
   if (!draft || !base || !skills) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
@@ -157,7 +177,7 @@ export function EditingWorkflow({
   const insert = (afterId: string | undefined, group: Group) => {
     let made = "";
     apply((d) => {
-      const r = insertStep(d, afterId, group);
+      const r = insertStep(d, afterId, group, workflowId);
       made = r.id;
       return r.draft;
     });
@@ -208,6 +228,11 @@ export function EditingWorkflow({
     reorder: (by) => reorder(step.id, by),
     insertAfter: () => insert(step.id, groups(step)),
     deleteStep: () => remove(step),
+    moveToWorkflow: (to) => {
+      apply((d) => moveStepToWorkflow(d, step.id, to));
+      // The panel follows the Step into the Workflow it joins.
+      shown.pick(to, step.id);
+    },
     addTaker: (member, join) => step.skill_id && apply((d) => addTaker(d, member, step.skill_id!, join)),
     removeTaker: (member) => step.skill_id && apply((d) => removeTaker(d, member, step.skill_id!)),
   };
@@ -216,6 +241,25 @@ export function EditingWorkflow({
   const invalid = !!editor?.tried && !!editor.problem;
   const panelShown = !phone || opened;
   const listShown = !phone || !opened;
+
+  const workflows = workflowsOf(draft.wf);
+  const rail: RailActions | undefined = editor && {
+    pick: shown.pick,
+    add: () => {
+      let made = "";
+      apply((d) => {
+        const r = addWorkflow(d);
+        made = r.id;
+        return r.draft;
+      });
+      return made;
+    },
+    rename: (id, name) => apply((d) => renameWorkflow(d, id, name), `workflow:${id}`),
+    settle: () => editor.settle(),
+    reorder: (id, by) => apply((d) => reorderWorkflow(d, id, by)),
+    moveTo: (id, onto) => apply((d) => moveWorkflowTo(d, id, onto)),
+    remove: (id) => setDeletingWorkflow(draft.wf.workflows.find((w) => w.id === id)),
+  };
 
   const said = editor && ((editor.tried && editor.problem) || !!editor.refused) && (
     <div className="rounded-md border border-danger-border bg-background px-3 py-2 shadow-soft">
@@ -247,13 +291,17 @@ export function EditingWorkflow({
             <span className="font-semibold text-foreground">Preview</span>
           )}
         </div>
-        {(!phone || showLine) && <Preview draft={draft.wf} base={base} skills={skillMap} groups={groups} onStep={pick} className="mx-auto max-w-[1240px] px-2" />}
+        {(!phone || showLine) && (
+          <Preview draft={draft.wf} base={base} skills={skillMap} groups={groups} workflowId={workflowId} onStep={pick} className="mx-auto max-w-[1240px] px-2" />
+        )}
       </section>
+      {(editor || workflows.length > 1) && <WorkflowsRail workflows={workflows} picked={workflowId} readOnly={readOnly} invalid={invalid} actions={rail ?? { ...readRail, pick: shown.pick }} />}
       <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_560px]">
         {listShown && (
           <div className="min-h-0 overflow-auto px-3 pt-3 pb-24 max-md:px-0 max-md:pt-0">
             <StepList
               draft={draft}
+              workflowId={workflowId}
               base={base}
               skills={skills}
               holders={holders}
@@ -284,7 +332,7 @@ export function EditingWorkflow({
               n={n}
               draft={draft}
               base={base}
-              order={order}
+              workflows={workflows}
               skills={skills}
               holders={holders}
               roster={roster}
@@ -303,12 +351,26 @@ export function EditingWorkflow({
         <DeleteStepDialog
           draft={draft}
           step={deleting}
-          order={order}
           skills={skillMap}
           onClose={() => setDeleting(undefined)}
           onDelete={(moveTo, repoint) => {
             removeNow(deleting, moveTo, repoint);
             setDeleting(undefined);
+          }}
+        />
+      )}
+      {deletingWorkflow && editor && (
+        <DeleteWorkflowDialog
+          draft={draft}
+          workflow={deletingWorkflow}
+          onClose={() => setDeletingWorkflow(undefined)}
+          onDelete={(moves, repoint) => {
+            // The rail moves to its neighbour: the Workflow after it, else the one before.
+            const at = workflows.findIndex((w) => w.id === deletingWorkflow.id);
+            const next = workflows[at + 1] ?? workflows[at - 1];
+            apply((d) => deleteWorkflow(d, deletingWorkflow.id, moves, repoint));
+            if (next) shown.pick(next.id);
+            setDeletingWorkflow(undefined);
           }}
         />
       )}

@@ -5,6 +5,7 @@ import { nameMax } from "../edits";
 import { cn } from "@/lib/utils";
 import type { RecordConnector, RecordStep, WorkflowRecord } from "../bind";
 import { wasTarget } from "./draft";
+import { StepOptions } from "./StepOptions";
 
 const DONE = "@done";
 const toValue = (to: string | undefined) => to ?? DONE;
@@ -32,12 +33,14 @@ export function AddOutcome({ step, onAdd }: { step: RecordStep; onAdd: (from: st
   );
 }
 
-/** One outcome: its name, the Step it leads to, where it led before this editing with undo, and remove. */
+/**
+ * One outcome: its name, the Step it leads to (its own Workflow's Steps, then each other
+ * Workflow's under its name, then Done), where it led before this editing with undo, and remove.
+ */
 export function Outcome({
   wf,
   base,
   step,
-  order,
   readOnly,
   invalid,
   actions,
@@ -47,7 +50,6 @@ export function Outcome({
   wf: WorkflowRecord;
   base: WorkflowRecord;
   step: RecordStep;
-  order: RecordStep[];
   readOnly: boolean;
   invalid: boolean;
   actions: OutcomeActions;
@@ -95,13 +97,7 @@ export function Outcome({
           <SelectValue />
         </SelectTrigger>
         <SelectContent position="popper" align="start">
-          {order
-            .filter((s) => s.id !== step.id)
-            .map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.name.trim() || "New Step"}
-              </SelectItem>
-            ))}
+          <StepOptions wf={wf} first={step.workflow_id} offered={(s) => s.id !== step.id} />
           <SelectSeparator />
           <SelectItem value={DONE}>Done</SelectItem>
         </SelectContent>

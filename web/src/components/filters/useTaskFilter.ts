@@ -5,7 +5,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { api, call, type Activity, type Member, type Project, type Skill, type Task, type Workflow } from "@/api/client";
+import { api, call, type Activity, type Member, type Project, type Skill, type Task, type Workflows } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { keys, newestActivity, useDirectory, useLabels, useRunnerSessions, useWorkspaces } from "@/api/queries";
 import { useIntent } from "@/app/intents";
@@ -98,7 +98,7 @@ export function useLegacyTaskFilters(lookup: LegacyLookup | undefined) {
 // ---------------------------------------------------------------- reads
 
 /** Each Project's Workflow, by Project id, read under the same keys as `useWorkflow`. */
-export function useWorkflows(projects: readonly Project[]): { workflows: Map<string, Workflow | undefined>; loaded: boolean } {
+export function useWorkflows(projects: readonly Project[]): { workflows: Map<string, Workflows | undefined>; loaded: boolean } {
   const results = useQueries({
     queries: projects.map((p) => ({
       queryKey: keys.workflow(p.key),
@@ -166,7 +166,7 @@ export type TaskFilter = {
   /** Whether a Task passes every pill. */
   matches: (task: Task) => boolean;
   /** Each of the list's Projects' Workflow, by Project id. */
-  workflows: Map<string, Workflow | undefined>;
+  workflows: Map<string, Workflows | undefined>;
 };
 
 /**

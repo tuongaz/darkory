@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Activity, Member, RunnerSession, Task, TaskDetail, Workflow } from "@/api/client";
+import type { Activity, Member, RunnerSession, Task, TaskDetail, Workflows } from "@/api/client";
 import { ada, bob, builder, detail, engineer, parentTask, retro, skills, step, subtask, task, web, workflow } from "@/test/fixtures";
 import { ageText } from "@/lib/time";
+import { shownWorkflow } from "@/components/pickedWorkflow";
 import { agentNeedsOf, consequence, needsOf, type NeedsInput } from "./needs";
 
 const now = Date.parse("2026-10-08T10:42:05Z");
@@ -11,7 +12,7 @@ const ago = (m: number) => new Date(now - m * 60_000).toISOString();
 const retroAgent: Member = { id: "m-retro", name: "retro", kind: "agent", admin: false, created_at: ago(9000), agent: { command: "claude", args: [], model: "m", env: {}, unattended: true, paused: true } };
 const members = new Map([ada, bob, builder, retroAgent].map((m) => [m.id, m]));
 
-function wf(): Workflow {
+function wf(): Workflows {
   return workflow(web, { retro: { takers: [{ id: retroAgent.id, name: retroAgent.name, kind: "agent" }] } });
 }
 
@@ -141,6 +142,52 @@ describe("Needs you", () => {
     const there = task(2, { aimed_at_id: ada.id, step_id: undefined, project_id: "p-ops", key: "OPS-2", id: "k-ops-2" });
     expect(needsOf(input([here, there])).map((i) => i.task.key)).toEqual(["WEB-1"]);
     expect(needsOf(input([here, there], { projectId: undefined })).map((i) => i.task.key).sort()).toEqual(["OPS-2", "WEB-1"]);
+  });
+});
+
+describe("Needs you on the page of one Workflow of several", () => {
+  // As if WEB's Steps were split: the page shows a Workflow of Build and Review only.
+  const split = (tasks: Task[], id = "wf-shown") => {
+    const graph = workflow(web);
+    return shownWorkflow(id, {
+      workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }],
+      steps: graph.steps.map((s) => ({ ...s, workflow_id: s.id === step.build || s.id === step.review ? "wf-shown" : "wf-other" })),
+    }, tasks);
+  };
+
+  it("lists the Tasks its board shows: a hold or a Retrospective of another Workflow is on its own page", () => {
+    const { open, details, lapses } = heavyDay();
+    // The page reads the Tasks the board reads, so WEB-16's ended Subtasks with them: the last
+    // ended at Review, this Workflow's.
+    const ended = details.get("k-16")!.subtasks.map((s) => (s.state === "done" ? { ...s, workflow_id: "wf-shown", last_step_id: step.review } : { ...s, workflow_id: "wf-other", last_step_id: step.plan }));
+    const read = [...open, ...ended];
+    const items = needsOf(input(open, { details, lapses, shown: split(read) }));
+    // WEB-5 waits at Backlog, WEB-17 and WEB-14 at Retro: not this Workflow's. WEB-13 blocks
+    // WEB-4, at Build; WEB-16 waits with its Owner, where its Subtasks last ended: here.
+    expect(items.map((i) => i.task.key)).toEqual(["WEB-13", "WEB-16"]);
+    // On the other Workflow's page WEB-16 is not listed: a Parent has one place, as on the boards.
+    expect(needsOf(input(open, { details, lapses, shown: split(read, "wf-other") })).map((i) => i.task.key)).not.toContain("WEB-16");
+  });
+
+  it("lists a question beside the Task it blocks, else with its Parent, else on every page", () => {
+    const question = (n: number, extra: Partial<Task> = {}) => task(n, { step_id: undefined, step_since: undefined, aimed_at_id: ada.id, skill_id: undefined, ...extra });
+    const heldUp = (n: number, at: string, by: Task) => task(n, { step_id: at, blocked: true, open_blockers: [{ id: by.id, key: by.key, title: by.title }] });
+    const here = question(30);
+    const there = question(31);
+    const parent = parentTask(40, { open: 1, working: 0, done: 0, dropped: 0 });
+    const under = question(32, { parent_id: parent.id });
+    const sibling = task(41, { step_id: step.plan, parent_id: parent.id });
+    const loose = question(33);
+    const open = [here, heldUp(34, step.review, here), there, heldUp(35, step.plan, there), parent, under, sibling, loose];
+    expect(needsOf(input(open, { shown: split(open) })).map((i) => i.task.key)).toEqual(["WEB-30", "WEB-33"]);
+  });
+
+  it("lists only the agents waiting on its Tasks", () => {
+    const sessionOn = (taskId: string): RunnerSession => ({ task_id: taskId, member_id: builder.id, session_id: "s", host: "h", started_at: ago(3), state: "waiting", state_since: ago(3), log_path: "/l" });
+    const here = task(6, { claim: { id: "c", task_id: "k-6", holder_id: builder.id, session_id: "s", started_at: ago(22) } });
+    const there = task(7, { step_id: step.retro, claim: { id: "c", task_id: "k-7", holder_id: builder.id, session_id: "s", started_at: ago(5) } });
+    const out = agentNeedsOf({ me: ada, open: [here, there], projectId: web.id, shown: split([here, there]), members, sessions: [sessionOn(here.id), sessionOn(there.id)] });
+    expect(out.map((a) => a.task.key)).toEqual(["WEB-6"]);
   });
 });
 

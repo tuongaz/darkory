@@ -2,8 +2,7 @@ import { ChevronDownIcon } from "lucide-react";
 import { useMemo } from "react";
 import { Pill, type PillTone } from "@/components/Pill";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { lineTopology } from "@/components/workflowLine";
-import { asLine, type Change } from "./draft";
+import { startMoves, type Change } from "./draft";
 import type { DraftEditor } from "./useDraft";
 
 const tone: Record<Change["kind"], PillTone> = {
@@ -15,6 +14,10 @@ const tone: Record<Change["kind"], PillTone> = {
   Moved: "secondary",
   "Re-pointed": "claimed",
   Main: "claimed",
+  "Workflow added": "done",
+  "Workflow renamed": "secondary",
+  "Workflow deleted": "blocked",
+  "Workflows reordered": "secondary",
 };
 
 /**
@@ -24,12 +27,7 @@ const tone: Record<Change["kind"], PillTone> = {
 export function ChangesChip({ editor }: { editor: DraftEditor }) {
   const n = editor.changes;
   const skills = useMemo(() => new Map((editor.skills ?? []).map((s) => [s.id, s])), [editor.skills]);
-  const start = useMemo(() => {
-    if (!editor.base || !editor.draft || n === 0) return undefined;
-    const was = lineTopology(asLine(editor.base, skills)).start;
-    const is = lineTopology(asLine(editor.draft.wf, skills)).start;
-    return was === is ? undefined : (editor.draft.wf.steps.find((s) => s.id === is)?.name.trim() ?? null);
-  }, [editor.base, editor.draft, skills, n]);
+  const start = useMemo(() => (editor.base && editor.draft && n > 0 ? startMoves(editor.base, editor.draft.wf, skills) : undefined), [editor.base, editor.draft, skills, n]);
   if (n === 0)
     return (
       <span role="status" aria-label="Editing">
@@ -65,7 +63,7 @@ export function ChangesChip({ editor }: { editor: DraftEditor }) {
             ))}
           </ul>
           <p className="mt-2.5 border-t pt-2 text-xs text-muted-foreground">
-            {start !== undefined && (start ? `New Tasks will start at ${start}. ` : "No Step is left where New Tasks start. ")}Undo: ⌘Z
+            {start && `${start}. `}Undo: ⌘Z
           </p>
         </PopoverContent>
       </Popover>

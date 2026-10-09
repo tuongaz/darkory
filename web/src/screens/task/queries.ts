@@ -80,5 +80,6 @@ export function useObservations(task: string | undefined) {
 export function useTaskWorkflow(projectId: string | undefined) {
   const project = findProject(useProjects().data ?? [], projectId);
   const workflow = useWorkflow(project?.key);
-  return { project, steps: stepsInOrder(workflow.data?.steps ?? []), connectors: workflow.data?.connectors ?? [] };
+  const workflows = workflow.data?.workflows ?? [];
+  return { project, workflows, steps: stepsInOrder({ workflows, steps: workflow.data?.steps ?? [] }), connectors: workflow.data?.connectors ?? [] };
 }

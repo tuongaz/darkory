@@ -12,6 +12,7 @@ import type {
   Task,
   TaskDetail,
   Workflow,
+  Workflows,
   WorkflowStep,
 } from "../api/client";
 import { refuse, type Handler } from "./api";
@@ -45,6 +46,16 @@ export const acceptance = skill("acceptance", { builtin: true });
 export const retro = skill("retro", { builtin: true });
 export const skillReview = skill("skill-review", { builtin: true });
 export const skills: Skill[] = [acceptance, breakdown, engineer, retro, review, skillReview];
+/** The generic Skills `workflowsFixture`'s Steps carry beyond engineer and review. */
+export const triage = skill("triage");
+export const qa = skill("qa");
+export const devops = skill("devops");
+export const design = skill("design");
+export const support = skill("support");
+export const opsSkill = skill("ops");
+export const finance = skill("finance");
+/** `skills` and those of `workflowsFixture`, by name: what a five-Workflow Project's `GET /v1/skills` serves. */
+export const workflowsSkills: Skill[] = [...skills, triage, qa, devops, design, support, opsSkill, finance].sort((a, b) => a.name.localeCompare(b.name));
 
 /** A Skill's version 1, published by ada when it was created. */
 export function skillVersion(s: Skill, version = 1, body = `How ${s.name} is done here.`): SkillVersion {
@@ -64,16 +75,21 @@ export const step = {
   skillReview: "st-skill-review",
 } as const;
 
+/** An id of WEB's as is; another Project's prefixed with its key in lower case (`ops-st-build`, `ops-wf-work`). */
+const ofProject = (p: Project, id: string) => (p.id === web.id ? id : `${p.key.toLowerCase()}-${id}`);
+
 /**
  * `init`'s default Workflow for `p` (decisions.md, Model v2 and W0), with its compact layout:
  * Backlog (hold) · Plan (breakdown) · Build (engineer) · Review (review) · Retro (retro) · Skill
  * review (skill-review), and the eight Connectors. No Task stands anywhere; builder takes Build and
  * ada Review and Skill review, so Plan and Retro have no takers.
  */
-export function workflow(p: Project = web, extra: Partial<Record<keyof typeof step, Partial<WorkflowStep>>> = {}): Workflow {
-  const id = (s: keyof typeof step) => (p.id === web.id ? step[s] : `${p.key.toLowerCase()}-${step[s]}`);
+export function workflow(p: Project = web, extra: Partial<Record<keyof typeof step, Partial<WorkflowStep>>> = {}): Workflows {
+  const id = (s: keyof typeof step) => ofProject(p, step[s]);
+  const work = ofProject(p, "wf-work");
   const s = (key: keyof typeof step, name: string, position: number, x: number, y: number, sk?: Skill, takers: Member[] = []): WorkflowStep => ({
     id: id(key),
+    workflow_id: work,
     name,
     skill_id: sk?.id,
     position,
@@ -93,6 +109,7 @@ export function workflow(p: Project = web, extra: Partial<Record<keyof typeof st
   });
   return {
     project_id: p.id,
+    workflows: [{ id: work, name: "Work", position: 1 }],
     steps: [
       s("backlog", "Backlog", 1, 0, 0),
       s("plan", "Plan", 2, 0, 128, breakdown),
@@ -112,6 +129,116 @@ export function workflow(p: Project = web, extra: Partial<Record<keyof typeof st
       c(8, "skillReview", "retro", "needs changes", 2),
     ],
   };
+}
+
+/** The five Workflows of ADR 0019's thread, by id (WEB's; another Project's prefixed as `step`'s are). */
+export const wfId = {
+  triage: "wf-triage",
+  bugs: "wf-bugs",
+  features: "wf-features",
+  prototypes: "wf-prototypes",
+  support: "wf-support",
+} as const;
+
+/**
+ * The Step ids of `workflowsFixture`, by the `step` convention (`st-` and the name in lower case,
+ * words joined by `-`). Build and Review share their ids with `workflow()`'s Build and Review: the
+ * two fixtures never answer for the same Project in one test.
+ */
+export const wfStep = {
+  triage: "st-triage",
+  investigate: "st-investigate",
+  fix: "st-fix",
+  review: "st-review",
+  verify: "st-verify",
+  build: "st-build",
+  codeReview: "st-code-review",
+  qa: "st-qa",
+  release: "st-release",
+  sketch: "st-sketch",
+  prototypeReview: "st-prototype-review",
+  support: "st-support",
+  awaitingCustomer: "st-awaiting-customer",
+  ops: "st-ops",
+  approve: "st-approve",
+} as const;
+
+type WfStep = keyof typeof wfStep;
+
+/**
+ * A Project of five Workflows, ADR 0019's thread, as `GET …/workflow` serves it: Workflows by
+ * position, Steps by their Workflow's position then their own, Connectors by their Step's order
+ * then their own. Triage [Triage (triage)] · Bugs [Investigate (engineer), Fix (engineer), Review
+ * (review), Verify (qa)] · Features [Build (engineer), Code review (review), QA (qa), Release
+ * (devops)] · Prototypes [Sketch (design), Prototype review (review)] · Support [Support (support),
+ * Awaiting customer (a hold), Ops (ops), Approve (finance)]. Triage's four outcomes cross into the
+ * other four Workflows; every other Connector stays in its Workflow. ada takes every Step with a
+ * Skill; no Task stands anywhere.
+ */
+export function workflowsFixture(p: Project = web, extra: Partial<Record<WfStep, Partial<WorkflowStep>>> = {}): Workflows {
+  const workflows: Workflow[] = (["Triage", "Bugs", "Features", "Prototypes", "Support"] as const).map((name, i) => ({
+    id: ofProject(p, wfId[name.toLowerCase() as keyof typeof wfId]),
+    name,
+    position: i + 1,
+  }));
+  const plan: [workflow: keyof typeof wfId, steps: [WfStep, string, Skill | undefined][]][] = [
+    ["triage", [["triage", "Triage", triage]]],
+    ["bugs", [["investigate", "Investigate", engineer], ["fix", "Fix", engineer], ["review", "Review", review], ["verify", "Verify", qa]]],
+    ["features", [["build", "Build", engineer], ["codeReview", "Code review", review], ["qa", "QA", qa], ["release", "Release", devops]]],
+    ["prototypes", [["sketch", "Sketch", design], ["prototypeReview", "Prototype review", review]]],
+    ["support", [["support", "Support", support], ["awaitingCustomer", "Awaiting customer", undefined], ["ops", "Ops", opsSkill], ["approve", "Approve", finance]]],
+  ];
+  const id = (s: WfStep) => ofProject(p, wfStep[s]);
+  const steps: WorkflowStep[] = plan.flatMap(([w, list], row) =>
+    list.map(([key, name, sk], i) => ({
+      id: id(key),
+      workflow_id: ofProject(p, wfId[w]),
+      name,
+      skill_id: sk?.id,
+      position: i + 1,
+      x: i * 448,
+      y: row * 160,
+      tasks: 0,
+      working: 0,
+      takers: sk ? [{ id: ada.id, name: ada.name, kind: ada.kind }] : [],
+      ...extra[key],
+    })),
+  );
+  const outs: [from: WfStep, name: string, to: WfStep | null][] = [
+    ["triage", "bug", "investigate"],
+    ["triage", "feature", "build"],
+    ["triage", "prototype", "sketch"],
+    ["triage", "question", "support"],
+    ["investigate", "fix", "fix"],
+    ["fix", "ready", "review"],
+    ["review", "pass", "verify"],
+    ["review", "needs changes", "fix"],
+    ["verify", "pass", null],
+    ["verify", "fail", "fix"],
+    ["build", "ready for review", "codeReview"],
+    ["codeReview", "pass", "qa"],
+    ["codeReview", "needs changes", "build"],
+    ["qa", "pass", "release"],
+    ["qa", "fail", "build"],
+    ["release", "released", null],
+    ["sketch", "ready", "prototypeReview"],
+    ["prototypeReview", "approved", null],
+    ["prototypeReview", "redesign", "sketch"],
+    ["support", "answered", null],
+    ["support", "waiting on the customer", "awaitingCustomer"],
+    ["support", "account change", "ops"],
+    ["support", "exception", "approve"],
+    ["ops", "done", "support"],
+    ["approve", "approved", "ops"],
+    ["approve", "declined", "support"],
+  ];
+  const count = new Map<WfStep, number>();
+  const connectors: Connector[] = outs.map(([from, name, to], n) => {
+    const position = (count.get(from) ?? 0) + 1;
+    count.set(from, position);
+    return { id: `${id(from)}-c${n + 1}`, from_step_id: id(from), to_step_id: to ? id(to) : undefined, name, position };
+  });
+  return { project_id: p.id, workflows, steps, connectors };
 }
 
 /** A Label: the Organisation's unless `project_id` is given. */
@@ -177,7 +304,7 @@ export function detail(t: Task, extra: Partial<TaskDetail> = {}): TaskDetail {
   const at = wf.steps.find((s) => s.id === t.step_id);
   return {
     task: t,
-    step: at && { id: at.id, name: at.name, skill_id: at.skill_id, position: at.position, x: at.x, y: at.y },
+    step: at && { id: at.id, workflow_id: at.workflow_id, name: at.name, skill_id: at.skill_id, position: at.position, x: at.x, y: at.y },
     subtasks: [],
     connectors: wf.connectors.filter((c) => c.from_step_id === t.step_id),
     labels: [],

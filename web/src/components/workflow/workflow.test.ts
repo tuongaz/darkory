@@ -124,7 +124,7 @@ describe("the canvas's nodes and edges", () => {
   });
 
   it("draws an empty Workflow as Done and Dropped alone", () => {
-    const empty: Workflow = { steps: [], connectors: [] };
+    const empty: Workflow = { workflows: [], steps: [], connectors: [] };
     expect(toNodes(empty, "edit").map((n) => n.id)).toEqual([DONE_NODE, DROPPED_NODE]);
     expect(tidy(empty)).toEqual({});
   });

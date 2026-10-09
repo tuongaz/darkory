@@ -6,7 +6,8 @@ import { useClaimTrails } from "@/components/filters/useTaskFilter";
 import { useCurrentMe } from "@/me";
 import { liveClaim, taskWorkGlyph } from "@/work";
 import type { WorkGlyph } from "@/lib/work";
-import { blocking, childrenOf, moveProblem, stepsInOrder } from "./derive";
+import { workflowsInOrder } from "@/components/workflowLine/model";
+import { blocking, childrenOf, moveProblem, stepLookups, stepsInOrder } from "./derive";
 import { useProjectTasks } from "./queries";
 
 /** Everything a Project's Tasks views read, joined: the records, lookups by id, and who is looking. */
@@ -25,10 +26,21 @@ export function useTasksModel(project: Project) {
 
   const lookups = useMemo(() => {
     const list = tasks.data ?? [];
-    const steps = stepsInOrder(workflow.data?.steps ?? []);
+    const workflows = workflowsInOrder(workflow.data?.workflows ?? []);
+    const steps = stepsInOrder({ workflows, steps: workflow.data?.steps ?? [] });
+    const workflowName = new Map(workflows.map((w) => [w.id, w.name]));
     return {
+      /** The Project's Workflows in order. */
+      workflows,
       steps,
+      /**
+       * A Step's Workflow, for a label that names it: `Bugs` of Investigate when the Project has
+       * two or more Workflows; none with one, where a Step's name says enough.
+       */
+      workflowOf: (s: Pick<WorkflowStep, "workflow_id">): string | undefined => (workflows.length > 1 ? workflowName.get(s.workflow_id) : undefined),
       stepById: new Map<string, WorkflowStep>(steps.map((s) => [s.id, s])),
+      /** Each Step's place in the Project's order and its Workflow, by id: what places a Task. */
+      ...stepLookups(steps),
       byId: new Map<string, Task>(list.map((t) => [t.id, t])),
       children: childrenOf(list),
       blocks: blocking(list),

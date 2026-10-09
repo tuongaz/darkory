@@ -103,9 +103,13 @@ export function useRouteProject(): Project {
   return project;
 }
 
-/** The address of one of a Project's places; for Tasks, `view` picks the list or the board. */
-export function projectPath(project: Pick<Project, "key">, area: ProjectArea = "tasks", view?: "list" | "board"): string {
-  return `/projects/${encodeURIComponent(project.key)}/${area}${view ? `?view=${view}` : ""}`;
+/**
+ * The address of one of a Project's places; for Tasks, `view` picks the list or the board, and
+ * `params` adds what else the address says (`workflow`, the Workflow a board shows).
+ */
+export function projectPath(project: Pick<Project, "key">, area: ProjectArea = "tasks", view?: "list" | "board", params: Record<string, string> = {}): string {
+  const search = new URLSearchParams(view ? { view, ...params } : params).toString();
+  return `/projects/${encodeURIComponent(project.key)}/${area}${search ? `?${search}` : ""}`;
 }
 
 /** The address of a Project's settings, its General page unless another is named. */

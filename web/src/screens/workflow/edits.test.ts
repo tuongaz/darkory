@@ -43,11 +43,12 @@ describe("binding the record to the canvas", () => {
 
 
 describe("each change as the PUT body", () => {
-  it("sends the whole Workflow as GET gave it: ids, Skills, positions 1…n, places, Connectors by id", () => {
+  it("sends the whole Workflow as GET gave it: its Workflows, ids, Skills, positions 1…n, places, Connectors by id", () => {
     const body = toBody(wf());
+    expect(body.workflows).toEqual([{ id: "wf-work", name: "Work", position: 1 }]);
     expect(body.steps).toHaveLength(6);
-    expect(at(body, "Backlog")).toEqual({ id: step.backlog, name: "Backlog", position: 1, x: 0, y: 0 });
-    expect(at(body, "Build")).toEqual({ id: step.build, name: "Build", skill: engineer.id, position: 3, x: 0, y: 256 });
+    expect(at(body, "Backlog")).toEqual({ id: step.backlog, workflow: "wf-work", name: "Backlog", position: 1, x: 0, y: 0 });
+    expect(at(body, "Build")).toEqual({ id: step.build, workflow: "wf-work", name: "Build", skill: engineer.id, position: 3, x: 0, y: 256 });
     expect(out(body, step.review)).toEqual([
       { id: `${step.review}-c3`, from: step.review, name: "pass", position: 1 },
       { id: `${step.review}-c4`, from: step.review, to: step.build, name: "needs changes", position: 2 },

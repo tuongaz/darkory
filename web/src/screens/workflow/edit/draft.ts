@@ -1,6 +1,7 @@
 import type { Skill } from "@/api/client";
 import { newKey } from "@/api/client";
-import { branchSkills, branchSteps, type LineWorkflow } from "@/components/workflowLine/model";
+import { lineTopology } from "@/components/workflowLine/layout";
+import { branchSkills, branchSteps, inProjectOrder, workflowsInOrder, type LineWorkflow } from "@/components/workflowLine/model";
 import { isNew, newIdPrefix, same, toBody, type RecordConnector, type RecordStep, type SetWorkflowBody, type WorkflowRecord } from "../bind";
 import type { Holder, Roster } from "./holders";
 import { countTasks } from "@/components/workflow/model";
@@ -65,17 +66,53 @@ export function groupsOf(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "na
   return (s) => (held.has(s.id) && placed[s.id] ? placed[s.id] : side.has(s.id) ? "after" : "main");
 }
 
-/** The record as the Workflow line takes it: Skills by name, a Connector into Done with `to` null. */
-export function asLine(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>): LineWorkflow {
+/**
+ * The record as the Workflow line takes it: Skills by name, a Connector into Done with `to` null;
+ * `drawn` names the Workflow the line draws, of a Project of several (every Step when unsaid).
+ */
+export function asLine(wf: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>, drawn?: string): LineWorkflow {
   return {
-    steps: wf.steps.map((s) => ({ id: s.id, name: s.name, position: s.position, ...(s.skill_id ? { skill: { name: skills.get(s.skill_id)?.name ?? "…" } } : {}) })),
+    ...(drawn !== undefined ? { drawn } : {}),
+    workflows: wf.workflows,
+    steps: wf.steps.map((s) => ({ id: s.id, workflow_id: s.workflow_id, name: s.name, position: s.position, ...(s.skill_id ? { skill: { name: skills.get(s.skill_id)?.name ?? "…" } } : {}) })),
     connectors: wf.connectors.map((c) => ({ id: c.id, from: c.from_step_id, to: c.to_step_id ?? null, name: c.name.trim(), position: c.position })),
   };
 }
 
 const fresh = () => `${newIdPrefix}${newKey()}`;
-export const inOrder = (steps: RecordStep[]) => [...steps].sort((a, b) => a.position - b.position);
-const renumber = (steps: RecordStep[]) => steps.map((s, i) => (s.position === i + 1 ? s : { ...s, position: i + 1 }));
+
+/** A named Workflow of the record. */
+export type RecordWorkflow = WorkflowRecord["workflows"][number];
+
+/** The Project's Steps in its order: by their Workflow's position, then their own. */
+export const inOrder = (wf: Pick<WorkflowRecord, "workflows" | "steps">): RecordStep[] => [...wf.steps].sort(inProjectOrder(wf.workflows));
+
+/** One Workflow's Steps in its order. */
+export const stepsIn = (wf: Pick<WorkflowRecord, "workflows" | "steps">, workflowId: string | undefined): RecordStep[] =>
+  inOrder(wf).filter((s) => s.workflow_id === workflowId);
+
+/** The Project's Workflows in their order. */
+export const workflowsOf = (wf: Pick<WorkflowRecord, "workflows">): RecordWorkflow[] => workflowsInOrder(wf.workflows);
+
+/** Numbers the Steps 1, 2, 3… within each Workflow, in the order given. */
+const renumber = (steps: RecordStep[]): RecordStep[] => {
+  const n = new Map<string, number>();
+  return steps.map((s) => {
+    const at = (n.get(s.workflow_id) ?? 0) + 1;
+    n.set(s.workflow_id, at);
+    return s.position === at ? s : { ...s, position: at };
+  });
+};
+
+/** The record with one Workflow's Steps put in the order given, numbered 1, 2, 3…; the others as they are. */
+function withSteps(wf: WorkflowRecord, workflowId: string, list: RecordStep[]): WorkflowRecord {
+  const others = wf.steps.filter((s) => s.workflow_id !== workflowId && !list.some((x) => x.id === s.id));
+  const own = list.map((s, i) => ({ ...s, workflow_id: workflowId, position: i + 1 }));
+  return { ...wf, steps: renumber(inOrder({ workflows: wf.workflows, steps: [...others, ...own] })) };
+}
+
+/** Numbers the Workflows 1, 2, 3… in the order given. */
+const renumberWorkflows = (list: RecordWorkflow[]): RecordWorkflow[] => list.map((w, i) => (w.position === i + 1 ? w : { ...w, position: i + 1 }));
 const outOf = (wf: WorkflowRecord, id: string) => wf.connectors.filter((c) => c.from_step_id === id).sort((a, b) => a.position - b.position);
 
 /** The first outcome out of a Step: the one its row shows, the one the main line follows. */
@@ -91,19 +128,25 @@ export function fromRecord(wf: WorkflowRecord): Draft {
 const withWf = (d: Draft, wf: WorkflowRecord): Draft => ({ ...d, wf });
 
 /**
- * A new Step, unnamed, a hold and with no outcome, right after `after` in the Workflow's order (last
- * with none): placed, not wired. No outcome is pointed into it and none leads out until the admin
- * says so, so a hold that is new reads as Backlog does, moved by hand. It is listed in `group`
- * (the group of the Step it follows) until its Skill places it.
+ * A new Step, unnamed, a hold and with no outcome, right after `after` in its Workflow's order (at
+ * the end of `workflowId`, else of the Project's first Workflow, with none): placed, not wired. No
+ * outcome is pointed into it and none leads out until the admin says so, so a hold that is new
+ * reads as Backlog does, moved by hand. It is listed in `group` (the group of the Step it follows)
+ * until its Skill places it.
  */
-export function insertStep(d: Draft, after: string | undefined, group?: Group): { draft: Draft; id: string } {
+export function insertStep(d: Draft, after: string | undefined, group?: Group, workflowId?: string): { draft: Draft; id: string } {
   const wf = d.wf;
-  const order = inOrder(wf.steps);
-  const index = after ? order.findIndex((s) => s.id === after) + 1 : order.length;
-  const prev = after ? order[index - 1] : undefined;
+  const prev = after ? wf.steps.find((s) => s.id === after) : undefined;
+  // Into the Workflow of the Step it follows; with none, the one named, else the Project's first.
+  // A draft of no Workflow has nowhere to put a Step: it is left as it is.
+  const into = prev?.workflow_id ?? (workflowId && wf.workflows.some((w) => w.id === workflowId) ? workflowId : workflowsOf(wf)[0]?.id);
+  if (!into) return { draft: d, id: "" };
+  const order = stepsIn(wf, into);
+  const index = prev ? order.findIndex((s) => s.id === prev.id) + 1 : order.length;
   const id = fresh();
   const step: RecordStep = {
     id,
+    workflow_id: into,
     name: "",
     position: 0,
     x: prev ? prev.x : 0,
@@ -112,9 +155,8 @@ export function insertStep(d: Draft, after: string | undefined, group?: Group): 
     working: 0,
     takers: [],
   };
-  const steps = renumber([...order.slice(0, index), step, ...order.slice(index)]);
   const placed = group ? { ...d.placed, [id]: group } : d.placed;
-  return { draft: { ...d, wf: { ...wf, steps }, placed }, id };
+  return { draft: { ...d, wf: withSteps(wf, into, [...order.slice(0, index), step, ...order.slice(index)]), placed }, id };
 }
 
 /** Makes an outcome the first out of its Step: the main way on, the one the line follows. The others keep their order after it. */
@@ -275,9 +317,9 @@ function movedInto(d: Draft, id: string): number {
     .reduce((n, [from]) => n + (d.removed?.[from] ?? 0), 0);
 }
 
-/** The outcomes out of other Steps that lead into `id`, in the Workflow's order of their Steps, then their own. */
+/** The outcomes out of other Steps that lead into `id`, in the Project's order of their Steps, then their own. */
 export function inbound(wf: WorkflowRecord, id: string): RecordConnector[] {
-  const at = new Map(inOrder(wf.steps).map((s, i) => [s.id, i]));
+  const at = new Map(inOrder(wf).map((s, i) => [s.id, i]));
   return wf.connectors
     .filter((c) => c.to_step_id === id && c.from_step_id !== id)
     .sort((a, b) => (at.get(a.from_step_id) ?? 0) - (at.get(b.from_step_id) ?? 0) || a.position - b.position);
@@ -315,7 +357,7 @@ export function deleteStep(d: Draft, id: string, moveTo?: string, repoint: Repoi
   const removed = step.tasks > 0 ? { ...d.removed, [id]: step.tasks } : d.removed;
   return {
     ...d,
-    wf: { ...wf, steps: renumber(inOrder(wf.steps.filter((s) => s.id !== id))), connectors: numbered },
+    wf: { ...wf, steps: renumber(inOrder({ workflows: wf.workflows, steps: wf.steps.filter((s) => s.id !== id) })), connectors: numbered },
     moves,
     removed,
   };
@@ -323,7 +365,7 @@ export function deleteStep(d: Draft, id: string, moveTo?: string, repoint: Repoi
 
 /** The Steps carrying a Skill with no outcome: a Task there leaves only when moved by hand. */
 export function deadEnds(wf: WorkflowRecord): RecordStep[] {
-  return inOrder(wf.steps).filter((s) => s.skill_id && !wf.connectors.some((c) => c.from_step_id === s.id));
+  return inOrder(wf).filter((s) => s.skill_id && !wf.connectors.some((c) => c.from_step_id === s.id));
 }
 
 /** Whether deleting a Step asks first: it holds Tasks, other Steps lead into it, or it leaves one with no way out. */
@@ -337,28 +379,102 @@ export function deadEndsAfterDelete(d: Draft, id: string, repoint: Repoint = {})
   return deadEnds(deleteStep(d, id, undefined, repoint).wf).filter((s) => !before.has(s.id));
 }
 
-/** One place earlier (-1) or later (+1) among the Steps of its group, in the Workflow's order. */
+/** One place earlier (-1) or later (+1) among the Steps of its group, in its Workflow's order. */
 export function reorderStep(d: Draft, id: string, by: -1 | 1, groups: (s: RecordStep) => Group): Draft {
-  const order = inOrder(d.wf.steps);
+  const own = d.wf.steps.find((s) => s.id === id);
+  if (!own) return d;
+  const order = stepsIn(d.wf, own.workflow_id);
   const i = order.findIndex((s) => s.id === id);
-  if (i < 0) return d;
   const group = groups(order[i]);
   let j = i + by;
   while (j >= 0 && j < order.length && groups(order[j]) !== group) j += by;
   if (j < 0 || j >= order.length) return d;
   [order[i], order[j]] = [order[j], order[i]];
-  return withWf(d, { ...d.wf, steps: renumber(order) });
+  return withWf(d, withSteps(d.wf, own.workflow_id, order));
 }
 
-/** A Step dragged onto another's place in the Workflow's order: the Steps between shift by one. */
+/** A Step dragged onto another's place in their Workflow's order: the Steps between shift by one. Not across Workflows. */
 export function moveStepTo(d: Draft, id: string, onto: string): Draft {
-  const order = inOrder(d.wf.steps);
+  const own = d.wf.steps.find((s) => s.id === id);
+  if (!own) return d;
+  const order = stepsIn(d.wf, own.workflow_id);
   const from = order.findIndex((s) => s.id === id);
   const to = order.findIndex((s) => s.id === onto);
   if (from < 0 || to < 0 || from === to) return d;
   const [moved] = order.splice(from, 1);
   order.splice(to, 0, moved);
-  return withWf(d, { ...d.wf, steps: renumber(order) });
+  return withWf(d, withSteps(d.wf, own.workflow_id, order));
+}
+
+/** A Step moved into another Workflow, last there; both Workflows' Steps are numbered again. Its outcomes go with it. */
+export function moveStepToWorkflow(d: Draft, id: string, workflowId: string): Draft {
+  const own = d.wf.steps.find((s) => s.id === id);
+  if (!own || own.workflow_id === workflowId || !d.wf.workflows.some((w) => w.id === workflowId)) return d;
+  const from = own.workflow_id;
+  const left = withSteps(d.wf, from, stepsIn(d.wf, from).filter((s) => s.id !== id));
+  return withWf(d, withSteps(left, workflowId, [...stepsIn(left, workflowId), { ...own, workflow_id: workflowId }]));
+}
+
+/** The name a new Workflow is given: the first of "Workflow 2", "Workflow 3"… the Project does not use, ignoring case. */
+export function newWorkflowName(wf: Pick<WorkflowRecord, "workflows">): string {
+  for (let n = 2; ; n++) {
+    const name = `Workflow ${n}`;
+    if (!wf.workflows.some((w) => same(w.name, name))) return name;
+  }
+}
+
+/** A new Workflow, last, with no Step: `newWorkflowName`'s name, until renamed. */
+export function addWorkflow(d: Draft): { draft: Draft; id: string } {
+  const id = fresh();
+  const list = [...workflowsOf(d.wf), { id, name: newWorkflowName(d.wf), position: 0 }];
+  return { draft: withWf(d, { ...d.wf, workflows: renumberWorkflows(list) }), id };
+}
+
+export function renameWorkflow(d: Draft, id: string, name: string): Draft {
+  return withWf(d, { ...d.wf, workflows: d.wf.workflows.map((w) => (w.id === id ? { ...w, name } : w)) });
+}
+
+/** One place earlier (-1) or later (+1) among the Workflows. */
+export function reorderWorkflow(d: Draft, id: string, by: -1 | 1): Draft {
+  const list = workflowsOf(d.wf);
+  const i = list.findIndex((w) => w.id === id);
+  const j = i + by;
+  if (i < 0 || j < 0 || j >= list.length) return d;
+  [list[i], list[j]] = [list[j], list[i]];
+  return withWf(d, { ...d.wf, workflows: renumberWorkflows(list) });
+}
+
+/** A Workflow dragged onto another's place: the Workflows between shift by one. */
+export function moveWorkflowTo(d: Draft, id: string, onto: string): Draft {
+  const list = workflowsOf(d.wf);
+  const from = list.findIndex((w) => w.id === id);
+  const to = list.findIndex((w) => w.id === onto);
+  if (from < 0 || to < 0 || from === to) return d;
+  const [moved] = list.splice(from, 1);
+  list.splice(to, 0, moved);
+  return withWf(d, { ...d.wf, workflows: renumberWorkflows(list) });
+}
+
+/**
+ * Deletes a Workflow with its Steps, as deleting each of them would (`deleteStep`): the open Tasks
+ * at each go to the Step `moves` names for it, and each outcome into them from another Workflow is
+ * removed unless `repoint` leads it elsewhere. The last Workflow stays.
+ */
+export function deleteWorkflow(d: Draft, id: string, moves: Record<string, string> = {}, repoint: Repoint = {}): Draft {
+  if (d.wf.workflows.length < 2 || !d.wf.workflows.some((w) => w.id === id)) return d;
+  const gone = stepsIn(d.wf, id);
+  const out = gone.reduce((x, s) => deleteStep(x, s.id, moves[s.id], repoint), d);
+  const placed = out.placed && Object.fromEntries(Object.entries(out.placed).filter(([k]) => !gone.some((s) => s.id === k)));
+  return { ...out, placed, wf: { ...out.wf, workflows: renumberWorkflows(workflowsOf(out.wf).filter((w) => w.id !== id)) } };
+}
+
+/** The outcomes from other Workflows' Steps that lead into a Workflow's Steps, in the Project's order of their Steps. */
+export function inboundWorkflow(wf: WorkflowRecord, id: string): RecordConnector[] {
+  const at = new Map(inOrder(wf).map((s, i) => [s.id, i]));
+  const own = new Set(stepsIn(wf, id).map((s) => s.id));
+  return wf.connectors
+    .filter((c) => c.to_step_id && own.has(c.to_step_id) && !own.has(c.from_step_id))
+    .sort((a, b) => (at.get(a.from_step_id) ?? 0) - (at.get(b.from_step_id) ?? 0) || a.position - b.position);
 }
 
 /** Where an outcome led when the editing began, when it leads elsewhere now: `{ to }`, undefined `to` being Done. */
@@ -369,32 +485,56 @@ export function wasTarget(server: WorkflowRecord, c: RecordConnector): { to: str
 }
 
 /** One change the draft makes, as the header's list says it: its kind, then what it changed. */
-export type Change = { kind: "Added" | "Deleted" | "Renamed" | "Skill" | "Moved" | "Removed" | "Re-pointed" | "Main"; text: string };
+export type Change = {
+  kind: "Added" | "Deleted" | "Renamed" | "Skill" | "Moved" | "Removed" | "Re-pointed" | "Main" | "Workflow added" | "Workflow renamed" | "Workflow deleted" | "Workflows reordered";
+  text: string;
+};
 
 /**
- * The changes the draft makes to the Workflow it began from, in the order of the Steps: each Step
- * added or deleted (with where its Tasks move), renamed, given another Skill or moved in the order
- * (the fewest moves that put it as it is); each outcome added, removed (the outcomes out of a
- * deleted Step go with it; one into it is a change of its own), renamed, pointed elsewhere, or made
- * the main way on.
+ * The changes the draft makes to the Workflows it began from: each Workflow added, renamed or
+ * deleted, and their order changed (one change); then, in the Project's order of the Steps, each
+ * Step added or deleted (with where its Tasks move), renamed, given another Skill, moved into
+ * another Workflow, or moved in its Workflow's order (the fewest moves that put it as it is); each
+ * outcome added, removed (the outcomes out of a deleted Step go with it; one into it is a change of
+ * its own), renamed, pointed elsewhere, or made the main way on.
  */
 export function describeChanges(server: WorkflowRecord, draft: WorkflowRecord, moves: Record<string, string> = {}, skillName: (id: string | undefined) => string = (id) => id ?? "hold"): Change[] {
   const out: Change[] = [];
   const name = (id: string | undefined) =>
     id === undefined ? "Done" : (draft.steps.find((s) => s.id === id) ?? server.steps.find((s) => s.id === id))?.name.trim() || "New Step";
+  const workflowName = (id: string) => (draft.workflows.find((w) => w.id === id) ?? server.workflows.find((w) => w.id === id))?.name.trim() || "New Workflow";
+  // A Workflow deleted and one added under its name, ignoring case, are one Workflow kept: /v1
+  // gives the one sent without an id the id of the Workflow named alike. Its Steps are replaced.
+  const asServer = sameWorkflows(server, draft);
+  const wasW = new Map(server.workflows.map((w) => [w.id, w]));
+  const wids = new Set(draft.workflows.map((w) => asServer(w.id)));
+  for (const w of workflowsOf(draft)) {
+    const before = wasW.get(asServer(w.id));
+    if (!before) out.push({ kind: "Workflow added", text: workflowName(w.id) });
+    else if (w.name.trim() !== before.name) out.push({ kind: "Workflow renamed", text: `${before.name} → ${workflowName(w.id)}` });
+  }
+  for (const w of workflowsOf(server).filter((x) => !wids.has(x.id))) out.push({ kind: "Workflow deleted", text: w.name });
+  const kept = (list: string[], ids: Set<string>) => list.filter((id) => ids.has(id));
+  const keptNow = kept(
+    workflowsOf(draft).map((w) => asServer(w.id)),
+    new Set(wasW.keys()),
+  );
+  if (keptNow.join() !== kept(workflowsOf(server).map((w) => w.id), wids).join()) out.push({ kind: "Workflows reordered", text: workflowsOf(draft).map((w) => workflowName(w.id)).join(", ") });
+
   const was = new Map(server.steps.map((s) => [s.id, s]));
   const ids = new Set(draft.steps.map((s) => s.id));
   const moved = reordered(server, draft);
-  for (const s of inOrder(draft.steps)) {
+  for (const s of inOrder(draft)) {
     const w = was.get(s.id);
     if (!w) out.push({ kind: "Added", text: name(s.id) });
     else {
       if (s.name.trim() !== w.name) out.push({ kind: "Renamed", text: `${w.name} → ${s.name.trim() || "New Step"}` });
       if (s.skill_id !== w.skill_id) out.push({ kind: "Skill", text: `${name(s.id)} · ${skillName(w.skill_id)} → ${skillName(s.skill_id)}` });
-      if (moved.has(s.id)) out.push({ kind: "Moved", text: name(s.id) });
+      if (asServer(s.workflow_id) !== w.workflow_id) out.push({ kind: "Moved", text: `${name(s.id)} to ${workflowName(s.workflow_id)}` });
+      else if (moved.has(s.id)) out.push({ kind: "Moved", text: name(s.id) });
     }
   }
-  for (const s of inOrder(server.steps).filter((x) => !ids.has(x.id))) {
+  for (const s of inOrder(server).filter((x) => !ids.has(x.id))) {
     const to = moves[s.id];
     out.push({ kind: "Deleted", text: s.tasks > 0 && to ? `${s.name} · its ${countTasks(s.tasks)} move to ${name(to)}` : s.name });
   }
@@ -420,20 +560,59 @@ export function describeChanges(server: WorkflowRecord, draft: WorkflowRecord, m
   return out;
 }
 
+/**
+ * The id /v1 will give each of the draft's Workflows, as far as it is known now: a Workflow sent
+ * without an id takes that of the Workflow named alike, ignoring case, that the draft no longer
+ * carries; any other keeps its own.
+ */
+function sameWorkflows(server: WorkflowRecord, draft: WorkflowRecord): (id: string) => string {
+  const carried = new Set(draft.workflows.map((w) => w.id));
+  const free = server.workflows.filter((w) => !carried.has(w.id));
+  const out = new Map<string, string>();
+  for (const w of draft.workflows) {
+    if (server.workflows.some((x) => x.id === w.id)) continue;
+    const alike = free.find((x) => same(x.name, w.name) && ![...out.values()].includes(x.id));
+    if (alike) out.set(w.id, alike.id);
+  }
+  return (id) => out.get(id) ?? id;
+}
+
+/**
+ * Where New Tasks will start once the draft is saved, when that is not where they start now: "New
+ * Tasks start at Investigate", or that no Step is left for them; undefined when it stays.
+ */
+export function startMoves(server: WorkflowRecord, draft: WorkflowRecord, skills: Map<string, Pick<Skill, "name">>): string | undefined {
+  const was = lineTopology(asLine(server, skills)).start;
+  const is = lineTopology(asLine(draft, skills)).start;
+  if (was === is) return undefined;
+  const step = is && draft.steps.find((s) => s.id === is);
+  return step ? `New Tasks start at ${step.name.trim() || "New Step"}` : "No Step is left where New Tasks start";
+}
+
 /** How many changes the draft makes to the Workflow it began from: `describeChanges`, counted. */
 export function countChanges(server: WorkflowRecord, draft: WorkflowRecord): number {
   return describeChanges(server, draft).length;
 }
 
-/** The Steps moved that turn the old order of the Steps kept into the new: the fewest, those off the longest run kept in order. */
+/**
+ * The Steps moved within their Workflow that turn its old order of the Steps it kept into the new:
+ * the fewest, those off the longest run kept in order. A Step moved into another Workflow is not
+ * one of them; that move is a change of its own.
+ */
 function reordered(server: WorkflowRecord, draft: WorkflowRecord): Set<string> {
-  const ids = new Set(draft.steps.map((s) => s.id));
+  const out = new Set<string>();
+  for (const w of draft.workflows) for (const id of reorderedIn(server, draft, w.id)) out.add(id);
+  return out;
+}
+
+function reorderedIn(server: WorkflowRecord, draft: WorkflowRecord, workflowId: string): Set<string> {
+  const ids = new Set(stepsIn(draft, workflowId).map((s) => s.id));
   const old = new Map(
-    inOrder(server.steps)
+    stepsIn(server, workflowId)
       .filter((s) => ids.has(s.id))
       .map((s, i) => [s.id, i]),
   );
-  const seq = inOrder(draft.steps).filter((s) => old.has(s.id));
+  const seq = stepsIn(draft, workflowId).filter((s) => old.has(s.id));
   // The longest run in order (patience sorting), kept with links back to rebuild it.
   const tails: number[] = [];
   const prev: number[] = [];

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FIXTURES, SOFTWARE } from "./fixtures";
+import { wfId } from "@/test/fixtures";
+import { FIVE, FIXTURES, PAGE, PARENT, SOFTWARE } from "./fixtures";
 import { crossings, densityFor, horizontal, lineTopology, NAME_TOP, TOKEN_HALO, type Density, type Horizontal, type LineTopology } from "./layout";
 import { overlaps } from "./place";
 import { HAND_LABEL, gapHint } from "./words";
@@ -11,10 +12,6 @@ import { HAND_LABEL, gapHint } from "./words";
  * only ever drawn when its every box is clear.
  */
 
-/** The line's own width on the Workflow page at each window width (the sidebar and padding off), and in a Parent's card. */
-const PAGE = { 1024: 744, 1280: 1000, 1440: 1160, 1920: 1640 } as const;
-const PARENT = { 1024: 506, 1280: 762, 1440: 786, 1920: 786 } as const;
-
 /** What WorkflowLine draws at a width: the density it picks, and whether the line stays across. */
 function drawn(t: LineTopology, width: number, compact = false): { h?: Horizontal; density: Density } {
   const at = (d: Density) => horizontal(t, { width, density: d, heads: compact ? "compact" : d, column: 0, noBranch: true });
@@ -24,8 +21,11 @@ function drawn(t: LineTopology, width: number, compact = false): { h?: Horizonta
   return { density, h: horizontal(t, { width, density, heads: compact ? "compact" : density, column: density === "tokens" ? 66 : 18, holdColumn: () => 36 }) };
 }
 
+/** Each of ADR 0019's five Workflows drawn alone: Triage with its four exits, the others each with its entry. */
+const DRAWN = Object.fromEntries(Object.entries(wfId).map(([name, id]) => [`five: ${name}`, FIVE(id)]));
+
 describe("no two words, chips or heads meet, on any Workflow at any width", () => {
-  for (const [name, wf] of Object.entries(FIXTURES)) {
+  for (const [name, wf] of Object.entries({ ...FIXTURES, ...DRAWN })) {
     const t = lineTopology(wf);
     for (const [screen, width] of [...Object.entries(PAGE).map(([s, w]) => [`page at ${s}`, w] as const), ...Object.entries(PARENT).map(([s, w]) => [`a Parent at ${s}`, w] as const)]) {
       it(`${name}, ${screen}`, () => {
@@ -47,7 +47,7 @@ describe("no two words, chips or heads meet, on any Workflow at any width", () =
 });
 
 describe("between the screens too", () => {
-  for (const [name, wf] of Object.entries(FIXTURES)) {
+  for (const [name, wf] of Object.entries({ ...FIXTURES, ...DRAWN })) {
     it(`${name}, every width from 480 to 1800`, () => {
       const t = lineTopology(wf);
       for (let width = 480; width <= 1800; width += 13) {
@@ -109,5 +109,21 @@ describe("the software Workflow (14 Steps)", () => {
     expect(drawn(t, PAGE[1440]).h).toBeDefined();
     expect(drawn(t, PAGE[1920]).h).toBeDefined();
     expect(drawn(t, PARENT[1440]).h).toBeUndefined();
+  });
+});
+
+describe("a Workflow drawn alone with its exits (Triage of five)", () => {
+  const t = lineTopology(FIVE(wfId.triage));
+
+  it("draws each exit as a chip, a word the no-overlap proof sees, at every width the page gives it", () => {
+    for (const width of Object.values(PAGE)) {
+      const h = drawn(t, width).h;
+      if (!h) throw new Error(`Triage runs down the page at ${width}`);
+      const exits = h.boxes.filter((b) => b.kind === "chip" && t.exits.some((e) => e.text === b.text));
+      expect(exits.map((b) => b.text), String(width)).toEqual(t.exits.map((e) => e.text));
+      expect(overlaps(h.boxes), String(width)).toEqual([]);
+      expect(h.clashes, String(width)).toEqual([]);
+      expect(crossings(h.polylines), String(width)).toEqual([]);
+    }
   });
 });

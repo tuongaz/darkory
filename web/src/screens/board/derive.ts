@@ -2,43 +2,48 @@
 // (a Step, with a Member, or ended), the order and grouping of the list, the board's columns, the
 // marks a row or card carries, who may move a Task by hand and what a refused move says. Pure, so
 // Vitest checks them without rendering.
-import type { Connector, Label, Member, Project, Task, TaskBrief, WorkflowStep } from "@/api/client";
+import type { Connector, Label, Member, Project, Task, TaskBrief, Workflow as WorkflowName, WorkflowStep } from "@/api/client";
 import type { ClaimTrail } from "@/components/filters/taskAxes";
+import { inProjectOrder, startStep, workflowsInOrder, type OrderedStep } from "@/components/workflowLine/model";
 import { isOnReportingLine } from "@/me";
 import { kindLabel, liveClaim } from "@/work";
 
-/** The builtin Skills Darkory files its own Subtasks at: never where a Task lands by default. */
-export const ownSubtaskSkills = ["breakdown", "acceptance", "retro", "skill-review"] as const;
+/** A Project's Workflows and Steps, as `GET …/workflow` serves them: what the Project's order reads. */
+export type StepsOf<S extends OrderedStep> = { workflows: readonly Pick<WorkflowName, "id" | "position">[]; steps: readonly S[] };
 
-export function stepsInOrder<S extends Pick<WorkflowStep, "position">>(steps: readonly S[]): S[] {
-  return [...steps].sort((a, b) => a.position - b.position);
+/** The Project's Steps in its order: by their Workflow's position, then their own (`inProjectOrder`). */
+export function stepsInOrder<S extends OrderedStep>(workflow: StepsOf<S>): S[] {
+  return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
 }
 
 /**
- * The Step a Task filed without one starts at, as `/v1` chooses it: the first Step carrying a
- * Skill other than those Darkory files its own Subtasks at (Build in the default Workflow); else
- * the first Step carrying any Skill; else the first Step. None in a Workflow with no Steps.
+ * The Step a Task filed without one starts at, as `/v1` chooses it: the line's `startStep`, the
+ * first Step in the Project's order carrying a Skill other than those Darkory files its own
+ * Subtasks at (Build in the default Workflow); else the first carrying any Skill; else the first
+ * Step. None in a Project with no Steps.
  */
-export function defaultFileStep<S extends Pick<WorkflowStep, "position" | "skill_id">>(
-  steps: readonly S[],
+export function defaultFileStep<S extends OrderedStep & Pick<WorkflowStep, "id" | "name" | "skill_id">>(
+  workflow: StepsOf<S>,
   skillName: (id: string) => string | undefined,
 ): S | undefined {
-  const ordered = stepsInOrder(steps);
-  const own: readonly string[] = ownSubtaskSkills;
-  return (
-    ordered.find((s) => s.skill_id && !own.includes(skillName(s.skill_id) ?? "")) ??
-    ordered.find((s) => s.skill_id) ??
-    ordered[0]
-  );
+  const steps = workflow.steps.map((s) => ({
+    id: s.id,
+    workflow_id: s.workflow_id,
+    name: s.name,
+    position: s.position,
+    ...(s.skill_id ? { skill: { name: skillName(s.skill_id) ?? "" } } : {}),
+  }));
+  const id = startStep({ workflows: workflow.workflows.map((w) => ({ id: w.id, name: "", position: w.position })), steps, connectors: [] });
+  return workflow.steps.find((s) => s.id === id);
 }
 
-/** The Step carrying the builtin Skill `name` (breakdown, acceptance, retro), if the Workflow has one. */
-export function stepWithSkill<S extends Pick<WorkflowStep, "position" | "skill_id">>(
-  steps: readonly S[],
+/** The first Step, in the Project's order, carrying the builtin Skill `name` (breakdown, acceptance, retro), if any. */
+export function stepWithSkill<S extends OrderedStep & Pick<WorkflowStep, "skill_id">>(
+  workflow: StepsOf<S>,
   name: string,
   skillName: (id: string) => string | undefined,
 ): S | undefined {
-  return stepsInOrder(steps).find((s) => s.skill_id && skillName(s.skill_id) === name);
+  return stepsInOrder(workflow).find((s) => s.skill_id && skillName(s.skill_id) === name);
 }
 
 /** Whether the Task has Subtasks: a Parent, at no Step, never claimed. */
@@ -155,6 +160,7 @@ export type Group =
   | { by: "none"; id: "all"; tasks: Task[] };
 
 export type GroupContext = {
+  /** The Project's Steps in its order (`stepsInOrder`). */
   steps: readonly WorkflowStep[];
   children: Map<string, Task[]>;
   members: Map<string, Member>;
@@ -189,10 +195,10 @@ const byName = (m: Map<string, { name: string }>, id: string) => m.get(id)?.name
 export function groupTasks(rows: readonly Task[], by: GroupBy, ctx: GroupContext): Group[] {
   if (by === "none") return rows.length ? [{ by, id: "all", tasks: [...rows] }] : [];
   if (by === "step") {
-    const position = new Map(ctx.steps.map((s) => [s.id, s.position]));
+    const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
     const places = bucket(rows, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
     const groups: Group[] = [];
-    for (const s of stepsInOrder(ctx.steps)) {
+    for (const s of ctx.steps) {
       const tasks = places.get(`step:${s.id}`);
       if (tasks) groups.push({ by: "step", id: s.id, step: s, tasks });
     }
@@ -246,25 +252,186 @@ export type Column =
   | { kind: "with"; id: string; memberId: string; member: Member | undefined; tasks: Task[] }
   | { kind: "done" | "dropped"; id: "done" | "dropped"; tasks: Task[]; collapsed: boolean };
 
+/** What says which Workflow's board a Task at no Step shows on: the Project's Workflows and Steps, and the Tasks around it. */
+export type BoardContext = {
+  workflows: readonly Pick<WorkflowName, "id" | "position">[];
+  /** The Project's Steps in its order (`stepsInOrder`). */
+  steps: readonly Pick<WorkflowStep, "id" | "workflow_id">[];
+  children: Map<string, Task[]>;
+  /** Every Task of the Project the page has, by id, filtered or not. */
+  byId: Map<string, Task>;
+  /** The open Tasks each Task blocks (`blocking`). */
+  blocks: Map<string, TaskBrief[]>;
+  /** Each Step's place in the Project's order, by id (`stepLookups`). */
+  position: Map<string, number>;
+  /** Each Step's Workflow, by the Step's id (`stepLookups`). */
+  stepWorkflow: Map<string, string>;
+};
+
+/** What a BoardContext reads off the Project's Steps in its order, built once: each Step's place and its Workflow. */
+export function stepLookups(steps: readonly Pick<WorkflowStep, "id" | "workflow_id">[]): Pick<BoardContext, "position" | "stepWorkflow"> {
+  return { position: new Map(steps.map((s, i) => [s.id, i])), stepWorkflow: new Map(steps.map((s) => [s.id, s.workflow_id])) };
+}
+
+/** The Project's first Workflow by position. */
+const firstWorkflow = (workflows: BoardContext["workflows"]) => workflowsInOrder(workflows)[0]?.id;
+
 /**
- * The board's columns: every Step in the Workflow's order (empty ones too, so a card can be
- * dragged there), then "With <Member>" for each Member an open card is aimed at, then Done, then
- * Dropped, each collapsed to its header unless the Display shows it. The cards are the Tasks with
- * no Subtasks; Parents, when the Display shows them, stand where `placeOf` says.
+ * The Workflow whose board an ended Task's card lands on: the one it ended in (`workflow_id`); for
+ * a Parent, which ends at no Step, the one its most recently ended Subtask ended in, counting only
+ * the Subtasks that ended at a Step at or before the Parent did (a Retrospective, filed when the
+ * Parent ends, ends after it and says nothing of where the work ended). Subtasks ended together (a
+ * cascade drop) go to the least advanced in the Project's order, so the Parent stays where it was.
+ * A Task aimed at a Member, which ends at no Step, lands where its Parent does (`withWorkflowsOf`).
+ * Else, as for a Task whose last Step was since deleted, the Project's first Workflow.
+ */
+export function endedWorkflowOf(
+  task: Pick<Task, "id" | "workflow_id" | "ended_at" | "parent_id" | "aimed_at_id">,
+  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "position" | "stepWorkflow" | "byId">>,
+): string | undefined {
+  const known = new Set(ctx.workflows.map((w) => w.id));
+  if (task.workflow_id && known.has(task.workflow_id)) return task.workflow_id;
+  const last = lastEndedSubtask(task, ctx);
+  if (last) return last.workflow_id;
+  const { byId, position, stepWorkflow } = ctx;
+  if (task.aimed_at_id && task.parent_id && byId && position && stepWorkflow) {
+    const parent = byId.get(task.parent_id);
+    const at = parent && parentWorkflow(parent, { workflows: ctx.workflows, children: ctx.children, byId, position, stepWorkflow });
+    if (at) return at;
+  }
+  return firstWorkflow(ctx.workflows);
+}
+
+/**
+ * The Subtask of `task` that ended last at a Step of a Workflow the Project has, at or before
+ * `task` ended (any, while `task` is open or undated); ties to the least advanced in the
+ * Project's order (its `last_step_id`, else its Workflow's place).
+ */
+function lastEndedSubtask(
+  task: Pick<Task, "id" | "ended_at">,
+  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "position">>,
+): Task | undefined {
+  const rank = new Map(ctx.workflows.map((w) => [w.id, w.position]));
+  const until = task.ended_at ? time(task.ended_at) : Number.POSITIVE_INFINITY;
+  const ended = (ctx.children.get(task.id) ?? []).filter((s) => s.state !== "open" && !!s.workflow_id && rank.has(s.workflow_id) && time(s.ended_at) <= until);
+  if (ended.length === 0) return undefined;
+  const advance = (s: Task) => [rank.get(s.workflow_id!)!, s.last_step_id ? (ctx.position?.get(s.last_step_id) ?? -1) : -1] as const;
+  const lessAdvanced = (a: Task, b: Task) => {
+    const [wa, sa] = advance(a);
+    const [wb, sb] = advance(b);
+    return wa - wb || sa - sb;
+  };
+  return ended.reduce((a, b) => {
+    const by = time(b.ended_at) - time(a.ended_at);
+    if (by !== 0) return by > 0 ? b : a;
+    return lessAdvanced(b, a) < 0 ? b : a;
+  });
+}
+
+/** The Workflow a Parent's card is on: an open one's least advanced Subtask's Step's, an ended one's `endedWorkflowOf`; none while it waits with a Member. */
+function parentWorkflow(parent: Task, ctx: Pick<BoardContext, "workflows" | "children" | "byId" | "position" | "stepWorkflow">): string | undefined {
+  if (parent.state !== "open") return endedWorkflowOf(parent, ctx);
+  const place = placeOf(parent, ctx);
+  return place.kind === "step" ? ctx.stepWorkflow.get(place.stepId) : undefined;
+}
+
+/**
+ * The Workflows whose boards show an open Task waiting with a Member at no Step, in "With
+ * <Member>"; undefined for every board. A Task aimed at a Member (a question) shows beside the
+ * Tasks it blocks, on the boards of their Workflows; blocking none, on its Parent's; else on every
+ * board. A Parent waiting with a Member shows where its Subtasks last ended, else on every board.
+ */
+export function withWorkflowsOf(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
+  if (isParent(task)) {
+    const last = lastEndedSubtask({ id: task.id, ended_at: undefined }, ctx);
+    return last ? new Set([last.workflow_id!]) : undefined;
+  }
+  const held = new Set<string>();
+  for (const b of ctx.blocks.get(task.id) ?? []) {
+    const t = ctx.byId.get(b.id);
+    const at = t?.step_id ? ctx.stepWorkflow.get(t.step_id) : undefined;
+    if (at) held.add(at);
+  }
+  if (held.size > 0) return held;
+  const parent = task.parent_id ? ctx.byId.get(task.parent_id) : undefined;
+  const at = parent && parentWorkflow(parent, ctx);
+  return at ? new Set([at]) : undefined;
+}
+
+/**
+ * The Workflows whose board and Workflow page show a Task; undefined for every one. The board and
+ * the page read it alike, so a Task is found in one place:
+ *
+ * - an open Task at a Step: that Step's Workflow;
+ * - an open Parent: the Workflow of its least advanced open Subtask's Step (`placeOf`); waiting
+ *   with a Member, where its Subtasks last ended (`withWorkflowsOf`);
+ * - an ended Task, a Parent included: the Workflow it ended in (`endedWorkflowOf`);
+ * - an open Task aimed at a Member: the Workflows of the Tasks it blocks, else its Parent's, else
+ *   every one (`withWorkflowsOf`).
+ */
+export function listedOn(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
+  if (task.state !== "open") {
+    const at = endedWorkflowOf(task, ctx);
+    return at ? new Set([at]) : undefined;
+  }
+  const place = placeOf(task, ctx);
+  if (place.kind === "step") {
+    const at = ctx.stepWorkflow.get(place.stepId);
+    return new Set(at ? [at] : []);
+  }
+  return withWorkflowsOf(task, ctx);
+}
+
+/**
+ * What places a Task at no Step, from the Project's Workflows and Steps (its Steps in its order,
+ * `stepsInOrder`) and the Tasks a page has: the open ones, and any ended ones it read.
+ */
+export function boardContext(graph: Pick<BoardContext, "workflows" | "steps">, tasks: readonly Task[]): BoardContext {
+  return {
+    workflows: graph.workflows,
+    steps: graph.steps,
+    ...stepLookups(graph.steps),
+    children: childrenOf(tasks),
+    byId: new Map(tasks.map((t) => [t.id, t])),
+    blocks: blocking(tasks),
+  };
+}
+
+/**
+ * The board of one Workflow (`workflow`): its Steps in order (empty ones too, so a card can be
+ * dragged there), then "With <Member>" for each Member an open card shown here is aimed at
+ * (`withWorkflowsOf`), then Done, then Dropped, each collapsed to its header unless the Display
+ * shows it. The cards are the Tasks with no Subtasks; Parents, when the Display shows them, stand
+ * where `placeOf` says, so an open one shows on the board of its least advanced Subtask's Step
+ * only. Done and Dropped hold the Tasks that ended in this Workflow (`endedWorkflowOf`).
  */
 export function boardColumns(
   tasks: readonly Task[],
-  ctx: Pick<GroupContext, "steps" | "children" | "members"> & { display: Pick<Display, "showDone" | "showDropped" | "showParents"> },
+  ctx: Pick<GroupContext, "steps" | "children" | "members"> &
+    BoardContext & {
+      workflow: string;
+      display: Pick<Display, "showDone" | "showDropped" | "showParents">;
+    },
 ): Column[] {
-  const position = new Map(ctx.steps.map((s) => [s.id, s.position]));
+  // Where a Parent stands reads the whole Project's order; the columns are this Workflow's.
   const cards = tasks.filter((t) => !isParent(t) || ctx.display.showParents);
-  const places = bucket(cards, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
-  const columns: Column[] = stepsInOrder(ctx.steps).map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
-  const withIds = [...places.keys()].filter((k) => k.startsWith("with:")).map((k) => k.slice(5));
-  withIds.sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
-  for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: places.get(`with:${id}`)! });
-  columns.push({ kind: "done", id: "done", tasks: places.get("done") ?? [], collapsed: !ctx.display.showDone });
-  columns.push({ kind: "dropped", id: "dropped", tasks: places.get("dropped") ?? [], collapsed: !ctx.display.showDropped });
+  const places = bucket(cards, (t) => placeKey(placeOf(t, ctx)));
+  const columns: Column[] = ctx.steps
+    .filter((s) => s.workflow_id === ctx.workflow)
+    .map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
+  // Who waits with a Member and what ended show where `listedOn` places them: the page's rules too.
+  const isHere = (t: Task) => listedOn(t, ctx)?.has(ctx.workflow) ?? true;
+  const withHere = new Map<string, Task[]>();
+  for (const [k, list] of places) {
+    if (!k.startsWith("with:")) continue;
+    const here = list.filter(isHere);
+    if (here.length > 0) withHere.set(k.slice(5), here);
+  }
+  const withIds = [...withHere.keys()].sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
+  for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: withHere.get(id)! });
+  const ended = (state: "done" | "dropped") => (places.get(state) ?? []).filter(isHere);
+  columns.push({ kind: "done", id: "done", tasks: ended("done"), collapsed: !ctx.display.showDone });
+  columns.push({ kind: "dropped", id: "dropped", tasks: ended("dropped"), collapsed: !ctx.display.showDropped });
   return columns;
 }
 

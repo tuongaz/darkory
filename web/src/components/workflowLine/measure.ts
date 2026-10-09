@@ -107,16 +107,17 @@ export function canvasMeasure(): Measure | undefined {
 
 /**
  * A text broken onto at most two lines at the space that makes its wider line narrowest; one line
- * when it has no space.
+ * when it has no space, or none `breaks` allows (it is asked of each pair of lines).
  */
-export function twoLines(text: string, font: Font, measure: Measure): { lines: string[]; width: number } {
+export function twoLines(text: string, font: Font, measure: Measure, breaks: (first: string, second: string) => boolean = () => true): { lines: string[]; width: number } {
   const words = text.split(" ");
   if (words.length < 2) return { lines: [text], width: measure(text, font) };
   let best = { lines: [text], width: Infinity };
   for (let k = 1; k < words.length; k++) {
     const lines = [words.slice(0, k).join(" "), words.slice(k).join(" ")];
+    if (!breaks(lines[0], lines[1])) continue;
     const width = Math.max(...lines.map((l) => measure(l, font)));
     if (width < best.width) best = { lines, width };
   }
-  return best;
+  return best.width === Infinity ? { lines: [text], width: measure(text, font) } : best;
 }

@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useSkills, useTasks, useWorkflow } from "@/api/queries";
+import { remember, usePickedWorkflow, workflowParam } from "@/components/pickedWorkflow";
+import { WorkflowChip } from "@/components/WorkflowChip";
 import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
@@ -17,6 +19,8 @@ import { useLineData } from "@/components/workflowLine";
 import { taskPath as taskPagePath } from "@/screens/task/format";
 import { fromRecord } from "./edit/draft";
 import { useDraftEditor } from "./edit/useDraft";
+import { useEditorWorkflow } from "./edit/useEditorWorkflow";
+import { same } from "./bind";
 import { EditingWorkflow } from "./Editing";
 import { LiveWorkflow } from "./Live";
 import { useLineView, useScopeParam } from "./lineView";
@@ -27,9 +31,10 @@ import { ChangesChip } from "./edit/Changes";
 import { toShort } from "@/lib/shortid";
 
 /**
- * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; `?scope=`
- * narrows it to the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the
- * line for the Blocking among its Tasks or a list.
+ * /projects/:key/workflow: the Project's Workflow, live, as one line with its panels; of a Project
+ * of several, one Workflow at a time, picked by the chip in the breadcrumb (`?workflow=`, shared
+ * with the board). `?scope=` narrows it to the Tasks with no Parent, a Parent's Subtasks or one
+ * Task, `?view=` swaps the line for the Blocking among its Tasks or a list.
  */
 export function WorkflowPage() {
   const project = useRouteProject();
@@ -38,13 +43,32 @@ export function WorkflowPage() {
   const [scope, setScope] = useScopeParam();
   const tasks = useTasks({ project: project.key, state: "open" }).data;
   const filter = useTaskFilter({ projects: [project], tasks });
-  const { data } = useLineData(project.key, scope, filter.matches);
-  const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined);
+  const workflows = useWorkflow(project.key).data?.workflows;
+  const picked = usePickedWorkflow(project, workflows);
+  const { data } = useLineData(project.key, picked.id, scope, filter.matches);
+  const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.shown);
+  // A Task scoped to stays in scope across a pick only where it is listed, as on the board; a
+  // Parent also where one of its open Subtasks is on the line, as the scope menu offers it.
+  const pick = (next: string) => {
+    const scope = data?.scope;
+    const scoped = scope && (scope.kind === "parent" || scope.kind === "task") ? scope.id : undefined;
+    const at = scoped ? data?.shown?.of(scoped) : undefined;
+    const workflowOf = new Map((data?.facts.steps ?? []).map((s) => [s.id, s.workflow_id]));
+    const working = scope?.kind === "parent" && !!data?.all.some((t) => t.parentId === scope.id && !!t.stepId && workflowOf.get(t.stepId) === next);
+    picked.set(next, at && !at.has(next) && !working ? { also: (p) => p.delete("scope") } : undefined);
+  };
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
     <>
       <TopBar
-        crumbs={[projectCrumb(project), { label: "Workflow" }, ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : [])]}
+        crumbs={[
+          projectCrumb(project),
+          // The Workflow drawn, at every width: on a phone too it is the way to another.
+          ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={pick} />, whole: true }] : []),
+          // Beside the chip on a phone, the page's name gives its room to the Project and the chip.
+          { label: "Workflow", wide: !!workflows && workflows.length > 1 },
+          ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
+        ]}
         view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
         actions={
           <>
@@ -70,7 +94,7 @@ export function WorkflowPage() {
       />
       <Content className="flex flex-col overflow-hidden">
         {view === "line" && <FilterChipRow {...filter.bar} />}
-        <LiveWorkflow project={project} view={view} scope={scope} onView={setView} filter={filter.matches} />
+        <LiveWorkflow project={project} workflowId={picked.id} view={view} scope={scope} onView={setView} filter={filter.matches} />
       </Content>
     </>
   );
@@ -120,11 +144,18 @@ function EditingPage() {
   });
   const [discarding, setDiscarding] = useState(false);
   const live = projectPath(project, "workflow");
+  const shown = useEditorWorkflow(project, editor.draft);
   const save = async () => {
-    if (await editor.save()) {
-      toast(`Saved ${project.name}'s Workflow`);
-      navigate(live);
-    }
+    // The Workflow edited, by name: a new one has its id only once saved.
+    const editing = editor.draft?.wf.workflows.find((w) => w.id === shown.id)?.name;
+    const reply = await editor.save();
+    if (!reply) return;
+    toast(`Saved ${project.name}'s Workflow`);
+    const saved = editing === undefined ? undefined : reply.workflows.find((w) => same(w.name, editing));
+    if (saved && reply.workflows.length > 1) {
+      remember(project.key, saved.id);
+      navigate(projectPath(project, "workflow", undefined, { [workflowParam]: saved.id }));
+    } else navigate(live);
   };
   const n = editor.changes;
   return (

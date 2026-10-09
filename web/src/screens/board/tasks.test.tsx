@@ -3,8 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockApi, refuse } from "@/test/api";
 import { FakeEventSource } from "@/test/eventSource";
-import { bob, builder, step, workflow } from "@/test/fixtures";
+import { bob, builder, parentTask, step, subtask, task, wfId, wfStep, workflow, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
+import { toShort } from "@/lib/shortid";
 import { cart, copy, payment, projectTasks, receipt, routes } from "./testData";
 
 const row = (name: RegExp) => screen.findByRole("link", { name });
@@ -311,5 +312,167 @@ describe("Tasks, board", () => {
     act(() => FakeEventSource.latest().open());
     act(() => FakeEventSource.latest().emit("activity", { seq: 10, kind: "workflow.changed", subject_type: "workflow", subject_id: "p-web", at: new Date().toISOString(), payload: {} }, 10));
     expect(await within(main()).findByRole("region", { name: "Code review" })).toBeInTheDocument();
+  });
+});
+
+describe("Tasks of a Project of several Workflows", () => {
+  afterEach(() => vi.restoreAllMocks());
+  const at = (n: number, title: string, stepId: string, workflowId: string) => task(n, { title, step_id: stepId, workflow_id: workflowId });
+  const done = (n: number, title: string, workflowId: string | undefined) =>
+    task(n, { title, state: "done", step_id: undefined, step_since: undefined, workflow_id: workflowId, ended_at: "2026-10-03T09:00:00Z" });
+  const parent = parentTask(5, { open: 0, working: 0, done: 1, dropped: 0 }, { title: "Billing revamp", state: "done", ended_at: "2026-10-04T09:00:00Z" });
+  const tasks = [
+    at(1, "Sort the inbox", wfStep.triage, wfId.triage),
+    at(2, "Crash on save", wfStep.investigate, wfId.bugs),
+    done(3, "Fixed login", wfId.bugs),
+    at(4, "Refund request", wfStep.support, wfId.support),
+    parent,
+    subtask(6, parent, { title: "Charge twice", state: "done", step_id: undefined, step_since: undefined, workflow_id: wfId.bugs, ended_at: "2026-10-04T08:00:00Z" }),
+  ];
+  const several = () => routes({ "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills }, "GET /v1/tasks": { items: tasks } });
+
+  it("shows the first Workflow's board by default: Triage's one Step, Done and Dropped", async () => {
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-1 Sort the inbox/);
+    expect(regions()).toEqual(["Triage", "Done", "Dropped"]);
+    expect(screen.queryByRole("link", { name: /WEB-3 Fixed login/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /WEB-2 Crash on save/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the Workflow ?workflow= names, with the Tasks that ended in it in its Done", async () => {
+    localStorage.setItem("darkory.tasks.display", JSON.stringify({ showParents: true }));
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]);
+    const doneCol = within(main()).getByRole("region", { name: "Done" });
+    expect(within(doneCol).getAllByRole("link").map((l) => l.getAttribute("data-task"))).toEqual(["WEB-3", "WEB-5", "WEB-6"]);
+    // At every width: a phone has no other way to another Workflow.
+    expect(screen.getByRole("button", { name: "Workflow: Bugs" }).closest(".hidden")).toBeNull();
+  });
+
+  it("reads an old link's long id in ?workflow= as the short id the API gives", async () => {
+    const long = "0b9a3c1e-5f2d-4c7a-9e1b-2d3f4a5b6c7d";
+    const short = toShort(long);
+    const record = workflowsFixture();
+    const renamed = {
+      ...record,
+      workflows: record.workflows.map((w) => (w.id === wfId.bugs ? { ...w, id: short } : w)),
+      steps: record.steps.map((st) => (st.workflow_id === wfId.bugs ? { ...st, workflow_id: short } : st)),
+    };
+    mockApi(routes({ "GET /v1/projects/:project/workflow": renamed, "GET /v1/skills": { items: workflowsSkills }, "GET /v1/tasks": { items: tasks } }));
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${long}`);
+    await row(/WEB-2 Crash on save/);
+    expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]);
+  });
+
+  it("the chip lists the five Workflows; picking Support shows its board, writes ?workflow= and is remembered", async () => {
+    mockApi(several());
+    const first = renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-1/);
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    const options = await screen.findAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual(["Triage", "Bugs", "Features", "Prototypes", "Support"]);
+    expect(screen.getByRole("option", { name: "Triage" })).toHaveAttribute("aria-selected", "true");
+    await userEvent.click(screen.getByRole("option", { name: "Support" }));
+    await waitFor(() => expect(regions()).toEqual(["Support", "Awaiting customer", "Ops", "Approve", "Done", "Dropped"]));
+    expect(screen.getByRole("button", { name: "Workflow: Support" })).toBeInTheDocument();
+    // The address says the Workflow: a card's link keeps it.
+    expect(await row(/WEB-4 Refund request/)).toHaveAttribute("href", expect.stringContaining(`workflow=${wfId.support}`));
+    first.unmount();
+
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-4 Refund request/);
+    expect(regions()).toEqual(["Support", "Awaiting customer", "Ops", "Approve", "Done", "Dropped"]);
+  });
+
+  it("picks a Workflow with no storage to remember it in", async () => {
+    const refused = () => {
+      throw new DOMException("refused", "SecurityError");
+    };
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(refused);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(refused);
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-1/);
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Bugs" }));
+    await waitFor(() => expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]));
+  });
+
+  it("shows the Workflow ?workflow= names over the one this browser remembers", async () => {
+    localStorage.setItem(`darkory.workflow.WEB`, wfId.support);
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]);
+  });
+
+  it("passes over a ?workflow= that is no Workflow of the Project: the first is shown", async () => {
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=board&workflow=wf-gone");
+    await row(/WEB-1 Sort the inbox/);
+    expect(regions()).toEqual(["Triage", "Done", "Dropped"]);
+    expect(screen.getByRole("button", { name: "Workflow: Triage" })).toBeInTheDocument();
+  });
+
+  it("picking the Workflow shown remembers it", async () => {
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-1/);
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Triage" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    expect(localStorage.getItem("darkory.workflow.WEB")).toBe(wfId.triage);
+  });
+
+  it("keeps ?workflow= across the List and Board switch", async () => {
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    const view = () => screen.getByRole("navigation", { name: "View" });
+    expect(within(view()).getByRole("link", { name: "List" })).toHaveAttribute("href", expect.stringContaining(`workflow=${wfId.bugs}`));
+    await userEvent.click(within(view()).getByRole("link", { name: "List" }));
+    await waitFor(() => expect(regions()).toContain("Bugs › Investigate"));
+    await userEvent.click(within(view()).getByRole("link", { name: "Board" }));
+    await waitFor(() => expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "Done", "Dropped"]));
+  });
+
+  it("shows a question aimed at a Member in With <Member> on the board of the Task it blocks", async () => {
+    const asked = task(7, { title: "Which browser?", step_id: undefined, step_since: undefined, aimed_at_id: bob.id });
+    const held = task(8, { title: "Blank page", step_id: wfStep.fix, workflow_id: wfId.bugs, blocked: true, open_blockers: [{ id: asked.id, key: asked.key, title: asked.title }] });
+    mockApi(routes({ "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills }, "GET /v1/tasks": { items: [...tasks, asked, held] } }));
+    const bugs = renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-8 Blank page/);
+    expect(regions()).toEqual(["Investigate", "Fix", "Review", "Verify", "With bob", "Done", "Dropped"]);
+    expect(within(within(main()).getByRole("region", { name: "With bob" })).getByRole("link", { name: /WEB-7 Which browser\?/ })).toBeInTheDocument();
+    bugs.unmount();
+
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.triage}`);
+    await row(/WEB-1 Sort the inbox/);
+    expect(regions()).toEqual(["Triage", "Done", "Dropped"]);
+  });
+
+  it("has no chip on a Project of one Workflow", async () => {
+    mockApi(routes());
+    renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-2/);
+    expect(screen.queryByRole("button", { name: /^Workflow:/ })).not.toBeInTheDocument();
+  });
+
+  it("grouped by other than Step, a row's Step reads with its Workflow", async () => {
+    localStorage.setItem("darkory.tasks.display", JSON.stringify({ group: "owner" }));
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=list");
+    expect(await row(/WEB-2 Crash on save/)).toHaveTextContent("Bugs › Investigate");
+  });
+
+  it("the list keeps the whole Project, each Step group headed by its Workflow", async () => {
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=list");
+    await row(/WEB-1/);
+    expect(regions()).toEqual(["Triage › Triage", "Bugs › Investigate", "Support › Support", "Done"]);
+    expect(screen.getByRole("heading", { name: "Bugs › Investigate" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Workflow:/ })).not.toBeInTheDocument();
   });
 });

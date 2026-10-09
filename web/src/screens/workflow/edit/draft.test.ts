@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { engineer, review, skills, step, workflow } from "@/test/fixtures";
+import { engineer, review, skills, step, wfId, wfStep, workflow, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { isNew, toBody } from "../bind";
 import type { Roster } from "./holders";
 import {
   addOutcome,
   addTaker,
+  addWorkflow,
+  deleteWorkflow,
+  inboundWorkflow,
+  moveStepToWorkflow,
+  moveWorkflowTo,
+  newWorkflowName,
+  renameWorkflow,
+  reorderWorkflow,
+  startMoves,
+  stepsIn,
+  workflowsOf,
   countChanges,
   deadEndsAfterDelete,
   deleteStep,
@@ -82,11 +93,18 @@ describe("inserting a Step", () => {
     expect(listed(setSkill(draft, id, { id: engineer.id }))).toBe("main");
   });
 
-  it("sends the new Step by name, with no outcome", () => {
+  it("sends the new Step by name, in the Workflow of the Step it follows, with no outcome", () => {
     const { draft, id } = insertStep(d0(), step.review, "main");
     const body = toBody(renameStep(draft, id, "Security review").wf);
-    expect(body.steps[4]).toEqual({ name: "Security review", position: 5 });
+    expect(body.steps[4]).toEqual({ workflow: "wf-work", name: "Security review", position: 5 });
     expect(body.connectors.filter((c) => c.from === "Security review")).toEqual([]);
+  });
+
+  it("leaves a draft of no Workflow and no Step as it is: there is nowhere to put the Step", () => {
+    const d = fromRecord({ ...base(), workflows: [], steps: [], connectors: [] });
+    const r = insertStep(d, undefined, "main");
+    expect(r.id).toBe("");
+    expect(r.draft).toBe(d);
   });
 });
 
@@ -288,5 +306,184 @@ describe("who takes the Steps, in the draft", () => {
     expect(describeChanges(base(), after.wf)).toEqual(describeChanges(base(), before.wf));
     expect(say(before)).toEqual([]);
     expect(say(after)).toHaveLength(1);
+  });
+});
+
+describe("Workflows in the draft", () => {
+  const five = () => fromRecord(workflowsFixture());
+  const named = (d: ReturnType<typeof fromRecord>) => workflowsOf(d.wf).map((w) => w.name);
+
+  it("sends a Project of one Workflow with its Workflow by id, Steps numbered within it", () => {
+    const body = saveBody(d0());
+    expect(body.workflows).toEqual([{ id: "wf-work", name: "Work", position: 1 }]);
+    expect(body.steps.map((s) => [s.workflow, s.position])).toEqual([1, 2, 3, 4, 5, 6].map((n) => ["wf-work", n]));
+  });
+
+  it("numbers Steps within each Workflow and Workflows 1…n, in the Project's order", () => {
+    const body = saveBody(five());
+    expect(body.workflows.map((w) => [w.name, w.position])).toEqual([
+      ["Triage", 1],
+      ["Bugs", 2],
+      ["Features", 3],
+      ["Prototypes", 4],
+      ["Support", 5],
+    ]);
+    expect(body.steps.filter((s) => s.workflow === wfId.bugs).map((s) => [s.name, s.position])).toEqual([
+      ["Investigate", 1],
+      ["Fix", 2],
+      ["Review", 3],
+      ["Verify", 4],
+    ]);
+    expect(body.connectors.find((c) => c.from === wfStep.triage && c.name === "bug")).toMatchObject({ to: wfStep.investigate, position: 1 });
+  });
+
+  it("adds a Workflow named Workflow 2, then 3, sent by name with its Steps naming it, and an outcome into it from another", () => {
+    let d = d0();
+    const a = addWorkflow(d);
+    expect(named(a.draft)).toEqual(["Work", "Workflow 2"]);
+    expect(isNew(a.id)).toBe(true);
+    expect(named(addWorkflow(a.draft).draft)).toEqual(["Work", "Workflow 2", "Workflow 3"]);
+    d = renameWorkflow(a.draft, a.id, "Support");
+    const s = insertStep(d, undefined, "main", a.id);
+    d = renameStep(s.draft, s.id, "Support");
+    const o = addOutcome(d, s.id);
+    d = setTarget(renameOutcome(o.draft, o.id, "bug"), o.id, step.build);
+    const body = saveBody(d);
+    expect(body.workflows).toEqual([
+      { id: "wf-work", name: "Work", position: 1 },
+      { name: "Support", position: 2 },
+    ]);
+    expect(body.steps.at(-1)).toEqual({ workflow: "Support", name: "Support", position: 1 });
+    expect(body.connectors.find((c) => c.name === "bug")).toEqual({ from: "Support", to: step.build, name: "bug", position: 1 });
+    expect(describeChanges(base(), d.wf).map((c) => c.kind)).toEqual(["Workflow added", "Added", "Added"]);
+  });
+
+  it("counts a Workflow renamed as one change", () => {
+    const d = renameWorkflow(d0(), "wf-work", "Build");
+    expect(describeChanges(base(), d.wf)).toEqual([{ kind: "Workflow renamed", text: "Work → Build" }]);
+  });
+
+  it("reorders the Workflows as one change, and says New Tasks start at Investigate once Bugs is first", () => {
+    const d = reorderWorkflow(five(), wfId.bugs, -1);
+    expect(named(d)).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]);
+    expect(describeChanges(workflowsFixture(), d.wf)).toEqual([{ kind: "Workflows reordered", text: "Bugs, Triage, Features, Prototypes, Support" }]);
+    const all = new Map(workflowsSkills.map((s) => [s.id, s]));
+    expect(startMoves(workflowsFixture(), d.wf, all)).toBe("New Tasks start at Investigate");
+    expect(startMoves(workflowsFixture(), five().wf, all)).toBeUndefined();
+    expect(moveWorkflowTo(five(), wfId.support, wfId.triage).wf.workflows.find((w) => w.id === wfId.support)?.position).toBe(1);
+  });
+
+  it("deletes a Workflow: its Tasks need a Step elsewhere, and the outcomes into it go unless led on", () => {
+    const record = workflowsFixture(undefined, { fix: { tasks: 1 } });
+    const d = fromRecord(record);
+    const triageBug = `${wfStep.triage}-c1`;
+    expect(inboundWorkflow(d.wf, wfId.bugs).map((c) => c.id)).toEqual([triageBug]);
+    const unsaid = deleteWorkflow(d, wfId.bugs);
+    expect(problem(unsaid, record, workflowsSkills)).toBe("1 Task is at Fix: say which Step they move to.");
+    const gone = deleteWorkflow(d, wfId.bugs, { [wfStep.fix]: wfStep.triage });
+    expect(problem(gone, record, workflowsSkills)).toBeUndefined();
+    expect(gone.moves).toEqual({ [wfStep.fix]: wfStep.triage });
+    expect(gone.wf.connectors.some((c) => c.id === triageBug)).toBe(false);
+    expect(named(gone)).toEqual(["Triage", "Features", "Prototypes", "Support"]);
+    expect(saveBody(gone).workflows.map((w) => w.position)).toEqual([1, 2, 3, 4]);
+    const changes = describeChanges(record, gone.wf, gone.moves);
+    expect(changes[0]).toEqual({ kind: "Workflow deleted", text: "Bugs" });
+    expect(changes).toContainEqual({ kind: "Deleted", text: "Fix · its 1 Task move to Triage" });
+    expect(changes).toContainEqual({ kind: "Removed", text: "Triage · bug → Investigate" });
+    const led = deleteWorkflow(d, wfId.bugs, { [wfStep.fix]: wfStep.triage }, { [triageBug]: { to: wfStep.build } });
+    expect(led.wf.connectors.find((c) => c.id === triageBug)?.to_step_id).toBe(wfStep.build);
+  });
+
+  it("names a new Workflow past those taken, ignoring case", () => {
+    const a = addWorkflow(d0());
+    const d = renameWorkflow(a.draft, a.id, "workflow 2");
+    expect(newWorkflowName(d.wf)).toBe("Workflow 3");
+    expect(named(addWorkflow(d).draft)).toEqual(["Work", "workflow 2", "Workflow 3"]);
+  });
+
+  it("sends a Step with an id moved into a Workflow not saved yet with its id and the Workflow's name", () => {
+    const a = addWorkflow(five());
+    const d = moveStepToWorkflow(renameWorkflow(a.draft, a.id, "Ops"), wfStep.fix, a.id);
+    const body = saveBody(d);
+    expect(body.workflows.at(-1)).toEqual({ name: "Ops", position: 6 });
+    expect(body.steps.find((s) => s.id === wfStep.fix)).toMatchObject({ id: wfStep.fix, workflow: "Ops", name: "Fix", position: 1 });
+  });
+
+  it("numbers the Workflows again after two swap, and their Steps within each as before", () => {
+    const d = moveWorkflowTo(five(), wfId.support, wfId.bugs);
+    const body = saveBody(d);
+    expect(body.workflows.map((w) => [w.name, w.position])).toEqual([
+      ["Triage", 1],
+      ["Support", 2],
+      ["Bugs", 3],
+      ["Features", 4],
+      ["Prototypes", 5],
+    ]);
+    const swapped = saveBody(reorderWorkflow(five(), wfId.bugs, 1));
+    expect(swapped.workflows.map((w) => [w.name, w.position])).toEqual([
+      ["Triage", 1],
+      ["Features", 2],
+      ["Bugs", 3],
+      ["Prototypes", 4],
+      ["Support", 5],
+    ]);
+    expect(swapped.steps.filter((s) => s.workflow === wfId.bugs).map((s) => s.position)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("says when no Step is left where New Tasks start", () => {
+    const d = base().steps.reduce((x, s) => deleteStep(x, s.id), d0());
+    expect(startMoves(base(), d.wf, skillMap)).toBe("No Step is left where New Tasks start");
+  });
+
+  it("counts a Workflow deleted and one added under its name as the Workflow kept, its Steps replaced", () => {
+    const record = workflowsFixture();
+    const gone = deleteWorkflow(fromRecord(record), wfId.bugs);
+    const a = addWorkflow(gone);
+    let d = renameWorkflow(a.draft, a.id, "bugs");
+    const s = insertStep(d, undefined, "main", a.id);
+    d = renameStep(s.draft, s.id, "Reproduce");
+    const changes = describeChanges(record, d.wf);
+    expect(changes.filter((c) => /^Workflow (added|deleted|renamed)$/.test(c.kind))).toEqual([{ kind: "Workflow renamed", text: "Bugs → bugs" }]);
+    expect(changes.filter((c) => c.kind === "Deleted").map((c) => c.text)).toEqual(["Investigate", "Fix", "Review", "Verify"]);
+    expect(changes).toContainEqual({ kind: "Added", text: "Reproduce" });
+    // Put back last, it is still the Workflow /v1 keeps: in its place, as the reorder says.
+    expect(changes.filter((c) => c.kind === "Workflows reordered")).toEqual([{ kind: "Workflows reordered", text: "Triage, Features, Prototypes, Support, bugs" }]);
+    // Named as it was, it is no change of its own.
+    const same = renameWorkflow(d, a.id, "Bugs");
+    expect(describeChanges(record, same.wf).filter((c) => c.kind === "Workflow renamed")).toEqual([]);
+  });
+
+  it("keeps the last Workflow", () => {
+    const d = d0();
+    expect(deleteWorkflow(d, "wf-work")).toBe(d);
+  });
+
+  it("refuses two Workflows named alike, one with no name, a long one and one spelled as an id", () => {
+    const a = addWorkflow(d0());
+    const at = (name: string) => problem(renameWorkflow(a.draft, a.id, name), base(), skills);
+    expect(at("work")).toBe("Two Workflows are called Work: a name is used once in a Project, whatever its case.");
+    expect(at(" ")).toBe("A Workflow needs a name.");
+    expect(at("x".repeat(51))).toBe("A Workflow's name is at most 50 characters.");
+    expect(at("1".repeat(22))).toMatch(/^A Workflow's name cannot be spelled as an id/);
+    expect(at("Support")).toBeUndefined();
+  });
+
+  it("inserts into the picked Workflow, reorders within it, and moves a Step into another, numbering both", () => {
+    let d = five();
+    const s = insertStep(d, undefined, "main", wfId.prototypes);
+    expect(stepsIn(s.draft.wf, wfId.prototypes).map((x) => x.position)).toEqual([1, 2, 3]);
+    expect(stepsIn(s.draft.wf, wfId.prototypes).at(-1)!.id).toBe(s.id);
+    d = reorderStep(five(), wfStep.fix, -1, () => "main");
+    expect(stepsIn(d.wf, wfId.bugs).map((x) => x.name)).toEqual(["Fix", "Investigate", "Review", "Verify"]);
+    // The first of a Workflow moves no further: not into the Workflow before it.
+    expect(reorderStep(five(), wfStep.investigate, -1, () => "main").wf).toEqual(five().wf);
+    d = moveStepToWorkflow(five(), wfStep.fix, wfId.support);
+    expect(stepsIn(d.wf, wfId.bugs).map((x) => [x.name, x.position])).toEqual([
+      ["Investigate", 1],
+      ["Review", 2],
+      ["Verify", 3],
+    ]);
+    expect(stepsIn(d.wf, wfId.support).map((x) => [x.name, x.position]).at(-1)).toEqual(["Fix", 5]);
+    expect(describeChanges(workflowsFixture(), d.wf)).toEqual([{ kind: "Moved", text: "Fix to Support" }]);
   });
 });

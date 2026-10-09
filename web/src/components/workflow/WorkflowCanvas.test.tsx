@@ -24,7 +24,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
   };
 });
 
-const docs = { id: "s-docs", name: "Docs", skill: { id: "k-docs", name: "docs" }, position: 8, x: 0, y: 900, takers: [], tasks: 0, working: 0 };
+const docs = { id: "s-docs", workflow_id: sampleWorkflow.workflows[0].id, name: "Docs", skill: { id: "k-docs", name: "docs" }, position: 8, x: 0, y: 900, takers: [], tasks: 0, working: 0 };
 const workflow: Workflow = { ...sampleWorkflow, steps: [...sampleWorkflow.steps, docs] };
 
 function renderCanvas(mode: "live" | "edit" = "edit") {

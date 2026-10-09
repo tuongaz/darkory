@@ -8,13 +8,16 @@ import { asLine, inOrder, type Group } from "./draft";
 /**
  * The line the list makes, drawn above it while editing: the Workflow line itself, Steps by name
  * only and no Tasks, redrawn from the draft as it changes; what the draft changed (a new or
- * re-pointed outcome) amber and dashed. The Steps after a Parent are named under it.
+ * re-pointed outcome) amber and dashed. Of a Project of several Workflows, the one picked
+ * (`workflowId`), with its exits into the others and its entries from them. The Steps after a
+ * Parent are named under it.
  */
 export function Preview({
   draft,
   base,
   skills,
   groups,
+  workflowId,
   onStep,
   className,
 }: {
@@ -22,16 +25,19 @@ export function Preview({
   base: WorkflowRecord;
   skills: Map<string, Pick<Skill, "name">>;
   groups: (s: RecordStep) => Group;
+  /** The Workflow drawn, of a Project of several. */
+  workflowId?: string;
   /** Picks a Step clicked on the line. */
   onStep?: (id: string) => void;
   className?: string;
 }) {
-  const line = useMemo(() => asLine(draft, skills), [draft, skills]);
+  const drawn = draft.workflows.length > 1 ? workflowId : undefined;
+  const line = useMemo(() => asLine(draft, skills, drawn), [draft, skills, drawn]);
   const changed = useMemo(() => {
     const was = new Map(base.connectors.map((c) => [c.id, c]));
     return new Set(draft.connectors.filter((c) => !was.get(c.id) || was.get(c.id)!.to_step_id !== c.to_step_id || was.get(c.id)!.name !== c.name.trim()).map((c) => c.id));
   }, [draft, base]);
-  const after = inOrder(draft.steps).filter((s) => groups(s) === "after");
+  const after = inOrder(draft).filter((s) => groups(s) === "after" && (drawn === undefined || s.workflow_id === drawn));
   const baseIds = new Set(base.steps.map((s) => s.id));
   return (
     // A Step's name on the line picks it; the list beside is the keyboard's way to the same.
