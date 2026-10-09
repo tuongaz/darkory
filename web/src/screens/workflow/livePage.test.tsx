@@ -359,6 +359,25 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
     await waitFor(() => expect(within(line()).getByText("2 today")).toBeInTheDocument());
   });
 
+  it("counts an ended Parent under Done where its board's Done column has it: where its Subtasks ended", async () => {
+    const today = new Date().toISOString();
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: undefined, ended_at: today, subtask_counts: { open: 0, working: 0, done: 0, dropped: 1 } });
+    several([
+      at(3, "Sorted", wfStep.triage, wfId.triage, { state: "done", step_id: undefined, last_step_id: wfStep.triage, ended_at: today }),
+      parent,
+      // Its one Subtask, dropped at Fix yesterday: not done today itself, but where the Parent's Done card sits.
+      at(10, "Ship it", wfStep.fix, wfId.bugs, { parent_id: parent.id, state: "dropped", step_id: undefined, last_step_id: wfStep.fix, ended_at: yesterday }),
+    ]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    await waitFor(() => expect(within(line()).getByText("1 today")).toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Workflow: Bugs" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    // Triage counts Sorted only: the Parent is not on its board's Done for want of a Step of its own.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Workflow: Triage" })).toBeInTheDocument());
+    await waitFor(() => expect(within(line()).getByText("1 today")).toBeInTheDocument());
+  });
+
   it("lists a Parent in the scope menu of the one page its board shows it on: where its least advanced Subtask is", async () => {
     const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
     several([parent, at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: parent.id }), at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);

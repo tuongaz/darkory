@@ -51,7 +51,7 @@ export function DeleteWorkflowDialog({
           ? "A Project keeps one Workflow at least."
           : steps.length === 0
             ? `${name} has no Steps.`
-            : `${name}'s Steps go with it: ${steps.map((s) => s.name.trim() || "New Step").join(", ")}.`
+            : `The Steps of ${name} go with it: ${steps.map((s) => s.name.trim() || "New Step").join(", ")}.`
       }
       submitLabel={`Delete ${name}`}
       destructive

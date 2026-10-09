@@ -90,6 +90,12 @@ export function useLineData(
   });
   const endedParents = ended.map((q) => q.data?.task).filter((t): t is Task => !!t);
   const endedKey = ended.map((q) => q.dataUpdatedAt).join();
+  // A Parent done today stands in Done where its Subtasks ended, which may be before today: read them.
+  const doneParents = useMemo(() => (done.data ?? []).filter((t) => !!t.subtask_counts).map((t) => t.id), [done.data]);
+  const doneDetails = useQueries({
+    queries: doneParents.map((id) => ({ queryKey: keys.task(id), queryFn: () => call(api.GET("/v1/tasks/{task}", { params: { path: { task: id } } })) })),
+  });
+  const doneKey = doneDetails.map((q) => q.dataUpdatedAt).join();
 
   // The Workflow drawn and its Steps, kept the same between ticks of the clock: what reads them
   // (the Blocking view's layout, the panels) recomputes only when the Workflow or its Steps change.
@@ -107,6 +113,19 @@ export function useLineData(
     return shownWorkflow(drawn, graph, [...tasks.values()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `ended` is new each render; `endedKey` stands for it.
   }, [graph, drawn, open.data, endedKey]);
+
+  // What reached Done today in the Workflow drawn, placed as its board's Done column places it
+  // (`workflowsOf`): an ended Parent where its Subtasks ended, not by its own Step.
+  const doneToday = useMemo(() => {
+    if (!done.data) return undefined;
+    if (!graph || !drawn) return done.data.length;
+    const tasks = new Map<string, Task>();
+    for (const q of doneDetails) for (const t of q.data?.subtasks ?? []) tasks.set(t.id, t);
+    for (const t of [...(open.data ?? []), ...done.data]) tasks.set(t.id, t);
+    const placed = shownWorkflow(drawn, graph, [...tasks.values()]);
+    return done.data.filter((t) => placed.shows(t)).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `doneDetails` is new each render; `doneKey` stands for it.
+  }, [graph, drawn, open.data, done.data, doneKey]);
 
   const data = useMemo<LineData | undefined>(() => {
     if (!facts || !open.data) return undefined;
@@ -165,13 +184,13 @@ export function useLineData(
       scope,
       scoped: narrowed,
       trace,
-      doneToday: done.data?.filter((t) => !drawn || t.workflow_id === drawn).length,
+      doneToday,
       parents,
       noParent: all.filter((t) => t.stepId && onLine(t) && !t.parentId).length,
       me: { id: me?.member.id ?? "", takeable: takeable.data ?? noTakeable },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `endedParents` is rebuilt each render; `endedKey` names its records.
-  }, [facts, drawn, steps, shown, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
+  }, [facts, drawn, steps, shown, open.data, all, byMember, scopeParam, ref, detail, path, now, doneToday, me, takeable.data, endedKey, filter]);
 
   return { data, error: record.error ?? open.error, loading: !data && !record.error && !open.error };
 }

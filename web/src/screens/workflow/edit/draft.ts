@@ -503,17 +503,23 @@ export function describeChanges(server: WorkflowRecord, draft: WorkflowRecord, m
   const name = (id: string | undefined) =>
     id === undefined ? "Done" : (draft.steps.find((s) => s.id === id) ?? server.steps.find((s) => s.id === id))?.name.trim() || "New Step";
   const workflowName = (id: string) => (draft.workflows.find((w) => w.id === id) ?? server.workflows.find((w) => w.id === id))?.name.trim() || "New Workflow";
+  // A Workflow deleted and one added under its name, ignoring case, are one Workflow kept: /v1
+  // gives the one sent without an id the id of the Workflow named alike. Its Steps are replaced.
+  const asServer = sameWorkflows(server, draft);
   const wasW = new Map(server.workflows.map((w) => [w.id, w]));
-  const wids = new Set(draft.workflows.map((w) => w.id));
+  const wids = new Set(draft.workflows.map((w) => asServer(w.id)));
   for (const w of workflowsOf(draft)) {
-    const before = wasW.get(w.id);
+    const before = wasW.get(asServer(w.id));
     if (!before) out.push({ kind: "Workflow added", text: workflowName(w.id) });
     else if (w.name.trim() !== before.name) out.push({ kind: "Workflow renamed", text: `${before.name} → ${workflowName(w.id)}` });
   }
   for (const w of workflowsOf(server).filter((x) => !wids.has(x.id))) out.push({ kind: "Workflow deleted", text: w.name });
-  const kept = (list: RecordWorkflow[], ids: Set<string>) => list.filter((w) => ids.has(w.id)).map((w) => w.id);
-  const keptNow = kept(workflowsOf(draft), new Set(wasW.keys()));
-  if (keptNow.join() !== kept(workflowsOf(server), wids).join()) out.push({ kind: "Workflows reordered", text: workflowsOf(draft).map((w) => workflowName(w.id)).join(", ") });
+  const kept = (list: string[], ids: Set<string>) => list.filter((id) => ids.has(id));
+  const keptNow = kept(
+    workflowsOf(draft).map((w) => asServer(w.id)),
+    new Set(wasW.keys()),
+  );
+  if (keptNow.join() !== kept(workflowsOf(server).map((w) => w.id), wids).join()) out.push({ kind: "Workflows reordered", text: workflowsOf(draft).map((w) => workflowName(w.id)).join(", ") });
 
   const was = new Map(server.steps.map((s) => [s.id, s]));
   const ids = new Set(draft.steps.map((s) => s.id));
@@ -524,7 +530,7 @@ export function describeChanges(server: WorkflowRecord, draft: WorkflowRecord, m
     else {
       if (s.name.trim() !== w.name) out.push({ kind: "Renamed", text: `${w.name} → ${s.name.trim() || "New Step"}` });
       if (s.skill_id !== w.skill_id) out.push({ kind: "Skill", text: `${name(s.id)} · ${skillName(w.skill_id)} → ${skillName(s.skill_id)}` });
-      if (s.workflow_id !== w.workflow_id) out.push({ kind: "Moved", text: `${name(s.id)} to ${workflowName(s.workflow_id)}` });
+      if (asServer(s.workflow_id) !== w.workflow_id) out.push({ kind: "Moved", text: `${name(s.id)} to ${workflowName(s.workflow_id)}` });
       else if (moved.has(s.id)) out.push({ kind: "Moved", text: name(s.id) });
     }
   }
@@ -552,6 +558,23 @@ export function describeChanges(server: WorkflowRecord, draft: WorkflowRecord, m
     if (first && before && first.id !== before.id && cids.has(before.id) && wasC.has(first.id)) out.push({ kind: "Main", text: way(first) });
   }
   return out;
+}
+
+/**
+ * The id /v1 will give each of the draft's Workflows, as far as it is known now: a Workflow sent
+ * without an id takes that of the Workflow named alike, ignoring case, that the draft no longer
+ * carries; any other keeps its own.
+ */
+function sameWorkflows(server: WorkflowRecord, draft: WorkflowRecord): (id: string) => string {
+  const carried = new Set(draft.workflows.map((w) => w.id));
+  const free = server.workflows.filter((w) => !carried.has(w.id));
+  const out = new Map<string, string>();
+  for (const w of draft.workflows) {
+    if (server.workflows.some((x) => x.id === w.id)) continue;
+    const alike = free.find((x) => same(x.name, w.name) && ![...out.values()].includes(x.id));
+    if (alike) out.set(w.id, alike.id);
+  }
+  return (id) => out.get(id) ?? id;
 }
 
 /**

@@ -142,31 +142,14 @@ function Segment({
       className={cn("flex flex-none items-center rounded-[6px]", current && "bg-background shadow-soft", isDragging && "z-20")}
     >
       {renaming ? (
-        <input
-          // A new Workflow's name, or one being renamed, takes the keys at once.
-          autoFocus
-          onFocus={(e) => e.currentTarget.select()}
-          value={workflow.name}
-          maxLength={nameMax}
-          aria-label="Name of the Workflow"
-          aria-invalid={(invalid && !workflow.name.trim()) || undefined}
-          onChange={(e) => onRename(e.target.value)}
-          onBlur={onDone}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === "Escape") {
-              e.preventDefault();
-              onDone();
-            }
-          }}
-          className="h-[26px] w-[160px] rounded-[6px] border border-input bg-background px-2 text-[13px] font-medium outline-none focus-visible:border-foreground focus-visible:ring-[3px] focus-visible:ring-muted aria-invalid:border-destructive"
-        />
+        <NameField workflow={workflow} invalid={invalid} onRename={onRename} onDone={onDone} />
       ) : (
         <button
           type="button"
           aria-current={current || undefined}
           onClick={onPick}
-          onKeyDown={onKeyDown}
           {...(draggable ? listeners : {})}
+          onKeyDown={onKeyDown}
           className={cn(
             "inline-flex h-[26px] max-w-[200px] items-center rounded-[6px] px-2.5 text-[13px] font-medium text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
             current ? "text-foreground" : "hover:text-foreground",
@@ -179,6 +162,36 @@ function Segment({
       )}
       {controls}
     </div>
+  );
+}
+
+/**
+ * A Workflow's name being typed: Enter or leaving the field keeps it; Escape puts back the name it
+ * had when the renaming began (a Workflow just added, its "Workflow N").
+ */
+function NameField({ workflow, invalid, onRename, onDone }: { workflow: RecordWorkflow; invalid: boolean; onRename: (name: string) => void; onDone: () => void }) {
+  const [was] = useState(workflow.name);
+  return (
+    <input
+      // A new Workflow's name, or one being renamed, takes the keys at once.
+      autoFocus
+      onFocus={(e) => e.currentTarget.select()}
+      value={workflow.name}
+      maxLength={nameMax}
+      aria-label="Name of the Workflow"
+      aria-invalid={(invalid && !workflow.name.trim()) || undefined}
+      onChange={(e) => onRename(e.target.value)}
+      onBlur={onDone}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== "Escape") return;
+        e.preventDefault();
+        // The Escape stops here: it cancels the name, not the editor around it.
+        e.stopPropagation();
+        if (e.key === "Escape" && workflow.name !== was) onRename(was);
+        onDone();
+      }}
+      className="h-[26px] w-[160px] rounded-[6px] border border-input bg-background px-2 text-[13px] font-medium outline-none focus-visible:border-foreground focus-visible:ring-[3px] focus-visible:ring-muted aria-invalid:border-destructive"
+    />
   );
 }
 
