@@ -9,6 +9,8 @@ import { toShort } from "@/lib/shortid";
 import { cart, copy, payment, projectTasks, receipt, routes } from "./testData";
 
 const row = (name: RegExp) => screen.findByRole("link", { name });
+// A label shown from `sm` up, the icon alone on a phone (jsdom lays nothing out: the classes are what tell).
+const phoneHidden = (el: Element) => el.classList.contains("hidden") && /\bsm:(inline|flex)\b/.test(el.className);
 const main = () => document.getElementById("main")!;
 // The list's groups and the board's columns: the regions of the page, not the toasts' region.
 const regions = () => within(main()).getAllByRole("region").map((g) => g.getAttribute("aria-label"));
@@ -461,53 +463,49 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(screen.queryByRole("button", { name: /^Workflow:/ })).not.toBeInTheDocument();
   });
 
-  it("folds the List | Board switch to a menu on a phone beside the chip, its check mark first", async () => {
+  it("keeps the List | Board switch as two icons on a phone, beside the chip or not, on the bar's second row", async () => {
+    // The board of several Workflows, with the chip in the crumbs; one Workflow's board; the list.
     mockApi(several());
-    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    const chipped = renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
     await row(/WEB-2 Crash on save/);
-    // The segments are for a wider screen; a phone has the menu under the layout's icon.
-    expect(screen.getByRole("navigation", { name: "View" })).toHaveClass("hidden", "sm:inline-flex");
-    await userEvent.click(screen.getByRole("button", { name: "View: Board" }));
-    const items = await screen.findAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["List", "Board"]);
-    for (const i of items) expect(i.querySelector("svg")?.getAttribute("class")).toMatch(/lucide-check/);
-    expect(items[1].querySelector("svg")).not.toHaveClass("invisible");
-    expect(items[0].querySelector("svg")).toHaveClass("invisible");
-  });
-
-  it("keeps the List | Board switch as two icons on a phone where no chip is in the bar", async () => {
-    // A Project of one Workflow, and the list of several: no chip, no menu.
+    expect(screen.getByRole("button", { name: /^Workflow:/ })).toBeInTheDocument();
+    const switchIn = () => within(screen.getByRole("toolbar", { name: "Page" })).getByRole("navigation", { name: "View" });
+    expect(screen.queryByRole("button", { name: /^View: / })).not.toBeInTheDocument();
+    expect(switchIn()).not.toHaveClass("hidden");
+    const links = within(switchIn()).getAllByRole("link");
+    expect(links.map((l) => l.getAttribute("aria-label"))).toEqual(["List", "Board"]);
+    for (const l of links) expect(phoneHidden(within(l).getByText(l.getAttribute("aria-label")!))).toBe(true);
+    chipped.unmount();
     mockApi(routes());
     const one = renderApp("/projects/WEB/tasks?view=board");
     await row(/WEB-2/);
     expect(screen.queryByRole("button", { name: /^View: / })).not.toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "View" })).not.toHaveClass("hidden");
-    expect(within(screen.getByRole("navigation", { name: "View" })).getAllByRole("link").map((l) => l.getAttribute("aria-label"))).toEqual(["List", "Board"]);
+    expect(within(switchIn()).getAllByRole("link").map((l) => l.getAttribute("aria-label"))).toEqual(["List", "Board"]);
     one.unmount();
     mockApi(several());
     renderApp("/projects/WEB/tasks?view=list");
     await row(/WEB-2 Crash on save/);
     expect(screen.queryByRole("button", { name: /^View: / })).not.toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "View" })).not.toHaveClass("hidden");
+    expect(switchIn()).not.toHaveClass("hidden");
   });
 
-  it("folds Views, Filter and Display into one menu on a phone beside the chip; each item opens its menu", async () => {
+  it("keeps Views, Filter, Display and File Task on the bar's second row beside the chip, each its icon alone on a phone", async () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
     await row(/WEB-2 Crash on save/);
-    // One trigger on a phone; the three buttons are for a wider screen.
-    const more = screen.getByRole("button", { name: "More" });
-    expect(more).toHaveClass("sm:hidden");
-    for (const name of ["Views", "Filter", "Display"]) expect(screen.getByRole("button", { name })).toHaveClass("max-sm:hidden");
-    for (const [item, opens] of [
+    const toolbar = screen.getByRole("toolbar", { name: "Page" });
+    expect(screen.queryByRole("button", { name: /^More/ })).not.toBeInTheDocument();
+    for (const name of ["Views", "Filter", "Display", "File Task"]) {
+      const button = within(toolbar).getByRole("button", { name });
+      expect(button).not.toHaveClass("max-sm:hidden");
+      expect(phoneHidden(within(button).getByText(name))).toBe(true);
+    }
+    for (const [name, opens] of [
       ["Views", "Views"],
       ["Filter", "Filters"],
       ["Display", "Display"],
     ]) {
-      await userEvent.click(more);
-      const items = await screen.findAllByRole("menuitem");
-      expect(items.map((i) => i.textContent)).toEqual(["Views", "Filter", "Display"]);
-      await userEvent.click(screen.getByRole("menuitem", { name: item }));
+      await userEvent.click(within(toolbar).getByRole("button", { name }));
       expect(await screen.findByRole("dialog", { name: opens })).toBeInTheDocument();
       await userEvent.keyboard("{Escape}");
       await waitFor(() => expect(screen.queryByRole("dialog", { name: opens })).not.toBeInTheDocument());
@@ -517,22 +515,13 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(await screen.findByRole("dialog", { name: "Filters" })).toBeInTheDocument();
   });
 
-  it("names the count of Filters set on the fold's trigger and its Filter item, in the words the Filter button uses", async () => {
+  it("names the count of Filters set on the Filter button, its label hidden on a phone", async () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}&filter.tasks=kind:is:task&filter.tasks=blocked:is:false`);
-    const more = await screen.findByRole("button", { name: "More, 2 Filters set" });
-    expect(screen.getByRole("button", { name: "Filter, 2 set" })).toHaveClass("max-sm:hidden");
-    await userEvent.click(more);
-    expect(await screen.findByRole("menuitem", { name: "Filter, 2 set" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Views" })).toBeInTheDocument();
-  });
-
-  it("keeps Views, Filter and Display as three buttons with no chip in the bar", async () => {
-    mockApi(routes());
-    renderApp("/projects/WEB/tasks?view=board");
-    await row(/WEB-2/);
-    expect(screen.queryByRole("button", { name: "More" })).not.toBeInTheDocument();
-    for (const name of ["Views", "Filter", "Display"]) expect(screen.getByRole("button", { name })).not.toHaveClass("max-sm:hidden");
+    const filter = await screen.findByRole("button", { name: "Filter, 2 set" });
+    expect(screen.getByRole("toolbar", { name: "Page" })).toContainElement(filter);
+    expect(phoneHidden(within(filter).getByText("Filter"))).toBe(true);
+    expect(within(filter).getByText("2")).toBeInTheDocument();
   });
 
   it("grouped by other than Step, a row's Step reads with its Workflow", async () => {

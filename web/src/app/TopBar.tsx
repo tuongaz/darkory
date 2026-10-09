@@ -13,9 +13,10 @@ import { cn } from "@/lib/utils";
 export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: boolean; whole?: boolean };
 
 /**
- * The 44px bar over every screen (kit `.topbar`): where you are, then the view switcher, then the
- * screen's actions and its one primary on the right. Every page renders one as its first child;
- * on a phone it carries the button that opens the sidebar.
+ * The bar over every screen: where you are on the first row (the crumbs; on a phone the button that
+ * opens the sidebar), then, when the page has any, a second row of what the page does: the view
+ * switch and the scope at the left, the actions and the one primary at the right. Every page
+ * renders one as its first child; one hairline runs under its last row.
  *
  * The first crumb is the area (a Project, Settings, Inbox) and reads strong; the rest are muted.
  */
@@ -38,50 +39,57 @@ export function TopBar({
   const next = crumbs.findIndex((c, i) => i > 0 && !c.wide);
   const icon = (i: number, c: Crumb) =>
     mark(i, c) ? <span className="flex flex-none max-sm:[&>*]:size-5 max-sm:[&>*]:rounded-[5px] max-sm:[&>*]:text-[11px]">{c.icon}</span> : c.icon;
+  const second = !!(view || actions || primary);
   return (
-    <header className="flex h-11 flex-none items-center gap-2 border-b px-4">
-      <SidebarTrigger className="-ml-1.5 text-muted-foreground md:hidden" />
-      <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
-        {crumbs.map((c, i) => (
-          <Fragment key={i}>
-            {i > 0 && (
-              <span aria-hidden className={cn("text-border", (c.wide || (i === next && whole)) && "hidden sm:inline")}>
-                /
+    <header className="flex flex-none flex-col border-b">
+      <div className={cn("flex h-11 items-center gap-2 px-4", second && "border-b-0")}>
+        <SidebarTrigger className="-ml-1.5 text-muted-foreground md:hidden" />
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+          {crumbs.map((c, i) => (
+            <Fragment key={i}>
+              {i > 0 && (
+                <span aria-hidden className={cn("text-border", (c.wide || (i === next && whole)) && "hidden sm:inline")}>
+                  /
+                </span>
+              )}
+              <span
+                className={cn(
+                  "flex items-center gap-1.5",
+                  c.whole ? "min-w-0 sm:flex-none" : "min-w-0",
+                  i === 0 && "font-medium text-foreground",
+                  mark(i, c) && "flex-none sm:flex-initial",
+                  (c.wide || (i === 0 && whole && !c.whole && !c.icon)) && "hidden sm:flex",
+                )}
+              >
+                {c.to ? (
+                  <Link
+                    to={c.to}
+                    aria-label={mark(i, c) && typeof c.label === "string" ? c.label : undefined}
+                    className="group flex min-w-0 items-center gap-1.5"
+                  >
+                    {icon(i, c)}
+                    <span className={cn("truncate group-hover:underline", mark(i, c) && "hidden sm:inline")}>{c.label}</span>
+                  </Link>
+                ) : (
+                  <>
+                    {icon(i, c)}
+                    <span className={cn(c.whole ? "flex min-w-0" : "truncate", mark(i, c) && "hidden sm:inline")}>{c.label}</span>
+                  </>
+                )}
               </span>
-            )}
-            <span
-              className={cn(
-                "flex items-center gap-1.5",
-                c.whole ? "min-w-0 sm:flex-none" : "min-w-0",
-                i === 0 && "font-medium text-foreground",
-                mark(i, c) && "flex-none sm:flex-initial",
-                (c.wide || (i === 0 && whole && !c.whole && !c.icon)) && "hidden sm:flex",
-              )}
-            >
-              {c.to ? (
-                <Link
-                  to={c.to}
-                  aria-label={mark(i, c) && typeof c.label === "string" ? c.label : undefined}
-                  className="group flex min-w-0 items-center gap-1.5"
-                >
-                  {icon(i, c)}
-                  <span className={cn("truncate group-hover:underline", mark(i, c) && "hidden sm:inline")}>{c.label}</span>
-                </Link>
-              ) : (
-                <>
-                  {icon(i, c)}
-                  <span className={cn(c.whole ? "flex min-w-0" : "truncate", mark(i, c) && "hidden sm:inline")}>{c.label}</span>
-                </>
-              )}
-            </span>
-          </Fragment>
-        ))}
-      </nav>
-      {view && <div className="flex-none sm:ml-3">{view}</div>}
-      {(actions || primary) && (
-        <div className="ml-auto flex flex-none items-center gap-1.5">
-          {actions}
-          {primary}
+            </Fragment>
+          ))}
+        </nav>
+      </div>
+      {second && (
+        <div role="toolbar" aria-label="Page" className="flex h-10 items-center gap-2 px-4">
+          {view && <div className="flex min-w-0 flex-none items-center gap-2">{view}</div>}
+          {(actions || primary) && (
+            <div className="ml-auto flex flex-none items-center gap-1.5">
+              {actions}
+              {primary}
+            </div>
+          )}
         </div>
       )}
     </header>

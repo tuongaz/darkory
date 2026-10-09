@@ -453,13 +453,13 @@ async function insideThePhone(page: Page, label: ReturnType<Page["locator"]>) {
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
   }
-  // Nothing in the bar is cut by what holds it: the chip ends inside the breadcrumb, before the
-  // view switch beside it.
+  // Nothing in the bar is cut by what holds it: the chip ends inside the breadcrumb, and what the
+  // page does sits on the bar's second row, under it.
   const crumbs = await page.getByRole("navigation", { name: "Breadcrumb" }).boundingBox();
   const whole = await chip(page).boundingBox();
   expect(whole!.x + whole!.width).toBeLessThanOrEqual(crumbs!.x + crumbs!.width + 0.5);
-  const view = await page.getByRole("button", { name: /^View: / }).boundingBox();
-  expect(whole!.x + whole!.width).toBeLessThan(view!.x);
+  const second = page.getByRole("toolbar", { name: "Page" });
+  if ((await second.count()) > 0) expect((await second.boundingBox())!.y).toBeGreaterThanOrEqual(crumbs!.y + crumbs!.height);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
 }
 
@@ -469,32 +469,16 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     await page.goto(`${base}${board(wf(name))}`);
     await expect(columns(page).first()).toBeVisible();
     await chipReadsWhole(page, name);
-    // Beside the chip the List | Board switch is a menu, and Views, Filter and Display are one.
-    await expect(page.getByRole("button", { name: "View: Board" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "More" })).toBeInViewport({ ratio: 1 });
-    for (const action of ["Views", "Filter", "Display"]) {
-      // Hidden by display:none on a phone, so the role query must include hidden elements to count it.
-      const button = page.getByRole("button", { name: action, exact: true, includeHidden: true });
-      await expect(button).toHaveCount(1);
-      await expect(button).toBeHidden();
-    }
+    // The bar's second row: the List | Board switch as its two icons, then Views, Filter and
+    // Display as icon buttons and the File Task primary, nothing folded.
+    const toolbar = page.getByRole("toolbar", { name: "Page" });
+    await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "More", exact: true })).toHaveCount(0);
+    await expect(toolbar.getByRole("navigation", { name: "View" }).getByRole("link")).toHaveCount(2);
+    await expect(toolbar.getByRole("navigation", { name: "View" })).toBeInViewport({ ratio: 1 });
+    for (const action of ["Views", "Filter", "Display", "File Task"]) await expect(toolbar.getByRole("button", { name: action, exact: true })).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
     await shot(page, `phone-board-${name.toLowerCase()}`);
-  }
-  // Each folded menu opens under the fold's trigger, inside the phone.
-  for (const [item, opens] of [
-    ["Views", "Views"],
-    ["Filter", "Filters"],
-    ["Display", "Display"],
-  ]) {
-    await page.getByRole("button", { name: "More" }).click();
-    await page.getByRole("menuitem", { name: item }).click();
-    const menu = page.getByRole("dialog", { name: opens });
-    await expect(menu).toBeInViewport({ ratio: 1 });
-    expect((await menu.boundingBox())!.y).toBeGreaterThanOrEqual((await page.getByRole("button", { name: "More" }).boundingBox())!.y + 28);
-    if (item === "Filter") await shot(page, "phone-board-filter-folded");
-    await page.keyboard.press("Escape");
-    await expect(menu).toBeHidden();
-    await expect(page.getByRole("button", { name: "More" })).toBeFocused();
   }
   await page.goto(`${base}/projects/ACC/workflows/${wf("Bugs")}`);
   await expect(page.getByRole("region", { name: "Workflow" })).toBeVisible();

@@ -55,3 +55,32 @@ describe("TopBar on a phone, beside the Workflow chip", () => {
     expect(phoneHidden(within(nav).getByText("/"))).toBe(false);
   });
 });
+
+describe("TopBar in two rows", () => {
+  it("draws the view, the actions and the primary on a second row inside the header, under the crumbs", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} view={<span>View</span>} actions={<button type="button">Filter</button>} primary={<button type="button">Save</button>} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    const header = screen.getByRole("banner");
+    const toolbar = within(header).getByRole("toolbar", { name: "Page" });
+    expect(toolbar.compareDocumentPosition(within(header).getByRole("navigation", { name: "Breadcrumb" })) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(within(toolbar).getByText("View")).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "Filter" })).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("has no second row when the page has nothing for it", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole("toolbar")).toBeNull();
+  });
+});
