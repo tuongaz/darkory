@@ -555,6 +555,19 @@ describe("keys", () => {
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
   });
 
+  it("⌘K switches from a Project's settings to the other Project's General", async () => {
+    mockApi(records());
+    renderApp("/projects/WEB/settings/members");
+    await screen.findByRole("navigation", { name: "Project settings" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    await userEvent.type(within(search).getByRole("combobox"), "OPS");
+    await userEvent.click(await within(search).findByRole("option", { name: /^OpsOPS/ }));
+    const general = () => within(screen.getByRole("navigation", { name: "Project settings" })).getByRole("link", { name: "General" });
+    await waitFor(() => expect(general()).toHaveAttribute("href", "/projects/OPS/settings/general"));
+    expect(general()).toHaveAttribute("aria-current", "page");
+  });
+
   it("⌘K goes to each Workflow's board of a Project of several", async () => {
     mockApi({ ...records(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } });
     renderApp("/projects/WEB/tasks");
@@ -711,7 +724,8 @@ describe("Settings", () => {
     const menu = await openOrganisationMenu();
     await userEvent.click(within(menu).getByRole("menuitem", { name: /^Settings/ }));
 
-    await waitFor(() => expect(crumbs()).toHaveTextContent("Settings/"));
+    // An admin's Settings opens on the Organisation's Members.
+    await waitFor(() => expect(crumbs().textContent).toBe("Settings/Members"));
     expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
     expect(within(nav()).getByRole("link", { name: "Account" })).toHaveAttribute("href", "/settings/account");
     const organisation = within(nav()).getByRole("list", { name: "Organisation" });

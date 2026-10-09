@@ -121,8 +121,8 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
         {p.id === project?.id && <span className="ml-auto text-xs text-muted-foreground">Current</span>}
       </>
     ),
-    // To the same place in the other Project, or its Tasks.
-    run: go(projectPath(p, area ?? "tasks")),
+    // To the same place in the other Project, or its Tasks; from settings straight to its General.
+    run: go(area === "settings" ? projectSettingsPath(p) : projectPath(p, area ?? "tasks")),
   });
   const words = query.trim();
   // With nothing typed, the actions, the Projects and the places; else what matches, best group first.

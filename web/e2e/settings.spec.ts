@@ -261,6 +261,8 @@ test("scenario 10: a Project's settings under it, Settings from the Organisation
       // Last: a page under OPS makes OPS the current Project.
       ["/admin/teams/OPS", "/projects/OPS/settings/general"],
       ["/settings/projects/ops/labels", "/projects/OPS/settings/labels"],
+      // A Project's settings page makes that Project current: /admin/teams now lands on OPS's.
+      ["/admin/teams", "/projects/OPS/settings/general"],
     ];
     // The current Project is the one last shown: WEB.
     await page.goto(`${base}/projects/WEB/tasks`);

@@ -3,7 +3,7 @@
 import { CheckIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import { Button } from "@/components/ui/button";
+import { BarAction } from "@/app/TopBar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import type { Display, GroupBy, Order } from "./derive";
 
 export type Layout = "list" | "board";
 
-/** The segmented List | Board switch (kit `.seg`); the other search parameters stay. On a phone it is the two icons. */
+/** The segmented List | Board switch (kit `.seg`); the other search parameters stay. On a narrow bar it is the two icons. */
 export function ViewSwitch({ view }: { view: Layout }) {
   const [params] = useSearchParams();
   const to = (v: Layout) => {
@@ -38,21 +38,16 @@ export function ViewSwitch({ view }: { view: Layout }) {
           )}
         >
           {icon}
-          <span className="hidden sm:inline">{label}</span>
+          <span className="hidden @2xl/page:inline">{label}</span>
         </Link>
       ))}
     </nav>
   );
 }
 
-/** An outline top-bar button whose label hides on a phone. */
-function BarButton({ icon, label, ...props }: { icon: ReactNode; label: string } & ComponentProps<typeof Button>) {
-  return (
-    <Button variant="outline" aria-label={label} {...props}>
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </Button>
-  );
+/** An outline act on the bar: its label hides when the bar's row is narrow. */
+function BarButton(props: ComponentProps<typeof BarAction>) {
+  return <BarAction variant="outline" {...props} />;
 }
 
 function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: ReactNode }) {

@@ -12,6 +12,7 @@ import { InfoTip } from "@/components/InfoTip";
 import { Loaded, Refusal } from "@/components/Refusal";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
+import { BarAction } from "@/app/TopBar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -64,10 +65,7 @@ export function WorkspacesPage() {
       pad={false}
       primary={
         admin && (
-          <Button aria-label="New Workspace" onClick={() => setAdding(true)}>
-            <PlusIcon />
-            <span className="hidden sm:inline">New Workspace</span>
-          </Button>
+          <BarAction icon={<PlusIcon />} label="New Workspace" onClick={() => setAdding(true)} />
         )
       }
     >

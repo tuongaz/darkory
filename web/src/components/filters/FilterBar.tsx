@@ -4,6 +4,7 @@
 // are the caller's (the address, through useFilterState); the bar only reads and writes them.
 import { ArrowLeftIcon, CheckIcon, ChevronDownIcon, ChevronRightIcon, FilterIcon, SearchIcon, XIcon } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { BarAction } from "@/app/TopBar";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
@@ -166,11 +167,9 @@ export function FilterMenuButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" aria-label={filterName(props)} className="data-[state=open]:bg-accent">
-          <FilterIcon />
-          <span className="hidden sm:inline">{labels.filter}</span>
+        <BarAction variant="outline" icon={<FilterIcon />} label={labels.filter} aria-label={filterName(props)} className="data-[state=open]:bg-accent">
           {count > 0 && <Count n={count} />}
-        </Button>
+        </BarAction>
       </PopoverTrigger>
       <PopoverContent
         ref={panel}

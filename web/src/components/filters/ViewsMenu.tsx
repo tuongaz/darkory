@@ -3,6 +3,7 @@
 // row under the header names the applied View (FilterChipRow's `leading`, AppliedView here).
 import { BookmarkIcon, CheckIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
+import { BarAction } from "@/app/TopBar";
 import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
@@ -54,10 +55,7 @@ export function ViewsMenu(props: ViewsMenuProps) {
   return (
     <Popover open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
       <PopoverTrigger asChild>
-        <Button variant="outline" aria-label="Views" className="data-[state=open]:bg-accent">
-          <BookmarkIcon />
-          <span className="hidden sm:inline">Views</span>
-        </Button>
+        <BarAction variant="outline" icon={<BookmarkIcon />} label="Views" className="data-[state=open]:bg-accent" />
       </PopoverTrigger>
       <PopoverContent align="end" aria-label="Views" className="w-72 p-0">
         {naming ? (

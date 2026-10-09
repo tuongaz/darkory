@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { web } from "@/test/fixtures";
 import { projectCrumb } from "./crumbs";
-import { type Crumb, TopBar } from "./TopBar";
+import { BarAction, type Crumb, TopBar } from "./TopBar";
 
 // jsdom lays nothing out: these check the bar's structure only (what it renders, the `sm:` classes).
 // Playwright's test 9 (workflows.spec.ts, the phone boards at 390 px) guards the phone link's name
@@ -71,6 +71,22 @@ describe("TopBar in two rows", () => {
     expect(within(row).getByText("View")).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "Filter" })).toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("hides its acts' labels by the row's width, and fades the view only when it overflows", () => {
+    render(
+      <MemoryRouter>
+        <SidebarProvider>
+          <TopBar crumbs={[{ label: "Inbox" }]} view={<span>View</span>} primary={<BarAction icon={<svg aria-hidden />} label="File Task" />} />
+        </SidebarProvider>
+      </MemoryRouter>,
+    );
+    const row = screen.getByRole("group", { name: "Page" });
+    expect(row).toHaveClass("@container/page");
+    const act = within(row).getByRole("button", { name: "File Task" });
+    expect(within(act).getByText("File Task")).toHaveClass("hidden", "@2xl/page:inline");
+    // jsdom lays nothing out, so nothing overflows: a fitting view is never faded.
+    expect(within(row).getByText("View").parentElement).not.toHaveAttribute("data-overflow");
   });
 
   it("has no second row when the page has nothing for it", () => {

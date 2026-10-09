@@ -330,3 +330,29 @@ for (const scheme of ["light", "dark"] as const) {
     });
   }
 }
+
+// A Project's Members page has the bar's widest second row: the four tabs, New agent and Add
+// Member. At 390 (no sidebar) and at 768 (the sidebar takes 16rem, the card is narrowest) the tabs
+// fit in the row's view and both acts are wholly on screen.
+for (const width of [390, 768]) {
+  test(`a Project's settings tabs fit beside its acts at ${width}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width, height: 844 } });
+    const page = await context.newPage();
+    await mock(page);
+    await page.goto("/projects/WEB/settings/members");
+    await page.getByRole("table", { name: "Members of Web storefront" }).waitFor({ state: "attached" });
+    await page.waitForLoadState("networkidle");
+    const tabs = page.getByRole("navigation", { name: "Project settings" });
+    const m = await tabs.evaluate((nav) => ({ nav: nav.scrollWidth, room: nav.parentElement!.clientWidth }));
+    console.log(`Members at ${width}: tabs ${m.nav}px, view room ${m.room}px`);
+    expect(m.nav, "the tabs run past the row's view").toBeLessThanOrEqual(m.room);
+    await expect(page.getByRole("button", { name: "New agent" })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "Add Member" })).toBeInViewport({ ratio: 1 });
+    // Under 42rem of row the acts are their icons alone, 32px squares.
+    for (const name of ["New agent", "Add Member"]) {
+      const box = (await page.getByRole("button", { name }).boundingBox())!;
+      expect([box.width, box.height], `${name} is not a 32px square`).toEqual([32, 32]);
+    }
+    await context.close();
+  });
+}

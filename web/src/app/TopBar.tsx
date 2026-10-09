@@ -1,5 +1,7 @@
-import { Fragment, type ReactNode } from "react";
+import { Slot } from "radix-ui";
+import { Fragment, useLayoutEffect, useState, type ComponentProps, type ReactNode } from "react";
 import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +42,7 @@ export function TopBar({
   const icon = (i: number, c: Crumb) =>
     mark(i, c) ? <span className="flex flex-none max-sm:[&>*]:size-5 max-sm:[&>*]:rounded-[5px] max-sm:[&>*]:text-[11px]">{c.icon}</span> : c.icon;
   const second = !!(view || actions || primary);
+  const [viewRef, overflowing] = useOverflow<HTMLDivElement>();
   return (
     <header className="flex flex-none flex-col border-b">
       <div className="flex h-11 items-center gap-2 px-4">
@@ -82,8 +85,12 @@ export function TopBar({
         </nav>
       </div>
       {second && (
-        <div role="group" aria-label="Page" className="flex h-10 items-center gap-2 px-4">
-          {view && <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">{view}</div>}
+        <div role="group" aria-label="Page" className="@container/page flex h-10 items-center gap-2 px-4">
+          {view && (
+            <div ref={viewRef} data-overflow={overflowing || undefined} className="bar-view flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+              {view}
+            </div>
+          )}
           {(actions || primary) && (
             <div className="ml-auto flex flex-none items-center gap-1.5">
               {actions}
@@ -94,6 +101,38 @@ export function TopBar({
       )}
     </header>
   );
+}
+
+/**
+ * An act on the bar's second row: its icon, then its label once the row has 42rem; on a narrower
+ * row the label steps aside and the act is a 32px square, still named by its label. What it is
+ * given as children follows the label (Filter's count, File Task's key), or, with `asChild`, is
+ * the element it becomes (a Link).
+ */
+export function BarAction({ icon, label, className, children, ...props }: { icon: ReactNode; label: string } & ComponentProps<typeof Button>) {
+  return (
+    <Button aria-label={label} className={cn("@max-2xl/page:min-w-8 @max-2xl/page:px-2", className)} {...props}>
+      {icon}
+      <span className="hidden @2xl/page:inline">{label}</span>
+      <Slot.Slottable>{children}</Slot.Slottable>
+    </Button>
+  );
+}
+
+/** Whether an element's content runs past it, kept as its box and its content change. */
+function useOverflow<T extends HTMLElement>() {
+  const [el, ref] = useState<T | null>(null);
+  const [on, setOn] = useState(false);
+  useLayoutEffect(() => {
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setOn(el.scrollWidth > el.clientWidth);
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    for (const child of el.children) watch.observe(child);
+    measure();
+    return () => watch.disconnect();
+  });
+  return [ref, on] as const;
 }
 
 /** The scrolling area under the TopBar. `pad` gives it the kit's 20px × 24px page padding. */

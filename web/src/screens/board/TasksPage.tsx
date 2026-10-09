@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ApiError, type Task } from "@/api/client";
 import { useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
-import { Content, TopBar } from "@/app/TopBar";
+import { BarAction, Content, TopBar } from "@/app/TopBar";
 import { EmptyState } from "@/components/EmptyState";
 import { FilterChipRow, FilterMenuButton } from "@/components/filters/FilterBar";
 import { useSavedViews } from "@/components/filters/useSavedViews";
@@ -103,11 +103,9 @@ export function TasksPage() {
           </>
         }
         primary={
-          <Button onClick={() => openFileTask({ project: project.key })} aria-label="File Task">
-            <PlusIcon />
-            <span className="hidden sm:inline">File Task</span>
-            <Kbd className="hidden h-[18px] min-w-[18px] border-transparent bg-primary-foreground/15 text-[10.5px] text-inherit sm:inline-flex">C</Kbd>
-          </Button>
+          <BarAction icon={<PlusIcon />} label="File Task" onClick={() => openFileTask({ project: project.key })}>
+            <Kbd className="hidden h-[18px] min-w-[18px] border-transparent bg-primary-foreground/15 text-[10.5px] text-inherit @2xl/page:inline-flex">C</Kbd>
+          </BarAction>
         }
       />
       <FilterChipRow {...filter.bar} leading={savedViews.applied && <AppliedView name={savedViews.applied.name} edited={savedViews.edited} />} />

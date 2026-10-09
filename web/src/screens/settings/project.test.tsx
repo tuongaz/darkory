@@ -1,6 +1,10 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
+import { LiveActivity } from "@/api/live";
+import { Providers, Root } from "@/App";
+import { newQueryClient } from "@/queryClient";
 import type { Project, Task, Workspace } from "@/api/client";
 import { json, mockApi, refuse, type Handler } from "@/test/api";
 import { acceptance, ada, bob, builder, me, memberDetail, ops, review, signedIn, task, web, workflow } from "@/test/fixtures";
@@ -209,7 +213,15 @@ describe("a Project › Settings", () => {
 
   it("lands the old Settings address on the Project's, its key in the Project's case", async () => {
     mockApi(routes());
-    renderApp("/settings/projects/web/workspaces?x=1");
+    render(
+      <Providers client={newQueryClient()} live={new LiveActivity()}>
+        <MemoryRouter initialEntries={["/settings/projects/web/workspaces?x=1"]}>
+          <Root />
+          <Address />
+        </MemoryRouter>
+      </Providers>,
+    );
+    await waitFor(() => expect(screen.getByLabelText("Address")).toHaveTextContent("/projects/WEB/settings/workspaces?x=1"));
     const tabs = await screen.findByRole("navigation", { name: "Project settings" });
     expect(within(tabs).getByRole("link", { name: "Workspaces" })).toHaveAttribute("aria-current", "page");
     // The app's sidebar, not Settings' nav, beside it.
@@ -225,6 +237,12 @@ describe("a Project › Settings", () => {
     expect(within(tabs).getByRole("link", { name: "General" })).toHaveAttribute("href", "/projects/WEB/settings/general");
   });
 });
+
+/** Where the app is now, read out beside it. */
+function Address() {
+  const l = useLocation();
+  return <output aria-label="Address">{l.pathname + l.search}</output>;
+}
 
 /** Two open Tasks name shop, one ended Task names docs. */
 const tasks: Task[] = [

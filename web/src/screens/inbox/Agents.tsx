@@ -5,7 +5,7 @@ import type { Activity, Member, MemberDetail, Project, RunnerSession, Task } fro
 import { useDirectory, useOpenTasks, useProject, useRunnerSessions, useWorkflow } from "@/api/queries";
 import { projectPath, projectSettingsPath, useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
-import { Content, TopBar } from "@/app/TopBar";
+import { BarAction, Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
 import { EmptyState } from "@/components/EmptyState";
 import { HeartbeatMeter } from "@/components/HeartbeatMeter";
@@ -97,12 +97,9 @@ export function AgentsPage() {
         crumbs={[projectCrumb(project), { label: "Agents" }]}
         primary={
           me.member.admin && (
-            <Button asChild>
-              <Link to="/settings/organisation/agents?new=1">
-                <PlusIcon />
-                <span className="hidden sm:inline">New agent</span>
-              </Link>
-            </Button>
+            <BarAction asChild icon={<PlusIcon />} label="New agent">
+              <Link to="/settings/organisation/agents?new=1" />
+            </BarAction>
           )
         }
       />

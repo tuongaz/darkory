@@ -9,8 +9,9 @@ import { toShort } from "@/lib/shortid";
 import { cart, copy, payment, projectTasks, receipt, routes } from "./testData";
 
 const row = (name: RegExp) => screen.findByRole("link", { name });
-// A label shown from `sm` up, the icon alone on a phone (jsdom lays nothing out: the classes are what tell).
-const phoneHidden = (el: Element) => el.classList.contains("hidden") && /\bsm:(inline|flex)\b/.test(el.className);
+// A label shown once the bar's second row has 42rem, the icon alone on a narrower row (jsdom lays
+// nothing out: the classes are what tell).
+const narrowHidden = (el: Element) => el.classList.contains("hidden") && el.classList.contains("@2xl/page:inline");
 const main = () => document.getElementById("main")!;
 // The list's groups and the board's columns: the regions of the page, not the toasts' region.
 const regions = () => within(main()).getAllByRole("region").map((g) => g.getAttribute("aria-label"));
@@ -474,7 +475,7 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(switchIn()).not.toHaveClass("hidden");
     const links = within(switchIn()).getAllByRole("link");
     expect(links.map((l) => l.getAttribute("aria-label"))).toEqual(["List", "Board"]);
-    for (const l of links) expect(phoneHidden(within(l).getByText(l.getAttribute("aria-label")!))).toBe(true);
+    for (const l of links) expect(narrowHidden(within(l).getByText(l.getAttribute("aria-label")!))).toBe(true);
     chipped.unmount();
     mockApi(routes());
     const one = renderApp("/projects/WEB/tasks?view=board");
@@ -489,7 +490,7 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(switchIn()).not.toHaveClass("hidden");
   });
 
-  it("keeps Views, Filter, Display and File Task on the bar's second row beside the chip, each its icon alone on a phone", async () => {
+  it("keeps Views, Filter, Display and File Task on the bar's second row beside the chip, each its icon alone on a narrow bar", async () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
     await row(/WEB-2 Crash on save/);
@@ -498,7 +499,7 @@ describe("Tasks of a Project of several Workflows", () => {
     for (const name of ["Views", "Filter", "Display", "File Task"]) {
       const button = within(toolbar).getByRole("button", { name });
       expect(button).not.toHaveClass("max-sm:hidden");
-      expect(phoneHidden(within(button).getByText(name))).toBe(true);
+      expect(narrowHidden(within(button).getByText(name))).toBe(true);
     }
     for (const [name, opens] of [
       ["Views", "Views"],
@@ -515,12 +516,12 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(await screen.findByRole("dialog", { name: "Filters" })).toBeInTheDocument();
   });
 
-  it("names the count of Filters set on the Filter button, its label hidden on a phone", async () => {
+  it("names the count of Filters set on the Filter button, its label hidden on a narrow bar", async () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}&filter.tasks=kind:is:task&filter.tasks=blocked:is:false`);
     const filter = await screen.findByRole("button", { name: "Filter, 2 set" });
     expect(screen.getByRole("group", { name: "Page" })).toContainElement(filter);
-    expect(phoneHidden(within(filter).getByText("Filter"))).toBe(true);
+    expect(narrowHidden(within(filter).getByText("Filter"))).toBe(true);
     expect(within(filter).getByText("2")).toBeInTheDocument();
   });
 

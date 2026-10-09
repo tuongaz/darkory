@@ -12,7 +12,7 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Loaded, Refusal } from "@/components/Refusal";
-import { Button } from "@/components/ui/button";
+import { BarAction } from "@/app/TopBar";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -314,10 +314,7 @@ function ProjectMembers({ project, members }: { project: Project; members: Membe
       pad={false}
       actions={
         admin && (
-          <Button variant="outline" aria-label="New agent" onClick={() => setNewAgent(true)}>
-            <BotIcon />
-            <span className="hidden sm:inline">New agent</span>
-          </Button>
+          <BarAction variant="outline" icon={<BotIcon />} label="New agent" onClick={() => setNewAgent(true)} />
         )
       }
       primary={
@@ -325,10 +322,7 @@ function ProjectMembers({ project, members }: { project: Project; members: Membe
           <Picker
             align="end"
             trigger={
-              <Button aria-label="Add Member">
-                <PlusIcon />
-                <span className="hidden sm:inline">Add Member</span>
-              </Button>
+              <BarAction icon={<PlusIcon />} label="Add Member" />
             }
             placeholder={`Add to ${project.name}…`}
             heading={`Not in ${project.name}`}

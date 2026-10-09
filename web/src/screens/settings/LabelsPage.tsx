@@ -5,6 +5,7 @@ import { useLabels, useProject, useProjectLabels } from "@/api/queries";
 import { useRouteProject } from "@/app/currentProject";
 import { LabelPill } from "@/components/LabelPill";
 import { Refusal } from "@/components/Refusal";
+import { BarAction } from "@/app/TopBar";
 import { Button } from "@/components/ui/button";
 import { useCurrentMe } from "@/me";
 import { SettingsFrame } from "./frame";
@@ -58,10 +59,7 @@ export function ProjectLabelsPage() {
       pad={false}
       primary={
         editable && (
-          <Button aria-label="New Label" onClick={() => setAdding(true)} disabled={adding}>
-            <PlusIcon />
-            <span className="hidden sm:inline">New Label</span>
-          </Button>
+          <BarAction icon={<PlusIcon />} label="New Label" onClick={() => setAdding(true)} disabled={adding} />
         )
       }
     >

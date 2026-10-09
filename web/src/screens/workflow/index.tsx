@@ -10,7 +10,7 @@ import { WorkflowChip } from "@/components/WorkflowChip";
 import { useRouteProject, workflowEditPath, workflowsPath } from "@/app/currentProject";
 import { NotFound } from "@/app/NotFound";
 import { projectCrumb } from "@/app/crumbs";
-import { Content, TopBar, type Crumb } from "@/app/TopBar";
+import { BarAction, Content, TopBar, type Crumb } from "@/app/TopBar";
 import { FormDialog } from "@/components/FormDialog";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
@@ -70,10 +70,7 @@ export function WorkflowsPage() {
         crumbs={[projectCrumb(project), { label: "Workflows" }]}
         primary={
           admin && (
-            <Button onClick={acts.add} disabled={!graph || acts.busy}>
-              <PlusIcon />
-              Workflow
-            </Button>
+            <BarAction icon={<PlusIcon />} label="Workflow" onClick={acts.add} disabled={!graph || acts.busy} />
           )
         }
       />
@@ -155,19 +152,16 @@ export function WorkflowPage() {
               <span className="hidden text-xs text-muted-foreground tabular-nums lg:inline">{data.scoped.hiddenTotal} hidden</span>
             )}
             {named && named.key !== "…" && (
-              <Button asChild variant="outline" className="hidden sm:inline-flex">
+              <Button asChild variant="outline" className="hidden @2xl/page:inline-flex">
                 <Link to={taskPagePath(named.key)}>Open {named.key}</Link>
               </Button>
             )}
             {view === "line" && <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />}
             {admin && shown && (
-              <Button asChild variant="outline">
+              <BarAction asChild variant="outline" icon={<PencilIcon />} label="Edit">
                 {/* This Workflow's editor, in the app. */}
-                <Link to={workflowEditPath(project, shown.id)} aria-label={`Edit ${shown.name}`}>
-                  <PencilIcon />
-                  <span className="hidden sm:inline">Edit</span>
-                </Link>
-              </Button>
+                <Link to={workflowEditPath(project, shown.id)} aria-label={`Edit ${shown.name}`} />
+              </BarAction>
             )}
           </>
         }

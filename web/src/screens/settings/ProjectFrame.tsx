@@ -46,7 +46,7 @@ export function ProjectSettingsFrame({
                 to={projectSettingsPath(project, p.page)}
                 aria-current={p.page === page ? "page" : undefined}
                 className={cn(
-                  "inline-flex h-[26px] items-center rounded-[6px] px-2.5 font-medium text-muted-foreground",
+                  "inline-flex h-[26px] items-center rounded-[6px] px-2 text-xs font-medium text-muted-foreground",
                   p.page === page && "bg-background text-foreground shadow-soft",
                 )}
               >
