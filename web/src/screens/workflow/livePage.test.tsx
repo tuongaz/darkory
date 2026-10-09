@@ -274,6 +274,20 @@ describe("the line as it happens", () => {
   });
 });
 
+describe("the scope menu of a Project of one Workflow", () => {
+  it("lists an ended Parent with an open Retrospective on the line by its key and title", async () => {
+    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, ended_at: new Date().toISOString(), subtask_counts: { open: 1, working: 0, done: 1, dropped: 0 } });
+    serve([parent, task(10, { title: "Retrospective: Launch", parent_id: parent.id, kind: "retrospective", step_id: step.retro }), task(2)]);
+    renderApp("/projects/WEB/workflow");
+    await waitFor(() => expect(tokenOf("WEB-10")).not.toBeNull());
+    // The open Tasks leave the ended Parent out; the page reads it, so the menu names it.
+    await userEvent.click(screen.getByRole("button", { name: /^Scope: / }));
+    await waitFor(async () => expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["All Tasks2", "WEB-9Launch1 open", "No Parent1"]));
+    await userEvent.click(screen.getByRole("option", { name: /WEB-9/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scope: WEB-9 Launch" })).toBeInTheDocument());
+  });
+});
+
 describe("the Workflow page of a Project of several Workflows (ADR 0019)", () => {
   afterEach(() => localStorage.clear());
   const at = (n: number, title: string, stepId: string, workflowId: string, extra: Partial<Task> = {}) => task(n, { title, step_id: stepId, workflow_id: workflowId, skill_id: undefined, ...extra });
@@ -362,7 +376,8 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
   it("counts an ended Parent under Done where its board's Done column has it: where its Subtasks ended", async () => {
     const today = new Date().toISOString();
     const yesterday = new Date(Date.now() - 86_400_000).toISOString();
-    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: undefined, ended_at: today, subtask_counts: { open: 0, working: 0, done: 0, dropped: 1 } });
+    // The server lists it where its one Subtask ended: Bugs.
+    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: wfId.bugs, ended_at: today, subtask_counts: { open: 0, working: 0, done: 0, dropped: 1 } });
     several([
       at(3, "Sorted", wfStep.triage, wfId.triage, { state: "done", step_id: undefined, last_step_id: wfStep.triage, ended_at: today }),
       parent,
@@ -391,7 +406,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
   };
 
   it("lists a Parent in the scope menu of each line one of its open Subtasks is on", async () => {
-    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: wfId.triage, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
     several([parent, at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: parent.id }), at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
     renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
@@ -407,7 +422,8 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
   it("lists an ended Parent on the line its Retrospective is open on, and counts it under Done where its work ended", async () => {
     const today = new Date().toISOString();
     const yesterday = new Date(Date.now() - 86_400_000).toISOString();
-    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: undefined, ended_at: today, subtask_counts: { open: 1, working: 0, done: 0, dropped: 1 } });
+    // The server lists it where its work ended, Bugs, not where its Retrospective is.
+    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: wfId.bugs, ended_at: today, subtask_counts: { open: 1, working: 0, done: 0, dropped: 1 } });
     several([
       parent,
       // Dropped at Fix yesterday: where the Parent's work ended (and not itself done today).
@@ -425,7 +441,8 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
   });
 
   it("lists a Parent waiting with its Owner on the one page where its Subtasks ended, as its board does", async () => {
-    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 0, working: 0, done: 1, dropped: 0 } });
+    // The server lists it where its Subtask ended: Bugs.
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: wfId.bugs, subtask_counts: { open: 0, working: 0, done: 1, dropped: 0 } });
     several([parent, at(10, "Ship it", wfStep.fix, wfId.bugs, { parent_id: parent.id, state: "done", step_id: undefined, last_step_id: wfStep.fix, ended_at: new Date().toISOString() })]);
     renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
     const needs = await screen.findByRole("region", { name: "Needs you" });
@@ -437,8 +454,9 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
   });
 
   it("lists a question under a Parent on the page of the Parent's board", async () => {
-    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
-    const asked = task(12, { title: "Which build crashed?", parent_id: parent.id, step_id: undefined, step_since: undefined, skill_id: undefined, aimed_at_id: ada.id });
+    // Blocking nothing, the question is listed with its Parent, which is listed at Investigate's Workflow.
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: wfId.bugs, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
+    const asked = task(12, { title: "Which build crashed?", parent_id: parent.id, step_id: undefined, step_since: undefined, skill_id: undefined, aimed_at_id: ada.id, workflow_id: wfId.bugs });
     several([parent, asked, at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
     renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}&view=text`);
     const withMember = await screen.findByRole("region", { name: "With a Member" });
@@ -448,7 +466,7 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
   });
 
   it("keeps a Parent's scope across a pick of a Workflow one of its open Subtasks is on, and drops it on another", async () => {
-    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: wfId.triage, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
     several([parent, at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: parent.id }), at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
     renderApp(`/projects/WEB/workflow?workflow=${wfId.triage}&scope=k-9`);
     await waitFor(() => expect(screen.getByRole("button", { name: "Scope: WEB-9 Launch" })).toBeInTheDocument());
@@ -459,10 +477,11 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
     await waitFor(() => expect(screen.getByRole("button", { name: "Scope: All Tasks" })).toBeInTheDocument());
   });
 
-  it("lists a question beside the Task it blocks, else with its Parent, else on every page", async () => {
+  it("lists a question where the server lists it, beside the Task it blocks, and one listed nowhere on every page", async () => {
     const q = (n: number, title: string, extra: Partial<Task> = {}) => task(n, { title, step_id: undefined, step_since: undefined, skill_id: undefined, aimed_at_id: ada.id, ...extra });
     const blocked = (by: Task) => ({ blocked: true, open_blockers: [{ id: by.id, key: by.key, title: by.title }] });
-    const forBugs = q(20, "Which build crashed?");
+    // The server lists it beside the Task it blocks; the other it lists nowhere.
+    const forBugs = q(20, "Which build crashed?", { workflow_id: wfId.bugs });
     const loose = q(21, "Anyone seen this?");
     several([forBugs, loose, at(2, "Crash on save", wfStep.investigate, wfId.bugs, blocked(forBugs))]);
     renderApp(`/projects/WEB/workflow?view=text`);

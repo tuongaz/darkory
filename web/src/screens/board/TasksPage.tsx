@@ -81,6 +81,8 @@ export function TasksPage() {
     return out;
   }, [filtering, expanded, kept.shown, passed]);
 
+  // The Workflow chip, in the bar on the board of a Project of several Workflows.
+  const chip = view === "board" && model.workflows.length > 1;
   const top = (
     <>
       <h1 className="sr-only">{view === "board" ? "Tasks, board" : "Tasks, list"}</h1>
@@ -89,10 +91,10 @@ export function TasksPage() {
           projectCrumb(project, false),
           // The board shows one Workflow, picked here at every width (a phone has no other way to
           // another); the list, the whole Project.
-          ...(view === "board" && model.workflows.length > 1 ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} />, whole: true }] : []),
+          ...(chip ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} />, whole: true }] : []),
           { label: "Tasks", wide: true },
         ]}
-        view={<ViewSwitch view={view} />}
+        view={<ViewSwitch view={view} fold={chip} />}
         actions={
           <>
             <ViewsMenu {...savedViews} />
@@ -240,10 +242,7 @@ function Board({
     workflow,
     steps: model.steps,
     position: model.position,
-    stepWorkflow: model.stepWorkflow,
     children: model.children,
-    byId: model.byId,
-    blocks: model.blocks,
     members: model.members,
     display,
   });

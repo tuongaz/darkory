@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Claim } from "@/api/client";
-import { chainOf, scopedLine, traceOf, unblocksWhen } from "./data";
+import { chainOf, scopedLine, scopeMenu, traceOf, unblocksWhen } from "./data";
 import { workflowsSkills, workflowsFixture } from "@/test/fixtures";
 import { MAIN } from "./fixtures";
 import { startStep, stepsOf, type LineTask, type LineWorkflow } from "./model";
@@ -153,5 +153,34 @@ describe("a Project of several Workflows", () => {
     expect(stepsOf(line(), "wf-support").map((s) => s.name)).toEqual(["Support", "Awaiting customer", "Ops", "Approve"]);
     expect(stepsOf({ ...line(), steps: [...line().steps].reverse() }, "wf-features").map((s) => s.name)).toEqual(["Build", "Code review", "QA", "Release"]);
     expect(stepsOf(line(), "wf-none")).toEqual([]);
+  });
+});
+
+describe("the scope menu", () => {
+  const records = new Map([
+    ["k-7", { key: "MAIN-7", title: "Checkout" }],
+    ["k-1", { key: "MAIN-1", title: "Launch" }],
+  ]);
+  const recordOf = (id: string) => records.get(id);
+
+  it("of the whole line: each Parent with open Subtasks, in the order met, and the Tasks at a Step with none", () => {
+    expect(scopeMenu(all, undefined, recordOf)).toEqual({
+      parents: [
+        { id: "k-7", key: "MAIN-7", title: "Checkout", open: 5 },
+        { id: "k-1", key: "MAIN-1", title: "Launch", open: 1 },
+      ],
+      // MAIN-4, 5, 6 and 19; MAIN-13, a question, is at no Step.
+      noParent: 4,
+    });
+  });
+
+  it("of a line of some Steps: a Parent only where an open Subtask is, wherever the Parent is listed, its open Subtasks there counted", () => {
+    // An ended Parent (MAIN-1) is offered on the line its open Retrospective is on.
+    expect(scopeMenu(all, new Set(["retro"]), recordOf)).toEqual({ parents: [{ id: "k-1", key: "MAIN-1", title: "Launch", open: 1 }], noParent: 0 });
+    expect(scopeMenu(all, new Set(["build", "qa"]), recordOf)).toEqual({ parents: [{ id: "k-7", key: "MAIN-7", title: "Checkout", open: 4 }], noParent: 2 });
+  });
+
+  it("names a Parent not read yet \"…\"", () => {
+    expect(scopeMenu(all, new Set(["retro"]), () => undefined).parents).toEqual([{ id: "k-1", key: "…", title: "", open: 1 }]);
   });
 });

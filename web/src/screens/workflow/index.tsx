@@ -53,8 +53,7 @@ export function WorkflowPage() {
     const scope = data?.scope;
     const scoped = scope && (scope.kind === "parent" || scope.kind === "task") ? scope.id : undefined;
     const at = scoped ? data?.shown?.of(scoped) : undefined;
-    const workflowOf = new Map((data?.facts.steps ?? []).map((s) => [s.id, s.workflow_id]));
-    const working = scope?.kind === "parent" && !!data?.all.some((t) => t.parentId === scope.id && !!t.stepId && workflowOf.get(t.stepId) === next);
+    const working = scope?.kind === "parent" && !!data?.shown?.lines(scope.id).has(next);
     picked.set(next, at && !at.has(next) && !working ? { also: (p) => p.delete("scope") } : undefined);
   };
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;

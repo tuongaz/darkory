@@ -252,158 +252,46 @@ export type Column =
   | { kind: "with"; id: string; memberId: string; member: Member | undefined; tasks: Task[] }
   | { kind: "done" | "dropped"; id: "done" | "dropped"; tasks: Task[]; collapsed: boolean };
 
-/** What says which Workflow's board a Task at no Step shows on: the Project's Workflows and Steps, and the Tasks around it. */
+/** What places a Task on a Workflow's board: the Project's Workflows and Steps, and each Parent's Subtasks. */
 export type BoardContext = {
   workflows: readonly Pick<WorkflowName, "id" | "position">[];
   /** The Project's Steps in its order (`stepsInOrder`). */
   steps: readonly Pick<WorkflowStep, "id" | "workflow_id">[];
   children: Map<string, Task[]>;
-  /** Every Task of the Project the page has, by id, filtered or not. */
-  byId: Map<string, Task>;
-  /** The open Tasks each Task blocks (`blocking`). */
-  blocks: Map<string, TaskBrief[]>;
   /** Each Step's place in the Project's order, by id (`stepLookups`). */
   position: Map<string, number>;
-  /** Each Step's Workflow, by the Step's id (`stepLookups`). */
-  stepWorkflow: Map<string, string>;
 };
 
-/** What a BoardContext reads off the Project's Steps in its order, built once: each Step's place and its Workflow. */
-export function stepLookups(steps: readonly Pick<WorkflowStep, "id" | "workflow_id">[]): Pick<BoardContext, "position" | "stepWorkflow"> {
-  return { position: new Map(steps.map((s, i) => [s.id, i])), stepWorkflow: new Map(steps.map((s) => [s.id, s.workflow_id])) };
+/** What a BoardContext reads off the Project's Steps in its order, built once: each Step's place. */
+export function stepLookups(steps: readonly Pick<WorkflowStep, "id">[]): Pick<BoardContext, "position"> {
+  return { position: new Map(steps.map((s, i) => [s.id, i])) };
 }
 
 /** The Project's first Workflow by position. */
 const firstWorkflow = (workflows: BoardContext["workflows"]) => workflowsInOrder(workflows)[0]?.id;
 
 /**
- * The Workflow whose board an ended Task's card lands on: the one it ended in (`workflow_id`); for
- * a Parent, which ends at no Step, the one its most recently ended Subtask ended in, counting only
- * the Subtasks that ended at a Step at or before the Parent did (a Retrospective, filed when the
- * Parent ends, ends after it and says nothing of where the work ended). Subtasks ended together (a
- * cascade drop) go to the least advanced in the Project's order, so the Parent stays where it was.
- * A Task aimed at a Member, which ends at no Step, lands where its Parent does (`withWorkflowsOf`).
- * Else, as for a Task whose last Step was since deleted, the Project's first Workflow.
+ * The Workflows whose board and Workflow page list a Task; undefined for every one. The server
+ * places every Task by one rule and says where in `workflow_id` (the Workflow of its Step or the
+ * Step it ended at; a Parent's by its Subtasks; a question's by the Task it blocks, else its
+ * Parent), so the board, the page, `tasks --workflow` and MCP agree. With no Workflow of the
+ * Project from the server, an open Task (a question that blocks nothing at a Step and has no
+ * Parent placed) is on every board, and an ended one (its last Step since deleted) on the first.
  */
-export function endedWorkflowOf(
-  task: Pick<Task, "id" | "workflow_id" | "ended_at" | "parent_id" | "aimed_at_id">,
-  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "position" | "stepWorkflow" | "byId">>,
-): string | undefined {
-  const known = new Set(ctx.workflows.map((w) => w.id));
-  if (task.workflow_id && known.has(task.workflow_id)) return task.workflow_id;
-  const last = lastEndedSubtask(task, ctx);
-  if (last) return last.workflow_id;
-  const { byId, position, stepWorkflow } = ctx;
-  if (task.aimed_at_id && task.parent_id && byId && position && stepWorkflow) {
-    const parent = byId.get(task.parent_id);
-    const at = parent && parentWorkflow(parent, { workflows: ctx.workflows, children: ctx.children, byId, position, stepWorkflow });
-    if (at) return at;
-  }
-  return firstWorkflow(ctx.workflows);
-}
-
-/**
- * The Subtask of `task` that ended last at a Step of a Workflow the Project has, at or before
- * `task` ended (any, while `task` is open or undated); ties to the least advanced in the
- * Project's order (its `last_step_id`, else its Workflow's place).
- */
-function lastEndedSubtask(
-  task: Pick<Task, "id" | "ended_at">,
-  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "position">>,
-): Task | undefined {
-  const rank = new Map(ctx.workflows.map((w) => [w.id, w.position]));
-  const until = task.ended_at ? time(task.ended_at) : Number.POSITIVE_INFINITY;
-  const ended = (ctx.children.get(task.id) ?? []).filter((s) => s.state !== "open" && !!s.workflow_id && rank.has(s.workflow_id) && time(s.ended_at) <= until);
-  if (ended.length === 0) return undefined;
-  const advance = (s: Task) => [rank.get(s.workflow_id!)!, s.last_step_id ? (ctx.position?.get(s.last_step_id) ?? -1) : -1] as const;
-  const lessAdvanced = (a: Task, b: Task) => {
-    const [wa, sa] = advance(a);
-    const [wb, sb] = advance(b);
-    return wa - wb || sa - sb;
-  };
-  return ended.reduce((a, b) => {
-    const by = time(b.ended_at) - time(a.ended_at);
-    if (by !== 0) return by > 0 ? b : a;
-    return lessAdvanced(b, a) < 0 ? b : a;
-  });
-}
-
-/** The Workflow a Parent's card is on: an open one's least advanced Subtask's Step's, an ended one's `endedWorkflowOf`; none while it waits with a Member. */
-function parentWorkflow(parent: Task, ctx: Pick<BoardContext, "workflows" | "children" | "byId" | "position" | "stepWorkflow">): string | undefined {
-  if (parent.state !== "open") return endedWorkflowOf(parent, ctx);
-  const place = placeOf(parent, ctx);
-  return place.kind === "step" ? ctx.stepWorkflow.get(place.stepId) : undefined;
-}
-
-/**
- * The Workflows whose boards show an open Task waiting with a Member at no Step, in "With
- * <Member>"; undefined for every board. A Task aimed at a Member (a question) shows beside the
- * Tasks it blocks, on the boards of their Workflows; blocking none, on its Parent's; else on every
- * board. A Parent waiting with a Member shows where its Subtasks last ended, else on every board.
- */
-export function withWorkflowsOf(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
-  if (isParent(task)) {
-    const last = lastEndedSubtask({ id: task.id, ended_at: undefined }, ctx);
-    return last ? new Set([last.workflow_id!]) : undefined;
-  }
-  const held = new Set<string>();
-  for (const b of ctx.blocks.get(task.id) ?? []) {
-    const t = ctx.byId.get(b.id);
-    const at = t?.step_id ? ctx.stepWorkflow.get(t.step_id) : undefined;
-    if (at) held.add(at);
-  }
-  if (held.size > 0) return held;
-  const parent = task.parent_id ? ctx.byId.get(task.parent_id) : undefined;
-  const at = parent && parentWorkflow(parent, ctx);
-  return at ? new Set([at]) : undefined;
-}
-
-/**
- * The Workflows whose board and Workflow page show a Task; undefined for every one. The board and
- * the page read it alike, so a Task is found in one place:
- *
- * - an open Task at a Step: that Step's Workflow;
- * - an open Parent: the Workflow of its least advanced open Subtask's Step (`placeOf`); waiting
- *   with a Member, where its Subtasks last ended (`withWorkflowsOf`);
- * - an ended Task, a Parent included: the Workflow it ended in (`endedWorkflowOf`);
- * - an open Task aimed at a Member: the Workflows of the Tasks it blocks, else its Parent's, else
- *   every one (`withWorkflowsOf`).
- */
-export function listedOn(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
-  if (task.state !== "open") {
-    const at = endedWorkflowOf(task, ctx);
-    return at ? new Set([at]) : undefined;
-  }
-  const place = placeOf(task, ctx);
-  if (place.kind === "step") {
-    const at = ctx.stepWorkflow.get(place.stepId);
-    return new Set(at ? [at] : []);
-  }
-  return withWorkflowsOf(task, ctx);
-}
-
-/**
- * What places a Task at no Step, from the Project's Workflows and Steps (its Steps in its order,
- * `stepsInOrder`) and the Tasks a page has: the open ones, and any ended ones it read.
- */
-export function boardContext(graph: Pick<BoardContext, "workflows" | "steps">, tasks: readonly Task[]): BoardContext {
-  return {
-    workflows: graph.workflows,
-    steps: graph.steps,
-    ...stepLookups(graph.steps),
-    children: childrenOf(tasks),
-    byId: new Map(tasks.map((t) => [t.id, t])),
-    blocks: blocking(tasks),
-  };
+export function listedOn(task: Pick<Task, "state" | "workflow_id">, ctx: Pick<BoardContext, "workflows">): ReadonlySet<string> | undefined {
+  if (task.workflow_id && ctx.workflows.some((w) => w.id === task.workflow_id)) return new Set([task.workflow_id]);
+  if (task.state === "open") return undefined;
+  const first = firstWorkflow(ctx.workflows);
+  return first ? new Set([first]) : undefined;
 }
 
 /**
  * The board of one Workflow (`workflow`): its Steps in order (empty ones too, so a card can be
  * dragged there), then "With <Member>" for each Member an open card shown here is aimed at
- * (`withWorkflowsOf`), then Done, then Dropped, each collapsed to its header unless the Display
- * shows it. The cards are the Tasks with no Subtasks; Parents, when the Display shows them, stand
- * where `placeOf` says, so an open one shows on the board of its least advanced Subtask's Step
- * only. Done and Dropped hold the Tasks that ended in this Workflow (`endedWorkflowOf`).
+ * (`listedOn`), then Done, then Dropped, each collapsed to its header unless the Display shows
+ * it. The cards are the Tasks with no Subtasks; Parents, when the Display shows them, stand where
+ * `placeOf` says, so an open one shows on the board of its least advanced Subtask's Step only.
+ * Done and Dropped hold the Tasks listed in this Workflow (`listedOn`).
  */
 export function boardColumns(
   tasks: readonly Task[],

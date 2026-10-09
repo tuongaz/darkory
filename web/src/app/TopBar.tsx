@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 /**
  * A step of the breadcrumb. `wide` leaves it out on a phone, where the bar has room for the area
  * alone. `whole` keeps it at its own width (a control, such as the Workflow chip, that must read
- * in full on a phone): the other crumbs truncate first.
+ * in full on a phone): the other crumbs truncate first, and on a phone the area's crumb gives it
+ * its room; only when the bar has no more does it shrink, its control truncating inside it.
  */
 export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: boolean; whole?: boolean };
 
@@ -28,6 +29,7 @@ export function TopBar({
   actions?: ReactNode;
   primary?: ReactNode;
 }) {
+  const whole = crumbs.some((c) => c.whole);
   return (
     <header className="flex h-11 flex-none items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1.5 text-muted-foreground md:hidden" />
@@ -35,24 +37,31 @@ export function TopBar({
         {crumbs.map((c, i) => (
           <Fragment key={i}>
             {i > 0 && (
-              <span aria-hidden className={cn("text-border", c.wide && "hidden sm:inline")}>
+              <span aria-hidden className={cn("text-border", (c.wide || (i === 1 && whole)) && "hidden sm:inline")}>
                 /
               </span>
             )}
-            <span className={cn("flex items-center gap-1.5", c.whole ? "flex-none" : "min-w-0", i === 0 && "font-medium text-foreground", c.wide && "hidden sm:flex")}>
+            <span
+              className={cn(
+                "flex items-center gap-1.5",
+                c.whole ? "min-w-0 sm:flex-none" : "min-w-0",
+                i === 0 && "font-medium text-foreground",
+                (c.wide || (i === 0 && whole && !c.whole)) && "hidden sm:flex",
+              )}
+            >
               {c.icon}
               {c.to ? (
                 <Link to={c.to} className="truncate hover:underline">
                   {c.label}
                 </Link>
               ) : (
-                <span className={cn(!c.whole && "truncate")}>{c.label}</span>
+                <span className={cn(c.whole ? "flex min-w-0" : "truncate")}>{c.label}</span>
               )}
             </span>
           </Fragment>
         ))}
       </nav>
-      {view && <div className="ml-3 flex-none">{view}</div>}
+      {view && <div className="flex-none sm:ml-3">{view}</div>}
       {(actions || primary) && (
         <div className="ml-auto flex flex-none items-center gap-1.5">
           {actions}

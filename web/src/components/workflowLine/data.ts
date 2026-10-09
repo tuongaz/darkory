@@ -73,6 +73,31 @@ export type ScopeParent = {
   subtasks: readonly { id: string; key: string; title: string; kind: LineTask["kind"]; state: "open" | "done" | "dropped" }[];
 };
 
+/** A Parent the scope menu offers: its key and title ("…" until read), and how many of its Subtasks are open on the line. */
+export type ScopeChoice = { id: string; key: string; title: string; open: number };
+
+/**
+ * The scope menu of a line that draws the Steps `drawn` (every Step when none): each Parent with
+ * an open Subtask on the line, in the order of `all`, wherever the Parent itself is listed (an
+ * ended one beside its open Retrospective; one with Subtasks on two Workflows' lines on both),
+ * named by its record; and how many open Tasks at the line's Steps have no Parent. Another
+ * Workflow's Tasks are on its own line.
+ */
+export function scopeMenu(
+  all: readonly LineTask[],
+  drawn: ReadonlySet<string> | undefined,
+  recordOf: (id: string) => Pick<Task, "key" | "title"> | undefined,
+): { parents: ScopeChoice[]; noParent: number } {
+  const onLine = (t: LineTask) => !drawn || (!!t.stepId && drawn.has(t.stepId));
+  const counts = new Map<string, number>();
+  for (const t of all) if (t.parentId && onLine(t)) counts.set(t.parentId, (counts.get(t.parentId) ?? 0) + 1);
+  const parents = [...counts].map(([id, open]) => {
+    const r = recordOf(id);
+    return { id, key: r?.key ?? "…", title: r?.title ?? "", open };
+  });
+  return { parents, noParent: all.filter((t) => t.stepId && onLine(t) && !t.parentId).length };
+}
+
 /** A token-shaped mark for a Subtask still to come: "when 4 open end Done". */
 export type Ghost = { stepId: string; text: string; label: string };
 

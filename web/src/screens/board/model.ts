@@ -39,7 +39,7 @@ export function useTasksModel(project: Project) {
        */
       workflowOf: (s: Pick<WorkflowStep, "workflow_id">): string | undefined => (workflows.length > 1 ? workflowName.get(s.workflow_id) : undefined),
       stepById: new Map<string, WorkflowStep>(steps.map((s) => [s.id, s])),
-      /** Each Step's place in the Project's order and its Workflow, by id: what places a Task. */
+      /** Each Step's place in the Project's order, by id: where a Parent stands. */
       ...stepLookups(steps),
       byId: new Map<string, Task>(list.map((t) => [t.id, t])),
       children: childrenOf(list),

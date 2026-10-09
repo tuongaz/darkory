@@ -320,7 +320,7 @@ describe("Tasks of a Project of several Workflows", () => {
   const at = (n: number, title: string, stepId: string, workflowId: string) => task(n, { title, step_id: stepId, workflow_id: workflowId });
   const done = (n: number, title: string, workflowId: string | undefined) =>
     task(n, { title, state: "done", step_id: undefined, step_since: undefined, workflow_id: workflowId, ended_at: "2026-10-03T09:00:00Z" });
-  const parent = parentTask(5, { open: 0, working: 0, done: 1, dropped: 0 }, { title: "Billing revamp", state: "done", ended_at: "2026-10-04T09:00:00Z" });
+  const parent = parentTask(5, { open: 0, working: 0, done: 1, dropped: 0 }, { title: "Billing revamp", state: "done", ended_at: "2026-10-04T09:00:00Z", workflow_id: wfId.bugs });
   const tasks = [
     at(1, "Sort the inbox", wfStep.triage, wfId.triage),
     at(2, "Crash on save", wfStep.investigate, wfId.bugs),
@@ -439,7 +439,8 @@ describe("Tasks of a Project of several Workflows", () => {
   });
 
   it("shows a question aimed at a Member in With <Member> on the board of the Task it blocks", async () => {
-    const asked = task(7, { title: "Which browser?", step_id: undefined, step_since: undefined, aimed_at_id: bob.id });
+    // Where the server lists it: the Workflow of the Task it blocks.
+    const asked = task(7, { title: "Which browser?", step_id: undefined, step_since: undefined, aimed_at_id: bob.id, workflow_id: wfId.bugs });
     const held = task(8, { title: "Blank page", step_id: wfStep.fix, workflow_id: wfId.bugs, blocked: true, open_blockers: [{ id: asked.id, key: asked.key, title: asked.title }] });
     mockApi(routes({ "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills }, "GET /v1/tasks": { items: [...tasks, asked, held] } }));
     const bugs = renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
@@ -458,6 +459,36 @@ describe("Tasks of a Project of several Workflows", () => {
     renderApp("/projects/WEB/tasks?view=board");
     await row(/WEB-2/);
     expect(screen.queryByRole("button", { name: /^Workflow:/ })).not.toBeInTheDocument();
+  });
+
+  it("folds the List | Board switch to a menu on a phone beside the chip, its check mark first", async () => {
+    mockApi(several());
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await row(/WEB-2 Crash on save/);
+    // The segments are for a wider screen; a phone has the menu under the layout's icon.
+    expect(screen.getByRole("navigation", { name: "View" })).toHaveClass("hidden", "sm:inline-flex");
+    await userEvent.click(screen.getByRole("button", { name: "View: Board" }));
+    const items = await screen.findAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["List", "Board"]);
+    for (const i of items) expect(i.querySelector("svg")?.getAttribute("class")).toMatch(/lucide-check/);
+    expect(items[1].querySelector("svg")).not.toHaveClass("invisible");
+    expect(items[0].querySelector("svg")).toHaveClass("invisible");
+  });
+
+  it("keeps the List | Board switch as two icons on a phone where no chip is in the bar", async () => {
+    // A Project of one Workflow, and the list of several: no chip, no menu.
+    mockApi(routes());
+    const one = renderApp("/projects/WEB/tasks?view=board");
+    await row(/WEB-2/);
+    expect(screen.queryByRole("button", { name: /^View: / })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "View" })).not.toHaveClass("hidden");
+    expect(within(screen.getByRole("navigation", { name: "View" })).getAllByRole("link").map((l) => l.getAttribute("aria-label"))).toEqual(["List", "Board"]);
+    one.unmount();
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=list");
+    await row(/WEB-2 Crash on save/);
+    expect(screen.queryByRole("button", { name: /^View: / })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "View" })).not.toHaveClass("hidden");
   });
 
   it("grouped by other than Step, a row's Step reads with its Workflow", async () => {

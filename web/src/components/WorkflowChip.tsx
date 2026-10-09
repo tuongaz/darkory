@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
  * caret; its menu lists the Project's Workflows in order, a check on the picked one. Nothing for a
  * Project of one. It shows at every width, at its own width (a breadcrumb crumb `whole`): on a
  * phone it is the only way to another Workflow, so a short name never truncates, a long one past
- * about 12 characters truncates before the caret, and the caret always shows. The pick is
+ * about 12 characters (or where the bar has no more room) truncates before the caret, and the
+ * caret always shows. The pick is
  * `usePickedWorkflow`'s (pickedWorkflow.ts).
  */
 export function WorkflowChip({ workflows, picked, onPick }: { workflows: readonly Workflow[]; picked: string | undefined; onPick: (id: string) => void }) {
@@ -25,9 +26,9 @@ export function WorkflowChip({ workflows, picked, onPick }: { workflows: readonl
         <button
           type="button"
           aria-label={`Workflow: ${current.name}`}
-          className="inline-flex h-7 flex-none items-center gap-1 rounded-md border bg-background px-2 text-[13px] font-medium text-foreground"
+          className="inline-flex h-7 max-w-full min-w-0 items-center gap-1 rounded-md border bg-background px-2 text-[13px] font-medium text-foreground"
         >
-          <span className="max-w-[12ch] truncate sm:max-w-[24ch]">{current.name}</span>
+          <span className="max-w-[12ch] min-w-0 truncate sm:max-w-[24ch]">{current.name}</span>
           <ChevronDownIcon aria-hidden className="size-3 flex-none text-muted-foreground" />
         </button>
       </PopoverTrigger>

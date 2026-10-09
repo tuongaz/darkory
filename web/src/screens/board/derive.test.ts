@@ -10,8 +10,8 @@ import {
   defaultDisplay,
   defaultFileStep,
   dropProblem,
-  endedWorkflowOf,
   groupTasks,
+  listedOn,
   listRows,
   marksOf,
   moveProblem,
@@ -188,8 +188,6 @@ describe("the board of one Workflow among several", () => {
       steps,
       ...stepLookups(steps),
       children: childrenOf(tasks),
-      byId: new Map(tasks.map((t) => [t.id, t])),
-      blocks: blocking(tasks),
       members,
       display,
     });
@@ -221,79 +219,65 @@ describe("the board of one Workflow among several", () => {
     expect(board(tasks, wfId.triage, shown).flatMap((c) => c.tasks.map((t) => t.key))).toEqual([]);
   });
 
-  it("lands an ended Parent where its most recently ended Subtask ended, else on the first Workflow", () => {
-    const p = parentTask(5, { open: 0, working: 0, done: 2, dropped: 0 }, { state: "done", ended_at: "2026-10-05T09:00:00Z" });
-    const early = subtask(6, p, { state: "done", step_id: undefined, workflow_id: wfId.triage, ended_at: "2026-10-02T09:00:00Z" });
-    const late = subtask(7, p, { state: "done", step_id: undefined, workflow_id: wfId.bugs, ended_at: "2026-10-04T09:00:00Z" });
-    const ctxOf = (tasks: Task[]) => ({ workflows: five.workflows, children: childrenOf(tasks) });
-    // The later in time, not the later in the list.
-    expect(endedWorkflowOf(p, ctxOf([p, late, early]))).toBe(wfId.bugs);
-    // No ended_at to go by: the least advanced in the Project's order.
-    const undated = [p, { ...late, ended_at: undefined }, { ...early, ended_at: undefined }];
-    expect(endedWorkflowOf(p, ctxOf(undated))).toBe(wfId.triage);
-    // A question aimed at a Member ended at no Step: the Subtask before it says where the work ended.
-    const asked = subtask(8, p, { state: "done", step_id: undefined, aimed_at_id: bob.id, ended_at: "2026-10-04T10:00:00Z" });
-    expect(endedWorkflowOf(p, ctxOf([p, early, late, asked]))).toBe(wfId.bugs);
-    expect(endedWorkflowOf(p, ctxOf([p]))).toBe(wfId.triage);
-    const shown = { ...defaultDisplay, showParents: true };
-    expect(keys(board([p, early, late], wfId.bugs, shown), "done")).toEqual(["WEB-5", "WEB-7"]);
-    expect(keys(board([p, early, late], wfId.triage, shown), "done")).toEqual(["WEB-6"]);
+  it("puts a Parent where the server lists it: waiting with its Owner in that board's With, ended in that board's Done", () => {
+    const shown = { ...defaultDisplay, showParents: true, showDropped: true };
+    // Its one Subtask ended at Fix: the server lists the Parent, waiting with ada, in Bugs.
+    const waiting = parentTask(5, { open: 0, working: 0, done: 1, dropped: 0 }, { workflow_id: wfId.bugs });
+    const fixed = subtask(6, waiting, { state: "done", step_id: undefined, workflow_id: wfId.bugs, last_step_id: wfStep.fix, ended_at: "2026-10-04T09:00:00Z" });
+    expect(keys(board([waiting, fixed], wfId.bugs, shown), `with:${ada.id}`)).toEqual(["WEB-5"]);
+    expect(keys(board([waiting, fixed], wfId.triage, shown), `with:${ada.id}`)).toBeUndefined();
+    // Ended, with its Retrospective at Triage: in Bugs' Done, where the server lists it, not Triage's.
+    const ended = parentTask(7, { open: 1, working: 0, done: 1, dropped: 0 }, { state: "done", workflow_id: wfId.bugs, ended_at: "2026-10-05T09:00:00Z" });
+    const retro = subtask(8, ended, { kind: "retrospective", step_id: wfStep.triage, workflow_id: wfId.triage });
+    expect(keys(board([ended, retro], wfId.bugs, shown), "done")).toEqual(["WEB-7"]);
+    expect(keys(board([ended, retro], wfId.triage, shown), "done")).toEqual([]);
+    expect(keys(board([ended, retro], wfId.triage, shown), wfStep.triage)).toEqual(["WEB-8"]);
   });
 
-  it("lands an ended Parent where its work ended, not where the Retrospective filed as it ended did", () => {
-    const p = parentTask(5, { open: 0, working: 0, done: 2, dropped: 0 }, { state: "done", ended_at: "2026-10-05T09:00:00Z" });
-    const fixed = subtask(6, p, { state: "done", step_id: undefined, workflow_id: wfId.bugs, last_step_id: wfStep.verify, ended_at: "2026-10-04T09:00:00Z" });
-    const retro = subtask(7, p, { kind: "retrospective", state: "done", step_id: undefined, workflow_id: wfId.triage, last_step_id: wfStep.triage, ended_at: "2026-10-06T09:00:00Z" });
-    const tasks = [p, fixed, retro];
-    expect(endedWorkflowOf(p, { workflows: five.workflows, children: childrenOf(tasks) })).toBe(wfId.bugs);
-    const shown = { ...defaultDisplay, showParents: true };
-    expect(keys(board(tasks, wfId.bugs, shown), "done")).toEqual(["WEB-5", "WEB-6"]);
-    expect(keys(board(tasks, wfId.triage, shown), "done")).toEqual(["WEB-7"]);
-  });
-
-  it("lands a dropped Parent whose Subtasks dropped with it on the board of the least advanced", () => {
-    const when = "2026-10-05T09:00:00Z";
-    const p = parentTask(5, { open: 0, working: 0, done: 0, dropped: 3 }, { state: "dropped", ended_at: when });
-    const dropped = (n: number, workflowId: string, stepId: string) => subtask(n, p, { state: "dropped", step_id: undefined, workflow_id: workflowId, last_step_id: stepId, ended_at: when });
-    const kids = [dropped(6, wfId.support, wfStep.support), dropped(7, wfId.bugs, wfStep.verify), dropped(8, wfId.bugs, wfStep.fix)];
-    const steps5 = stepsInOrder(five);
-    // Whatever the order of the list, the Parent stays on Bugs, where Fix is the least advanced.
-    for (const list of [kids, [...kids].reverse()]) {
-      const tasks = [p, ...list];
-      expect(endedWorkflowOf(p, { workflows: five.workflows, children: childrenOf(tasks), ...stepLookups(steps5) })).toBe(wfId.bugs);
-    }
-    const tasks = [p, ...kids];
-    expect(keys(board(tasks, wfId.bugs, { ...defaultDisplay, showDropped: true, showParents: true }), "dropped")).toEqual(["WEB-5", "WEB-7", "WEB-8"]);
-  });
-
-  it("shows a question aimed at a Member beside the Task it blocks, else its Parent's Workflow, else on every board", () => {
-    const asked = task(3, { step_id: undefined, step_since: undefined, aimed_at_id: bob.id });
-    const held = task(4, { step_id: wfStep.fix, workflow_id: wfId.bugs, blocked: true, open_blockers: [{ id: asked.id, key: asked.key, title: asked.title }] });
+  it("shows a question where the server lists it; with no Workflow, on every board while open and the first Workflow's Done once ended", () => {
     const withBob = (cols: ReturnType<typeof boardColumns>) => keys(cols, `with:${bob.id}`);
-    // Beside the Task it holds up: Bugs' board only.
-    expect(withBob(board([asked, held], wfId.bugs))).toEqual(["WEB-3"]);
-    expect(withBob(board([asked, held], wfId.triage))).toBeUndefined();
-    // Blocking none: on its Parent's board, where the Parent's least advanced Subtask stands.
-    const p = parentTask(5, { open: 2, working: 0, done: 0, dropped: 0 });
-    const sub = task(6, { parent_id: p.id, step_id: undefined, step_since: undefined, aimed_at_id: bob.id, rank: undefined });
-    const work = subtask(7, p, { step_id: wfStep.sketch, workflow_id: wfId.prototypes });
-    expect(withBob(board([p, sub, work], wfId.prototypes))).toEqual(["WEB-6"]);
-    expect(withBob(board([p, sub, work], wfId.bugs))).toBeUndefined();
-    // Neither: every board, Support's included.
-    expect(withBob(board([asked], wfId.support))).toEqual(["WEB-3"]);
-    expect(withBob(board([asked], wfId.triage))).toEqual(["WEB-3"]);
-    // Ended, it lands on its Parent's Workflow, else the first Workflow's Done.
-    const answered = { ...sub, state: "done" as const, ended_at: "2026-10-04T09:00:00Z" };
-    expect(keys(board([p, answered, work], wfId.prototypes), "done")).toEqual(["WEB-6"]);
-    const closed = { ...asked, state: "done" as const, ended_at: "2026-10-04T09:00:00Z" };
+    // Beside the Task it blocks, as the server says: Bugs' board only.
+    const asked = task(3, { step_id: undefined, step_since: undefined, aimed_at_id: bob.id, workflow_id: wfId.bugs });
+    expect(withBob(board([asked], wfId.bugs))).toEqual(["WEB-3"]);
+    expect(withBob(board([asked], wfId.triage))).toBeUndefined();
+    // None from the server (it blocks nothing at a Step and has no Parent placed): every board.
+    const loose = { ...asked, workflow_id: undefined };
+    for (const w of Object.values(wfId)) expect(withBob(board([loose], w))).toEqual(["WEB-3"]);
+    // Ended, it is in the Done of the Workflow listed, else the first Workflow's.
+    const answered = { ...asked, state: "done" as const, ended_at: "2026-10-04T09:00:00Z" };
+    expect(keys(board([answered], wfId.bugs), "done")).toEqual(["WEB-3"]);
+    expect(keys(board([answered], wfId.triage), "done")).toEqual([]);
+    const closed = { ...answered, workflow_id: undefined };
     expect(keys(board([closed], wfId.triage), "done")).toEqual(["WEB-3"]);
     expect(keys(board([closed], wfId.bugs), "done")).toEqual([]);
   });
 
-  it("lands an ended Task of no Workflow (its Step since deleted, or aimed at a Member) on the first Workflow's board", () => {
+  it("lands an ended Task of no Workflow the Project has (its Step since deleted) on the first Workflow's board", () => {
     const tasks = [ended(1, undefined), ended(2, "wf-gone")];
     expect(keys(board(tasks, wfId.triage), "done")).toEqual(["WEB-1", "WEB-2"]);
     expect(keys(board(tasks, wfId.bugs), "done")).toEqual([]);
+    expect(listedOn(task(3, { workflow_id: "wf-gone" }), five)).toBeUndefined();
+  });
+
+  it("stands an open Parent at a Step (`placeOf`) of the Workflow the server lists it in", () => {
+    // The server's rule and the board's Step rule read the same Subtask: the least advanced open
+    // one at a Step, by Workflow position, then Step position. A Parent's `workflow_id` below is
+    // what `/v1` serves for it (workflowOfSQL); its card stands at a Step of that Workflow.
+    const stepWorkflow = new Map(steps.map((s) => [s.id, s.workflow_id]));
+    const cases: [stepIds: string[], listed: string][] = [
+      [[wfStep.verify, wfStep.fix], wfId.bugs],
+      [[wfStep.support, wfStep.verify], wfId.bugs],
+      [[wfStep.release, wfStep.triage, wfStep.sketch], wfId.triage],
+      [[wfStep.approve, wfStep.prototypeReview], wfId.prototypes],
+    ];
+    for (const [stepIds, listed] of cases) {
+      const p = parentTask(5, { open: stepIds.length, working: 0, done: 0, dropped: 0 }, { workflow_id: listed });
+      const kids = stepIds.map((id, i) => subtask(6 + i, p, { step_id: id, workflow_id: stepWorkflow.get(id) }));
+      const place = placeOf(p, { children: childrenOf([p, ...kids]), ...stepLookups(steps) });
+      expect(place.kind).toBe("step");
+      expect(stepWorkflow.get((place as { stepId: string }).stepId)).toBe(p.workflow_id);
+      expect(listedOn(p, five)).toEqual(new Set([listed]));
+    }
   });
 });
 

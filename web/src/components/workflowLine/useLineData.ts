@@ -1,18 +1,15 @@
+import { useQueries } from "@tanstack/react-query";
 import { useContext, useMemo } from "react";
-import type { Task } from "@/api/client";
-import { useMembers, useRunnerSessions, useTask, useTasks, useWorkflow } from "@/api/queries";
+import { api, call, type Task } from "@/api/client";
+import { keys, useMembers, useRunnerSessions, useTask, useTasks, useWorkflow } from "@/api/queries";
 import { useNow } from "@/clock";
 import { startOf } from "@/components/filters/dates";
 import { MeContext } from "@/me";
 import { useTakeableIds, useTaskPath } from "@/screens/task/queries";
 import { useLiveCanvas } from "@/screens/workflow/canvasData";
-import { lineTasks, scopedLine, traceOf, type LineScope, type ScopedLine, type ScopeParent, type Trace } from "./data";
+import { lineTasks, scopedLine, scopeMenu, traceOf, type LineScope, type ScopeChoice, type ScopedLine, type ScopeParent, type Trace } from "./data";
 import { shownWorkflow, type ShownWorkflow } from "@/components/pickedWorkflow";
 import { drawnSteps, drawnWorkflow, type LineFacts, type LineTask } from "./model";
-import { useProjectTasks } from "@/screens/board/queries";
-
-/** A Parent the scope menu offers: its key and title, and how many of its Subtasks are open. */
-export type ScopeChoice = { id: string; key: string; title: string; open: number };
 
 export type LineData = {
   /** The Workflow with its Steps' takers (ringed by how they work there now) and medians. */
@@ -23,7 +20,8 @@ export type LineData = {
   drawnSteps?: ReadonlySet<string>;
   /**
    * The Workflow the page shows, of a Project of several: which Tasks its panels, views and counts
-   * list, placed by the board's rules (`listedOn`) off the Tasks the board reads.
+   * list, where the server places each (`listedOn`), as its board lists them; and the lines a
+   * Parent's open Subtasks are on.
    */
   shown?: ShownWorkflow;
   /** The records behind `all`, for actions that take a Task. */
@@ -83,31 +81,44 @@ export function useLineData(
     });
   }, [open.data, sessions.data, byMember, now]);
 
+  // An ended Parent still holding open Subtasks (its Retrospective) is not among the open Tasks:
+  // read it, for its key and title in the scope menu, and where it is listed.
+  const missing = useMemo(() => {
+    const ids = new Set((open.data ?? []).map((t) => t.id));
+    return [...new Set((open.data ?? []).map((t) => t.parent_id).filter((id): id is string => !!id && !ids.has(id)))];
+  }, [open.data]);
+  const ended = useQueries({
+    queries: missing.map((id) => ({ queryKey: keys.task(id), queryFn: () => call(api.GET("/v1/tasks/{task}", { params: { path: { task: id } } })) })),
+  });
+  const endedKey = ended.map((q) => q.dataUpdatedAt).join();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `ended` is new each render; `endedKey` stands for it.
+  const endedParents = useMemo(() => ended.map((q) => q.data?.task).filter((t): t is Task => !!t), [endedKey]);
+
   // The Workflow drawn and its Steps, kept the same between ticks of the clock: what reads them
   // (the Blocking view's layout, the panels) recomputes only when the Workflow or its Steps change.
   // (The facts are new on each tick, with their rings; the record is not.)
   const graph = record.data;
   const drawn = useMemo(() => (graph ? drawnWorkflow(graph, workflowId) : undefined), [graph, workflowId]);
   const steps = useMemo(() => (graph ? drawnSteps({ steps: graph.steps, drawn }) : undefined), [graph, drawn]);
-  // The Tasks the board reads, its own query (open and ended): where a Parent's Subtasks are and
-  // where they ended, so the page places every Task as the board does, in one place. Read only
-  // where the page shows one Workflow of several.
-  const whole = useProjectTasks(drawn ? project : "");
-  // Which Tasks are this Workflow's page's (`listedOn`): the one placement every panel, view,
-  // count and story of the page reads.
-  const shown = useMemo(() => (graph && drawn && whole.data ? shownWorkflow(drawn, graph, whole.data) : undefined), [graph, drawn, whole.data]);
+  // Which Tasks are this Workflow's page's, where the server lists each (`listedOn`, its
+  // `workflow_id`): the one placement every panel, view, count and story of the page reads, as
+  // the board's. Of a Project of several Workflows only.
+  const shown = useMemo(() => {
+    if (!graph || !drawn) return undefined;
+    const tasks = new Map<string, Task>();
+    for (const t of [...endedParents, ...(done.data ?? []), ...(open.data ?? [])]) tasks.set(t.id, t);
+    if (detail) tasks.set(detail.task.id, detail.task);
+    return shownWorkflow(drawn, graph, [...tasks.values()]);
+  }, [graph, drawn, endedParents, done.data, open.data, detail]);
 
-  // What reached Done today in the Workflow drawn, where its board's Done column has it: an ended
-  // Parent where its Subtasks ended, not by its own Step.
+  // What reached Done today in the Workflow drawn, where its board's Done column has it.
   const doneToday = useMemo(() => {
     if (!done.data) return undefined;
-    if (!drawn) return done.data.length;
-    return shown ? done.data.filter((t) => shown.shows(t)).length : undefined;
-  }, [drawn, done.data, shown]);
+    return shown ? done.data.filter((t) => shown.shows(t)).length : done.data.length;
+  }, [done.data, shown]);
 
   const data = useMemo<LineData | undefined>(() => {
-    // Of several Workflows, nothing until the page knows which Tasks are this one's.
-    if (!facts || !open.data || (drawn && !shown)) return undefined;
+    if (!facts || !open.data) return undefined;
     const lineFacts: LineFacts = {
       workflows: facts.workflows,
       steps: facts.steps.map((s) => ({ ...s, takers: s.takers.map((t) => ({ ...t, paused: byMember.get(t.id)?.agent?.paused })) })),
@@ -138,17 +149,9 @@ export function useLineData(
     let trace: Trace | undefined;
     if (scope.kind === "task" && detail) trace = traceOf(detail.task, path, detail.claims, lineFacts, (id) => byMember.get(id), now);
 
-    // The scope menu: the Parents with open Subtasks on this line, wherever the Parent itself is
-    // listed (an ended one holding its Retrospective here included; one with Subtasks on two
-    // Workflows' lines on both), and the rest there. Another Workflow's Tasks are on its own line.
-    const onLine = (t: LineTask) => !steps || (!!t.stepId && steps.has(t.stepId));
-    const counts = new Map<string, number>();
-    for (const t of all) if (t.parentId && onLine(t)) counts.set(t.parentId, (counts.get(t.parentId) ?? 0) + 1);
-    const recordOf = new Map([...(whole.data ?? []), ...open.data].map((t) => [t.id, t]));
-    const parents: ScopeChoice[] = [...counts].map(([id, n]) => {
-      const r = recordOf.get(id) ?? (detail?.task.id === id ? detail.task : undefined);
-      return { id, key: r?.key ?? "…", title: r?.title ?? "", open: n };
-    });
+    // The scope menu: the Parents with open Subtasks on this line, and the rest there.
+    const recordOf = new Map([...endedParents, ...open.data].map((t) => [t.id, t]));
+    const menu = scopeMenu(all, steps, (id) => recordOf.get(id) ?? (detail?.task.id === id ? detail.task : undefined));
     return {
       facts: lineFacts,
       all,
@@ -159,12 +162,11 @@ export function useLineData(
       scoped: narrowed,
       trace,
       doneToday,
-      parents,
-      noParent: all.filter((t) => t.stepId && onLine(t) && !t.parentId).length,
+      ...menu,
       me: { id: me?.member.id ?? "", takeable: takeable.data ?? noTakeable },
     };
-  }, [facts, drawn, steps, shown, whole.data, open.data, all, byMember, scopeParam, ref, detail, path, now, doneToday, me, takeable.data, filter]);
+  }, [facts, drawn, steps, shown, endedParents, open.data, all, byMember, scopeParam, ref, detail, path, now, doneToday, me, takeable.data, filter]);
 
-  const error = record.error ?? open.error ?? whole.error;
-  return { data, error: error ?? undefined, loading: !data && !error };
+  const error = record.error ?? open.error;
+  return { data, error, loading: !data && !error };
 }
