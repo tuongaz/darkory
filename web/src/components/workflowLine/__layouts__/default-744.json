@@ -1,0 +1,1101 @@
+{
+  "topology": {
+    "main": [
+      "build",
+      "review",
+      "done"
+    ],
+    "start": "build",
+    "before": "plan",
+    "holds": [
+      "backlog"
+    ],
+    "connectors": [
+      [
+        "build:pass",
+        {
+          "id": "build:pass",
+          "from": "build",
+          "to": "review",
+          "name": "pass",
+          "position": 1
+        }
+      ],
+      [
+        "plan:done",
+        {
+          "id": "plan:done",
+          "from": "plan",
+          "to": null,
+          "name": "done",
+          "position": 1
+        }
+      ],
+      [
+        "retro:done",
+        {
+          "id": "retro:done",
+          "from": "retro",
+          "to": null,
+          "name": "done",
+          "position": 1
+        }
+      ],
+      [
+        "retro:propose",
+        {
+          "id": "retro:propose",
+          "from": "retro",
+          "to": "skillreview",
+          "name": "propose",
+          "position": 2
+        }
+      ],
+      [
+        "review:needs changes",
+        {
+          "id": "review:needs changes",
+          "from": "review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 2
+        }
+      ],
+      [
+        "review:pass",
+        {
+          "id": "review:pass",
+          "from": "review",
+          "to": null,
+          "name": "pass",
+          "position": 1
+        }
+      ],
+      [
+        "skillreview:needs changes",
+        {
+          "id": "skillreview:needs changes",
+          "from": "skillreview",
+          "to": "retro",
+          "name": "needs changes",
+          "position": 2
+        }
+      ],
+      [
+        "skillreview:publish",
+        {
+          "id": "skillreview:publish",
+          "from": "skillreview",
+          "to": null,
+          "name": "publish",
+          "position": 1
+        }
+      ]
+    ],
+    "steps": [
+      [
+        "backlog",
+        {
+          "id": "backlog",
+          "workflow_id": "work",
+          "name": "Backlog",
+          "position": 1
+        }
+      ],
+      [
+        "build",
+        {
+          "id": "build",
+          "workflow_id": "work",
+          "name": "Build",
+          "position": 3,
+          "skill": {
+            "name": "engineer"
+          }
+        }
+      ],
+      [
+        "plan",
+        {
+          "id": "plan",
+          "workflow_id": "work",
+          "name": "Plan",
+          "position": 2,
+          "skill": {
+            "name": "breakdown"
+          }
+        }
+      ],
+      [
+        "retro",
+        {
+          "id": "retro",
+          "workflow_id": "work",
+          "name": "Retro",
+          "position": 5,
+          "skill": {
+            "name": "retro"
+          }
+        }
+      ],
+      [
+        "review",
+        {
+          "id": "review",
+          "workflow_id": "work",
+          "name": "Review",
+          "position": 4,
+          "skill": {
+            "name": "review"
+          }
+        }
+      ],
+      [
+        "skillreview",
+        {
+          "id": "skillreview",
+          "workflow_id": "work",
+          "name": "Skill review",
+          "position": 6,
+          "skill": {
+            "name": "skill-review"
+          }
+        }
+      ]
+    ],
+    "segments": [
+      {
+        "lo": 0,
+        "from": "build",
+        "to": "review",
+        "connector": {
+          "id": "build:pass",
+          "from": "build",
+          "to": "review",
+          "name": "pass",
+          "position": 1
+        }
+      },
+      {
+        "lo": 1,
+        "from": "review",
+        "to": "done",
+        "connector": {
+          "id": "review:pass",
+          "from": "review",
+          "to": null,
+          "name": "pass",
+          "position": 1
+        }
+      }
+    ],
+    "under": [
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "review:needs changes",
+          "from": "review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 2
+        },
+        "side": "under",
+        "back": true,
+        "lo": 0,
+        "hi": 1,
+        "depth": 1,
+        "legLo": 0,
+        "legHi": 0
+      }
+    ],
+    "over": [],
+    "rows": [
+      {
+        "stations": [
+          "retro",
+          "skillreview"
+        ],
+        "segments": [
+          {
+            "lo": 0,
+            "connector": {
+              "id": "retro:propose",
+              "from": "retro",
+              "to": "skillreview",
+              "name": "propose",
+              "position": 2
+            }
+          }
+        ],
+        "loops": [
+          {
+            "connector": {
+              "id": "skillreview:needs changes",
+              "from": "skillreview",
+              "to": "retro",
+              "name": "needs changes",
+              "position": 2
+            },
+            "lo": 0,
+            "hi": 1,
+            "depth": 1
+          }
+        ],
+        "exit": {
+          "id": "skillreview:publish",
+          "from": "skillreview",
+          "to": null,
+          "name": "publish",
+          "position": 1
+        }
+      }
+    ],
+    "chips": [
+      {
+        "kind": "chip",
+        "stepId": "plan",
+        "connector": {
+          "id": "plan:done",
+          "from": "plan",
+          "to": null,
+          "name": "done",
+          "position": 1
+        },
+        "text": "done → Done",
+        "hint": "Plan → Done: when the holder says done, and the Task is complete"
+      },
+      {
+        "kind": "chip",
+        "stepId": "retro",
+        "connector": {
+          "id": "retro:done",
+          "from": "retro",
+          "to": null,
+          "name": "done",
+          "position": 1
+        },
+        "text": "done → Done",
+        "hint": "Retro → Done: when the holder says done, and the Task is complete"
+      }
+    ],
+    "exits": [],
+    "entries": [],
+    "others": [],
+    "loops": [
+      {
+        "connector": {
+          "id": "review:needs changes",
+          "from": "review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 2
+        },
+        "from": "Review",
+        "to": "Build"
+      },
+      {
+        "connector": {
+          "id": "skillreview:needs changes",
+          "from": "skillreview",
+          "to": "retro",
+          "name": "needs changes",
+          "position": 2
+        },
+        "from": "Skill review",
+        "to": "Retro"
+      }
+    ],
+    "maxUnder": 1,
+    "maxOver": 0
+  },
+  "horizontal": {
+    "width": 744,
+    "height": 390,
+    "density": "beads",
+    "at": [
+      [
+        "backlog",
+        {
+          "x": 168,
+          "y": 244
+        }
+      ],
+      [
+        "build",
+        {
+          "x": 295,
+          "y": 194
+        }
+      ],
+      [
+        "done",
+        {
+          "x": 644,
+          "y": 194
+        }
+      ],
+      [
+        "plan",
+        {
+          "x": 119,
+          "y": 138
+        }
+      ],
+      [
+        "retro",
+        {
+          "x": 121,
+          "y": 354
+        }
+      ],
+      [
+        "review",
+        {
+          "x": 470,
+          "y": 194
+        }
+      ],
+      [
+        "skillreview",
+        {
+          "x": 418,
+          "y": 354
+        }
+      ]
+    ],
+    "lineY": 194,
+    "headY": 28,
+    "columnY": 98,
+    "heads": [
+      {
+        "id": "build",
+        "x": 295,
+        "top": 28,
+        "tier": 0,
+        "w": 52,
+        "h": 60,
+        "lines": [
+          "Build"
+        ]
+      },
+      {
+        "id": "review",
+        "x": 470,
+        "top": 28,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Review"
+        ]
+      },
+      {
+        "id": "done",
+        "x": 644,
+        "top": 28,
+        "tier": 0,
+        "w": 33,
+        "h": 30,
+        "lines": [
+          "Done"
+        ]
+      }
+    ],
+    "main": [
+      {
+        "from": "build",
+        "to": "review",
+        "x1": 295,
+        "x2": 470,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "build:pass"
+      },
+      {
+        "from": "review",
+        "to": "done",
+        "x1": 470,
+        "x2": 644,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "review:pass"
+      }
+    ],
+    "segmentLabels": [
+      {
+        "x": 382.5,
+        "y": 194,
+        "text": "pass",
+        "connectorId": "build:pass",
+        "hint": "Build → Review: when the holder says pass"
+      },
+      {
+        "x": 557,
+        "y": 194,
+        "text": "pass",
+        "connectorId": "review:pass",
+        "hint": "Review → Done: when the holder says pass, and the Task is complete"
+      }
+    ],
+    "arcs": [
+      {
+        "id": "review:needs changes",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "review:needs changes"
+        ],
+        "line": [
+          [
+            464,
+            203
+          ],
+          [
+            464,
+            236
+          ],
+          [
+            301,
+            236
+          ],
+          [
+            301,
+            203
+          ]
+        ],
+        "arrow": {
+          "x": 301,
+          "y": 203,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 382.5,
+            "y": 236,
+            "text": "needs changes",
+            "back": true,
+            "connectorId": "review:needs changes",
+            "hint": "Review → Build: when the holder says needs changes"
+          }
+        ]
+      }
+    ],
+    "branch": {
+      "label": {
+        "x": 115,
+        "y": 280
+      },
+      "stations": [
+        {
+          "id": "retro",
+          "x": 121,
+          "y": 354,
+          "row": 0
+        },
+        {
+          "id": "skillreview",
+          "x": 418,
+          "y": 354,
+          "row": 0
+        }
+      ],
+      "lines": [
+        {
+          "id": "row:0",
+          "points": [
+            [
+              121,
+              354
+            ],
+            [
+              614,
+              354
+            ],
+            [
+              644,
+              324
+            ],
+            [
+              644,
+              204
+            ]
+          ]
+        },
+        {
+          "id": "skillreview:needs changes",
+          "points": [
+            [
+              412,
+              360
+            ],
+            [
+              412,
+              374
+            ],
+            [
+              127,
+              374
+            ],
+            [
+              127,
+              360
+            ]
+          ]
+        }
+      ],
+      "loops": [
+        {
+          "id": "skillreview:needs changes",
+          "side": "under",
+          "back": true,
+          "connectorIds": [
+            "skillreview:needs changes"
+          ],
+          "line": [
+            [
+              412,
+              360
+            ],
+            [
+              412,
+              374
+            ],
+            [
+              127,
+              374
+            ],
+            [
+              127,
+              360
+            ]
+          ],
+          "arrow": {
+            "x": 127,
+            "y": 360,
+            "dir": "up"
+          },
+          "labels": [
+            {
+              "x": 269.5,
+              "y": 374,
+              "text": "needs changes",
+              "back": true,
+              "connectorId": "skillreview:needs changes",
+              "hint": "Skill review → Retro: when the holder says needs changes"
+            }
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 269.5,
+          "y": 354,
+          "text": "propose",
+          "connectorId": "retro:propose",
+          "hint": "Retro → Skill review: when the holder says propose"
+        },
+        {
+          "x": 516,
+          "y": 354,
+          "text": "publish",
+          "connectorId": "skillreview:publish",
+          "hint": "Skill review → Done: when the holder says publish, and the Task is complete"
+        }
+      ]
+    },
+    "chips": [
+      {
+        "kind": "chip",
+        "stepId": "plan",
+        "x": 105,
+        "y": 129,
+        "text": "done → Done",
+        "align": "right",
+        "connectorId": "plan:done",
+        "hint": "Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start each at the Step its filer names, Build when they name none"
+      },
+      {
+        "kind": "chip",
+        "stepId": "retro",
+        "x": 18,
+        "y": 345,
+        "text": "done → Done",
+        "align": "left",
+        "connectorId": "retro:done",
+        "hint": "Retro → Done: when the holder says done, and the Task is complete"
+      }
+    ],
+    "exits": [],
+    "entry": {
+      "holds": [
+        {
+          "id": "backlog",
+          "x": 168,
+          "y": 244,
+          "hint": "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+        }
+      ],
+      "arrow": {
+        "line": [
+          [
+            146,
+            194
+          ],
+          [
+            284,
+            194
+          ]
+        ],
+        "head": {
+          "x": 284,
+          "y": 194,
+          "dir": "right"
+        },
+        "label": {
+          "x": 16,
+          "y": 194,
+          "text": "New Tasks start here",
+          "align": "start",
+          "hint": "New Tasks start at Build, unless the filer names another Step"
+        },
+        "connectorIds": []
+      },
+      "before": {
+        "id": "plan",
+        "title": {
+          "x": 113,
+          "y": 64,
+          "hint": "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none"
+        },
+        "station": {
+          "x": 119,
+          "y": 138
+        },
+        "files": {
+          "line": [
+            [
+              126,
+              138
+            ],
+            [
+              239,
+              138
+            ],
+            [
+              239,
+              191
+            ]
+          ],
+          "head": {
+            "x": 239,
+            "y": 191,
+            "dir": "down"
+          },
+          "label": {
+            "x": 182.5,
+            "y": 138,
+            "text": "files Subtasks",
+            "hint": "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none"
+          }
+        }
+      },
+      "spine": {
+        "line": [
+          [
+            168,
+            244
+          ],
+          [
+            168,
+            197
+          ]
+        ],
+        "head": {
+          "x": 168,
+          "y": 197,
+          "dir": "up"
+        },
+        "label": {
+          "x": 174,
+          "y": 219,
+          "text": "by hand",
+          "align": "start",
+          "hint": "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+        }
+      }
+    },
+    "routes": [
+      [
+        "build:pass",
+        "M295 194 H470"
+      ],
+      [
+        "plan:done",
+        "M119 138 L644 194"
+      ],
+      [
+        "retro:done",
+        "M121 354 L644 194"
+      ],
+      [
+        "retro:propose",
+        "M121 354 H418"
+      ],
+      [
+        "review:needs changes",
+        "M470 194 L464 203 V236 H301 V203 L295 194"
+      ],
+      [
+        "review:pass",
+        "M470 194 H644"
+      ],
+      [
+        "skillreview:needs changes",
+        "M418 354 L412 360 V374 H127 V360 L121 354"
+      ],
+      [
+        "skillreview:publish",
+        "M418 354 H614 Q644 354 644 324 V194"
+      ]
+    ],
+    "polylines": [
+      {
+        "id": "main",
+        "points": [
+          [
+            295,
+            194
+          ],
+          [
+            644,
+            194
+          ]
+        ]
+      },
+      {
+        "id": "review:needs changes",
+        "points": [
+          [
+            464,
+            203
+          ],
+          [
+            464,
+            236
+          ],
+          [
+            301,
+            236
+          ],
+          [
+            301,
+            203
+          ]
+        ]
+      },
+      {
+        "id": "entry",
+        "points": [
+          [
+            146,
+            194
+          ],
+          [
+            284,
+            194
+          ]
+        ]
+      },
+      {
+        "id": "files",
+        "points": [
+          [
+            126,
+            138
+          ],
+          [
+            239,
+            138
+          ],
+          [
+            239,
+            191
+          ]
+        ]
+      },
+      {
+        "id": "holds",
+        "points": [
+          [
+            168,
+            244
+          ],
+          [
+            168,
+            197
+          ]
+        ]
+      },
+      {
+        "id": "row:0",
+        "points": [
+          [
+            121,
+            354
+          ],
+          [
+            614,
+            354
+          ],
+          [
+            644,
+            324
+          ],
+          [
+            644,
+            204
+          ]
+        ]
+      },
+      {
+        "id": "skillreview:needs changes",
+        "points": [
+          [
+            412,
+            360
+          ],
+          [
+            412,
+            374
+          ],
+          [
+            127,
+            374
+          ],
+          [
+            127,
+            360
+          ]
+        ]
+      }
+    ],
+    "hints": [
+      [
+        "entry",
+        "New Tasks start at Build, unless the filer names another Step"
+      ],
+      [
+        "files",
+        "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Build when they name none"
+      ],
+      [
+        "holds",
+        "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+      ],
+      [
+        "review:needs changes",
+        "Review → Build: when the holder says needs changes"
+      ],
+      [
+        "row:0",
+        "Retro → Skill review: when the holder says propose. Skill review → Done: when the holder says publish, and the Task is complete"
+      ],
+      [
+        "seg:build",
+        "Build → Review: when the holder says pass"
+      ],
+      [
+        "seg:review",
+        "Review → Done: when the holder says pass, and the Task is complete"
+      ],
+      [
+        "skillreview:needs changes",
+        "Skill review → Retro: when the holder says needs changes"
+      ]
+    ],
+    "boxes": [
+      {
+        "id": "head:build",
+        "kind": "head",
+        "text": "Build",
+        "x": 269,
+        "y": 28,
+        "w": 52,
+        "h": 60
+      },
+      {
+        "id": "head:review",
+        "kind": "head",
+        "text": "Review",
+        "x": 445.5,
+        "y": 28,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:done",
+        "kind": "head",
+        "text": "Done",
+        "x": 627.5,
+        "y": 28,
+        "w": 33,
+        "h": 30
+      },
+      {
+        "id": "seg:build",
+        "kind": "label",
+        "text": "pass",
+        "x": 363.5,
+        "y": 186,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:review",
+        "kind": "label",
+        "text": "pass",
+        "x": 538,
+        "y": 186,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "entry",
+        "kind": "entry",
+        "text": "New Tasks start here",
+        "x": 16,
+        "y": 186,
+        "w": 120,
+        "h": 16
+      },
+      {
+        "id": "files",
+        "kind": "label",
+        "text": "files Subtasks",
+        "x": 138,
+        "y": 130,
+        "w": 89.5,
+        "h": 16
+      },
+      {
+        "id": "breakdown",
+        "kind": "note",
+        "text": "Break down",
+        "x": 113,
+        "y": 64,
+        "w": 63,
+        "h": 16
+      },
+      {
+        "id": "name:plan",
+        "kind": "name",
+        "text": "Plan",
+        "x": 113,
+        "y": 84,
+        "w": 126.5,
+        "h": 42
+      },
+      {
+        "id": "chip:plan:0",
+        "kind": "chip",
+        "text": "done → Done",
+        "x": 16,
+        "y": 129,
+        "w": 89,
+        "h": 20
+      },
+      {
+        "id": "hold:backlog",
+        "kind": "name",
+        "text": "Backlog",
+        "x": 24,
+        "y": 234,
+        "w": 130,
+        "h": 36
+      },
+      {
+        "id": "spine",
+        "kind": "label",
+        "text": "by hand",
+        "x": 174,
+        "y": 211,
+        "w": 56.5,
+        "h": 16
+      },
+      {
+        "id": "arc:review:needs changes",
+        "kind": "label",
+        "text": "needs changes",
+        "w": 95.5,
+        "h": 16,
+        "x": 334.5,
+        "y": 228
+      },
+      {
+        "id": "name:retro",
+        "kind": "name",
+        "text": "Retro",
+        "x": 115,
+        "y": 300,
+        "w": 106,
+        "h": 42
+      },
+      {
+        "id": "name:skillreview",
+        "kind": "name",
+        "text": "Skill review",
+        "x": 412,
+        "y": 300,
+        "w": 192,
+        "h": 42
+      },
+      {
+        "id": "branch:0",
+        "kind": "label",
+        "text": "propose",
+        "x": 240.5,
+        "y": 346,
+        "w": 57.5,
+        "h": 16
+      },
+      {
+        "id": "branch:1",
+        "kind": "label",
+        "text": "publish",
+        "x": 490,
+        "y": 346,
+        "w": 52,
+        "h": 16
+      },
+      {
+        "id": "loop:skillreview:needs changes",
+        "kind": "label",
+        "text": "needs changes",
+        "w": 95.5,
+        "h": 16,
+        "x": 221.5,
+        "y": 366
+      },
+      {
+        "id": "chip:retro:done",
+        "kind": "chip",
+        "text": "done → Done",
+        "w": 89,
+        "h": 20,
+        "x": 18,
+        "y": 345
+      },
+      {
+        "id": "branch",
+        "kind": "note",
+        "text": "After a Parent",
+        "w": 77.5,
+        "h": 16,
+        "x": 115,
+        "y": 280
+      }
+    ],
+    "clashes": [],
+    "fits": true
+  }
+}

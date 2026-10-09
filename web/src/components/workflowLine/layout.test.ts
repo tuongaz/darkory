@@ -185,6 +185,15 @@ describe("one Workflow of several drawn alone (ADR 0019): a Connector into anoth
   };
   const counted = (t: ReturnType<typeof lineTopology>) => t.connectors.size + t.exits.length + t.entries.length;
 
+  it("drops no Connector of any of the five: drawn, exits and entries add up to those touching its Steps", () => {
+    for (const [name, id] of Object.entries(wfId)) {
+      const wf = FIVE(id);
+      const t = lineTopology(wf);
+      expect(counted(t), name).toBe(touching(wf, id));
+      expect(touching(wf, id), name).toBeGreaterThan(0);
+    }
+  });
+
   it("Triage: its one Step on the line, where New Tasks start, and a chip for each of its four outcomes into another Workflow", () => {
     const wf = FIVE(wfId.triage);
     const t = lineTopology(wf);

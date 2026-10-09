@@ -694,15 +694,14 @@ export function HorizontalLine(props: HorizontalProps) {
         })}
         {h.arcs.map((a) => arc(a))}
         {/* An exit's leg, from its Step down to its chip: the way into another Workflow. */}
-        {h.polylines
-          .filter((p) => p.id.startsWith("exit:"))
-          .map((p) => {
-            const tone = routeTone([p.id.slice(5)]);
+        {h.exits.map((x) => {
+            const tone = routeTone([x.connectorId]);
             return (
               <path
-                key={p.id}
-                data-route={p.id.slice(5)}
-                d={smooth(p.points)}
+                key={x.connectorId}
+                data-route={x.connectorId}
+                data-exit={x.connectorId}
+                d={smooth(x.points)}
                 fill="none"
                 stroke={stroke(tone, "var(--muted-foreground)")}
                 strokeWidth={tone === "trace" ? 2.6 : 1.3}
@@ -807,6 +806,8 @@ export function HorizontalLine(props: HorizontalProps) {
         <span
           key={`chip-${i}`}
           data-box="chip"
+          data-chip={c.kind}
+          data-connector={c.connectorId}
           {...hover(c.hint)}
           className={cn(
             "absolute rounded-full border border-dashed bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap text-muted-foreground",

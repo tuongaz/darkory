@@ -135,6 +135,10 @@ export const DEFAULT = workflow(
   ],
 );
 
+/** The line's own width on the Workflow page at each window width (the sidebar and padding off), and in a Parent's card. */
+export const PAGE = { 1024: 744, 1280: 1000, 1440: 1160, 1920: 1640 } as const;
+export const PARENT = { 1024: 506, 1280: 762, 1440: 786, 1920: 786 } as const;
+
 /** Every fixture by name, for the proofs that hold of them all. */
 export const FIXTURES = { MAIN, SACCA, DEFAULT, BIG, SOFTWARE } as const;
 
@@ -145,4 +149,92 @@ export const FIXTURES = { MAIN, SACCA, DEFAULT, BIG, SOFTWARE } as const;
 export function FIVE(drawn?: string): LineWorkflow {
   const wf = toCanvas(workflowsFixture(), new Map(workflowsSkills.map((s) => [s.id, s])));
   return { ...wf, ...(drawn ? { drawn } : {}) };
+}
+
+/**
+ * Two Workflows written here, a Workflow per entry of `workflows`, its Steps as `[id, name, skill]`;
+ * Connectors as `[from, name, to]` by Step id, any of them crossing between the two.
+ */
+function several(workflows: [id: string, name: string, steps: [id: string, name: string, skill: string | null][]][], connectors: [from: string, name: string, to: string | null][], drawn?: string): LineWorkflow {
+  const steps: LineStep[] = workflows.flatMap(([wf, , list]) => list.map(([id, name, skill], i) => ({ id, workflow_id: wf, name, position: i + 1, ...(skill ? { skill: { name: skill } } : {}) })));
+  const count = new Map<string, number>();
+  const c: LineConnector[] = connectors.map(([from, name, to]) => {
+    const position = (count.get(from) ?? 0) + 1;
+    count.set(from, position);
+    return { id: `${from}:${name}`, from, to, name, position };
+  });
+  return { workflows: workflows.map(([id, name], i) => ({ id, name, position: i + 1 })), steps, connectors: c, ...(drawn ? { drawn } : {}) };
+}
+
+/**
+ * A crossing between two branches: Work's Acceptance says accepted into Wrap's Retro. Both sit
+ * after a Parent, so drawn alone Work's Acceptance carries an exit on its branch row, and Wrap's
+ * Retro an entry on its own.
+ */
+export function WRAP(drawn: "work" | "wrap"): LineWorkflow {
+  return several(
+    [
+      ["work", "Work", [["build", "Build", "engineer"], ["review", "Review", "review"], ["acceptance", "Acceptance", "acceptance"]]],
+      ["wrap", "Wrap", [["retro", "Retro", "retro"], ["skillreview", "Skill review", "skill-review"]]],
+    ],
+    [
+      ["build", "pass", "review"],
+      ["review", "pass", null],
+      ["acceptance", "accepted", "retro"],
+      ["acceptance", "fail", "build"],
+      ["retro", "done", null],
+      ["retro", "propose", "skillreview"],
+      ["skillreview", "publish", null],
+    ],
+    drawn,
+  );
+}
+
+/**
+ * Tasks reach Build from Support (along `outcome`, `bug` unless said) as well as being filed there. With `backlog`, Build is
+ * not the line's first Step (a Backlog joined to it by `ready` stands before it), so both say so
+ * over Build's head: where New Tasks start, and the entry from Support.
+ */
+export function MARKS(backlog: boolean, outcome = "bug"): LineWorkflow {
+  return several(
+    [
+      ["work", "Work", [...(backlog ? [["backlog", "Backlog", null] as [string, string, null]] : []), ["build", "Build", "engineer"], ["qa", "QA", "qa"]]],
+      ["support", "Support", [["support", "Support", "support"]]],
+    ],
+    [...(backlog ? [["backlog", "ready", "build"] as [string, string, string]] : []), ["build", "pass", "qa"], ["qa", "pass", null], ["support", outcome, "build"], ["support", "answered", null]],
+    "work",
+  );
+}
+
+/**
+ * MAIN with an Ops Workflow QA escalates into twice: QA stands inside the arc needs changes runs
+ * under, so its two exits' chips cannot hang on legs under it and go under everything instead.
+ */
+export function ESCALATE(): LineWorkflow {
+  return {
+    workflows: [...MAIN.workflows, { id: "ops", name: "Ops", position: 2 }],
+    steps: [...MAIN.steps, { id: "hotfix", workflow_id: "ops", name: "Hotfix", position: 1, skill: { name: "ops" } }],
+    connectors: [
+      ...MAIN.connectors,
+      { id: "qa:escalate", from: "qa", to: "hotfix", name: "escalate", position: 3 },
+      { id: "qa:outage", from: "qa", to: "hotfix", name: "outage", position: 4 },
+      { id: "hotfix:done", from: "hotfix", to: null, name: "done", position: 1 },
+    ],
+    drawn: "work",
+  };
+}
+
+/**
+ * BIG with an Ops Workflow QA sends Tasks into once ("esc → Ops › Fix", short enough to stand
+ * clear between QA and Security review on a wide line). QA drops onto the return track into
+ * Build (its fail), so the exit's leg down from QA would run along that drop: its chip goes under
+ * everything instead.
+ */
+export function HOTFIX(): LineWorkflow {
+  return {
+    workflows: [...BIG.workflows, { id: "ops", name: "Ops", position: 2 }],
+    steps: [...BIG.steps, { id: "fix", workflow_id: "ops", name: "Fix", position: 1, skill: { name: "ops" } }],
+    connectors: [...BIG.connectors, { id: "qa:esc", from: "qa", to: "fix", name: "esc", position: 3 }, { id: "fix:done", from: "fix", to: null, name: "done", position: 1 }],
+    drawn: "work",
+  };
 }

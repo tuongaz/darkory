@@ -1,0 +1,2834 @@
+{
+  "topology": {
+    "main": [
+      "triage",
+      "design",
+      "threat-model",
+      "design-review",
+      "build",
+      "code-review",
+      "security-review",
+      "qa",
+      "release",
+      "done"
+    ],
+    "start": "triage",
+    "before": "plan",
+    "holds": [
+      "backlog"
+    ],
+    "connectors": [
+      [
+        "acceptance:fixes filed",
+        {
+          "id": "acceptance:fixes filed",
+          "from": "acceptance",
+          "to": null,
+          "name": "fixes filed",
+          "position": 2
+        }
+      ],
+      [
+        "acceptance:pass",
+        {
+          "id": "acceptance:pass",
+          "from": "acceptance",
+          "to": "release",
+          "name": "pass",
+          "position": 1
+        }
+      ],
+      [
+        "build:ready for review",
+        {
+          "id": "build:ready for review",
+          "from": "build",
+          "to": "code-review",
+          "name": "ready for review",
+          "position": 1
+        }
+      ],
+      [
+        "code-review:needs changes",
+        {
+          "id": "code-review:needs changes",
+          "from": "code-review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 3
+        }
+      ],
+      [
+        "code-review:pass",
+        {
+          "id": "code-review:pass",
+          "from": "code-review",
+          "to": "qa",
+          "name": "pass",
+          "position": 1
+        }
+      ],
+      [
+        "code-review:security review",
+        {
+          "id": "code-review:security review",
+          "from": "code-review",
+          "to": "security-review",
+          "name": "security review",
+          "position": 2
+        }
+      ],
+      [
+        "design-review:approved",
+        {
+          "id": "design-review:approved",
+          "from": "design-review",
+          "to": null,
+          "name": "approved",
+          "position": 1
+        }
+      ],
+      [
+        "design-review:redesign",
+        {
+          "id": "design-review:redesign",
+          "from": "design-review",
+          "to": "design",
+          "name": "redesign",
+          "position": 2
+        }
+      ],
+      [
+        "design:no security impact",
+        {
+          "id": "design:no security impact",
+          "from": "design",
+          "to": "design-review",
+          "name": "no security impact",
+          "position": 2
+        }
+      ],
+      [
+        "design:security impact",
+        {
+          "id": "design:security impact",
+          "from": "design",
+          "to": "threat-model",
+          "name": "security impact",
+          "position": 1
+        }
+      ],
+      [
+        "plan:done",
+        {
+          "id": "plan:done",
+          "from": "plan",
+          "to": null,
+          "name": "done",
+          "position": 1
+        }
+      ],
+      [
+        "qa:fail",
+        {
+          "id": "qa:fail",
+          "from": "qa",
+          "to": "build",
+          "name": "fail",
+          "position": 2
+        }
+      ],
+      [
+        "qa:pass",
+        {
+          "id": "qa:pass",
+          "from": "qa",
+          "to": "release",
+          "name": "pass",
+          "position": 1
+        }
+      ],
+      [
+        "release:not ready",
+        {
+          "id": "release:not ready",
+          "from": "release",
+          "to": "build",
+          "name": "not ready",
+          "position": 2
+        }
+      ],
+      [
+        "release:released",
+        {
+          "id": "release:released",
+          "from": "release",
+          "to": null,
+          "name": "released",
+          "position": 1
+        }
+      ],
+      [
+        "retro:done",
+        {
+          "id": "retro:done",
+          "from": "retro",
+          "to": null,
+          "name": "done",
+          "position": 1
+        }
+      ],
+      [
+        "retro:propose",
+        {
+          "id": "retro:propose",
+          "from": "retro",
+          "to": "skill-review",
+          "name": "propose",
+          "position": 2
+        }
+      ],
+      [
+        "security-review:needs changes",
+        {
+          "id": "security-review:needs changes",
+          "from": "security-review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 2
+        }
+      ],
+      [
+        "security-review:pass",
+        {
+          "id": "security-review:pass",
+          "from": "security-review",
+          "to": "qa",
+          "name": "pass",
+          "position": 1
+        }
+      ],
+      [
+        "skill-review:needs changes",
+        {
+          "id": "skill-review:needs changes",
+          "from": "skill-review",
+          "to": "retro",
+          "name": "needs changes",
+          "position": 2
+        }
+      ],
+      [
+        "skill-review:publish",
+        {
+          "id": "skill-review:publish",
+          "from": "skill-review",
+          "to": null,
+          "name": "publish",
+          "position": 1
+        }
+      ],
+      [
+        "threat-model:accepted",
+        {
+          "id": "threat-model:accepted",
+          "from": "threat-model",
+          "to": "design-review",
+          "name": "accepted",
+          "position": 1
+        }
+      ],
+      [
+        "threat-model:redesign",
+        {
+          "id": "threat-model:redesign",
+          "from": "threat-model",
+          "to": "design",
+          "name": "redesign",
+          "position": 2
+        }
+      ],
+      [
+        "triage:no design needed",
+        {
+          "id": "triage:no design needed",
+          "from": "triage",
+          "to": "build",
+          "name": "no design needed",
+          "position": 1
+        }
+      ]
+    ],
+    "steps": [
+      [
+        "acceptance",
+        {
+          "id": "acceptance",
+          "workflow_id": "software",
+          "name": "Acceptance",
+          "position": 12,
+          "skill": {
+            "name": "acceptance"
+          }
+        }
+      ],
+      [
+        "backlog",
+        {
+          "id": "backlog",
+          "workflow_id": "software",
+          "name": "Backlog",
+          "position": 1
+        }
+      ],
+      [
+        "build",
+        {
+          "id": "build",
+          "workflow_id": "software",
+          "name": "Build",
+          "position": 7,
+          "skill": {
+            "name": "engineer"
+          }
+        }
+      ],
+      [
+        "code-review",
+        {
+          "id": "code-review",
+          "workflow_id": "software",
+          "name": "Code review",
+          "position": 8,
+          "skill": {
+            "name": "review"
+          }
+        }
+      ],
+      [
+        "design",
+        {
+          "id": "design",
+          "workflow_id": "software",
+          "name": "Design",
+          "position": 4,
+          "skill": {
+            "name": "architecture"
+          }
+        }
+      ],
+      [
+        "design-review",
+        {
+          "id": "design-review",
+          "workflow_id": "software",
+          "name": "Design review",
+          "position": 6,
+          "skill": {
+            "name": "review"
+          }
+        }
+      ],
+      [
+        "plan",
+        {
+          "id": "plan",
+          "workflow_id": "software",
+          "name": "Plan",
+          "position": 3,
+          "skill": {
+            "name": "breakdown"
+          }
+        }
+      ],
+      [
+        "qa",
+        {
+          "id": "qa",
+          "workflow_id": "software",
+          "name": "QA",
+          "position": 10,
+          "skill": {
+            "name": "qa"
+          }
+        }
+      ],
+      [
+        "release",
+        {
+          "id": "release",
+          "workflow_id": "software",
+          "name": "Release",
+          "position": 11,
+          "skill": {
+            "name": "devops"
+          }
+        }
+      ],
+      [
+        "retro",
+        {
+          "id": "retro",
+          "workflow_id": "software",
+          "name": "Retro",
+          "position": 13,
+          "skill": {
+            "name": "retro"
+          }
+        }
+      ],
+      [
+        "security-review",
+        {
+          "id": "security-review",
+          "workflow_id": "software",
+          "name": "Security review",
+          "position": 9,
+          "skill": {
+            "name": "security"
+          }
+        }
+      ],
+      [
+        "skill-review",
+        {
+          "id": "skill-review",
+          "workflow_id": "software",
+          "name": "Skill review",
+          "position": 14,
+          "skill": {
+            "name": "skill-review"
+          }
+        }
+      ],
+      [
+        "threat-model",
+        {
+          "id": "threat-model",
+          "workflow_id": "software",
+          "name": "Threat model",
+          "position": 5,
+          "skill": {
+            "name": "security"
+          }
+        }
+      ],
+      [
+        "triage",
+        {
+          "id": "triage",
+          "workflow_id": "software",
+          "name": "Triage",
+          "position": 2,
+          "skill": {
+            "name": "triage"
+          }
+        }
+      ]
+    ],
+    "segments": [
+      {
+        "lo": 0,
+        "from": "triage",
+        "to": "design",
+        "hand": false
+      },
+      {
+        "lo": 1,
+        "from": "design",
+        "to": "threat-model",
+        "connector": {
+          "id": "design:security impact",
+          "from": "design",
+          "to": "threat-model",
+          "name": "security impact",
+          "position": 1
+        }
+      },
+      {
+        "lo": 2,
+        "from": "threat-model",
+        "to": "design-review",
+        "connector": {
+          "id": "threat-model:accepted",
+          "from": "threat-model",
+          "to": "design-review",
+          "name": "accepted",
+          "position": 1
+        }
+      },
+      {
+        "lo": 3,
+        "from": "design-review",
+        "to": "build",
+        "hand": false
+      },
+      {
+        "lo": 4,
+        "from": "build",
+        "to": "code-review",
+        "connector": {
+          "id": "build:ready for review",
+          "from": "build",
+          "to": "code-review",
+          "name": "ready for review",
+          "position": 1
+        }
+      },
+      {
+        "lo": 5,
+        "from": "code-review",
+        "to": "security-review",
+        "connector": {
+          "id": "code-review:security review",
+          "from": "code-review",
+          "to": "security-review",
+          "name": "security review",
+          "position": 2
+        }
+      },
+      {
+        "lo": 6,
+        "from": "security-review",
+        "to": "qa",
+        "connector": {
+          "id": "security-review:pass",
+          "from": "security-review",
+          "to": "qa",
+          "name": "pass",
+          "position": 1
+        }
+      },
+      {
+        "lo": 7,
+        "from": "qa",
+        "to": "release",
+        "connector": {
+          "id": "qa:pass",
+          "from": "qa",
+          "to": "release",
+          "name": "pass",
+          "position": 1
+        }
+      },
+      {
+        "lo": 8,
+        "from": "release",
+        "to": "done",
+        "connector": {
+          "id": "release:released",
+          "from": "release",
+          "to": null,
+          "name": "released",
+          "position": 1
+        }
+      }
+    ],
+    "under": [
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "design-review:approved",
+          "from": "design-review",
+          "to": null,
+          "name": "approved",
+          "position": 1
+        },
+        "side": "under",
+        "back": false,
+        "lo": 3,
+        "hi": 9,
+        "depth": 2,
+        "legLo": 0,
+        "legHi": 0
+      },
+      {
+        "kind": "track",
+        "target": "build",
+        "lo": 4,
+        "hi": 8,
+        "depth": 1,
+        "legLo": 0,
+        "drops": [
+          {
+            "connector": {
+              "id": "code-review:needs changes",
+              "from": "code-review",
+              "to": "build",
+              "name": "needs changes",
+              "position": 3
+            },
+            "at": 5
+          },
+          {
+            "connector": {
+              "id": "security-review:needs changes",
+              "from": "security-review",
+              "to": "build",
+              "name": "needs changes",
+              "position": 2
+            },
+            "at": 6
+          },
+          {
+            "connector": {
+              "id": "qa:fail",
+              "from": "qa",
+              "to": "build",
+              "name": "fail",
+              "position": 2
+            },
+            "at": 7
+          },
+          {
+            "connector": {
+              "id": "release:not ready",
+              "from": "release",
+              "to": "build",
+              "name": "not ready",
+              "position": 2
+            },
+            "at": 8
+          }
+        ]
+      },
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "threat-model:redesign",
+          "from": "threat-model",
+          "to": "design",
+          "name": "redesign",
+          "position": 2
+        },
+        "side": "under",
+        "back": true,
+        "lo": 1,
+        "hi": 2,
+        "depth": 1,
+        "legLo": 1,
+        "legHi": 0
+      },
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "design-review:redesign",
+          "from": "design-review",
+          "to": "design",
+          "name": "redesign",
+          "position": 2
+        },
+        "side": "under",
+        "back": true,
+        "lo": 1,
+        "hi": 3,
+        "depth": 2,
+        "legLo": 0,
+        "legHi": 0
+      }
+    ],
+    "over": [
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "design:no security impact",
+          "from": "design",
+          "to": "design-review",
+          "name": "no security impact",
+          "position": 2
+        },
+        "side": "over",
+        "back": false,
+        "lo": 1,
+        "hi": 3,
+        "depth": 1,
+        "legLo": 0,
+        "legHi": 0
+      },
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "code-review:pass",
+          "from": "code-review",
+          "to": "qa",
+          "name": "pass",
+          "position": 1
+        },
+        "side": "over",
+        "back": false,
+        "lo": 5,
+        "hi": 7,
+        "depth": 1,
+        "legLo": 0,
+        "legHi": 0
+      },
+      {
+        "kind": "arc",
+        "connector": {
+          "id": "triage:no design needed",
+          "from": "triage",
+          "to": "build",
+          "name": "no design needed",
+          "position": 1
+        },
+        "side": "over",
+        "back": false,
+        "lo": 0,
+        "hi": 4,
+        "depth": 2,
+        "legLo": 0,
+        "legHi": 0
+      }
+    ],
+    "rows": [
+      {
+        "stations": [
+          "acceptance"
+        ],
+        "segments": [],
+        "loops": [],
+        "exit": {
+          "id": "acceptance:fixes filed",
+          "from": "acceptance",
+          "to": null,
+          "name": "fixes filed",
+          "position": 2
+        }
+      },
+      {
+        "stations": [
+          "retro",
+          "skill-review"
+        ],
+        "segments": [
+          {
+            "lo": 0,
+            "connector": {
+              "id": "retro:propose",
+              "from": "retro",
+              "to": "skill-review",
+              "name": "propose",
+              "position": 2
+            }
+          }
+        ],
+        "loops": [
+          {
+            "connector": {
+              "id": "skill-review:needs changes",
+              "from": "skill-review",
+              "to": "retro",
+              "name": "needs changes",
+              "position": 2
+            },
+            "lo": 0,
+            "hi": 1,
+            "depth": 1
+          }
+        ],
+        "exit": {
+          "id": "skill-review:publish",
+          "from": "skill-review",
+          "to": null,
+          "name": "publish",
+          "position": 1
+        }
+      }
+    ],
+    "chips": [
+      {
+        "kind": "chip",
+        "stepId": "plan",
+        "connector": {
+          "id": "plan:done",
+          "from": "plan",
+          "to": null,
+          "name": "done",
+          "position": 1
+        },
+        "text": "done → Done",
+        "hint": "Plan → Done: when the holder says done, and the Task is complete"
+      },
+      {
+        "kind": "chip",
+        "stepId": "acceptance",
+        "connector": {
+          "id": "acceptance:pass",
+          "from": "acceptance",
+          "to": "release",
+          "name": "pass",
+          "position": 1
+        },
+        "text": "pass → Release",
+        "hint": "Acceptance → Release: when the holder says pass"
+      },
+      {
+        "kind": "chip",
+        "stepId": "retro",
+        "connector": {
+          "id": "retro:done",
+          "from": "retro",
+          "to": null,
+          "name": "done",
+          "position": 1
+        },
+        "text": "done → Done",
+        "hint": "Retro → Done: when the holder says done, and the Task is complete"
+      }
+    ],
+    "exits": [],
+    "entries": [],
+    "others": [],
+    "loops": [
+      {
+        "connector": {
+          "id": "threat-model:redesign",
+          "from": "threat-model",
+          "to": "design",
+          "name": "redesign",
+          "position": 2
+        },
+        "from": "Threat model",
+        "to": "Design"
+      },
+      {
+        "connector": {
+          "id": "design-review:redesign",
+          "from": "design-review",
+          "to": "design",
+          "name": "redesign",
+          "position": 2
+        },
+        "from": "Design review",
+        "to": "Design"
+      },
+      {
+        "connector": {
+          "id": "code-review:needs changes",
+          "from": "code-review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 3
+        },
+        "from": "Code review",
+        "to": "Build"
+      },
+      {
+        "connector": {
+          "id": "security-review:needs changes",
+          "from": "security-review",
+          "to": "build",
+          "name": "needs changes",
+          "position": 2
+        },
+        "from": "Security review",
+        "to": "Build"
+      },
+      {
+        "connector": {
+          "id": "qa:fail",
+          "from": "qa",
+          "to": "build",
+          "name": "fail",
+          "position": 2
+        },
+        "from": "QA",
+        "to": "Build"
+      },
+      {
+        "connector": {
+          "id": "release:not ready",
+          "from": "release",
+          "to": "build",
+          "name": "not ready",
+          "position": 2
+        },
+        "from": "Release",
+        "to": "Build"
+      },
+      {
+        "connector": {
+          "id": "skill-review:needs changes",
+          "from": "skill-review",
+          "to": "retro",
+          "name": "needs changes",
+          "position": 2
+        },
+        "from": "Skill review",
+        "to": "Retro"
+      }
+    ],
+    "maxUnder": 2,
+    "maxOver": 2
+  },
+  "horizontal": {
+    "width": 744,
+    "height": 562,
+    "density": "beads",
+    "at": [
+      [
+        "acceptance",
+        {
+          "x": 476,
+          "y": 460
+        }
+      ],
+      [
+        "backlog",
+        {
+          "x": 168,
+          "y": 284
+        }
+      ],
+      [
+        "build",
+        {
+          "x": 482,
+          "y": 234
+        }
+      ],
+      [
+        "code-review",
+        {
+          "x": 529,
+          "y": 234
+        }
+      ],
+      [
+        "design",
+        {
+          "x": 342,
+          "y": 234
+        }
+      ],
+      [
+        "design-review",
+        {
+          "x": 435,
+          "y": 234
+        }
+      ],
+      [
+        "done",
+        {
+          "x": 716,
+          "y": 234
+        }
+      ],
+      [
+        "plan",
+        {
+          "x": 119,
+          "y": 178
+        }
+      ],
+      [
+        "qa",
+        {
+          "x": 622,
+          "y": 234
+        }
+      ],
+      [
+        "release",
+        {
+          "x": 669,
+          "y": 234
+        }
+      ],
+      [
+        "retro",
+        {
+          "x": 106,
+          "y": 526
+        }
+      ],
+      [
+        "security-review",
+        {
+          "x": 575,
+          "y": 234
+        }
+      ],
+      [
+        "skill-review",
+        {
+          "x": 286,
+          "y": 526
+        }
+      ],
+      [
+        "threat-model",
+        {
+          "x": 388,
+          "y": 234
+        }
+      ],
+      [
+        "triage",
+        {
+          "x": 295,
+          "y": 234
+        }
+      ]
+    ],
+    "lineY": 234,
+    "headY": 68,
+    "columnY": 138,
+    "heads": [
+      {
+        "id": "triage",
+        "x": 295,
+        "top": 68,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Triage"
+        ]
+      },
+      {
+        "id": "design",
+        "x": 342,
+        "top": 68,
+        "tier": 0,
+        "w": 78,
+        "h": 60,
+        "lines": [
+          "Design"
+        ]
+      },
+      {
+        "id": "threat-model",
+        "x": 388,
+        "top": 68,
+        "tier": 0,
+        "w": 52,
+        "h": 60,
+        "lines": [
+          "Threat",
+          "model"
+        ]
+      },
+      {
+        "id": "design-review",
+        "x": 435,
+        "top": 68,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Design",
+          "review"
+        ]
+      },
+      {
+        "id": "build",
+        "x": 482,
+        "top": 68,
+        "tier": 0,
+        "w": 52,
+        "h": 60,
+        "lines": [
+          "Build"
+        ]
+      },
+      {
+        "id": "code-review",
+        "x": 529,
+        "top": 68,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "Code",
+          "review"
+        ]
+      },
+      {
+        "id": "security-review",
+        "x": 575,
+        "top": 68,
+        "tier": 0,
+        "w": 52.5,
+        "h": 60,
+        "lines": [
+          "Security",
+          "review"
+        ]
+      },
+      {
+        "id": "qa",
+        "x": 622,
+        "top": 68,
+        "tier": 0,
+        "w": 48.5,
+        "h": 60,
+        "lines": [
+          "QA"
+        ]
+      },
+      {
+        "id": "release",
+        "x": 669,
+        "top": 68,
+        "tier": 0,
+        "w": 49.5,
+        "h": 60,
+        "lines": [
+          "Release"
+        ]
+      },
+      {
+        "id": "done",
+        "x": 716,
+        "top": 68,
+        "tier": 0,
+        "w": 33,
+        "h": 30,
+        "lines": [
+          "Done"
+        ]
+      }
+    ],
+    "main": [
+      {
+        "from": "triage",
+        "to": "design",
+        "x1": 295,
+        "x2": 342,
+        "dotted": true,
+        "gap": true
+      },
+      {
+        "from": "design",
+        "to": "threat-model",
+        "x1": 342,
+        "x2": 388,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "design:security impact"
+      },
+      {
+        "from": "threat-model",
+        "to": "design-review",
+        "x1": 388,
+        "x2": 435,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "threat-model:accepted"
+      },
+      {
+        "from": "design-review",
+        "to": "build",
+        "x1": 435,
+        "x2": 482,
+        "dotted": true,
+        "gap": true
+      },
+      {
+        "from": "build",
+        "to": "code-review",
+        "x1": 482,
+        "x2": 529,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "build:ready for review"
+      },
+      {
+        "from": "code-review",
+        "to": "security-review",
+        "x1": 529,
+        "x2": 575,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "code-review:security review"
+      },
+      {
+        "from": "security-review",
+        "to": "qa",
+        "x1": 575,
+        "x2": 622,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "security-review:pass"
+      },
+      {
+        "from": "qa",
+        "to": "release",
+        "x1": 622,
+        "x2": 669,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "qa:pass"
+      },
+      {
+        "from": "release",
+        "to": "done",
+        "x1": 669,
+        "x2": 716,
+        "dotted": false,
+        "gap": false,
+        "connectorId": "release:released"
+      }
+    ],
+    "segmentLabels": [
+      {
+        "x": 365,
+        "y": 234,
+        "text": "security impact",
+        "connectorId": "design:security impact",
+        "hint": "Design → Threat model: when the holder says security impact"
+      },
+      {
+        "x": 411.5,
+        "y": 234,
+        "text": "accepted",
+        "connectorId": "threat-model:accepted",
+        "hint": "Threat model → Design review: when the holder says accepted"
+      },
+      {
+        "x": 505.5,
+        "y": 234,
+        "text": "ready for review",
+        "connectorId": "build:ready for review",
+        "hint": "Build → Code review: when the holder says ready for review"
+      },
+      {
+        "x": 552,
+        "y": 234,
+        "text": "security review",
+        "connectorId": "code-review:security review",
+        "hint": "Code review → Security review: when the holder says security review"
+      },
+      {
+        "x": 598.5,
+        "y": 234,
+        "text": "pass",
+        "connectorId": "security-review:pass",
+        "hint": "Security review → QA: when the holder says pass"
+      },
+      {
+        "x": 645.5,
+        "y": 234,
+        "text": "pass",
+        "connectorId": "qa:pass",
+        "hint": "QA → Release: when the holder says pass"
+      },
+      {
+        "x": 692.5,
+        "y": 234,
+        "text": "released",
+        "connectorId": "release:released",
+        "hint": "Release → Done: when the holder says released, and the Task is complete"
+      }
+    ],
+    "arcs": [
+      {
+        "id": "design-review:approved",
+        "side": "under",
+        "back": false,
+        "connectorIds": [
+          "design-review:approved"
+        ],
+        "line": [
+          [
+            710,
+            243
+          ],
+          [
+            710,
+            298
+          ],
+          [
+            441,
+            298
+          ],
+          [
+            441,
+            243
+          ]
+        ],
+        "arrow": {
+          "x": 710,
+          "y": 243,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 575.5,
+            "y": 298,
+            "text": "approved",
+            "back": false,
+            "connectorId": "design-review:approved",
+            "hint": "Design review → Done: when the holder says approved, and the Task is complete"
+          }
+        ]
+      },
+      {
+        "id": "track:build",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "code-review:needs changes",
+          "security-review:needs changes",
+          "qa:fail",
+          "release:not ready"
+        ],
+        "line": [
+          [
+            669,
+            243
+          ],
+          [
+            669,
+            276
+          ],
+          [
+            488,
+            276
+          ],
+          [
+            488,
+            243
+          ]
+        ],
+        "arrow": {
+          "x": 488,
+          "y": 243,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 552,
+            "y": 346,
+            "text": "needs changes",
+            "back": true,
+            "hint": "Code review → Build: when the holder says needs changes. Security review → Build: when the holder says needs changes"
+          },
+          {
+            "x": 622,
+            "y": 290,
+            "text": "fail",
+            "back": true,
+            "connectorId": "qa:fail",
+            "hint": "QA → Build: when the holder says fail"
+          },
+          {
+            "x": 669,
+            "y": 290,
+            "text": "not ready",
+            "back": true,
+            "connectorId": "release:not ready",
+            "hint": "Release → Build: when the holder says not ready"
+          },
+          {
+            "x": 636,
+            "y": 368,
+            "text": "↩ Build · 4 loops",
+            "back": true,
+            "align": "start",
+            "hint": "Code review → Build: when the holder says needs changes. Security review → Build: when the holder says needs changes. QA → Build: when the holder says fail. Release → Build: when the holder says not ready"
+          }
+        ]
+      },
+      {
+        "id": "threat-model:redesign",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "threat-model:redesign"
+        ],
+        "line": [
+          [
+            382,
+            243
+          ],
+          [
+            382,
+            276
+          ],
+          [
+            357,
+            276
+          ],
+          [
+            357,
+            243
+          ]
+        ],
+        "arrow": {
+          "x": 357,
+          "y": 243,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 369.5,
+            "y": 324,
+            "text": "redesign",
+            "back": true,
+            "connectorId": "threat-model:redesign",
+            "hint": "Threat model → Design: when the holder says redesign"
+          }
+        ]
+      },
+      {
+        "id": "design-review:redesign",
+        "side": "under",
+        "back": true,
+        "connectorIds": [
+          "design-review:redesign"
+        ],
+        "line": [
+          [
+            429,
+            243
+          ],
+          [
+            429,
+            298
+          ],
+          [
+            348,
+            298
+          ],
+          [
+            348,
+            243
+          ]
+        ],
+        "arrow": {
+          "x": 348,
+          "y": 243,
+          "dir": "up"
+        },
+        "labels": [
+          {
+            "x": 388.5,
+            "y": 298,
+            "text": "redesign",
+            "back": true,
+            "connectorId": "design-review:redesign",
+            "hint": "Design review → Design: when the holder says redesign"
+          }
+        ]
+      },
+      {
+        "id": "design:no security impact",
+        "side": "over",
+        "back": false,
+        "connectorIds": [
+          "design:no security impact"
+        ],
+        "line": [
+          [
+            348,
+            62
+          ],
+          [
+            348,
+            36
+          ],
+          [
+            429,
+            36
+          ],
+          [
+            429,
+            62
+          ]
+        ],
+        "arrow": {
+          "x": 429,
+          "y": 62,
+          "dir": "down"
+        },
+        "labels": [
+          {
+            "x": 388.5,
+            "y": 36,
+            "text": "no security impact",
+            "back": false,
+            "connectorId": "design:no security impact",
+            "hint": "Design → Design review: when the holder says no security impact"
+          }
+        ]
+      },
+      {
+        "id": "code-review:pass",
+        "side": "over",
+        "back": false,
+        "connectorIds": [
+          "code-review:pass"
+        ],
+        "line": [
+          [
+            535,
+            62
+          ],
+          [
+            535,
+            36
+          ],
+          [
+            616,
+            36
+          ],
+          [
+            616,
+            62
+          ]
+        ],
+        "arrow": {
+          "x": 616,
+          "y": 62,
+          "dir": "down"
+        },
+        "labels": [
+          {
+            "x": 575.5,
+            "y": 36,
+            "text": "pass",
+            "back": false,
+            "connectorId": "code-review:pass",
+            "hint": "Code review → QA: when the holder says pass"
+          }
+        ]
+      },
+      {
+        "id": "triage:no design needed",
+        "side": "over",
+        "back": false,
+        "connectorIds": [
+          "triage:no design needed"
+        ],
+        "line": [
+          [
+            301,
+            62
+          ],
+          [
+            301,
+            16
+          ],
+          [
+            476,
+            16
+          ],
+          [
+            476,
+            62
+          ]
+        ],
+        "arrow": {
+          "x": 476,
+          "y": 62,
+          "dir": "down"
+        },
+        "labels": [
+          {
+            "x": 388.5,
+            "y": 16,
+            "text": "no design needed",
+            "back": false,
+            "connectorId": "triage:no design needed",
+            "hint": "Triage → Build: when the holder says no design needed"
+          }
+        ]
+      }
+    ],
+    "branch": {
+      "label": {
+        "x": 100,
+        "y": 396
+      },
+      "stations": [
+        {
+          "id": "acceptance",
+          "x": 476,
+          "y": 460,
+          "row": 0
+        },
+        {
+          "id": "retro",
+          "x": 106,
+          "y": 526,
+          "row": 1
+        },
+        {
+          "id": "skill-review",
+          "x": 286,
+          "y": 526,
+          "row": 1
+        }
+      ],
+      "lines": [
+        {
+          "id": "row:0",
+          "points": [
+            [
+              476,
+              460
+            ],
+            [
+              686,
+              460
+            ],
+            [
+              716,
+              430
+            ],
+            [
+              716,
+              244
+            ]
+          ]
+        },
+        {
+          "id": "row:1",
+          "points": [
+            [
+              106,
+              526
+            ],
+            [
+              626,
+              526
+            ],
+            [
+              656,
+              496
+            ],
+            [
+              656,
+              490
+            ],
+            [
+              686,
+              460
+            ]
+          ]
+        },
+        {
+          "id": "skill-review:needs changes",
+          "points": [
+            [
+              280,
+              532
+            ],
+            [
+              280,
+              546
+            ],
+            [
+              112,
+              546
+            ],
+            [
+              112,
+              532
+            ]
+          ]
+        }
+      ],
+      "loops": [
+        {
+          "id": "skill-review:needs changes",
+          "side": "under",
+          "back": true,
+          "connectorIds": [
+            "skill-review:needs changes"
+          ],
+          "line": [
+            [
+              280,
+              532
+            ],
+            [
+              280,
+              546
+            ],
+            [
+              112,
+              546
+            ],
+            [
+              112,
+              532
+            ]
+          ],
+          "arrow": {
+            "x": 112,
+            "y": 532,
+            "dir": "up"
+          },
+          "labels": [
+            {
+              "x": 196,
+              "y": 546,
+              "text": "needs changes",
+              "back": true,
+              "connectorId": "skill-review:needs changes",
+              "hint": "Skill review → Retro: when the holder says needs changes"
+            }
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "x": 581,
+          "y": 460,
+          "text": "fixes filed",
+          "connectorId": "acceptance:fixes filed",
+          "hint": "Acceptance → Done: when the holder says fixes filed, and the Task is complete"
+        },
+        {
+          "x": 196,
+          "y": 526,
+          "text": "propose",
+          "connectorId": "retro:propose",
+          "hint": "Retro → Skill review: when the holder says propose"
+        },
+        {
+          "x": 456,
+          "y": 526,
+          "text": "publish",
+          "connectorId": "skill-review:publish",
+          "hint": "Skill review → Done: when the holder says publish, and the Task is complete"
+        }
+      ]
+    },
+    "chips": [
+      {
+        "kind": "chip",
+        "stepId": "plan",
+        "x": 105,
+        "y": 169,
+        "text": "done → Done",
+        "align": "right",
+        "connectorId": "plan:done",
+        "hint": "Plan's Breakdown Subtask ends Done when its holder says done; the Subtasks it filed start each at the Step its filer names, Triage when they name none"
+      },
+      {
+        "kind": "chip",
+        "stepId": "acceptance",
+        "x": 360.5,
+        "y": 451,
+        "text": "pass → Release",
+        "align": "left",
+        "connectorId": "acceptance:pass",
+        "hint": "Acceptance → Release: when the holder says pass"
+      },
+      {
+        "kind": "chip",
+        "stepId": "retro",
+        "x": 3,
+        "y": 517,
+        "text": "done → Done",
+        "align": "left",
+        "connectorId": "retro:done",
+        "hint": "Retro → Done: when the holder says done, and the Task is complete"
+      }
+    ],
+    "exits": [],
+    "entry": {
+      "holds": [
+        {
+          "id": "backlog",
+          "x": 168,
+          "y": 284,
+          "hint": "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+        }
+      ],
+      "arrow": {
+        "line": [
+          [
+            146,
+            234
+          ],
+          [
+            284,
+            234
+          ]
+        ],
+        "head": {
+          "x": 284,
+          "y": 234,
+          "dir": "right"
+        },
+        "label": {
+          "x": 16,
+          "y": 234,
+          "text": "New Tasks start here",
+          "align": "start",
+          "hint": "New Tasks start at Triage, unless the filer names another Step"
+        },
+        "connectorIds": []
+      },
+      "before": {
+        "id": "plan",
+        "title": {
+          "x": 113,
+          "y": 104,
+          "hint": "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Triage when they name none"
+        },
+        "station": {
+          "x": 119,
+          "y": 178
+        },
+        "files": {
+          "line": [
+            [
+              126,
+              178
+            ],
+            [
+              239,
+              178
+            ],
+            [
+              239,
+              231
+            ]
+          ],
+          "head": {
+            "x": 239,
+            "y": 231,
+            "dir": "down"
+          },
+          "label": {
+            "x": 182.5,
+            "y": 178,
+            "text": "files Subtasks",
+            "hint": "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Triage when they name none"
+          }
+        }
+      },
+      "spine": {
+        "line": [
+          [
+            168,
+            284
+          ],
+          [
+            168,
+            237
+          ]
+        ],
+        "head": {
+          "x": 168,
+          "y": 237,
+          "dir": "up"
+        },
+        "label": {
+          "x": 174,
+          "y": 259,
+          "text": "by hand",
+          "align": "start",
+          "hint": "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+        }
+      }
+    },
+    "routes": [
+      [
+        "acceptance:fixes filed",
+        "M476 460 H686 Q716 460 716 430 V234"
+      ],
+      [
+        "acceptance:pass",
+        "M476 460 L669 234"
+      ],
+      [
+        "build:ready for review",
+        "M482 234 H529"
+      ],
+      [
+        "code-review:needs changes",
+        "M529 234 V276 H488 V243 L482 234"
+      ],
+      [
+        "code-review:pass",
+        "M529 234 L535 62 V36 H616 V62 L622 234"
+      ],
+      [
+        "code-review:security review",
+        "M529 234 H575"
+      ],
+      [
+        "design-review:approved",
+        "M435 234 L441 243 V298 H710 V243 L716 234"
+      ],
+      [
+        "design-review:redesign",
+        "M435 234 L429 243 V298 H348 V243 L342 234"
+      ],
+      [
+        "design:no security impact",
+        "M342 234 L348 62 V36 H429 V62 L435 234"
+      ],
+      [
+        "design:security impact",
+        "M342 234 H388"
+      ],
+      [
+        "plan:done",
+        "M119 178 L716 234"
+      ],
+      [
+        "qa:fail",
+        "M622 234 V276 H488 V243 L482 234"
+      ],
+      [
+        "qa:pass",
+        "M622 234 H669"
+      ],
+      [
+        "release:not ready",
+        "M669 234 V276 H488 V243 L482 234"
+      ],
+      [
+        "release:released",
+        "M669 234 H716"
+      ],
+      [
+        "retro:done",
+        "M106 526 L716 234"
+      ],
+      [
+        "retro:propose",
+        "M106 526 H286"
+      ],
+      [
+        "security-review:needs changes",
+        "M575 234 V276 H488 V243 L482 234"
+      ],
+      [
+        "security-review:pass",
+        "M575 234 H622"
+      ],
+      [
+        "skill-review:needs changes",
+        "M286 526 L280 532 V546 H112 V532 L106 526"
+      ],
+      [
+        "skill-review:publish",
+        "M286 526 H626 Q656 526 656 496 V490 Q656 460 686 460 H686 Q716 460 716 430 V234"
+      ],
+      [
+        "threat-model:accepted",
+        "M388 234 H435"
+      ],
+      [
+        "threat-model:redesign",
+        "M388 234 L382 243 V276 H357 V243 L342 234"
+      ],
+      [
+        "triage:no design needed",
+        "M295 234 L301 62 V16 H476 V62 L482 234"
+      ]
+    ],
+    "polylines": [
+      {
+        "id": "main",
+        "points": [
+          [
+            295,
+            234
+          ],
+          [
+            716,
+            234
+          ]
+        ]
+      },
+      {
+        "id": "drop:code-review:needs changes",
+        "points": [
+          [
+            529,
+            243
+          ],
+          [
+            529,
+            267
+          ],
+          [
+            520,
+            276
+          ]
+        ]
+      },
+      {
+        "id": "drop:security-review:needs changes",
+        "points": [
+          [
+            575,
+            243
+          ],
+          [
+            575,
+            267
+          ],
+          [
+            566,
+            276
+          ]
+        ]
+      },
+      {
+        "id": "drop:qa:fail",
+        "points": [
+          [
+            622,
+            243
+          ],
+          [
+            622,
+            267
+          ],
+          [
+            613,
+            276
+          ]
+        ]
+      },
+      {
+        "id": "design-review:approved",
+        "points": [
+          [
+            710,
+            243
+          ],
+          [
+            710,
+            298
+          ],
+          [
+            441,
+            298
+          ],
+          [
+            441,
+            243
+          ]
+        ]
+      },
+      {
+        "id": "track:build",
+        "points": [
+          [
+            669,
+            243
+          ],
+          [
+            669,
+            276
+          ],
+          [
+            488,
+            276
+          ],
+          [
+            488,
+            243
+          ]
+        ]
+      },
+      {
+        "id": "threat-model:redesign",
+        "points": [
+          [
+            382,
+            243
+          ],
+          [
+            382,
+            276
+          ],
+          [
+            357,
+            276
+          ],
+          [
+            357,
+            243
+          ]
+        ]
+      },
+      {
+        "id": "design-review:redesign",
+        "points": [
+          [
+            429,
+            243
+          ],
+          [
+            429,
+            298
+          ],
+          [
+            348,
+            298
+          ],
+          [
+            348,
+            243
+          ]
+        ]
+      },
+      {
+        "id": "design:no security impact",
+        "points": [
+          [
+            348,
+            62
+          ],
+          [
+            348,
+            36
+          ],
+          [
+            429,
+            36
+          ],
+          [
+            429,
+            62
+          ]
+        ]
+      },
+      {
+        "id": "code-review:pass",
+        "points": [
+          [
+            535,
+            62
+          ],
+          [
+            535,
+            36
+          ],
+          [
+            616,
+            36
+          ],
+          [
+            616,
+            62
+          ]
+        ]
+      },
+      {
+        "id": "triage:no design needed",
+        "points": [
+          [
+            301,
+            62
+          ],
+          [
+            301,
+            16
+          ],
+          [
+            476,
+            16
+          ],
+          [
+            476,
+            62
+          ]
+        ]
+      },
+      {
+        "id": "entry",
+        "points": [
+          [
+            146,
+            234
+          ],
+          [
+            284,
+            234
+          ]
+        ]
+      },
+      {
+        "id": "files",
+        "points": [
+          [
+            126,
+            178
+          ],
+          [
+            239,
+            178
+          ],
+          [
+            239,
+            231
+          ]
+        ]
+      },
+      {
+        "id": "holds",
+        "points": [
+          [
+            168,
+            284
+          ],
+          [
+            168,
+            237
+          ]
+        ]
+      },
+      {
+        "id": "row:0",
+        "points": [
+          [
+            476,
+            460
+          ],
+          [
+            686,
+            460
+          ],
+          [
+            716,
+            430
+          ],
+          [
+            716,
+            244
+          ]
+        ]
+      },
+      {
+        "id": "row:1",
+        "points": [
+          [
+            106,
+            526
+          ],
+          [
+            626,
+            526
+          ],
+          [
+            656,
+            496
+          ],
+          [
+            656,
+            490
+          ],
+          [
+            686,
+            460
+          ]
+        ]
+      },
+      {
+        "id": "skill-review:needs changes",
+        "points": [
+          [
+            280,
+            532
+          ],
+          [
+            280,
+            546
+          ],
+          [
+            112,
+            546
+          ],
+          [
+            112,
+            532
+          ]
+        ]
+      }
+    ],
+    "hints": [
+      [
+        "code-review:pass",
+        "Code review → QA: when the holder says pass"
+      ],
+      [
+        "design-review:approved",
+        "Design review → Done: when the holder says approved, and the Task is complete"
+      ],
+      [
+        "design-review:redesign",
+        "Design review → Design: when the holder says redesign"
+      ],
+      [
+        "design:no security impact",
+        "Design → Design review: when the holder says no security impact"
+      ],
+      [
+        "drop:code-review:needs changes",
+        "Code review → Build: when the holder says needs changes"
+      ],
+      [
+        "drop:qa:fail",
+        "QA → Build: when the holder says fail"
+      ],
+      [
+        "drop:security-review:needs changes",
+        "Security review → Build: when the holder says needs changes"
+      ],
+      [
+        "entry",
+        "New Tasks start at Triage, unless the filer names another Step"
+      ],
+      [
+        "files",
+        "Plan: a Task filed with Break down on becomes a Parent, and Darkory files its Breakdown Subtask here. Whoever takes it files the Parent's other Subtasks, each at the Step its filer names, Triage when they name none"
+      ],
+      [
+        "holds",
+        "Backlog: a hold. No one is offered these; a human moves a Task on by hand, to any Step"
+      ],
+      [
+        "row:0",
+        "Acceptance → Done: when the holder says fixes filed, and the Task is complete"
+      ],
+      [
+        "row:1",
+        "Retro → Skill review: when the holder says propose. Skill review → Done: when the holder says publish, and the Task is complete"
+      ],
+      [
+        "seg:build",
+        "Build → Code review: when the holder says ready for review"
+      ],
+      [
+        "seg:code-review",
+        "Code review → Security review: when the holder says security review"
+      ],
+      [
+        "seg:design",
+        "Design → Threat model: when the holder says security impact"
+      ],
+      [
+        "seg:design-review",
+        "Design review → Build: no outcome of Design review leads to Build, so nothing moves along here; a Task reaches Build when it is filed there, or moved there by hand"
+      ],
+      [
+        "seg:qa",
+        "QA → Release: when the holder says pass"
+      ],
+      [
+        "seg:release",
+        "Release → Done: when the holder says released, and the Task is complete"
+      ],
+      [
+        "seg:security-review",
+        "Security review → QA: when the holder says pass"
+      ],
+      [
+        "seg:threat-model",
+        "Threat model → Design review: when the holder says accepted"
+      ],
+      [
+        "seg:triage",
+        "Triage → Design: no outcome of Triage leads to Design, so nothing moves along here; a Task reaches Design when it is filed there, or moved there by hand"
+      ],
+      [
+        "skill-review:needs changes",
+        "Skill review → Retro: when the holder says needs changes"
+      ],
+      [
+        "threat-model:redesign",
+        "Threat model → Design: when the holder says redesign"
+      ],
+      [
+        "track:build",
+        "Code review → Build: when the holder says needs changes. Security review → Build: when the holder says needs changes. QA → Build: when the holder says fail. Release → Build: when the holder says not ready"
+      ],
+      [
+        "triage:no design needed",
+        "Triage → Build: when the holder says no design needed"
+      ]
+    ],
+    "boxes": [
+      {
+        "id": "head:triage",
+        "kind": "head",
+        "text": "Triage",
+        "x": 270.5,
+        "y": 68,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:design",
+        "kind": "head",
+        "text": "Design",
+        "x": 303,
+        "y": 68,
+        "w": 78,
+        "h": 60
+      },
+      {
+        "id": "head:threat-model",
+        "kind": "head",
+        "text": "Threat model",
+        "x": 362,
+        "y": 68,
+        "w": 52,
+        "h": 60
+      },
+      {
+        "id": "head:design-review",
+        "kind": "head",
+        "text": "Design review",
+        "x": 410.5,
+        "y": 68,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:build",
+        "kind": "head",
+        "text": "Build",
+        "x": 456,
+        "y": 68,
+        "w": 52,
+        "h": 60
+      },
+      {
+        "id": "head:code-review",
+        "kind": "head",
+        "text": "Code review",
+        "x": 504.5,
+        "y": 68,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:security-review",
+        "kind": "head",
+        "text": "Security review",
+        "x": 549,
+        "y": 68,
+        "w": 52.5,
+        "h": 60
+      },
+      {
+        "id": "head:qa",
+        "kind": "head",
+        "text": "QA",
+        "x": 597.5,
+        "y": 68,
+        "w": 48.5,
+        "h": 60
+      },
+      {
+        "id": "head:release",
+        "kind": "head",
+        "text": "Release",
+        "x": 644,
+        "y": 68,
+        "w": 49.5,
+        "h": 60
+      },
+      {
+        "id": "head:done",
+        "kind": "head",
+        "text": "Done",
+        "x": 699.5,
+        "y": 68,
+        "w": 33,
+        "h": 30
+      },
+      {
+        "id": "seg:design",
+        "kind": "label",
+        "text": "security impact",
+        "x": 316.5,
+        "y": 226,
+        "w": 97,
+        "h": 16
+      },
+      {
+        "id": "seg:threat-model",
+        "kind": "label",
+        "text": "accepted",
+        "x": 380,
+        "y": 226,
+        "w": 63,
+        "h": 16
+      },
+      {
+        "id": "seg:build",
+        "kind": "label",
+        "text": "ready for review",
+        "x": 454.5,
+        "y": 226,
+        "w": 102,
+        "h": 16
+      },
+      {
+        "id": "seg:code-review",
+        "kind": "label",
+        "text": "security review",
+        "x": 504,
+        "y": 226,
+        "w": 96,
+        "h": 16
+      },
+      {
+        "id": "seg:security-review",
+        "kind": "label",
+        "text": "pass",
+        "x": 579.5,
+        "y": 226,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:qa",
+        "kind": "label",
+        "text": "pass",
+        "x": 626.5,
+        "y": 226,
+        "w": 38,
+        "h": 16
+      },
+      {
+        "id": "seg:release",
+        "kind": "label",
+        "text": "released",
+        "x": 663,
+        "y": 226,
+        "w": 59,
+        "h": 16
+      },
+      {
+        "id": "entry",
+        "kind": "entry",
+        "text": "New Tasks start here",
+        "x": 16,
+        "y": 226,
+        "w": 120,
+        "h": 16
+      },
+      {
+        "id": "files",
+        "kind": "label",
+        "text": "files Subtasks",
+        "x": 138,
+        "y": 170,
+        "w": 89.5,
+        "h": 16
+      },
+      {
+        "id": "breakdown",
+        "kind": "note",
+        "text": "Break down",
+        "x": 113,
+        "y": 104,
+        "w": 63,
+        "h": 16
+      },
+      {
+        "id": "name:plan",
+        "kind": "name",
+        "text": "Plan",
+        "x": 113,
+        "y": 124,
+        "w": 126.5,
+        "h": 42
+      },
+      {
+        "id": "chip:plan:0",
+        "kind": "chip",
+        "text": "done → Done",
+        "x": 16,
+        "y": 169,
+        "w": 89,
+        "h": 20
+      },
+      {
+        "id": "hold:backlog",
+        "kind": "name",
+        "text": "Backlog",
+        "x": 24,
+        "y": 274,
+        "w": 130,
+        "h": 36
+      },
+      {
+        "id": "spine",
+        "kind": "label",
+        "text": "by hand",
+        "x": 174,
+        "y": 251,
+        "w": 56.5,
+        "h": 16
+      },
+      {
+        "id": "arc:design:no security impact",
+        "kind": "label",
+        "text": "no security impact",
+        "w": 114,
+        "h": 16,
+        "x": 331.5,
+        "y": 28
+      },
+      {
+        "id": "arc:code-review:pass",
+        "kind": "label",
+        "text": "pass",
+        "w": 38,
+        "h": 16,
+        "x": 556.5,
+        "y": 28
+      },
+      {
+        "id": "arc:triage:no design needed",
+        "kind": "label",
+        "text": "no design needed",
+        "w": 110.5,
+        "h": 16,
+        "x": 333,
+        "y": 8
+      },
+      {
+        "id": "arc:design-review:approved",
+        "kind": "label",
+        "text": "approved",
+        "w": 64.5,
+        "h": 16,
+        "x": 543.5,
+        "y": 290
+      },
+      {
+        "id": "arc:threat-model:redesign",
+        "kind": "label",
+        "text": "redesign",
+        "w": 60,
+        "h": 16,
+        "x": 339.5,
+        "y": 316
+      },
+      {
+        "id": "arc:design-review:redesign",
+        "kind": "label",
+        "text": "redesign",
+        "w": 60,
+        "h": 16,
+        "x": 358.5,
+        "y": 290
+      },
+      {
+        "id": "drop:build:0",
+        "kind": "label",
+        "text": "needs changes",
+        "w": 95.5,
+        "h": 16,
+        "x": 504,
+        "y": 338
+      },
+      {
+        "id": "drop:build:1",
+        "kind": "label",
+        "text": "fail",
+        "w": 28.5,
+        "h": 16,
+        "x": 608,
+        "y": 282
+      },
+      {
+        "id": "drop:build:2",
+        "kind": "label",
+        "text": "not ready",
+        "w": 64.5,
+        "h": 16,
+        "x": 636.5,
+        "y": 282
+      },
+      {
+        "id": "track:build",
+        "kind": "label",
+        "text": "↩ Build · 4 loops",
+        "w": 104,
+        "h": 16,
+        "x": 636,
+        "y": 360
+      },
+      {
+        "id": "name:acceptance",
+        "kind": "name",
+        "text": "Acceptance",
+        "x": 470,
+        "y": 406,
+        "w": 181.5,
+        "h": 42
+      },
+      {
+        "id": "name:retro",
+        "kind": "name",
+        "text": "Retro",
+        "x": 100,
+        "y": 472,
+        "w": 106,
+        "h": 42
+      },
+      {
+        "id": "name:skill-review",
+        "kind": "name",
+        "text": "Skill review",
+        "x": 280,
+        "y": 472,
+        "w": 192,
+        "h": 42
+      },
+      {
+        "id": "branch:0",
+        "kind": "label",
+        "text": "fixes filed",
+        "x": 548.5,
+        "y": 452,
+        "w": 65,
+        "h": 16
+      },
+      {
+        "id": "branch:1",
+        "kind": "label",
+        "text": "propose",
+        "x": 167,
+        "y": 518,
+        "w": 57.5,
+        "h": 16
+      },
+      {
+        "id": "branch:2",
+        "kind": "label",
+        "text": "publish",
+        "x": 430,
+        "y": 518,
+        "w": 52,
+        "h": 16
+      },
+      {
+        "id": "loop:skill-review:needs changes",
+        "kind": "label",
+        "text": "needs changes",
+        "w": 95.5,
+        "h": 16,
+        "x": 148,
+        "y": 538
+      },
+      {
+        "id": "chip:acceptance:pass",
+        "kind": "chip",
+        "text": "pass → Release",
+        "w": 101.5,
+        "h": 20,
+        "x": 360.5,
+        "y": 451
+      },
+      {
+        "id": "chip:retro:done",
+        "kind": "chip",
+        "text": "done → Done",
+        "w": 89,
+        "h": 20,
+        "x": 3,
+        "y": 517
+      },
+      {
+        "id": "branch",
+        "kind": "note",
+        "text": "After a Parent",
+        "w": 77.5,
+        "h": 16,
+        "x": 100,
+        "y": 396
+      }
+    ],
+    "clashes": [
+      [
+        "head:design",
+        "head:triage"
+      ],
+      [
+        "head:threat-model",
+        "head:design"
+      ],
+      [
+        "head:design-review",
+        "head:threat-model"
+      ],
+      [
+        "head:build",
+        "head:design-review"
+      ],
+      [
+        "head:code-review",
+        "head:build"
+      ],
+      [
+        "head:security-review",
+        "head:code-review"
+      ],
+      [
+        "head:qa",
+        "head:security-review"
+      ],
+      [
+        "head:release",
+        "head:qa"
+      ],
+      [
+        "seg:design",
+        "station"
+      ],
+      [
+        "seg:threat-model",
+        "seg:design"
+      ],
+      [
+        "seg:threat-model",
+        "station"
+      ],
+      [
+        "seg:build",
+        "station"
+      ],
+      [
+        "seg:code-review",
+        "seg:build"
+      ],
+      [
+        "seg:code-review",
+        "station"
+      ],
+      [
+        "seg:security-review",
+        "seg:code-review"
+      ],
+      [
+        "seg:security-review",
+        "station"
+      ],
+      [
+        "seg:qa",
+        "station"
+      ],
+      [
+        "seg:release",
+        "seg:qa"
+      ],
+      [
+        "seg:release",
+        "station"
+      ]
+    ],
+    "fits": false
+  }
+}

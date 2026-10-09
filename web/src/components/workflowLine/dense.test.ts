@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { wfId } from "@/test/fixtures";
-import { FIVE, FIXTURES, SOFTWARE } from "./fixtures";
+import { FIVE, FIXTURES, PAGE, PARENT, SOFTWARE } from "./fixtures";
 import { crossings, densityFor, horizontal, lineTopology, NAME_TOP, TOKEN_HALO, type Density, type Horizontal, type LineTopology } from "./layout";
 import { overlaps } from "./place";
 import { HAND_LABEL, gapHint } from "./words";
@@ -11,10 +11,6 @@ import { HAND_LABEL, gapHint } from "./words";
  * not all stand clear the line runs down the page instead (WorkflowLine), so a horizontal line is
  * only ever drawn when its every box is clear.
  */
-
-/** The line's own width on the Workflow page at each window width (the sidebar and padding off), and in a Parent's card. */
-const PAGE = { 1024: 744, 1280: 1000, 1440: 1160, 1920: 1640 } as const;
-const PARENT = { 1024: 506, 1280: 762, 1440: 786, 1920: 786 } as const;
 
 /** What WorkflowLine draws at a width: the density it picks, and whether the line stays across. */
 function drawn(t: LineTopology, width: number, compact = false): { h?: Horizontal; density: Density } {
