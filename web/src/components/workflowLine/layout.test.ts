@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { BIG, MAIN } from "./fixtures";
+import { wfId, wfStep } from "@/test/fixtures";
+import { BIG, FIVE, MAIN } from "./fixtures";
 import { crossings, densityFor, horizontal, lineTopology, topologyCrossings, type Arc, type Track } from "./layout";
 import { DONE_STATION, type LineWorkflow } from "./model";
+import { overlaps } from "./place";
 
 const arcNamed = (list: (Arc | Track)[], name: string) => list.find((e): e is Arc => e.kind === "arc" && e.connector.name === name);
 
@@ -173,5 +175,133 @@ describe("the rules on Workflows of other shapes", () => {
     });
     expect(t.main).toEqual(["build", "acc", DONE_STATION]);
     expect(t.rows.map((r) => r.stations)).toEqual([["retro"]]);
+  });
+});
+
+describe("one Workflow of several drawn alone (ADR 0019): a Connector into another Workflow is an exit, one from another an entry", () => {
+  const touching = (wf: LineWorkflow, drawn: string) => {
+    const ids = new Set(wf.steps.filter((s) => s.workflow_id === drawn).map((s) => s.id));
+    return wf.connectors.filter((c) => ids.has(c.from) || (c.to !== null && ids.has(c.to))).length;
+  };
+  const counted = (t: ReturnType<typeof lineTopology>) => t.connectors.size + t.exits.length + t.entries.length;
+
+  it("Triage: its one Step on the line, where New Tasks start, and a chip for each of its four outcomes into another Workflow", () => {
+    const wf = FIVE(wfId.triage);
+    const t = lineTopology(wf);
+    expect(t.main).toEqual([wfStep.triage, DONE_STATION]);
+    expect(t.start).toBe(wfStep.triage);
+    expect(t.exits.map((e) => [e.stepId, e.text])).toEqual([
+      [wfStep.triage, "bug → Bugs › Investigate"],
+      [wfStep.triage, "feature → Features › Build"],
+      [wfStep.triage, "prototype → Prototypes › Sketch"],
+      [wfStep.triage, "question → Support › Support"],
+    ]);
+    expect(t.exits[0].hint).toBe("Triage → Bugs › Investigate: when the holder says bug");
+    expect(t.entries).toEqual([]);
+    expect(counted(t)).toBe(touching(wf, wfId.triage));
+  });
+
+  it("Triage in pixels: each exit a chip at the end of a leg leaving Triage, clear of every word and line", () => {
+    const t = lineTopology(FIVE(wfId.triage));
+    for (const width of [744, 1000, 1160, 1640]) {
+      const h = horizontal(t, { width, column: 66 });
+      const chips = h.chips.filter((c) => c.stepId === wfStep.triage).map((c) => c.text);
+      expect(chips, String(width)).toEqual(t.exits.map((e) => e.text));
+      for (const e of t.exits) {
+        const leg = h.polylines.find((p) => p.id === `exit:${e.connector.id}`);
+        expect(leg, `${e.text} at ${width}`).toBeDefined();
+        expect(leg!.points[0][0]).toBe(h.at.get(wfStep.triage)!.x);
+        expect(h.routes.get(e.connector.id), e.text).toMatch(/^M/);
+        expect(h.boxes.filter((b) => b.kind === "chip" && b.text === e.text)).toHaveLength(1);
+      }
+      expect(overlaps(h.boxes), String(width)).toEqual([]);
+      expect(h.clashes, String(width)).toEqual([]);
+      expect(crossings(h.polylines), String(width)).toEqual([]);
+    }
+  });
+
+  it("Bugs: Investigate carries one entry from Triage; Bugs' own Connectors are drawn as they would be alone", () => {
+    const wf = FIVE(wfId.bugs);
+    const t = lineTopology(wf);
+    expect(t.main).toEqual([wfStep.investigate, wfStep.fix, wfStep.review, wfStep.verify, DONE_STATION]);
+    // New Tasks start at Triage, which this line does not draw.
+    expect(t.start).toBeUndefined();
+    expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([[wfStep.investigate, "from Triage · bug"]]);
+    expect(t.exits).toEqual([]);
+    expect(t.segments.map((s) => s.connector?.name ?? "dotted")).toEqual(["fix", "ready", "pass", "pass"]);
+    expect(t.loops.map((l) => `${l.from} ↩ ${l.to} ${l.connector.name}`)).toEqual(["Review ↩ Fix needs changes", "Verify ↩ Fix fail"]);
+    expect(counted(t)).toBe(touching(wf, wfId.bugs));
+  });
+
+  it("Bugs in pixels: the entry is an arrow into Investigate from the left, its words where New Tasks' would be", () => {
+    const t = lineTopology(FIVE(wfId.bugs));
+    const h = horizontal(t, { width: 1160, column: 66 });
+    const arrow = h.entry?.arrow;
+    expect(arrow?.label.text).toBe("from Triage · bug");
+    expect(arrow?.label.hint).toBe("Triage › Triage → Investigate: when the holder says bug");
+    expect(arrow!.line.at(-1)![0]).toBeLessThan(h.at.get(wfStep.investigate)!.x);
+    expect(h.entry?.mark).toBeUndefined();
+    expect(h.entry?.before).toBeUndefined();
+    expect(h.boxes.filter((b) => b.kind === "entry").map((b) => b.text)).toEqual(["from Triage · bug"]);
+    expect(h.routes.get(t.entries[0].connector.id)).toMatch(/^M/);
+    expect(overlaps(h.boxes)).toEqual([]);
+    expect(crossings(h.polylines)).toEqual([]);
+  });
+
+  it("Support: an entry from Triage on Support, and its loops back (Ops' done into Support among them) drawn as they would be alone", () => {
+    const wf = FIVE(wfId.support);
+    const t = lineTopology(wf);
+    expect(t.main).toEqual([wfStep.support, wfStep.awaitingCustomer, wfStep.ops, wfStep.approve, DONE_STATION]);
+    expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([[wfStep.support, "from Triage · question"]]);
+    expect(t.exits).toEqual([]);
+    expect(t.loops.map((l) => `${l.from} ↩ ${l.to} ${l.connector.name}`)).toEqual(["Ops ↩ Support done", "Approve ↩ Ops approved", "Approve ↩ Support declined"]);
+    expect(counted(t)).toBe(touching(wf, wfId.support));
+  });
+
+  it("an entry into a Step after the line's first is a mark over its head, as New Tasks' is", () => {
+    const wf: LineWorkflow = {
+      workflows: [
+        { id: "a", name: "Intake", position: 1 },
+        { id: "b", name: "Work", position: 2 },
+      ],
+      steps: [
+        { id: "in", workflow_id: "a", name: "Intake", position: 1, skill: { name: "triage" } },
+        { id: "build", workflow_id: "b", name: "Build", position: 1, skill: { name: "engineer" } },
+        { id: "qa", workflow_id: "b", name: "QA", position: 2, skill: { name: "qa" } },
+      ],
+      connectors: [
+        { id: "1", from: "in", to: "qa", name: "test only", position: 1 },
+        { id: "2", from: "build", to: "qa", name: "pass", position: 1 },
+        { id: "3", from: "qa", to: null, name: "pass", position: 1 },
+        { id: "4", from: "qa", to: "in", name: "misrouted", position: 2 },
+      ],
+      drawn: "b",
+    };
+    const t = lineTopology(wf);
+    expect(t.entries.map((e) => [e.stepId, e.text])).toEqual([["qa", "from Intake · test only"]]);
+    expect(t.exits.map((e) => [e.stepId, e.text])).toEqual([["qa", "misrouted → Intake › Intake"]]);
+    const h = horizontal(t, { width: 1000, column: 30 });
+    expect(h.entry?.arrow).toBeUndefined();
+    const marks = h.entry?.arrivals ?? [];
+    expect(marks.map((m) => [m.stepId, m.lines])).toEqual([["qa", ["from Intake · test only"]]]);
+    expect(marks[0].x).toBe(h.at.get("qa")!.x);
+    expect(h.boxes.filter((b) => b.kind === "mark").map((b) => b.text)).toEqual(["from Intake · test only"]);
+    expect(overlaps(h.boxes)).toEqual([]);
+    expect(h.clashes).toEqual([]);
+    expect(crossings(h.polylines)).toEqual([]);
+  });
+
+  it("a Workflow with no crossing has no exits or entries, and draws as it did before a Project had several", () => {
+    const alone = lineTopology({ ...MAIN, drawn: "work" });
+    expect(alone.exits).toEqual([]);
+    expect(alone.entries).toEqual([]);
+    expect(alone).toEqual(lineTopology(MAIN));
+    expect(horizontal(alone, { width: 1198, column: 102 })).toEqual(horizontal(lineTopology(MAIN), { width: 1198, column: 102 }));
+  });
+
+  it("ignores a Connector that touches no drawn Step: it belongs to another drawing", () => {
+    const t = lineTopology(FIVE(wfId.prototypes));
+    expect(t.entries.map((e) => e.text)).toEqual(["from Triage · prototype"]);
+    expect([...t.connectors.values()].map((c) => c.name)).toEqual(["ready", "approved", "redesign"]);
   });
 });

@@ -38,7 +38,7 @@ export function WorkflowPage() {
   const [scope, setScope] = useScopeParam();
   const tasks = useTasks({ project: project.key, state: "open" }).data;
   const filter = useTaskFilter({ projects: [project], tasks });
-  const { data } = useLineData(project.key, scope, filter.matches);
+  const { data } = useLineData(project.key, undefined, scope, filter.matches);
   const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined);
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (

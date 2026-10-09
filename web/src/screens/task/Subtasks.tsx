@@ -142,7 +142,7 @@ function ParentBlocking({ detail, onShowOnLine }: { detail: TaskDetail; onShowOn
  * nothing on the main line any more folds it to a strip of names. A token opens its peek.
  */
 function ParentLine({ detail }: { detail: TaskDetail }) {
-  const { data } = useLineData(detail.task.project_id, detail.task.key);
+  const { data } = useLineData(detail.task.project_id, undefined, detail.task.key);
   const now = useNow();
   const navigate = useNavigate();
   const peek = usePeekLink();

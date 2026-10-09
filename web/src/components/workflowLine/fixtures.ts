@@ -1,6 +1,8 @@
 import type { LineConnector, LineStep, LineWorkflow } from "./model";
 import saccaJSON from "./workflows/sacca.json";
 import softwareJSON from "./workflows/software.json";
+import { toCanvas } from "@/screens/workflow/bind";
+import { workflowsFixture, workflowsSkills } from "@/test/fixtures";
 
 /*
  * The Workflows the line is proved on: MAIN, the Workflow at Sacca today (mock-workflow/fixture.md;
@@ -135,3 +137,12 @@ export const DEFAULT = workflow(
 
 /** Every fixture by name, for the proofs that hold of them all. */
 export const FIXTURES = { MAIN, SACCA, DEFAULT, BIG, SOFTWARE } as const;
+
+/**
+ * ADR 0019's five Workflows (`workflowsFixture`: Triage's four outcomes cross into Bugs, Features,
+ * Prototypes and Support), as the line reads them, drawing the Workflow `drawn` (by `wfId`).
+ */
+export function FIVE(drawn?: string): LineWorkflow {
+  const wf = toCanvas(workflowsFixture(), new Map(workflowsSkills.map((s) => [s.id, s])));
+  return { ...wf, ...(drawn ? { drawn } : {}) };
+}

@@ -39,7 +39,7 @@ export function LiveWorkflow({
   /** The Filter bar's test: Tasks it leaves out leave the line, counted into their Step's "+N". */
   filter?: (task: Task) => boolean;
 }) {
-  const { data, error } = useLineData(project.key, scope, filter);
+  const { data, error } = useLineData(project.key, undefined, scope, filter);
   const now = useNow();
   const [, setParams] = useSearchParams();
   const openTask = useCallback(

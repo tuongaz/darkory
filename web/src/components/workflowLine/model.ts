@@ -17,8 +17,12 @@ export type LineWorkflowName = { id: string; name: string; position: number };
 /** A Step: its place in its Workflow (`workflow_id`), 1 first. */
 export type LineStep = { id: string; workflow_id: string; name: string; position: number; skill?: { name: string } };
 export type LineConnector = { id: string; from: string; to: string | null; name: string; position: number };
-/** A Project's Workflows, every Step of them and every Connector, one into another Workflow's Step too. */
-export type LineWorkflow = { workflows: readonly LineWorkflowName[]; steps: readonly LineStep[]; connectors: readonly LineConnector[] };
+/**
+ * A Project's Workflows, every Step of them and every Connector, one into another Workflow's Step
+ * too; and the Workflow the line draws (`drawn`, by id): its Steps on the line, another Workflow's
+ * only where a Connector crosses (an exit, an entry). Every Step when unsaid.
+ */
+export type LineWorkflow = { workflows: readonly LineWorkflowName[]; steps: readonly LineStep[]; connectors: readonly LineConnector[]; drawn?: string };
 
 /**
  * The Skills of the Steps where Darkory files what a Parent needs once its Subtasks end: they sit
@@ -45,6 +49,16 @@ function inPosition<S extends LineStep>(workflow: { workflows: readonly LineWork
 /** One Workflow's Steps in its order; none for a Workflow the Project does not have. */
 export function stepsOf<S extends LineStep>(workflow: { workflows: readonly LineWorkflowName[]; steps: readonly S[] }, workflowId: string): S[] {
   return inPosition(workflow).filter((s) => s.workflow_id === workflowId);
+}
+
+/**
+ * The Workflow a line of the Project draws when none is picked: the first by position when the
+ * Project has several, else none, so a Project of one Workflow draws every Step as it always has.
+ */
+export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[] }, picked?: string): string | undefined {
+  if (picked && workflow.workflows.some((w) => w.id === picked)) return picked;
+  if (workflow.workflows.length < 2) return undefined;
+  return [...workflow.workflows].sort((a, b) => a.position - b.position)[0].id;
 }
 
 /**
@@ -115,7 +129,7 @@ export type LineMember = { id: string; name: string; kind: MemberKind; working?:
 
 /** A Step with what the line says under its name: who takes its Tasks, and their median time there. */
 export type LineStepFacts = LineStep & { takers?: readonly LineMember[]; medianMs?: number };
-export type LineFacts = { workflows: readonly LineWorkflowName[]; steps: readonly LineStepFacts[]; connectors: readonly LineConnector[] };
+export type LineFacts = { workflows: readonly LineWorkflowName[]; steps: readonly LineStepFacts[]; connectors: readonly LineConnector[]; drawn?: string };
 
 /** A Task named by its key: a blocker on a token's "by MAIN-10". */
 export type LineBrief = { id: string; key: string; title: string };

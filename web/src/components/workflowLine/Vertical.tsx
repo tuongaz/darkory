@@ -86,14 +86,19 @@ export function VerticalLine({
 
   const traversed = new Set(trace?.traversed ?? []);
   const name = (id: string | null) => (id === null ? "Done" : (steps.get(id)?.name ?? "a Step"));
-  const chipsAt = (id: string) => [
-    ...t.over.filter((a) => !a.back && a.connector.from === id).map((a) => `${a.connector.name} → ${name(a.connector.to)}`),
-    ...t.chips.filter((c) => c.stepId === id).map((c) => c.text),
+  const chipsAt = (id: string): { text: string; exit?: string; hint?: string }[] => [
+    ...t.over.filter((a) => !a.back && a.connector.from === id).map((a) => ({ text: `${a.connector.name} → ${name(a.connector.to)}` })),
+    ...t.chips.filter((c) => c.stepId === id).map((c) => ({ text: c.text })),
+    // Its outcomes into other Workflows, as across.
+    ...t.exits.filter((c) => c.stepId === id).map((c) => ({ text: c.text, exit: c.connector.id, hint: c.hint })),
     // Neighbours no Connector joins, where the first has no outcome on: a human moves a Task on.
     // Where its outcomes lead elsewhere nothing moves between them, and nothing is said.
-    ...t.segments.filter((s) => s.from === id && s.hand).map((s) => `${HAND_LABEL} → ${name(s.to === DONE_STATION ? null : s.to)}`),
+    ...t.segments.filter((s) => s.from === id && s.hand).map((s) => ({ text: `${HAND_LABEL} → ${name(s.to === DONE_STATION ? null : s.to)}` })),
   ];
   const entry = t.start !== undefined && t.main[0] === t.start;
+  // Where Tasks arrive from other Workflows: a mark on each Step they reach.
+  const arrivals = new Map<string, LineTopology["entries"]>();
+  for (const e of t.entries) arrivals.set(e.stepId, [...(arrivals.get(e.stepId) ?? []), e]);
   const stays = new Map((trace?.stays ?? []).filter((s) => s.until !== undefined).map((s) => [s.stepId, s]));
 
   const token = (task: LineTask) => (
@@ -154,6 +159,15 @@ export function VerticalLine({
             New Tasks start here, at {s?.name}
           </span>
         )}
+        {!trace && arrivals.has(id) && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {arrivals.get(id)!.map((e) => (
+              <span key={e.connector.id} title={e.hint} data-arrival={id} className="inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium">
+                {e.text}
+              </span>
+            ))}
+          </div>
+        )}
         {!trace && (list.length > 0 || n > 0 || (terminal && (done?.length ?? 0) > 0)) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {list.map(token)}
@@ -164,8 +178,8 @@ export function VerticalLine({
         {chips.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
             {chips.map((c) => (
-              <span key={c} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
-                {c}
+              <span key={c.text} data-exit={c.exit} title={c.hint} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+                {c.text}
               </span>
             ))}
           </div>
@@ -281,10 +295,10 @@ export function VerticalLine({
           <ul className="flex flex-col">{sideRow(before, false)}</ul>
           <div title={filesHint(name(before), start)} className="flex flex-wrap gap-1 pl-5">
             {start && <span className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">{FILES_LABEL}</span>}
-            {t.chips
+            {[...t.chips, ...t.exits]
               .filter((c) => c.stepId === before)
               .map((c) => (
-                <span key={c.connector.id} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
+                <span key={c.connector.id} data-exit={"hint" in c ? c.connector.id : undefined} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
                   {c.text}
                 </span>
               ))}

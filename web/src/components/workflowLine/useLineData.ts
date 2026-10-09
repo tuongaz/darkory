@@ -8,7 +8,7 @@ import { MeContext } from "@/me";
 import { useTakeableIds, useTaskPath } from "@/screens/task/queries";
 import { useLiveCanvas } from "@/screens/workflow/canvasData";
 import { blockingCount, lineTasks, scopedLine, traceOf, type LineScope, type ScopedLine, type ScopeParent, type Trace } from "./data";
-import type { LineFacts, LineTask } from "./model";
+import { drawnWorkflow, type LineFacts, type LineTask } from "./model";
 
 /** A Parent the scope menu offers: its key and title, and how many of its Subtasks are open. */
 export type ScopeChoice = { id: string; key: string; title: string; open: number };
@@ -39,11 +39,18 @@ const noTakeable: ReadonlySet<string> = new Set();
 /**
  * Everything the Workflow line draws for a Project at a scope, live: the Workflow and its Steps'
  * facts, the open Tasks (Claims, Blocking, Runner sessions), what reached Done today, the scope's
- * Parent or Task, and one Task's path. `scope` is the `?scope=` value: `none`, a Task's id or key,
- * or null for every open Task. `filter` (the Filter bar's `matches`) narrows the tokens further;
- * what it leaves out counts into each Step's "+N".
+ * Parent or Task, and one Task's path. `workflowId` is the Workflow the line draws (ADR 0019): its
+ * Steps, with every Connector, so one into or out of another Workflow is an exit or an entry;
+ * unsaid, the first of several, or every Step of a Project's one (`drawnWorkflow`). `scope` is the
+ * `?scope=` value: `none`, a Task's id or key, or null for every open Task. `filter` (the Filter
+ * bar's `matches`) narrows the tokens further; what it leaves out counts into each Step's "+N".
  */
-export function useLineData(project: string, scopeParam: string | null, filter?: (task: Task) => boolean): { data?: LineData; error?: unknown; loading: boolean } {
+export function useLineData(
+  project: string,
+  workflowId: string | undefined,
+  scopeParam: string | null,
+  filter?: (task: Task) => boolean,
+): { data?: LineData; error?: unknown; loading: boolean } {
   const record = useWorkflow(project);
   const facts = useLiveCanvas(project, record.data);
   const open = useTasks({ project, state: "open" });
@@ -82,10 +89,12 @@ export function useLineData(project: string, scopeParam: string | null, filter?:
 
   const data = useMemo<LineData | undefined>(() => {
     if (!facts || !open.data) return undefined;
+    const drawn = drawnWorkflow(facts, workflowId);
     const lineFacts: LineFacts = {
       workflows: facts.workflows,
       steps: facts.steps.map((s) => ({ ...s, takers: s.takers.map((t) => ({ ...t, paused: byMember.get(t.id)?.agent?.paused })) })),
       connectors: facts.connectors,
+      ...(drawn ? { drawn } : {}),
     };
     const isParent = (t: Task) => !!t.subtask_counts || false;
     let scope: LineScope = { kind: "all" };
@@ -133,7 +142,7 @@ export function useLineData(project: string, scopeParam: string | null, filter?:
       me: { id: me?.member.id ?? "", takeable: takeable.data ?? noTakeable },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `endedParents` is rebuilt each render; `endedKey` names its records.
-  }, [facts, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
+  }, [facts, workflowId, open.data, all, byMember, scopeParam, ref, detail, path, now, done.data, me, takeable.data, endedKey, filter]);
 
   return { data, error: record.error ?? open.error, loading: !data && !record.error && !open.error };
 }

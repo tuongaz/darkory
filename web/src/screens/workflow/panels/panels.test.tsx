@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity, Task } from "@/api/client";
 import { LiveActivity } from "@/api/live";
 import { Providers } from "@/App";
@@ -149,6 +149,14 @@ function QuietMark() {
 }
 
 describe("What's happening", () => {
+  // The panel tells today's stories: on a clock read near midnight "an hour ago" would be
+  // yesterday, so the day is pinned at noon (only Date: the timers stay real for the queries).
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-08T12:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
   it("divides the stories at where I last looked, the new ones on two lines", async () => {
     const { tasks, entries } = storyDay(true);
     recordApi({ tasks, activity: entries, extra: { "GET /v1/projects/:project/seen": { seq: 2, at: new Date(Date.now() - 30 * 60_000).toISOString() } } });

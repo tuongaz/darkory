@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
-import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology } from "./layout";
+import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology, type Mark } from "./layout";
 import { estimate, type Measure } from "./measure";
 import { blockedBy, DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { spanText } from "@/lib/time";
@@ -462,6 +462,28 @@ export function HorizontalLine(props: HorizontalProps) {
     );
   };
 
+  // A mark over a head, its arrow over the station: "New Tasks start here ↓", "from Triage · bug ↓".
+  const markTag = (m: Mark, hint: string, attrs: Record<string, string | boolean>, key?: string) => {
+    return (
+      <span
+        key={key}
+        {...attrs}
+        {...hover(hint)}
+        data-box="mark"
+        className={cn("absolute inline-flex items-end gap-1 border bg-background px-2 text-[11px] font-medium whitespace-nowrap", m.lines.length > 1 ? "rounded-lg py-px leading-[14px]" : "rounded-full leading-[18px]")}
+        style={{ left: m.left, top: m.top }}
+      >
+        {m.arrow === "left" && <span aria-hidden>↓</span>}
+        <span className={cn(m.lines.length > 1 && "flex flex-col", m.arrow === "left" ? "items-start" : "items-end")}>
+          {m.lines.map((l) => (
+            <span key={l}>{l}</span>
+          ))}
+        </span>
+        {m.arrow === "right" && <span aria-hidden>↓</span>}
+      </span>
+    );
+  };
+
   const label = (l: Label, k: string, main = false) => {
     const tone = l.connectorId ? routeTone([l.connectorId], main) : props.litLoop ? "dim" : "plain";
     return (
@@ -671,6 +693,24 @@ export function HorizontalLine(props: HorizontalProps) {
           );
         })}
         {h.arcs.map((a) => arc(a))}
+        {/* An exit's leg, from its Step down to its chip: the way into another Workflow. */}
+        {h.polylines
+          .filter((p) => p.id.startsWith("exit:"))
+          .map((p) => {
+            const tone = routeTone([p.id.slice(5)]);
+            return (
+              <path
+                key={p.id}
+                data-route={p.id.slice(5)}
+                d={smooth(p.points)}
+                fill="none"
+                stroke={stroke(tone, "var(--muted-foreground)")}
+                strokeWidth={tone === "trace" ? 2.6 : 1.3}
+                strokeDasharray={tone === "next" ? "4 3" : undefined}
+                className={cn(tone === "dim" && "wl-dim")}
+              />
+            );
+          })}
         {h.branch && (
           <g className={cn((dimOthers || props.litLoop) && "wl-dim")}>
             {h.branch.lines
@@ -802,33 +842,14 @@ export function HorizontalLine(props: HorizontalProps) {
             <span
               {...hover(h.entry.arrow.label.hint)}
               data-box="entry"
-              className="absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap"
+              className={cn("absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap", h.entry.arrow.label.lines && "flex flex-col")}
               style={{ left: h.entry.arrow.label.x, top: h.entry.arrow.label.y }}
             >
-              {ENTRY_LABEL}
+              {h.entry.arrow.label.lines ? h.entry.arrow.label.lines.map((l) => <span key={l}>{l}</span>) : h.entry.arrow.label.text}
             </span>
           )}
-          {h.entry.mark && (
-            <span
-              {...hover(h.entry.mark.hint)}
-              data-entry-mark
-              data-box="mark"
-              aria-label={ENTRY_LABEL}
-              className={cn(
-                "absolute inline-flex items-end gap-1 border bg-background px-2 text-[11px] font-medium whitespace-nowrap",
-                h.entry.mark.lines.length > 1 ? "rounded-lg py-px leading-[14px]" : "rounded-full leading-[18px]",
-              )}
-              style={{ left: h.entry.mark.left, top: h.entry.mark.top }}
-            >
-              {h.entry.mark.arrow === "left" && <span aria-hidden>↓</span>}
-              <span className={cn(h.entry.mark.lines.length > 1 && "flex flex-col", h.entry.mark.arrow === "left" ? "items-start" : "items-end")}>
-                {h.entry.mark.lines.map((l) => (
-                  <span key={l}>{l}</span>
-                ))}
-              </span>
-              {h.entry.mark.arrow === "right" && <span aria-hidden>↓</span>}
-            </span>
-          )}
+          {h.entry.arrivals?.map((m) => markTag(m, m.hint, { "data-arrival": m.stepId }, m.stepId))}
+          {h.entry.mark && markTag(h.entry.mark, h.entry.mark.hint, { "data-entry-mark": true, "aria-label": ENTRY_LABEL })}
           {h.entry.before && (
             <>
               <div {...hover(h.entry.before.title.hint)} data-box="note" className="absolute text-[11px] whitespace-nowrap text-muted-foreground" style={{ left: h.entry.before.title.x, top: h.entry.before.title.y }}>
