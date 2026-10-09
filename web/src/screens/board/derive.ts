@@ -253,24 +253,51 @@ export type Column =
   | { kind: "done" | "dropped"; id: "done" | "dropped"; tasks: Task[]; collapsed: boolean };
 
 /**
- * The board's columns: every Step in the Workflow's order (empty ones too, so a card can be
+ * The Workflow whose board an ended Task's card lands on: the one it ended in (`workflow_id`); for
+ * a Parent, which ends at no Step, the one its most recently ended Subtask ended in (by
+ * `ended_at`, else the last in the list), counting only the Subtasks that ended at a Step; else,
+ * as for a Task whose last Step was since deleted, the Project's first Workflow.
+ */
+export function endedWorkflowOf(
+  task: Pick<Task, "id" | "workflow_id">,
+  ctx: { workflows: readonly Pick<WorkflowName, "id" | "position">[]; children: Map<string, Task[]> },
+): string | undefined {
+  const known = new Set(ctx.workflows.map((w) => w.id));
+  if (task.workflow_id && known.has(task.workflow_id)) return task.workflow_id;
+  const ended = (ctx.children.get(task.id) ?? []).filter((s) => s.state !== "open" && !!s.workflow_id && known.has(s.workflow_id));
+  if (ended.length > 0) return ended.reduce((a, b) => (time(b.ended_at) >= time(a.ended_at) ? b : a)).workflow_id;
+  return [...ctx.workflows].sort((a, b) => a.position - b.position)[0]?.id;
+}
+
+/**
+ * The board of one Workflow (`workflow`): its Steps in order (empty ones too, so a card can be
  * dragged there), then "With <Member>" for each Member an open card is aimed at, then Done, then
  * Dropped, each collapsed to its header unless the Display shows it. The cards are the Tasks with
- * no Subtasks; Parents, when the Display shows them, stand where `placeOf` says.
+ * no Subtasks; Parents, when the Display shows them, stand where `placeOf` says, so an open one
+ * shows on the board of its least advanced Subtask's Step only. Done and Dropped hold the Tasks
+ * that ended in this Workflow (`endedWorkflowOf`).
  */
 export function boardColumns(
   tasks: readonly Task[],
-  ctx: Pick<GroupContext, "steps" | "children" | "members"> & { display: Pick<Display, "showDone" | "showDropped" | "showParents"> },
+  ctx: Pick<GroupContext, "steps" | "children" | "members"> & {
+    workflows: readonly Pick<WorkflowName, "id" | "position">[];
+    workflow: string;
+    display: Pick<Display, "showDone" | "showDropped" | "showParents">;
+  },
 ): Column[] {
+  // Where a Parent stands reads the whole Project's order; the columns are this Workflow's.
   const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
   const cards = tasks.filter((t) => !isParent(t) || ctx.display.showParents);
   const places = bucket(cards, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
-  const columns: Column[] = ctx.steps.map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
+  const columns: Column[] = ctx.steps
+    .filter((s) => s.workflow_id === ctx.workflow)
+    .map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
   const withIds = [...places.keys()].filter((k) => k.startsWith("with:")).map((k) => k.slice(5));
   withIds.sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
   for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: places.get(`with:${id}`)! });
-  columns.push({ kind: "done", id: "done", tasks: places.get("done") ?? [], collapsed: !ctx.display.showDone });
-  columns.push({ kind: "dropped", id: "dropped", tasks: places.get("dropped") ?? [], collapsed: !ctx.display.showDropped });
+  const here = (state: "done" | "dropped") => (places.get(state) ?? []).filter((t) => endedWorkflowOf(t, ctx) === ctx.workflow);
+  columns.push({ kind: "done", id: "done", tasks: here("done"), collapsed: !ctx.display.showDone });
+  columns.push({ kind: "dropped", id: "dropped", tasks: here("dropped"), collapsed: !ctx.display.showDropped });
   return columns;
 }
 

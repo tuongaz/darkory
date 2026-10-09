@@ -1,6 +1,6 @@
 // /projects/:key/tasks?view=list|board: a Project's Tasks as rows grouped by Step, or as a
-// kanban whose columns are its Workflow's Steps, with Views, Filter (its pills in ?filter.tasks=),
-// Display and File Task.
+// kanban whose columns are one Workflow's Steps (picked by the chip, ?workflow=, when the Project
+// has two or more), with Views, Filter (its pills in ?filter.tasks=), Display and File Task.
 import { BanIcon, ListTodoIcon, PlusIcon } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router";
@@ -17,6 +17,8 @@ import { AppliedView, ViewsMenu } from "@/components/filters/ViewsMenu";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { usePickedWorkflow } from "@/components/pickedWorkflow";
+import { WorkflowChip } from "@/components/WorkflowChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
 import type { Display } from "./derive";
@@ -33,6 +35,7 @@ export function TasksPage() {
   const [params] = useSearchParams();
   const view: Layout = params.get("view") === "board" ? "board" : "list";
   const model = useTasksModel(project);
+  const picked = usePickedWorkflow(project, model.workflow.data?.workflows);
   const [display, changeDisplay] = useDisplay();
   const [expanded, expand] = useRememberedSet(expandedKey);
   const [folded, fold] = useRememberedSet(foldedKey, ["dropped"]);
@@ -82,7 +85,12 @@ export function TasksPage() {
     <>
       <h1 className="sr-only">{view === "board" ? "Tasks, board" : "Tasks, list"}</h1>
       <TopBar
-        crumbs={[projectCrumb(project, false), { label: "Tasks", wide: true }]}
+        crumbs={[
+          projectCrumb(project, false),
+          // The board shows one Workflow; the list, the whole Project.
+          ...(view === "board" && model.workflows.length > 1 ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} />, wide: true }] : []),
+          { label: "Tasks", wide: true },
+        ]}
         view={<ViewSwitch view={view} />}
         actions={
           <>
@@ -135,7 +143,7 @@ export function TasksPage() {
       <>
         {top}
         <Content>
-          <Board model={model} tasks={sorted.filter((t) => passed.has(t.id))} display={display} changeDisplay={changeDisplay} onAdd={add} />
+          <Board model={model} workflow={picked.id ?? ""} tasks={sorted.filter((t) => passed.has(t.id))} display={display} changeDisplay={changeDisplay} onAdd={add} />
         </Content>
       </>
     );
@@ -211,19 +219,22 @@ function footerText(all: Task[], rows: Task[], bySubtask: boolean, filtering: bo
 /** The kanban, with what a drop does: move the Task to the Step, or say why not. */
 function Board({
   model,
+  workflow,
   tasks,
   display,
   changeDisplay,
   onAdd,
 }: {
   model: TasksModel;
+  /** The Workflow whose board this is. */
+  workflow: string;
   tasks: Task[];
   display: ReturnType<typeof useDisplay>[0];
   changeDisplay: ReturnType<typeof useDisplay>[1];
   onAdd: (step: string) => void;
 }) {
   const move = useMoveTask(model.project.key);
-  const columns = boardColumns(tasks, { steps: model.steps, children: model.children, members: model.members, display });
+  const columns = boardColumns(tasks, { workflows: model.workflows, workflow, steps: model.steps, children: model.children, members: model.members, display });
   const me = model.me.member.id;
 
   const refuse = (task: Task, to: Column, body: string) =>

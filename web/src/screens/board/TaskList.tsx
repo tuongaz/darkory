@@ -85,8 +85,10 @@ export function TaskList(props: ListProps) {
 
 function groupLabel(g: Group, model: TasksModel): string {
   switch (g.by) {
-    case "step":
-      return g.step.name;
+    case "step": {
+      const workflow = model.workflowOf(g.step);
+      return workflow ? `${workflow} › ${g.step.name}` : g.step.name;
+    }
     case "with":
       return `With ${g.member?.name ?? "a Member"}`;
     case "ended":
@@ -120,10 +122,18 @@ function GroupHeader({
   switch (g.by) {
     case "step": {
       const skill = g.step.skill_id ? model.skills.get(g.step.skill_id) : undefined;
+      const workflow = model.workflowOf(g.step);
       head = (
         <>
           <WorkGlyph glyph={{ glyph: skill ? "waiting" : "hold" }} label={skill ? g.step.name : `${g.step.name}, a hold`} />
-          <h2 className="font-medium">{g.step.name}</h2>
+          <h2 className="font-medium">
+            {workflow && (
+              <>
+                <span className="font-normal text-muted-foreground">{workflow}</span> <span className="font-normal text-muted-foreground">›</span>{" "}
+              </>
+            )}
+            {g.step.name}
+          </h2>
           {skill ? <Pill tone="outline">{skill.name}</Pill> : <span className="text-xs text-muted-foreground">hold</span>}
         </>
       );

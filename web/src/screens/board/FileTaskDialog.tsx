@@ -19,7 +19,7 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useNow } from "@/clock";
@@ -179,6 +179,12 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
   const workspaceIds = chosenWorkspaces ?? defaultWorkspaces(project, parent, workspaces);
   const parentHolder = parent && !blocksKey ? liveClaim(parent, now)?.holder_id : undefined;
   const splits = !!parentHolder && parentHolder === me.member.id;
+
+  const stepItem = (s: WorkflowStep) => (
+    <SelectItem key={s.id} value={s.id}>
+      <StepOption step={s} skill={s.skill_id ? skillName(s.skill_id) : undefined} />
+    </SelectItem>
+  );
 
   const parents = all.filter((t) => t.state === "open" && !t.parent_id);
   const blockable = all.filter((t) => t.state === "open" && !isParent(t));
@@ -400,11 +406,17 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
                 <SelectValue placeholder={breaking ? "None: a Parent" : aim ? `With ${name(aim)}` : steps.length ? "Choose a Step" : "This Workflow has no Steps"} />
               </SelectTrigger>
               <SelectContent>
-                {steps.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <StepOption step={s} skill={s.skill_id ? skillName(s.skill_id) : undefined} />
-                  </SelectItem>
-                ))}
+                {workflows.length > 1
+                  ? // A Project of several Workflows: each one's Steps under its name, in the Project's order.
+                    [...workflows]
+                      .sort((a, b) => a.position - b.position)
+                      .map((w) => (
+                        <SelectGroup key={w.id}>
+                          <SelectLabel>{w.name}</SelectLabel>
+                          {steps.filter((s) => s.workflow_id === w.id).map(stepItem)}
+                        </SelectGroup>
+                      ))
+                  : steps.map(stepItem)}
               </SelectContent>
             </Select>
           </Field>

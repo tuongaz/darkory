@@ -25,9 +25,18 @@ export function useTasksModel(project: Project) {
 
   const lookups = useMemo(() => {
     const list = tasks.data ?? [];
-    const steps = stepsInOrder({ workflows: workflow.data?.workflows ?? [], steps: workflow.data?.steps ?? [] });
+    const workflows = [...(workflow.data?.workflows ?? [])].sort((a, b) => a.position - b.position);
+    const steps = stepsInOrder({ workflows, steps: workflow.data?.steps ?? [] });
+    const workflowName = new Map(workflows.map((w) => [w.id, w.name]));
     return {
+      /** The Project's Workflows in order. */
+      workflows,
       steps,
+      /**
+       * A Step's Workflow, for a label that names it: `Bugs` of Investigate when the Project has
+       * two or more Workflows; none with one, where a Step's name says enough.
+       */
+      workflowOf: (s: Pick<WorkflowStep, "workflow_id">): string | undefined => (workflows.length > 1 ? workflowName.get(s.workflow_id) : undefined),
       stepById: new Map<string, WorkflowStep>(steps.map((s) => [s.id, s])),
       byId: new Map<string, Task>(list.map((t) => [t.id, t])),
       children: childrenOf(list),

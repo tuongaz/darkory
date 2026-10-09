@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Workspace } from "@/api/client";
 import { mockApi, refuse, type Call } from "@/test/api";
-import { acceptance, ada, bob, builder, detail, me, ops, step, task, web, workflow } from "@/test/fixtures";
+import { acceptance, ada, bob, builder, detail, me, ops, step, task, web, wfId, workflow, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { openFileTask } from "./state";
 import { cart, routes } from "./testData";
@@ -305,5 +305,32 @@ describe("File a Task", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "File Task" }));
     await waitFor(() => expect(filed(api)).toBeDefined());
     expect(filed(api)!.body).toMatchObject({ parent: "WEB-3", workspaces: [] });
+  });
+
+  it("groups the Steps under their Workflows when the Project has several, starting at the first Workflow's", async () => {
+    mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } }));
+    const dialog = await openDialog();
+    const stepField = within(dialog).getByRole("combobox", { name: "Step" });
+    expect(stepField).toHaveTextContent("Triage");
+    await userEvent.click(stepField);
+    const list = await screen.findByRole("listbox");
+    const groups = within(list).getAllByRole("group");
+    expect(groups.map((g) => g.getAttribute("aria-labelledby") && document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent)).toEqual([
+      "Triage",
+      "Bugs",
+      "Features",
+      "Prototypes",
+      "Support",
+    ]);
+    // Bugs' four Steps, in order.
+    expect(within(groups[1]).getAllByRole("option").map((o) => o.getAttribute("data-value") ?? o.querySelector(".truncate")?.textContent)).toEqual(["Investigate", "Fix", "Review", "Verify"]);
+  });
+
+  it("a Step column's + on a board of several Workflows starts the Task at that Step", async () => {
+    mockApi(routes({ ...answer(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } }));
+    renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
+    await userEvent.click(await screen.findByRole("button", { name: "File a Task at Fix" }));
+    const dialog = await screen.findByRole("dialog", { name: "File a Task" });
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent("Fix");
   });
 });
