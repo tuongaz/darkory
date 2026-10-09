@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -1047,6 +1048,12 @@ func TestSetWorkflowMovesEndedTasks(t *testing.T) {
 		if got := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Filters: []string{"workflow:not:" + work}}); !slices.Contains(got, dropped.Key) || slices.Contains(got, moved.Key) {
 			t.Fatalf("workflow:not:Work lists %v", got)
 		}
+		if got := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Filters: []string{"workflow:in:" + work}}); slices.Contains(got, dropped.Key) || !slices.Contains(got, moved.Key) {
+			t.Fatalf("workflow:in:Work lists %v", got)
+		}
+		if got := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Filters: []string{"workflow:nin:" + work}}); !slices.Contains(got, dropped.Key) || slices.Contains(got, moved.Key) {
+			t.Fatalf("workflow:nin:Work lists %v", got)
+		}
 		f.checkActivity()
 	})
 }
@@ -1170,7 +1177,9 @@ func TestEndedTaskKeepsItsLastStep(t *testing.T) {
 		for _, tf := range []core.TaskFilter{
 			{Project: ptrStr("WEB"), Workflow: ptrStr("bugs")},
 			{Project: ptrStr("WEB"), Workflow: ptrStr(bugs)},
+			{Project: ptrStr("WEB"), Workflow: ptrStr(shortid.Short(bugs))},
 			{Workflow: ptrStr(bugs)},
+			{Workflow: ptrStr(shortid.Short(bugs))},
 			{Filters: []string{"workflow:is:" + bugs}},
 		} {
 			if got := f.filterKeys(tf); !slices.Equal(got, inBugs) {
@@ -1186,16 +1195,95 @@ func TestEndedTaskKeepsItsLastStep(t *testing.T) {
 		without := func(keys ...string) []string {
 			return slices.DeleteFunc(slices.Clone(all), func(k string) bool { return slices.Contains(keys, k) })
 		}
-		if got, want := f.filterKeys(core.TaskFilter{Filters: []string{"workflow:in:" + work + "," + bugs}}), without(pd.Task.Key, aimed.Key); !slices.Equal(got, want) {
+		if got, want := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Filters: []string{"workflow:in:" + work + "," + bugs}}), without(pd.Task.Key, aimed.Key); !slices.Equal(got, want) {
 			t.Errorf("workflow:in:Work,Bugs lists %v, want %v", got, want)
 		}
 		// not and nin also match a Task in no Workflow: the Parent and the aimed Task.
 		for _, tok := range []string{"workflow:nin:" + bugs, "workflow:not:" + bugs} {
-			got, want := f.filterKeys(core.TaskFilter{Filters: []string{tok}}), without(inBugs...)
+			got, want := f.filterKeys(core.TaskFilter{Project: ptrStr("WEB"), Filters: []string{tok}}), without(inBugs...)
 			if !slices.Equal(got, want) || !slices.Contains(got, pd.Task.Key) || !slices.Contains(got, aimed.Key) {
 				t.Errorf("%s lists %v, want %v", tok, got, want)
 			}
 		}
 		f.checkActivity()
+	})
+}
+
+// A held write reads its Task, then sends one batch; the Workflow its response names is the one
+// its Step was in at the read. A Workflow edit committed in between that moves the Step into
+// another Workflow must refuse the batch, which runHeldWrite then reads again, as an edit that
+// changes the Step's Skill does. The race cannot be interposed from outside the batch, so this
+// runs the guards the batch ends with against the edit: each holds before it, and refuses after.
+func TestBatchGuardsTheStepsWorkflow(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st)
+		ctx := t.Context()
+		f.project("WEB")
+		lead := f.member("lead", []string{"WEB"}, nil)
+		w := asSet(f.workflows("WEB"))
+		w.Workflows = append(w.Workflows, core.WorkflowInput{Name: "Bugs", Position: 2})
+		w.Steps = append(w.Steps, core.StepInput{Workflow: "Bugs", Name: "Verify", Position: 1})
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		ids := f.workflowIDs("WEB")
+		work, bugs := ids[core.WorkflowFirstName], ids["Bugs"]
+		build := f.step("WEB", "Build")
+		var out *core.Connector
+		for _, k := range f.workflows("WEB").Connectors {
+			if k.FromStepID == build {
+				out = &k
+				break
+			}
+		}
+		if out == nil {
+			t.Fatal("no Connector out of Build")
+		}
+		task := f.task(lead, "WEB", "Held", "Build")
+		pre := f.get(task.Key).Task
+		if pre.WorkflowID == nil || *pre.WorkflowID != work {
+			t.Fatalf("the Task at Build is in Workflow %v, want %s", pre.WorkflowID, work)
+		}
+		args := map[string]any{"org": f.admin.OrgID, "task": task.ID}
+		guards := func() map[string]store.Stmt {
+			return map[string]store.Stmt{
+				"step guard": core.StepGuard(args, pre.StepID, pre.SkillID, pre.WorkflowID),
+				"from guard": core.FromGuard(args, pre, out),
+			}
+		}
+		for name, g := range guards() {
+			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); err != nil {
+				t.Fatalf("%s before the edit: %v", name, err)
+			}
+		}
+
+		// Build moves into Bugs, keeping its id, Skill and Connectors.
+		w = asSet(f.workflows("WEB"))
+		for i := range w.Steps {
+			if w.Steps[i].ID == build {
+				w.Steps[i].Workflow = bugs
+			}
+		}
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
+			t.Fatal(err)
+		}
+		now := f.get(task.Key).Task
+		if now.StepID == nil || *now.StepID != build || now.SkillID == nil || pre.SkillID == nil || *now.SkillID != *pre.SkillID ||
+			now.WorkflowID == nil || *now.WorkflowID != bugs {
+			t.Fatalf("after the edit the Task is at %v with Skill %v in Workflow %v; want Build, the same Skill, Bugs",
+				now.StepID, now.SkillID, now.WorkflowID)
+		}
+		for name, g := range guards() {
+			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); !errors.Is(err, store.ErrConditionFailed) {
+				t.Errorf("%s after the Step moved Workflow: %v, want refused", name, err)
+			}
+		}
+		// Read again, as runHeldWrite does, the guards hold.
+		pre = now
+		for name, g := range guards() {
+			if err := f.st.WriteBatch(ctx, f.admin.OrgID, g); err != nil {
+				t.Errorf("%s on a fresh read: %v", name, err)
+			}
+		}
 	})
 }

@@ -547,12 +547,13 @@ func (s *Service) runHeldWrite(ctx context.Context, c *auth.Caller, ref string, 
 }
 
 // stepGuard is the guard a held write that answers with its Task ends with: the Task is at the
-// Step the response names (none for nil), carrying the Skill it names, which a Workflow edited
-// meanwhile may have changed.
-func stepGuard(args map[string]any, step, skill *string) store.Stmt {
+// Step the response names (none for nil), carrying the Skill and in the Workflow it names, either
+// of which a Workflow edited meanwhile may have changed.
+func stepGuard(args map[string]any, step, skill, workflow *string) store.Stmt {
 	return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t LEFT JOIN steps gs ON gs.org_id = t.org_id AND gs.id = t.step_id
-WHERE t.org_id = @org AND t.id = @task AND t.step_id IS NOT DISTINCT FROM @step AND gs.skill_id IS NOT DISTINCT FROM @skill`,
-		with(args, map[string]any{"step": step, "skill": skill})))
+WHERE t.org_id = @org AND t.id = @task AND t.step_id IS NOT DISTINCT FROM @step AND gs.skill_id IS NOT DISTINCT FROM @skill
+AND gs.workflow_id IS NOT DISTINCT FROM @workflow`,
+		with(args, map[string]any{"step": step, "skill": skill, "workflow": workflow})))
 }
 
 // with copies args and adds kv, so one op's statements can bind more than the guard.
@@ -602,7 +603,7 @@ func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note 
 			stmts = append(stmts, noteStmt(pre, args, newID(), *note))
 		}
 		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.released", pre.ID, map[string]any{"claim_id": pre.Claim.ID}, now),
-			stepGuard(args, pre.StepID, pre.SkillID))
+			stepGuard(args, pre.StepID, pre.SkillID, pre.WorkflowID))
 		return out, stmts, nil
 	}})
 	if err != nil {

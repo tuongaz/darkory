@@ -83,7 +83,8 @@ t.claim_timeout_ms, cc.started_at, t.claim_expires_at,
 EXISTS (SELECT 1 FROM blocks b JOIN tasks bt ON bt.id = b.blocker_task_id
 	WHERE b.org_id = t.org_id AND b.task_id = t.id AND bt.state = 'open')`
 
-const taskFrom = `tasks t LEFT JOIN steps ts ON ts.id = t.step_id LEFT JOIN steps ls ON ls.id = t.last_step_id
+const taskFrom = `tasks t LEFT JOIN steps ts ON ts.id = t.step_id AND ts.org_id = t.org_id
+LEFT JOIN steps ls ON ls.id = t.last_step_id AND ls.org_id = t.org_id
 LEFT JOIN claims cc ON cc.id = t.claim_id
 LEFT JOIN sessions cs ON cs.id = t.claim_session_id`
 
