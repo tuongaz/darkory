@@ -378,20 +378,85 @@ describe("the Workflow page of a Project of several Workflows (ADR 0019)", () =>
     await waitFor(() => expect(within(line()).getByText("1 today")).toBeInTheDocument());
   });
 
-  it("lists a Parent in the scope menu of the one page its board shows it on: where its least advanced Subtask is", async () => {
+  const scopeMenu = async () => {
+    await userEvent.click(screen.getByRole("button", { name: /^Scope: / }));
+    const options = (await screen.findAllByRole("option")).map((o) => o.textContent);
+    await userEvent.keyboard("{Escape}");
+    return options;
+  };
+  const pickWorkflow = async (from: string, to: string) => {
+    await userEvent.click(screen.getByRole("button", { name: `Workflow: ${from}` }));
+    await userEvent.click(await screen.findByRole("option", { name: to }));
+    await waitFor(() => expect(screen.getByRole("button", { name: `Workflow: ${to}` })).toBeInTheDocument());
+  };
+
+  it("lists a Parent in the scope menu of each line one of its open Subtasks is on", async () => {
     const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
     several([parent, at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: parent.id }), at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
     renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
     await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
-    // WEB-2, a Subtask of WEB-9, is on Bugs' line; WEB-9 itself is on Triage's page, as on Triage's board.
-    await userEvent.click(screen.getByRole("button", { name: "Scope: All Tasks" }));
-    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["All Tasks1", "No Parent0"]);
-    await userEvent.keyboard("{Escape}");
-    await userEvent.click(screen.getByRole("button", { name: "Workflow: Bugs" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Triage" }));
+    // WEB-2, a Subtask of WEB-9, is on Bugs' line: WEB-9 scopes it here, though its board is Triage's.
+    expect(await scopeMenu()).toEqual(["All Tasks1", "WEB-9Launch1 open", "No Parent0"]);
+    await pickWorkflow("Bugs", "Triage");
     await waitFor(() => expect(tokenOf("WEB-1")).not.toBeNull());
-    await userEvent.click(screen.getByRole("button", { name: "Scope: All Tasks" }));
-    expect((await screen.findAllByRole("option")).map((o) => o.textContent)).toEqual(["All Tasks1", "WEB-9Launch1 open", "No Parent0"]);
+    expect(await scopeMenu()).toEqual(["All Tasks1", "WEB-9Launch1 open", "No Parent0"]);
+    await pickWorkflow("Triage", "Features");
+    expect(await scopeMenu()).toEqual(["All Tasks0", "No Parent0"]);
+  });
+
+  it("lists an ended Parent on the line its Retrospective is open on, and counts it under Done where its work ended", async () => {
+    const today = new Date().toISOString();
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+    const parent = task(9, { title: "Launch", state: "done", step_id: undefined, step_since: undefined, skill_id: undefined, workflow_id: undefined, ended_at: today, subtask_counts: { open: 1, working: 0, done: 0, dropped: 1 } });
+    several([
+      parent,
+      // Dropped at Fix yesterday: where the Parent's work ended (and not itself done today).
+      at(10, "Ship it", wfStep.fix, wfId.bugs, { parent_id: parent.id, state: "dropped", step_id: undefined, last_step_id: wfStep.fix, ended_at: yesterday }),
+      // Filed as the Parent ended, open at a Step of another Workflow.
+      at(11, "Retrospective: Launch", wfStep.support, wfId.support, { parent_id: parent.id, kind: "retrospective" }),
+    ]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.support}`);
+    await waitFor(() => expect(tokenOf("WEB-11")).not.toBeNull());
+    expect(await scopeMenu()).toEqual(["All Tasks1", "WEB-9Launch1 open", "No Parent0"]);
+    expect(within(line()).queryByText("1 today")).toBeNull();
+    await pickWorkflow("Support", "Bugs");
+    await waitFor(() => expect(within(line()).getByText("1 today")).toBeInTheDocument());
+    expect(await scopeMenu()).toEqual(["All Tasks0", "No Parent0"]);
+  });
+
+  it("lists a Parent waiting with its Owner on the one page where its Subtasks ended, as its board does", async () => {
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 0, working: 0, done: 1, dropped: 0 } });
+    several([parent, at(10, "Ship it", wfStep.fix, wfId.bugs, { parent_id: parent.id, state: "done", step_id: undefined, last_step_id: wfStep.fix, ended_at: new Date().toISOString() })]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}`);
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    await waitFor(() => expect(within(needs).getByText("Launch")).toBeInTheDocument());
+    for (const [from, to] of [["Bugs", "Triage"], ["Triage", "Support"]]) {
+      await pickWorkflow(from, to);
+      await waitFor(() => expect(within(screen.getByRole("region", { name: "Needs you" })).queryByText("Launch")).toBeNull());
+    }
+  });
+
+  it("lists a question under a Parent on the page of the Parent's board", async () => {
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
+    const asked = task(12, { title: "Which build crashed?", parent_id: parent.id, step_id: undefined, step_since: undefined, skill_id: undefined, aimed_at_id: ada.id });
+    several([parent, asked, at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.bugs}&view=text`);
+    const withMember = await screen.findByRole("region", { name: "With a Member" });
+    await waitFor(() => expect(within(withMember).getByText("Which build crashed?")).toBeInTheDocument());
+    await pickWorkflow("Bugs", "Triage");
+    await waitFor(() => expect(screen.queryByText("Which build crashed?")).toBeNull());
+  });
+
+  it("keeps a Parent's scope across a pick of a Workflow one of its open Subtasks is on, and drops it on another", async () => {
+    const parent = task(9, { title: "Launch", step_id: undefined, step_since: undefined, skill_id: undefined, subtask_counts: { open: 2, working: 0, done: 0, dropped: 0 } });
+    several([parent, at(1, "Sort the inbox", wfStep.triage, wfId.triage, { parent_id: parent.id }), at(2, "Crash on save", wfStep.investigate, wfId.bugs, { parent_id: parent.id })]);
+    renderApp(`/projects/WEB/workflow?workflow=${wfId.triage}&scope=k-9`);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scope: WEB-9 Launch" })).toBeInTheDocument());
+    await pickWorkflow("Triage", "Bugs");
+    expect(screen.getByRole("button", { name: "Scope: WEB-9 Launch" })).toBeInTheDocument();
+    await waitFor(() => expect(tokenOf("WEB-2")).not.toBeNull());
+    await pickWorkflow("Bugs", "Features");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scope: All Tasks" })).toBeInTheDocument());
   });
 
   it("lists a question beside the Task it blocks, else with its Parent, else on every page", async () => {

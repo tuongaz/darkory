@@ -80,19 +80,22 @@ describe("What's happening", () => {
 
   it("on the page of one Workflow of several, tells only the stories of the Tasks its board shows", () => {
     const { input } = morning();
-    // As if WEB's Steps were split: the page shows a Workflow of Build alone, after the rest.
-    const shown = shownWorkflow(
-      "wf-shown",
-      { workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }], steps: record.steps.map((s) => ({ ...s, workflow_id: s.id === step.build ? "wf-shown" : "wf-other" })) },
-      [...input.tasks.values()],
-    );
+    // As if WEB's Steps were split: the page shows a Workflow of Build alone, after the rest,
+    // placing the Tasks it has as the board does (the page's one placement, `useLineData`'s).
+    const split = (tasks: Map<string, Task>) =>
+      shownWorkflow(
+        "wf-shown",
+        { workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }], steps: record.steps.map((s) => ({ ...s, workflow_id: s.id === step.build ? "wf-shown" : "wf-other" })) },
+        [...tasks.values()],
+      );
+    const shown = split(input.tasks);
     // WEB-9 and WEB-6 are at Review now, another Workflow's; the Parent WEB-7 is where its open
     // Subtask WEB-18 is, at Build.
     expect(storiesOf({ ...input, shown }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12", "WEB-7"]);
     // With WEB-18 at Review, WEB-7 is on Review's page, as on its board.
     const s18 = [...input.tasks.values()].find((t) => t.key === "WEB-18")!;
     const moved = new Map(input.tasks).set(s18.id, { ...s18, step_id: step.review });
-    expect(storiesOf({ ...input, tasks: moved, shown }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12"]);
+    expect(storiesOf({ ...input, tasks: moved, shown: split(moved) }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12"]);
     // A Task not read yet goes by the Step its latest entry leaves it at.
     const unknown = { ...input, tasks: new Map(), shown };
     expect(storiesOf(unknown).map((s) => s.key)).not.toContain("WEB-9");

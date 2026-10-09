@@ -7,7 +7,7 @@ import { useCurrentMe } from "@/me";
 import { liveClaim, taskWorkGlyph } from "@/work";
 import type { WorkGlyph } from "@/lib/work";
 import { workflowsInOrder } from "@/components/workflowLine/model";
-import { blocking, childrenOf, moveProblem, stepsInOrder } from "./derive";
+import { blocking, childrenOf, moveProblem, stepLookups, stepsInOrder } from "./derive";
 import { useProjectTasks } from "./queries";
 
 /** Everything a Project's Tasks views read, joined: the records, lookups by id, and who is looking. */
@@ -39,6 +39,8 @@ export function useTasksModel(project: Project) {
        */
       workflowOf: (s: Pick<WorkflowStep, "workflow_id">): string | undefined => (workflows.length > 1 ? workflowName.get(s.workflow_id) : undefined),
       stepById: new Map<string, WorkflowStep>(steps.map((s) => [s.id, s])),
+      /** Each Step's place in the Project's order and its Workflow, by id: what places a Task. */
+      ...stepLookups(steps),
       byId: new Map<string, Task>(list.map((t) => [t.id, t])),
       children: childrenOf(list),
       blocks: blocking(list),

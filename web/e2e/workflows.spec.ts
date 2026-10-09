@@ -341,13 +341,35 @@ test("7 · File Task's Step picker groups the Steps by Workflow; the list heads 
   await ctx.close();
 });
 
-test("8 · on a phone, Bugs' board does not scroll sideways and the chip shows", async ({ browser }) => {
-  const { page, errors, ctx } = await open(browser, board(wf("Bugs")), { width: 390, height: 844 });
+/** The chip reads its whole name and its caret, inside a phone's 390 px, and the page does not scroll sideways (decision 8). */
+async function chipReadsWhole(page: Page, name: string) {
   await expect(chip(page)).toBeVisible();
-  await expect(chip(page)).toHaveText("Bugs");
-  await expect(page.getByRole("region", { name: "Investigate", exact: true })).toBeVisible();
+  await expect(chip(page)).toHaveText(name);
+  const label = chip(page).locator("span").first();
+  // Not clipped: the name's text fits its box, and the chip its own.
+  expect(await label.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await chip(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  for (const box of [await chip(page).boundingBox(), await label.boundingBox(), await chip(page).locator("svg").boundingBox()]) {
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+  }
+  // Nothing in the bar is cut by what holds it: the chip ends inside the breadcrumb.
+  const crumbs = await page.getByRole("navigation", { name: "Breadcrumb" }).boundingBox();
+  const whole = await chip(page).boundingBox();
+  expect(whole!.x + whole!.width).toBeLessThanOrEqual(crumbs!.x + crumbs!.width + 0.5);
   expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
+}
+
+test("8 · on a phone, Bugs' board does not scroll sideways and the chip reads whole", async ({ browser }) => {
+  const { page, errors, ctx } = await open(browser, board(wf("Bugs")), { width: 390, height: 844 });
+  await expect(page.getByRole("region", { name: "Investigate", exact: true })).toBeVisible();
+  await chipReadsWhole(page, "Bugs");
   await shot(page, "phone-board-bugs");
+  await page.goto(`${base}/projects/ACC/workflow?workflow=${wf("Bugs")}`);
+  await expect(page.getByRole("region", { name: "Workflow" })).toBeVisible();
+  await chipReadsWhole(page, "Bugs");
+  await shot(page, "phone-workflow-bugs");
   expect(errors).toEqual([]);
   await ctx.close();
 });

@@ -1,9 +1,10 @@
 // The top bar's controls on a Project's Tasks: the List | Board switch and Display. Filters come
 // from components/filters.
-import { CheckIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -11,7 +12,11 @@ import type { Display, GroupBy, Order } from "./derive";
 
 export type Layout = "list" | "board";
 
-/** The segmented List | Board switch (kit `.seg`); the other search parameters stay. */
+/**
+ * The segmented List | Board switch (kit `.seg`); the other search parameters stay. On a phone it
+ * folds to a menu under the layout's icon, as the Workflow page's view switch does, so the
+ * breadcrumb keeps room for the Workflow chip.
+ */
 export function ViewSwitch({ view }: { view: Layout }) {
   const [params] = useSearchParams();
   const to = (v: Layout) => {
@@ -20,25 +25,50 @@ export function ViewSwitch({ view }: { view: Layout }) {
     next.delete("task");
     return { search: `?${next}` };
   };
-  const item = (v: Layout, icon: ReactNode, label: string) => (
-    <Link
-      to={to(v)}
-      aria-current={view === v ? "page" : undefined}
-      aria-label={label}
-      className={cn(
-        "inline-flex h-[26px] items-center gap-1.5 rounded-[6px] px-2.5 font-medium text-muted-foreground [&_svg]:size-3.5",
-        view === v && "bg-background text-foreground shadow-soft",
-      )}
-    >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </Link>
-  );
+  const layouts: { v: Layout; icon: ReactNode; label: string }[] = [
+    { v: "list", icon: <ListIcon aria-hidden />, label: "List" },
+    { v: "board", icon: <KanbanIcon aria-hidden />, label: "Board" },
+  ];
+  const current = layouts.find((l) => l.v === view)!;
   return (
-    <nav aria-label="View" className="inline-flex rounded-md bg-muted p-0.5">
-      {item("list", <ListIcon aria-hidden />, "List")}
-      {item("board", <KanbanIcon aria-hidden />, "Board")}
-    </nav>
+    <>
+      <nav aria-label="View" className="hidden rounded-md bg-muted p-0.5 sm:inline-flex">
+        {layouts.map(({ v, icon, label }) => (
+          <Link
+            key={v}
+            to={to(v)}
+            aria-current={view === v ? "page" : undefined}
+            aria-label={label}
+            className={cn(
+              "inline-flex h-[26px] items-center gap-1.5 rounded-[6px] px-2.5 font-medium text-muted-foreground [&_svg]:size-3.5",
+              view === v && "bg-background text-foreground shadow-soft",
+            )}
+          >
+            {icon}
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" aria-label={`View: ${current.label}`} className="flex h-7 items-center gap-1 rounded-md bg-muted px-2 text-foreground sm:hidden [&_svg]:size-3.5">
+            {current.icon}
+            <ChevronDownIcon aria-hidden className="size-3 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-36">
+          {layouts.map(({ v, icon, label }) => (
+            <DropdownMenuItem key={v} asChild>
+              <Link to={to(v)} aria-current={view === v ? "page" : undefined}>
+                {icon}
+                {label}
+                <CheckIcon aria-hidden className={cn("ml-auto size-3.5", view !== v && "invisible")} />
+              </Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   );
 }
 

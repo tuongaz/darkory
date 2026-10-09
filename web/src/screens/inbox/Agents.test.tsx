@@ -76,6 +76,8 @@ describe("a Project's Agents", () => {
     expect(row).toHaveTextContent("WEB-3");
     expect(row).toHaveTextContent("Payment form");
     expect(row).toHaveTextContent("Build");
+    // Of one Workflow, its Steps are named alone.
+    expect(row).not.toHaveTextContent("›");
     expect(within(row).getByText("Running")).toBeInTheDocument();
     expect(row).toHaveTextContent("mac-mini");
     expect(row).toHaveTextContent("dk-WEB-3");
@@ -132,6 +134,8 @@ describe("a Project's Agents", () => {
     const peek = await screen.findByRole("dialog", { name: "Agent builder" });
     await waitFor(() => expect(within(peek).getByRole("region", { name: "Shift" })).toHaveTextContent("dk-WEB-3"));
     expect(within(peek).getByText("Steps in Web").nextSibling).toHaveTextContent("Build");
+    // Of one Workflow, a Step's name says enough: no Workflow before it.
+    expect(within(peek).getByText("Steps in Web").nextSibling).not.toHaveTextContent("›");
     expect(within(peek).getByRole("link", { name: /Settings/ })).toHaveAttribute("href", "/settings/organisation/agents/builder");
 
     await userEvent.click(within(peek).getByRole("button", { name: "Nudge" }));

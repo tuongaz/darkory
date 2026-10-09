@@ -123,7 +123,11 @@ describe("a Task's page", () => {
     const dialog = await screen.findByRole("dialog", { name: "Move WEB-2" });
     expect(dialog).toHaveTextContent("Ends builder's Claim");
     await userEvent.click(within(dialog).getByRole("combobox", { name: "Step" }));
+    // Of one Workflow, the Steps alone: no group names a Workflow.
+    await screen.findAllByRole("option");
+    expect(screen.queryAllByRole("group")).toEqual([]);
     await userEvent.click(await screen.findByRole("option", { name: /Review/ }));
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent(/^Review$/);
     await userEvent.click(within(dialog).getByRole("button", { name: "Move" }));
     await waitFor(() => expect(posted(api, "/step")?.body).toEqual({ step: step.review }));
   });
@@ -209,6 +213,8 @@ describe("a Task in a Project of several Workflows (ADR 0019)", () => {
     // Its own Step is not offered.
     expect(within(groups[0]).getAllByRole("option").map((o) => o.textContent)).toEqual(["Fixengineer", "Reviewreview", "Verifyqa"]);
     await userEvent.click(within(groups[3]).getByRole("option", { name: /Sketch/ }));
+    // The choice reads with its Workflow, not its Skill: the list's groups are gone once it closes.
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent(/^Prototypes › Sketch$/);
     await userEvent.click(within(dialog).getByRole("button", { name: "Move" }));
     await waitFor(() => expect(posted(api, "/step")?.body).toEqual({ step: wfStep.sketch }));
   });
@@ -218,7 +224,8 @@ describe("a Task in a Project of several Workflows (ADR 0019)", () => {
     renderApp("/tasks/WEB-8");
     const head = (await screen.findByRole("heading", { level: 1, name: "Crash on save" })).closest("header")!;
     const stepper = await within(head).findByRole("list", { name: "Path through the Steps" });
-    await waitFor(() => expect(within(stepper).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringMatching(/^Triage/), "bug", "Bugs ›", expect.stringMatching(/^Investigate/)]));
+    // The crossing reads with the Step it reaches, in its item: no item of the path is not a Step or an outcome.
+    await waitFor(() => expect(within(stepper).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringMatching(/^Triage/), "bug", expect.stringMatching(/^Bugs ›Investigate/)]));
   });
 
   it("its line draws the Workflow it is in, lighting the entry it came in by", async () => {

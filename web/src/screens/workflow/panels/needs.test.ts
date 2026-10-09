@@ -147,9 +147,9 @@ describe("Needs you", () => {
 
 describe("Needs you on the page of one Workflow of several", () => {
   // As if WEB's Steps were split: the page shows a Workflow of Build and Review only.
-  const split = (tasks: Task[]) => {
+  const split = (tasks: Task[], id = "wf-shown") => {
     const graph = workflow(web);
-    return shownWorkflow("wf-shown", {
+    return shownWorkflow(id, {
       workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }],
       steps: graph.steps.map((s) => ({ ...s, workflow_id: s.id === step.build || s.id === step.review ? "wf-shown" : "wf-other" })),
     }, tasks);
@@ -157,10 +157,16 @@ describe("Needs you on the page of one Workflow of several", () => {
 
   it("lists the Tasks its board shows: a hold or a Retrospective of another Workflow is on its own page", () => {
     const { open, details, lapses } = heavyDay();
-    const items = needsOf(input(open, { details, lapses, shown: split(open) }));
+    // The page reads the Tasks the board reads, so WEB-16's ended Subtasks with them: the last
+    // ended at Review, this Workflow's.
+    const ended = details.get("k-16")!.subtasks.map((s) => (s.state === "done" ? { ...s, workflow_id: "wf-shown", last_step_id: step.review } : { ...s, workflow_id: "wf-other", last_step_id: step.plan }));
+    const read = [...open, ...ended];
+    const items = needsOf(input(open, { details, lapses, shown: split(read) }));
     // WEB-5 waits at Backlog, WEB-17 and WEB-14 at Retro: not this Workflow's. WEB-13 blocks
-    // WEB-4, at Build; WEB-16 waits with its Owner, its Subtasks' ends not read: every page's.
+    // WEB-4, at Build; WEB-16 waits with its Owner, where its Subtasks last ended: here.
     expect(items.map((i) => i.task.key)).toEqual(["WEB-13", "WEB-16"]);
+    // On the other Workflow's page WEB-16 is not listed: a Parent has one place, as on the boards.
+    expect(needsOf(input(open, { details, lapses, shown: split(read, "wf-other") })).map((i) => i.task.key)).not.toContain("WEB-16");
   });
 
   it("lists a question beside the Task it blocks, else with its Parent, else on every page", () => {

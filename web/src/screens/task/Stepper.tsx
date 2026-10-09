@@ -48,23 +48,25 @@ export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: rea
         return (
           <Fragment key={i}>
             {i > 0 && <Arrow />}
-            {into && (
-              <li data-crossing className="inline-flex text-2xs font-medium text-muted-foreground">
-                {into} ›
-              </li>
-            )}
-            <li
-              aria-current={current ? "step" : undefined}
-              className={cn(
-                "inline-flex h-6 items-center gap-1.5 rounded-full border px-2",
-                hold(s.stepId) && "border-dashed",
-                current ? "border-ring bg-state-waiting-bg font-medium text-foreground" : "text-muted-foreground",
+            {/* The Workflow it crossed into reads with the Step, in its item: "Bugs › Investigate". */}
+            <li aria-current={current ? "step" : undefined} className="inline-flex items-center gap-1">
+              {into && (
+                <span data-crossing className="text-2xs font-medium text-muted-foreground">
+                  {into} ›
+                </span>
               )}
-              title={`${name(s.stepId)}: ${new Date(s.since).toLocaleString()}${s.until ? ` to ${new Date(s.until).toLocaleString()}` : ", now"}`}
-            >
-              <span className="max-w-32 truncate">{name(s.stepId)}</span>
-              <span className="tabular-nums">{spanText((s.until ?? now) - s.since)}</span>
-              {current && <span className="sr-only">, now</span>}
+              <span
+                className={cn(
+                  "inline-flex h-6 items-center gap-1.5 rounded-full border px-2",
+                  hold(s.stepId) && "border-dashed",
+                  current ? "border-ring bg-state-waiting-bg font-medium text-foreground" : "text-muted-foreground",
+                )}
+                title={`${name(s.stepId)}: ${new Date(s.since).toLocaleString()}${s.until ? ` to ${new Date(s.until).toLocaleString()}` : ", now"}`}
+              >
+                <span className="max-w-32 truncate">{name(s.stepId)}</span>
+                <span className="tabular-nums">{spanText((s.until ?? now) - s.since)}</span>
+                {current && <span className="sr-only">, now</span>}
+              </span>
             </li>
             {out && <li className="inline-flex text-2xs text-muted-foreground">{out}</li>}
           </Fragment>

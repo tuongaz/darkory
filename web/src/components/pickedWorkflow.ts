@@ -5,7 +5,7 @@ import { useSearchParams } from "react-router";
 import type { Project, Task, Workflow, WorkflowStep } from "@/api/client";
 import { workflowsInOrder } from "@/components/workflowLine/model";
 import { toShort } from "@/lib/shortid";
-import { boardContext, stepsInOrder, workflowsOf } from "@/screens/board/derive";
+import { boardContext, listedOn, stepsInOrder } from "@/screens/board/derive";
 
 /** The search parameter naming the Workflow a page shows of a Project of several. */
 export const workflowParam = "workflow";
@@ -91,7 +91,7 @@ export type ShownWorkflow = {
 
 /**
  * The Workflow `id` of `graph` as a page shows it, its Tasks placed as its board places them
- * (`workflowsOf`): one at a Step of it or ended in it; an open Parent where its least advanced
+ * (`listedOn`): one at a Step of it or ended in it; an open Parent where its least advanced
  * open Subtask is; a Task aimed at a Member beside the Task it blocks, else with its Parent, else
  * on every page. `tasks` are the Tasks the page has, open and any ended it read: a Parent's
  * Subtasks and the Blocking among them are read off them.
@@ -105,12 +105,12 @@ export function shownWorkflow(id: string, graph: WorkflowGraph, tasks: readonly 
     steps,
     graph,
     shows: (task) => {
-      const at = workflowsOf(task, ctx);
+      const at = listedOn(task, ctx);
       return !at || at.has(id);
     },
     of: (taskId) => {
       const task = ctx.byId.get(taskId);
-      return task && workflowsOf(task, ctx);
+      return task && listedOn(task, ctx);
     },
   };
 }

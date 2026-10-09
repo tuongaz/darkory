@@ -89,7 +89,7 @@ export function TasksPage() {
           projectCrumb(project, false),
           // The board shows one Workflow, picked here at every width (a phone has no other way to
           // another); the list, the whole Project.
-          ...(view === "board" && model.workflows.length > 1 ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} /> }] : []),
+          ...(view === "board" && model.workflows.length > 1 ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} />, whole: true }] : []),
           { label: "Tasks", wide: true },
         ]}
         view={<ViewSwitch view={view} />}
@@ -239,6 +239,8 @@ function Board({
     workflows: model.workflows,
     workflow,
     steps: model.steps,
+    position: model.position,
+    stepWorkflow: model.stepWorkflow,
     children: model.children,
     byId: model.byId,
     blocks: model.blocks,

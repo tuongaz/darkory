@@ -262,7 +262,16 @@ export type BoardContext = {
   byId: Map<string, Task>;
   /** The open Tasks each Task blocks (`blocking`). */
   blocks: Map<string, TaskBrief[]>;
+  /** Each Step's place in the Project's order, by id (`stepLookups`). */
+  position: Map<string, number>;
+  /** Each Step's Workflow, by the Step's id (`stepLookups`). */
+  stepWorkflow: Map<string, string>;
 };
+
+/** What a BoardContext reads off the Project's Steps in its order, built once: each Step's place and its Workflow. */
+export function stepLookups(steps: readonly Pick<WorkflowStep, "id" | "workflow_id">[]): Pick<BoardContext, "position" | "stepWorkflow"> {
+  return { position: new Map(steps.map((s, i) => [s.id, i])), stepWorkflow: new Map(steps.map((s) => [s.id, s.workflow_id])) };
+}
 
 /** The Project's first Workflow by position. */
 const firstWorkflow = (workflows: BoardContext["workflows"]) => workflowsInOrder(workflows)[0]?.id;
@@ -278,15 +287,16 @@ const firstWorkflow = (workflows: BoardContext["workflows"]) => workflowsInOrder
  */
 export function endedWorkflowOf(
   task: Pick<Task, "id" | "workflow_id" | "ended_at" | "parent_id" | "aimed_at_id">,
-  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "steps" | "byId">>,
+  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "position" | "stepWorkflow" | "byId">>,
 ): string | undefined {
   const known = new Set(ctx.workflows.map((w) => w.id));
   if (task.workflow_id && known.has(task.workflow_id)) return task.workflow_id;
   const last = lastEndedSubtask(task, ctx);
   if (last) return last.workflow_id;
-  if (task.aimed_at_id && task.parent_id && ctx.byId && ctx.steps) {
-    const parent = ctx.byId.get(task.parent_id);
-    const at = parent && parentWorkflow(parent, ctx as Pick<BoardContext, "workflows" | "children" | "steps" | "byId">);
+  const { byId, position, stepWorkflow } = ctx;
+  if (task.aimed_at_id && task.parent_id && byId && position && stepWorkflow) {
+    const parent = byId.get(task.parent_id);
+    const at = parent && parentWorkflow(parent, { workflows: ctx.workflows, children: ctx.children, byId, position, stepWorkflow });
     if (at) return at;
   }
   return firstWorkflow(ctx.workflows);
@@ -299,14 +309,13 @@ export function endedWorkflowOf(
  */
 function lastEndedSubtask(
   task: Pick<Task, "id" | "ended_at">,
-  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "steps">>,
+  ctx: Pick<BoardContext, "workflows" | "children"> & Partial<Pick<BoardContext, "position">>,
 ): Task | undefined {
   const rank = new Map(ctx.workflows.map((w) => [w.id, w.position]));
   const until = task.ended_at ? time(task.ended_at) : Number.POSITIVE_INFINITY;
   const ended = (ctx.children.get(task.id) ?? []).filter((s) => s.state !== "open" && !!s.workflow_id && rank.has(s.workflow_id) && time(s.ended_at) <= until);
   if (ended.length === 0) return undefined;
-  const index = new Map((ctx.steps ?? []).map((s, i) => [s.id, i]));
-  const advance = (s: Task) => [rank.get(s.workflow_id!)!, s.last_step_id ? (index.get(s.last_step_id) ?? -1) : -1] as const;
+  const advance = (s: Task) => [rank.get(s.workflow_id!)!, s.last_step_id ? (ctx.position?.get(s.last_step_id) ?? -1) : -1] as const;
   const lessAdvanced = (a: Task, b: Task) => {
     const [wa, sa] = advance(a);
     const [wb, sb] = advance(b);
@@ -320,11 +329,10 @@ function lastEndedSubtask(
 }
 
 /** The Workflow a Parent's card is on: an open one's least advanced Subtask's Step's, an ended one's `endedWorkflowOf`; none while it waits with a Member. */
-function parentWorkflow(parent: Task, ctx: Pick<BoardContext, "workflows" | "children" | "steps" | "byId">): string | undefined {
+function parentWorkflow(parent: Task, ctx: Pick<BoardContext, "workflows" | "children" | "byId" | "position" | "stepWorkflow">): string | undefined {
   if (parent.state !== "open") return endedWorkflowOf(parent, ctx);
-  const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
-  const place = placeOf(parent, { children: ctx.children, position });
-  return place.kind === "step" ? ctx.steps.find((s) => s.id === place.stepId)?.workflow_id : undefined;
+  const place = placeOf(parent, ctx);
+  return place.kind === "step" ? ctx.stepWorkflow.get(place.stepId) : undefined;
 }
 
 /**
@@ -338,11 +346,10 @@ export function withWorkflowsOf(task: Task, ctx: BoardContext): ReadonlySet<stri
     const last = lastEndedSubtask({ id: task.id, ended_at: undefined }, ctx);
     return last ? new Set([last.workflow_id!]) : undefined;
   }
-  const stepWorkflow = new Map(ctx.steps.map((s) => [s.id, s.workflow_id]));
   const held = new Set<string>();
   for (const b of ctx.blocks.get(task.id) ?? []) {
     const t = ctx.byId.get(b.id);
-    const at = t?.step_id ? stepWorkflow.get(t.step_id) : undefined;
+    const at = t?.step_id ? ctx.stepWorkflow.get(t.step_id) : undefined;
     if (at) held.add(at);
   }
   if (held.size > 0) return held;
@@ -362,15 +369,14 @@ export function withWorkflowsOf(task: Task, ctx: BoardContext): ReadonlySet<stri
  * - an open Task aimed at a Member: the Workflows of the Tasks it blocks, else its Parent's, else
  *   every one (`withWorkflowsOf`).
  */
-export function workflowsOf(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
+export function listedOn(task: Task, ctx: BoardContext): ReadonlySet<string> | undefined {
   if (task.state !== "open") {
     const at = endedWorkflowOf(task, ctx);
     return at ? new Set([at]) : undefined;
   }
-  const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
-  const place = placeOf(task, { children: ctx.children, position });
+  const place = placeOf(task, ctx);
   if (place.kind === "step") {
-    const at = ctx.steps.find((s) => s.id === place.stepId)?.workflow_id;
+    const at = ctx.stepWorkflow.get(place.stepId);
     return new Set(at ? [at] : []);
   }
   return withWorkflowsOf(task, ctx);
@@ -381,7 +387,14 @@ export function workflowsOf(task: Task, ctx: BoardContext): ReadonlySet<string> 
  * `stepsInOrder`) and the Tasks a page has: the open ones, and any ended ones it read.
  */
 export function boardContext(graph: Pick<BoardContext, "workflows" | "steps">, tasks: readonly Task[]): BoardContext {
-  return { workflows: graph.workflows, steps: graph.steps, children: childrenOf(tasks), byId: new Map(tasks.map((t) => [t.id, t])), blocks: blocking(tasks) };
+  return {
+    workflows: graph.workflows,
+    steps: graph.steps,
+    ...stepLookups(graph.steps),
+    children: childrenOf(tasks),
+    byId: new Map(tasks.map((t) => [t.id, t])),
+    blocks: blocking(tasks),
+  };
 }
 
 /**
@@ -401,14 +414,13 @@ export function boardColumns(
     },
 ): Column[] {
   // Where a Parent stands reads the whole Project's order; the columns are this Workflow's.
-  const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
   const cards = tasks.filter((t) => !isParent(t) || ctx.display.showParents);
-  const places = bucket(cards, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
+  const places = bucket(cards, (t) => placeKey(placeOf(t, ctx)));
   const columns: Column[] = ctx.steps
     .filter((s) => s.workflow_id === ctx.workflow)
     .map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
-  // Who waits with a Member and what ended show where `workflowsOf` places them: the page's rules too.
-  const isHere = (t: Task) => workflowsOf(t, ctx)?.has(ctx.workflow) ?? true;
+  // Who waits with a Member and what ended show where `listedOn` places them: the page's rules too.
+  const isHere = (t: Task) => listedOn(t, ctx)?.has(ctx.workflow) ?? true;
   const withHere = new Map<string, Task[]>();
   for (const [k, list] of places) {
     if (!k.startsWith("with:")) continue;

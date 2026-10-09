@@ -18,6 +18,7 @@ import {
   placeOf,
   progressText,
   rankFinder,
+  stepLookups,
   stepsInOrder,
   stepWithSkill,
 } from "./derive";
@@ -40,6 +41,7 @@ function ctx(tasks: Task[]) {
     workflows: wf.workflows,
     workflow: wf.workflows[0].id,
     steps: wf.steps,
+    ...stepLookups(wf.steps),
     children: childrenOf(tasks),
     members,
     labels: new Map([bug, clientX].map((l) => [l.id, l])),
@@ -184,6 +186,7 @@ describe("the board of one Workflow among several", () => {
       workflows: five.workflows,
       workflow,
       steps,
+      ...stepLookups(steps),
       children: childrenOf(tasks),
       byId: new Map(tasks.map((t) => [t.id, t])),
       blocks: blocking(tasks),
@@ -257,7 +260,7 @@ describe("the board of one Workflow among several", () => {
     // Whatever the order of the list, the Parent stays on Bugs, where Fix is the least advanced.
     for (const list of [kids, [...kids].reverse()]) {
       const tasks = [p, ...list];
-      expect(endedWorkflowOf(p, { workflows: five.workflows, children: childrenOf(tasks), steps: steps5 })).toBe(wfId.bugs);
+      expect(endedWorkflowOf(p, { workflows: five.workflows, children: childrenOf(tasks), ...stepLookups(steps5) })).toBe(wfId.bugs);
     }
     const tasks = [p, ...kids];
     expect(keys(board(tasks, wfId.bugs, { ...defaultDisplay, showDropped: true, showParents: true }), "dropped")).toEqual(["WEB-5", "WEB-7", "WEB-8"]);

@@ -1,5 +1,5 @@
 import type { Activity, RunnerSession, Task } from "@/api/client";
-import { shownWorkflow, type ShownWorkflow } from "@/components/pickedWorkflow";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import { progressText } from "@/screens/inbox/derive";
 import { liveClaim } from "@/work";
 import { flowKinds, storyVerb, type FlowContext } from "../flowEvents";
@@ -146,11 +146,9 @@ export function storiesOf(input: StoriesInput): Story[] {
     byRow.set(rowId, row);
   }
   const out: Story[] = [];
-  // The Tasks here, ended ones included, say where an ended Parent's Subtasks ended.
-  const shows = shown && shownWorkflow(shown.id, shown.graph, [...tasks.values()]).shows;
   for (const [taskId, row] of byRow) {
     if (exclude.has(taskId)) continue;
-    if (!ofShown(taskId, row.latest, tasks, shown, shows)) continue;
+    if (!ofShown(taskId, row.latest, tasks, shown)) continue;
     const fresh = seenSeq === null ? true : row.latest.seq > seenSeq;
     if (Date.parse(row.latest.at) < from && !fresh) continue;
     const task = tasks.get(taskId);
@@ -186,10 +184,10 @@ export function storiesOf(input: StoriesInput): Story[] {
  * else by the Step its latest entry leaves it at (where it went, else where it is, else where it
  * ended), when it names one.
  */
-function ofShown(taskId: string, latest: Activity, tasks: Map<string, Task>, shown: ShownWorkflow | undefined, shows: ((task: Task) => boolean) | undefined): boolean {
-  if (!shown || !shows) return true;
+function ofShown(taskId: string, latest: Activity, tasks: Map<string, Task>, shown: ShownWorkflow | undefined): boolean {
+  if (!shown) return true;
   const task = tasks.get(taskId);
-  if (task) return shows(task);
+  if (task) return shown.shows(task);
   const at = str(latest.payload, "to") ?? str(latest.payload, "step_id") ?? str(latest.payload, "from");
   return !at || shown.steps.has(at);
 }

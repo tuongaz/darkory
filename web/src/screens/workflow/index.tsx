@@ -47,11 +47,15 @@ export function WorkflowPage() {
   const picked = usePickedWorkflow(project, workflows);
   const { data } = useLineData(project.key, picked.id, scope, filter.matches);
   const blocking = useBlockingCount(project, data?.scope.kind === "parent" ? data.scope.id : undefined, data?.shown);
-  // A Parent or Task scoped to stays in scope across a pick only where it is listed, as on the board.
+  // A Task scoped to stays in scope across a pick only where it is listed, as on the board; a
+  // Parent also where one of its open Subtasks is on the line, as the scope menu offers it.
   const pick = (next: string) => {
-    const scoped = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? data.scope.id : undefined;
+    const scope = data?.scope;
+    const scoped = scope && (scope.kind === "parent" || scope.kind === "task") ? scope.id : undefined;
     const at = scoped ? data?.shown?.of(scoped) : undefined;
-    picked.set(next, at && !at.has(next) ? { also: (p) => p.delete("scope") } : undefined);
+    const workflowOf = new Map((data?.facts.steps ?? []).map((s) => [s.id, s.workflow_id]));
+    const working = scope?.kind === "parent" && !!data?.all.some((t) => t.parentId === scope.id && !!t.stepId && workflowOf.get(t.stepId) === next);
+    picked.set(next, at && !at.has(next) && !working ? { also: (p) => p.delete("scope") } : undefined);
   };
   const named = data && (data.scope.kind === "parent" || data.scope.kind === "task") ? (data.all.find((t) => t.id === (data.scope as { id: string }).id) ?? data.parents.find((p) => p.id === (data.scope as { id: string }).id)) : undefined;
   return (
@@ -60,8 +64,9 @@ export function WorkflowPage() {
         crumbs={[
           projectCrumb(project),
           // The Workflow drawn, at every width: on a phone too it is the way to another.
-          ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={pick} /> }] : []),
-          { label: "Workflow" },
+          ...(workflows && workflows.length > 1 ? [{ label: <WorkflowChip workflows={workflows} picked={picked.id} onPick={pick} />, whole: true }] : []),
+          // Beside the chip on a phone, the page's name gives its room to the Project and the chip.
+          { label: "Workflow", wide: !!workflows && workflows.length > 1 },
           ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
         ]}
         view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}

@@ -3,8 +3,12 @@ import { Link } from "react-router";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-/** A step of the breadcrumb. `wide` leaves it out on a phone, where the bar has room for the area alone. */
-export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: boolean };
+/**
+ * A step of the breadcrumb. `wide` leaves it out on a phone, where the bar has room for the area
+ * alone. `whole` keeps it at its own width (a control, such as the Workflow chip, that must read
+ * in full on a phone): the other crumbs truncate first.
+ */
+export type Crumb = { label: ReactNode; to?: string; icon?: ReactNode; wide?: boolean; whole?: boolean };
 
 /**
  * The 44px bar over every screen (kit `.topbar`): where you are, then the view switcher, then the
@@ -35,14 +39,14 @@ export function TopBar({
                 /
               </span>
             )}
-            <span className={cn("flex min-w-0 items-center gap-1.5", i === 0 && "font-medium text-foreground", c.wide && "hidden sm:flex")}>
+            <span className={cn("flex items-center gap-1.5", c.whole ? "flex-none" : "min-w-0", i === 0 && "font-medium text-foreground", c.wide && "hidden sm:flex")}>
               {c.icon}
               {c.to ? (
                 <Link to={c.to} className="truncate hover:underline">
                   {c.label}
                 </Link>
               ) : (
-                <span className="truncate">{c.label}</span>
+                <span className={cn(!c.whole && "truncate")}>{c.label}</span>
               )}
             </span>
           </Fragment>

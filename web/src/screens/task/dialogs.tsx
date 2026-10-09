@@ -213,7 +213,8 @@ export function MoveDialog({ detail, open, onOpenChange }: DialogProps) {
       <Field label="Step" htmlFor="move-step" help={target ? (target.skill_id ? `Waits there for ${skill(target.skill_id)}` : "A hold: no one is offered it there") : undefined}>
         <Select value={to} onValueChange={setTo}>
           <SelectTrigger id="move-step" className="w-full">
-            <SelectValue placeholder="Choose a Step" />
+            {/* The choice by its place, `Workflow › Step` of several, not the item's text with its Skill. */}
+            <SelectValue placeholder="Choose a Step">{target && stepTitle(target, workflows)}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             {/* Of several Workflows, each one's Steps under its name, the Task's own first. */}

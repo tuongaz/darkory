@@ -5,6 +5,7 @@ import { ESCALATE, FIVE, FIXTURES, HOTFIX, MARKS, PAGE, PARENT, WRAP } from "./f
 import { crossings, horizontal, lineTopology, type Horizontal, type HorizontalOptions, type LineTopology } from "./layout";
 import { drawnWorkflow, type LineWorkflow } from "./model";
 import { overlaps } from "./place";
+import type { Trace } from "./data";
 import { WorkflowLine } from "./WorkflowLine";
 import { ENTRY_LABEL } from "./words";
 
@@ -28,8 +29,26 @@ vi.mock("./layout", async (actual) => {
   };
 });
 
-/** The Connectors touching a drawing's Steps: within it, out of it, into it. */
-const touching = (wf: LineWorkflow, t: LineTopology) => wf.connectors.filter((c) => t.steps.has(c.from) || (c.to !== null && t.steps.has(c.to)));
+/** The Steps a drawing draws: every one of the topology's, or with `noBranch` (a Task's line off the branch) those off the branch rows. */
+const drawnOf = (t: LineTopology, noBranch = false): ReadonlySet<string> => {
+  const off = new Set(noBranch ? t.rows.flatMap((r) => r.stations) : []);
+  return new Set([...t.steps.keys()].filter((id) => !off.has(id)));
+};
+
+/**
+ * The Connectors touching a drawing's drawn Steps: within it, out of it, into it; not one to or
+ * from a Step of its own Workflow it leaves undrawn (the branch, off a Task's line).
+ */
+const touching = (wf: LineWorkflow, t: LineTopology, drawn: ReadonlySet<string> = drawnOf(t)) => {
+  const undrawn = (id: string | null) => id !== null && t.steps.has(id) && !drawn.has(id);
+  return wf.connectors.filter((c) => (drawn.has(c.from) || (c.to !== null && drawn.has(c.to))) && !undrawn(c.from) && !undrawn(c.to));
+};
+
+/** A Task's path as TaskLine traces it: waiting at the line's first Step, its outcomes out of there its next moves. */
+const traceAt = (wf: LineWorkflow, t: LineTopology): Trace => {
+  const at = t.main.find((id) => t.steps.has(id))!;
+  return { stays: [{ stepId: at, since: 0, worked: 0, waited: 60_000 }], traversed: [], next: wf.connectors.filter((c) => c.from === at).map((c) => c.id), current: at };
+};
 
 /** Every Connector a drawing shows: on the main line, an arc or a track, a branch row, a chip, the entry arrow or a mark. */
 function shown(h: Horizontal): Set<string> {
@@ -103,17 +122,25 @@ describe("and across, as the renderer draws it", () => {
     cleanup();
   });
 
-  /** The line as the page draws it, and as a single Task's line (TaskLine). */
-  const rendered: Record<string, Partial<Parameters<typeof WorkflowLine>[0]>> = {
-    page: {},
-    "a Task's line": { compactHeads: true, density: "tokens", noLoops: true },
+  /**
+   * The line as the page draws it, and as TaskLine draws a single Task's: on the branch, off it
+   * (`noBranch`, its Task at a main Step) and with its path traced.
+   */
+  const taskLine = { compactHeads: true, density: "tokens", noLoops: true } as const;
+  const rendered: Record<string, (wf: LineWorkflow, t: LineTopology) => Partial<Parameters<typeof WorkflowLine>[0]>> = {
+    page: () => ({}),
+    "a Task's line": () => taskLine,
+    "a Task's line off the branch": () => ({ ...taskLine, noBranch: true }),
+    "a Task's traced line": (wf, t) => ({ ...taskLine, noBranch: true, trace: traceAt(wf, t) }),
   };
 
   for (const [name, wf, from] of drawings) {
-    for (const [shape, props] of Object.entries(rendered)) {
+    for (const [shape, propsOf] of Object.entries(rendered)) {
       it(`${name}, ${shape}`, () => {
         const t = lineTopology(wf);
-        for (const width of [from, 1000, 1640]) {
+        const props = propsOf(wf, t);
+        const drawn = drawnOf(t, props.noBranch);
+        for (const width of [...new Set([from, ...Object.values(PAGE), 1000, 1640])]) {
           vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width, height: 600, x: 0, y: 0, top: 0, left: 0, right: width, bottom: 600, toJSON: () => ({}) } as DOMRect);
           laid.length = 0;
           const { container } = render(<WorkflowLine workflow={wf} tasks={[]} now={0} orientation="horizontal" {...props} />);
@@ -126,15 +153,15 @@ describe("and across, as the renderer draws it", () => {
             [...container.querySelectorAll(`${selector}[data-connectors]`)].some((el) => (JSON.parse(el.getAttribute("data-connectors")!) as string[]).includes(id));
           const q = JSON.stringify;
           // Every Connector touching a drawn Step is somewhere in the drawing, by its id.
-          for (const c of touching(wf, t)) expect(has(`[data-connector=${q(c.id)}], [data-route=${q(c.id)}]`) || names("", c.id), `${c.id}, ${at}`).toBe(true);
+          for (const c of touching(wf, t, drawn)) expect(has(`[data-connector=${q(c.id)}], [data-route=${q(c.id)}]`) || names("", c.id), `${c.id}, ${at}`).toBe(true);
           // Each exit and entry laid out as a chip is a chip of its kind; each exit's leg is drawn.
           for (const c of h.chips.filter((x) => x.kind !== "chip")) expect(has(`[data-chip="${c.kind}"][data-connector=${q(c.connectorId)}]`), `${c.text}, ${at}`).toBe(true);
-          for (const e of t.exits) expect(has(`[data-chip="exit"][data-connector=${q(e.connector.id)}]`), `${e.text}, ${at}`).toBe(true);
+          for (const e of t.exits.filter((x) => drawn.has(x.stepId))) expect(has(`[data-chip="exit"][data-connector=${q(e.connector.id)}]`), `${e.text}, ${at}`).toBe(true);
           for (const x of h.exits) expect(has(`[data-exit=${q(x.connectorId)}]`), `${x.connectorId}'s leg, ${at}`).toBe(true);
           // An entry not a chip is a mark over its Step's head, or the arrow into the line.
           for (const m of h.entry?.arrivals ?? []) for (const id of m.connectorIds) expect(names("[data-arrival]", id), `${id}, ${at}`).toBe(true);
           for (const id of h.entry?.arrow?.connectorIds ?? []) expect(names('[data-box="entry"]', id), `${id}, ${at}`).toBe(true);
-          for (const e of t.entries) {
+          for (const e of t.entries.filter((x) => drawn.has(x.stepId))) {
             const id = e.connector.id;
             expect(has(`[data-chip="entry"][data-connector=${q(id)}]`) || names("[data-arrival]", id) || names('[data-box="entry"]', id), `${e.text}, ${at}`).toBe(true);
           }
