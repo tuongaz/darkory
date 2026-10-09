@@ -53,6 +53,14 @@ func TestBuildPrompt(t *testing.T) {
 	if strings.Contains(got, "\x1b") {
 		t.Error("the prompt carries a raw escape")
 	}
+	// Whether to commit, push and open a pull request is one rule: it keeps the pull request for a
+	// Skill that changes the work and says a Skill that commits nothing pushes and opens nothing.
+	if n := strings.Count(got, "commit nothing, push no branch and open no pull request"); n != 1 {
+		t.Errorf("the no-commit rule is said %d times, want once", n)
+	}
+	if !strings.Contains(got, "push your branch (`git push -u origin web-12-cart-page`)") {
+		t.Error("the Build prompt in pull_request mode lost the push and pull request rule")
+	}
 	// A Task at Build ends by advancing along its Step's outcomes, never by complete.
 	if !strings.Contains(got, "`darkory advance WEB-12 <outcome> --note") || !strings.Contains(got, "one of `pass`:") || strings.Contains(got, "darkory complete WEB-12") {
 		t.Error("the build Task's prompt does not end it by advance")
@@ -74,6 +82,10 @@ func TestBuildPrompt(t *testing.T) {
 	cross.Task.Outcomes = []PromptOutcome{{Name: "bug", To: "Bugs › Investigate"}, {Name: "pass"}, {Name: "question", Done: true}}
 	if got := BuildPrompt(cross); !strings.Contains(got, "one of `bug` (to Bugs › Investigate), `pass`, `question` (into Done):") {
 		t.Errorf("the crossing outcome is not named by its Workflow and Step:\n%s", got)
+	}
+	// A Triage Shift reads the same one rule and is told to push and open nothing.
+	if g := BuildPrompt(cross); !strings.Contains(g, "When your Skill has you commit nothing (triage, planning, verifying), commit nothing, push no branch and open no pull request") {
+		t.Error("the Triage prompt does not say to commit, push and open nothing")
 	}
 	two := review
 	two.Task.Outcomes = []PromptOutcome{{Name: "pass", Done: true}, {Name: "wontfix", Done: true}}

@@ -188,19 +188,28 @@ func BuildPrompt(p Prompt) string {
 		n++
 	}
 	if len(p.Checkouts) > 0 {
-		step("Work only in the checkouts above. Commit your work on the branch each one is on. Never push the default branch, " +
-			"never force-push, and never check out, rename or delete another branch.")
-	}
-	for _, c := range p.Checkouts {
-		if c.Workspace.Mode == ModePullRequest {
-			step("%s is merged through pull requests: before you advance the Task, push your branch (`git push -u origin %s`) "+
-				"and open a pull request into %s whose title starts with %s (`gh pr create --base %s --title \"%s: …\"`). "+
-				"Its merge on GitHub lands your work, and completes the Task while it is at a review Step.",
-				line(c.Workspace.Name), c.Branch, c.Base, t.Key, c.Base, t.Key)
+		step("Work only in the checkouts above. Never push the default branch, never force-push, and never check out, rename " +
+			"or delete another branch.")
+		rule := "Commit only what your Skill has you change: when it has you change the work, commit it on the branch each checkout is on"
+		var prs []string
+		for _, c := range p.Checkouts {
+			if c.Workspace.Mode == ModePullRequest {
+				prs = append(prs, fmt.Sprintf("%s is merged through pull requests: before you advance the Task, push your branch "+
+					"(`git push -u origin %s`) and open a pull request into %s whose title starts with %s "+
+					"(`gh pr create --base %s --title \"%s: …\"`). Its merge on GitHub lands your work, and completes the Task while it "+
+					"is at a review Step",
+					line(c.Workspace.Name), c.Branch, c.Base, t.Key, c.Base, t.Key))
+			}
 		}
+		if len(prs) > 0 {
+			rule += ". " + strings.Join(prs, ". ")
+		}
+		rule += ". When your Skill has you commit nothing (triage, planning, verifying), commit nothing, push no branch and open " +
+			"no pull request: a branch with nothing ahead of its base has nothing to land."
+		step("%s", rule)
 	}
 	step("Write a short Note at each milestone (`darkory note %s <text>`), so whoever works the Task next has your context.", t.Key)
-	step("Attach the log of your tests as Evidence (`darkory attach %s <file>`).", t.Key)
+	step("When you ran tests, attach their log as Evidence (`darkory attach %s <file>`).", t.Key)
 	stuck := "   - when you are stuck or unsure, `darkory file --blocks %[1]s --aim %[2]s --title <your question>`, then stop: " +
 		"the Runner releases the Task, and it comes back once the question is answered."
 	if len(t.Outcomes) == 0 {

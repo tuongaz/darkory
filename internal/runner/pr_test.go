@@ -95,3 +95,25 @@ func TestRunnerPullRequestMode(t *testing.T) {
 		return strings.Contains(notesOf(f.task("WEB-1")), "web: opened https://github.com/acme/web/pull/9, the pull request of web-1 into main.")
 	})
 }
+
+// A done Task whose branch has nothing ahead of its base lands nothing: the merge Note says so
+// instead of promising a pull request; a branch with commits still lands through its pull request.
+func TestPullRequestLineSaysWhenNothingLanded(t *testing.T) {
+	repo := gitRepo(t)
+	mustGit(t, repo, "branch", "dark-3-triage")
+	mustGit(t, repo, "branch", "dark-3-build")
+	mustGit(t, repo, "checkout", "-q", "dark-3-build")
+	commitFile(t, repo, "b.txt", "x\n", "work")
+	mustGit(t, repo, "checkout", "-q", "main")
+	r := &Runner{gh: &recordingGitHub{}}
+	ws := Workspace{Name: "darkory", Path: repo, Mode: ModePullRequest}
+
+	got := r.pullRequestLine(t.Context(), ws, "dark-3-triage", "main", "")
+	if !strings.Contains(got, "has no commits ahead of main, so nothing landed") || strings.Contains(got, "lands in main") {
+		t.Errorf("a branch with nothing ahead: %q", got)
+	}
+	got = r.pullRequestLine(t.Context(), ws, "dark-3-build", "main", "")
+	if !strings.Contains(got, "lands in main through its pull request") {
+		t.Errorf("a branch with commits: %q", got)
+	}
+}
