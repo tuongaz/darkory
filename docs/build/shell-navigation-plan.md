@@ -391,4 +391,6 @@ Under `settings`: `projects` → `<ToCurrentProject path={(key) => \`/projects/$
 
 ## State
 
-Plan written 2026-10-09 on `shell-nav`. Tasks 1–5 pending. When a task lands, replace this paragraph with the task's commit and what the review found.
+Plan written 2026-10-09 on `shell-nav`. Tasks 2–5 pending.
+
+- **Task 1 landed** as 9d612e5 (the shell) + 173c22c (review fixes). The kit stayed untouched: twMerge lets the Frame's `rounded-lg`/`border`/`shadow-none` win. Review found one Important item: the darker dark `--sidebar` also sat under three in-card surfaces (the editor's Preview strip, the Blocking graph's bands and band labels), which went from raised to sunken; they now paint `bg-muted`, a page surface. Minor: the shell test now covers the Settings shell and pins the inset classes exactly. Noted for later: the desktop collapsed sidebar is unreachable (no keyboard handler, the only trigger is `md:hidden`); Task 5's dark pass should look at the editor Preview and the Blocking graph, and the Settings sheet on a phone.
