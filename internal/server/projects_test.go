@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tuongaz/darkory/client"
+	"github.com/tuongaz/darkory/internal/shortid"
 	"github.com/tuongaz/darkory/internal/store"
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
@@ -138,9 +139,16 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 		got(builder.ClaimTaskWithResponse(ctx, now.Key, &client.ClaimTaskParams{}, client.ClaimTaskBody{})).want(t, http.StatusOK)
 
 		wf := got(peer.GetWorkflowWithResponse(ctx, "WEB")).want(t, http.StatusOK).JSON200
+		if len(wf.Workflows) != 1 || wf.Workflows[0].Name != "Work" || wf.Workflows[0].Position != 1 || wf.Workflows[0].ID == "" {
+			t.Fatalf("WEB's Workflows: %+v", wf.Workflows)
+		}
+		work := wf.Workflows[0].ID
 		facts := map[string]client.WorkflowStep{}
 		for _, s := range wf.Steps {
 			facts[s.Name] = s
+			if s.WorkflowID != work {
+				t.Fatalf("%s is in Workflow %q, want %s", s.Name, s.WorkflowID, work)
+			}
 		}
 		if b := facts["Build"]; b.Tasks != 1 || b.Working != 1 || len(b.Takers) != 1 || b.Takers[0].ID != builderID || b.Takers[0].Kind != client.Agent {
 			t.Fatalf("Build %+v", b)
@@ -193,10 +201,11 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 		// needs moves.
 		reviewID, buildID, backlogID := facts["Review"].ID, facts["Build"].ID, facts["Backlog"].ID
 		in := client.SetWorkflowBody{
+			Workflows: []client.WorkflowInput{{Name: "Work", Position: 1}},
 			Steps: []client.StepInput{
-				{ID: &reviewID, Name: "Check", Skill: ptrStr("review"), Position: 3},
-				{ID: &buildID, Name: "Build", Skill: ptrStr("engineer"), Position: 2},
-				{ID: &backlogID, Name: "Backlog", Position: 1},
+				{ID: &reviewID, Workflow: "Work", Name: "Check", Skill: ptrStr("review"), Position: 3},
+				{ID: &buildID, Workflow: "Work", Name: "Build", Skill: ptrStr("engineer"), Position: 2},
+				{ID: &backlogID, Workflow: "Work", Name: "Backlog", Position: 1},
 			},
 			Connectors: []client.ConnectorInput{
 				{From: "Build", To: ptrStr("Check"), Name: "pass", Position: 1},
@@ -209,6 +218,11 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 		bad.Steps[0].Position = 2
 		if res := got(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, bad)).want(t, http.StatusBadRequest); res.JSONDefault.Code != client.ErrorCodeInvalid {
 			t.Fatalf("two Steps at one position: %s", res.Body)
+		}
+		bare := in
+		bare.Workflows = nil
+		if res := got(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, bare)).want(t, http.StatusBadRequest); res.JSONDefault.Code != client.ErrorCodeInvalid {
+			t.Fatalf("a body without workflows: %s", res.Body)
 		}
 		got(peer.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, in)).want(t, http.StatusForbidden)
 		set := got(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{IdempotencyKey: key("wf")}, in)).want(t, http.StatusOK).JSON200
@@ -245,6 +259,91 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 		}
 		if res := got(ada.PassOwnershipWithResponse(ctx, sub.Key, &client.PassOwnershipParams{}, client.PassOwnershipBody{Owner: "ada"})).want(t, http.StatusConflict); res.JSONDefault.Code != client.ErrorCodeUseParent {
 			t.Fatalf("passing a Subtask's ownership: %s", res.Body)
+		}
+
+		// Two Workflows: Bugs' Steps listed first but placed second, and a Connector out of Build
+		// into Bugs. The Steps read back in the Project's order, each with its Workflow.
+		two := client.SetWorkflowBody{
+			Workflows: []client.WorkflowInput{{Name: "Bugs", Position: 2}, {ID: &work, Name: "Work", Position: 1}},
+			Steps: []client.StepInput{
+				{Workflow: "Bugs", Name: "Fix", Skill: ptrStr("engineer"), Position: 2},
+				{Workflow: "Bugs", Name: "Investigate", Skill: ptrStr("engineer"), Position: 1},
+				{ID: &backlogID, Workflow: work, Name: "Backlog", Position: 1},
+				{ID: &buildID, Workflow: "Work", Name: "Build", Skill: ptrStr("engineer"), Position: 2},
+			},
+			Connectors: []client.ConnectorInput{
+				{From: "Build", Name: "pass", Position: 1},
+				{From: "Build", To: ptrStr("Investigate"), Name: "bug", Position: 2},
+				{From: "Investigate", To: ptrStr("Fix"), Name: "fix", Position: 1},
+				{From: "Fix", Name: "done", Position: 1},
+			},
+		}
+		set = got(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, two)).want(t, http.StatusOK).JSON200
+		if stepNames(set) != "Backlog Build Investigate Fix" || len(set.Workflows) != 2 || set.Workflows[0].ID != work ||
+			set.Workflows[1].Name != "Bugs" || set.Workflows[1].Position != 2 {
+			t.Fatalf("two Workflows: %s %+v", stepNames(set), set.Workflows)
+		}
+		bugs := set.Workflows[1].ID
+		for _, s := range set.Steps {
+			if want := map[bool]string{true: bugs, false: work}[s.Name == "Investigate" || s.Name == "Fix"]; s.WorkflowID != want {
+				t.Fatalf("%s is in Workflow %s, want %s", s.Name, s.WorkflowID, want)
+			}
+		}
+
+		// Sent back as read, its Workflows without their ids: they keep them, and nothing is
+		// written.
+		changes := func() int {
+			t.Helper()
+			kinds := []client.ActivityKind{client.ActivityKindWorkflowChanged}
+			return len(got(ada.ListActivityWithResponse(ctx, &client.ListActivityParams{Project: ptrStr("WEB"), Kind: &kinds})).
+				want(t, http.StatusOK).JSON200.Items)
+		}
+		before := changes()
+		asRead := client.SetWorkflowBody{}
+		for _, w := range set.Workflows {
+			asRead.Workflows = append(asRead.Workflows, client.WorkflowInput{Name: w.Name, Position: w.Position})
+		}
+		for _, s := range set.Steps {
+			asRead.Steps = append(asRead.Steps, client.StepInput{ID: &s.ID, Workflow: s.WorkflowID, Name: s.Name, Skill: s.SkillID, Position: s.Position, X: &s.X, Y: &s.Y})
+		}
+		for _, k := range set.Connectors {
+			asRead.Connectors = append(asRead.Connectors, client.ConnectorInput{ID: &k.ID, From: k.FromStepID, To: k.ToStepID, Name: k.Name, Position: k.Position})
+		}
+		again := got(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, asRead)).want(t, http.StatusOK).JSON200
+		if again.Workflows[0].ID != work || again.Workflows[1].ID != bugs || changes() != before {
+			t.Fatalf("sent back as read: %+v, %d workflow.changed after %d", again.Workflows, changes(), before)
+		}
+
+		// Advanced along bug, a Task is in Bugs: listed by its name with the Project, or by its
+		// id alone, in either form.
+		claimAndAdvance := func(task, outcome string) client.Task {
+			t.Helper()
+			got(builder.ClaimTaskWithResponse(ctx, task, &client.ClaimTaskParams{}, client.ClaimTaskBody{})).want(t, http.StatusOK)
+			return *got(builder.AdvanceTaskWithResponse(ctx, task, &client.AdvanceTaskParams{}, client.AdvanceTaskBody{Outcome: &outcome})).
+				want(t, http.StatusOK).JSON200
+		}
+		bugged := claimAndAdvance(later.Key, "bug")
+		if bugged.WorkflowID == nil || *bugged.WorkflowID != bugs || bugged.LastStepID != nil {
+			t.Fatalf("advanced into Bugs: %+v", bugged)
+		}
+		if ks := at(client.ListTasksParams{Project: ptrStr("WEB"), Workflow: ptrStr("Bugs")}); !slices.Equal(ks, []string{later.Key}) {
+			t.Fatalf("in Bugs by name: %v", ks)
+		}
+		if ks := at(client.ListTasksParams{Workflow: ptrStr(shortid.Canonical(bugs))}); !slices.Equal(ks, []string{later.Key}) {
+			t.Fatalf("in Bugs by its long id: %v", ks)
+		}
+		if ks := at(client.ListTasksParams{Workflow: &bugs}); !slices.Equal(ks, []string{later.Key}) {
+			t.Fatalf("in Bugs by its short id: %v", ks)
+		}
+
+		// Ended at Fix, it keeps Fix as its last Step, and Bugs as its Workflow.
+		claimAndAdvance(later.Key, "fix")
+		claimAndAdvance(later.Key, "done")
+		fixID := stepID(set, "Fix")
+		ended := got(peer.GetTaskWithResponse(ctx, later.Key)).want(t, http.StatusOK).JSON200.Task
+		if ended.State != client.TaskStateDone || ended.StepID != nil || ended.LastStepID == nil || *ended.LastStepID != fixID ||
+			ended.WorkflowID == nil || *ended.WorkflowID != bugs {
+			t.Fatalf("ended at Fix: %+v", ended)
 		}
 	})
 }

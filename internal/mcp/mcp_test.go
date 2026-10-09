@@ -61,8 +61,9 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	must(t)(tok, err)
 	f := &fixture{t: t, srv: srv, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
 	must(t)(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, client.SetWorkflowBody{
-		Steps: []client.StepInput{{Name: "Plan", Skill: ptr("breakdown"), Position: 1}, {Name: "Build", Skill: ptr("build"), Position: 2},
-			{Name: "Retro", Skill: ptr("retro"), Position: 3}, {Name: "Skill review", Skill: ptr("skill-review"), Position: 4}},
+		Workflows: []client.WorkflowInput{{Name: "Work", Position: 1}},
+		Steps: []client.StepInput{{Workflow: "Work", Name: "Plan", Skill: ptr("breakdown"), Position: 1}, {Workflow: "Work", Name: "Build", Skill: ptr("build"), Position: 2},
+			{Workflow: "Work", Name: "Retro", Skill: ptr("retro"), Position: 3}, {Workflow: "Work", Name: "Skill review", Skill: ptr("skill-review"), Position: 4}},
 		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: 1}, {From: "Build", Name: "pass", Position: 1},
 			{From: "Retro", Name: "done", Position: 1}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: 2},
 			{From: "Skill review", Name: "publish", Position: 1}},
@@ -280,7 +281,7 @@ func TestNextClaimComplete(t *testing.T) {
 			list.Steps[1].Name != "Build" || !slices.Equal(list.Steps[1].Outcomes, []string{"pass"}) || list.Steps[1].ProjectID != list.Items[0].ProjectID {
 			t.Fatalf("list_tasks: %+v", list)
 		}
-		var wf client.Workflow
+		var wf client.Workflows
 		ok(t, cs, &wf, "workflow", map[string]any{"project": "WEB"})
 		if len(wf.Steps) != 4 || wf.Steps[2].Name != "Retro" || len(wf.Connectors) != 5 {
 			t.Fatalf("workflow: %+v", wf)

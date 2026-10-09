@@ -37,9 +37,9 @@ func TestMVPFlowThroughTheClient(t *testing.T) {
 
 		// WEB's Workflow: the default, with QA (qa-acme) after Build in place of Review.
 		wf := got(ada.GetWorkflowWithResponse(ctx, "WEB")).want(t, http.StatusOK).JSON200
-		in := client.SetWorkflowBody{Moves: &map[string]string{}}
+		in := client.SetWorkflowBody{Workflows: []client.WorkflowInput{{Name: "Work", Position: 1}}, Moves: &map[string]string{}}
 		for _, s := range wf.Steps {
-			si := client.StepInput{ID: &s.ID, Name: s.Name, Position: s.Position}
+			si := client.StepInput{ID: &s.ID, Workflow: "Work", Name: s.Name, Position: s.Position}
 			if s.SkillID != nil {
 				si.Skill = s.SkillID
 			}
@@ -320,7 +320,7 @@ func TestMVPFlowThroughTheClient(t *testing.T) {
 }
 
 // stepNames is the names of a Workflow's Steps, in order.
-func stepNames(w *client.Workflow) string {
+func stepNames(w *client.Workflows) string {
 	var names []string
 	for _, s := range w.Steps {
 		names = append(names, s.Name)
@@ -329,7 +329,7 @@ func stepNames(w *client.Workflow) string {
 }
 
 // stepID is the id of the Workflow's Step named name.
-func stepID(w *client.Workflow, name string) string {
+func stepID(w *client.Workflows, name string) string {
 	for _, s := range w.Steps {
 		if s.Name == name {
 			return s.ID

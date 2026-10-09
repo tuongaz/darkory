@@ -14,15 +14,15 @@ import (
 // webFlow is the MVP flow's Workflow: a Breakdown at Plan, then Build, QA, UI review and Security
 // review, each passing to the next and QA failing back to Build; a Retrospective at Retro, whose
 // proposal goes to Skill review.
-const webFlow = `{"steps": [
-  {"name": "Backlog", "position": 1},
-  {"name": "Plan", "skill": "breakdown", "position": 2},
-  {"name": "Build", "skill": "build", "position": 3},
-  {"name": "QA", "skill": "qa-acme", "position": 4},
-  {"name": "UI review", "skill": "ui-review", "position": 5},
-  {"name": "Security review", "skill": "security-review", "position": 6},
-  {"name": "Retro", "skill": "retro", "position": 7},
-  {"name": "Skill review", "skill": "skill-review", "position": 8}],
+const webFlow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [
+  {"workflow": "Work", "name": "Backlog", "position": 1},
+  {"workflow": "Work", "name": "Plan", "skill": "breakdown", "position": 2},
+  {"workflow": "Work", "name": "Build", "skill": "build", "position": 3},
+  {"workflow": "Work", "name": "QA", "skill": "qa-acme", "position": 4},
+  {"workflow": "Work", "name": "UI review", "skill": "ui-review", "position": 5},
+  {"workflow": "Work", "name": "Security review", "skill": "security-review", "position": 6},
+  {"workflow": "Work", "name": "Retro", "skill": "retro", "position": 7},
+  {"workflow": "Work", "name": "Skill review", "skill": "skill-review", "position": 8}],
  "connectors": [
   {"from": "Plan", "name": "done", "position": 1},
   {"from": "Build", "to": "QA", "name": "pass", "position": 1},

@@ -380,11 +380,16 @@ func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project str
 	for _, k := range have.Connectors {
 		got = append(got, fmt.Sprintf("connector %s %s %s %d", name[k.FromStepID], name[deref(k.ToStepID)], k.Name, k.Position))
 	}
-	body := client.SetWorkflowBody{Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
+	// One Workflow: the Project's first, kept by its id, or a new one named Work.
+	work := client.WorkflowInput{Name: "Work", Position: 1}
+	if len(have.Workflows) > 0 {
+		work.ID, work.Name = ptr(have.Workflows[0].ID), have.Workflows[0].Name
+	}
+	body := client.SetWorkflowBody{Workflows: []client.WorkflowInput{work}, Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
 	position := map[string]int64{}
 	for i, st := range want.Steps {
 		wanted = append(wanted, fmt.Sprintf("step %d %s %s", i+1, st.Name, st.Skill))
-		in := client.StepInput{Name: st.Name, Position: int64(i + 1)}
+		in := client.StepInput{Workflow: work.Name, Name: st.Name, Position: int64(i + 1)}
 		if st.Skill != "" {
 			in.Skill = ptr(st.Skill)
 		}

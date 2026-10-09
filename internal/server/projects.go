@@ -69,21 +69,24 @@ func (s *Server) RemoveProjectMember(w http.ResponseWriter, r *http.Request, pro
 
 func (s *Server) GetWorkflow(w http.ResponseWriter, r *http.Request, project gen.ProjectRef) {
 	d, err := s.core.GetWorkflow(r.Context(), caller(r), project)
-	s.respond(w, r, as(http.StatusOK, func(d core.WorkflowDetail) any { return workflowOut(d) }), d, err)
+	s.respond(w, r, as(http.StatusOK, func(d core.WorkflowsDetail) any { return workflowOut(d) }), d, err)
 }
 
-// SetWorkflow replaces a Project's Workflow and answers with it as getWorkflow does, live facts
+// SetWorkflow replaces a Project's Workflows and answers with it as getWorkflow does, live facts
 // included, read in the same write.
 func (s *Server) SetWorkflow(w http.ResponseWriter, r *http.Request, project gen.ProjectRef, params gen.SetWorkflowParams) {
 	var body gen.SetWorkflowBody
-	out := as(http.StatusOK, func(d core.WorkflowDetail) any { return workflowOut(d) })
+	out := as(http.StatusOK, func(d core.WorkflowsDetail) any { return workflowOut(d) })
 	c, idem, ok := s.begin(w, r, params.IdempotencyKey, &body, out)
 	if !ok {
 		return
 	}
-	in := core.WorkflowInput{
+	in := core.WorkflowsInput{
+		Workflows: each(body.Workflows, func(wf gen.WorkflowInput) core.WorkflowInput {
+			return core.WorkflowInput{ID: deref(shortid.StringPtr(wf.ID)), Name: wf.Name, Position: wf.Position}
+		}),
 		Steps: each(body.Steps, func(st gen.StepInput) core.StepInput {
-			return core.StepInput{ID: deref(shortid.StringPtr(st.ID)), Name: st.Name, Skill: st.Skill, Position: st.Position, X: st.X, Y: st.Y}
+			return core.StepInput{ID: deref(shortid.StringPtr(st.ID)), Workflow: st.Workflow, Name: st.Name, Skill: st.Skill, Position: st.Position, X: st.X, Y: st.Y}
 		}),
 		Connectors: each(body.Connectors, func(k gen.ConnectorInput) core.ConnectorInput {
 			return core.ConnectorInput{ID: deref(shortid.StringPtr(k.ID)), From: k.From, To: k.To, Name: k.Name, Position: k.Position}
@@ -94,7 +97,9 @@ func (s *Server) SetWorkflow(w http.ResponseWriter, r *http.Request, project gen
 	}
 	grant := func(g gen.SkillGrantInput) core.SkillGrant { return core.SkillGrant{Member: g.Member, Skill: g.Skill} }
 	if body.Skills != nil {
-		in.Skills = each(*body.Skills, func(k gen.WorkflowSkillInput) core.WorkflowSkill { return core.WorkflowSkill{Name: k.Name, Body: k.Body} })
+		in.Skills = each(*body.Skills, func(k gen.WorkflowSkillInput) core.WorkflowSkill {
+			return core.WorkflowSkill{Name: k.Name, Body: k.Body}
+		})
 	}
 	if body.Joins != nil {
 		in.Joins = *body.Joins

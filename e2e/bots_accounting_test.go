@@ -247,7 +247,7 @@ func TestBotsAccounting(t *testing.T) {
 	for _, tk := range admin.tasks(client.ListTasksParams{}) {
 		tasks[tk.ID] = admin.task(tk.Key)
 	}
-	workflows := map[string]client.Workflow{wf.ProjectID: wf}
+	workflows := map[string]client.Workflows{wf.ProjectID: wf}
 	predicted := replay(t, trail, workflows)
 	for _, d := range tasks {
 		if d.Task.Claim != nil {

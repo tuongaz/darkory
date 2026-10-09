@@ -221,12 +221,17 @@ func cmdWorkflowShow(c *call) error {
 
 // workflowBody turns a Workflow as read into the body that sets it again, naming Skills and Steps
 // by name so a person can edit it; ids are kept, so a renamed Step stays the same Step.
-func (c *call) workflowBody(wf client.Workflow) client.SetWorkflowBody {
-	body := client.SetWorkflowBody{Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
+func (c *call) workflowBody(wf client.Workflows) client.SetWorkflowBody {
+	body := client.SetWorkflowBody{Workflows: []client.WorkflowInput{}, Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
+	workflows := map[string]string{}
+	for _, w := range wf.Workflows {
+		workflows[w.ID] = w.Name
+		body.Workflows = append(body.Workflows, client.WorkflowInput{ID: ptr(w.ID), Name: w.Name, Position: w.Position})
+	}
 	names := map[string]string{}
 	for _, s := range wf.Steps {
 		names[s.ID] = s.Name
-		in := client.StepInput{ID: ptr(s.ID), Name: s.Name, Position: s.Position, X: ptr(s.X), Y: ptr(s.Y)}
+		in := client.StepInput{ID: ptr(s.ID), Workflow: workflows[s.WorkflowID], Name: s.Name, Position: s.Position, X: ptr(s.X), Y: ptr(s.Y)}
 		if s.SkillID != nil {
 			in.Skill = ptr(c.skillName(*s.SkillID))
 		}
@@ -291,7 +296,7 @@ func cmdWorkflowSet(c *call) error {
 
 // printWorkflow prints each Step in order with its Skill, what is at it now, who can take its
 // Tasks, and the Connectors out of it.
-func (c *call) printWorkflow(w io.Writer, wf client.Workflow) {
+func (c *call) printWorkflow(w io.Writer, wf client.Workflows) {
 	if len(wf.Steps) == 0 {
 		fmt.Fprintln(w, "No Steps: nothing can be filed in this Project until it has one.")
 		return

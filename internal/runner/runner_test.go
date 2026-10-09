@@ -167,7 +167,7 @@ func (f *fixture) workflow(body string) {
 
 // buildOnly is a Workflow of one Step, Build, whose one way out, "done", leads into Done: its
 // holder completes a Task there without review.
-const buildOnly = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1}],
+const buildOnly = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Build", "skill": "engineer", "position": 1}],
  "connectors": [{"from": "Build", "name": "done", "position": 1}]}`
 
 // run starts the runner with the named agents' tokens, sessions as child processes; it stops
@@ -475,8 +475,8 @@ func TestRunnerParentMergeConflictFilesAResolvingTask(t *testing.T) {
 
 // reviewThenRelease is a Workflow whose review is not its last Step: Build, Review, then Release,
 // whose holder advances the Task into Done.
-const reviewThenRelease = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1},
-  {"name": "Review", "skill": "review", "position": 2}, {"name": "Release", "skill": "devops", "position": 3}],
+const reviewThenRelease = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Build", "skill": "engineer", "position": 1},
+  {"workflow": "Work", "name": "Review", "skill": "review", "position": 2}, {"workflow": "Work", "name": "Release", "skill": "devops", "position": 3}],
  "connectors": [{"from": "Build", "to": "Review", "name": "built", "position": 1},
   {"from": "Review", "to": "Release", "name": "pass", "position": 1}, {"from": "Release", "name": "released", "position": 1}]}`
 
@@ -981,8 +981,8 @@ func TestRunnerTerminal(t *testing.T) {
 
 // conflictWorkflow puts Write before Build, so the Project's first work Step is not where its
 // builder works: Write (docs) · Build (engineer) → Review (review), with "needs changes" back.
-const conflictWorkflow = `{"steps": [{"name": "Write", "skill": "docs", "position": 1}, {"name": "Build", "skill": "engineer", "position": 2},
-  {"name": "Review", "skill": "review", "position": 3}],
+const conflictWorkflow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Write", "skill": "docs", "position": 1}, {"workflow": "Work", "name": "Build", "skill": "engineer", "position": 2},
+  {"workflow": "Work", "name": "Review", "skill": "review", "position": 3}],
  "connectors": [{"from": "Write", "name": "done", "position": 1}, {"from": "Build", "to": "Review", "name": "pass", "position": 1},
   {"from": "Review", "name": "pass", "position": 1}, {"from": "Review", "to": "Build", "name": "needs changes", "position": 2}]}`
 

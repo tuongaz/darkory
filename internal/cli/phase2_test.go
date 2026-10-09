@@ -91,7 +91,7 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 	// A Workflow as `workflow show --body` prints it, with a move added.
 	wf := filepath.Join(dir, "workflow.json")
 	for path, content := range map[string]string{png: "\x89PNG\r\n\x1a\n", report: "all green\n", proposal: "Test the edges.\n",
-		wf: `{"steps":[{"id":"st1","name":"Backlog","position":1},{"name":"Build","skill":"engineer","position":2,"x":448,"y":0}],` +
+		wf: `{"workflows":[{"id":"w1","name":"Work","position":1}],"steps":[{"id":"st1","workflow":"Work","name":"Backlog","position":1},{"workflow":"Work","name":"Build","skill":"engineer","position":2,"x":448,"y":0}],` +
 			`"connectors":[{"from":"Backlog","to":"Build","name":"ready","position":1},{"from":"Build","name":"pass","position":1}],"moves":{"st9":"Build"}}`} {
 		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatal(err)
@@ -233,7 +233,7 @@ func TestCommandsFormTheirRequests(t *testing.T) {
 		{name: "project remove", args: []string{"project", "remove", "WEB", "bob"}, method: "DELETE", path: "/v1/projects/WEB/members/bob"},
 		{name: "workflow show", args: []string{"workflow", "show", "WEB"}, method: "GET", path: "/v1/projects/WEB/workflow"},
 		{name: "workflow set", args: []string{"workflow", "set", "WEB", "--file", wf},
-			method: "PUT", path: "/v1/projects/WEB/workflow", body: `{"steps":[{"id":"st1","name":"Backlog","position":1},{"name":"Build","skill":"engineer","position":2,"x":448,"y":0}],` +
+			method: "PUT", path: "/v1/projects/WEB/workflow", body: `{"workflows":[{"id":"w1","name":"Work","position":1}],"steps":[{"id":"st1","workflow":"Work","name":"Backlog","position":1},{"workflow":"Work","name":"Build","skill":"engineer","position":2,"x":448,"y":0}],` +
 				`"connectors":[{"from":"Backlog","to":"Build","name":"ready","position":1},{"from":"Build","name":"pass","position":1}],"moves":{"st9":"Build"}}`},
 		{name: "label create", args: []string{"label", "create", "bug", "--color", "#ff0000"},
 			method: "POST", path: "/v1/labels", body: `{"name":"bug","color":"#ff0000"}`},
@@ -544,7 +544,7 @@ func TestWorkflowCommands(t *testing.T) {
 		for i := range body.Steps {
 			body.Steps[i].Position++
 		}
-		body.Steps = append(body.Steps, client.StepInput{Name: "Backlog", Position: 1})
+		body.Steps = append(body.Steps, client.StepInput{Workflow: "Work", Name: "Backlog", Position: 1})
 		body.Connectors = append(body.Connectors, client.ConnectorInput{From: "Backlog", To: ptr("Build"), Name: "ready", Position: 1})
 		b, err := json.Marshal(body)
 		if err != nil {

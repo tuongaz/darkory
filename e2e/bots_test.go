@@ -78,12 +78,12 @@ func TestBots(t *testing.T) {
 		}
 	}
 	web, ops := admin.workflow("WEB"), admin.workflow("OPS")
-	for _, wf := range []client.Workflow{web, ops} {
+	for _, wf := range []client.Workflows{web, ops} {
 		if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(bot.SoftwareWorkflow)) {
 			t.Fatalf("a Project's Workflow is %v", names)
 		}
 	}
-	step := func(wf client.Workflow, name string) client.WorkflowStep {
+	step := func(wf client.Workflows, name string) client.WorkflowStep {
 		for _, s := range wf.Steps {
 			if s.Name == name {
 				return s
@@ -344,7 +344,7 @@ func TestBots(t *testing.T) {
 	for _, tk := range admin.tasks(client.ListTasksParams{}) {
 		tasks[tk.ID] = admin.task(tk.Key)
 	}
-	workflows := map[string]client.Workflow{web.ProjectID: web, ops.ProjectID: ops}
+	workflows := map[string]client.Workflows{web.ProjectID: web, ops.ProjectID: ops}
 	predicted := replay(t, trail, workflows)
 	for _, d := range tasks {
 		cs := d.Claims
@@ -561,7 +561,7 @@ func (a api) task(key string) client.TaskDetail {
 }
 
 // workflow reads a Project's Workflow.
-func (a api) workflow(project string) client.Workflow {
+func (a api) workflow(project string) client.Workflows {
 	a.t.Helper()
 	res, err := a.c.GetWorkflowWithResponse(context.Background(), project)
 	if err != nil || res.JSON200 == nil {
@@ -712,7 +712,7 @@ func orgShape(a api) []string {
 }
 
 // stepNamesOf are a Workflow's Steps' names, in order; specStepNames a preset's.
-func stepNamesOf(wf client.Workflow) []string {
+func stepNamesOf(wf client.Workflows) []string {
 	var out []string
 	for _, s := range wf.Steps {
 		out = append(out, s.Name)
@@ -755,7 +755,7 @@ func sleepCtx(ctx context.Context, d time.Duration) bool {
 // atOneStep checks the invariant that a Task is at exactly one Step or none: an open Task that
 // is not a Parent and not aimed at a Member is at one Step of its Project's Workflow; any other
 // Task is at none.
-func atOneStep(t *testing.T, d client.TaskDetail, workflows map[string]client.Workflow) {
+func atOneStep(t *testing.T, d client.TaskDetail, workflows map[string]client.Workflows) {
 	t.Helper()
 	tk := d.Task
 	wantNone := tk.State != client.TaskStateOpen || tk.SubtaskCounts != nil || tk.AimedAtID != nil
@@ -778,7 +778,7 @@ func atOneStep(t *testing.T, d client.TaskDetail, workflows map[string]client.Wo
 // replay follows each Task's Step through the Activity alone, by ADR 0016, and fails the test
 // where an entry disagrees with it, such as a claim of a Task at a hold or an advance from a Step
 // it is not at. It returns each Task's predicted Step, "" for none.
-func replay(t *testing.T, trail []client.Activity, workflows map[string]client.Workflow) map[string]string {
+func replay(t *testing.T, trail []client.Activity, workflows map[string]client.Workflows) map[string]string {
 	t.Helper()
 	skill := map[string]string{} // Step id → its Skill's id, "" at a hold
 	for _, wf := range workflows {

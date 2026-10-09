@@ -412,10 +412,10 @@ func (s *Server) addTools() {
 		}, enum("state", "open", "done", "dropped"))
 	tool(s, "workflow", "Read a Project's Workflow: its Steps in order, the Skill each carries (none on a hold), the Connectors out of each "+
 		"(the outcomes; to_step_id absent means into Done), and what is at each Step now.",
-		func(ctx context.Context, in projectRef) (client.Workflow, error) {
+		func(ctx context.Context, in projectRef) (client.Workflows, error) {
 			res, err := c.GetWorkflowWithResponse(ctx, in.Project)
 			if err := check(res, err, http.StatusOK); err != nil {
-				return client.Workflow{}, err
+				return client.Workflows{}, err
 			}
 			return *res.JSON200, nil
 		})
@@ -514,7 +514,7 @@ func (s *Server) addTools() {
 }
 
 // stepsOf lists a Workflow's Steps with the outcomes out of each.
-func stepsOf(wf client.Workflow) []stepOut {
+func stepsOf(wf client.Workflows) []stepOut {
 	var out []stepOut
 	for _, st := range wf.Steps {
 		so := stepOut{ID: st.ID, ProjectID: wf.ProjectID, Name: st.Name, SkillID: st.SkillID, Outcomes: []string{}}

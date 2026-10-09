@@ -383,7 +383,7 @@ func where(d *client.TaskDetail) string {
 }
 
 // workflow reads a Project's Workflow and remembers its Steps.
-func (a *agent) workflow(ctx context.Context, project string) (*client.Workflow, error) {
+func (a *agent) workflow(ctx context.Context, project string) (*client.Workflows, error) {
 	res, err := a.c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
 		return nil, err
