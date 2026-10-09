@@ -1,4 +1,6 @@
-import type { Activity, Member, RunnerSessionState, Skill, Task, TaskDetail } from "@/api/client";
+import type { Activity, Member, RunnerSessionState, Skill, Task, TaskDetail, Workflows } from "@/api/client";
+import { stepTitle } from "@/components/workflowLine/model";
+import { stepsInOrder } from "@/screens/board/derive";
 import { liveClaim } from "@/work";
 
 // The rules the four screens read, apart from rendering, so the tests can hold them to the plan.
@@ -318,4 +320,15 @@ export function sizeText(bytes: number): string {
   if (bytes < 1000) return `${bytes} B`;
   if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`;
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
+}
+
+/**
+ * The Steps a Member takes in a Project, in its order, as the Agents page names them: `Bugs ›
+ * Investigate` when the Project has two or more Workflows, else the Step's name.
+ */
+export function takesOf(workflow: Pick<Workflows, "workflows" | "steps"> | undefined, memberId: string): string[] {
+  if (!workflow) return [];
+  return stepsInOrder(workflow)
+    .filter((s) => s.takers.some((t) => t.id === memberId))
+    .map((s) => stepTitle(s, workflow.workflows));
 }

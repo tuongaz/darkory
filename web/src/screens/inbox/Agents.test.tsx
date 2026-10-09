@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { describe, expect, it } from "vitest";
 import { FakeEventSource } from "@/test/eventSource";
-import type { Member, RunnerSession } from "@/api/client";
-import { ada, bob, builder, engineer, ops, task, web } from "@/test/fixtures";
+import type { Member, RunnerSession, Workflows } from "@/api/client";
+import { ada, bob, builder, engineer, ops, task, web, workflowsFixture } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { agentRows, claimHolder, claimsSince } from "./derive";
 import { claim, entry, memberDetail, minutes, recordApi } from "./testing";
@@ -16,7 +16,7 @@ function session(state: RunnerSession["state"], extra: Partial<RunnerSession> = 
   return { task_id: "k-3", member_id: builder.id, session_id: "sess-1", host: "mac-mini", tmux: "dk-WEB-3", started_at: minutes(-20), state, state_since: minutes(-20), log_path: "/tmp/log", ...extra };
 }
 
-function agentsApi({ sessions = [], member = ada, paused = false }: { sessions?: RunnerSession[]; member?: Member; paused?: boolean } = {}) {
+function agentsApi({ sessions = [], member = ada, paused = false, workflow }: { sessions?: RunnerSession[]; member?: Member; paused?: boolean; workflow?: Workflows } = {}) {
   const shown = paused ? { ...agentBuilder, agent: { ...agentBuilder.agent!, paused: true } } : agentBuilder;
   const held = task(3, { title: "Payment form", claim: claim("k-3", builder.id, { expires_at: minutes(10), heartbeat_timeout_seconds: 600, skill_id: engineer.id }) });
   return recordApi({
@@ -38,6 +38,7 @@ function agentsApi({ sessions = [], member = ada, paused = false }: { sessions?:
       "GET /v1/runner/sessions": { items: sessions, runner: true },
       "POST /v1/runner/sessions/:task/nudge": undefined,
       "POST /v1/runner/sessions/:task/stop": undefined,
+      ...(workflow ? { "GET /v1/projects/:project/workflow": workflow } : {}),
     },
   });
 }
@@ -113,6 +114,16 @@ describe("a Project's Agents", () => {
     const others = await screen.findByRole("region", { name: "Also in other Projects" });
     expect(within(others).getByText("planner")).toBeInTheDocument();
     expect(await within(others).findByRole("link", { name: "Ops" })).toHaveAttribute("href", "/projects/OPS/agents");
+  });
+
+  it("of a Project of several Workflows, names each Step it takes with its Workflow, in the Project's order", async () => {
+    const takes = { takers: [{ id: builder.id, name: builder.name, kind: builder.kind }] };
+    agentsApi({ workflow: workflowsFixture(web, { build: takes, fix: takes, investigate: takes }) });
+    renderApp("/projects/WEB/agents?agent=builder");
+    const row = await waitFor(() => tableRow("builder"));
+    await waitFor(() => expect(within(row).getByText(/takes no Step|›/)).toHaveTextContent("Bugs › Investigate · Bugs › Fix · Features › Build"));
+    const peek = await screen.findByRole("dialog", { name: "Agent builder" });
+    expect(within(peek).getByText("Steps in Web").nextSibling).toHaveTextContent("Bugs › Investigate · Bugs › Fix · Features › Build");
   });
 
   it("opens an agent's peek: what it holds, its session, the Steps it takes here; an admin nudges and stops it", async () => {

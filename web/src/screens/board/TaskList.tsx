@@ -11,6 +11,7 @@ import { Key } from "@/components/Key";
 import { LabelPill, LabelPills } from "@/components/LabelPill";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
+import { stepTitle } from "@/components/workflowLine/model";
 import { DayTime } from "@/components/Time";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { Button } from "@/components/ui/button";
@@ -252,7 +253,7 @@ function TaskRow({ task, model, expanded, onExpand, subtasks, showStep, nested }
           {!ended && task.aimed_at_id && <BlocksPill blocks={blocks} />}
           {(showStep || nested) && step && !ended && (
             <Pill tone="outline" className="hidden sm:inline-flex">
-              {step.name}
+              {stepTitle(step, model.workflows)}
             </Pill>
           )}
         </span>

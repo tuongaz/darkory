@@ -24,6 +24,7 @@ import {
   TakeBackDialog,
 } from "./dialogs";
 import { ActionItem } from "./parts";
+import { advanceTarget } from "./format";
 import { useTakeableIds, useTaskWorkflow } from "./queries";
 
 export type TaskActionsUI = {
@@ -42,9 +43,12 @@ const none: TaskActions = { caret: [], menu: [], dimmed: {}, notes: null, labels
 
 type Opened = { kind: "advance"; connector: Connector } | { kind: Exclude<TaskAction, "advance"> };
 
-/** "Advance · pass" along a Connector into a Step; "Complete · pass" into Done. */
-export function connectorLabel(c: Connector): string {
-  return `${c.to_step_id ? "Advance" : "Complete"} · ${c.name}`;
+/**
+ * "Advance · pass" along a Connector into a Step; "Complete · pass" into Done; "Advance · bug →
+ * Bugs › Investigate" into another Workflow's Step (`crossing`, as `advanceTarget` names it).
+ */
+export function connectorLabel(c: Connector, crossing?: string): string {
+  return `${c.to_step_id ? "Advance" : "Complete"} · ${c.name}${crossing ? ` → ${crossing}` : ""}`;
 }
 
 /**
@@ -56,7 +60,13 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "d
   const { members } = useDirectory();
   const takeable = useTakeableIds().data;
   const now = useNow();
-  const { project } = useTaskWorkflow(detail?.task.project_id);
+  const { project, workflows, steps } = useTaskWorkflow(detail?.task.project_id);
+  // A Connector into another Workflow's Step says where it leads.
+  const label = (c: Connector) => {
+    const from = steps.find((s) => s.id === detail?.task.step_id);
+    const to = steps.find((s) => s.id === c.to_step_id);
+    return connectorLabel(c, from && to && to.workflow_id !== from.workflow_id ? advanceTarget(c, { workflows, steps, from: from.id }) : undefined);
+  };
   const actions = detail
     ? taskActions({ me: me.member.id, detail, members, takeable: takeable ?? new Set(), projects: new Set(me.projects.map((p) => p.id)), now })
     : none;
@@ -116,7 +126,7 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "d
       <div className="inline-flex">
         <Button size={size} className="rounded-r-none" onClick={() => setOpen({ kind: "advance", connector: p.connector })}>
           {into(p.connector)}
-          {connectorLabel(p.connector)}
+          {label(p.connector)}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -129,7 +139,7 @@ export function useTaskActionsUI(detail: TaskDetail | undefined, size: "xs" | "d
               c.kind === "advance" ? (
                 <DropdownMenuItem key={c.connector.id} onSelect={() => setOpen(c)}>
                   {into(c.connector)}
-                  {connectorLabel(c.connector)}
+                  {label(c.connector)}
                 </DropdownMenuItem>
               ) : (
                 <Fragment key="release">

@@ -98,7 +98,8 @@ export function VerticalLine({
   ];
   const entry = t.start !== undefined && t.main[0] === t.start;
   // Where Tasks arrive from other Workflows: a mark on each Step they reach.
-  const arrivalsAt = (id: string) => chipsAt(t, id).filter((c) => c.kind === "entry");
+  // On a Task's way (a trace), only the one it came in by, lit: where it came from.
+  const arrivalsAt = (id: string) => chipsAt(t, id).filter((c) => c.kind === "entry" && (!trace || traversed.has(c.connector.id)));
   const chipTags = (list: ReturnType<typeof tagsAt>) =>
     list.map((c) => (
       <span key={c.key} data-chip={c.kind} data-exit={c.kind === "exit" ? c.connectorId : undefined} data-connector={c.connectorId} title={c.hint} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
@@ -107,7 +108,15 @@ export function VerticalLine({
     ));
   const arrivalTags = (id: string) =>
     arrivalsAt(id).map((e) => (
-      <span key={e.connector.id} title={e.hint} data-chip="entry" data-arrival={id} data-connector={e.connector.id} className="inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium">
+      <span
+        key={e.connector.id}
+        title={e.hint}
+        data-chip="entry"
+        data-arrival={id}
+        data-connector={e.connector.id}
+        data-lit={traversed.has(e.connector.id) ? "true" : undefined}
+        className={cn("inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium", traversed.has(e.connector.id) && "border-state-claimed font-semibold text-state-claimed")}
+      >
         {e.text}
       </span>
     ));
@@ -171,7 +180,7 @@ export function VerticalLine({
             New Tasks start here, at {s?.name}
           </span>
         )}
-        {!trace && arrivalsAt(id).length > 0 && <div className="mt-1 flex flex-wrap gap-1">{arrivalTags(id)}</div>}
+        {arrivalsAt(id).length > 0 && <div className="mt-1 flex flex-wrap gap-1">{arrivalTags(id)}</div>}
         {!trace && (list.length > 0 || n > 0 || (terminal && (done?.length ?? 0) > 0)) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {list.map(token)}

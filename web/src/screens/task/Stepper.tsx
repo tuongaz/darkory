@@ -1,6 +1,7 @@
 // A Task's path through its Workflow's Steps, with the time it spent at each: where it was filed,
 // how it left each Step (an advance's outcome, a move by hand), where it is now and since when,
-// and how it ended.
+// and how it ended. Where the path crosses into another Workflow, that Workflow's name stands
+// before its first Step.
 import { ArrowRightIcon } from "lucide-react";
 import { Fragment } from "react";
 import type { Activity, TaskDetail, WorkflowStep } from "@/api/client";
@@ -8,6 +9,7 @@ import { useNow } from "@/clock";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { cn } from "@/lib/utils";
 import { taskPath, type Stay } from "./path";
+import { useTaskWorkflow } from "./queries";
 import { spanText } from "@/lib/time";
 
 const leftWords = (left: Stay["left"]) => {
@@ -24,19 +26,33 @@ const leftWords = (left: Stay["left"]) => {
 
 export function Stepper({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
   const now = useNow();
+  const { workflows } = useTaskWorkflow(detail.task.project_id);
   const { stays, end } = taskPath(detail.task, path);
   // A path with no Step on it (a Parent from its filing, history out of reach) says nothing.
   if (stays.length === 0) return null;
   const name = (id: string) => steps.find((s) => s.id === id)?.name ?? "A Step since removed";
   const hold = (id: string) => !steps.find((s) => s.id === id)?.skill_id;
+  const workflowOf = (id: string) => steps.find((s) => s.id === id)?.workflow_id;
+  // The Workflow a stay crossed into from the one before it, of a Project of several; none if either Step is gone.
+  const crossed = (i: number) => {
+    if (i === 0 || workflows.length < 2) return undefined;
+    const [was, is] = [workflowOf(stays[i - 1].stepId), workflowOf(stays[i].stepId)];
+    return was && is && was !== is ? workflows.find((w) => w.id === is)?.name : undefined;
+  };
   return (
     <ol aria-label="Path through the Steps" className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs">
       {stays.map((s, i) => {
         const current = s.until === undefined;
         const out = leftWords(s.left);
+        const into = crossed(i);
         return (
           <Fragment key={i}>
             {i > 0 && <Arrow />}
+            {into && (
+              <li data-crossing className="inline-flex text-2xs font-medium text-muted-foreground">
+                {into} ›
+              </li>
+            )}
             <li
               aria-current={current ? "step" : undefined}
               className={cn(

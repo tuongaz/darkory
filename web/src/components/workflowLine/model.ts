@@ -81,6 +81,17 @@ export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[]
   return workflowsInOrder(workflow.workflows)[0].id;
 }
 
+/**
+ * A Step's name as a page says it among its Project's Workflows: "Bugs › Investigate" when the
+ * Project has two or more, else its name alone. With `besides` (the Workflow the reader is in, a
+ * Task's own), a Step of that Workflow is its name alone too: only a crossing names its Workflow.
+ */
+export function stepTitle(step: { name: string; workflow_id: string }, workflows: readonly Pick<LineWorkflowName, "id" | "name">[], besides?: string): string {
+  if (workflows.length < 2 || step.workflow_id === besides) return step.name;
+  const workflow = workflows.find((w) => w.id === step.workflow_id);
+  return workflow ? `${workflow.name} › ${step.name}` : step.name;
+}
+
 /** The Steps a line of the Project draws (`LineWorkflow.drawn`'s), by id; none said is every Step. */
 export function drawnSteps(workflow: Pick<LineWorkflow, "steps" | "drawn">): ReadonlySet<string> | undefined {
   if (workflow.drawn === undefined) return undefined;

@@ -463,14 +463,20 @@ export function HorizontalLine(props: HorizontalProps) {
   };
 
   // A mark over a head, its arrow over the station: "New Tasks start here ↓", "from Triage · bug ↓".
-  const markTag = (m: Mark, hint: string, attrs: Record<string, string | boolean>, key?: string) => {
+  // A Task's way that came in by it (a trace) lights it: where the Task came from.
+  const markTag = (m: Mark, hint: string, attrs: Record<string, string | boolean>, key?: string, lit = false) => {
     return (
       <span
         key={key}
         {...attrs}
         {...hover(hint)}
         data-box="mark"
-        className={cn("absolute inline-flex items-end gap-1 border bg-background px-2 text-[11px] font-medium whitespace-nowrap", m.lines.length > 1 ? "rounded-lg py-px leading-[14px]" : "rounded-full leading-[18px]")}
+        data-lit={lit ? "true" : undefined}
+        className={cn(
+          "absolute inline-flex items-end gap-1 border bg-background px-2 text-[11px] font-medium whitespace-nowrap",
+          m.lines.length > 1 ? "rounded-lg py-px leading-[14px]" : "rounded-full leading-[18px]",
+          lit && "border-state-claimed font-semibold text-state-claimed",
+        )}
         style={{ left: m.left, top: m.top }}
       >
         {m.arrow === "left" && <span aria-hidden>↓</span>}
@@ -810,11 +816,13 @@ export function HorizontalLine(props: HorizontalProps) {
           data-box="chip"
           data-chip={c.kind}
           data-connector={c.connectorId}
+          data-lit={c.connectorId && traversed.has(c.connectorId) ? "true" : undefined}
           {...hover(c.hint)}
           className={cn(
             // An entry reads as the mark over a head does; the rest as words beside their Step.
             "absolute rounded-full border bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap",
             c.kind === "entry" ? "font-medium" : "border-dashed text-muted-foreground",
+            c.connectorId && traversed.has(c.connectorId) && "border-state-claimed font-semibold text-state-claimed",
             c.align === "right" && "-translate-x-full",
             c.align === "center" && "-translate-x-1/2",
             (dimOthers || props.litLoop) && "wl-dim",
@@ -848,13 +856,18 @@ export function HorizontalLine(props: HorizontalProps) {
               {...hover(h.entry.arrow.label.hint)}
               data-box="entry"
               data-connectors={JSON.stringify(h.entry.arrow.connectorIds)}
-              className={cn("absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap", h.entry.arrow.label.lines && "flex flex-col")}
+              data-lit={h.entry.arrow.connectorIds.some((id) => traversed.has(id)) ? "true" : undefined}
+              className={cn(
+                "absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap",
+                h.entry.arrow.label.lines && "flex flex-col",
+                h.entry.arrow.connectorIds.some((id) => traversed.has(id)) && "font-semibold text-state-claimed",
+              )}
               style={{ left: h.entry.arrow.label.x, top: h.entry.arrow.label.y }}
             >
               {h.entry.arrow.label.lines ? h.entry.arrow.label.lines.map((l) => <span key={l}>{l}</span>) : h.entry.arrow.label.text}
             </span>
           )}
-          {h.entry.arrivals?.map((m) => markTag(m, m.hint, { "data-arrival": m.stepId, "data-connectors": JSON.stringify(m.connectorIds) }, m.stepId))}
+          {h.entry.arrivals?.map((m) => markTag(m, m.hint, { "data-arrival": m.stepId, "data-connectors": JSON.stringify(m.connectorIds) }, m.stepId, m.connectorIds.some((id) => traversed.has(id))))}
           {h.entry.mark && markTag(h.entry.mark, h.entry.mark.hint, { "data-entry-mark": true, "aria-label": ENTRY_LABEL })}
           {h.entry.before && (
             <>

@@ -460,6 +460,13 @@ describe("Tasks of a Project of several Workflows", () => {
     expect(screen.queryByRole("button", { name: /^Workflow:/ })).not.toBeInTheDocument();
   });
 
+  it("grouped by other than Step, a row's Step reads with its Workflow", async () => {
+    localStorage.setItem("darkory.tasks.display", JSON.stringify({ group: "owner" }));
+    mockApi(several());
+    renderApp("/projects/WEB/tasks?view=list");
+    expect(await row(/WEB-2 Crash on save/)).toHaveTextContent("Bugs › Investigate");
+  });
+
   it("the list keeps the whole Project, each Step group headed by its Workflow", async () => {
     mockApi(several());
     renderApp("/projects/WEB/tasks?view=list");
