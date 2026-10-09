@@ -174,8 +174,8 @@ function GlyphSet() {
 
 // The sample with a Step whose Skill no Member holds, to show its warning.
 const editSample: Workflow = (() => {
-  const docs: Step = { id: "s-docs", name: "Docs", skill: { id: "k-docs", name: "docs" }, position: 8, x: 0, y: 0, takers: [], tasks: 2, working: 0 };
-  const w = { steps: [...sampleWorkflow.steps, docs], connectors: [...sampleWorkflow.connectors, { id: "c-docs-done", from: "s-docs", to: null, name: "done", position: 0 }] };
+  const docs: Step = { id: "s-docs", workflow_id: sampleWorkflow.workflows[0].id, name: "Docs", skill: { id: "k-docs", name: "docs" }, position: 8, x: 0, y: 0, takers: [], tasks: 2, working: 0 };
+  const w = { workflows: sampleWorkflow.workflows, steps: [...sampleWorkflow.steps, docs], connectors: [...sampleWorkflow.connectors, { id: "c-docs-done", from: "s-docs", to: null, name: "done", position: 0 }] };
   const at = tidy(w);
   return { ...w, steps: w.steps.map((s) => ({ ...s, ...at[s.id] })) };
 })();
@@ -215,6 +215,7 @@ function EditingCanvas() {
             const id = newId("s");
             const step: Step = {
               id,
+              workflow_id: source.workflow_id,
               name: `Step ${made}`,
               position: Math.max(...w.steps.map((s) => s.position)) + 1,
               x: at?.x ?? source.x + STEP_W + RANK_GAP,
@@ -224,7 +225,7 @@ function EditingCanvas() {
               working: 0,
             };
             const connector: Connector = { id: newId("c"), from, to: id, name: nextOutcome(from), position: w.connectors.length };
-            return { steps: [...w.steps, step], connectors: [...w.connectors, connector] };
+            return { ...w, steps: [...w.steps, step], connectors: [...w.connectors, connector] };
           });
         }}
         onAddConnector={(ends) => {
@@ -238,6 +239,7 @@ function EditingCanvas() {
         onDeleteStep={(step, moveTo) => {
           say(`onDeleteStep(${step.name}${moveTo ? `, move to ${name(moveTo)}` : ""})`);
           update((w) => ({
+            ...w,
             steps: w.steps.filter((s) => s.id !== step.id).map((s) => (s.id === moveTo ? { ...s, tasks: s.tasks + step.tasks } : s)),
             connectors: w.connectors.filter((c) => c.from !== step.id && c.to !== step.id),
           }));

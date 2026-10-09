@@ -1,6 +1,6 @@
 import { DONE_STATION, sideSteps, type LineConnector, type LineStep, type LineWorkflow } from "./model";
 import { estimate, twoLines, type Measure } from "./measure";
-import { along, Board, runsOf, type Box, type Placed as TextBox, type Pt } from "./place";
+import { along, Board, cuts, runsOf, type Box, type Placed as TextBox, type Pt } from "./place";
 import { AFTER_BRANCH, BREAKDOWN_BRANCH, breakdownOutcomeHint, ENTRY_LABEL, entryHint, FILES_LABEL, filesHint, gapHint, HAND_LABEL, handHint, holdHint, HOLD_NOTE, outcomeHint, outcomesHint } from "./words";
 
 /*
@@ -15,6 +15,12 @@ import { AFTER_BRANCH, BREAKDOWN_BRANCH, breakdownOutcomeHint, ENTRY_LABEL, entr
  * - the Steps where Darkory files a Parent's own Subtasks (acceptance, retro, skill-review) sit on
  *   a short branch "After a Parent" whose rows run into Done;
  * - a Connector the drawing cannot route without a crossing is a chip ("fail → Build");
+ * - one Workflow of several drawn alone (`LineWorkflow.drawn`, ADR 0019): a Connector into another
+ *   Workflow's Step is an exit, a chip at the end of a short leg down from its Step ("bug → Bugs ›
+ *   Investigate"), a plain chip where that leg would cross a line; one from another Workflow is an
+ *   entry on the Step it reaches ("from Triage · bug"), the arrow into the line's first Step where
+ *   New Tasks' is not, else a mark over the Step's head; no Connector touching a drawn Step is
+ *   dropped;
  * - new Tasks enter from the left into the Step they start at; the breakdown Step sits on a short
  *   branch "Break down" above that entry, its arrow "files Subtasks" joining it; a hold no
  *   Connector joins parks below the entry, its arrow "by hand";
@@ -75,8 +81,31 @@ export type BranchRow = {
   exit?: LineConnector;
 };
 
-/** A Connector shown in words beside its Step: "fail → Build". */
-export type Chip = { stepId: string; connector: LineConnector; text: string };
+/**
+ * A Connector shown in words by its Step, with what it says on hover: a `chip` the drawing cannot
+ * route ("fail → Build"); or one between a drawn Step and a Step of another Workflow (ADR 0019),
+ * an `exit` by the drawn Step it leaves ("bug → Bugs › Investigate") or an `entry` on the drawn
+ * Step it reaches ("from Triage · bug").
+ */
+export type Chip = { kind: "chip" | "exit" | "entry"; stepId: string; connector: LineConnector; text: string; hint: string };
+
+/** An exit or an entry: a Connector crossing into or out of the Workflow drawn. */
+export type Crossing = Chip & { kind: "exit" | "entry" };
+
+/**
+ * A Step's Connectors in words, as both renderers stand them beside it: those the drawing cannot
+ * route, its exits, then its entries.
+ */
+export function chipsAt(t: Pick<LineTopology, "chips" | "exits" | "entries">, stepId: string): Chip[] {
+  return [...t.chips, ...t.exits, ...t.entries].filter((c) => c.stepId === stepId);
+}
+
+/** A list of chips (or marks) by the Step they stand at, each Step's in the list's order. */
+export function byStep<T extends { stepId: string }>(list: readonly T[]): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const x of list) out.set(x.stepId, [...(out.get(x.stepId) ?? []), x]);
+  return out;
+}
 
 /** A loop back as the Loops list names it. */
 export type Loop = { connector: LineConnector; from: string; to: string };
@@ -98,6 +127,12 @@ export type LineTopology = {
   over: Arc[];
   rows: BranchRow[];
   chips: Chip[];
+  /** Connectors out of a drawn Step into another Workflow's, in Workflow order. */
+  exits: Crossing[];
+  /** Connectors into a drawn Step from another Workflow's, by the Step they reach. */
+  entries: Crossing[];
+  /** The Steps of other Workflows the line names, as "Bugs › Investigate". */
+  others: Map<string, string>;
   loops: Loop[];
   maxUnder: number;
   maxOver: number;
@@ -169,28 +204,95 @@ function legs(list: (Arc | Track)[]) {
   }
 }
 
-/** The line's stations, routes and branch, in station order. */
+/** Compares Steps in the Project's order: their Workflow's position, then their own. */
+function stepOrder(workflows: LineWorkflow["workflows"]): (a: LineStep, b: LineStep) => number {
+  const rank = new Map(workflows.map((w) => [w.id, w.position]));
+  const of = (s: LineStep) => rank.get(s.workflow_id) ?? Number.POSITIVE_INFINITY;
+  return (a, b) => {
+    const [wa, wb] = [of(a), of(b)];
+    return (wa === wb ? 0 : wa - wb) || byPosition(a, b);
+  };
+}
+
+/** The Steps of other Workflows a drawing's Connectors reach, each named with its Workflow: "Bugs › Investigate". */
+function otherSteps(workflow: LineWorkflow, drawn: ReadonlyMap<string, LineStep>, touching: readonly LineConnector[]): Map<string, string> {
+  const every = new Map(workflow.steps.map((s) => [s.id, s]));
+  const out = new Map<string, string>();
+  for (const c of touching) {
+    for (const id of [c.from, c.to]) {
+      const s = id === null || drawn.has(id) ? undefined : every.get(id);
+      if (s) out.set(s.id, `${workflowName(workflow, s)} › ${s.name}`);
+    }
+  }
+  return out;
+}
+
+const workflowName = (workflow: LineWorkflow, s: LineStep) => workflow.workflows.find((w) => w.id === s.workflow_id)?.name ?? "Another Workflow";
+
+/** The Connectors out of a drawn Step into another Workflow's, as exits, in the order of the Steps they leave. */
+function exitTopology(
+  touching: readonly LineConnector[],
+  drawn: ReadonlyMap<string, LineStep>,
+  others: ReadonlyMap<string, string>,
+  byFrom: (a: LineConnector, b: LineConnector) => number,
+  fullName: (id: string | null) => string,
+): Crossing[] {
+  return touching
+    .filter((c) => drawn.has(c.from) && c.to !== null && others.has(c.to))
+    .sort(byFrom)
+    .map((c) => ({ kind: "exit", stepId: c.from, connector: c, text: `${c.name} → ${others.get(c.to!)}`, hint: outcomeHint(c, fullName) }));
+}
+
+/** The Connectors into a drawn Step from another Workflow's, as entries: by the Step they reach, then the Step they leave. */
+function entryTopology(
+  touching: readonly LineConnector[],
+  workflow: LineWorkflow,
+  drawn: ReadonlyMap<string, LineStep>,
+  inOrder: (a: LineStep, b: LineStep) => number,
+  fullName: (id: string | null) => string,
+): Crossing[] {
+  const every = new Map(workflow.steps.map((s) => [s.id, s]));
+  return touching
+    .filter((c) => !drawn.has(c.from) && every.has(c.from) && c.to !== null && drawn.has(c.to))
+    .sort((a, b) => inOrder(drawn.get(a.to!)!, drawn.get(b.to!)!) || inOrder(every.get(a.from)!, every.get(b.from)!) || a.position - b.position)
+    .map((c) => ({ kind: "entry", stepId: c.to!, connector: c, text: `from ${workflowName(workflow, every.get(c.from)!)} · ${c.name}`, hint: outcomeHint(c, fullName) }));
+}
+
+/**
+ * The line's stations, routes and branch, in station order. `workflow` is the Project's whole
+ * graph; the line draws the Steps of `workflow.drawn` (every Step when unsaid). Where Tasks start
+ * and which Steps leave the line are the Project's (`sideSteps`), so a Workflow drawn alone says
+ * "New Tasks start here" only where they do. A Connector between a drawn Step and another
+ * Workflow's is an exit or an entry; one touching no drawn Step belongs to another drawing.
+ */
 export function lineTopology(workflow: LineWorkflow): LineTopology {
-  const ordered = [...workflow.steps].sort(byPosition);
+  const inOrder = stepOrder(workflow.workflows);
+  const every = new Map(workflow.steps.map((s) => [s.id, s]));
+  const ordered = (workflow.drawn === undefined ? [...workflow.steps] : workflow.steps.filter((s) => s.workflow_id === workflow.drawn)).sort(inOrder);
   const steps = new Map(ordered.map((s) => [s.id, s]));
   const sides = sideSteps(workflow);
-  const sideIds = sides.after;
-  const before = [...sides.before][0];
+  const sideIds = new Set([...sides.after].filter((id) => steps.has(id)));
+  const before = [...sides.before].find((id) => steps.has(id));
+  const start = sides.start !== undefined && steps.has(sides.start) ? sides.start : undefined;
   const holds = ordered.filter((s) => sides.holds.has(s.id)).map((s) => s.id);
   const main = [...ordered.filter((s) => !sideIds.has(s.id) && s.id !== before && !sides.holds.has(s.id)).map((s) => s.id), DONE_STATION];
   const index = new Map(main.map((id, i) => [id, i]));
   const name = (id: string | null) => (id === null ? "Done" : (steps.get(id)?.name ?? "a Step"));
-  const connectors = [...workflow.connectors]
-    .filter((c) => steps.has(c.from) && (c.to === null || steps.has(c.to)))
-    .sort((a, b) => byPosition(steps.get(a.from)!, steps.get(b.from)!) || a.position - b.position);
-
+  const touching = workflow.connectors.filter((c) => steps.has(c.from) || (c.to !== null && steps.has(c.to)));
+  const byFrom = (a: LineConnector, b: LineConnector) => inOrder(every.get(a.from)!, every.get(b.from)!) || a.position - b.position;
+  const connectors = touching.filter((c) => steps.has(c.from) && (c.to === null || steps.has(c.to))).sort(byFrom);
+  const others = otherSteps(workflow, steps, touching);
+  // A Step of either side by its name, another Workflow's with that Workflow's: "Bugs › Investigate".
+  const fullName = (id: string | null) => (id !== null && others.has(id) ? others.get(id)! : name(id));
+  const exits = exitTopology(touching, steps, others, byFrom, fullName);
+  const entries = entryTopology(touching, workflow, steps, inOrder, fullName);
   const segments: Segment[] = main.slice(0, -1).map((from, i) => ({ lo: i, from, to: main[i + 1] }));
   const chips: Chip[] = [];
   const forward: Arc[] = [];
   const backs: LineConnector[] = [];
   const sideLinks: LineConnector[] = [];
   const sideOut: LineConnector[] = [];
-  const chip = (c: LineConnector) => chips.push({ stepId: c.from, connector: c, text: `${c.name} → ${name(c.to)}` });
+  const chip = (c: LineConnector) => chips.push({ kind: "chip", stepId: c.from, connector: c, text: `${c.name} → ${name(c.to)}`, hint: outcomeHint(c, name) });
 
   for (const c of connectors) {
     const to = c.to ?? DONE_STATION;
@@ -215,7 +317,7 @@ export function lineTopology(workflow: LineWorkflow): LineTopology {
   }
   // A Step with an outcome that leads on (to a later Step, Done, or off the line) moves its Tasks
   // along it; one with none, or only loops back, has its Tasks moved on by hand.
-  const leadsOn = new Set(connectors.filter((c) => c.to === null || !index.has(c.to) || index.get(c.to)! > index.get(c.from)!).map((c) => c.from));
+  const leadsOn = new Set([...connectors.filter((c) => c.to === null || !index.has(c.to) || index.get(c.to)! > index.get(c.from)!).map((c) => c.from), ...exits.map((e) => e.stepId)]);
   for (const s of segments) if (!s.connector) s.hand = !leadsOn.has(s.from);
 
   // Loops back: three or more into one Step share a track; the rest are arcs.
@@ -282,7 +384,7 @@ export function lineTopology(workflow: LineWorkflow): LineTopology {
     ...backs.map((c) => ({ connector: c, from: name(c.from), to: name(c.to) })),
     ...rows.flatMap((r) => r.loops.map((l) => ({ connector: l.connector, from: name(l.connector.from), to: name(l.connector.to) }))),
   ];
-  return { main, start: sides.start, before, holds, connectors: new Map(connectors.map((c) => [c.id, c])), steps, segments, under, over, rows, chips, loops, maxUnder, maxOver };
+  return { main, start, before, holds, connectors: new Map(connectors.map((c) => [c.id, c])), steps, segments, under, over, rows, chips, exits, entries, others, loops, maxUnder, maxOver };
 }
 
 function nestPlaced(list: (Arc | Track)[], placedOf: (e: Arc | Track) => Placed): number {
@@ -375,6 +477,8 @@ function spacingFor(n: number, width: number, edges?: Edges) {
 export type Zone = {
   /** The start Step is the line's first: the entry arrow comes in from the left. */
   entry: boolean;
+  /** Where New Tasks do not start at the line's first Step: the Connectors from other Workflows into it, which the arrow brings in instead. */
+  arrive: Crossing[];
   /** Where the entry arrow begins, right of its words. */
   entryStart: number;
   /** The breakdown Step's station. */
@@ -385,8 +489,8 @@ export type Zone = {
   hx: number;
   /** The right edge of all of it. */
   right: number;
-  /** The breakdown Step's words left of it: its outcomes, and where its Subtasks start when no arrow can say it. */
-  chips: { text: string; connectorId?: string }[];
+  /** The breakdown Step's words left of it: its outcomes, those crossing into or out of the Workflow, and where its Subtasks start when no arrow can say it. */
+  chips: { kind: Chip["kind"]; text: string; connectorId?: string; hint: string }[];
 };
 
 const ZONE_L = 16;
@@ -399,6 +503,9 @@ const LABEL2_H = 30;
 /** A chip's padding and border, and its height. */
 const CHIP_PAD = 18;
 const CHIP_H = 20;
+/** How far under the line an exit's first chip stands (its middle), and the tick from its leg into it. */
+const EXIT_TOP = 30;
+const EXIT_TICK = 10;
 /** Half the room a station takes on its line. */
 const STATION_R = 9;
 /** A branch Step's name line over its station: as tall as a token there. */
@@ -412,7 +519,7 @@ const chipW = (text: string, measure: Measure) => measure(text, "chip") + CHIP_P
 const labelW = (text: string, measure: Measure) => measure(text, "label") + LABEL_PAD;
 
 function nameOf(t: LineTopology) {
-  return (id: string | null) => (id === null || id === DONE_STATION ? "Done" : (t.steps.get(id)?.name ?? "a Step"));
+  return (id: string | null) => (id === null || id === DONE_STATION ? "Done" : (t.steps.get(id)?.name ?? t.others.get(id) ?? "a Step"));
 }
 
 /** A branch Step's name line, roughly, when the drawing has not said: name, Skill, a mark. */
@@ -423,25 +530,30 @@ function nameLine(s: LineStep | undefined, measure: Measure): number {
 
 export function zoneOf(t: LineTopology, measure: Measure = estimate, labelWidth?: (stepId: string) => number): Zone | undefined {
   const entry = t.start !== undefined && t.main[0] === t.start;
-  if (!entry && !t.before && t.holds.length === 0) return undefined;
-  const entryStart = Math.round(ZONE_L + measure(ENTRY_LABEL, "entry") + 10);
+  const arrive = entry ? [] : t.entries.filter((e) => e.stepId === t.main[0]);
+  if (!entry && arrive.length === 0 && !t.before && t.holds.length === 0) return undefined;
+  const words = arrive.length > 0 ? arrive.map((e) => e.text) : [ENTRY_LABEL];
+  const entryStart = Math.round(ZONE_L + Math.max(...words.map((w) => measure(w, "entry"))) + 10);
   const holdW = Math.max(0, ...t.holds.map((id) => Math.max(measure(t.steps.get(id)?.name ?? "", "side"), measure(HOLD_NOTE, "note"))));
   const hx = Math.round(Math.max(entryStart + 22, ZONE_L + holdW + 18));
-  let right = entry ? entryStart + 48 : ZONE_L;
+  let right = entry || arrive.length > 0 ? entryStart + 48 : ZONE_L;
   if (t.holds.length > 0) right = Math.max(right, hx + 6 + labelW(HAND_LABEL, measure));
   const chips: Zone["chips"] = [];
   let px = 0;
   let joinX = 0;
   if (t.before) {
-    for (const c of t.chips.filter((c) => c.stepId === t.before)) chips.push({ text: c.text, connectorId: c.connector.id });
-    if (!entry && t.start) chips.push({ text: FILES_LABEL });
+    // Its own outcomes say, on hover, where the Subtasks it files start.
+    const name = nameOf(t);
+    const start = t.start !== undefined ? name(t.start) : undefined;
+    for (const c of chipsAt(t, t.before)) chips.push({ kind: c.kind, text: c.text, connectorId: c.connector.id, hint: c.kind === "chip" ? breakdownOutcomeHint(c.connector, name, start) : c.hint });
+    if (!entry && t.start) chips.push({ kind: "chip", text: FILES_LABEL, hint: filesHint(name(t.before), start) });
     const widest = Math.max(0, ...chips.map((c) => chipW(c.text, measure)));
     px = Math.round(ZONE_L + (widest ? widest + 14 : 6));
     const nameW = labelWidth?.(t.before) ?? nameLine(t.steps.get(t.before), measure);
     if (entry) joinX = Math.round(Math.max(px + 7 + labelW(FILES_LABEL, measure) + 24, (t.holds.length ? hx : entryStart) + 34));
     right = Math.max(right, px - 6 + nameW, joinX);
   }
-  return { entry, entryStart, px, joinX, hx, right: Math.round(right), chips };
+  return { entry, arrive, entryStart, px, joinX, hx, right: Math.round(right), chips };
 }
 
 /** Each main-line station's x: spread over the width, right of the zone where Tasks enter. */
@@ -480,10 +592,25 @@ export type Head = { id: string; x: number; top: number; tier: number; w: number
 
 type HeadPlan = { x: number; w: number; h: number };
 
-/** A way the start Step's mark stands over its head: its words left of its arrow (`right`) or right of it, on one line or two. */
-export type MarkPlan = { side: "left" | "right"; lines: string[]; w: number; h: number };
+/**
+ * A way a mark stands over a head: its words left of its arrow (`right`) or right of it, on one
+ * line or more. The start Step's says "New Tasks start here"; an entry's "from Triage · bug".
+ */
+export type MarkPlan = { kind: "start" | "entry"; side: "left" | "right"; lines: string[]; w: number; h: number };
 
-type HeadChoice = { tier: number; mark?: MarkPlan };
+/** The ways one mark can be worded at a station (one line, else two), before its side is chosen. */
+type MarkSpec = { kind: MarkPlan["kind"]; variants: { lines: string[]; w: number; h: number }[] };
+
+/** A head's tier, and its station's marks stacked over it, the nearest first. */
+type HeadChoice = { tier: number; marks: MarkPlan[] };
+
+/** The room a stack of marks takes over its head. */
+const stackH = (marks: readonly MarkPlan[]) => marks.reduce((n, m) => n + m.h + 4, 0);
+
+/** Every way of picking one of each list, the first list's choice varying slowest. */
+function product<T>(lists: T[][]): T[][] {
+  return lists.reduce<T[][]>((acc, list) => acc.flatMap((a) => list.map((x) => [...a, x])), [[]]);
+}
 
 /**
  * Which heads to raise a tier, and how the start Step's mark stands, so that nothing over the line
@@ -491,18 +618,24 @@ type HeadChoice = { tier: number; mark?: MarkPlan };
  * over the line landing through a head or the mark on its way to its own. Heads stay down where
  * they can, left to right; `ok` is false when no way is clear (the line then runs down the page).
  */
-function placeHeads(hs: HeadPlan[], legs: { x: number; at: number }[], tierH: number, mark: { at: number; plans: MarkPlan[] } | undefined, width: number) {
+function placeHeads(hs: HeadPlan[], legs: { x: number; at: number }[], tierH: number, marks: ReadonlyMap<number, MarkSpec[]>, width: number) {
   const n = hs.length;
   const low = Math.max(...hs.map((h) => h.h));
   const top = (c: HeadChoice) => -c.tier * tierH;
   const headBox = (i: number, c: HeadChoice): Box => ({ x: hs[i].x - hs[i].w / 2 - HEAD_GAP / 2, y: top(c), w: hs[i].w + HEAD_GAP, h: hs[i].h });
   const markLeft = (i: number, m: MarkPlan) => (m.side === "right" ? hs[i].x + MARK_TIP - m.w : hs[i].x - MARK_TIP);
-  const markBox = (i: number, c: HeadChoice): Box | undefined => (c.mark ? { x: markLeft(i, c.mark), y: top(c) - c.mark.h - 4, w: c.mark.w, h: c.mark.h } : undefined);
-  const boxTop = (c: HeadChoice) => top(c) - (c.mark ? c.mark.h + 4 : 0);
+  const markBoxes = (i: number, c: HeadChoice): Box[] => {
+    let y = top(c);
+    return c.marks.map((m) => {
+      y -= m.h + 4;
+      return { x: markLeft(i, m), y, w: m.w, h: m.h };
+    });
+  };
+  const boxTop = (c: HeadChoice) => top(c) - stackH(c.marks);
   const guide = (i: number, c: HeadChoice): Box | undefined => (c.tier > 0 ? { x: hs[i].x - 2, y: top(c) + hs[i].h + 4, w: 4, h: low - (top(c) + hs[i].h + 4) } : undefined);
   const legsAt = legs.map((l) => l.at);
   const legBoxes = (i: number, c: HeadChoice): Box[] => legs.filter((_, k) => legsAt[k] === i).map((l) => ({ x: l.x - 2, y: -1e4, w: 4, h: 1e4 + boxTop(c) - 6 }));
-  const solid = (i: number, c: HeadChoice) => [headBox(i, c), markBox(i, c)].filter((b): b is Box => !!b);
+  const solid = (i: number, c: HeadChoice) => [headBox(i, c), ...markBoxes(i, c)];
   const thin = (i: number, c: HeadChoice) => [guide(i, c), ...legBoxes(i, c)].filter((b): b is Box => !!b);
   const conflict = (i: number, ci: HeadChoice, j: number, cj: HeadChoice) => {
     const [si, sj] = [solid(i, ci), solid(j, cj)];
@@ -511,9 +644,14 @@ function placeHeads(hs: HeadPlan[], legs: { x: number; at: number }[], tierH: nu
     return thin(j, cj).some((a) => si.some((b) => meetsBox(a, b)));
   };
   const choices = (i: number): HeadChoice[] => {
-    if (mark?.at !== i) return [{ tier: 0 }, { tier: 1 }];
-    const inside = mark.plans.filter((m) => markLeft(i, m) >= 2 && markLeft(i, m) + m.w <= width - 2);
-    return [0, 1].flatMap((tier) => inside.map((m) => ({ tier, mark: m })));
+    const specs = marks.get(i);
+    if (!specs?.length) return [{ tier: 0, marks: [] }, { tier: 1, marks: [] }];
+    // One wording per mark, then a side for the stack, its arrows over the station.
+    const stacks = product(specs.map((m) => m.variants.map((v) => ({ ...v, kind: m.kind })))).flatMap((stack) =>
+      (["right", "left"] as const).map((side) => stack.map((m): MarkPlan => ({ ...m, side }))),
+    );
+    const inside = stacks.filter((stack) => stack.every((m) => markLeft(i, m) >= 2 && markLeft(i, m) + m.w <= width - 2));
+    return [0, 1].flatMap((tier) => inside.map((stack) => ({ tier, marks: stack })));
   };
   const picked: HeadChoice[] = [];
   let nodes = 0;
@@ -529,7 +667,7 @@ function placeHeads(hs: HeadPlan[], legs: { x: number; at: number }[], tierH: nu
     return false;
   };
   if (search(0)) return { choices: picked, ok: true };
-  return { choices: hs.map((_, i) => (mark?.at === i ? { tier: 0, mark: mark.plans[0] } : { tier: 0 })), ok: false };
+  return { choices: hs.map((_, i): HeadChoice => ({ tier: 0, marks: (marks.get(i) ?? []).map((m) => ({ ...m.variants[0], kind: m.kind, side: "right" })) })), ok: false };
 }
 
 const meetsBox = (a: Box, b: Box) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 0.5 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 0.5;
@@ -564,6 +702,9 @@ export type DrawnArc = {
 
 export type BranchStation = { id: string; x: number; y: number; row: number };
 
+/** An exit's leg: from its Step's station down and into its chip (also among `polylines`, as `exit:<connector id>`). */
+export type ExitLeg = { connectorId: string; stepId: string; points: Point[] };
+
 export type Horizontal = {
   width: number;
   height: number;
@@ -586,13 +727,20 @@ export type Horizontal = {
     loops: DrawnArc[];
     labels: Label[];
   };
-  chips: { stepId: string; x: number; y: number; text: string; align: "left" | "right" | "center"; connectorId?: string; hint?: string }[];
+  chips: { kind: Chip["kind"]; stepId: string; x: number; y: number; text: string; align: "left" | "right" | "center"; connectorId?: string; hint: string }[];
+  /** Each exit drawn at the end of a short leg down from its Step: the leg, from the station to its chip. */
+  exits: ExitLeg[];
   /** Where Tasks enter the line, when it draws an entry (see `Zone`). */
   entry?: {
-    /** The entry arrow into the start Step, with its words; absent when the start Step is not the line's first. */
-    arrow?: { line: Point[]; head: { x: number; y: number; dir: "right" }; label: Label };
+    /**
+     * The entry arrow into the line's first Step, with its words: "New Tasks start here" when they
+     * start there, else the Connectors from other Workflows into it, "from Triage · bug" a line each.
+     */
+    arrow?: { line: Point[]; head: { x: number; y: number; dir: "right" }; label: Label; connectorIds: string[] };
     /** The mark over a start Step the arrow cannot reach: "New Tasks start here ↓", its left edge at `left` (over the station, or beside an arc's leg). */
     mark?: Mark & { hint: string };
+    /** The marks over the Steps the arrow does not lead into that Tasks reach from another Workflow: "from Triage · bug ↓". */
+    arrivals?: (Mark & { stepId: string; hint: string; connectorIds: string[] })[];
     /** The branch "Break down": its title, its Step, and its arrow into the start Step. */
     before?: {
       id: string;
@@ -665,24 +813,34 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
   const board = new Board();
 
   // The heads: each over its station, raised a tier where it would meet its neighbour's; the
-  // start Step's keeps a row over it for its mark.
+  // start Step's keeps a row over it for its mark, and so does a Step Tasks enter from another
+  // Workflow unless the entry arrow leads into it.
   const marked = t.start !== undefined && t.main[0] !== t.start;
-  // The mark: "New Tasks start here ↓" on one line, else "New Tasks / start here ↓" on two.
-  const split = twoLines(ENTRY_LABEL, "entry", measure);
-  const markPlans: MarkPlan[] = [
-    { lines: [ENTRY_LABEL], w: measure(ENTRY_LABEL, "entry") + MARK_PAD, h: 20 },
-    { lines: split.lines, w: split.width + MARK_PAD, h: 32 },
-  ].flatMap((m) => (["right", "left"] as const).map((side) => ({ ...m, side })));
+  // A mark on one line, else on two ("New Tasks / start here ↓"); several entries one a line.
+  const wordings = (lines: string[]): MarkSpec["variants"] => {
+    const box = (ls: string[]) => ({ lines: ls, w: Math.max(...ls.map((l) => measure(l, "entry"))) + MARK_PAD, h: ls.length === 1 ? 20 : 14 * ls.length + 4 });
+    if (lines.length > 1) return [box(lines)];
+    // "from Triage · bug" breaks after its "·" or not at all, so no line begins with one.
+    const split = twoLines(lines[0], "entry", measure, (first) => !lines[0].includes(" · ") || first.endsWith(" ·"));
+    return split.lines.length > 1 ? [box(lines), box(split.lines)] : [box(lines)];
+  };
+  const startAt = marked && t.start !== undefined ? t.main.indexOf(t.start) : -1;
+  const markSpecs = new Map<number, MarkSpec[]>();
+  if (startAt >= 0) markSpecs.set(startAt, [{ kind: "start", variants: wordings([ENTRY_LABEL]) }]);
+  const arriving = new Set(zone?.arrive.map((e) => e.connector.id));
+  t.main.forEach((id, i) => {
+    const words = t.entries.filter((e) => e.stepId === id && !arriving.has(e.connector.id)).map((e) => e.text);
+    if (words.length > 0) markSpecs.set(i, [...(markSpecs.get(i) ?? []), { kind: "entry", variants: wordings(words) }]);
+  });
   const plans: HeadPlan[] = t.main.map((_, i) => ({ x: xs[i], w: texts[i].w, h: texts[i].h }));
   const overLegs = t.over.flatMap((e) => [
     { x: xs[e.lo] + LEG0 + e.legLo * LEG, at: e.lo },
     { x: xs[e.hi] - LEG0 - e.legHi * LEG, at: e.hi },
   ]);
-  const markRoom = marked ? Math.max(...markPlans.map((m) => m.h)) + 4 : 0;
+  const markRoom = Math.max(0, ...[...markSpecs.values()].map((specs) => specs.reduce((sum, m) => sum + Math.max(...m.variants.map((v) => v.h)) + 4, 0)));
   const tierH = Math.max(...plans.map((p) => p.h)) + markRoom + 8;
-  const startAt = marked && t.start !== undefined ? t.main.indexOf(t.start) : -1;
-  const { choices, ok: headsFit } = placeHeads(plans, overLegs, tierH, startAt >= 0 ? { at: startAt, plans: markPlans } : undefined, opts.width);
-  const ext = (c: HeadChoice) => (c.mark ? c.mark.h + 4 : 0);
+  const { choices, ok: headsFit } = placeHeads(plans, overLegs, tierH, markSpecs, opts.width);
+  const ext = (c: HeadChoice) => stackH(c.marks);
   const minTop = Math.min(...choices.map((c) => -c.tier * tierH - ext(c)));
   const headY = 28 + t.maxOver * OVER_STEP - minTop;
   const heads: Head[] = t.main.map((id, i) => ({ id, x: xs[i], top: headY - choices[i].tier * tierH, tier: choices[i].tier, w: texts[i].w, h: texts[i].h, lines: texts[i].lines }));
@@ -754,7 +912,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
   // over the station from one side, clear of the arcs landing beside it.
   heads.forEach((h) => board.fix({ id: `head:${h.id}`, kind: "head", text: h.lines.join(" "), x: h.x - h.w / 2, y: h.top, w: h.w, h: h.h }, [`guide:${h.id}`]));
   let mark: Mark | undefined;
-  const chosen = startAt >= 0 ? choices[startAt].mark : undefined;
+  const chosen = startAt >= 0 ? choices[startAt].marks.find((m) => m.kind === "start") : undefined;
   if (chosen) {
     // Its arrow stands over the station, its words left of it (else right of it).
     const x = xs[startAt];
@@ -763,6 +921,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
     board.fix({ id: "mark", kind: "mark", text: ENTRY_LABEL, x: left, y: top, w: chosen.w, h: chosen.h });
     mark = { x, left, top, y: top + chosen.h / 2, arrow: chosen.side, lines: chosen.lines };
   }
+  const arrivals = placeArrivals(t, { choices, heads, xs, lineY, arriving, board, routes, name });
 
   // Every segment says what moves along it: its Connector's outcome, or "by hand" where a human
   // moves the Task on. On the line when it fits between its stations, else on two lines between
@@ -806,18 +965,25 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
   const chips: Horizontal["chips"] = [];
   let entry: Horizontal["entry"];
   if (mark && t.start !== undefined) entry = { holds: [], mark: { ...mark, hint: entryHint(name(t.start)) } };
+  if (arrivals.length > 0) {
+    entry ??= { holds: [] };
+    entry.arrivals = arrivals;
+  }
   if (zone) {
     entry ??= { holds: [] };
     const x0 = xs[0];
     const start = t.start !== undefined ? name(t.start) : undefined;
-    if (zone.entry) {
+    if (zone.entry || zone.arrive.length > 0) {
       const line: Point[] = [[zone.entryStart, lineY], [x0 - 11, lineY]];
-      const hint = entryHint(start!);
-      entry.arrow = { line, head: { x: x0 - 11, y: lineY, dir: "right" }, label: { x: ZONE_L, y: lineY, text: ENTRY_LABEL, align: "start", hint } };
+      const words = zone.entry ? [ENTRY_LABEL] : zone.arrive.map((e) => e.text);
+      const hint = zone.entry ? entryHint(start!) : outcomesHint(zone.arrive.map((e) => e.connector), name);
+      const text = words.join(" ");
+      entry.arrow = { line, head: { x: x0 - 11, y: lineY, dir: "right" }, label: { x: ZONE_L, y: lineY, text, ...(words.length > 1 ? { lines: words } : {}), align: "start", hint }, connectorIds: zone.arrive.map((e) => e.connector.id) };
       polylines.push({ id: "entry", points: line });
       board.addRuns(runsOf("entry", line));
       hints.set("entry", hint);
-      board.fix({ id: "entry", kind: "entry", text: ENTRY_LABEL, x: ZONE_L, y: lineY - 8, w: measure(ENTRY_LABEL, "entry"), h: 16 });
+      board.fix({ id: "entry", kind: "entry", text, x: ZONE_L, y: lineY - 8 * words.length, w: Math.max(...words.map((w) => measure(w, "entry"))), h: 16 * words.length });
+      for (const e of zone.arrive) routes.set(e.connector.id, `M${zone.entryStart} ${lineY} H${x0}`);
     }
     if (t.before) {
       const id = t.before;
@@ -840,11 +1006,12 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       board.fix({ id: "breakdown", kind: "note", text: BREAKDOWN_BRANCH, x: px - 6, y: py - NAME_TOP - TOKEN_HALO - 20, w: measure(BREAKDOWN_BRANCH, "note"), h: 16 });
       board.fix({ id: `name:${id}`, kind: "name", text: name(id), x: px - 6, y: py - NAME_TOP - TOKEN_HALO, w: opts.labelWidth?.(id) ?? nameLine(t.steps.get(id), measure), h: NAME_H + 2 * TOKEN_HALO });
       zone.chips.forEach((c, m) => {
-        const connector = c.connectorId ? t.connectors.get(c.connectorId) : undefined;
         const w = chipW(c.text, measure);
-        const chip = { stepId: id, x: px - 14, y: py - 9 + m * 22, text: c.text, align: "right" as const, connectorId: c.connectorId, hint: connector ? breakdownOutcomeHint(connector, name, start) : hint };
+        const chip = { kind: c.kind, stepId: id, x: px - 14, y: py - 9 + m * 22, text: c.text, align: "right" as const, connectorId: c.connectorId, hint: c.hint };
         chips.push(chip);
         board.fix({ id: `chip:${id}:${m}`, kind: "chip", text: c.text, x: chip.x - w, y: chip.y, w, h: CHIP_H });
+        // A crossing goes by its chip: out of the Step into it, or out of it into the Step.
+        if (c.connectorId && c.kind !== "chip") routes.set(c.connectorId, chipRoute(c.kind, { x: px, y: py }, { x: chip.x - w / 2, y: chip.y + CHIP_H / 2 }));
       });
     }
     if (t.holds.length > 0) {
@@ -859,11 +1026,12 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       }
       const last = entry.holds.at(-1)!.y;
       const words = t.holds.map((id) => holdHint(name(id))).join(" ");
-      const line: Point[] = zone.entry ? [[zone.hx, last], [zone.hx, lineY + 3]] : [[zone.hx, last], [zone.hx, lineY], [x0 - 11, lineY]];
-      const label: Label = zone.entry
+      const arrow = zone.entry || zone.arrive.length > 0;
+      const line: Point[] = arrow ? [[zone.hx, last], [zone.hx, lineY + 3]] : [[zone.hx, last], [zone.hx, lineY], [x0 - 11, lineY]];
+      const label: Label = arrow
         ? { x: zone.hx + 6, y: (lineY + entry.holds[0].y) / 2, text: HAND_LABEL, align: "start", hint: words }
         : { x: (zone.hx + x0 - 11) / 2, y: lineY, text: HAND_LABEL, hint: words };
-      entry.spine = { line, head: zone.entry ? { x: zone.hx, y: lineY + 3, dir: "up" } : { x: x0 - 11, y: lineY, dir: "right" }, label };
+      entry.spine = { line, head: arrow ? { x: zone.hx, y: lineY + 3, dir: "up" } : { x: x0 - 11, y: lineY, dir: "right" }, label };
       polylines.push({ id: "holds", points: line });
       board.addRuns(runsOf("holds", line));
       hints.set("holds", words);
@@ -874,11 +1042,17 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
   // Up to here every box stands where the line puts it: if two meet, the line does not fit.
   const fits = headsFit && board.clashes.length === 0;
 
+  const exits: ExitLeg[] = [];
+  const unplaced = placeExits(t, { at, lineY, width: opts.width, measure, board, routes, hints, polylines, chips, exits });
+
   // The words on the arcs, each along its own run where it is clear: shallow ones first.
   const deepest = () => Math.max(lineY + 24, ...board.boxes.map((b) => b.y + b.h), ...board.runs.filter((r) => r.a[1] > lineY && r.b[1] > lineY).map((r) => Math.max(r.a[1], r.b[1])));
-  function* rowsBelow(xFrom: number, xTo: number, prefer: number): Generator<Pt> {
+  // Rows under everything, a box `w` wide kept inside the width.
+  function* rowsBelow(xFrom: number, xTo: number, prefer: number, w: number): Generator<Pt> {
     const top = deepest() + 6;
-    for (let k = 0; k < 8; k++) yield* along(prefer, xFrom, xTo, top + k * ROW);
+    const lo = Math.max(4, Math.min(xFrom, opts.width - w - 4));
+    const hi = Math.max(lo, Math.min(xTo, opts.width - w - 4));
+    for (let k = 0; k < 8; k++) yield* along(prefer, lo, hi, top + k * ROW);
   }
   const order = [...arcs].sort((p, q) => (p.side === q.side ? 0 : p.side === "over" ? -1 : 1));
   for (const a of order) {
@@ -904,7 +1078,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       board.place(
         { ...box, w, h: LABEL_H },
         (function* () {
-          if (a.side === "under") yield* rowsBelow(Math.max(4, xl - w / 2), Math.min(opts.width - w - 4, xr), mid - w / 2);
+          if (a.side === "under") yield* rowsBelow(xl - w / 2, xr, mid - w / 2, w);
           else yield [Math.max(4, mid - w / 2), y - LABEL_H / 2] as Pt;
         })(),
         [a.id],
@@ -929,7 +1103,7 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
         { id: `drop:${tr.target}:${k}`, kind: "label", text, w, h: LABEL_H },
         (function* () {
           yield* along(g.x - w / 2, g.x - w / 2 - 40, g.x - w / 2 + 40, tr.y + 6, 4);
-          yield* rowsBelow(g.x - w / 2 - 60, g.x - w / 2 + 60, g.x - w / 2);
+          yield* rowsBelow(g.x - w / 2 - 60, g.x - w / 2 + 60, g.x - w / 2, w);
         })(),
         [tr.arc.id, ...g.connectors.map((c) => `drop:${c.id}`)],
       );
@@ -944,19 +1118,21 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
         yield [tr.xe + 8, tr.y + 6] as Pt;
         yield [tr.xl - 8 - w, tr.y - LABEL_H / 2] as Pt;
         yield* along(tr.xe - w, tr.xl, tr.xe - w, tr.y + 6, 8);
-        yield* rowsBelow(tr.xl, Math.min(opts.width - w - 4, tr.xe + 8), tr.xe + 8);
+        yield* rowsBelow(tr.xl, tr.xe + 8, tr.xe + 8, w);
       })(),
       [tr.arc.id],
     );
     tr.arc.labels.push({ x: placed.x, y: placed.y + LABEL_H / 2, text, back: true, align: "start" });
   }
 
-  // Under everything on the line: the chips of main Steps (Connectors into the branch).
-  for (const c of t.chips.filter((c) => at.has(c.stepId) && t.main.includes(c.stepId))) {
+  // Under everything on the line: the chips of main Steps (Connectors into the branch, and exits
+  // whose legs could not be drawn clear).
+  for (const c of [...t.chips.filter((c) => at.has(c.stepId) && t.main.includes(c.stepId)), ...unplaced]) {
     const w = chipW(c.text, measure);
     const x = at.get(c.stepId)!.x;
-    const placed = board.place({ id: `chip:${c.connector.id}`, kind: "chip", text: c.text, w, h: CHIP_H }, rowsBelow(x - w / 2 - 80, x - w / 2 + 80, x - w / 2));
-    chips.push({ stepId: c.stepId, x: placed.x + w / 2, y: placed.y, text: c.text, align: "center", connectorId: c.connector.id });
+    const placed = board.place({ id: `chip:${c.connector.id}`, kind: "chip", text: c.text, w, h: CHIP_H }, rowsBelow(x - w / 2 - 80, x - w / 2 + 80, x - w / 2, w));
+    chips.push({ kind: c.kind, stepId: c.stepId, x: placed.x + w / 2, y: placed.y, text: c.text, align: "center", connectorId: c.connector.id, hint: c.hint });
+    if (c.kind === "exit") routes.set(c.connector.id, chipRoute("exit", { x, y: lineY }, { x: placed.x + w / 2, y: placed.y + CHIP_H / 2 }));
   }
   let bottom = deepest();
 
@@ -1048,23 +1224,23 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
       })(), [a.id]);
       a.labels.push({ x: placed.x + w / 2, y: placed.y + LABEL_H / 2, text: c.name, back: true, connectorId: c.id });
     }
-    // A branch Step's other Connectors in words: left of its row's first Step, else under it.
+    // A branch Step's other Connectors in words, those into or out of another Workflow among them:
+    // left of its row's first Step, else under it.
     stations.forEach((s) => {
       const first = !stations.some((o) => o.row === s.row && o.x < s.x);
-      t.chips
-        .filter((c) => c.stepId === s.id)
-        .forEach((c, m) => {
-          const w = chipW(c.text, measure);
-          const placed = board.place(
-            { id: `chip:${c.connector.id}`, kind: "chip", text: c.text, w, h: CHIP_H },
-            (function* () {
-              if (first) yield [s.x - 14 - w, s.y - 9 + m * 22] as Pt;
-              for (let k = 0; k < 6; k++) yield [s.x + 8, s.y + 10 + (m + k) * 22] as Pt;
-              for (let k = 0; k < 6; k++) yield [s.x - w - 8, s.y + 10 + (m + k) * 22] as Pt;
-            })(),
-          );
-          chips.push({ stepId: s.id, x: placed.x, y: placed.y, text: c.text, align: "left", connectorId: c.connector.id });
-        });
+      chipsAt(t, s.id).forEach((c, m) => {
+        const w = chipW(c.text, measure);
+        const placed = board.place(
+          { id: `chip:${c.connector.id}`, kind: "chip", text: c.text, w, h: CHIP_H },
+          (function* () {
+            if (first) yield [s.x - 14 - w, s.y - 9 + m * 22] as Pt;
+            for (let k = 0; k < 6; k++) yield [s.x + 8, s.y + 10 + (m + k) * 22] as Pt;
+            for (let k = 0; k < 6; k++) yield [s.x - w - 8, s.y + 10 + (m + k) * 22] as Pt;
+          })(),
+        );
+        chips.push({ kind: c.kind, stepId: s.id, x: placed.x, y: placed.y, text: c.text, align: "left", connectorId: c.connector.id, hint: c.hint });
+        if (c.kind !== "chip") routes.set(c.connector.id, chipRoute(c.kind, s, { x: placed.x + w / 2, y: placed.y + CHIP_H / 2 }));
+      });
     });
     const leftmost = Math.min(...stations.map((s) => s.x));
     const titleText = opts.branchLabel ?? AFTER_BRANCH;
@@ -1091,12 +1267,105 @@ export function horizontal(t: LineTopology, opts: HorizontalOptions): Horizontal
     const c = l.connectorId ? t.connectors.get(l.connectorId) : undefined;
     if (c) l.hint = outcomeHint(c, name);
   }
-  for (const c of chips) {
-    const k = c.connectorId ? t.connectors.get(c.connectorId) : undefined;
-    if (!c.hint && k) c.hint = outcomeHint(k, name);
-  }
 
-  return { width: opts.width, height: Math.ceil(bottom + 8), density, at, lineY, headY, columnY, heads, main, segmentLabels, arcs, branch, chips, entry, routes, polylines, hints, boxes: board.boxes, clashes: board.clashes, fits };
+  return { width: opts.width, height: Math.ceil(bottom + 8), density, at, lineY, headY, columnY, heads, main, segmentLabels, arcs, branch, chips, exits, entry, routes, polylines, hints, boxes: board.boxes, clashes: board.clashes, fits };
+}
+
+/**
+ * The way a token goes by a chip, square-cornered: an exit down (or up) from its Step's station
+ * to the chip's row, then along it into the chip; an entry out of the chip along its row, then
+ * into the station.
+ */
+function chipRoute(kind: "exit" | "entry", station: { x: number; y: number }, chip: { x: number; y: number }): string {
+  return kind === "exit" ? `M${station.x} ${station.y} V${chip.y} H${chip.x}` : `M${chip.x} ${chip.y} H${station.x} V${station.y}`;
+}
+
+type Drawing = {
+  board: Board;
+  routes: Map<string, string>;
+};
+
+/**
+ * The marks over the heads of the main Steps Tasks reach from another Workflow, where the entry
+ * arrow does not lead in: "from Triage · bug ↓", stacked over the start's where both stand at one
+ * Step. Each entry's route comes down from its mark into the station.
+ */
+function placeArrivals(
+  t: LineTopology,
+  d: Drawing & { choices: HeadChoice[]; heads: Head[]; xs: number[]; lineY: number; arriving: ReadonlySet<string>; name: (id: string | null) => string },
+): NonNullable<NonNullable<Horizontal["entry"]>["arrivals"]> {
+  const out: NonNullable<NonNullable<Horizontal["entry"]>["arrivals"]> = [];
+  const at = byStep(t.entries.filter((e) => !d.arriving.has(e.connector.id)));
+  d.choices.forEach((c, i) => {
+    let top = d.heads[i].top;
+    for (const m of c.marks) {
+      top -= m.h + 4;
+      if (m.kind !== "entry") continue;
+      const x = d.xs[i];
+      const id = t.main[i];
+      const left = m.side === "right" ? x + MARK_TIP - m.w : x - MARK_TIP;
+      const here = at.get(id) ?? [];
+      d.board.fix({ id: `arrival:${id}`, kind: "mark", text: here.map((e) => e.text).join(" "), x: left, y: top, w: m.w, h: m.h });
+      out.push({ stepId: id, x, left, top, y: top + m.h / 2, arrow: m.side, lines: m.lines, hint: outcomesHint(here.map((e) => e.connector), d.name), connectorIds: here.map((e) => e.connector.id) });
+      for (const e of here) d.routes.set(e.connector.id, `M${x} ${top + m.h} V${d.lineY}`);
+    }
+  });
+  return out;
+}
+
+/**
+ * A main Step's exits into other Workflows: chips one under another, each at the end of a short
+ * leg down from the Step, where the legs cross no line and the chips meet nothing and stay inside
+ * the width. A Step whose exits cannot all stand so has them all returned, to go under everything
+ * as any Connector the line cannot route.
+ */
+function placeExits(
+  t: LineTopology,
+  d: Drawing & {
+    at: ReadonlyMap<string, { x: number; y: number }>;
+    lineY: number;
+    width: number;
+    measure: Measure;
+    hints: Map<string, string>;
+    polylines: Polyline[];
+    chips: Horizontal["chips"];
+    exits: ExitLeg[];
+  },
+): Crossing[] {
+  const unplaced: Crossing[] = [];
+  const { board, lineY } = d;
+  const out = byStep(t.exits);
+  for (const id of t.main) {
+    const list = out.get(id);
+    if (!list) continue;
+    const x = d.at.get(id)!.x;
+    const comb = list.map((e, k) => {
+      const cy = lineY + EXIT_TOP + k * (CHIP_H + 6);
+      const leg: Point[] = [[x, lineY + STATION_R], [x, cy], [x + EXIT_TICK, cy]];
+      const w = chipW(e.text, d.measure);
+      return { e, cy, leg, box: { id: `chip:${e.connector.id}`, kind: "chip" as const, text: e.text, x: x + EXIT_TICK, y: cy - CHIP_H / 2, w, h: CHIP_H } };
+    });
+    // A leg checked from just below its station, so a line standing there (a drop) still counts.
+    const legClear = (leg: Point[]) => {
+      const own: Seg[] = [[[leg[0][0], leg[0][1] + 1], leg[1]], [leg[1], leg[2]]];
+      return own.every((g) => board.runs.every((r) => !meet(g, [r.a, r.b])) && [...board.boxes, ...board.obstacles.map((o) => o.box)].every((b) => !cuts({ a: g[0], b: g[1] }, b)));
+    };
+    if (!comb.every((c) => board.clear(c.box) && c.box.x + c.box.w <= d.width && legClear(c.leg))) {
+      unplaced.push(...list);
+      continue;
+    }
+    for (const c of comb) {
+      const pid = `exit:${c.e.connector.id}`;
+      board.addRuns(runsOf(pid, c.leg));
+      board.fix(c.box, [pid]);
+      d.polylines.push({ id: pid, points: c.leg });
+      d.exits.push({ connectorId: c.e.connector.id, stepId: id, points: c.leg });
+      d.hints.set(pid, c.e.hint);
+      d.routes.set(c.e.connector.id, chipRoute("exit", { x, y: lineY }, { x: c.box.x + c.box.w / 2, y: c.cy }));
+      d.chips.push({ kind: "exit", stepId: id, x: c.box.x, y: c.box.y, text: c.e.text, align: "left", connectorId: c.e.connector.id, hint: c.e.hint });
+    }
+  }
+  return unplaced;
 }
 
 /** A route between two stations with no Connector between them (a move by hand): straight. */
@@ -1104,6 +1373,12 @@ export function handRoute(h: Horizontal, from: string, to: string): string | und
   const [a, b] = [h.at.get(from), h.at.get(to)];
   if (!a || !b) return undefined;
   return `M${a.x} ${a.y} L${b.x} ${b.y}`;
+}
+
+/** A Task moved by hand off the line, into a Step it does not draw (another Workflow's): down from its station, as an exit's leg runs. */
+export function leaveRoute(h: Horizontal, from: string): string | undefined {
+  const a = h.at.get(from);
+  return a && `M${a.x} ${a.y} V${a.y + EXIT_TOP}`;
 }
 
 /** Corners rounded: the SVG path of a polyline. */

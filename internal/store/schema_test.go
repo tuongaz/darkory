@@ -46,6 +46,35 @@ func TestSchemaIsTheSameOnBothEngines(t *testing.T) {
 	}
 }
 
+// The parity above compares each foreign key with its delete rule; this pins the one rule that is
+// not NO ACTION: an ended Task's last Step, deleted with no move for it, leaves last_step_id null.
+func TestTheLastStepIsSetNullWhenItsStepGoes(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, s *store.Store) {
+		ctx := t.Context()
+		for _, q := range []string{
+			`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`,
+			`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`,
+			`INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ('p', 'o', 'WEB', 'Web', 0)`,
+			`INSERT INTO workflows (id, org_id, project_id, name, position, created_at) VALUES ('wf', 'o', 'p', 'Work', 1, 0)`,
+			`INSERT INTO steps (id, org_id, project_id, workflow_id, name, position, x, y, created_at) VALUES ('st', 'o', 'p', 'wf', 'Build', 1, 0, 0, 0)`,
+			`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, last_step_id, owner_id, waiting_since, created_at, ended_at)
+VALUES ('t', 'o', 'p', 'WEB-1', 'work', 'T', 'done', 'st', 'm', 0, 0, 0)`,
+			`DELETE FROM steps WHERE org_id = 'o' AND id = 'st'`,
+		} {
+			if err := s.WriteBatchNoSeq(ctx, store.Stmt{SQL: q}); err != nil {
+				t.Fatalf("%s: %v", q, err)
+			}
+		}
+		var last *string
+		if err := s.QueryRow(ctx, `SELECT last_step_id FROM tasks WHERE org_id = 'o' AND id = 't'`).Scan(&last); err != nil {
+			t.Fatal(err)
+		}
+		if last != nil {
+			t.Fatalf("the ended Task's last Step is %s after its Step was deleted, want null", *last)
+		}
+	})
+}
+
 // Every query filters by org_id (plan invariant 5), so every table carries it. The exceptions
 // hold no Organisation's data: organisations itself and the migration record.
 func TestEveryTableCarriesOrgID(t *testing.T) {
@@ -203,7 +232,7 @@ func describeSQLite(ctx context.Context, s *store.Store) (schema, error) {
 			tb.Indexes[i.name] = indexKind(i.unique, i.partial, cols)
 		}
 
-		fks, err := strings1(ctx, s, `SELECT "from" || ' → ' || "table" || '.' || "to" FROM pragma_foreign_key_list($1)`, name)
+		fks, err := strings1(ctx, s, `SELECT "from" || ' → ' || "table" || '.' || "to" || ' on delete ' || on_delete FROM pragma_foreign_key_list($1)`, name)
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +298,9 @@ func describePostgres(ctx context.Context, s *store.Store) (schema, error) {
 		}
 		rows.Close()
 
-		fks, err := strings1(ctx, s, `SELECT a.attname || ' → ' || ft.relname || '.' || fa.attname
+		fks, err := strings1(ctx, s, `SELECT a.attname || ' → ' || ft.relname || '.' || fa.attname || ' on delete ' ||
+				CASE k.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT' WHEN 'c' THEN 'CASCADE'
+					WHEN 'n' THEN 'SET NULL' WHEN 'd' THEN 'SET DEFAULT' ELSE 'unknown ' || k.confdeltype::text END
 			FROM pg_constraint k
 			JOIN pg_class ft ON ft.oid = k.confrelid
 			JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = k.conkey[1]

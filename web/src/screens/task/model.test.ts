@@ -13,7 +13,7 @@ const inWeb = new Set(["p-web"]);
 
 describe("the graph's binding", () => {
   it("lays the Workflow's Steps as columns, with their Skills", () => {
-    const cols = graphSteps(workflow().steps, new Map(skills.map((s) => [s.id, s])));
+    const cols = graphSteps(workflow(), new Map(skills.map((s) => [s.id, s])));
     expect(cols.map((c) => [c.name, c.skill?.name])).toEqual([
       ["Backlog", undefined],
       ["Plan", "breakdown"],

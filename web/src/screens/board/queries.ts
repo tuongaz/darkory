@@ -35,6 +35,9 @@ export function useMoveTask(project: string) {
     },
     onSuccess: (moved) => {
       qc.setQueryData<Task[]>(key, (old) => old?.map((t) => (t.id === moved.id ? moved : t)));
+      // Others may be listed elsewhere now (a question aimed at a Member reads its Workflow off the
+      // Task it blocks): read the list again rather than wait for the Activity entry.
+      void qc.invalidateQueries({ queryKey: key });
     },
   });
 }

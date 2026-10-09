@@ -19,11 +19,15 @@ const mai = { id: "m-mai", name: "Mai Tran", kind: "human" } as const;
 
 const skill = (name: string) => ({ id: `k-${name}`, name });
 
+/** The sample's one Workflow. */
+const work = { id: "w-work", name: "Work", position: 1 };
+
 const steps: Omit<Step, "x" | "y">[] = [
-  { id: "s-backlog", name: "Backlog", position: 0, takers: [], tasks: 3, working: 0 },
-  { id: "s-plan", name: "Plan", skill: skill("breakdown"), position: 1, takers: [{ ...planner, working: "running" }], tasks: 1, working: 1, medianMs: 25 * 60_000 },
+  { id: "s-backlog", workflow_id: work.id, name: "Backlog", position: 0, takers: [], tasks: 3, working: 0 },
+  { id: "s-plan", workflow_id: work.id, name: "Plan", skill: skill("breakdown"), position: 1, takers: [{ ...planner, working: "running" }], tasks: 1, working: 1, medianMs: 25 * 60_000 },
   {
     id: "s-build",
+    workflow_id: work.id,
     name: "Build",
     skill: skill("engineer"),
     position: 2,
@@ -32,11 +36,11 @@ const steps: Omit<Step, "x" | "y">[] = [
     working: 2,
     medianMs: 3 * 3_600_000,
   },
-  { id: "s-qa", name: "QA", skill: skill("qa"), position: 3, takers: [{ ...qa, working: "waiting" }], tasks: 1, working: 1, medianMs: 50 * 60_000 },
-  { id: "s-review", name: "Review", skill: skill("review"), position: 4, takers: [reviewer], tasks: 2, working: 0, medianMs: 70 * 60_000 },
-  { id: "s-acceptance", name: "Acceptance", skill: skill("acceptance"), position: 5, takers: [{ ...mai, working: "held" }, qa], tasks: 1, working: 1 },
-  { id: "s-retro", name: "Retro", skill: skill("retro"), position: 6, takers: [retro], tasks: 0, working: 0 },
-  { id: "s-skill-review", name: "Skill review", skill: skill("skill-review"), position: 7, takers: [reviewer], tasks: 0, working: 0 },
+  { id: "s-qa", workflow_id: work.id, name: "QA", skill: skill("qa"), position: 3, takers: [{ ...qa, working: "waiting" }], tasks: 1, working: 1, medianMs: 50 * 60_000 },
+  { id: "s-review", workflow_id: work.id, name: "Review", skill: skill("review"), position: 4, takers: [reviewer], tasks: 2, working: 0, medianMs: 70 * 60_000 },
+  { id: "s-acceptance", workflow_id: work.id, name: "Acceptance", skill: skill("acceptance"), position: 5, takers: [{ ...mai, working: "held" }, qa], tasks: 1, working: 1 },
+  { id: "s-retro", workflow_id: work.id, name: "Retro", skill: skill("retro"), position: 6, takers: [retro], tasks: 0, working: 0 },
+  { id: "s-skill-review", workflow_id: work.id, name: "Skill review", skill: skill("skill-review"), position: 7, takers: [reviewer], tasks: 0, working: 0 },
 ];
 
 const connector = (id: string, from: string, to: string | null, name: string, position: number): Connector => ({ id, from, to, name, position });
@@ -58,9 +62,9 @@ const connectors: Connector[] = [
 
 /** Laid out by Tidy up, as a Workflow the server stored after one. */
 function laidOut(w: { steps: Omit<Step, "x" | "y">[]; connectors: Connector[] }): Workflow {
-  const unplaced = { steps: w.steps.map((s) => ({ ...s, x: 0, y: 0 })), connectors: w.connectors };
+  const unplaced = { workflows: [work], steps: w.steps.map((s) => ({ ...s, x: 0, y: 0 })), connectors: w.connectors };
   const at = tidy(unplaced);
-  return { steps: unplaced.steps.map((s) => ({ ...s, ...at[s.id] })), connectors: w.connectors };
+  return { workflows: [work], steps: unplaced.steps.map((s) => ({ ...s, ...at[s.id] })), connectors: w.connectors };
 }
 
 export const sampleWorkflow: Workflow = laidOut({ steps, connectors });
@@ -84,6 +88,7 @@ export const defaultWorkflow: Workflow = (() => {
   const order = ["s-backlog", "s-plan", "s-build", "s-review", "s-retro", "s-skill-review"];
   const kept = new Set(["c-plan-done", "c-review-done", "c-review-build", "c-retro-done", "c-retro-skill-review", "c-skill-review-done", "c-skill-review-retro"]);
   return {
+    workflows: [work],
     steps: order.map((id, i) => {
       const s = steps.find((x) => x.id === id)!;
       const takers = s.takers.filter((t) => t.kind === "agent").map(({ id, name, kind }) => ({ id, name, kind }));

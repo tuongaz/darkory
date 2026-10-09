@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -276,7 +277,8 @@ func TestTheSchemaHoldsItsChecks(t *testing.T) {
 				`INSERT INTO workspaces (id, org_id, name, kind, path, mode, default_branch, created_at) VALUES ('ws', 'o', 'web', 'git', '/src/web', 'plain', 'main', 0)`,
 				`INSERT INTO projects (id, org_id, key_prefix, name, default_workspace_id, created_at) VALUES ('p', 'o', 'WEB', 'Web', 'ws', 0)`,
 				`INSERT INTO skills (id, org_id, name, kind, current_version, created_at) VALUES ('sk', 'o', 'engineer', 'generic', 1, 0)`,
-				`INSERT INTO steps (id, org_id, project_id, name, skill_id, position, x, y, created_at) VALUES ('st', 'o', 'p', 'Build', 'sk', 1, 0, 0, 0)`,
+				`INSERT INTO workflows (id, org_id, project_id, name, position, created_at) VALUES ('wf', 'o', 'p', 'Work', 1, 0)`,
+				`INSERT INTO steps (id, org_id, project_id, workflow_id, name, skill_id, position, x, y, created_at) VALUES ('st', 'o', 'p', 'wf', 'Build', 'sk', 1, 0, 0, 0)`,
 				`INSERT INTO connectors (id, org_id, project_id, from_step_id, to_step_id, name, position, created_at) VALUES ('cn', 'o', 'p', 'st', NULL, 'pass', 1, 0)`,
 				`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, step_id, owner_id, rank, waiting_since, created_at)
 VALUES ('t', 'o', 'p', 'WEB-1', 'work', 'T', 'open', 'st', 'm', 1, 0, 0)`,
@@ -297,7 +299,11 @@ VALUES ('sub', 'o', 'p', 't', 'WEB-2', 'acceptance', 'A', 'open', 'st', 'm', 0, 
 				`UPDATE tasks SET kind = 'feature' WHERE id = 't'`,
 				`UPDATE tasks SET state = 'shipped' WHERE id = 't'`,
 				`UPDATE tasks SET parent_id = 'nope' WHERE id = 'sub'`,
-				`INSERT INTO steps (id, org_id, project_id, name, position, x, y, created_at) VALUES ('st2', 'o', 'p', 'Build', 2, 0, 0, 0)`,
+				`INSERT INTO steps (id, org_id, project_id, workflow_id, name, position, x, y, created_at) VALUES ('st2', 'o', 'p', 'wf', 'Build', 2, 0, 0, 0)`,
+				`INSERT INTO steps (id, org_id, project_id, name, position, x, y, created_at) VALUES ('st3', 'o', 'p', 'Ship', 3, 0, 0, 0)`,
+				`INSERT INTO steps (id, org_id, project_id, workflow_id, name, position, x, y, created_at) VALUES ('st4', 'o', 'p', 'nope', 'Ship', 3, 0, 0, 0)`,
+				`INSERT INTO workflows (id, org_id, project_id, name, position, created_at) VALUES ('wf2', 'o', 'p', 'Work', 2, 0)`,
+				`UPDATE tasks SET last_step_id = 'nope' WHERE id = 't'`,
 				`INSERT INTO connectors (id, org_id, project_id, from_step_id, name, position, created_at) VALUES ('cn2', 'o', 'p', 'st', 'pass', 2, 0)`,
 				`INSERT INTO connectors (id, org_id, project_id, from_step_id, to_step_id, name, position, created_at) VALUES ('cn3', 'o', 'p', 'st', 'nope', 'back', 2, 0)`,
 				`INSERT INTO task_labels (org_id, task_id, label_id) VALUES ('o', 't', 'nope')`,
@@ -382,6 +388,188 @@ func TestMigration0005ColoursTheProjectsInCreationOrder(t *testing.T) {
 			want := map[string][]int{"o1": {0, 6, 3, 9, 1, 2, 4, 5, 7, 8, 10, 11, 0, 6}, "o2": {0, 6}}
 			if fmt.Sprint(got) != fmt.Sprint(want) {
 				t.Fatalf("colours %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+// Migration 0006 gives every Project one Workflow named Work holding all its Steps, and gives an
+// ended Task the Step it ended at, read from the newest task.completed or task.dropped entry of
+// its Activity, when that Step still exists.
+func TestMigration0006NamesTheWorkflowAndKeepsTheLastStep(t *testing.T) {
+	before := fstest.MapFS{}
+	for _, name := range []string{"0001_init.sql", "0002_project_seen.sql", "0003_files.sql", "0004_sessions_by_member.sql", "0005_project_color.sql"} {
+		data, err := os.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = &fstest.MapFile{Data: data}
+	}
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			if _, err := s.MigrateFS(ctx, before, now); err != nil {
+				t.Fatal(err)
+			}
+			err := s.WriteNoSeq(ctx, func(tx store.Tx) error {
+				for _, q := range []string{
+					`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`,
+					`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`,
+					`INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ('p1', 'o', 'ONE', 'One', 10)`,
+					`INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ('p2', 'o', 'TWO', 'Two', 20)`,
+					`INSERT INTO steps (id, org_id, project_id, name, position, x, y, created_at) VALUES ('s1a', 'o', 'p1', 'Build', 1, 0, 0, 0)`,
+					`INSERT INTO steps (id, org_id, project_id, name, position, x, y, created_at) VALUES ('s1b', 'o', 'p1', 'Review', 2, 0, 0, 0)`,
+					`INSERT INTO steps (id, org_id, project_id, name, position, x, y, created_at) VALUES ('s2', 'o', 'p2', 'Build', 1, 0, 0, 0)`,
+					// Open at a Step, with an older ending in its Activity: an open Task keeps none.
+					`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, step_id, owner_id, rank, waiting_since, created_at)
+VALUES ('open', 'o', 'p1', 'ONE-1', 'work', 'Open', 'open', 's1a', 'm', 1, 0, 0)`,
+					// Done: its newest ending left s1b; an older one left s1a.
+					`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, owner_id, rank, waiting_since, created_at, ended_at)
+VALUES ('done', 'o', 'p1', 'ONE-2', 'work', 'Done', 'done', 'm', 2, 0, 0, 5)`,
+					// Dropped from a Step that no longer exists.
+					`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, owner_id, rank, waiting_since, created_at, ended_at)
+VALUES ('ghost', 'o', 'p2', 'TWO-1', 'work', 'Ghost', 'dropped', 'm', 1, 0, 0, 5)`,
+					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 1, 'm', 'task.dropped', 'open', '{"from":"s1b","since":1}', 1)`,
+					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 2, 'm', 'task.completed', 'done', '{"from":"s1a","since":1}', 2)`,
+					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 3, 'm', 'task.completed', 'done', '{"from":"s1b","since":1}', 3)`,
+					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 4, 'm', 'task.dropped', 'ghost', '{"from":"gone","since":1}', 4)`,
+					// A Parent completed by its last Subtask: at no Step, its ending names none.
+					`INSERT INTO tasks (id, org_id, project_id, display_key, kind, title, state, owner_id, rank, waiting_since, created_at, ended_at)
+VALUES ('parent', 'o', 'p2', 'TWO-2', 'work', 'Parent', 'done', 'm', 2, 0, 0, 6)`,
+					`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at) VALUES ('o', 5, 'm', 'task.completed', 'parent', '{"auto_complete":true}', 5)`,
+				} {
+					if _, err := tx.Exec(ctx, q); err != nil {
+						return fmt.Errorf("%s: %w", q, err)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+
+			workflow := map[string]string{} // project → its Workflow
+			rows, err := s.Query(ctx, `SELECT w.id, w.org_id, w.project_id, w.name, w.position, p.created_at
+FROM workflows w JOIN projects p ON p.id = w.project_id ORDER BY w.project_id`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for rows.Next() {
+				var id, org, project, name string
+				var position int
+				var created int64
+				if err := rows.Scan(&id, &org, &project, &name, &position, &created); err != nil {
+					t.Fatal(err)
+				}
+				if org != "o" || name != "Work" || position != 1 {
+					t.Errorf("Project %s's Workflow is org %s, %q at %d; want o, Work at 1", project, org, name, position)
+				}
+				// A UUIDv7 whose time, its first 48 bits, is its own Project's created_at.
+				prefix := fmt.Sprintf("%08x-%04x-7", created>>16, created&0xffff)
+				if !strings.HasPrefix(id, prefix) || !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(id) {
+					t.Errorf("Project %s's Workflow id %q is not a UUIDv7 of its created_at %d (%s…)", project, id, created, prefix)
+				}
+				if workflow[project] != "" {
+					t.Errorf("Project %s has two Workflows", project)
+				}
+				workflow[project] = id
+			}
+			rows.Close()
+			if len(workflow) != 2 || workflow["p1"] == "" || workflow["p2"] == "" || workflow["p1"] == workflow["p2"] {
+				t.Fatalf("Workflows %v, want one each for p1 and p2", workflow)
+			}
+
+			rows, err = s.Query(ctx, `SELECT id, project_id, workflow_id FROM steps ORDER BY id`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			n := 0
+			for rows.Next() {
+				var id, project, wf string
+				if err := rows.Scan(&id, &project, &wf); err != nil {
+					t.Fatal(err)
+				}
+				if wf != workflow[project] {
+					t.Errorf("Step %s is in Workflow %s, want %s", id, wf, workflow[project])
+				}
+				n++
+			}
+			rows.Close()
+			if n != 3 {
+				t.Fatalf("%d Steps after migrating, want 3", n)
+			}
+
+			last := map[string]string{}
+			rows, err = s.Query(ctx, `SELECT id, last_step_id FROM tasks`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for rows.Next() {
+				var id string
+				var step sql.NullString
+				if err := rows.Scan(&id, &step); err != nil {
+					t.Fatal(err)
+				}
+				last[id] = step.String
+			}
+			rows.Close()
+			if want := map[string]string{"open": "", "done": "s1b", "ghost": "", "parent": ""}; fmt.Sprint(last) != fmt.Sprint(want) {
+				t.Fatalf("last_step_id %v, want %v", last, want)
+			}
+
+			index := `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = $1`
+			if e == store.Postgres {
+				index = `SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = $1`
+			}
+			for _, name := range []string{"steps_project_name", "steps_workflow", "workflows_project_name", "tasks_last_step"} {
+				var n int
+				if err := s.QueryRow(ctx, index, name).Scan(&n); err != nil {
+					t.Fatal(err)
+				}
+				if n != 1 {
+					t.Errorf("index %s: %d, want 1", name, n)
+				}
+			}
+		})
+	}
+}
+
+// Migration 0007 keys a Task's Subtasks by its Organisation first, replacing tasks_parent, and
+// SQLite, which keeps no statistics, reads a Parent's open Subtasks through it rather than
+// through tasks_open_step, every open Task of the Organisation.
+func TestMigration0007KeysSubtasksByOrganisation(t *testing.T) {
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.Open(t, e)
+			index := `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = $1`
+			if e == store.Postgres {
+				index = `SELECT COUNT(*) FROM pg_indexes WHERE schemaname = current_schema() AND indexname = $1`
+			}
+			for name, want := range map[string]int{"tasks_org_parent": 1, "tasks_parent": 0} {
+				var n int
+				if err := s.QueryRow(ctx, index, name).Scan(&n); err != nil {
+					t.Fatal(err)
+				}
+				if n != want {
+					t.Errorf("index %s: %d, want %d", name, n, want)
+				}
+			}
+			if e != store.SQLite {
+				return
+			}
+			var id, parent, notused int
+			var plan string
+			if err := s.QueryRow(ctx, `EXPLAIN QUERY PLAN SELECT 1 FROM tasks c WHERE c.org_id = 'o' AND c.parent_id = 'p' AND c.state = 'open'`).
+				Scan(&id, &parent, &notused, &plan); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(plan, "tasks_org_parent (org_id=? AND parent_id=? AND state=?)") {
+				t.Errorf("a Parent's open Subtasks are read by %q", plan)
 			}
 		})
 	}

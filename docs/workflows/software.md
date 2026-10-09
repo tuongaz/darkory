@@ -36,6 +36,8 @@ These are the practices that change outcomes, with their sources. Only the rules
 
 ## The Workflow
 
+The preset's Workflow is named Software. A Project on it has this one Workflow, so its name shows nowhere until a second is added.
+
 ```
 Backlog (hold)
 Triage (triage) ── no design needed ──────────────────────────────────────────► Build
@@ -114,6 +116,7 @@ The Workflow fits Darkory's rules as they are. Where the research asks for somet
 - **Labels carry risk, but rules never read them.** `security` and `infra` steer the agents' choice of outcome, and Darkory's rules ignore them, by design.
 - **Review Steps run one after another: a known limit.** Code review, Security review and QA cannot run in parallel on one Task; each waits for the one before it. Decided 2026-10-09: keep them sequential rather than give a Step several Skills.
 - **A question has no branch.** A Task aimed at a Member gets no checkout and merges nothing: its answer lives in Notes. In the first proof run, an answer committed on a question's branch merged past every review; the Runner now prepares no Workspace for one.
+- **Other flows are Workflows of their own.** Support, Bugs or Prototypes would each be a Workflow of its own in the same Project, with its own board and canvas, rather than more Steps in Software or another Project (ADR 0019). Triage routes by outcome: a Connector out of Triage such as `bug → Bugs › Investigate` leads into the other Workflow's Step, so the Task crosses in one advance and stays one Task with one history.
 - **Self-review is by Skill.** Someone who built a Task under `devops` could release it under `devops` again. So infrastructure is built by the builder (`engineer`) and released by DevOps, never both by one agent.
 
 ## Applying it to an Install
@@ -133,7 +136,7 @@ PROJECT=WEB PROJECT_NAME="Web" REPO=/path/to/repo MODE=plain \
 
 It creates the Skills, the Project with `acceptance` and `auto_complete` on, the Workspace (plain or `pull_request`), the Labels `security` and `infra`, and the agents. Each agent is a Member of the Project with its Skills and Reporting line, runs Claude Code on its model, unattended, and gets a token written to `$DATA/agents` that is never printed. Last, it sets the Workflow.
 
-Running it again keeps everything that is already there. Steps keep their ids by name, so Tasks in flight stay put. Open Tasks at a Step the preset no longer has move to Backlog. A Skill that already exists is not rewritten: change a Skill through a Retrospective's proposal, or `skill create` a new one.
+Running it again keeps everything that is already there, other Workflows included. The preset owns one Workflow, Software, and leaves every other Workflow of the Project as it is: its Steps, its Tasks and its Connectors, and a Connector out of a Software Step into one of them, such as `bug → Bugs › Investigate`. Software keeps the id of the Workflow it becomes: the Project's only one, renamed Software if it was named otherwise (a Project made before Workflows were named has one called Work); else the one named Software; else the one holding Backlog or Triage. So a re-run never deletes and remakes it, and Software is listed first. Its Steps keep their ids by name, so Tasks in flight stay put. Open Tasks at a Step the preset no longer has move to Backlog. A Skill that already exists is not rewritten: change a Skill through a Retrospective's proposal, or `skill create` a new one.
 
 Restart `darkory serve` (or start `darkory runner`) once the tokens exist, so the Runner starts the agents. File work with `darkory file --project WEB --title …`, which starts at Triage, or add `--breakdown` for a Parent, which starts at Plan.
 

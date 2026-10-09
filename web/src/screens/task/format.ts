@@ -1,4 +1,6 @@
+import type { Connector, Workflow, WorkflowStep } from "@/api/client";
 import { useDirectory } from "@/api/queries";
+import { stepTitle } from "@/components/workflowLine/model";
 
 /** A Member's name for a sentence, by id. */
 export function useMemberName(): (id: string | undefined) => string {
@@ -34,4 +36,18 @@ export function dayText(at: string, now: number): string {
 /** The Project line narrowed to one Task: `/projects/:key/workflow?scope=<id>`. */
 export function workflowScopePath(project: { key: string }, taskId: string): string {
   return `/projects/${project.key}/workflow?scope=${encodeURIComponent(taskId)}`;
+}
+
+/**
+ * Where a Connector out of the Step `from` leads, as Advance names it: Done; a Step of the same
+ * Workflow by its name; another Workflow's as `Bugs › Investigate`.
+ */
+export function advanceTarget(
+  connector: Pick<Connector, "to_step_id">,
+  graph: { workflows: readonly Pick<Workflow, "id" | "name">[]; steps: readonly Pick<WorkflowStep, "id" | "name" | "workflow_id">[]; from?: string },
+): string {
+  if (!connector.to_step_id) return "Done";
+  const to = graph.steps.find((s) => s.id === connector.to_step_id);
+  if (!to) return "its next Step";
+  return stepTitle(to, graph.workflows, graph.steps.find((s) => s.id === graph.from)?.workflow_id ?? to.workflow_id);
 }

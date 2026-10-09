@@ -89,18 +89,24 @@ func skillDetailOut(d core.SkillDetail) gen.SkillDetail {
 }
 
 func stepOut(s core.Step) gen.Step {
-	return gen.Step{ID: shortid.Of(s.ID), Name: s.Name, SkillID: shortid.OfPtr(s.SkillID), Position: s.Position, X: s.X, Y: s.Y}
+	return gen.Step{ID: shortid.Of(s.ID), WorkflowID: shortid.Of(s.WorkflowID), Name: s.Name, SkillID: shortid.OfPtr(s.SkillID), Position: s.Position, X: s.X, Y: s.Y}
 }
 
 func connectorOut(k core.Connector) gen.Connector {
 	return gen.Connector{ID: shortid.Of(k.ID), FromStepID: shortid.Of(k.FromStepID), ToStepID: shortid.OfPtr(k.ToStepID), Name: k.Name, Position: k.Position}
 }
 
-// workflowOut renders a Workflow with each Step's live facts; facts are in the order of the Steps.
-func workflowOut(d core.WorkflowDetail) gen.Workflow {
-	out := gen.Workflow{ProjectID: shortid.Of(d.ProjectID), Steps: make([]gen.WorkflowStep, 0, len(d.Steps)), Connectors: each(d.Connectors, connectorOut)}
+func workflowRowOut(wf core.Workflow) gen.Workflow {
+	return gen.Workflow{ID: shortid.Of(wf.ID), Name: wf.Name, Position: wf.Position}
+}
+
+// workflowOut renders a Project's Workflows with each Step's live facts; facts are in the order of
+// the Steps.
+func workflowOut(d core.WorkflowsDetail) gen.Workflows {
+	out := gen.Workflows{ProjectID: shortid.Of(d.ProjectID), Workflows: each(d.Workflows.Workflows, workflowRowOut),
+		Steps: make([]gen.WorkflowStep, 0, len(d.Steps)), Connectors: each(d.Connectors, connectorOut)}
 	for i, s := range d.Steps {
-		ws := gen.WorkflowStep{ID: shortid.Of(s.ID), Name: s.Name, SkillID: shortid.OfPtr(s.SkillID), Position: s.Position, X: s.X, Y: s.Y, Takers: []gen.Taker{}}
+		ws := gen.WorkflowStep{ID: shortid.Of(s.ID), WorkflowID: shortid.Of(s.WorkflowID), Name: s.Name, SkillID: shortid.OfPtr(s.SkillID), Position: s.Position, X: s.X, Y: s.Y, Takers: []gen.Taker{}}
 		if i < len(d.Facts) {
 			f := d.Facts[i]
 			ws.Tasks, ws.Working, ws.MedianMs = f.Tasks, f.Working, f.MedianMS
@@ -135,7 +141,8 @@ func taskBriefOut(b core.TaskBrief) gen.TaskBrief {
 func taskOut(t core.Task) gen.Task {
 	out := gen.Task{ID: shortid.Of(t.ID), Key: t.Key, ProjectID: shortid.Of(t.ProjectID), ParentID: shortid.OfPtr(t.ParentID), Kind: gen.TaskKind(t.Kind), Title: t.Title,
 		Description: t.Description, State: gen.TaskState(t.State), OwnerID: shortid.Of(t.OwnerID), Rank: t.Rank, StepID: shortid.OfPtr(t.StepID),
-		StepSince: t.StepSince, SkillID: shortid.OfPtr(t.SkillID), AimedAtID: shortid.OfPtr(t.AimedAtID), Labels: some(shortid.OfAll(t.Labels)), Breakdown: t.Breakdown,
+		LastStepID: shortid.OfPtr(t.LastStepID), WorkflowID: shortid.OfPtr(t.WorkflowID), StepSince: t.StepSince, SkillID: shortid.OfPtr(t.SkillID),
+		AimedAtID: shortid.OfPtr(t.AimedAtID), Labels: some(shortid.OfAll(t.Labels)), Breakdown: t.Breakdown,
 		AutoComplete: t.AutoComplete, Acceptance: t.Acceptance, FromRetrospectiveTaskID: shortid.OfPtr(t.FromRetrospectiveTaskID), Blocked: t.Blocked,
 		WorkspaceIds: some(shortid.OfAll(t.WorkspaceIDs)), FiledBy: shortid.OfPtr(t.FiledBy), WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
 	if t.Claim != nil {

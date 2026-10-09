@@ -1,0 +1,711 @@
+{
+  "main": [
+    "backlog",
+    "triage",
+    "plan",
+    "design",
+    "build",
+    "creview",
+    "qa",
+    "sec",
+    "docs",
+    "acc",
+    "release",
+    "retro",
+    "done"
+  ],
+  "start": "triage",
+  "holds": [],
+  "connectors": [
+    [
+      "acc:fail",
+      {
+        "id": "acc:fail",
+        "from": "acc",
+        "to": "build",
+        "name": "fail",
+        "position": 2
+      }
+    ],
+    [
+      "acc:pass",
+      {
+        "id": "acc:pass",
+        "from": "acc",
+        "to": "release",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "backlog:pass",
+      {
+        "id": "backlog:pass",
+        "from": "backlog",
+        "to": "triage",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "build:pass",
+      {
+        "id": "build:pass",
+        "from": "build",
+        "to": "creview",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "creview:needs changes",
+      {
+        "id": "creview:needs changes",
+        "from": "creview",
+        "to": "build",
+        "name": "needs changes",
+        "position": 2
+      }
+    ],
+    [
+      "creview:pass",
+      {
+        "id": "creview:pass",
+        "from": "creview",
+        "to": "qa",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "design:pass",
+      {
+        "id": "design:pass",
+        "from": "design",
+        "to": "build",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "design:rework",
+      {
+        "id": "design:rework",
+        "from": "design",
+        "to": "plan",
+        "name": "rework",
+        "position": 2
+      }
+    ],
+    [
+      "docs:needs changes",
+      {
+        "id": "docs:needs changes",
+        "from": "docs",
+        "to": "build",
+        "name": "needs changes",
+        "position": 2
+      }
+    ],
+    [
+      "docs:pass",
+      {
+        "id": "docs:pass",
+        "from": "docs",
+        "to": "acc",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "plan:no design needed",
+      {
+        "id": "plan:no design needed",
+        "from": "plan",
+        "to": "build",
+        "name": "no design needed",
+        "position": 2
+      }
+    ],
+    [
+      "plan:pass",
+      {
+        "id": "plan:pass",
+        "from": "plan",
+        "to": "design",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "qa:fail",
+      {
+        "id": "qa:fail",
+        "from": "qa",
+        "to": "build",
+        "name": "fail",
+        "position": 2
+      }
+    ],
+    [
+      "qa:pass",
+      {
+        "id": "qa:pass",
+        "from": "qa",
+        "to": "sec",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "release:pass",
+      {
+        "id": "release:pass",
+        "from": "release",
+        "to": "retro",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "release:rollback",
+      {
+        "id": "release:rollback",
+        "from": "release",
+        "to": "qa",
+        "name": "rollback",
+        "position": 2
+      }
+    ],
+    [
+      "retro:pass",
+      {
+        "id": "retro:pass",
+        "from": "retro",
+        "to": null,
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "sec:fail",
+      {
+        "id": "sec:fail",
+        "from": "sec",
+        "to": "build",
+        "name": "fail",
+        "position": 2
+      }
+    ],
+    [
+      "sec:pass",
+      {
+        "id": "sec:pass",
+        "from": "sec",
+        "to": "docs",
+        "name": "pass",
+        "position": 1
+      }
+    ],
+    [
+      "triage:pass",
+      {
+        "id": "triage:pass",
+        "from": "triage",
+        "to": "plan",
+        "name": "pass",
+        "position": 1
+      }
+    ]
+  ],
+  "steps": [
+    [
+      "acc",
+      {
+        "id": "acc",
+        "workflow_id": "work",
+        "name": "Acceptance",
+        "position": 10,
+        "skill": {
+          "name": "acceptance"
+        }
+      }
+    ],
+    [
+      "backlog",
+      {
+        "id": "backlog",
+        "workflow_id": "work",
+        "name": "Backlog",
+        "position": 1
+      }
+    ],
+    [
+      "build",
+      {
+        "id": "build",
+        "workflow_id": "work",
+        "name": "Build",
+        "position": 5,
+        "skill": {
+          "name": "engineer"
+        }
+      }
+    ],
+    [
+      "creview",
+      {
+        "id": "creview",
+        "workflow_id": "work",
+        "name": "Code review",
+        "position": 6,
+        "skill": {
+          "name": "review"
+        }
+      }
+    ],
+    [
+      "design",
+      {
+        "id": "design",
+        "workflow_id": "work",
+        "name": "Design",
+        "position": 4,
+        "skill": {
+          "name": "design"
+        }
+      }
+    ],
+    [
+      "docs",
+      {
+        "id": "docs",
+        "workflow_id": "work",
+        "name": "Docs",
+        "position": 9,
+        "skill": {
+          "name": "docs"
+        }
+      }
+    ],
+    [
+      "plan",
+      {
+        "id": "plan",
+        "workflow_id": "work",
+        "name": "Plan",
+        "position": 3,
+        "skill": {
+          "name": "breakdown"
+        }
+      }
+    ],
+    [
+      "qa",
+      {
+        "id": "qa",
+        "workflow_id": "work",
+        "name": "QA",
+        "position": 7,
+        "skill": {
+          "name": "qa"
+        }
+      }
+    ],
+    [
+      "release",
+      {
+        "id": "release",
+        "workflow_id": "work",
+        "name": "Release",
+        "position": 11,
+        "skill": {
+          "name": "release"
+        }
+      }
+    ],
+    [
+      "retro",
+      {
+        "id": "retro",
+        "workflow_id": "work",
+        "name": "Retro",
+        "position": 12,
+        "skill": {
+          "name": "retro"
+        }
+      }
+    ],
+    [
+      "sec",
+      {
+        "id": "sec",
+        "workflow_id": "work",
+        "name": "Security review",
+        "position": 8,
+        "skill": {
+          "name": "security"
+        }
+      }
+    ],
+    [
+      "triage",
+      {
+        "id": "triage",
+        "workflow_id": "work",
+        "name": "Triage",
+        "position": 2,
+        "skill": {
+          "name": "triage"
+        }
+      }
+    ]
+  ],
+  "segments": [
+    {
+      "lo": 0,
+      "from": "backlog",
+      "to": "triage",
+      "connector": {
+        "id": "backlog:pass",
+        "from": "backlog",
+        "to": "triage",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 1,
+      "from": "triage",
+      "to": "plan",
+      "connector": {
+        "id": "triage:pass",
+        "from": "triage",
+        "to": "plan",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 2,
+      "from": "plan",
+      "to": "design",
+      "connector": {
+        "id": "plan:pass",
+        "from": "plan",
+        "to": "design",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 3,
+      "from": "design",
+      "to": "build",
+      "connector": {
+        "id": "design:pass",
+        "from": "design",
+        "to": "build",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 4,
+      "from": "build",
+      "to": "creview",
+      "connector": {
+        "id": "build:pass",
+        "from": "build",
+        "to": "creview",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 5,
+      "from": "creview",
+      "to": "qa",
+      "connector": {
+        "id": "creview:pass",
+        "from": "creview",
+        "to": "qa",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 6,
+      "from": "qa",
+      "to": "sec",
+      "connector": {
+        "id": "qa:pass",
+        "from": "qa",
+        "to": "sec",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 7,
+      "from": "sec",
+      "to": "docs",
+      "connector": {
+        "id": "sec:pass",
+        "from": "sec",
+        "to": "docs",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 8,
+      "from": "docs",
+      "to": "acc",
+      "connector": {
+        "id": "docs:pass",
+        "from": "docs",
+        "to": "acc",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 9,
+      "from": "acc",
+      "to": "release",
+      "connector": {
+        "id": "acc:pass",
+        "from": "acc",
+        "to": "release",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 10,
+      "from": "release",
+      "to": "retro",
+      "connector": {
+        "id": "release:pass",
+        "from": "release",
+        "to": "retro",
+        "name": "pass",
+        "position": 1
+      }
+    },
+    {
+      "lo": 11,
+      "from": "retro",
+      "to": "done",
+      "connector": {
+        "id": "retro:pass",
+        "from": "retro",
+        "to": null,
+        "name": "pass",
+        "position": 1
+      }
+    }
+  ],
+  "under": [
+    {
+      "kind": "track",
+      "target": "build",
+      "lo": 4,
+      "hi": 9,
+      "depth": 1,
+      "legLo": 0,
+      "drops": [
+        {
+          "connector": {
+            "id": "creview:needs changes",
+            "from": "creview",
+            "to": "build",
+            "name": "needs changes",
+            "position": 2
+          },
+          "at": 5
+        },
+        {
+          "connector": {
+            "id": "qa:fail",
+            "from": "qa",
+            "to": "build",
+            "name": "fail",
+            "position": 2
+          },
+          "at": 6
+        },
+        {
+          "connector": {
+            "id": "sec:fail",
+            "from": "sec",
+            "to": "build",
+            "name": "fail",
+            "position": 2
+          },
+          "at": 7
+        },
+        {
+          "connector": {
+            "id": "docs:needs changes",
+            "from": "docs",
+            "to": "build",
+            "name": "needs changes",
+            "position": 2
+          },
+          "at": 8
+        },
+        {
+          "connector": {
+            "id": "acc:fail",
+            "from": "acc",
+            "to": "build",
+            "name": "fail",
+            "position": 2
+          },
+          "at": 9
+        }
+      ]
+    },
+    {
+      "kind": "arc",
+      "connector": {
+        "id": "design:rework",
+        "from": "design",
+        "to": "plan",
+        "name": "rework",
+        "position": 2
+      },
+      "side": "under",
+      "back": true,
+      "lo": 2,
+      "hi": 3,
+      "depth": 1,
+      "legLo": 0,
+      "legHi": 0
+    }
+  ],
+  "over": [
+    {
+      "kind": "arc",
+      "connector": {
+        "id": "plan:no design needed",
+        "from": "plan",
+        "to": "build",
+        "name": "no design needed",
+        "position": 2
+      },
+      "side": "over",
+      "back": false,
+      "lo": 2,
+      "hi": 4,
+      "depth": 1,
+      "legLo": 0,
+      "legHi": 0
+    },
+    {
+      "kind": "arc",
+      "connector": {
+        "id": "release:rollback",
+        "from": "release",
+        "to": "qa",
+        "name": "rollback",
+        "position": 2
+      },
+      "side": "over",
+      "back": true,
+      "lo": 6,
+      "hi": 10,
+      "depth": 1,
+      "legLo": 0,
+      "legHi": 0
+    }
+  ],
+  "rows": [],
+  "chips": [],
+  "exits": [],
+  "entries": [],
+  "others": [],
+  "loops": [
+    {
+      "connector": {
+        "id": "design:rework",
+        "from": "design",
+        "to": "plan",
+        "name": "rework",
+        "position": 2
+      },
+      "from": "Design",
+      "to": "Plan"
+    },
+    {
+      "connector": {
+        "id": "creview:needs changes",
+        "from": "creview",
+        "to": "build",
+        "name": "needs changes",
+        "position": 2
+      },
+      "from": "Code review",
+      "to": "Build"
+    },
+    {
+      "connector": {
+        "id": "qa:fail",
+        "from": "qa",
+        "to": "build",
+        "name": "fail",
+        "position": 2
+      },
+      "from": "QA",
+      "to": "Build"
+    },
+    {
+      "connector": {
+        "id": "sec:fail",
+        "from": "sec",
+        "to": "build",
+        "name": "fail",
+        "position": 2
+      },
+      "from": "Security review",
+      "to": "Build"
+    },
+    {
+      "connector": {
+        "id": "docs:needs changes",
+        "from": "docs",
+        "to": "build",
+        "name": "needs changes",
+        "position": 2
+      },
+      "from": "Docs",
+      "to": "Build"
+    },
+    {
+      "connector": {
+        "id": "acc:fail",
+        "from": "acc",
+        "to": "build",
+        "name": "fail",
+        "position": 2
+      },
+      "from": "Acceptance",
+      "to": "Build"
+    },
+    {
+      "connector": {
+        "id": "release:rollback",
+        "from": "release",
+        "to": "qa",
+        "name": "rollback",
+        "position": 2
+      },
+      "from": "Release",
+      "to": "QA"
+    }
+  ],
+  "maxUnder": 1,
+  "maxOver": 1
+}

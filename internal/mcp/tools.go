@@ -49,7 +49,7 @@ type advanceIn struct {
 
 type moveIn struct {
 	Task string `json:"task" jsonschema:"the Task's display key or id"`
-	Step string `json:"step" jsonschema:"the Step of its Project's Workflow to move it to, by name or id; workflow lists them"`
+	Step string `json:"step" jsonschema:"the Step to move it to, in any of its Project's Workflows, by name or id; workflow lists them"`
 	Note string `json:"note,omitempty" jsonschema:"why it moves, added as a Note before the move"`
 }
 
@@ -108,22 +108,25 @@ type done struct {
 }
 
 type listTasksIn struct {
-	Project string   `json:"project,omitempty" jsonschema:"only this Project's Tasks, by key such as WEB"`
-	Parent  string   `json:"parent,omitempty" jsonschema:"only this Parent's Subtasks"`
-	State   string   `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
-	Step    string   `json:"step,omitempty" jsonschema:"only Tasks at this Step: its id, or its name with project"`
-	AimedAt string   `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
-	Holder  string   `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
-	Mine    bool     `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
-	Filter  []string `json:"filter,omitempty" jsonschema:"only Tasks matching every one of these field:op:values tokens, such as holder:is:none, skill:is:<id>, top:is:true or filed_at:last:7d; references are ids, each value percent-encoded"`
-	Limit   int      `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
-	Cursor  string   `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
+	Project  string   `json:"project,omitempty" jsonschema:"only this Project's Tasks, by key such as WEB"`
+	Parent   string   `json:"parent,omitempty" jsonschema:"only this Parent's Subtasks"`
+	State    string   `json:"state,omitempty" jsonschema:"only Tasks in this state: open, done or dropped"`
+	Step     string   `json:"step,omitempty" jsonschema:"only Tasks at this Step: its id, or its name with project"`
+	Workflow string   `json:"workflow,omitempty" jsonschema:"only Tasks listed in this Workflow, as their workflow_id reads (at or ended at its Steps, and the Parents and Tasks aimed at a Member placed in it): its id, or its name with project"`
+	AimedAt  string   `json:"aimed_at,omitempty" jsonschema:"only Tasks aimed at this Member"`
+	Holder   string   `json:"holder,omitempty" jsonschema:"only Tasks this Member holds"`
+	Mine     bool     `json:"mine,omitempty" jsonschema:"only Tasks you hold"`
+	Filter   []string `json:"filter,omitempty" jsonschema:"only Tasks matching every one of these field:op:values tokens, such as holder:is:none, skill:is:<id>, workflow:is:<id>, top:is:true or filed_at:last:7d; references are ids, each value percent-encoded"`
+	Limit    int      `json:"limit,omitempty" jsonschema:"at most this many (default 100)"`
+	Cursor   string   `json:"cursor,omitempty" jsonschema:"the next_cursor of a previous page"`
 }
 
-// stepOut is a Step of a listed Task's Workflow, with the outcomes out of it.
+// stepOut is a Step of a listed Task's Project, with the Workflow it is in and the outcomes out
+// of it.
 type stepOut struct {
 	ID        string   `json:"id"`
 	ProjectID string   `json:"project_id"`
+	Workflow  string   `json:"workflow" jsonschema:"the name of the Workflow the Step is in"`
 	Name      string   `json:"name"`
 	SkillID   *string  `json:"skill_id,omitempty" jsonschema:"the Skill that takes a Task at it; absent on a hold"`
 	Outcomes  []string `json:"outcomes" jsonschema:"the outcomes a holder advances along, in order"`
@@ -134,7 +137,7 @@ type stepOut struct {
 type taskListOut struct {
 	Items      []client.Task      `json:"items"`
 	NextCursor *string            `json:"next_cursor,omitempty" jsonschema:"pass as cursor for the next page; absent on the last"`
-	Steps      []stepOut          `json:"steps" jsonschema:"the Steps of the listed Tasks' Workflows, by Project, in order"`
+	Steps      []stepOut          `json:"steps" jsonschema:"the Steps of the listed Tasks' Projects, by Project, in each Project's order"`
 	Parents    []client.TaskBrief `json:"parents" jsonschema:"the Parents of the listed Subtasks"`
 }
 
@@ -251,7 +254,7 @@ func (s *Server) addTools() {
 			s.keeper.Forget(res.JSON200.ID)
 			return *res.JSON200, nil
 		})
-	tool(s, "move_step", "Move a Task to another Step of its Workflow by hand: out of a hold such as Backlog, or anywhere a person decides. "+
+	tool(s, "move_step", "Move a Task by hand to another Step, a Step of any of its Project's Workflows: out of a hold such as Backlog, or anywhere a person decides. "+
 		"A Task someone holds moves only for its Owner or someone above the holder, and their Claim ends.",
 		func(ctx context.Context, in moveIn) (client.Task, error) {
 			res, err := c.MoveTaskWithResponse(ctx, in.Task, &client.MoveTaskParams{}, client.MoveTaskBody{Step: in.Step, Note: opt(in.Note)})
@@ -366,7 +369,7 @@ func (s *Server) addTools() {
 	tool(s, "list_tasks", "List Tasks by Project and Rank, filtered, with the Steps their step_id names (each with its outcomes) and the Parents their parent_id names.",
 		func(ctx context.Context, in listTasksIn) (taskListOut, error) {
 			params := &client.ListTasksParams{Project: opt(in.Project), Parent: opt(in.Parent), Step: opt(in.Step),
-				AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Cursor: opt(in.Cursor)}
+				Workflow: opt(in.Workflow), AimedAt: opt(in.AimedAt), Holder: opt(in.Holder), Cursor: opt(in.Cursor)}
 			if len(in.Filter) > 0 {
 				params.Filter = &in.Filter
 			}
@@ -410,12 +413,13 @@ func (s *Server) addTools() {
 			}
 			return out, nil
 		}, enum("state", "open", "done", "dropped"))
-	tool(s, "workflow", "Read a Project's Workflow: its Steps in order, the Skill each carries (none on a hold), the Connectors out of each "+
-		"(the outcomes; to_step_id absent means into Done), and what is at each Step now.",
-		func(ctx context.Context, in projectRef) (client.Workflow, error) {
+	tool(s, "workflow", "Read a Project's Workflows: each Workflow's Steps in order, the Connectors out of each Step, and what is happening at each Step now. "+
+		"Each Step names its workflow_id and the Skill it carries (none on a hold); a Connector's outcome may lead into a Step of another "+
+		"Workflow, and to_step_id absent means into Done.",
+		func(ctx context.Context, in projectRef) (client.Workflows, error) {
 			res, err := c.GetWorkflowWithResponse(ctx, in.Project)
 			if err := check(res, err, http.StatusOK); err != nil {
-				return client.Workflow{}, err
+				return client.Workflows{}, err
 			}
 			return *res.JSON200, nil
 		})
@@ -513,11 +517,15 @@ func (s *Server) addTools() {
 		})
 }
 
-// stepsOf lists a Workflow's Steps with the outcomes out of each.
-func stepsOf(wf client.Workflow) []stepOut {
+// stepsOf lists a Project's Steps with the Workflow each is in and the outcomes out of each.
+func stepsOf(wf client.Workflows) []stepOut {
+	workflows := map[string]string{}
+	for _, w := range wf.Workflows {
+		workflows[w.ID] = w.Name
+	}
 	var out []stepOut
 	for _, st := range wf.Steps {
-		so := stepOut{ID: st.ID, ProjectID: wf.ProjectID, Name: st.Name, SkillID: st.SkillID, Outcomes: []string{}}
+		so := stepOut{ID: st.ID, ProjectID: wf.ProjectID, Workflow: workflows[st.WorkflowID], Name: st.Name, SkillID: st.SkillID, Outcomes: []string{}}
 		for _, k := range wf.Connectors {
 			if k.FromStepID == st.ID {
 				so.Outcomes = append(so.Outcomes, k.Name)

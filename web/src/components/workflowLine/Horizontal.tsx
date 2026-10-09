@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { ChainCallout } from "./Callout";
 import { chainOf, type Chain, type Ghost, type Trace } from "./data";
 import { arrowhead, placeCallout, smooth, type Box } from "./draw";
-import { handRoute, horizontal as layOut, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology } from "./layout";
+import { handRoute, horizontal as layOut, leaveRoute, NAME_TOP, type Density, type DrawnArc, type Horizontal as Laid, type Label, type LineTopology, type Mark } from "./layout";
 import { estimate, type Measure } from "./measure";
 import { blockedBy, DONE_STATION, isHoldStep, PICKUP_MS, tokenTime, type LineFacts, type LineStepFacts, type LineTask } from "./model";
 import { spanText } from "@/lib/time";
@@ -447,7 +447,7 @@ export function HorizontalLine(props: HorizontalProps) {
     const dashed = tone === "next" || (!a.back && tone !== "trace");
     const sw = tone === "trace" ? 2.6 : a.back ? (a.id.startsWith("track:") ? 1.8 : 1.6) : 1.3;
     return (
-      <g key={a.id} data-route={a.id} className={cn(tone === "dim" && "wl-dim")}>
+      <g key={a.id} data-route={a.id} data-connectors={JSON.stringify(a.connectorIds)} className={cn(tone === "dim" && "wl-dim")}>
         <path d={smooth(a.line)} fill="none" stroke={stroke(tone, base)} strokeWidth={sw} strokeDasharray={dashed ? "4 3" : undefined} />
         <path d={arrowhead(a.arrow.x, a.arrow.y, a.arrow.dir)} fill="none" stroke={stroke(tone, base)} strokeWidth={1.5} />
         {!branch && a.id.startsWith("track:")
@@ -462,6 +462,34 @@ export function HorizontalLine(props: HorizontalProps) {
     );
   };
 
+  // A mark over a head, its arrow over the station: "New Tasks start here ↓", "from Triage · bug ↓".
+  // A Task's way that came in by it (a trace) lights it: where the Task came from.
+  const markTag = (m: Mark, hint: string, attrs: Record<string, string | boolean>, key?: string, lit = false) => {
+    return (
+      <span
+        key={key}
+        {...attrs}
+        {...hover(hint)}
+        data-box="mark"
+        data-lit={lit ? "true" : undefined}
+        className={cn(
+          "absolute inline-flex items-end gap-1 border bg-background px-2 text-[11px] font-medium whitespace-nowrap",
+          m.lines.length > 1 ? "rounded-lg py-px leading-[14px]" : "rounded-full leading-[18px]",
+          lit && "border-state-claimed font-semibold text-state-claimed",
+        )}
+        style={{ left: m.left, top: m.top }}
+      >
+        {m.arrow === "left" && <span aria-hidden>↓</span>}
+        <span className={cn(m.lines.length > 1 && "flex flex-col", m.arrow === "left" ? "items-start" : "items-end")}>
+          {m.lines.map((l) => (
+            <span key={l}>{l}</span>
+          ))}
+        </span>
+        {m.arrow === "right" && <span aria-hidden>↓</span>}
+      </span>
+    );
+  };
+
   const label = (l: Label, k: string, main = false) => {
     const tone = l.connectorId ? routeTone([l.connectorId], main) : props.litLoop ? "dim" : "plain";
     return (
@@ -469,6 +497,7 @@ export function HorizontalLine(props: HorizontalProps) {
         key={k}
         {...hover(l.hint)}
         data-box="label"
+        data-connector={l.connectorId}
         data-lit={l.connectorId && (lit.has(l.connectorId) || loopLit([l.connectorId])) ? "true" : undefined}
         className={cn(
           "absolute -translate-y-1/2 rounded bg-background px-1.5 text-[11px] whitespace-nowrap",
@@ -578,7 +607,8 @@ export function HorizontalLine(props: HorizontalProps) {
     .map((tk) => {
       if (tk.travel.to === DROPPED) return undefined;
       const to = tk.travel.to === DONE ? DONE_STATION : tk.travel.to;
-      const route = (tk.travel.connectorId && h.routes.get(tk.travel.connectorId)) || handRoute(h, tk.travel.from, to);
+      // Along its Connector; else straight, by hand; else, into a Step the line does not draw, off it.
+      const route = (tk.travel.connectorId && h.routes.get(tk.travel.connectorId)) || handRoute(h, tk.travel.from, to) || (h.at.has(to) ? undefined : leaveRoute(h, tk.travel.from));
       if (!route) return undefined;
       const outcome = tk.travel.connectorId ? facts.connectors.find((c) => c.id === tk.travel.connectorId)?.name : "by hand";
       return { id: tk.id, key: tk.key, route, outcome, hand: !tk.travel.connectorId };
@@ -671,6 +701,23 @@ export function HorizontalLine(props: HorizontalProps) {
           );
         })}
         {h.arcs.map((a) => arc(a))}
+        {/* An exit's leg, from its Step down to its chip: the way into another Workflow. */}
+        {h.exits.map((x) => {
+            const tone = routeTone([x.connectorId]);
+            return (
+              <path
+                key={x.connectorId}
+                data-route={x.connectorId}
+                data-exit={x.connectorId}
+                d={smooth(x.points)}
+                fill="none"
+                stroke={stroke(tone, "var(--muted-foreground)")}
+                strokeWidth={tone === "trace" ? 2.6 : 1.3}
+                strokeDasharray={tone === "next" ? "4 3" : undefined}
+                className={cn(tone === "dim" && "wl-dim")}
+              />
+            );
+          })}
         {h.branch && (
           <g className={cn((dimOthers || props.litLoop) && "wl-dim")}>
             {h.branch.lines
@@ -767,9 +814,15 @@ export function HorizontalLine(props: HorizontalProps) {
         <span
           key={`chip-${i}`}
           data-box="chip"
+          data-chip={c.kind}
+          data-connector={c.connectorId}
+          data-lit={c.connectorId && traversed.has(c.connectorId) ? "true" : undefined}
           {...hover(c.hint)}
           className={cn(
-            "absolute rounded-full border border-dashed bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap text-muted-foreground",
+            // An entry reads as the mark over a head does; the rest as words beside their Step.
+            "absolute rounded-full border bg-background px-2 text-[11px] leading-[18px] whitespace-nowrap",
+            c.kind === "entry" ? "font-medium" : "border-dashed text-muted-foreground",
+            c.connectorId && traversed.has(c.connectorId) && "border-state-claimed font-semibold text-state-claimed",
             c.align === "right" && "-translate-x-full",
             c.align === "center" && "-translate-x-1/2",
             (dimOthers || props.litLoop) && "wl-dim",
@@ -802,33 +855,20 @@ export function HorizontalLine(props: HorizontalProps) {
             <span
               {...hover(h.entry.arrow.label.hint)}
               data-box="entry"
-              className="absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap"
+              data-connectors={JSON.stringify(h.entry.arrow.connectorIds)}
+              data-lit={h.entry.arrow.connectorIds.some((id) => traversed.has(id)) ? "true" : undefined}
+              className={cn(
+                "absolute -translate-y-1/2 text-[11.5px] leading-4 font-medium whitespace-nowrap",
+                h.entry.arrow.label.lines && "flex flex-col",
+                h.entry.arrow.connectorIds.some((id) => traversed.has(id)) && "font-semibold text-state-claimed",
+              )}
               style={{ left: h.entry.arrow.label.x, top: h.entry.arrow.label.y }}
             >
-              {ENTRY_LABEL}
+              {h.entry.arrow.label.lines ? h.entry.arrow.label.lines.map((l) => <span key={l}>{l}</span>) : h.entry.arrow.label.text}
             </span>
           )}
-          {h.entry.mark && (
-            <span
-              {...hover(h.entry.mark.hint)}
-              data-entry-mark
-              data-box="mark"
-              aria-label={ENTRY_LABEL}
-              className={cn(
-                "absolute inline-flex items-end gap-1 border bg-background px-2 text-[11px] font-medium whitespace-nowrap",
-                h.entry.mark.lines.length > 1 ? "rounded-lg py-px leading-[14px]" : "rounded-full leading-[18px]",
-              )}
-              style={{ left: h.entry.mark.left, top: h.entry.mark.top }}
-            >
-              {h.entry.mark.arrow === "left" && <span aria-hidden>↓</span>}
-              <span className={cn(h.entry.mark.lines.length > 1 && "flex flex-col", h.entry.mark.arrow === "left" ? "items-start" : "items-end")}>
-                {h.entry.mark.lines.map((l) => (
-                  <span key={l}>{l}</span>
-                ))}
-              </span>
-              {h.entry.mark.arrow === "right" && <span aria-hidden>↓</span>}
-            </span>
-          )}
+          {h.entry.arrivals?.map((m) => markTag(m, m.hint, { "data-arrival": m.stepId, "data-connectors": JSON.stringify(m.connectorIds) }, m.stepId, m.connectorIds.some((id) => traversed.has(id))))}
+          {h.entry.mark && markTag(h.entry.mark, h.entry.mark.hint, { "data-entry-mark": true, "aria-label": ENTRY_LABEL })}
           {h.entry.before && (
             <>
               <div {...hover(h.entry.before.title.hint)} data-box="note" className="absolute text-[11px] whitespace-nowrap text-muted-foreground" style={{ left: h.entry.before.title.x, top: h.entry.before.title.y }}>

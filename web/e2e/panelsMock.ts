@@ -53,6 +53,7 @@ const taker = (id: string, name: string) => ({ id, name, kind: "agent" });
 function workflowOf() {
   const st = (id: string, name: string, position: number, x: number, y: number, skillName: string | undefined, takers: { id: string; name: string; kind: string }[], median?: number) => ({
     id,
+    workflow_id: "wf-work",
     name,
     skill_id: skillName ? `s-${skillName}` : undefined,
     position,
@@ -65,6 +66,7 @@ function workflowOf() {
   });
   return {
     project_id: project.id,
+    workflows: [{ id: "wf-work", name: "Work", position: 1 }],
     steps: [
       st("st-backlog", "Backlog", 1, 0, 0, undefined, []),
       st("st-plan", "Plan", 2, 0, 128, "breakdown", [taker("m-planner", "planner")], 6 * 60_000),
@@ -117,6 +119,7 @@ function task(n: number, title: string, stepId: string | undefined, since: strin
     rank: n,
     step_id: stepId,
     step_since: stepId ? since : undefined,
+    workflow_id: stepId ? "wf-work" : undefined,
     skill_id: stepId ? stepSkill[stepId] : undefined,
     breakdown: false,
     auto_complete: false,

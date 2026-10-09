@@ -3,6 +3,8 @@
 // row under the header names the applied View (FilterChipRow's `leading`, AppliedView here).
 import { BookmarkIcon, CheckIcon, PlusIcon, SaveIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
+import type { Fold } from "@/components/BarFold";
+import { useFolded } from "@/components/useFolded";
 import { Button } from "@/components/ui/button";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
@@ -26,6 +28,11 @@ export type ViewsMenuProps = {
   error: string | null;
   onClearError: () => void;
   saving: boolean;
+  /** Its open state, when the page opens it too (from the bar's fold). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Folded on a phone into the bar's menu (the board beside the Workflow chip). */
+  fold?: Fold;
 };
 
 /**
@@ -34,7 +41,13 @@ export type ViewsMenuProps = {
  */
 export function ViewsMenu(props: ViewsMenuProps) {
   const { views, appliedId, edited } = props;
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = props.open ?? openState;
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    props.onOpenChange?.(next);
+  };
+  const { own: foldOwn, hide: foldHide, anchor: foldAnchor, onCloseAutoFocus: foldClose } = useFolded(props.fold);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
   const close = () => {
@@ -53,13 +66,14 @@ export function ViewsMenu(props: ViewsMenuProps) {
   const canSave = !(appliedId && !edited);
   return (
     <Popover open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+      {foldAnchor}
       <PopoverTrigger asChild>
-        <Button variant="outline" aria-label="Views" className="data-[state=open]:bg-accent">
+        <Button ref={foldOwn} variant="outline" aria-label="Views" className={cn("data-[state=open]:bg-accent", foldHide)}>
           <BookmarkIcon />
           <span className="hidden sm:inline">Views</span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="Views" className="w-72 p-0">
+      <PopoverContent align="end" aria-label="Views" className="w-72 p-0" onCloseAutoFocus={foldClose}>
         {naming ? (
           <form
             className="flex flex-col gap-2 p-2"

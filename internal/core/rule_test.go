@@ -19,10 +19,10 @@ func TestTakeableRule(t *testing.T) {
 		f.project("API")
 		f.skill("build")
 		f.skill("qa")
-		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", core.WorkflowInput{Steps: []core.StepInput{
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", inWork(core.WorkflowsInput{Steps: []core.StepInput{
 			{Name: "Backlog"}, {Name: "Plan", Skill: ptrStr(core.SkillBreakdown)}, {Name: "Build", Skill: ptrStr("build")},
 			{Name: "QA", Skill: ptrStr("qa")}, {Name: "Skill review", Skill: ptrStr(core.SkillSkillReview)},
-		}}, core.Idem{}); err != nil {
+		}}), core.Idem{}); err != nil {
 			t.Fatal(err)
 		}
 		owner := f.member("owner", []string{"WEB"}, nil)
@@ -102,9 +102,9 @@ func TestTakeableRule(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		var in core.WorkflowInput
+		in := core.WorkflowsInput{Workflows: []core.WorkflowInput{{Name: core.WorkflowFirstName, Position: 1}}}
 		for _, s := range w.Steps {
-			si := core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position}
+			si := core.StepInput{ID: s.ID, Workflow: s.WorkflowID, Name: s.Name, Skill: s.SkillID, Position: s.Position}
 			if s.Name == "Build" {
 				si.Skill = ptrStr("qa")
 			}

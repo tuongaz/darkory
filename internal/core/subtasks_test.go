@@ -106,7 +106,7 @@ func TestFilingTasks(t *testing.T) {
 		if got := f.fileTask(lead, core.NewTask{Project: ptrStr("OWN"), Title: "Look back"}); got.Step == nil || got.Step.Name != "Retro" {
 			t.Fatalf("filed among Darkory's own Steps at %+v", got.Step)
 		}
-		if _, err := f.svc.SetWorkflow(ctx, f.admin, "NIL", core.WorkflowInput{}, core.Idem{}); err != nil {
+		if _, err := f.svc.SetWorkflow(ctx, f.admin, "NIL", inWork(core.WorkflowsInput{}), core.Idem{}); err != nil {
 			t.Fatalf("a Workflow of no Steps: %v", err)
 		}
 		_, err = f.svc.FileTask(ctx, lead, core.NewTask{Project: ptrStr("NIL"), Title: "Lost"}, core.Idem{})
@@ -289,7 +289,7 @@ func TestBreakdown(t *testing.T) {
 func newAcceptanceFixture(t *testing.T, st *store.Store, withStep bool) *fixture {
 	f := newFixture(t, st)
 	f.project("WEB")
-	in := core.WorkflowInput{
+	in := core.WorkflowsInput{
 		Steps:      []core.StepInput{{Name: "Plan", Skill: ptrStr(core.SkillBreakdown)}, {Name: "Build", Skill: ptrStr(core.SkillEngineer)}},
 		Connectors: []core.ConnectorInput{{From: "Plan", Name: "done"}, {From: "Build", Name: "pass"}},
 	}
@@ -298,7 +298,7 @@ func newAcceptanceFixture(t *testing.T, st *store.Store, withStep bool) *fixture
 		in.Connectors = append(in.Connectors, core.ConnectorInput{From: "Acceptance", Name: "pass"},
 			core.ConnectorInput{From: "Acceptance", To: ptrStr("Build"), Name: "fail"})
 	}
-	if _, err := f.svc.SetWorkflow(t.Context(), f.admin, "WEB", in, core.Idem{}); err != nil {
+	if _, err := f.svc.SetWorkflow(t.Context(), f.admin, "WEB", inWork(in), core.Idem{}); err != nil {
 		t.Fatal(err)
 	}
 	f.projectDefaults("WEB", core.ProjectChange{Acceptance: ptrBool(true)})

@@ -535,15 +535,17 @@ func (s *Service) GetTask(ctx context.Context, c *auth.Caller, ref string) (Task
 }
 
 // TaskFilter narrows ListTasks; nil fields do not. Step names a Step by id, or by name with
-// Project, since names are unique only within a Project's Workflow. Filters are `filter` tokens
+// Project, since names are unique only within a Project. Workflow names a Workflow the same way,
+// and keeps the Tasks listed in it (workflowOfSQL), Parents and Tasks aimed at a Member placed in
+// it too. Filters are `filter` tokens
 // (filter.go), where the Step's Skill is `skill`; SessionTasks are the ids of the Tasks a Runner
 // beside the server runs a session for now, which `claim:is:session` matches.
 type TaskFilter struct {
-	Project, Parent, State, Step, AimedAt, Holder *string
-	Filters                                       []string
-	SessionTasks                                  []string
-	Limit                                         int
-	Cursor                                        string
+	Project, Parent, State, Step, Workflow, AimedAt, Holder *string
+	Filters                                                 []string
+	SessionTasks                                            []string
+	Limit                                                   int
+	Cursor                                                  string
 }
 
 // ListTasks lists Tasks by Rank: a Subtask after its Parent, by how long each has waited.
@@ -600,6 +602,24 @@ func (s *Service) ListTasks(ctx context.Context, c *auth.Caller, tf TaskFilter) 
 			return Page[Task]{}, err
 		}
 		q.and("t.step_id = " + q.arg(st.ID))
+	}
+	if tf.Workflow != nil {
+		var wf Workflow
+		if tf.Project == nil {
+			if wf, err = workflowByID(ctx, s.store, c.OrgID, *tf.Workflow); codeOf(err) == CodeNotFound {
+				return Page[Task]{}, refuse(CodeInvalid, "no Workflow has the id %q; a Workflow named by its name needs the project too", *tf.Workflow)
+			}
+		} else {
+			projectID, rerr := resolveProject(ctx, s.store, c.OrgID, *tf.Project)
+			if rerr != nil {
+				return Page[Task]{}, rerr
+			}
+			wf, err = workflowOf(ctx, s.store, c.OrgID, projectID, *tf.Workflow)
+		}
+		if err != nil {
+			return Page[Task]{}, err
+		}
+		q.and(inWorkflows(q, []string{wf.ID}))
 	}
 	if tf.State != nil {
 		q.and("t.state = " + q.arg(*tf.State))

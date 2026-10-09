@@ -103,7 +103,7 @@ func (in *install) agent(name, project string, skills ...string) {
 
 // webWorkflow is the Workflow setup gives WEB: Plan (breakdown) and Build (engineer), each into
 // Done.
-const webWorkflow = `{"steps": [{"name": "Plan", "skill": "breakdown", "position": 1}, {"name": "Build", "skill": "engineer", "position": 2}],
+const webWorkflow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Plan", "skill": "breakdown", "position": 1}, {"workflow": "Work", "name": "Build", "skill": "engineer", "position": 2}],
  "connectors": [{"from": "Plan", "name": "done", "position": 1}, {"from": "Build", "name": "pass", "position": 1}]}`
 
 // setup makes the Project WEB, whose Workflow is webWorkflow; the generic Skill build; and the

@@ -111,13 +111,16 @@ type SkillDetail struct {
 	Current SkillVersion
 }
 
-// Step is a place in a Project's Workflow (ADR 0016), carrying at most one Skill: a Task at it is
-// taken by a Member with that Skill. A Step without one is a hold.
+// Step is a place in one of a Project's Workflows (ADR 0016, ADR 0019), carrying at most one
+// Skill: a Task at it is taken by a Member with that Skill. A Step without one is a hold.
 type Step struct {
-	ID      string
+	ID string
+	// WorkflowID is the Workflow it belongs to.
+	WorkflowID string
+	// Name is unique in its Project, ignoring case, across its Workflows.
 	Name    string
 	SkillID *string
-	// Position is its place in the Workflow, 1 first.
+	// Position is its place in its Workflow, 1 first.
 	Position int64
 	// X and Y are where the canvas draws it, in pixels.
 	X, Y int64
@@ -133,16 +136,31 @@ type Connector struct {
 	Position int64
 }
 
-// Workflow is a Project's Steps, in order, and the Connectors between them.
+// Workflow is one named set of a Project's Steps (ADR 0019); its Position orders the Project's
+// Steps before their own, so "the first Step" is the first of the first Workflow.
 type Workflow struct {
+	ID       string
+	Name     string
+	Position int64
+}
+
+// WorkflowFirstName names the one Workflow a default or empty Project starts with, as migration
+// 0006 named every Project's (decisions.md).
+const WorkflowFirstName = "Work"
+
+// Workflows is a Project's whole graph: its Workflows by position, its Steps in the Project's
+// order (their Workflow's position, then their own), and the Connectors between them, which may
+// lead from a Step of one Workflow into a Step of another.
+type Workflows struct {
 	ProjectID  string
+	Workflows  []Workflow
 	Steps      []Step
 	Connectors []Connector
 }
 
-// WorkflowDetail is a Workflow with what is happening at each of its Steps now.
-type WorkflowDetail struct {
-	Workflow
+// WorkflowsDetail is a Project's Workflows with what is happening at each Step now.
+type WorkflowsDetail struct {
+	Workflows
 	// Facts are each Step's, in the order of Steps.
 	Facts []StepFacts
 }
@@ -195,9 +213,20 @@ type Task struct {
 	StepSince *time.Time
 	// SkillID is the Skill of its Step, read with it: the Skill that takes it. Nil at a hold and
 	// wherever StepID is nil.
-	SkillID   *string
-	AimedAtID *string
-	OwnerID   string
+	SkillID *string
+	// LastStepID is the Step an ended Task ended at; nil while it is open, on a Task that ended at
+	// no Step (a Parent, a Task aimed at a Member), and once that Step is deleted with no move for
+	// it. WorkflowID is the Workflow the Task is listed in, read by workflowOfSQL: that of its
+	// Step or last Step; a Parent's by its Subtasks; a Task aimed at a Member's by the Task it
+	// blocks, else by its Parent; nil when none gives one.
+	LastStepID *string
+	WorkflowID *string
+	// StepWorkflowID is the Workflow of the Step the Task is at, nil wherever StepID is. The
+	// guards a write's batch ends with bind it, never WorkflowID, which also reads other Tasks; the
+	// API does not show it.
+	StepWorkflowID *string
+	AimedAtID      *string
+	OwnerID        string
 	// Rank is the Task's place in its Project's Rank, 1 first; nil on a Subtask, which sorts by
 	// its Parent's.
 	Rank *int64

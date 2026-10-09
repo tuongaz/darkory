@@ -1,6 +1,6 @@
 # Darkory
 
-Management for a software factory whose workforce mixes AI agents and humans. Members, human or agent, pull work from one shared record: each Project has a Workflow of Steps (Plan, Build, Review…), each carrying a Skill; a Member claims a Task at a Step whose Skill they have, works it, and advances it along one of the Step's outcomes to the next Step, or into Done. Darkory never starts an agent.
+Management for a software factory whose workforce mixes AI agents and humans. Members, human or agent, pull work from one shared record: each Project has one or more Workflows of Steps (Plan, Build, Review…), each with its own board; each Step carries a Skill; a Member claims a Task at a Step whose Skill they have, works it, and advances it along one of the Step's outcomes to the next Step, or into Done. Darkory never starts an agent.
 
 The words used here (Member, Project, Task, Subtask, Step, Claim, advance, Takeable, Retrospective…) are defined in [`CONTEXT.md`](CONTEXT.md). The architecture decisions are in [`docs/adr/`](docs/adr/).
 
@@ -19,13 +19,13 @@ Set up a Project and an agent from the web app, or from the CLI:
 ```sh
 export DARKORY_TOKEN=dk_...            # the token init printed
 eval "$(bin/darkory prime)"            # a Session id for this shell, plus the working rules
-bin/darkory project create WEB "Web"   # on the default Workflow: Backlog · Plan · Build · Review · Retro · Skill review
+bin/darkory project create WEB "Web"   # one Workflow, Work: Backlog · Plan · Build · Review · Retro · Skill review
 bin/darkory member create eng-bot --kind agent
 bin/darkory project add WEB eng-bot
 bin/darkory grant eng-bot engineer
 bin/darkory token issue eng-bot --name laptop --timeout 2m   # give this token to the agent
 bin/darkory file --project WEB --title "Login page" --breakdown   # files its Breakdown Subtask at Plan too
-bin/darkory workflow show WEB          # the Steps, who takes each, and the outcomes out of each
+bin/darkory workflow show WEB          # each Workflow's Steps, who takes each, and the outcomes out of each
 ```
 
 ## Keys in the web app
@@ -69,7 +69,7 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 | `complete <task> [--note]` | complete a Task you hold whose Step has one way into Done, or a Parent you own once its Subtasks have ended |
 | `drop`, `take-back`, `rank <task> <position>`, `owner <task> <member>` | the Owner's and the Reporting line's authority |
 | `file --title t (--project p \| --parent task \| --blocks task --aim m) [--step s] [--breakdown] [--blocked-by task,…] [--label l]… [--owner m] [--auto-complete] [--acceptance] [--workspace ws]…` | file a Task, a Subtask (splitting the Task when you hold it), or a question that blocks a Task; `--blocked-by` files it already blocked |
-| `show <task>`, `tasks [--project p] [--parent task] [--step s] [--filter field:op:values]…` | read Tasks: the Step, the Parent, the Subtasks, the Labels and the outcomes |
+| `show <task>`, `tasks [--project p] [--parent task] [--workflow w] [--step s] [--filter field:op:values]…` | read Tasks: the Step, the Parent, the Subtasks, the Labels and the outcomes |
 | `note`, `observe`, `observations <task> [--all]`, `attach <task> <file>`, `evidence get` | Notes, Observations and Evidence |
 | `block <task> --by <task>`, `unblock` | Blocking |
 | `propose <task> --skill s --base n --file f`, `proposal show <task\|id>` | a Retrospective's Skill proposals |
@@ -79,8 +79,8 @@ An agent needs `DARKORY_URL` (default `http://127.0.0.1:7357`), `DARKORY_TOKEN`,
 |---|---|
 | `project create <KEY> <name> [--workflow default\|empty\|copy] [--copy-from p] [--member m]… [--workspace ws] [--color 0-11] [--auto-complete] [--acceptance]` | create a Project with its first Workflow (admin) |
 | `project list`, `project show <project>`, `project add\|remove <project> <member>`, `project set <project> [--name] [--color 0-11] [--workspace] [--auto-complete=…] [--acceptance=…]` | Projects, their Members, their colour and the defaults a Task filed in them takes |
-| `workflow show <project> [--body]` | the Steps, their Skills and takers, what waits and works at each, and the Connectors out of each; `--body` prints it as `workflow set` reads it |
-| `workflow set <project> --file path\|-` | replace the Workflow (admin): `{"steps": [{"id", "name", "skill", "position", "x", "y"}…], "connectors": [{"from", "to", "name", "position"}…], "moves": {deleted Step id: Step}}`, Steps and Skills by name or id, `to` left out for Done |
+| `workflow show <project> [--workflow w] [--body]` | each Workflow's Steps (under its name when there are two or more), their Skills and takers, what waits and works at each, and the Connectors out of each, one into another Workflow as `bug → Bugs › Investigate`; `--workflow` shows one; `--body` prints them all as `workflow set` reads them |
+| `workflow set <project> --file path\|-` | replace the Project's Workflows (admin): `{"workflows": [{"id", "name", "position"}…], "steps": [{"id", "workflow", "name", "skill", "position", "x", "y"}…], "connectors": [{"from", "to", "name", "position"}…], "moves": {deleted Step id: Step}}`, Workflows, Steps and Skills by name or id, `to` any Step of any Workflow or left out for Done |
 | `label create <name> --color #rrggbb [--project p]`, `label list`, `label update`, `label delete` | the Organisation's and a Project's Labels |
 | `label set <task> <label,…>` | set the Labels a Task carries (`""` for none) |
 

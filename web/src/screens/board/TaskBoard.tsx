@@ -224,7 +224,9 @@ function BoardColumn({
         >
           <WorkGlyph glyph={{ glyph: c.kind }} />
           {name}
-          <span className="font-normal tabular-nums">{c.tasks.length}</span>
+          <span className="font-normal tabular-nums" aria-label={tasksCount(c.tasks.length)}>
+            {c.tasks.length}
+          </span>
           <ChevronRightIcon className="size-3.5" aria-hidden />
         </button>
       </section>
@@ -247,7 +249,10 @@ function BoardColumn({
     >
       <div className="flex h-7 min-w-0 items-center gap-2 px-1 font-medium">
         <ColumnHead column={c} model={model} />
-        <span className="font-normal text-muted-foreground tabular-nums">{c.tasks.length}</span>
+        <span className="font-normal text-muted-foreground tabular-nums" aria-hidden>
+          {c.tasks.length}
+        </span>
+        <span className="sr-only">{tasksCount(c.tasks.length)}</span>
         {c.kind === "step" && (
           <Button variant="ghost" size="icon-xs" className="ml-auto text-muted-foreground" aria-label={`File a Task at ${c.step.name}`} onClick={() => onAdd(c.step.id)}>
             <PlusIcon />
@@ -260,6 +265,9 @@ function BoardColumn({
     </section>
   );
 }
+
+/** A column's count as it is read out: "1 Task", "0 Tasks". */
+const tasksCount = (n: number) => `${n} ${n === 1 ? "Task" : "Tasks"}`;
 
 function TaskCard({ task, model }: { task: Task; model: TasksModel }) {
   const peek = usePeekLink();

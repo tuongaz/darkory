@@ -38,8 +38,10 @@ export const skills = [
 
 export const project = { id: "p-web", key: "WEB", name: "Web", color: 0, auto_complete: true, acceptance: true, created_at: at };
 
+type WorkflowRec = { id: string; name: string; position: number };
 type StepRec = {
   id: string;
+  workflow_id: string;
   name: string;
   skill_id?: string;
   position: number;
@@ -54,6 +56,7 @@ type ConnectorRec = { id: string; from_step_id: string; to_step_id?: string; nam
 
 const st = (id: string, name: string, position: number, x: number, y: number, skillName: string | undefined, takers: string[], tasks: number, working: number, median?: number): StepRec => ({
   id,
+  workflow_id: "wf-work",
   name,
   skill_id: skillName ? `s-${skillName}` : undefined,
   position,
@@ -65,9 +68,10 @@ const st = (id: string, name: string, position: number, x: number, y: number, sk
   median_ms: median,
 });
 
-export function initialWorkflow(): { project_id: string; steps: StepRec[]; connectors: ConnectorRec[] } {
+export function initialWorkflow(): { project_id: string; workflows: WorkflowRec[]; steps: StepRec[]; connectors: ConnectorRec[] } {
   return {
     project_id: project.id,
+    workflows: [{ id: "wf-work", name: "Work", position: 1 }],
     steps: [
       st("st-backlog", "Backlog", 1, 0, 0, undefined, [], 3, 0),
       st("st-plan", "Plan", 2, 0, 128, "breakdown", ["m-planner"], 1, 1, 25 * 60_000),
@@ -118,6 +122,7 @@ const task = (n: number, title: string, stepId: string, extra: Record<string, un
   rank: n,
   step_id: stepId,
   step_since: at,
+  workflow_id: "wf-work",
   skill_id: stepSkill[stepId],
   breakdown: false,
   auto_complete: false,
@@ -142,7 +147,7 @@ export const tasks = [
   task(10, "Review the CSV export", "st-review"),
   task(11, "Review the sidebar", "st-review"),
   task(12, "Acceptance: Support emoji", "st-acceptance", { kind: "acceptance" }),
-  task(13, "Export the ledger totals", "st-review", { state: "done", step_id: undefined }),
+  task(13, "Export the ledger totals", "st-review", { state: "done", step_id: undefined, last_step_id: "st-review" }),
 ];
 
 const session = (n: number, member: string, state: string) => ({
@@ -221,24 +226,39 @@ export async function emit(page: Page, entry: Record<string, unknown>) {
 }
 
 type Body = {
-  steps: { id?: string; name: string; skill?: string; position: number; x?: number; y?: number }[];
-  connectors: { id?: string; from: string; to?: string; name: string; position: number }[];
+  workflows: { id?: string; name: string; position?: number }[];
+  steps: { id?: string; workflow: string; name: string; skill?: string; position?: number; x?: number; y?: number }[];
+  connectors: { id?: string; from: string; to?: string; name: string; position?: number }[];
 };
 
-/** The record a `PUT …/workflow` body makes of `wf`: ids for new Steps and Connectors, the facts kept. */
+/**
+ * The record a `PUT …/workflow` body makes of `wf`: a Workflow sent without an id keeps the id of
+ * the one with its name, ignoring case; ids for new Workflows, Steps and Connectors; a position
+ * left out is the item's place in its list; the facts kept.
+ */
 export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): ReturnType<typeof initialWorkflow> {
   let n = 0;
+  const workflows = body.workflows.map((w, i) => ({
+    id: w.id ?? wf.workflows.find((x) => x.name.toLowerCase() === w.name.toLowerCase())?.id ?? `wf-new-${Date.now()}-${n++}`,
+    name: w.name,
+    position: w.position || i + 1,
+  }));
+  const placed = new Map<string, number>();
   const steps = body.steps.map((s) => {
     const was = wf.steps.find((x) => x.id === s.id);
     const id = s.id ?? `st-new-${Date.now()}-${n++}`;
+    const workflowId = workflows.find((w) => w.id === s.workflow || w.name === s.workflow)?.id ?? s.workflow;
+    placed.set(workflowId, (placed.get(workflowId) ?? 0) + 1);
+    const position = s.position || placed.get(workflowId)!;
     const skillId = s.skill ? (skills.find((k) => k.id === s.skill || k.name === s.skill)?.id ?? s.skill) : undefined;
     const takers = skillId === was?.skill_id ? (was?.takers ?? []) : [];
     return {
       id,
+      workflow_id: workflowId,
       name: s.name,
       skill_id: skillId,
-      position: s.position,
-      x: s.x ?? was?.x ?? (s.position - 1) * 448,
+      position,
+      x: s.x ?? was?.x ?? (position - 1) * 448,
       y: s.y ?? was?.y ?? 0,
       tasks: was?.tasks ?? 0,
       working: was?.working ?? 0,
@@ -247,14 +267,20 @@ export function applyBody(wf: ReturnType<typeof initialWorkflow>, body: Body): R
     };
   });
   const ref = (r: string | undefined) => (r === undefined ? undefined : (steps.find((s) => s.id === r || s.name === r)?.id ?? r));
-  const connectors = body.connectors.map((c) => ({
-    id: c.id ?? `c-new-${Date.now()}-${n++}`,
-    from_step_id: ref(c.from)!,
-    to_step_id: ref(c.to),
-    name: c.name,
-    position: c.position,
-  }));
-  return { project_id: wf.project_id, steps: steps.sort((a, b) => a.position - b.position), connectors };
+  const out = new Map<string, number>();
+  const connectors = body.connectors.map((c) => {
+    const from = ref(c.from)!;
+    out.set(from, (out.get(from) ?? 0) + 1);
+    return { id: c.id ?? `c-new-${Date.now()}-${n++}`, from_step_id: from, to_step_id: ref(c.to), name: c.name, position: c.position || out.get(from)! };
+  });
+  // The Project's order: by Workflow position, then Step position.
+  const at = (s: StepRec) => workflows.find((w) => w.id === s.workflow_id)?.position ?? 0;
+  return {
+    project_id: wf.project_id,
+    workflows: workflows.sort((a, b) => a.position - b.position),
+    steps: steps.sort((a, b) => at(a) - at(b) || a.position - b.position),
+    connectors,
+  };
 }
 
 /** Answers every /v1 read the shell and the Workflow screens make, as `who`; returns the Tasks it serves, to change. */

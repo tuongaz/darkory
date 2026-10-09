@@ -1,11 +1,15 @@
 import type { MemberKind, Working } from "@/lib/work";
+import { inProjectOrder } from "@/components/workflowLine/model";
 
 /**
  * A Project's Workflow as the canvas draws it (model v2, ADR 0016): its Steps and the Connectors
  * between them, with the live facts `GET /v1/projects/{project}/workflow` adds per step. M4 binds
  * the record to these shapes; the canvas reads nothing else.
  */
-export type Workflow = { steps: Step[]; connectors: Connector[] };
+export type Workflow = { workflows: WorkflowName[]; steps: Step[]; connectors: Connector[] };
+
+/** A named Workflow of the Project (ADR 0019): its place among them, 1 first. */
+export type WorkflowName = { id: string; name: string; position: number };
 
 /** A Member of the Project holding a Step's Skill. `working` rings their mark (MemberAvatar). */
 export type Taker = { id: string; name: string; kind: MemberKind; working?: Working };
@@ -18,6 +22,8 @@ export type TaskChip = { id: string; key: string; title: string; parentKey?: str
 
 export type Step = {
   id: string;
+  /** The Workflow it belongs to. */
+  workflow_id: string;
   name: string;
   /** The Skill a Member needs to take the Tasks at it; absent on a hold. */
   skill?: { id: string; name: string };
@@ -70,8 +76,9 @@ export function waitingAt(step: Step): number {
   return Math.max(0, step.tasks - step.working);
 }
 
+/** The Project's Steps in its order: by Workflow, then by Step (`inProjectOrder`). */
 export function stepsInOrder(workflow: Workflow): Step[] {
-  return [...workflow.steps].sort((a, b) => a.position - b.position);
+  return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
 }
 
 /** The Connectors out of a Step, in their order: the outcomes its holder may name. */

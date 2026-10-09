@@ -11,7 +11,7 @@ import type { GraphStep } from "../graph";
 import type { Point } from "../model";
 import { roundedPath } from "../route";
 import { ageText } from "@/lib/time";
-import { acrossGeometry, analyseBlocking, downGeometry, endsText, placeBlocking, type BlockingAnalysis, type BlockingLayout, type BlockingTask, type PlacedNode } from "./layout";
+import { acrossGeometry, analyseBlocking, downGeometry, endsText, ownWorkflowSteps, placeBlocking, type BlockingAnalysis, type BlockingLayout, type BlockingTask, type PlacedNode } from "./layout";
 
 /** A Parent as a band's header names it. */
 export type BandParent = { id: string; key: string; title: string; counts?: SubtaskCounts };
@@ -22,6 +22,8 @@ export type BlockingBoardProps = {
   projectId: string;
   /** A Task's id: a Parent's Subtasks, or one Task's chain. */
   scope?: string;
+  /** On the page of one Workflow of several, whether a Task is that page's: the Project's others join only as outside Tasks. */
+  shows?: (id: string) => boolean;
   /** The signed-in Member's id. */
   me: string;
   now: number;
@@ -252,18 +254,18 @@ function Keys({ ids, keyOf }: { ids: string[]; keyOf: (id: string) => string }) 
  * Tasks with no Blocking. A node selects its chain and opens a card that says what it waits on,
  * with Show on line and Open. On a phone it runs down, the side cards above and below.
  */
-export function BlockingBoard({ tasks, projectId, scope, me, now, steps, parents, projects, onOpen, onShowOnLine, graphLink }: BlockingBoardProps) {
+export function BlockingBoard({ tasks, projectId, scope, shows, me, now, steps, parents, projects, onOpen, onShowOnLine, graphLink }: BlockingBoardProps) {
   const [rootRef, rootWidth] = useWidth<HTMLDivElement>();
   const width = rootWidth || 1200;
   const phone = width < PHONE;
   const byId = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
-  const a = useMemo(() => analyseBlocking(tasks, { projectId, scope, me }), [tasks, projectId, scope, me]);
+  const a = useMemo(() => analyseBlocking(tasks, { projectId, scope, me, shows }), [tasks, projectId, scope, me, shows]);
   const side = a.depths >= 4 ? SIDE_NARROW : SIDE_W;
   const fit = phone ? width : width - side - SIDE_GAP;
   const layout = useMemo(() => placeBlocking(byId, a, phone ? downGeometry : acrossGeometry, { projectId, scope, fit }), [byId, a, phone, projectId, scope, fit]);
   const [selected, setSelected] = useState<string | null>(null);
   const keyOf = (id: string) => byId.get(id)?.key ?? id;
-  const stepsOf = (id: string) => steps.get(byId.get(id)!.projectId) ?? [];
+  const stepsOf = (id: string) => ownWorkflowSteps(steps.get(byId.get(id)!.projectId) ?? [], byId.get(id)!.stepId);
 
   // A selection that no longer stands (it ended, the scope changed) clears.
   const current = selected && a.nodes.includes(selected) ? selected : null;

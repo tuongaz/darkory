@@ -38,7 +38,7 @@ import { SessionsTable } from "@/screens/settings/SessionsTable";
 import { liveClaim } from "@/work";
 import { agentActions, agentSettingsPath, sessionOverAgents, taskOverAgents, type AgentAction } from "./agentActions";
 import { useAgentActions } from "./useAgentActions";
-import { agentRows, claimHolder, claimsSince, count, startOfDay, type ClaimRecord } from "./derive";
+import { agentRows, claimHolder, claimsSince, count, startOfDay, takesOf, type ClaimRecord } from "./derive";
 import { activityLimit, useRecentActivity, useSessions, useStepNames, useTaskMap } from "./queries";
 
 const actionIcons: Record<string, ReactNode> = {
@@ -155,7 +155,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   const sessionTask = runnerSession && (tasks.get(runnerSession.task_id) ?? held.find((t) => t.id === runnerSession.task_id));
   const actions = agentActions({ agent, held, me: me.member, members, session: runnerSession, sessionKey: sessionTask?.key, project });
   const entries = history.complete ? count(history.entries.length, "entry", "entries") : `${activityLimit}+ entries`;
-  const takes = (workflow?.steps ?? []).filter((s) => s.takers.some((t) => t.id === id));
+  const takes = takesOf(workflow, id);
   const working = live ? workingOf("agent", runnerSession?.state) : runnerSession?.state === "ending" ? "ending" : undefined;
 
   return (
@@ -224,7 +224,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
           </span>
         </Property>
         <Property label={`Steps in ${project.name}`}>
-          {takes.length === 0 ? <span className="text-muted-foreground">None</span> : <span className="truncate">{takes.map((s) => s.name).join(" · ")}</span>}
+          {takes.length === 0 ? <span className="text-muted-foreground">None</span> : <span className="truncate">{takes.join(" · ")}</span>}
         </Property>
         <Property label="Projects">
           <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">

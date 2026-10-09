@@ -353,9 +353,15 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 		names[m.ID] = m.Name
 	}
 	d := s.d
+	var wf *client.Workflows
+	if leadsToAStep(d) {
+		if wf, err = s.rec.Workflows(ctx, d.Task.ProjectID); err != nil {
+			return Prompt{}, err
+		}
+	}
 	p := Prompt{Agent: s.a.name(), Manager: names[s.manager(d)], Dir: s.r.taskDir(s.key), Checkouts: checkouts, Rules: remote.Rules,
 		Task: PromptTask{Key: d.Task.Key, Title: d.Task.Title, Description: d.Task.Description, Step: stepName(d), Kind: string(d.Task.Kind),
-			Outcomes: outcomes(d)}}
+			Outcomes: outcomes(d, wf)}}
 	if parent != nil {
 		p.Parent = &PromptParent{Key: parent.Key, Title: parent.Title, Description: parent.Description, Owner: parent.Owner}
 	}
@@ -945,11 +951,43 @@ func parentKey(d *client.TaskDetail) string {
 	return d.Parent.Key
 }
 
-// outcomes are the ways out of a Task's Step, in order.
-func outcomes(d *client.TaskDetail) []PromptOutcome {
+// outcomes are the ways out of a Task's Step, in order, each into another Workflow named by that
+// Workflow and the Step it reaches; wf is the Task's Project's Workflows, nil when no outcome
+// leads to a Step.
+func outcomes(d *client.TaskDetail, wf *client.Workflows) []PromptOutcome {
+	steps, workflowOf, workflows := map[string]string{}, map[string]string{}, map[string]string{}
+	if wf != nil {
+		for _, w := range wf.Workflows {
+			workflows[w.ID] = w.Name
+		}
+		for _, st := range wf.Steps {
+			steps[st.ID], workflowOf[st.ID] = st.Name, st.WorkflowID
+		}
+	}
+	from := ""
+	if d.Step != nil {
+		from = d.Step.WorkflowID
+	}
 	var out []PromptOutcome
 	for _, k := range d.Connectors {
-		out = append(out, PromptOutcome{Name: k.Name, Done: k.ToStepID == nil})
+		o := PromptOutcome{Name: k.Name, Done: k.ToStepID == nil}
+		if k.ToStepID != nil {
+			if to := workflowOf[*k.ToStepID]; to != "" && to != from && workflows[to] != "" {
+				o.To = workflows[to] + " › " + steps[*k.ToStepID]
+			}
+		}
+		out = append(out, o)
 	}
 	return out
+}
+
+// leadsToAStep says some outcome of the Task's Step leads to a Step, not into Done: only then
+// does the prompt need the Project's Workflows, to name one in another Workflow.
+func leadsToAStep(d *client.TaskDetail) bool {
+	for _, k := range d.Connectors {
+		if k.ToStepID != nil {
+			return true
+		}
+	}
+	return false
 }

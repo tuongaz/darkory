@@ -67,11 +67,11 @@ export function useDraftEditor(project: string, projectName: string) {
   const changes = changeList.length;
   const said = base && draft ? problem(draft, base, skills.data ?? []) : undefined;
 
-  /** Sends the draft whole. Resolves true once `/v1` has taken it. */
-  async function save(): Promise<boolean> {
-    if (!draft || !base) return false;
+  /** Sends the draft whole. Resolves to the record `/v1` made of it once it has taken it. */
+  async function save(): Promise<WorkflowRecord | undefined> {
+    if (!draft || !base) return undefined;
     setTried(true);
-    if (said) return false;
+    if (said) return undefined;
     setSaving(true);
     setRefused(undefined);
     try {
@@ -82,10 +82,10 @@ export function useDraftEditor(project: string, projectName: string) {
       setBase(reply);
       setDraftState(fromRecord(reply));
       setTried(false);
-      return true;
+      return reply;
     } catch (err) {
       setRefused(err);
-      return false;
+      return undefined;
     } finally {
       setSaving(false);
     }

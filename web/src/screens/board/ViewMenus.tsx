@@ -1,9 +1,12 @@
 // The top bar's controls on a Project's Tasks: the List | Board switch and Display. Filters come
 // from components/filters.
-import { CheckIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, FolderTreeIcon, KanbanIcon, ListIcon, RowsIcon, SlidersHorizontalIcon, TagIcon, UserIcon, WorkflowIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
+import type { Fold } from "@/components/BarFold";
+import { useFolded } from "@/components/useFolded";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -11,8 +14,13 @@ import type { Display, GroupBy, Order } from "./derive";
 
 export type Layout = "list" | "board";
 
-/** The segmented List | Board switch (kit `.seg`); the other search parameters stay. */
-export function ViewSwitch({ view }: { view: Layout }) {
+/**
+ * The segmented List | Board switch (kit `.seg`); the other search parameters stay. On a phone
+ * it is the two icons, unless `fold` (the Workflow chip is in the bar beside it: the board of a
+ * Project of several Workflows): then it folds to a menu under the layout's icon, as the Workflow
+ * page's view switch does, so the breadcrumb keeps room for the chip.
+ */
+export function ViewSwitch({ view, fold }: { view: Layout; fold: boolean }) {
   const [params] = useSearchParams();
   const to = (v: Layout) => {
     const next = new URLSearchParams(params);
@@ -20,25 +28,52 @@ export function ViewSwitch({ view }: { view: Layout }) {
     next.delete("task");
     return { search: `?${next}` };
   };
-  const item = (v: Layout, icon: ReactNode, label: string) => (
-    <Link
-      to={to(v)}
-      aria-current={view === v ? "page" : undefined}
-      aria-label={label}
-      className={cn(
-        "inline-flex h-[26px] items-center gap-1.5 rounded-[6px] px-2.5 font-medium text-muted-foreground [&_svg]:size-3.5",
-        view === v && "bg-background text-foreground shadow-soft",
-      )}
-    >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
-    </Link>
-  );
+  const layouts: { v: Layout; icon: ReactNode; label: string }[] = [
+    { v: "list", icon: <ListIcon aria-hidden />, label: "List" },
+    { v: "board", icon: <KanbanIcon aria-hidden />, label: "Board" },
+  ];
+  const current = layouts.find((l) => l.v === view)!;
   return (
-    <nav aria-label="View" className="inline-flex rounded-md bg-muted p-0.5">
-      {item("list", <ListIcon aria-hidden />, "List")}
-      {item("board", <KanbanIcon aria-hidden />, "Board")}
-    </nav>
+    <>
+      <nav aria-label="View" className={cn("rounded-md bg-muted p-0.5", fold ? "hidden sm:inline-flex" : "inline-flex")}>
+        {layouts.map(({ v, icon, label }) => (
+          <Link
+            key={v}
+            to={to(v)}
+            aria-current={view === v ? "page" : undefined}
+            aria-label={label}
+            className={cn(
+              "inline-flex h-[26px] items-center gap-1.5 rounded-[6px] px-2.5 font-medium text-muted-foreground [&_svg]:size-3.5",
+              view === v && "bg-background text-foreground shadow-soft",
+            )}
+          >
+            {icon}
+            <span className="hidden sm:inline">{label}</span>
+          </Link>
+        ))}
+      </nav>
+      {fold && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label={`View: ${current.label}`} className="flex h-7 items-center gap-1 rounded-md bg-muted px-2 text-foreground sm:hidden [&_svg]:size-3.5">
+              {current.icon}
+              <ChevronDownIcon aria-hidden className="size-3 text-muted-foreground" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-36">
+            {layouts.map(({ v, icon, label }) => (
+              <DropdownMenuItem key={v} asChild>
+                <Link to={to(v)} aria-current={view === v ? "page" : undefined}>
+                  <CheckIcon aria-hidden className={cn("size-3.5", view !== v && "invisible")} />
+                  {icon}
+                  {label}
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </>
   );
 }
 
@@ -94,13 +129,31 @@ const orders: { order: Order; label: string }[] = [
 ];
 
 /** Display: the layout's grouping (the list), the order within a group or column, and what to show. */
-export function DisplayMenu({ display, change, view }: { display: Display; change: (c: Partial<Display>) => void; view: Layout }) {
+export function DisplayMenu({
+  display,
+  change,
+  view,
+  open,
+  onOpenChange,
+  fold,
+}: {
+  display: Display;
+  change: (c: Partial<Display>) => void;
+  view: Layout;
+  /** Its open state, when the page opens it too (from the bar's fold). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Folded on a phone into the bar's menu (the board beside the Workflow chip). */
+  fold?: Fold;
+}) {
+  const { own: foldOwn, hide: foldHide, anchor: foldAnchor, onCloseAutoFocus: foldClose } = useFolded(fold);
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
+      {foldAnchor}
       <PopoverTrigger asChild>
-        <BarButton icon={<SlidersHorizontalIcon />} label="Display" className="data-[state=open]:bg-accent" />
+        <BarButton ref={foldOwn} icon={<SlidersHorizontalIcon />} label="Display" className={cn("data-[state=open]:bg-accent", foldHide)} />
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="Display" className="w-[280px] p-1">
+      <PopoverContent align="end" aria-label="Display" className="w-[280px] p-1" onCloseAutoFocus={foldClose}>
         {view === "list" && (
           <div role="group" aria-label="Group by">
             <SectionLabel>Group by</SectionLabel>

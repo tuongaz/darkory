@@ -5,14 +5,24 @@ import { durationText } from "@/lib/time";
  * What the Workflow line draws (Direction D, docs: mock-workflow/frag-d.html): a Project's Steps
  * on one left-to-right line in Workflow order, and the Tasks at them as tokens. The shapes are
  * structural, so the canvas's `Workflow` (components/workflow/model.ts) passes as a `LineWorkflow`.
+ * A Project has one or more named Workflows (ADR 0019); each Step belongs to one, and the
+ * Project's order is its Workflows' order, then each Workflow's Steps'.
  */
 
 /** The station every line ends on. A Connector with no `to` leads into it. */
 export const DONE_STATION = "done";
 
-export type LineStep = { id: string; name: string; position: number; skill?: { name: string } };
+/** A named Workflow of the Project: its place among them, 1 first. */
+export type LineWorkflowName = { id: string; name: string; position: number };
+/** A Step: its place in its Workflow (`workflow_id`), 1 first. */
+export type LineStep = { id: string; workflow_id: string; name: string; position: number; skill?: { name: string } };
 export type LineConnector = { id: string; from: string; to: string | null; name: string; position: number };
-export type LineWorkflow = { steps: readonly LineStep[]; connectors: readonly LineConnector[] };
+/**
+ * A Project's Workflows, every Step of them and every Connector, one into another Workflow's Step
+ * too; and the Workflow the line draws (`drawn`, by id): its Steps on the line, another Workflow's
+ * only where a Connector crosses (an exit, an entry). Every Step when unsaid.
+ */
+export type LineWorkflow = { workflows: readonly LineWorkflowName[]; steps: readonly LineStep[]; connectors: readonly LineConnector[]; drawn?: string };
 
 /**
  * The Skills of the Steps where Darkory files what a Parent needs once its Subtasks end: they sit
@@ -26,12 +36,73 @@ export const breakdownSkill = "breakdown";
 /** The Organisation's builtin Skills, by name: no Step carrying one is where a Project's own work starts. */
 export const builtinSkills: readonly string[] = [breakdownSkill, ...branchSkills];
 
-const inPosition = (workflow: LineWorkflow) => [...workflow.steps].sort((a, b) => a.position - b.position);
+/** What the Project's order reads of a Step: its Workflow and its place there. */
+export type OrderedStep = { workflow_id: string; position: number };
 
 /**
- * Where a Task filed with no Step named starts: the first Step whose Skill is the Project's own
- * work (not breakdown, acceptance, retro or skill-review); else the first Step with any Skill; else
- * the first Step. The same rule as the server's `defaultStep` (internal/core/workflow.go).
+ * Compares two Steps in the Project's order: by their Workflow's position, then their own (the
+ * order the server returns them in, and the one "the first Step" reads). A Step of no Workflow
+ * listed comes last. Every list of a Project's Steps sorts with it.
+ */
+export function inProjectOrder(workflows: readonly Pick<LineWorkflowName, "id" | "position">[]): (a: OrderedStep, b: OrderedStep) => number {
+  const rank = new Map(workflows.map((w) => [w.id, w.position]));
+  const of = (s: OrderedStep) => rank.get(s.workflow_id) ?? Number.POSITIVE_INFINITY;
+  return (a, b) => {
+    const wa = of(a);
+    const wb = of(b);
+    // Two Steps of no listed Workflow tie on Infinity, whose difference is NaN.
+    return (wa === wb ? 0 : wa - wb) || a.position - b.position;
+  };
+}
+
+/** A Project's Workflows in their order, by position: the order of the rail, the chip and the Project's Steps. */
+export function workflowsInOrder<W extends Pick<LineWorkflowName, "position">>(workflows: readonly W[]): W[] {
+  return [...workflows].sort((a, b) => a.position - b.position);
+}
+
+/** The Project's Steps in its order (`inProjectOrder`). */
+function inPosition<S extends OrderedStep>(workflow: { workflows: readonly Pick<LineWorkflowName, "id" | "position">[]; steps: readonly S[] }): S[] {
+  return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
+}
+
+/** One Workflow's Steps in its order; none for a Workflow the Project does not have. */
+export function stepsOf<S extends LineStep>(workflow: { workflows: readonly LineWorkflowName[]; steps: readonly S[] }, workflowId: string): S[] {
+  return inPosition(workflow).filter((s) => s.workflow_id === workflowId);
+}
+
+/**
+ * The Workflow a line of the Project draws: of a Project of several, the one picked, else the
+ * first by position; of a Project of one, none, picked or not, so it draws every Step as it always
+ * has (the path the pinned layouts hold).
+ */
+export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[] }, picked?: string): string | undefined {
+  if (workflow.workflows.length < 2) return undefined;
+  if (picked && workflow.workflows.some((w) => w.id === picked)) return picked;
+  return workflowsInOrder(workflow.workflows)[0].id;
+}
+
+/**
+ * A Step's name as a page says it among its Project's Workflows: "Bugs › Investigate" when the
+ * Project has two or more, else its name alone. With `besides` (the Workflow the reader is in, a
+ * Task's own), a Step of that Workflow is its name alone too: only a crossing names its Workflow.
+ */
+export function stepTitle(step: { name: string; workflow_id: string }, workflows: readonly Pick<LineWorkflowName, "id" | "name">[], besides?: string): string {
+  if (workflows.length < 2 || step.workflow_id === besides) return step.name;
+  const workflow = workflows.find((w) => w.id === step.workflow_id);
+  return workflow ? `${workflow.name} › ${step.name}` : step.name;
+}
+
+/** The Steps a line of the Project draws (`LineWorkflow.drawn`'s), by id; none said is every Step. */
+export function drawnSteps(workflow: Pick<LineWorkflow, "steps" | "drawn">): ReadonlySet<string> | undefined {
+  if (workflow.drawn === undefined) return undefined;
+  return new Set(workflow.steps.filter((s) => s.workflow_id === workflow.drawn).map((s) => s.id));
+}
+
+/**
+ * Where a Task filed with no Step named starts: the first Step, in the Project's order, whose
+ * Skill is the Project's own work (not breakdown, acceptance, retro or skill-review); else the
+ * first Step with any Skill; else the first Step. The same rule as the server's `defaultStep`
+ * (internal/core/workflow.go).
  */
 export function startStep(workflow: LineWorkflow): string | undefined {
   const steps = inPosition(workflow);
@@ -95,7 +166,7 @@ export type LineMember = { id: string; name: string; kind: MemberKind; working?:
 
 /** A Step with what the line says under its name: who takes its Tasks, and their median time there. */
 export type LineStepFacts = LineStep & { takers?: readonly LineMember[]; medianMs?: number };
-export type LineFacts = { steps: readonly LineStepFacts[]; connectors: readonly LineConnector[] };
+export type LineFacts = { workflows: readonly LineWorkflowName[]; steps: readonly LineStepFacts[]; connectors: readonly LineConnector[]; drawn?: string };
 
 /** A Task named by its key: a blocker on a token's "by MAIN-10". */
 export type LineBrief = { id: string; key: string; title: string };

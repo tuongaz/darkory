@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Claim } from "@/api/client";
-import { blockingCount, chainOf, scopedLine, traceOf, unblocksWhen } from "./data";
+import { chainOf, scopedLine, scopeMenu, traceOf, unblocksWhen } from "./data";
+import { workflowsSkills, workflowsFixture } from "@/test/fixtures";
 import { MAIN } from "./fixtures";
-import type { LineTask } from "./model";
+import { startStep, stepsOf, type LineTask, type LineWorkflow } from "./model";
 
 // The fixture's open Tasks (mock-workflow/fixture.md with the deps round's MAIN-18 and MAIN-19).
 const tk = (n: number, extra: Partial<LineTask> = {}): LineTask => ({ id: `k-${n}`, key: `MAIN-${n}`, title: `T${n}`, kind: "work", blockers: [], ...extra });
@@ -24,10 +25,6 @@ const all: LineTask[] = [
 const me = { id: "m-tu", takeable: new Set(["k-12"]) };
 
 describe("Blocking on the line", () => {
-  it("counts the Blockings, not the blocked Tasks: Blocking 5", () => {
-    expect(blockingCount(all)).toBe(5);
-  });
-
   it("MAIN-19's chain: MAIN-13 → MAIN-4 and MAIN-12, unblocks when both end, first answer MAIN-13", () => {
     const c = chainOf("k-19", all, me)!;
     expect(c.upstream.map((p) => p.map((x) => x.key))).toEqual([["MAIN-12"], ["MAIN-13", "MAIN-4"]]);
@@ -122,5 +119,68 @@ describe("one Task's path", () => {
     expect(trace.traversed).toEqual(["build:pass"]);
     expect(trace.next).toEqual(["qa:pass", "qa:fail"]);
     expect(trace.current).toBe("qa");
+  });
+});
+
+describe("a Project of several Workflows", () => {
+  const skillName = new Map(workflowsSkills.map((s) => [s.id, s.name]));
+  // The five-Workflow record as the line takes it: Skills by name, a Connector into Done with `to` null.
+  const line = (record = workflowsFixture()): LineWorkflow => ({
+    workflows: record.workflows,
+    steps: record.steps.map((s) => ({ id: s.id, workflow_id: s.workflow_id, name: s.name, position: s.position, ...(s.skill_id ? { skill: { name: skillName.get(s.skill_id)! } } : {}) })),
+    connectors: record.connectors.map((c) => ({ id: c.id, from: c.from_step_id, to: c.to_step_id ?? null, name: c.name, position: c.position })),
+  });
+  // Bugs first, Triage second: only the Workflows' positions swapped. The Steps stay as they came,
+  // Triage's first, so nothing but the Workflows' order can put Investigate first.
+  const bugsFirst = (): LineWorkflow => {
+    const wf = line();
+    const position = (id: string, was: number) => (id === "wf-bugs" ? 1 : id === "wf-triage" ? 2 : was);
+    return { ...wf, workflows: wf.workflows.map((w) => ({ ...w, position: position(w.id, w.position) })) };
+  };
+
+  it("starts a filed Task at the first work Step in the Project's order: Triage, then Investigate once Bugs comes first", () => {
+    expect(startStep(line())).toBe("st-triage");
+    expect(startStep(bugsFirst())).toBe("st-investigate");
+  });
+
+  it("reads the Project's order from the Workflows' positions, whatever order the Steps arrive in", () => {
+    const wf = bugsFirst();
+    expect(startStep({ ...wf, steps: [...wf.steps].reverse() })).toBe("st-investigate");
+  });
+
+  it("lists one Workflow's Steps in its order", () => {
+    expect(stepsOf(line(), "wf-bugs").map((s) => s.name)).toEqual(["Investigate", "Fix", "Review", "Verify"]);
+    expect(stepsOf(line(), "wf-support").map((s) => s.name)).toEqual(["Support", "Awaiting customer", "Ops", "Approve"]);
+    expect(stepsOf({ ...line(), steps: [...line().steps].reverse() }, "wf-features").map((s) => s.name)).toEqual(["Build", "Code review", "QA", "Release"]);
+    expect(stepsOf(line(), "wf-none")).toEqual([]);
+  });
+});
+
+describe("the scope menu", () => {
+  const records = new Map([
+    ["k-7", { key: "MAIN-7", title: "Checkout" }],
+    ["k-1", { key: "MAIN-1", title: "Launch" }],
+  ]);
+  const recordOf = (id: string) => records.get(id);
+
+  it("of the whole line: each Parent with open Subtasks, in the order met, and the Tasks at a Step with none", () => {
+    expect(scopeMenu(all, undefined, recordOf)).toEqual({
+      parents: [
+        { id: "k-7", key: "MAIN-7", title: "Checkout", open: 5 },
+        { id: "k-1", key: "MAIN-1", title: "Launch", open: 1 },
+      ],
+      // MAIN-4, 5, 6 and 19; MAIN-13, a question, is at no Step.
+      noParent: 4,
+    });
+  });
+
+  it("of a line of some Steps: a Parent only where an open Subtask is, wherever the Parent is listed, its open Subtasks there counted", () => {
+    // An ended Parent (MAIN-1) is offered on the line its open Retrospective is on.
+    expect(scopeMenu(all, new Set(["retro"]), recordOf)).toEqual({ parents: [{ id: "k-1", key: "MAIN-1", title: "Launch", open: 1 }], noParent: 0 });
+    expect(scopeMenu(all, new Set(["build", "qa"]), recordOf)).toEqual({ parents: [{ id: "k-7", key: "MAIN-7", title: "Checkout", open: 4 }], noParent: 2 });
+  });
+
+  it("names a Parent not read yet \"…\"", () => {
+    expect(scopeMenu(all, new Set(["retro"]), () => undefined).parents).toEqual([{ id: "k-1", key: "…", title: "", open: 1 }]);
   });
 });

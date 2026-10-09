@@ -6,7 +6,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "../bind";
 import { nameMax } from "../edits";
-import { isNewSkill, outcomes, tasksAt, type Draft } from "./draft";
+import { isNewSkill, outcomes, tasksAt, type Draft, type RecordWorkflow } from "./draft";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Holder, Roster } from "./holders";
 import { AddOutcome, Outcome, type OutcomeActions } from "./Outcomes";
 import type { OrgFacts } from "./reach";
@@ -15,7 +16,8 @@ import { TakenBy, type StepSkill } from "./TakenBy";
 import { Tip } from "@/components/Tip";
 
 /*
- * The picked Step, edited beside the list: its name and a menu (move, add a Step after, delete);
+ * The picked Step, edited beside the list: its name, its Workflow (of a Project of several), and a
+ * menu (move, add a Step after, delete);
  * how many Tasks are at it; its Skill; who takes it (TakenBy); its outcomes, the main one picked by
  * a radio; and Delete Step at the foot. Every edit is the draft's, saved on Save. Read-only for a
  * Member who is not an admin: the same facts as text.
@@ -29,6 +31,8 @@ export type PanelActions = OutcomeActions & {
   reorder: (by: -1 | 1) => void;
   insertAfter: () => void;
   deleteStep: () => void;
+  /** Moves the Step into another Workflow, last there. */
+  moveToWorkflow: (workflowId: string) => void;
   /** Takes this Step's Skill on Save; `join`: joins the Project first. */
   addTaker: (member: string, join: boolean) => void;
   removeTaker: (member: string) => void;
@@ -40,7 +44,7 @@ export function StepPanel({
   n,
   draft,
   base,
-  order,
+  workflows,
   skills,
   holders,
   roster,
@@ -57,7 +61,8 @@ export function StepPanel({
   n: number;
   draft: Draft;
   base: WorkflowRecord;
-  order: RecordStep[];
+  /** The Project's Workflows in order: of two or more, the Step's is picked beside its name. */
+  workflows: RecordWorkflow[];
   skills: Skill[];
   holders?: Map<string, Holder[]>;
   roster: Roster | undefined;
@@ -103,6 +108,20 @@ export function StepPanel({
               onBlur={actions.settleName}
               className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-[15px] font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-foreground focus-visible:ring-[3px] focus-visible:ring-muted aria-invalid:border-destructive dark:bg-input/30"
             />
+          )}
+          {!readOnly && workflows.length > 1 && (
+            <Select value={step.workflow_id} onValueChange={actions.moveToWorkflow}>
+              <SelectTrigger aria-label={`Workflow of ${name}`} className="h-9 w-[150px] flex-none max-md:w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                {workflows.map((w) => (
+                  <SelectItem key={w.id} value={w.id}>
+                    {w.name.trim() || "New Workflow"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
           {!readOnly && (
             <DropdownMenu>
@@ -195,7 +214,7 @@ export function StepPanel({
                   </button>
                 </Tip>
               )}
-              <Outcome wf={draft.wf} base={base} step={step} order={order} readOnly={readOnly} invalid={invalid} actions={actions} nameRef={nameRef} c={c} />
+              <Outcome wf={draft.wf} base={base} step={step} readOnly={readOnly} invalid={invalid} actions={actions} nameRef={nameRef} c={c} />
             </div>
           ))}
         </div>

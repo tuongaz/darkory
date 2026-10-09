@@ -1,4 +1,5 @@
 import type { Activity, RunnerSession, Task } from "@/api/client";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import { progressText } from "@/screens/inbox/derive";
 import { liveClaim } from "@/work";
 import { flowKinds, storyVerb, type FlowContext } from "../flowEvents";
@@ -52,6 +53,8 @@ export type StoriesInput = {
   from: number;
   /** The newest entry the Member has seen, or null before they first looked. */
   seenSeq: number | null;
+  /** The Workflow the page shows of a Project of several: only the stories of the Tasks its board shows. */
+  shown?: ShownWorkflow;
 };
 
 const flow = new Set<string>(flowKinds);
@@ -128,7 +131,7 @@ export function tailOf(task: Task | undefined, now: number): string | undefined 
  * through the Workflow count: the Runner's housekeeping is not a story, and its nudge is a flag.
  */
 export function storiesOf(input: StoriesInput): Story[] {
-  const { entries, tasks, ctx, exclude, sessions, now, from, seenSeq } = input;
+  const { entries, tasks, ctx, exclude, sessions, now, from, seenSeq, shown } = input;
   const byRow = new Map<string, { latest: Activity; sub?: string; own: Activity[]; all: Activity[] }>();
   for (const e of entries) {
     if (e.subject_type !== "task" || !flow.has(e.kind)) continue;
@@ -145,6 +148,7 @@ export function storiesOf(input: StoriesInput): Story[] {
   const out: Story[] = [];
   for (const [taskId, row] of byRow) {
     if (exclude.has(taskId)) continue;
+    if (!ofShown(taskId, row.latest, tasks, shown)) continue;
     const fresh = seenSeq === null ? true : row.latest.seq > seenSeq;
     if (Date.parse(row.latest.at) < from && !fresh) continue;
     const task = tasks.get(taskId);
@@ -173,6 +177,19 @@ export function storiesOf(input: StoriesInput): Story[] {
     });
   }
   return out.sort((a, b) => b.latest.seq - a.latest.seq);
+}
+
+/**
+ * Whether a row's Task is the shown Workflow's: by its record, as its board places it (`shows`),
+ * else by the Step its latest entry leaves it at (where it went, else where it is, else where it
+ * ended), when it names one.
+ */
+function ofShown(taskId: string, latest: Activity, tasks: Map<string, Task>, shown: ShownWorkflow | undefined): boolean {
+  if (!shown) return true;
+  const task = tasks.get(taskId);
+  if (task) return shown.shows(task);
+  const at = str(latest.payload, "to") ?? str(latest.payload, "step_id") ?? str(latest.payload, "from");
+  return !at || shown.steps.has(at);
 }
 
 /**

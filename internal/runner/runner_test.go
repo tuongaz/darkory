@@ -167,7 +167,7 @@ func (f *fixture) workflow(body string) {
 
 // buildOnly is a Workflow of one Step, Build, whose one way out, "done", leads into Done: its
 // holder completes a Task there without review.
-const buildOnly = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1}],
+const buildOnly = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Build", "skill": "engineer", "position": 1}],
  "connectors": [{"from": "Build", "name": "done", "position": 1}]}`
 
 // run starts the runner with the named agents' tokens, sessions as child processes; it stops
@@ -475,8 +475,8 @@ func TestRunnerParentMergeConflictFilesAResolvingTask(t *testing.T) {
 
 // reviewThenRelease is a Workflow whose review is not its last Step: Build, Review, then Release,
 // whose holder advances the Task into Done.
-const reviewThenRelease = `{"steps": [{"name": "Build", "skill": "engineer", "position": 1},
-  {"name": "Review", "skill": "review", "position": 2}, {"name": "Release", "skill": "devops", "position": 3}],
+const reviewThenRelease = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Build", "skill": "engineer", "position": 1},
+  {"workflow": "Work", "name": "Review", "skill": "review", "position": 2}, {"workflow": "Work", "name": "Release", "skill": "devops", "position": 3}],
  "connectors": [{"from": "Build", "to": "Review", "name": "built", "position": 1},
   {"from": "Review", "to": "Release", "name": "pass", "position": 1}, {"from": "Release", "name": "released", "position": 1}]}`
 
@@ -595,6 +595,29 @@ func TestRunnerMergesATaskStandingAlone(t *testing.T) {
 	}
 	if branchExists(t.Context(), f.repo, "web-1") {
 		t.Fatal("a Task standing alone got a Parent's branch")
+	}
+}
+
+// The prompt for a Task at a Step whose outcome leads into another Workflow names that outcome
+// by the Workflow and Step it reaches.
+func TestRunnerPromptNamesAnOutcomeIntoAnotherWorkflow(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(`{"workflows": [{"name": "Triage", "position": 1}, {"name": "Bugs", "position": 2}],
+ "steps": [{"workflow": "Triage", "name": "Triage", "skill": "engineer", "position": 1},
+  {"workflow": "Bugs", "name": "Investigate", "skill": "engineer", "position": 1}],
+ "connectors": [{"from": "Triage", "to": "Investigate", "name": "bug", "position": 1}, {"from": "Triage", "name": "question", "position": 2},
+  {"from": "Investigate", "name": "done", "position": 1}]}`)
+	f.agent("triager", "complete", "engineer")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Crash on save")
+	f.run("triager")
+
+	eventually(t, 30*time.Second, "WEB-1 done", func() bool { return f.done("WEB-1") })
+	b, err := os.ReadFile(filepath.Join(f.data, "sessions", "WEB-1", "prompt.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "`bug` (to Bugs › Investigate), `question` (into Done)"; !strings.Contains(string(b), want) {
+		t.Fatalf("the prompt does not say %q:\n%s", want, b)
 	}
 }
 
@@ -981,8 +1004,8 @@ func TestRunnerTerminal(t *testing.T) {
 
 // conflictWorkflow puts Write before Build, so the Project's first work Step is not where its
 // builder works: Write (docs) · Build (engineer) → Review (review), with "needs changes" back.
-const conflictWorkflow = `{"steps": [{"name": "Write", "skill": "docs", "position": 1}, {"name": "Build", "skill": "engineer", "position": 2},
-  {"name": "Review", "skill": "review", "position": 3}],
+const conflictWorkflow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Write", "skill": "docs", "position": 1}, {"workflow": "Work", "name": "Build", "skill": "engineer", "position": 2},
+  {"workflow": "Work", "name": "Review", "skill": "review", "position": 3}],
  "connectors": [{"from": "Write", "name": "done", "position": 1}, {"from": "Build", "to": "Review", "name": "pass", "position": 1},
   {"from": "Review", "name": "pass", "position": 1}, {"from": "Review", "to": "Build", "name": "needs changes", "position": 2}]}`
 

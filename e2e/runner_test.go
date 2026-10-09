@@ -474,7 +474,7 @@ func TestRunnerStandaloneAndAutoComplete(t *testing.T) {
 func TestRunnerMergesATaskCompletedWithoutReview(t *testing.T) {
 	ri := newRunnerInstall(t, func(ri *runnerInstall) {
 		ri.ada.ok("workflow", "set", "MAIN", "--file", writeFile(ri.t, filepath.Join(ri.dir, "workflow.json"),
-			`{"steps": [{"name": "Build", "skill": "engineer", "position": 1}], "connectors": [{"from": "Build", "name": "done", "position": 1}]}`))
+			`{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Build", "skill": "engineer", "position": 1}], "connectors": [{"from": "Build", "name": "done", "position": 1}]}`))
 		ri.fake("builder", "complete")
 	})
 	ri.ada.ok("file", "--project", "MAIN", "--title", "Fix the typo")

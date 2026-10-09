@@ -306,8 +306,8 @@ func (s *Service) DropTask(ctx context.Context, c *auth.Caller, ref string, reas
 }
 
 // dropTask ends an open Task dropped inside a write: it ends the Task's Claim, takes it off its
-// Step, supersedes a proposal left pending on it and records task.dropped with payload and the
-// Step it left.
+// Step, keeping it as the Step it ended at (last_step_id), supersedes a proposal left pending on
+// it and records task.dropped with payload and the Step it left.
 func dropTask(t *tx, task Task, payload map[string]any) error {
 	claim, holder, live, err := endClaimOf(t, task.ID, "dropped")
 	if err != nil {
@@ -322,7 +322,8 @@ func dropTask(t *tx, task Task, payload map[string]any) error {
 			payload["since"] = ms(*task.StepSince)
 		}
 	}
-	if _, err := t.Exec(t.ctx, `UPDATE tasks SET state = 'dropped', ended_at = $1, step_id = NULL, step_since = NULL WHERE org_id = $2 AND id = $3`,
+	if _, err := t.Exec(t.ctx, `UPDATE tasks SET state = 'dropped', ended_at = $1, last_step_id = step_id, step_id = NULL, step_since = NULL
+WHERE org_id = $2 AND id = $3`,
 		ms(t.now), t.caller.OrgID, task.ID); err != nil {
 		return err
 	}

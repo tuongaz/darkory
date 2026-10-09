@@ -384,7 +384,7 @@ func (m *member) on(p *serveProc) *member {
 
 // buildFlow is a Workflow of one Step, Build, carrying the Skill build, with one way out, "pass",
 // into Done.
-const buildFlow = `{"steps": [{"name": "Build", "skill": "build", "position": 1}], "connectors": [{"from": "Build", "name": "pass", "position": 1}]}`
+const buildFlow = `{"workflows": [{"name": "Work", "position": 1}], "steps": [{"workflow": "Work", "name": "Build", "skill": "build", "position": 1}], "connectors": [{"from": "Build", "name": "pass", "position": 1}]}`
 
 // project creates a Project through ada's CLI, with ada in it, on the Workflow flow: a body as
 // darkory workflow set reads it, or "" for the default Workflow.

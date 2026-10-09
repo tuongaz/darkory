@@ -43,8 +43,10 @@ const BIG = { id: "p-big", key: "BIG", name: "Big", color: 6, auto_complete: fal
 const SW = { id: "p-sw", key: "SW", name: "Software", color: 3, auto_complete: true, acceptance: true, created_at: at };
 const projects = [MAIN, BIG, SW];
 
+// Each Project has one Workflow: MAIN's and BIG's are Work, SW's is Software.
 const step = (id: string, name: string, position: number, skillName: string | undefined, takers: string[], median?: number) => ({
   id,
+  workflow_id: id.startsWith("b-") ? "wf-big" : id.startsWith("sw-") ? "wf-sw" : "wf-main",
   name,
   skill_id: skillName ? `s-${skillName}` : undefined,
   position,
@@ -60,6 +62,7 @@ const min = 60_000;
 
 const mainWorkflow = {
   project_id: MAIN.id,
+  workflows: [{ id: "wf-main", name: "Work", position: 1 }],
   steps: [
     step("backlog", "Backlog", 1, undefined, []),
     step("plan", "Plan", 2, "breakdown", ["m-pl"], 6 * min),
@@ -104,6 +107,7 @@ const bigSteps: [string, string, string | undefined][] = [
 ];
 const bigWorkflow = {
   project_id: BIG.id,
+  workflows: [{ id: "wf-big", name: "Work", position: 1 }],
   steps: bigSteps.map(([id, name, s], i) => step(id, name, i + 1, s, s ? ["m-bu"] : [])),
   connectors: [
     ...bigSteps.slice(0, -1).map(([id], i) => conn(id, "pass", bigSteps[i + 1][0], 1)),
@@ -139,6 +143,7 @@ const swSteps: [string, string, string | undefined, string[]][] = [
 ];
 const swWorkflow = {
   project_id: SW.id,
+  workflows: [{ id: "wf-sw", name: "Software", position: 1 }],
   steps: swSteps.map(([id, name, s, takers], i) => step(id, name, i + 1, s, takers, s ? (8 + i) * min : undefined)),
   connectors: [
     conn("sw-triage", "no design needed", "sw-build", 1),
@@ -174,7 +179,8 @@ const workflows = new Map<string, typeof mainWorkflow>([
 ]);
 
 type Rec = Record<string, unknown> & { id: string; key: string; project_id: string; state: string; step_id?: string; parent_id?: string };
-const stepSkill = (id: string | undefined) => [...mainWorkflow.steps, ...bigWorkflow.steps, ...swWorkflow.steps].find((s) => s.id === id)?.skill_id;
+const stepOf = (id: string | undefined) => [...mainWorkflow.steps, ...bigWorkflow.steps, ...swWorkflow.steps].find((s) => s.id === id);
+const stepSkill = (id: string | undefined) => stepOf(id)?.skill_id;
 const brief = (id: string) => ({ id, key: id.replace("k-", "MAIN-"), title: titles[id] ?? "" });
 const titles: Record<string, string> = {
   "k-1": "Saved cards at checkout",
@@ -214,6 +220,7 @@ function task(n: number, extra: Partial<Rec> & { step_id?: string }): Rec {
     owner_id: "m-tu",
     rank: n,
     skill_id: stepSkill(extra.step_id),
+    workflow_id: stepOf(extra.step_id)?.workflow_id,
     breakdown: false,
     auto_complete: false,
     acceptance: false,
@@ -323,6 +330,7 @@ export function swTasks(): Rec[] {
     owner_id: "m-tu",
     rank: n,
     skill_id: stepSkill(extra.step_id),
+    workflow_id: stepOf(extra.step_id)?.workflow_id,
     breakdown: false,
     auto_complete: false,
     acceptance: false,
@@ -499,7 +507,7 @@ export async function mockLine(page: Page) {
         task: x,
         parent: parent && { id: parent.id, key: parent.key, title: parent.title },
         subtasks: tasks.filter((y) => y.parent_id === x.id),
-        step: s && { id: s.id, name: s.name, skill_id: s.skill_id, position: s.position, x: 0, y: 0 },
+        step: s && { id: s.id, workflow_id: s.workflow_id, name: s.name, skill_id: s.skill_id, position: s.position, x: 0, y: 0 },
         connectors: wf.connectors.filter((c) => c.from_step_id === x.step_id),
         labels: [],
         workspaces: [],

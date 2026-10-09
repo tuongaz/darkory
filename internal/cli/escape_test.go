@@ -118,8 +118,8 @@ func TestOutputEscapesEveryField(t *testing.T) {
 		`,"state":"open","owner_id":"m1","rank":1,"blocked":false,"breakdown":false,"auto_complete":false,"acceptance":false,"filed_by":"m1",` +
 		`"subtask_counts":{"open":1,"working":1,"done":0,"dropped":0},"waiting_since":"2026-10-06T00:00:00Z","created_at":"2026-10-06T00:00:00Z"}`
 	detail := `{"task":` + task + `,"parent":{"id":"f1","key":` + js("WEB-1"+h) + `,"title":` + js(h) + `},"subtasks":[],` +
-		`"step":{"id":"st1","name":` + js(h) + `,"skill_id":"s1","position":1,"x":0,"y":0},` +
-		`"connectors":[{"id":"k1","from_step_id":"st1","name":` + js(h) + `,"position":1}],` +
+		`"step":{"id":"st1","workflow_id":"w1","name":` + js(h) + `,"skill_id":"s1","position":1,"x":0,"y":0},` +
+		`"connectors":[{"id":"k1","from_step_id":"st1","name":` + js(h) + `,"position":1},{"id":"k2","from_step_id":"st1","to_step_id":"st2","name":` + js(h+"2") + `,"position":2}],` +
 		`"labels":[{"id":"l1","project_id":"p1","name":` + js(h) + `,"color":"#ff0000","created_at":"2026-10-06T00:00:00Z"}],` +
 		`"workspaces":[],"claims":[],"blockers":[` + task + `],"blocking":[],` +
 		`"notes":[{"id":"n1","task_id":"t3","author_id":"m1","body":` + js(h) + `,"created_at":"2026-10-06T00:00:00Z"}],` +
@@ -133,10 +133,16 @@ func TestOutputEscapesEveryField(t *testing.T) {
 		"GET /v1/tasks/WEB-1": {200, parentDetail},
 		"GET /v1/tasks/f1":    {200, parentDetail},
 		"GET /v1/projects":    {200, `{"items":[{"id":"p1","key":` + js("WEB"+h) + `,"name":` + js(h) + `,"auto_complete":false,"acceptance":false,"created_at":"2026-10-06T00:00:00Z"}]}`},
-		"GET /v1/projects/p1/workflow": {200, `{"project_id":"p1","steps":[{"id":"st1","name":` + js(h) + `,"skill_id":"s1","position":1,"x":0,"y":0,` +
-			`"tasks":1,"working":1,"takers":[{"id":"m1","name":` + js(h) + `,"kind":"agent"}],"median_ms":1000}],"connectors":[{"id":"k1","from_step_id":"st1","name":` + js(h) + `,"position":1}]}`},
-		"GET /v1/projects/WEB/workflow": {200, `{"project_id":"p1","steps":[{"id":"st1","name":` + js(h) + `,"skill_id":"s1","position":1,"x":0,"y":0,` +
-			`"tasks":1,"working":1,"takers":[{"id":"m1","name":` + js(h) + `,"kind":"agent"}],"median_ms":1000}],"connectors":[{"id":"k1","from_step_id":"st1","name":` + js(h) + `,"position":1}]}`},
+		"GET /v1/projects/p1/workflow": {200, `{"project_id":"p1","workflows":[{"id":"w1","name":` + js(h) + `,"position":1},{"id":"w2","name":` + js(h+"2") + `,"position":2}],` +
+			`"steps":[{"id":"st1","workflow_id":"w1","name":` + js(h) + `,"skill_id":"s1","position":1,"x":0,"y":0,` +
+			`"tasks":1,"working":1,"takers":[{"id":"m1","name":` + js(h) + `,"kind":"agent"}],"median_ms":1000},` +
+			`{"id":"st2","workflow_id":"w2","name":` + js(h+"2") + `,"position":1,"x":0,"y":0,"tasks":0,"working":0,"takers":[]}],` +
+			`"connectors":[{"id":"k1","from_step_id":"st1","name":` + js(h) + `,"position":1},{"id":"k2","from_step_id":"st1","to_step_id":"st2","name":` + js(h+"2") + `,"position":2}]}`},
+		"GET /v1/projects/WEB/workflow": {200, `{"project_id":"p1","workflows":[{"id":"w1","name":` + js(h) + `,"position":1},{"id":"w2","name":` + js(h+"2") + `,"position":2}],` +
+			`"steps":[{"id":"st1","workflow_id":"w1","name":` + js(h) + `,"skill_id":"s1","position":1,"x":0,"y":0,` +
+			`"tasks":1,"working":1,"takers":[{"id":"m1","name":` + js(h) + `,"kind":"agent"}],"median_ms":1000},` +
+			`{"id":"st2","workflow_id":"w2","name":` + js(h+"2") + `,"position":1,"x":0,"y":0,"tasks":0,"working":0,"takers":[]}],` +
+			`"connectors":[{"id":"k1","from_step_id":"st1","name":` + js(h) + `,"position":1},{"id":"k2","from_step_id":"st1","to_step_id":"st2","name":` + js(h+"2") + `,"position":2}]}`},
 		"GET /v1/labels":             {200, `{"items":[]}`},
 		"GET /v1/projects/p1/labels": {200, `{"items":[{"id":"l1","project_id":"p1","name":` + js(h) + `,"color":"#ff0000","created_at":"2026-10-06T00:00:00Z"}]}`},
 		"GET /v1/members":            {200, `{"items":[{"id":"m1","name":` + js(h) + `,"kind":"agent","admin":false,"created_at":"2026-10-06T00:00:00Z","email":` + js(h) + `}]}`},
@@ -147,10 +153,19 @@ func TestOutputEscapesEveryField(t *testing.T) {
 	ts := httptest.NewServer(rc)
 	defer ts.Close()
 	r := &runner{t: t, env: map[string]string{"DARKORY_URL": ts.URL, "DARKORY_TOKEN": "dk_test", "DARKORY_SESSION": "s"}}
+	show, workflow := r.ok("show", "WEB-3"), r.ok("workflow", "show", "WEB")
+	// The outcome into the other Workflow is named by its Workflow and Step, both cleaned, and each
+	// Workflow's heading is cleaned: the crossing path ran.
+	if crossing := one(h+"2") + " › " + one(h+"2"); !strings.Contains(show, crossing) || !strings.Contains(workflow, crossing) {
+		t.Errorf("the crossing outcome is not named %q:\n%s\n%s", crossing, show, workflow)
+	}
+	if !strings.HasPrefix(workflow, one(h)+"\n") || !strings.Contains(workflow, "\n"+one(h+"2")+"\n") {
+		t.Errorf("workflow show lacks the cleaned headings %q and %q:\n%s", one(h), one(h+"2"), workflow)
+	}
 	for name, out := range map[string]string{
-		"show":        r.ok("show", "WEB-3"),
+		"show":        show,
 		"parent show": r.ok("show", "WEB-1"),
-		"workflow":    r.ok("workflow", "show", "WEB"),
+		"workflow":    workflow,
 		"member list": r.ok("member", "list"),
 		"activity":    r.ok("activity"),
 		"error":       r.fails(ExitRefused, "claim", "WEB-3").stderr,

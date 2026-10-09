@@ -139,16 +139,19 @@ func (s *Service) connectorFor(ctx context.Context, c *auth.Caller, pre Task, ou
 	return nil, refuse(CodeNoConnector, "%s has no outcome %q; %s", st.Name, name, outcomes(ks)).with("outcomes", outcomeNames(ks))
 }
 
-// fromGuard holds while the Task is at the Step @from it was read at and the Connector @connector
-// still leads from there to @to: a Task moved, or a Workflow edited, since the read is refused
-// and read again. A Task at no Step has no Connector.
+// fromGuard holds while the Task is at the Step @from it was read at, still in the Workflow
+// @workflow it was read in (that Step's own, pre.StepWorkflowID), and the Connector @connector
+// still leads from there to @to: a Task moved, or a Workflow edited, since the read is refused and
+// read again. A Task at no Step has no Connector.
 func fromGuard(args map[string]any, pre Task, k *Connector) store.Stmt {
 	if k == nil {
 		return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t WHERE t.org_id = @org AND t.id = @task AND t.step_id IS NULL`, args))
 	}
-	return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t JOIN connectors k ON k.org_id = t.org_id AND k.from_step_id = t.step_id
-WHERE t.org_id = @org AND t.id = @task AND t.step_id = @from AND k.id = @connector AND k.to_step_id IS NOT DISTINCT FROM @to`,
-		with(args, map[string]any{"from": pre.StepID, "connector": k.ID, "to": k.ToStepID})))
+	return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t JOIN steps fs ON fs.org_id = t.org_id AND fs.id = t.step_id
+JOIN connectors k ON k.org_id = t.org_id AND k.from_step_id = t.step_id
+WHERE t.org_id = @org AND t.id = @task AND t.step_id = @from AND fs.workflow_id IS NOT DISTINCT FROM @workflow
+AND k.id = @connector AND k.to_step_id IS NOT DISTINCT FROM @to`,
+		with(args, map[string]any{"from": pre.StepID, "workflow": pre.StepWorkflowID, "connector": k.ID, "to": k.ToStepID})))
 }
 
 // advanceStmts move pre along k to its Step to: the Claim ends advanced, and the Task waits at
@@ -156,6 +159,7 @@ WHERE t.org_id = @org AND t.id = @task AND t.step_id = @from AND k.id = @connect
 func advanceStmts(c *auth.Caller, pre Task, k Connector, to Step, note *string, extra map[string]any, args map[string]any, now time.Time) (Task, []store.Stmt) {
 	out := pre
 	out.Claim, out.StepID, out.StepSince, out.WaitingSince, out.SkillID = nil, k.ToStepID, &now, now, to.SkillID
+	out.WorkflowID, out.StepWorkflowID = &to.WorkflowID, &to.WorkflowID
 	a := with(args, map[string]any{"to": k.ToStepID})
 	stmts := []store.Stmt{fromGuard(args, pre, &k)}
 	if note != nil && *note != "" {
@@ -172,7 +176,7 @@ func advanceStmts(c *auth.Caller, pre Task, k Connector, to Step, note *string, 
 		store.S(`UPDATE claims SET ended_at = @now, how_ended = 'advanced', ended_by = @member WHERE org_id = @org AND id = @claim`, a),
 		store.S(clearClaimSQL+`, step_id = @to, step_since = @now, waiting_since = @now WHERE org_id = @org AND id = @task`, a),
 		activityStmt(c.OrgID, &c.MemberID, "task.advanced", pre.ID, payload, now),
-		stepGuard(args, k.ToStepID, to.SkillID),
+		stepGuard(args, k.ToStepID, to.SkillID, &to.WorkflowID),
 	)
 	return out, stmts
 }
@@ -218,7 +222,8 @@ func (s *Service) sendBack(ctx context.Context, c *auth.Caller, pre Task, stale 
 // Acceptance or complete itself (parentStmts).
 func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Connector, ps []SkillProposal, note *string, args map[string]any, now time.Time) (any, []store.Stmt, error) {
 	out := pre
-	out.Claim, out.State, out.EndedAt, out.StepID, out.StepSince, out.SkillID = nil, "done", &now, nil, nil, nil
+	out.Claim, out.State, out.EndedAt, out.StepID, out.StepSince, out.SkillID, out.StepWorkflowID = nil, "done", &now, nil, nil, nil, nil
+	out.LastStepID = pre.StepID // its WorkflowID stays that Step's
 	stmts := []store.Stmt{fromGuard(args, pre, k)}
 	for _, p := range ps {
 		stmts = append(stmts, publishStmts(p, args)...)
@@ -228,7 +233,8 @@ func (s *Service) doneStmts(ctx context.Context, c *auth.Caller, pre Task, k *Co
 	}
 	stmts = append(stmts,
 		store.S(`UPDATE claims SET ended_at = @now, how_ended = 'completed', ended_by = @member WHERE org_id = @org AND id = @claim`, args),
-		store.S(clearClaimSQL+`, state = 'done', ended_at = @now, step_id = NULL, step_since = NULL WHERE org_id = @org AND id = @task`, args),
+		store.S(clearClaimSQL+`, state = 'done', ended_at = @now, last_step_id = step_id, step_id = NULL, step_since = NULL
+WHERE org_id = @org AND id = @task`, args),
 		store.S(supersedeSQL+` WHERE org_id = @org AND task_id = @task AND state = 'pending'`, args),
 	)
 	if pre.Kind == "retrospective" && pre.ParentID != nil {

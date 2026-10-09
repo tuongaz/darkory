@@ -1,13 +1,14 @@
 {
+  "workflows": [{"name": "Work", "position": 1}],
   "steps": [
-    {"name": "Backlog",      "position": 1, "x": 0,   "y": 0},
-    {"name": "Plan",         "skill": "breakdown",    "position": 2, "x": 0,   "y": 128},
-    {"name": "Build",        "skill": "engineer",     "position": 3, "x": 0,   "y": 256},
-    {"name": "QA",           "skill": "qa",           "position": 4, "x": 448, "y": 256},
-    {"name": "Review",       "skill": "review",       "position": 5, "x": 896, "y": 256},
-    {"name": "Acceptance",   "skill": "acceptance",   "position": 6, "x": 448, "y": 384},
-    {"name": "Retro",        "skill": "retro",        "position": 7, "x": 0,   "y": 512},
-    {"name": "Skill review", "skill": "skill-review", "position": 8, "x": 448, "y": 512}
+    {"workflow": "Work", "name": "Backlog",      "position": 1, "x": 0,   "y": 0},
+    {"workflow": "Work", "name": "Plan",         "skill": "breakdown",    "position": 2, "x": 0,   "y": 128},
+    {"workflow": "Work", "name": "Build",        "skill": "engineer",     "position": 3, "x": 0,   "y": 256},
+    {"workflow": "Work", "name": "QA",           "skill": "qa",           "position": 4, "x": 448, "y": 256},
+    {"workflow": "Work", "name": "Review",       "skill": "review",       "position": 5, "x": 896, "y": 256},
+    {"workflow": "Work", "name": "Acceptance",   "skill": "acceptance",   "position": 6, "x": 448, "y": 384},
+    {"workflow": "Work", "name": "Retro",        "skill": "retro",        "position": 7, "x": 0,   "y": 512},
+    {"workflow": "Work", "name": "Skill review", "skill": "skill-review", "position": 8, "x": 448, "y": 512}
   ],
   "connectors": [
     {"from": "Plan",         "name": "done",          "position": 1},

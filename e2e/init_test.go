@@ -62,7 +62,7 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		t.Fatalf("Workspaces %+v, MAIN's default %v", workspaces.Items, project.Project.DefaultWorkspaceID)
 	}
 	// MAIN's Workflow is the default: its Steps, their Skills, and the Connectors out of each.
-	var flow client.Workflow
+	var flow client.Workflows
 	ada.json(&flow, "workflow", "show", "MAIN")
 	var steps []string
 	for _, s := range flow.Steps {

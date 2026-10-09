@@ -411,21 +411,21 @@ export interface paths {
         get: operations["listProjects"];
         put?: never;
         /**
-         * Create a Project with its first Workflow (admin)
+         * Create a Project with its Workflows (admin)
          * @description The key prefixes the display keys of the Project's Tasks (`MAIN` in `MAIN-42`) and never
-         *     changes. The Project starts with a Workflow: `default` (Backlog, a hold · Plan carrying
-         *     `breakdown` · Build carrying `engineer` · Review carrying `review` · Retro carrying
-         *     `retro` · Skill review carrying `skill-review`, with the Connectors Plan → Done "done",
-         *     Build → Review "pass", Review → Done "pass", Review → Build "needs changes", Retro → Done
-         *     "done", Retro → Skill review "propose", Skill review → Done "publish", Skill review → Retro
-         *     "needs changes"); `empty` (Backlog, a hold, → Done "done"), for a Project that draws its
-         *     own; or `copy`, the Steps and Connectors of the Project `copy_from` names, without its
-         *     Tasks. The Members named are put in the Project in the same write; the creator is not,
-         *     unless named. `auto_complete` and `acceptance` are what a Task filed in the Project takes
-         *     when its filer does not say; both default to false. Records `project.created`. Errors:
-         *     `forbidden` (not an admin), `conflict` (key or name taken, ignoring case), `not_found` (no
-         *     such Project to copy, Workspace or Member), `invalid` (`copy` without `copy_from`, or
-         *     `copy_from` with another `workflow`).
+         *     changes. The Project starts with its Workflows: `default`, one Workflow named Work (Backlog,
+         *     a hold · Plan carrying `breakdown` · Build carrying `engineer` · Review carrying `review` ·
+         *     Retro carrying `retro` · Skill review carrying `skill-review`, with the Connectors Plan →
+         *     Done "done", Build → Review "pass", Review → Done "pass", Review → Build "needs changes",
+         *     Retro → Done "done", Retro → Skill review "propose", Skill review → Done "publish", Skill
+         *     review → Retro "needs changes"); `empty`, one Workflow named Work (Backlog, a hold, → Done
+         *     "done"), for a Project that draws its own; or `copy`, every Workflow of the Project
+         *     `copy_from` names, with its Steps and Connectors, without its Tasks. The Members named are
+         *     put in the Project in the same write; the creator is not, unless named. `auto_complete` and
+         *     `acceptance` are what a Task filed in the Project takes when its filer does not say; both
+         *     default to false. Records `project.created`. Errors: `forbidden` (not an admin), `conflict`
+         *     (key or name taken, ignoring case), `not_found` (no such Project to copy, Workspace or
+         *     Member), `invalid` (`copy` without `copy_from`, or `copy_from` with another `workflow`).
          */
         post: operations["createProject"];
         delete?: never;
@@ -526,43 +526,53 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get a Project's Workflow with what is happening at each Step now
-         * @description The Steps in their order and the Connectors out of each, with each Step's live facts: the
-         *     open Tasks at it, how many of them are being worked, the Members who could take them by
-         *     its Skill, and the median time Tasks spent at it over the last 30 days. Any Member may
-         *     read any Project's Workflow. A Task aimed at a Member, a Parent and an ended Task are at
-         *     no Step and counted at none.
+         * Get a Project's Workflows with what is happening at each Step now
+         * @description The Workflows in their order, the Steps in theirs and the Connectors out of each, with each
+         *     Step's live facts: the open Tasks at it, how many of them are being worked, the Members who
+         *     could take them by its Skill, and the median time Tasks spent at it over the last 30 days.
+         *     Any Member may read any Project's Workflows. A Task aimed at a Member, a Parent and an ended
+         *     Task are at no Step and counted at none.
          */
         get: operations["getWorkflow"];
         /**
-         * Replace a Project's Workflow (admin)
-         * @description Takes the whole Workflow. A Step already in it carries its `id` and may be renamed,
-         *     reordered, moved on the canvas or given another Skill; a new one has no `id`; one left out
-         *     is deleted. Connectors likewise: one left out is deleted, and one without `id` is new
-         *     unless a Connector out of the same Step with the same name exists, which it then keeps.
-         *     Steps are ordered by `position`, and each Step's Connectors by theirs; the list's own
-         *     order is not read. Changing a Step's Skill keeps the Tasks at it where they are, Claims
-         *     included, and the next `next` offers them by the new Skill. A deleted Step at which open
-         *     Tasks stand needs `moves` to say where they go, or it is refused with `step_in_use`; the
-         *     Tasks moved keep their Claims. The Steps carrying the builtin `breakdown`, `acceptance`
-         *     and `retro` Skills are where Darkory files the Subtasks it owns, and a Workflow may have
-         *     none of them: its Project then offers no Break down, files no Acceptance and no
-         *     Retrospective. A Workflow may have no Steps at all, and nothing can then be filed at one.
-         *     The same body may change who takes the Steps, so an editor saves its draft whole: it
-         *     creates the generic Skills in `skills` first, so a Step or a grant may name one, then puts
-         *     the Workflow in place, adds the Members in `joins` to the Project, and gives and takes
-         *     away the Skills in `grants` and `revokes`. All of it is one write: refused, none of it
-         *     is made. Records `workflow.changed` when the Workflow changes, and `skill.created`,
-         *     `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act
-         *     that changes something. Errors: `forbidden` (not an admin), `not_found` (no such
-         *     Skill or Member), `conflict` (a Skill in `skills` is named as one that exists),
-         *     `invalid` (a Skill's name in `skills` is not lower-case letters, digits and dashes, or
-         *     given twice; one Member and Skill both granted and revoked; two Steps share a name,
-         *     ignoring case, or a `position`; a Connector
-         *     names a Step that is not in the body; two Connectors out of one Step share a name,
-         *     ignoring case, or a `position`; an `id` the Workflow does not have, or given twice; a
-         *     `moves` key that is not a Step being deleted, or a value that is not a Step kept),
-         *     `step_in_use`.
+         * Replace a Project's Workflows (admin)
+         * @description Takes the Project's whole graph: every Workflow, every Step with the Workflow it belongs to,
+         *     and every Connector. A Workflow already there carries its `id` and may be renamed or
+         *     reordered; one without `id` keeps the id of the Workflow with the same name, ignoring case,
+         *     unless another Workflow of the body carries it, and any other is new; one left out is
+         *     deleted with its Steps, whose open Tasks need `moves` as for any deleted Step. A Step
+         *     already there carries its `id` and may be renamed, reordered, moved on the canvas, given
+         *     another Skill or put in another Workflow; a new one has no `id`; one left out is deleted.
+         *     Connectors likewise: one left out is deleted, and one without `id` is new unless a Connector
+         *     out of the same Step with the same name exists, which it then keeps. A Connector may lead
+         *     into a Step of another Workflow of the Project. Workflows are ordered by `position`, each
+         *     Workflow's Steps by theirs and each Step's Connectors by theirs; the lists' own order is read
+         *     only where a `position` is left out or 0. Changing a Step's Skill keeps the Tasks at it where they are, Claims included, and the
+         *     next `next` offers them by the new Skill. A deleted Step at which open Tasks stand needs
+         *     `moves` to say where they go, or it is refused with `step_in_use`; the Tasks moved keep
+         *     their Claims. The Steps carrying the builtin `breakdown`, `acceptance` and `retro` Skills
+         *     are where Darkory files the Subtasks it owns, the first of each by the Project's order, and
+         *     a Project may have none of them: it then offers no Break down, files no Acceptance and no
+         *     Retrospective. A Workflow may have no Steps at all, and a Project whose Workflows have none
+         *     files nothing.
+         *     The same body may change who takes the Steps, so an editor saves its draft whole: it creates
+         *     the generic Skills in `skills` first, so a Step or a grant may name one, then puts the
+         *     Workflows in place, adds the Members in `joins` to the Project, and gives and takes away the
+         *     Skills in `grants` and `revokes`. All of it is one write: refused, none of it is made.
+         *     Records `workflow.changed` when the Workflows change, and `skill.created`,
+         *     `project.member_added`, `member.skill_granted` and `member.skill_revoked` for each act that
+         *     changes something. Errors: `forbidden` (not an admin), `not_found` (no such Skill or
+         *     Member), `conflict` (a Skill in `skills` is named as one that exists), `invalid` (a Skill's
+         *     name in `skills` is not lower-case letters, digits and dashes, or given twice; one Member
+         *     and Skill both granted and revoked; no Workflow at all; two Workflows share a name, ignoring
+         *     case, or a `position`; a Step names a Workflow that is not in the body; two Steps share a
+         *     name, ignoring case; two Steps of one Workflow share a `position`; a Connector names a Step
+         *     that is not in the body; two Connectors out of one Step share a name, ignoring case, or a
+         *     `position`; a Workflow `id` the Project does not have, or given twice; a Step or Connector
+         *     `id` the Project does not have, or given twice; a Workflow, Step or Connector name that is
+         *     empty, over 50 characters, on more than one line, or spelled as an id; a negative
+         *     `position`; a `moves` key that is not a Step being deleted, or names one twice, or a value that is
+         *     not a Step of the body), `step_in_use`.
          */
         put: operations["setWorkflow"];
         post?: never;
@@ -799,17 +809,18 @@ export interface paths {
          *
          *     A Task with no Parent goes to the bottom of its Project's Rank, owned by `owner` or else
          *     the caller, who must be a Member of the Project. A Task or Subtask waits at `step`, or else
-         *     at the Workflow's first work Step: the first carrying a Skill other than those Darkory
-         *     files its own Subtasks at (`breakdown`, `acceptance`, `retro`, `skill-review`), which is
-         *     Build in the default Workflow; failing that, the first Step carrying any Skill; failing
-         *     that, the first Step. Break down is the `breakdown` switch, never where a Task lands by
-         *     default. At a hold no one is offered it until someone moves it on (`moveTask`). Aimed at a
-         *     Member by name (`aim`), it waits with that Member at no Step instead. With `breakdown` it
-         *     is a Parent from its first moment, at no Step: its Breakdown Subtask ("Break down:
-         *     <title>", kind `breakdown`, filed by nobody) is filed with it at the Workflow's Step
-         *     carrying `breakdown`, and whoever takes that files its other Subtasks. `auto_complete` and
-         *     `acceptance` default to the Project's. It names `workspaces`, or else the Project's
-         *     default Workspace, or none when the Project has no default.
+         *     at the Project's first work Step, by its Workflows' order then their Steps': the first
+         *     carrying a Skill other than those Darkory files its own Subtasks at (`breakdown`,
+         *     `acceptance`, `retro`, `skill-review`), which is Build in a `default` Project; failing that,
+         *     the first Step carrying any Skill; failing that, the first Step. Break down is the
+         *     `breakdown` switch, never where a Task lands by default. At a hold no one is offered it
+         *     until someone moves it on (`moveTask`). Aimed at a Member by name (`aim`), it waits with
+         *     that Member at no Step instead. With `breakdown` it is a Parent from its first moment, at no
+         *     Step: its Breakdown Subtask ("Break down: <title>", kind `breakdown`, filed by nobody) is
+         *     filed with it at the Project's first Step carrying `breakdown`, and whoever takes that files
+         *     its other Subtasks. `auto_complete` and `acceptance` default to the Project's. It names
+         *     `workspaces`, or else the Project's default Workspace, or none when the Project has no
+         *     default.
          *
          *     A Subtask (`parent`) takes its Parent's Project and Owner, sorts by its Parent's Rank,
          *     and names its Parent's Workspaces unless `workspaces` says otherwise, since its branch
@@ -840,9 +851,9 @@ export interface paths {
          *     `use_parent` (`owner` on a Subtask), `one_level` (the Parent is itself a Subtask), `held`
          *     (another Member holds the Parent), `ended` (the Parent has ended and the Task blocks
          *     nothing under it, or the blocked Task has ended), `not_holder` (another Member holds the
-         *     blocked Task), `no_step` (`breakdown` in a Workflow with no Step carrying `breakdown`, or
-         *     a Workflow with no Steps), `conflict` (the Parent-to-be blocks or is blocked by an open
-         *     Task; the blocked Task is a Parent), `cycle`.
+         *     blocked Task), `no_step` (`breakdown` in a Project with no Step carrying `breakdown`, or a
+         *     Project whose Workflows have no Steps), `conflict` (the Parent-to-be blocks or is blocked by
+         *     an open Task; the blocked Task is a Parent), `cycle`.
          */
         post: operations["fileTask"];
         delete?: never;
@@ -1058,11 +1069,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Move a Task to a Step of its Workflow by hand
-         * @description Puts an open Task that is not a Parent at any Step of its Project's Workflow, recorded as
-         *     a move rather than an advance; it is the only way out of a hold. By any Member of the
-         *     Project or the Task's Owner. A held Task may be moved only by whoever may take it back
-         *     (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
+         * Move a Task to a Step of its Project by hand
+         * @description Puts an open Task that is not a Parent at any Step of any of its Project's Workflows,
+         *     recorded as a move rather than an advance; it is the only way out of a hold. By any Member
+         *     of the Project or the Task's Owner. A held Task may be moved only by whoever may take it
+         *     back (someone on the holder's Reporting line, or the Owner), and the write ends the Claim
          *     `taken_back` first; anyone else is refused with `held`. A Task aimed at a Member then
          *     waits at the Step instead. `note` is added to the Task's Notes by the mover, under no
          *     Skill. Naming the Step the Task is at changes nothing. Records `task.moved` with `from`
@@ -1105,14 +1116,14 @@ export interface paths {
          *     reviewed by it.
          *
          *     A Subtask ending done may finish its Parent. When the Parent is open and every other
-         *     Subtask has ended: if the Parent has `acceptance` on, its Workflow has a Step carrying
+         *     Subtask has ended: if the Parent has `acceptance` on, its Project has a Step carrying
          *     `acceptance`, and the Subtask is not itself an Acceptance, Darkory files an Acceptance
          *     ("Acceptance: <Parent title>", kind `acceptance`, filed by nobody, owned by the Parent's
          *     Owner) at that Step; otherwise, if the Parent has `auto_complete` on, the Parent completes
          *     in the same write. A Parent that ends, done or dropped, files its Retrospective
-         *     ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Workflow's Step
-         *     carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets off
-         *     neither rule. Records `task.completed`, and the Parent's entries in the same write.
+         *     ("Retrospective: <title>", kind `retrospective`, filed by nobody) at the Project's first
+         *     Step carrying `retro`, when it has one; a Retrospective ending under an ended Parent sets
+         *     off neither rule. Records `task.completed`, and the Parent's entries in the same write.
          *     Errors: `not_holder`, `use_advance`, `forbidden` (a Parent's Complete by anyone but its
          *     Owner; the caller wrote a proposal it would publish), `tasks_open`, `ended`,
          *     `proposal_stale`.
@@ -1733,7 +1744,7 @@ export interface components {
          *
          *     `no_connector`: the Task's Step has no Connector of the outcome named, or several and none
          *     was named. `use_advance`: Complete was asked of a Task whose Step has no Connector or
-         *     several into Done. `no_step`: the Workflow has no Step the request needs (one carrying
+         *     several into Done. `no_step`: the Project has no Step the request needs (one carrying
          *     `breakdown` for Break down, or any Step to file at), or no Connector leads from a
          *     Retrospective's Step to one carrying `skill-review`. `one_level`: a Subtask has no
          *     Subtasks of its own. `held`: another Member holds the Task, and only its holder, or
@@ -2001,7 +2012,7 @@ export interface components {
             manager: string;
         };
         /**
-         * @description A body of work with the Members who do it: its own key, Workflow, Labels, Rank and
+         * @description A body of work with the Members who do it: its own key, Workflows, Labels, Rank and
          *     default Workspace. Every Task belongs to exactly one Project.
          */
         Project: {
@@ -2041,10 +2052,11 @@ export interface components {
             items: components["schemas"]["Project"][];
         };
         /**
-         * @description The Workflow a new Project starts with. `default`: Backlog · Plan · Build · Review · Retro
-         *     · Skill review, carrying `breakdown`, `engineer`, `review`, `retro` and `skill-review`.
-         *     `empty`: Backlog, a hold, → Done. `copy`: the Steps and Connectors of another Project.
-         *     `default` when not given.
+         * @description The Workflows a new Project starts with. `default`: one Workflow named Work, Backlog · Plan
+         *     · Build · Review · Retro · Skill review, carrying `breakdown`, `engineer`, `review`,
+         *     `retro` and `skill-review`, with their Connectors. `empty`: one Workflow named Work,
+         *     Backlog, a hold, → Done. `copy`: every Workflow of another Project, with its Steps and
+         *     Connectors. `default` when not given.
          * @enum {string}
          */
         NewWorkflow: "default" | "empty" | "copy";
@@ -2053,7 +2065,7 @@ export interface components {
             name: string;
             color?: components["schemas"]["ProjectColor"];
             workflow?: components["schemas"]["NewWorkflow"];
-            /** @description With `workflow` `copy` only, which needs it. Project id or key whose Workflow is copied. */
+            /** @description With `workflow` `copy` only, which needs it. Project id or key whose Workflows are copied. */
             copy_from?: string;
             /** @description Member ids or names put in the Project with it. The creator is not, unless named. */
             members?: string[];
@@ -2073,16 +2085,36 @@ export interface components {
             acceptance?: boolean;
         };
         /**
-         * @description A Project's Steps, in order, and the Connectors between them. The board's columns are
-         *     the Steps in this order, then Done.
+         * @description A Project's Workflows, with every Step and Connector. The Steps are ordered by their
+         *     Workflow's `position`, then their own; "the first Step" reads that order. Each
+         *     Workflow's board shows its Steps in order, then Done.
+         */
+        Workflows: {
+            /** Format: id */
+            project_id: string;
+            /** @description The Workflows, by `position`. */
+            workflows: components["schemas"]["Workflow"][];
+            /** @description Every Step, by its Workflow's `position` then its own, each with what is happening at it now. */
+            steps: components["schemas"]["WorkflowStep"][];
+            /** @description Every Connector, by its Step's order, then its own `position`. */
+            connectors: components["schemas"]["Connector"][];
+        };
+        /**
+         * @description A named set of Steps and the Connectors between them, drawn on a canvas and shown as the
+         *     columns of its own board. A Project has one or more; a Connector may lead into a Step of
+         *     another Workflow of the same Project, or into Done. A Task's Workflow is that of the Step
+         *     it is at.
          */
         Workflow: {
             /** Format: id */
-            project_id: string;
-            /** @description The Steps, by `position`, each with what is happening at it now. */
-            steps: components["schemas"]["WorkflowStep"][];
-            /** @description Every Connector, by its Step's `position`, then its own. */
-            connectors: components["schemas"]["Connector"][];
+            id: string;
+            /** @description Unique in its Project, ignoring case. */
+            name: string;
+            /**
+             * Format: int64
+             * @description Its place among the Project's Workflows, 1 first.
+             */
+            position: number;
         };
         /**
          * @description A place in a Workflow, carrying at most one Skill: a Task at it is taken by a Member with
@@ -2092,7 +2124,12 @@ export interface components {
         Step: {
             /** Format: id */
             id: string;
-            /** @description Unique in its Workflow, ignoring case. */
+            /**
+             * Format: id
+             * @description The Workflow it belongs to.
+             */
+            workflow_id: string;
+            /** @description Unique in its Project, ignoring case. */
             name: string;
             /**
              * Format: id
@@ -2101,7 +2138,7 @@ export interface components {
             skill_id?: string;
             /**
              * Format: int64
-             * @description Its place in the Workflow, 1 first.
+             * @description Its place in its Workflow, 1 first.
              */
             position: number;
             /**
@@ -2143,9 +2180,9 @@ export interface components {
             kind: components["schemas"]["MemberKind"];
         };
         /**
-         * @description A named way out of a Step into another Step, or into Done: the outcome its holder names
-         *     when they advance the Task. Advancing into Done completes the Task; dropping needs no
-         *     Connector.
+         * @description A named way out of a Step into another Step, of its Workflow or of another Workflow of the
+         *     same Project, or into Done: the outcome its holder names when they advance the Task.
+         *     Advancing into Done completes the Task; dropping needs no Connector.
          */
         Connector: {
             /** Format: id */
@@ -2167,20 +2204,28 @@ export interface components {
         };
         SetWorkflowBody: {
             /**
-             * @description Every Step of the new Workflow. A Step already in it carries its `id`; a new one has
-             *     none. A Step left out is deleted.
+             * @description Every Workflow of the Project, one at least. One already there carries its `id`; one
+             *     without an `id` keeps the id of the Workflow with the same name, ignoring case, unless
+             *     another Workflow of the body carries it, and any other is new. One left out is deleted
+             *     with its Steps, whose open Tasks need `moves`.
+             */
+            workflows: components["schemas"]["WorkflowInput"][];
+            /**
+             * @description Every Step of the Project, in any of its Workflows. A Step already there carries its
+             *     `id`; a new one has none. A Step left out is deleted.
              */
             steps: components["schemas"]["StepInput"][];
-            /** @description Every Connector of the new Workflow. One left out is deleted. */
+            /** @description Every Connector of the Project. One left out is deleted. */
             connectors: components["schemas"]["ConnectorInput"][];
             /**
-             * @description Where the open Tasks at a deleted Step go: the deleted Step's id to a Step of the new
-             *     Workflow, by its id or its name in `steps`.
+             * @description Where the Tasks at a deleted Step go, the open ones and the ended ones that ended at
+             *     it (`last_step_id`): the deleted Step's id to any Step of the body, by its id or its
+             *     name in `steps`.
              */
             moves?: {
                 [key: string]: string;
             };
-            /** @description Generic Skills to create before the Workflow is put in place, each published as version 1. */
+            /** @description Generic Skills to create before the Workflows are put in place, each published as version 1. */
             skills?: components["schemas"]["WorkflowSkillInput"][];
             /** @description Members, by id or name, to add to the Project; one in it already changes nothing. */
             joins?: string[];
@@ -2200,48 +2245,64 @@ export interface components {
             /** @description The Skill, by id or name; one in `skills` by its name. */
             skill: string;
         };
+        WorkflowInput: {
+            /**
+             * Format: id
+             * @description The id of a Workflow of the Project now; left out, the one with the same name keeps
+             *     its id unless another Workflow of the body carries it.
+             */
+            id?: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description Its place among the Workflows; distinct, and the Project numbers them 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
+             */
+            position?: number;
+        };
         StepInput: {
             /**
              * Format: id
-             * @description The id of a Step in the Workflow now; left out for a new one.
+             * @description The id of a Step of the Project now; left out for a new one.
              */
             id?: string;
+            /** @description The Workflow it belongs to, by its id or its name in `workflows`. */
+            workflow: string;
             name: string;
             /** @description Skill id or name the Step carries. Left out, the Step is a hold. */
             skill?: string;
             /**
              * Format: int64
-             * @description The Step's place in the Workflow; distinct among the Steps, and the Workflow numbers them 1, 2, 3… in this order.
+             * @description The Step's place in its Workflow; distinct among that Workflow's Steps, numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
              */
-            position: number;
+            position?: number;
             /**
              * Format: int64
-             * @description Left out, a Step in the Workflow now keeps its place, and a new one is drawn at (position − 1) × 448.
+             * @description Left out, a Step of the Project now keeps its place, and a new one is drawn at (position − 1) × 448 in its Workflow.
              */
             x?: number;
             /**
              * Format: int64
-             * @description Left out, a Step in the Workflow now keeps its place, and a new one is drawn at 0.
+             * @description Left out, a Step of the Project now keeps its place, and a new one is drawn at 0.
              */
             y?: number;
         };
         ConnectorInput: {
             /**
              * Format: id
-             * @description The id of a Connector in the Workflow now. Left out, a Connector out of the same Step
+             * @description The id of a Connector of the Project now. Left out, a Connector out of the same Step
              *     with the same name, ignoring case, keeps its id; any other is new.
              */
             id?: string;
             /** @description The Step it leads out of, by its id or its name in `steps`. */
             from: string;
-            /** @description The Step it leads to, by its id or its name in `steps`. Left out, it leads into Done. */
+            /** @description The Step it leads to, by its id or its name in `steps`, in any Workflow of the body. Left out, it leads into Done. */
             to?: string;
             name: string;
             /**
              * Format: int64
-             * @description Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order.
+             * @description Its place among the Connectors out of its Step; distinct among them, and numbered 1, 2, 3… in this order. Left out, or 0, it is the item's place in the list.
              */
-            position: number;
+            position?: number;
         };
         /**
          * @description A named, coloured mark carried by any number of Tasks: a Project's own, or the
@@ -2420,9 +2481,9 @@ export interface components {
             body: string;
         };
         /**
-         * @description The unit of work in a Project. A Task with no Subtasks is at one Step of its Project's
-         *     Workflow, where it is claimed, worked and advanced, or aimed at a Member by name and
-         *     waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
+         * @description The unit of work in a Project. A Task with no Subtasks is at one Step of one of its
+         *     Project's Workflows, where it is claimed, worked and advanced, or aimed at a Member by name
+         *     and waiting with them. A Task with Subtasks is a Parent: at no Step, never claimed, and
          *     neither blocking nor blocked. Waiting, being worked and blocked follow from the Claim and
          *     Blocking and are not stored.
          */
@@ -2466,6 +2527,21 @@ export interface components {
             step_since?: string;
             /**
              * Format: id
+             * @description The Workflow the Task is listed in: that of the Step it is at or ended at; for a
+             *     Parent, of its least-advanced open Subtask, or once ended of the Subtask that ended
+             *     last at or before it; for a Task aimed at a Member, of the Task it blocks, else of its
+             *     Parent. Absent when none gives one.
+             */
+            workflow_id?: string;
+            /**
+             * Format: id
+             * @description The Step an ended Task ended at; `moves` re-points it when that Step is deleted.
+             *     Absent while it is open, on a Task that ended at no Step (a Parent, a Task aimed at a
+             *     Member), and when that Step was since deleted with no `moves` for it.
+             */
+            last_step_id?: string;
+            /**
+             * Format: id
              * @description The Skill its Step carries: the Skill a Member needs to take it. Absent at a hold and
              *     wherever `step_id` is.
              */
@@ -2486,7 +2562,7 @@ export interface components {
             auto_complete: boolean;
             /**
              * @description Once every Subtask of a Parent has ended and the last to end ended done, Darkory files
-             *     an Acceptance under it, when its Workflow has a Step carrying `acceptance`. Always
+             *     an Acceptance under it, when its Project has a Step carrying `acceptance`. Always
              *     false on a Subtask.
              */
             acceptance: boolean;
@@ -2644,10 +2720,10 @@ export interface components {
             /** @description Member id or name. Defaults to the caller; a Subtask's is its Parent's and cannot be named. */
             owner?: string;
             /**
-             * @description Step id or name in the Project's Workflow to start at. Defaults to the first Step
-             *     carrying a Skill other than `breakdown`, `acceptance`, `retro` and `skill-review`
-             *     (Build in the default Workflow); failing that, the first Step carrying any Skill;
-             *     failing that, the first Step.
+             * @description Step id or name in any Workflow of the Project to start at. Defaults to the first Step,
+             *     by its Workflows' order then their Steps', carrying a Skill other than `breakdown`,
+             *     `acceptance`, `retro` and `skill-review` (Build in a `default` Project); failing that,
+             *     the first Step carrying any Skill; failing that, the first Step.
              */
             step?: string;
             /** @description File the Task with its Breakdown Subtask, making it a Parent from its first moment. */
@@ -2724,7 +2800,7 @@ export interface components {
             note?: string;
         };
         MoveTaskBody: {
-            /** @description Step id or name in the Task's Project's Workflow. */
+            /** @description Step id or name in any Workflow of the Task's Project. */
             step: string;
             /** @description Added to the Task's Notes in the same write. */
             note?: string;
@@ -2883,23 +2959,28 @@ export interface components {
          * @description What happened. The part before the dot is the `subject_type`. New kinds may be added
          *     within `/v1`; a client should skip a kind it does not know.
          *
-         *     The entries that trace a Task's path through its Workflow carry Step ids in their
+         *     The entries that trace a Task's path through its Project's Workflows carry Step ids in their
          *     payloads: `task.filed` its `step_id` (absent for a Task aimed at a Member or filed as a
-         *     Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no
-         *     Parent, `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break
-         *     down on; `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`,
-         *     and `from` when it was at a Step; `task.became_parent`, `task.completed` and
-         *     `task.dropped` `from` when it was at a Step. Those that leave a Step also carry `since`,
-         *     when the Task reached it, in milliseconds since the Unix epoch. The Subtasks Darkory files
-         *     itself (a Breakdown, an Acceptance, a Retrospective) are recorded with no actor.
-         *     `task.nudged` (no actor) says the Runner nudged the agent holding the Task, whose turn
-         *     had ended with no decision: `claim_id`, `holder_id` and `nudge`, 1 or 2.
+         *     Parent), with `parent_id`, `aimed_at_id`, `blocks`, `labels` and, for a Task with no Parent,
+         *     `auto_complete` and `acceptance`, and `breakdown` when it was filed with Break down on;
+         *     `task.advanced` `from` and `to` (Step ids) and `outcome`; `task.moved` `to`, and `from` when
+         *     it was at a Step; `task.became_parent`, `task.completed` and `task.dropped` `from` when it
+         *     was at a Step. Those that leave a Step also carry `since`, when the Task reached it, in
+         *     milliseconds since the Unix epoch. The Subtasks Darkory files itself (a Breakdown, an
+         *     Acceptance, a Retrospective) are recorded with no actor. `task.nudged` (no actor) says the
+         *     Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
+         *     `holder_id` and `nudge`, 1 or 2.
+         *
+         *     `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
+         *     (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
+         *     `position` each) and `connectors` (`id`, `from`, `to`, `name` each), with `moves` and
+         *     `tasks_moved` when open Tasks were moved off deleted Steps.
          * @enum {string}
          */
         ActivityKind: "task.filed" | "task.claimed" | "task.lapsed" | "task.nudged" | "task.released" | "task.advanced" | "task.moved" | "task.completed" | "task.dropped" | "task.taken_back" | "task.claim_ended" | "task.split" | "task.became_parent" | "task.note_added" | "task.observed" | "task.blocker_added" | "task.blocker_removed" | "task.evidence_attached" | "task.skill_proposed" | "task.ranked" | "task.owner_passed" | "task.labels_set" | "workflow.changed" | "label.created" | "label.changed" | "label.deleted" | "skill.created" | "skill.version_published" | "member.created" | "member.updated" | "member.manager_set" | "member.manager_cleared" | "member.skill_granted" | "member.skill_revoked" | "member.deactivated" | "member.reactivated" | "member.agent_changed" | "project.created" | "project.changed" | "project.member_added" | "project.member_removed" | "workspace.added" | "workspace.changed" | "workspace.removed" | "token.issued" | "token.revoked" | "session.closed" | "login_link.issued" | "login_link.redeemed" | "file.uploaded" | "file.deleted";
         /**
-         * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflow as a
-         *     whole; its `subject_id` is the Project's id.
+         * @description The kind of record an Activity entry is about. `workflow` is a Project's Workflows as a
+         *     whole, every Workflow, Step and Connector; its `subject_id` is the Project's id.
          * @enum {string}
          */
         SubjectType: "task" | "workflow" | "label" | "skill" | "member" | "project" | "token" | "session" | "login_link" | "workspace" | "file";
@@ -3112,10 +3193,13 @@ export interface components {
          *     `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
          *     `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
          *     match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
-         *     Parent, a Task aimed at a Member, an ended Task), and on a field with several values
-         *     (`label`, `workspace`) match a Task none of whose values is one given.
+         *     Parent, a Task aimed at a Member, an ended Task; `workflow:not:<id>` matches a Task with no
+         *     `workflow_id`: a Task aimed at a Member that blocks no Task at a Step and has no Parent
+         *     placed, an ended Task whose last Step was since deleted), and on a field with several values (`label`, `workspace`) match a Task none of
+         *     whose values is one given.
          *
-         *     Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+         *     Fields: `project` (Project id) · `step` (Step id the Task is at) · `workflow` (Workflow
+         *     id the Task is listed in, as its `workflow_id` reads) · `skill` (Skill id
          *     carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
          *     `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
          *     (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
@@ -4089,13 +4173,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The Workflow. */
+            /** @description The Workflows. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Workflow"];
+                    "application/json": components["schemas"]["Workflows"];
                 };
             };
             default: components["responses"]["Error"];
@@ -4123,13 +4207,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The new Workflow, as `getWorkflow` returns it. */
+            /** @description The new Workflows, as `getWorkflow` returns them. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Workflow"];
+                    "application/json": components["schemas"]["Workflows"];
                 };
             };
             default: components["responses"]["Error"];
@@ -4556,6 +4640,12 @@ export interface operations {
                 state?: components["schemas"]["TaskState"];
                 /** @description Only Tasks at this Step, by id, or by name together with `project`. */
                 step?: string;
+                /**
+                 * @description Only Tasks listed in this Workflow, as each Task's `workflow_id` reads: those at or
+                 *     ended at one of its Steps, and the Parents and Tasks aimed at a Member placed in it. By
+                 *     id, or by name together with `project`.
+                 */
+                workflow?: string;
                 /** @description Only Tasks aimed at this Member. */
                 aimed_at?: string;
                 /** @description Only Tasks this Member holds a live Claim on. */
@@ -4577,10 +4667,13 @@ export interface operations {
                  *     `2026-10-07T09:00:00.000+11:00`; a day picked in a browser is sent as its local bounds,
                  *     `btw:2026-10-04T00:00:00.000+11:00,2026-10-04T23:59:59.999+11:00`. `not` and `nin` also
                  *     match a Task with no value for the field (`step:not:<id>` matches a Task at no Step: a
-                 *     Parent, a Task aimed at a Member, an ended Task), and on a field with several values
-                 *     (`label`, `workspace`) match a Task none of whose values is one given.
+                 *     Parent, a Task aimed at a Member, an ended Task; `workflow:not:<id>` matches a Task with no
+                 *     `workflow_id`: a Task aimed at a Member that blocks no Task at a Step and has no Parent
+                 *     placed, an ended Task whose last Step was since deleted), and on a field with several values (`label`, `workspace`) match a Task none of
+                 *     whose values is one given.
                  *
-                 *     Fields: `project` (Project id) · `step` (Step id the Task is at) · `skill` (Skill id
+                 *     Fields: `project` (Project id) · `step` (Step id the Task is at) · `workflow` (Workflow
+                 *     id the Task is listed in, as its `workflow_id` reads) · `skill` (Skill id
                  *     carried by the Task's Step; a hold carries none) · `label` (Label id the Task carries) ·
                  *     `parent` (Task id of the Task's Parent, or `none` for a Task with no Parent) · `top`
                  *     (`true`: a Task with no Parent, as `parent:is:none`; `false`: a Subtask) · `holder`
@@ -5566,7 +5659,7 @@ export interface operations {
                 /** @description Only entries of these kinds; repeat it for several. */
                 kind?: components["schemas"]["ActivityKind"][];
                 /**
-                 * @description Only entries about this Project (id or key): the Project itself, its Workflow, its own
+                 * @description Only entries about this Project (id or key): the Project itself, its Workflows, its own
                  *     Labels, or a Task of it.
                  */
                 project?: string;

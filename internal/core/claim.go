@@ -57,7 +57,8 @@ func claimStmts(c *auth.Caller, taskID, claimID string, pre TaskDetail, version 
 	}
 	for k, v := range map[string]any{
 		"task": taskID, "claim": claimID, "session": c.SessionID, "timeout": timeoutMS, "expires": expires,
-		"label": o.ModelLabel, "step": pre.Task.StepID, "skill": pre.Task.SkillID, "version": version,
+		"label": o.ModelLabel, "step": pre.Task.StepID, "skill": pre.Task.SkillID,
+		"workflow": pre.Task.StepWorkflowID, "version": version,
 		"claims": int64(len(pre.Claims)), "open": open,
 	} {
 		args[k] = v
@@ -90,16 +91,7 @@ outgoing_expires_at = claim_expires_at, claim_id = @claim, claim_holder_id = @me
 claim_skill_id = (SELECT cst.skill_id FROM steps cst WHERE cst.org_id = @org AND cst.id = t.step_id),
 claim_timeout_ms = @timeout, claim_expires_at = @expires
 WHERE t.id = @task AND `+takeableSQL, args),
-		// The claim happened, on the Task as it was read: at the same Step, whose Skill is the one
-		// read, at the same version, and with the Claims it lists — none made since the read, and
-		// none open then ended since (the response would show a Claim released meanwhile as
-		// lapsed). Claims are never removed, and this runs before the new Claim is added.
-		withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t LEFT JOIN steps gs ON gs.org_id = @org AND gs.id = t.step_id
-WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim
-AND t.step_id IS NOT DISTINCT FROM @step AND gs.skill_id IS NOT DISTINCT FROM @skill
-AND (gs.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.org_id = @org AND s.id = gs.skill_id AND s.current_version = @version))
-AND (SELECT COUNT(*) FROM claims c WHERE c.org_id = @org AND c.task_id = @task) = @claims
-AND (SELECT COUNT(*) FROM claims c WHERE c.org_id = @org AND c.task_id = @task AND c.ended_at IS NULL) = @open`, args)),
+		claimGuard(args),
 		store.S(`INSERT INTO activity (org_id, seq, actor_id, kind, subject_id, payload, at)
 SELECT @org, o.seq, NULL, 'task.lapsed', ot.id, '{"claim_id":"' || oc.id || '","holder_id":"' || oc.holder_id || '","how_ended":"lapsed"}', CAST(@now AS BIGINT)
 FROM tasks ot JOIN claims oc ON oc.id = ot.outgoing_claim_id JOIN organisations o ON o.id = @org
@@ -112,6 +104,21 @@ SELECT @claim, @org, t.id, @member, @session, t.claim_skill_id, s.current_versio
 FROM tasks t LEFT JOIN skills s ON s.org_id = @org AND s.id = t.claim_skill_id WHERE t.org_id = @org AND t.id = @task`, args),
 		activityStmt(c.OrgID, &c.MemberID, "task.claimed", taskID, payload, now),
 	}
+}
+
+// claimGuard holds when the claim happened, on the Task as it was read: at the same Step @step,
+// whose Skill @skill is the one read, at the same version @version, in the Workflow @workflow of
+// that Step (nil at no Step), and with the Claims it lists, @claims — none made since the read,
+// and @open of them open — none open then ended since (the response would show a Claim released
+// meanwhile as lapsed). Claims are never removed, and this runs before the new Claim is added.
+func claimGuard(args map[string]any) store.Stmt {
+	return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t LEFT JOIN steps gs ON gs.org_id = @org AND gs.id = t.step_id
+WHERE t.org_id = @org AND t.id = @task AND t.claim_id = @claim
+AND t.step_id IS NOT DISTINCT FROM @step AND gs.skill_id IS NOT DISTINCT FROM @skill
+AND gs.workflow_id IS NOT DISTINCT FROM @workflow
+AND (gs.skill_id IS NULL OR EXISTS (SELECT 1 FROM skills s WHERE s.org_id = @org AND s.id = gs.skill_id AND s.current_version = @version))
+AND (SELECT COUNT(*) FROM claims c WHERE c.org_id = @org AND c.task_id = @task) = @claims
+AND (SELECT COUNT(*) FROM claims c WHERE c.org_id = @org AND c.task_id = @task AND c.ended_at IS NULL) = @open`, args))
 }
 
 // sessionOpenGuard holds while the Session @session is open and its token, if any, unrevoked.
@@ -547,12 +554,14 @@ func (s *Service) runHeldWrite(ctx context.Context, c *auth.Caller, ref string, 
 }
 
 // stepGuard is the guard a held write that answers with its Task ends with: the Task is at the
-// Step the response names (none for nil), carrying the Skill it names, which a Workflow edited
-// meanwhile may have changed.
-func stepGuard(args map[string]any, step, skill *string) store.Stmt {
+// Step the response names (none for nil), carrying the Skill and in the Workflow it names, either
+// of which `SetWorkflow` may have changed. workflow is that Step's own Workflow, never the Task's
+// WorkflowID, which also reads its last Step.
+func stepGuard(args map[string]any, step, skill, workflow *string) store.Stmt {
 	return withGuard(store.S(`SELECT 1 / COUNT(*) FROM tasks t LEFT JOIN steps gs ON gs.org_id = t.org_id AND gs.id = t.step_id
-WHERE t.org_id = @org AND t.id = @task AND t.step_id IS NOT DISTINCT FROM @step AND gs.skill_id IS NOT DISTINCT FROM @skill`,
-		with(args, map[string]any{"step": step, "skill": skill})))
+WHERE t.org_id = @org AND t.id = @task AND t.step_id IS NOT DISTINCT FROM @step AND gs.skill_id IS NOT DISTINCT FROM @skill
+AND gs.workflow_id IS NOT DISTINCT FROM @workflow`,
+		with(args, map[string]any{"step": step, "skill": skill, "workflow": workflow})))
 }
 
 // with copies args and adds kv, so one op's statements can bind more than the guard.
@@ -602,7 +611,7 @@ func (s *Service) Release(ctx context.Context, c *auth.Caller, ref string, note 
 			stmts = append(stmts, noteStmt(pre, args, newID(), *note))
 		}
 		stmts = append(stmts, activityStmt(c.OrgID, &c.MemberID, "task.released", pre.ID, map[string]any{"claim_id": pre.Claim.ID}, now),
-			stepGuard(args, pre.StepID, pre.SkillID))
+			stepGuard(args, pre.StepID, pre.SkillID, pre.StepWorkflowID))
 		return out, stmts, nil
 	}})
 	if err != nil {

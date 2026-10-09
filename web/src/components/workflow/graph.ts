@@ -2,7 +2,8 @@ import { glyphFor, type MemberKind, type SessionState, type WorkGlyph, type Work
 import { routeGrid, type GridArrow, type GridEdge } from "./gridRoute";
 
 /** A Step of the Project's Workflow, as the graph's columns need it. */
-export type GraphStep = { id: string; name: string; skill?: { id: string; name: string } };
+/** A Step as a graph draws it; `workflowId` names its Workflow, where the drawing keeps to one. */
+export type GraphStep = { id: string; name: string; workflowId?: string; skill?: { id: string; name: string } };
 
 /** A Subtask as the graph draws it. M4 binds `TaskDetail.subtasks` to this. */
 export type GraphSubtask = {

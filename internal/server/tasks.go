@@ -40,7 +40,7 @@ func (s *Server) FileTask(w http.ResponseWriter, r *http.Request, params gen.Fil
 // beside this server runs now.
 func (s *Server) ListTasks(w http.ResponseWriter, r *http.Request, params gen.ListTasksParams) {
 	tf := core.TaskFilter{Project: params.Project, Parent: params.Parent, State: (*string)(params.State), Step: params.Step,
-		AimedAt: params.AimedAt, Holder: params.Holder}
+		Workflow: params.Workflow, AimedAt: params.AimedAt, Holder: params.Holder}
 	if params.Filter != nil {
 		tf.Filters = *params.Filter
 		if run := s.theRunner(); run != nil {

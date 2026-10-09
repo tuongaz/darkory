@@ -76,6 +76,7 @@ var soakSteps = []string{"A", "B", "C", "D"}
 // other work Step, "to-<step>", so a holder may complete a Task at any of them or advance it on.
 func soakFlow() string {
 	type step struct {
+		Workflow string `json:"workflow"`
 		Name     string `json:"name"`
 		Skill    string `json:"skill"`
 		Position int    `json:"position"`
@@ -86,10 +87,10 @@ func soakFlow() string {
 		Name     string  `json:"name"`
 		Position int     `json:"position"`
 	}
-	steps := []step{{"Plan", "breakdown", 1}}
+	steps := []step{{"Work", "Plan", "breakdown", 1}}
 	connectors := []connector{{From: "Plan", Name: "done", Position: 1}}
 	for i, name := range soakSteps {
-		steps = append(steps, step{name, soakSkills[i], i + 2})
+		steps = append(steps, step{"Work", name, soakSkills[i], i + 2})
 		connectors = append(connectors, connector{From: name, Name: "done", Position: 1})
 		for j, to := range soakSteps {
 			if to != name {
@@ -97,9 +98,9 @@ func soakFlow() string {
 			}
 		}
 	}
-	steps = append(steps, step{"Retro", "retro", len(soakSteps) + 2})
+	steps = append(steps, step{"Work", "Retro", "retro", len(soakSteps) + 2})
 	connectors = append(connectors, connector{From: "Retro", Name: "done", Position: 1})
-	b, _ := json.Marshal(map[string]any{"steps": steps, "connectors": connectors})
+	b, _ := json.Marshal(map[string]any{"workflows": []map[string]any{{"name": "Work", "position": 1}}, "steps": steps, "connectors": connectors})
 	return string(b)
 }
 

@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { BIG, MAIN, SOFTWARE } from "./fixtures";
+import { wfId } from "@/test/fixtures";
+import { BIG, FIVE, MAIN, SOFTWARE } from "./fixtures";
 import { brackets, lineTopology, railX, VERTICAL_GUTTER, bracketX } from "./layout";
 import { WorkflowLine } from "./WorkflowLine";
 
@@ -49,5 +50,24 @@ describe("the line down a phone", () => {
     expect(xs.length).toBe(brackets(lineTopology(SOFTWARE)).length);
     expect(Math.min(...xs)).toBeGreaterThanOrEqual(VERTICAL_GUTTER);
     expect(railX(lineTopology(SOFTWARE))).toBeGreaterThan(32);
+  });
+
+  it("draws the same exits and entries as the line across: Triage's four outcomes into other Workflows as chips, the entry from Triage on Bugs' first Step", () => {
+    const { unmount } = render(<WorkflowLine workflow={FIVE(wfId.triage)} tasks={[]} now={0} orientation="vertical" />);
+    const rail = screen.getByRole("list", { name: "Steps on the line" });
+    for (const text of ["bug → Bugs › Investigate", "feature → Features › Build", "prototype → Prototypes › Sketch", "question → Support › Support"]) {
+      expect(within(rail).getByText(text)).toHaveAttribute("data-exit");
+    }
+    expect(within(rail).queryByText(/^from /)).toBeNull();
+    unmount();
+
+    render(<WorkflowLine workflow={FIVE(wfId.bugs)} tasks={[]} now={0} orientation="vertical" />);
+    const bugs = screen.getByRole("list", { name: "Steps on the line" });
+    const entry = within(bugs).getByText("from Triage · bug");
+    expect(entry).toHaveAttribute("data-arrival");
+    expect(entry.closest("li")).toHaveTextContent(/^Investigate/);
+    expect(within(bugs).queryByText(/→ .* › /)).toBeNull();
+    // New Tasks start at Triage, not on this line.
+    expect(screen.queryByText(/New Tasks start here/)).toBeNull();
   });
 });

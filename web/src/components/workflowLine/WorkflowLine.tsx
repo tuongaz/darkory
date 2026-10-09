@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { quiet, type FlowState } from "@/components/workflow/live";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -111,9 +111,12 @@ export function WorkflowLine(props: WorkflowLineProps) {
     return { density: d, fits: false };
   }, [topology, w, measure, fixed, compact]);
   // The drawing itself may find its heads and words meet once its Tasks are in (a name line
-  // carrying tokens): then it too runs down the page, at that width.
+  // carrying tokens): then it too runs down the page, at that width and any narrower.
   const [tight, setTight] = useState<{ width: number; topology: unknown } | null>(null);
-  const tooTight = !!tight && tight.width === w && tight.topology === topology;
+  const tooTight = !!tight && tight.topology === topology && w <= tight.width;
+  // Said once per width and drawing: unmeasured (a test's DOM) the line stays across, and a second
+  // word would only draw it again.
+  const onTight = useCallback(() => setTight((t) => (t && t.topology === topology && w <= t.width ? t : { width: w, topology })), [w, topology]);
   const vertical = props.orientation === "vertical" || (props.orientation !== "horizontal" && width > 0 && (width < (props.verticalBelow ?? VERTICAL_BELOW) || !fits || tooTight));
   const flow = props.flow ?? quiet;
   const all = props.all ?? props.tasks;
@@ -192,7 +195,7 @@ export function WorkflowLine(props: WorkflowLineProps) {
           highlight={props.highlight}
           noBranch={props.noBranch}
           measure={measure}
-          onTight={() => setTight({ width: w, topology })}
+          onTight={onTight}
         />
       )}
       {heavy && !vertical && <LoopsList loops={topology.loops} onHover={setLitLoop} />}

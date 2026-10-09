@@ -185,11 +185,11 @@ func TestProposingNeedsAWayToSkillReview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		in := core.WorkflowInput{}
+		in := core.WorkflowsInput{Workflows: []core.WorkflowInput{{Name: core.WorkflowFirstName, Position: 1}}}
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name
-			in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
+			in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Workflow: s.WorkflowID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
 		}
 		for _, k := range w.Connectors {
 			if k.Name == "propose" {

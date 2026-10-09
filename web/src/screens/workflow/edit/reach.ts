@@ -3,6 +3,7 @@ import type { Member, Skill } from "@/api/client";
 import { api, call } from "@/api/client";
 import { keys, useMembers, useProjects } from "@/api/queries";
 import type { WorkflowRecord } from "../bind";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import { orgWide } from "./holders";
 
 /*
@@ -31,7 +32,7 @@ type SkillRef = Pick<Skill, "id" | "name" | "builtin">;
 
 const placesOf = (facts: OrgFacts, project: OrgProject, has: (skill: string | undefined) => boolean): Place[] =>
   [...(facts.workflows.get(project.key)?.steps ?? [])]
-    .sort((a, b) => a.position - b.position)
+    .sort(inProjectOrder(facts.workflows.get(project.key)?.workflows ?? []))
     .filter((s) => has(s.skill_id))
     .map((s) => ({ project, step: { id: s.id, name: s.name }, tasks: s.tasks }));
 

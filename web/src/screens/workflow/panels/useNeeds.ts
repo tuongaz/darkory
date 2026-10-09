@@ -4,6 +4,7 @@ import { api, call, type Activity, type Member, type Project, type TaskDetail } 
 import { keys, useDirectory, useOpenTasks, useRunnerSessions } from "@/api/queries";
 import { useNow } from "@/clock";
 import { useWorkflows } from "@/components/filters/useTaskFilter";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 import { useCurrentMe } from "@/me";
 import { useRecentActivity, useTaskDetails } from "@/screens/inbox/queries";
 import { agentNeedsOf, needsOf, type AgentNeed, type NeedItem } from "./needs";
@@ -20,11 +21,12 @@ export type Needs = {
 const noProjects: Project[] = [];
 
 /**
- * What needs the signed-in Member in `project`, or across every Project with none (the Inbox):
+ * What needs the signed-in Member in `project` (of the Workflow `shown`, when its page shows one),
+ * or across every Project with none (the Inbox):
  * the decision cards in their order and the agents whose sessions wait on someone. Every read is
  * shared with the rest of the app, so Needs you and What's happening ask once between them.
  */
-export function useNeeds(project?: Project): Needs {
+export function useNeeds(project?: Project, shown?: ShownWorkflow): Needs {
   const me = useCurrentMe().member;
   const now = useNow();
   const dir = useDirectory();
@@ -60,6 +62,7 @@ export function useNeeds(project?: Project): Needs {
       now,
       open: tasks,
       projectId: project?.id,
+      shown,
       workflows,
       members: dir.members,
       projectMembers,
@@ -79,5 +82,5 @@ export function useNeeds(project?: Project): Needs {
       error: open.error,
     };
     // The reads' stamps stand for their arrays, which are new on every render.
-  }, [me, now, tasks, project?.id, workflows, dir.members, dir.skills, sessions.data, detailStamp, projectStamp, lapseStamp, nudgeStamp, open.isPending, open.error]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [me, now, tasks, project?.id, shown, workflows, dir.members, dir.skills, sessions.data, detailStamp, projectStamp, lapseStamp, nudgeStamp, open.isPending, open.error]); // eslint-disable-line react-hooks/exhaustive-deps
 }

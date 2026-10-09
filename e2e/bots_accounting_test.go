@@ -60,7 +60,7 @@ func TestBotsAccounting(t *testing.T) {
 
 	// TAX's Workflow is the accounting one; there is no agent and no Workspace.
 	wf := admin.workflow(bot.ProjectTax)
-	if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(bot.AccountingWorkflow)) {
+	if names := stepNamesOf(wf); !slices.Equal(names, specStepNames(&bot.Accounting)) {
 		t.Fatalf("TAX's Workflow is %v", names)
 	}
 	steps := map[string]client.WorkflowStep{}
@@ -247,7 +247,7 @@ func TestBotsAccounting(t *testing.T) {
 	for _, tk := range admin.tasks(client.ListTasksParams{}) {
 		tasks[tk.ID] = admin.task(tk.Key)
 	}
-	workflows := map[string]client.Workflow{wf.ProjectID: wf}
+	workflows := map[string]client.Workflows{wf.ProjectID: wf}
 	predicted := replay(t, trail, workflows)
 	for _, d := range tasks {
 		if d.Task.Claim != nil {

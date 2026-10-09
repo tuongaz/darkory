@@ -8,6 +8,7 @@ import { lineTopology } from "@/components/workflowLine";
 import type { RecordStep } from "../bind";
 import { asLine, deadEndsAfterDelete, deleteStep, inbound, outcomes, tasksAt, type Draft, type Repoint } from "./draft";
 import { andList } from "./reach";
+import { StepOptions } from "./StepOptions";
 
 const REMOVE = "@remove";
 const DONE = "@done";
@@ -21,21 +22,18 @@ const DONE = "@done";
 export function DeleteStepDialog({
   draft,
   step,
-  order,
   skills,
   onClose,
   onDelete,
 }: {
   draft: Draft;
   step: RecordStep;
-  order: RecordStep[];
   skills: Map<string, Pick<Skill, "name">>;
   onClose: () => void;
   onDelete: (moveTo: string | undefined, repoint: Repoint) => void;
 }) {
   const name = step.name.trim() || "the new Step";
-  const nameOf = (id: string | undefined) => (id ? order.find((s) => s.id === id)?.name.trim() || "New Step" : "Done");
-  const others = order.filter((s) => s.id !== step.id);
+  const nameOf = (id: string | undefined) => (id ? draft.wf.steps.find((s) => s.id === id)?.name.trim() || "New Step" : "Done");
   const tasks = tasksAt(draft, step.id);
   const into = inbound(draft.wf, step.id);
   const [to, setTo] = useState<string | undefined>();
@@ -92,11 +90,7 @@ export function DeleteStepDialog({
                 <SelectValue placeholder="Pick a Step" />
               </SelectTrigger>
               <SelectContent position="popper" align="start">
-                {others.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name.trim() || "New Step"}
-                  </SelectItem>
-                ))}
+                <StepOptions wf={draft.wf} first={step.workflow_id} offered={(s) => s.id !== step.id} />
               </SelectContent>
             </Select>
           </div>
@@ -123,13 +117,8 @@ export function DeleteStepDialog({
                     <SelectContent position="popper" align="start">
                       <SelectItem value={REMOVE}>Remove this outcome</SelectItem>
                       <SelectSeparator />
-                      {others
-                        .filter((s) => s.id !== c.from_step_id)
-                        .map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name.trim() || "New Step"}
-                          </SelectItem>
-                        ))}
+                      <StepOptions wf={draft.wf} first={step.workflow_id} offered={(s) => s.id !== step.id && s.id !== c.from_step_id} />
+                      <SelectSeparator />
                       <SelectItem value={DONE}>Done</SelectItem>
                     </SelectContent>
                   </Select>

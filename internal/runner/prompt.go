@@ -39,10 +39,12 @@ type PromptTask struct {
 	Outcomes []PromptOutcome
 }
 
-// PromptOutcome is one way out of a Task's Step: Name, into Done when Done.
+// PromptOutcome is one way out of a Task's Step: Name, into Done when Done. To names the Step it
+// leads to as Workflow › Step when that Step is in another Workflow than the Task's; empty
+// otherwise.
 type PromptOutcome struct {
-	Name string
-	Done bool
+	Name, To string
+	Done     bool
 }
 
 // PromptParent is the Task's Parent.
@@ -211,6 +213,8 @@ func BuildPrompt(p Prompt) string {
 			if o.Done {
 				outs = append(outs, fmt.Sprintf("`%s` (into Done)", line(o.Name)))
 				done = append(done, o.Name)
+			} else if o.To != "" {
+				outs = append(outs, fmt.Sprintf("`%s` (to %s)", line(o.Name), line(o.To)))
 			} else {
 				outs = append(outs, fmt.Sprintf("`%s`", line(o.Name)))
 			}

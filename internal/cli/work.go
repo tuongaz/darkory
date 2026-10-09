@@ -40,7 +40,7 @@ var workCommands = []command{
 	{path: "block", args: "<task> --by <task>", short: "let a Task block another", run: cmdBlock},
 	{path: "unblock", args: "<task> --by <task>", short: "stop a Task blocking another", run: cmdUnblock},
 	{path: "show", args: "<task>", short: "show a Task with its Step and outcomes, Subtasks, Claims, Notes, Evidence and Observations", run: cmdShow},
-	{path: "tasks", args: "[--project p] [--parent task] [--state s] [--step s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
+	{path: "tasks", args: "[--project p] [--parent task] [--state s] [--workflow w] [--step s] [--aimed-at m] [--holder m | --mine] [--filter field:op:values]...", short: "list Tasks", run: cmdTasks},
 	{path: "propose", args: "<task> --skill skill --base n --file path|-", short: "propose a new version of a company Skill", run: cmdPropose},
 	{path: "proposal show", args: "<task|proposal id>", short: "show the Skill proposals written on a Task, or one by id", run: cmdProposalShow},
 	{path: "activity", args: "[--after n | --before n | --all] [--limit n] [--member m] [--kind k,…] [--project p] [--task t] [--follow]", short: "read Activity (the latest page by default), or follow it as it is written", run: cmdActivity, long: true},
@@ -692,6 +692,7 @@ func cmdTasks(c *call) error {
 	project := c.fs.String("project", "", "only this Project's Tasks")
 	parent := c.fs.String("parent", "", "only this Parent's Subtasks")
 	state := c.fs.String("state", "", "only Tasks in this state: open, done or dropped")
+	workflow := c.fs.String("workflow", "", "only Tasks listed in this Workflow, Parents and questions placed in it too: its id, or its name with --project")
 	step := c.fs.String("step", "", "only Tasks at this Step: its id, or its name with --project")
 	aimed := c.fs.String("aimed-at", "", "only Tasks aimed at this Member")
 	holder := c.fs.String("holder", "", "only Tasks this Member holds")
@@ -707,7 +708,7 @@ func cmdTasks(c *call) error {
 	if err != nil {
 		return err
 	}
-	params := &client.ListTasksParams{Project: opt(*project), Parent: opt(*parent), Step: opt(*step), AimedAt: opt(*aimed),
+	params := &client.ListTasksParams{Project: opt(*project), Parent: opt(*parent), Workflow: opt(*workflow), Step: opt(*step), AimedAt: opt(*aimed),
 		Holder: opt(*holder), Cursor: opt(*cursor)}
 	if filters.set {
 		params.Filter = &filters.v

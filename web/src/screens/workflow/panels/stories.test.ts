@@ -3,6 +3,7 @@ import type { Activity, RunnerSession, Task } from "@/api/client";
 import type { Workflow as Model } from "@/components/workflow/model";
 import { ada, bob, builder, parentTask, step, subtask, task, web, workflow } from "@/test/fixtures";
 import type { FlowContext } from "../flowEvents";
+import { shownWorkflow } from "@/components/pickedWorkflow";
 import { entriesOf, isQuiet, segmentsOf, storiesOf, type StoriesInput } from "./stories";
 
 const now = Date.parse("2026-10-08T10:42:05");
@@ -13,7 +14,8 @@ const startOfToday = Date.parse("2026-10-08T00:00:00");
 // WEB's default Workflow as the canvas model has it: Backlog · Plan · Build · Review · Retro · Skill review.
 const record = workflow(web);
 const model: Model = {
-  steps: record.steps.map((s) => ({ id: s.id, name: s.name, position: s.position, x: s.x, y: s.y, takers: [], tasks: 0, working: 0, skill: s.skill_id ? { id: s.skill_id, name: s.skill_id } : undefined })),
+  workflows: record.workflows,
+  steps: record.steps.map((s) => ({ id: s.id, workflow_id: s.workflow_id, name: s.name, position: s.position, x: s.x, y: s.y, takers: [], tasks: 0, working: 0, skill: s.skill_id ? { id: s.skill_id, name: s.skill_id } : undefined })),
   connectors: record.connectors.map((c) => ({ id: c.id, from: c.from_step_id, to: c.to_step_id ?? null, name: c.name, position: c.position })),
 };
 
@@ -74,6 +76,28 @@ describe("What's happening", () => {
       ["WEB-7", "ada filed WEB-18", "1 of 6 done", true],
       ["WEB-6", "builder picked up", "Review · waited 20m", false],
     ]);
+  });
+
+  it("on the page of one Workflow of several, tells only the stories of the Tasks its board shows", () => {
+    const { input } = morning();
+    // As if WEB's Steps were split: the page shows a Workflow of Build alone, after the rest. The
+    // Tasks are as `/v1` serves them: each at a Step listed in its Step's Workflow, the Parent
+    // WEB-7 where the server lists it (`parent`: by its least advanced open Subtask).
+    const graph = { workflows: [{ id: "wf-other", position: 1 }, { id: "wf-shown", position: 2 }], steps: record.steps.map((s) => ({ ...s, workflow_id: s.id === step.build ? "wf-shown" : "wf-other" })) };
+    const served = (tasks: Map<string, Task>, parent: string) =>
+      new Map([...tasks].map(([id, t]) => [id, { ...t, workflow_id: t.key === "WEB-7" ? parent : t.step_id ? graph.steps.find((s) => s.id === t.step_id)?.workflow_id : t.workflow_id }]));
+    const here = served(input.tasks, "wf-shown");
+    const shown = shownWorkflow("wf-shown", graph, [...here.values()]);
+    // WEB-9 and WEB-6 are at Review now, another Workflow's; the Parent WEB-7 is listed where its
+    // open Subtask WEB-18 is, at Build.
+    expect(storiesOf({ ...input, tasks: here, shown }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12", "WEB-7"]);
+    // With WEB-18 at Review, the server lists WEB-7 on Review's page, as on its board.
+    const s18 = [...input.tasks.values()].find((t) => t.key === "WEB-18")!;
+    const moved = served(new Map(input.tasks).set(s18.id, { ...s18, step_id: step.review }), "wf-other");
+    expect(storiesOf({ ...input, tasks: moved, shown: shownWorkflow("wf-shown", graph, [...moved.values()]) }).map((s) => s.key)).toEqual(["WEB-10", "WEB-12"]);
+    // A Task not read yet goes by the Step its latest entry leaves it at.
+    const unknown = { ...input, tasks: new Map(), shown };
+    expect(storiesOf(unknown).map((s) => s.key)).not.toContain("WEB-9");
   });
 
   it("reads 'now' for a change under a minute old, flags a waiting session as nudged, and gives a Needs-you Task no row", () => {

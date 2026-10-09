@@ -98,15 +98,16 @@ say "Project Sample"
 api POST /v1/projects "$(jq -nc --arg a "$admin" --arg p "$planner" --arg b "$builder" --arg q "$qa" --arg r "$reviewer" --arg t "$retro" \
   '{key: "SAM", name: "Sample", workflow: "empty", acceptance: true, members: [$a, $p, $b, $q, $r, $t]}')" >/dev/null
 api PUT /v1/projects/SAM/workflow '{
+  "workflows": [{"name": "Work", "position": 1}],
   "steps": [
-    {"name": "Backlog", "position": 1},
-    {"name": "Plan", "skill": "breakdown", "position": 2},
-    {"name": "Build", "skill": "engineer", "position": 3},
-    {"name": "QA", "skill": "qa", "position": 4},
-    {"name": "Review", "skill": "review", "position": 5},
-    {"name": "Acceptance", "skill": "acceptance", "position": 6},
-    {"name": "Retro", "skill": "retro", "position": 7},
-    {"name": "Skill review", "skill": "skill-review", "position": 8}
+    {"workflow": "Work", "name": "Backlog", "position": 1},
+    {"workflow": "Work", "name": "Plan", "skill": "breakdown", "position": 2},
+    {"workflow": "Work", "name": "Build", "skill": "engineer", "position": 3},
+    {"workflow": "Work", "name": "QA", "skill": "qa", "position": 4},
+    {"workflow": "Work", "name": "Review", "skill": "review", "position": 5},
+    {"workflow": "Work", "name": "Acceptance", "skill": "acceptance", "position": 6},
+    {"workflow": "Work", "name": "Retro", "skill": "retro", "position": 7},
+    {"workflow": "Work", "name": "Skill review", "skill": "skill-review", "position": 8}
   ],
   "connectors": [
     {"from": "Plan", "name": "done", "position": 1},
@@ -193,7 +194,8 @@ api PUT /v1/projects/BIG/workflow "$(jq -nc '
   ["Backlog","Triage","Plan","Design","Build","Code review","QA","Security review","Docs","Acceptance","Release","Retro"] as $names |
   ["",       "triage","breakdown","design","engineer","review","qa","security","docs","acceptance","release","retro"] as $skills |
   {
-    steps: [range(0; 12) | {name: $names[.], position: (. + 1)} + (if $skills[.] == "" then {} else {skill: $skills[.]} end)],
+    workflows: [{name: "Work", position: 1}],
+    steps: [range(0; 12) | {workflow: "Work", name: $names[.], position: (. + 1)} + (if $skills[.] == "" then {} else {skill: $skills[.]} end)],
     connectors: (
       [range(0; 11) | {from: $names[.], to: $names[. + 1], name: "pass", position: 1}] +
       [{from: "Retro", name: "pass", position: 1},
@@ -240,22 +242,26 @@ ren=$(member_id ren)
 for s in review security qa devops; do api PUT "/v1/members/$ren/skills/$s" >/dev/null; done
 T_REN=$(token "$ren")
 api POST /v1/projects "$(jq -nc --arg a "$admin" --arg m "$sol" --arg r "$ren" '{key: "SW", name: "Software", workflow: "empty", auto_complete: true, acceptance: true, members: [$a, $m, $r]}')" >/dev/null
-api PUT /v1/projects/SW/workflow '{
+# The Project starts with one empty Workflow, Work; the body carries its id, so it is renamed
+# Software rather than deleted and made again, as examples/workflows/software/setup.sh does.
+sw_workflow=$(api GET /v1/projects/SW/workflow | jq -r '.workflows[0].id')
+api PUT /v1/projects/SW/workflow "$(jq -c --arg id "$sw_workflow" '.workflows[0].id = $id' <<<'{
+  "workflows": [{"name": "Software", "position": 1}],
   "steps": [
-    {"name": "Backlog", "position": 1},
-    {"name": "Triage", "skill": "triage", "position": 2},
-    {"name": "Plan", "skill": "breakdown", "position": 3},
-    {"name": "Design", "skill": "architecture", "position": 4},
-    {"name": "Threat model", "skill": "security", "position": 5},
-    {"name": "Design review", "skill": "review", "position": 6},
-    {"name": "Build", "skill": "engineer", "position": 7},
-    {"name": "Code review", "skill": "review", "position": 8},
-    {"name": "Security review", "skill": "security", "position": 9},
-    {"name": "QA", "skill": "qa", "position": 10},
-    {"name": "Release", "skill": "devops", "position": 11},
-    {"name": "Acceptance", "skill": "acceptance", "position": 12},
-    {"name": "Retro", "skill": "retro", "position": 13},
-    {"name": "Skill review", "skill": "skill-review", "position": 14}
+    {"workflow": "Software", "name": "Backlog", "position": 1},
+    {"workflow": "Software", "name": "Triage", "skill": "triage", "position": 2},
+    {"workflow": "Software", "name": "Plan", "skill": "breakdown", "position": 3},
+    {"workflow": "Software", "name": "Design", "skill": "architecture", "position": 4},
+    {"workflow": "Software", "name": "Threat model", "skill": "security", "position": 5},
+    {"workflow": "Software", "name": "Design review", "skill": "review", "position": 6},
+    {"workflow": "Software", "name": "Build", "skill": "engineer", "position": 7},
+    {"workflow": "Software", "name": "Code review", "skill": "review", "position": 8},
+    {"workflow": "Software", "name": "Security review", "skill": "security", "position": 9},
+    {"workflow": "Software", "name": "QA", "skill": "qa", "position": 10},
+    {"workflow": "Software", "name": "Release", "skill": "devops", "position": 11},
+    {"workflow": "Software", "name": "Acceptance", "skill": "acceptance", "position": 12},
+    {"workflow": "Software", "name": "Retro", "skill": "retro", "position": 13},
+    {"workflow": "Software", "name": "Skill review", "skill": "skill-review", "position": 14}
   ],
   "connectors": [
     {"from": "Triage", "to": "Build", "name": "no design needed", "position": 1},
@@ -283,7 +289,7 @@ api PUT /v1/projects/SW/workflow '{
     {"from": "Skill review", "name": "publish", "position": 1},
     {"from": "Skill review", "to": "Retro", "name": "needs changes", "position": 2}
   ]
-}' >/dev/null
+}')" >/dev/null
 
 # The Parent: triaged onto the design path, its Design Subtask approved, its slices spread over the line.
 keys=$(file '{"project":"SW","title":"Only callers with an API key can create short links"}')

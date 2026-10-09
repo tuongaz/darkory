@@ -31,8 +31,10 @@ type call struct {
 	warned bool
 
 	members, skills, projects, workspaces, taskKeys map[string]string
-	// steps and labels are each Project's Step and Label names by id, by the Project's id.
-	steps, labels map[string]map[string]string
+	// steps are each Project's Steps and Workflows, by the Project's id.
+	steps map[string]projectSteps
+	// labels are each Project's Label names by id, by the Project's id.
+	labels map[string]map[string]string
 }
 
 // args parses the command's flags, which may come before, between or after its arguments (a
@@ -322,27 +324,54 @@ func (c *call) project(id string) string {
 	return one(id)
 }
 
-// step returns the name of a Step of a Project's Workflow for human output, or the id when it
-// cannot be found. Step names are the Project's own, so they are read per Project.
-func (c *call) step(projectID, id string) string {
+// projectSteps is what human output needs of a Project's Workflows: each Step's name and the
+// Workflow it is in, and each Workflow's name.
+type projectSteps struct {
+	names, workflowOf, workflows map[string]string
+}
+
+// stepsOf reads a Project's Workflows once per command; Step names are the Project's own, so
+// they are read per Project.
+func (c *call) stepsOf(projectID string) projectSteps {
 	if c.steps == nil {
-		c.steps = map[string]map[string]string{}
+		c.steps = map[string]projectSteps{}
 	}
-	names, ok := c.steps[projectID]
+	ps, ok := c.steps[projectID]
 	if !ok {
-		names = map[string]string{}
+		ps = projectSteps{names: map[string]string{}, workflowOf: map[string]string{}, workflows: map[string]string{}}
 		res, err := c.conn.GetWorkflowWithResponse(c.ctx, projectID)
 		if check(res, err, http.StatusOK) == nil {
+			for _, w := range res.JSON200.Workflows {
+				ps.workflows[w.ID] = w.Name
+			}
 			for _, s := range res.JSON200.Steps {
-				names[s.ID] = s.Name
+				ps.names[s.ID], ps.workflowOf[s.ID] = s.Name, s.WorkflowID
 			}
 		}
-		c.steps[projectID] = names
+		c.steps[projectID] = ps
 	}
-	if n, ok := names[id]; ok {
+	return ps
+}
+
+// step returns the name of a Step of a Project's Workflows for human output, or the id when it
+// cannot be found.
+func (c *call) step(projectID, id string) string {
+	if n, ok := c.stepsOf(projectID).names[id]; ok {
 		return one(n)
 	}
 	return one(id)
+}
+
+// stepFrom names the Step a Connector out of a Step of the Workflow from leads to: the Step alone
+// within that Workflow, and as Workflow › Step into another.
+func (c *call) stepFrom(projectID, from, id string) string {
+	ps := c.stepsOf(projectID)
+	n, ok := ps.names[id]
+	if !ok {
+		return one(id)
+	}
+	to := ps.workflowOf[id]
+	return target(from, to, ps.workflows[to], n)
 }
 
 // label returns the name of a Label a Task of a Project may carry, the Project's own or the

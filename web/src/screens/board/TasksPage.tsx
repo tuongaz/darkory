@@ -1,22 +1,26 @@
 // /projects/:key/tasks?view=list|board: a Project's Tasks as rows grouped by Step, or as a
-// kanban whose columns are its Workflow's Steps, with Views, Filter (its pills in ?filter.tasks=),
-// Display and File Task.
-import { BanIcon, ListTodoIcon, PlusIcon } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+// kanban whose columns are one Workflow's Steps (picked by the chip, ?workflow=, when the Project
+// has two or more), with Views, Filter (its pills in ?filter.tasks=), Display and File Task.
+import { BanIcon, BookmarkIcon, FilterIcon, ListTodoIcon, PlusIcon, SlidersHorizontalIcon } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { ApiError, type Task } from "@/api/client";
 import { useRouteProject } from "@/app/currentProject";
 import { projectCrumb } from "@/app/crumbs";
 import { Content, TopBar } from "@/app/TopBar";
+import { BarFold } from "@/components/BarFold";
 import { EmptyState } from "@/components/EmptyState";
-import { FilterChipRow, FilterMenuButton } from "@/components/filters/FilterBar";
+import { FilterChipRow, FilterCount, FilterMenuButton } from "@/components/filters/FilterBar";
+import { filterName, foldName } from "@/components/filters/names";
 import { useSavedViews } from "@/components/filters/useSavedViews";
 import { useTaskFilter } from "@/components/filters/useTaskFilter";
 import { AppliedView, ViewsMenu } from "@/components/filters/ViewsMenu";
 import { Refusal } from "@/components/Refusal";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
+import { usePickedWorkflow } from "@/components/pickedWorkflow";
+import { WorkflowChip } from "@/components/WorkflowChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { liveClaim } from "@/work";
 import type { Display } from "./derive";
@@ -33,6 +37,7 @@ export function TasksPage() {
   const [params] = useSearchParams();
   const view: Layout = params.get("view") === "board" ? "board" : "list";
   const model = useTasksModel(project);
+  const picked = usePickedWorkflow(project, model.workflow.data?.workflows);
   const [display, changeDisplay] = useDisplay();
   const [expanded, expand] = useRememberedSet(expandedKey);
   const [folded, fold] = useRememberedSet(foldedKey, ["dropped"]);
@@ -78,17 +83,42 @@ export function TasksPage() {
     return out;
   }, [filtering, expanded, kept.shown, passed]);
 
+  // The Workflow chip, in the bar on the board of a Project of several Workflows.
+  const chip = view === "board" && model.workflows.length > 1;
+  // Beside it on a phone, Views, Filter and Display fold into one menu, opening each under it.
+  const [more, setMore] = useState<HTMLButtonElement | null>(null);
+  const barFold = chip ? { anchor: more } : undefined;
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
   const top = (
     <>
       <h1 className="sr-only">{view === "board" ? "Tasks, board" : "Tasks, list"}</h1>
       <TopBar
-        crumbs={[projectCrumb(project, false), { label: "Tasks", wide: true }]}
-        view={<ViewSwitch view={view} />}
+        crumbs={[
+          projectCrumb(project, false),
+          // The board shows one Workflow, picked here at every width (a phone has no other way to
+          // another); the list, the whole Project.
+          ...(chip ? [{ label: <WorkflowChip workflows={model.workflows} picked={picked.id} onPick={picked.set} />, whole: true }] : []),
+          { label: "Tasks", wide: true },
+        ]}
+        view={<ViewSwitch view={view} fold={chip} />}
         actions={
           <>
-            <ViewsMenu {...savedViews} />
-            <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} />
-            <DisplayMenu display={display} change={changeDisplay} view={view} />
+            {barFold && (
+              <BarFold
+                anchor={setMore}
+                name={foldName(filter.bar)}
+                badge={<FilterCount {...filter.bar} />}
+                items={[
+                  { label: "Views", icon: <BookmarkIcon />, open: () => setViewsOpen(true) },
+                  { label: "Filter", name: filterName(filter.bar), icon: <FilterIcon />, open: () => filter.setOpen(true), badge: <FilterCount {...filter.bar} /> },
+                  { label: "Display", icon: <SlidersHorizontalIcon />, open: () => setDisplayOpen(true) },
+                ]}
+              />
+            )}
+            <ViewsMenu {...savedViews} open={viewsOpen} onOpenChange={setViewsOpen} fold={barFold} />
+            <FilterMenuButton {...filter.bar} open={filter.open} onOpenChange={filter.setOpen} fold={barFold} />
+            <DisplayMenu display={display} change={changeDisplay} view={view} open={displayOpen} onOpenChange={setDisplayOpen} fold={barFold} />
           </>
         }
         primary={
@@ -135,7 +165,7 @@ export function TasksPage() {
       <>
         {top}
         <Content>
-          <Board model={model} tasks={sorted.filter((t) => passed.has(t.id))} display={display} changeDisplay={changeDisplay} onAdd={add} />
+          <Board model={model} workflow={picked.id ?? ""} tasks={sorted.filter((t) => passed.has(t.id))} display={display} changeDisplay={changeDisplay} onAdd={add} />
         </Content>
       </>
     );
@@ -211,19 +241,30 @@ function footerText(all: Task[], rows: Task[], bySubtask: boolean, filtering: bo
 /** The kanban, with what a drop does: move the Task to the Step, or say why not. */
 function Board({
   model,
+  workflow,
   tasks,
   display,
   changeDisplay,
   onAdd,
 }: {
   model: TasksModel;
+  /** The Workflow whose board this is. */
+  workflow: string;
   tasks: Task[];
   display: ReturnType<typeof useDisplay>[0];
   changeDisplay: ReturnType<typeof useDisplay>[1];
   onAdd: (step: string) => void;
 }) {
   const move = useMoveTask(model.project.key);
-  const columns = boardColumns(tasks, { steps: model.steps, children: model.children, members: model.members, display });
+  const columns = boardColumns(tasks, {
+    workflows: model.workflows,
+    workflow,
+    steps: model.steps,
+    position: model.position,
+    children: model.children,
+    members: model.members,
+    display,
+  });
   const me = model.me.member.id;
 
   const refuse = (task: Task, to: Column, body: string) =>

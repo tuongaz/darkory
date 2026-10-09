@@ -12,7 +12,7 @@ import { useLineData, WorkflowLine, type Chain, type LineData } from "@/componen
 import { branchSkills } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
 import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
-import { lineText, trailLine, type FlowContext } from "./flowEvents";
+import { lineText, onDrawnLine, trailLine, type FlowContext } from "./flowEvents";
 import { LineText } from "./LineText";
 import type { LineView } from "./lineView";
 import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from "./panels";
@@ -27,19 +27,24 @@ import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
  */
 export function LiveWorkflow({
   project,
+  workflowId,
   view,
   scope,
   onView,
   filter,
 }: {
   project: Project;
+  /** The Workflow drawn, of a Project of several (`usePickedWorkflow`); the first when unsaid. */
+  workflowId?: string;
   view: LineView;
   scope: string | null;
   onView?: (v: LineView) => void;
   /** The Filter bar's test: Tasks it leaves out leave the line, counted into their Step's "+N". */
   filter?: (task: Task) => boolean;
 }) {
-  const { data, error } = useLineData(project.key, scope, filter);
+  const { data, error } = useLineData(project.key, workflowId, scope, filter);
+  // Of a Project of several Workflows the page is the drawn one's: its panels list its Tasks.
+  const shown = data?.shown;
   const now = useNow();
   const [, setParams] = useSearchParams();
   const openTask = useCallback(
@@ -53,15 +58,15 @@ export function LiveWorkflow({
   );
   const [selected, setSelected] = useState<string | null>(null);
   const [ringed, setRinged] = useState<string | null>(null);
-  const quiet = useStoriesQuiet(project);
+  const quiet = useStoriesQuiet(project, shown);
 
   if (error) return <Refusal error={error} className="m-6" />;
   if (!data) return <Skeleton aria-label="Loading the Workflow" className="m-6 h-[420px]" />;
 
   const panels = {
-    needs: <NeedsYouPanel project={project} onHover={setRinged} />,
+    needs: <NeedsYouPanel project={project} workflow={shown} onHover={setRinged} />,
     // A story opened into its path selects its token on the line, as F2 draws it.
-    stories: <StoriesPanel project={project} onHover={setRinged} onOpen={setSelected} />,
+    stories: <StoriesPanel project={project} workflow={shown} onHover={setRinged} onOpen={setSelected} />,
   };
 
   if (view === "blocking") {
@@ -70,6 +75,7 @@ export function LiveWorkflow({
         <BlockingView
           project={project}
           scope={data.scope.kind === "parent" ? data.scope.id : undefined}
+          shown={data.shown}
           onShowOnLine={(id) => {
             setSelected(id);
             onView?.("line");
@@ -126,8 +132,8 @@ function LiveLine({
   const ctx = useMemo<FlowContext>(() => {
     const byId = new Map((members.data ?? []).map((m) => [m.id, m]));
     const tasks = new Map(data.records.map((t) => [t.id, t]));
-    return { projectId: project.id, workflow: data.facts, task: (id) => tasks.get(id), member: (id) => byId.get(id) };
-  }, [project.id, data.facts, data.records, members.data]);
+    return { projectId: project.id, workflow: data.facts, drawn: data.drawnSteps, task: (id) => tasks.get(id), member: (id) => byId.get(id) };
+  }, [project.id, data.facts, data.drawnSteps, data.records, members.data]);
   const flow = useLiveFlow(ctx, reduced);
   const announced = useAnnouncement(ctx);
   const recordOf = useMemo(() => new Map<string, Task>(data.records.map((t) => [t.id, t])), [data.records]);
@@ -171,13 +177,13 @@ function LiveLine({
   );
 }
 
-/** The newest flow entry that arrived since the page opened, in the trail's words. */
+/** The newest flow entry about the line drawn that arrived since the page opened, in the trail's words. */
 function useAnnouncement(ctx: FlowContext): string {
   const live = useLiveEntries();
   const [opened] = useState(() => live[0]?.seq ?? 0);
   for (const e of live) {
     if (e.seq <= opened) break;
-    const line = trailLine(e, ctx);
+    const line = onDrawnLine(e, ctx) && trailLine(e, ctx);
     if (line) return lineText(line);
   }
   return "";

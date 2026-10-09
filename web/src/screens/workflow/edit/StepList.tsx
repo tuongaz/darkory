@@ -7,12 +7,12 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { cn } from "@/lib/utils";
 import type { RecordStep, WorkflowRecord } from "../bind";
 import type { Holder } from "./holders";
-import { isNewSkill, outcomes, type Draft, type Group } from "./draft";
+import { isNewSkill, outcomes, stepsIn, type Draft, type Group } from "./draft";
 import { InfoTip } from "@/components/InfoTip";
 import { Tip } from "@/components/Tip";
 
 /*
- * The Workflow's Steps as text, one 38px row each: its number, name, Skill, who takes it and where
+ * One Workflow's Steps as text (the picked one's, of a Project of several), one 38px row each: its number, name, Skill, who takes it and where
  * its main outcome leads. Picking a row opens the Step in the panel beside the list; nothing here is
  * a field. Between rows a band shows "+ Add Step" on hover, in room it always keeps, and each group
  * ends with "+ Add Step". Rows reorder by their grip, Alt+↑/↓, or the panel's menu; ↑/↓ pick the
@@ -26,6 +26,7 @@ export type RowTags = { start?: string; breakdown?: { start?: string }; orgWide?
 
 export function StepList({
   draft,
+  workflowId,
   base,
   skills,
   holders,
@@ -39,6 +40,8 @@ export function StepList({
   tags,
 }: {
   draft: Draft;
+  /** The Workflow whose Steps are listed. */
+  workflowId: string | undefined;
   base: WorkflowRecord;
   skills: Skill[];
   /** Who takes each Skill's Steps; undefined while unknown. */
@@ -54,7 +57,7 @@ export function StepList({
   tags: (s: RecordStep) => RowTags;
 }) {
   const wf = draft.wf;
-  const order = [...wf.steps].sort((a, b) => a.position - b.position);
+  const order = stepsIn(wf, workflowId);
   const main = order.filter((s) => groups(s) === "main");
   const after = order.filter((s) => groups(s) === "after");
   const number = new Map([...main, ...after].map((s, i) => [s.id, i + 1]));

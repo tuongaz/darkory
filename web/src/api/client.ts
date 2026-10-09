@@ -54,6 +54,7 @@ export type Token = Schemas["Token"];
 export type View = Schemas["View"];
 export type ViewEntity = Schemas["ViewEntity"];
 export type Workflow = Schemas["Workflow"];
+export type Workflows = Schemas["Workflows"];
 export type WorkflowStep = Schemas["WorkflowStep"];
 export type Workspace = Schemas["Workspace"];
 export type WorkspaceMode = Schemas["WorkspaceMode"];

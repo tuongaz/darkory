@@ -1,6 +1,6 @@
 # MVP build status
 
-State on 2026-10-06, at the end of the first build. The plan is [`plan.md`](plan.md).
+State on 2026-10-09, at the end of the first build and the Named Workflows build (ADR 0019). The plans are [`plan.md`](plan.md) and [`named-workflows-plan.md`](named-workflows-plan.md).
 
 ## Built
 
@@ -18,6 +18,7 @@ State on 2026-10-06, at the end of the first build. The plan is [`plan.md`](plan
   - `darkory mcp`, whose tools cover the agent operations.
   - The embedded React web app.
 - **Delivery:** goreleaser for six platforms, a container image, `install.sh`, and `darkory update` with checksum and ed25519 signature checks.
+- **Workflows (ADR 0019):** a Project's Steps are grouped into one or more named Workflows, each with its own board and canvas; a Connector may lead into a Step of another Workflow; `workflow show` reads one or all; the software preset's Workflow is named Software and `setup.sh` keeps every other Workflow on a re-run; migration 0006 names every existing Workflow Work.
 
 ## How it was checked
 

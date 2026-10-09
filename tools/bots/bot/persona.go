@@ -157,7 +157,7 @@ func (h *Person) look(ctx context.Context) error {
 		}
 		h.say("completed", t.Key, "%q, every Subtask having ended", t.Title)
 	}
-	hold := h.preset.Workflow.Hold()
+	hold := h.preset.Hold()
 	if hold == "" {
 		return nil
 	}
@@ -183,8 +183,11 @@ func (h *Person) look(ctx context.Context) error {
 				continue
 			}
 			to, err := h.stepFor(ctx, c, parent)
-			if err != nil || to == "" {
+			if err != nil {
 				return err
+			}
+			if to == "" {
+				continue
 			}
 			return h.move(ctx, c.Key, to, "out of "+hold)
 		}
@@ -192,8 +195,9 @@ func (h *Person) look(ctx context.Context) error {
 	return nil
 }
 
-// stepFor is the Step a Task in the hold is for: its Item's, else the first Step of its Workflow
-// whose Skill is the Project's own work rather than one Darkory files its Subtasks at.
+// stepFor is the Step a Task in the hold is for: its Item's, else the first Step of the hold's
+// Workflow whose Skill is the Project's own work rather than one Darkory files its Subtasks at. A
+// Task's Workflow is that of its Step (ADR 0019), so the hold leads only into its own Workflow.
 func (h *Person) stepFor(ctx context.Context, t client.Task, parent string) (string, error) {
 	if it := h.preset.item(parent, t.Title, h.ask); it != nil && it.Step != "" {
 		return it.Step, nil
@@ -210,8 +214,14 @@ func (h *Person) stepFor(ctx context.Context, t client.Task, parent string) (str
 	for _, s := range res.JSON200.Items {
 		builtin[s.ID] = s.Builtin
 	}
+	in := ""
 	for _, s := range wf.Steps {
-		if s.SkillID != nil && !builtin[*s.SkillID] {
+		if s.ID == deref(t.StepID) {
+			in = s.WorkflowID
+		}
+	}
+	for _, s := range wf.Steps {
+		if s.WorkflowID == in && s.SkillID != nil && !builtin[*s.SkillID] {
 			return s.Name, nil
 		}
 	}

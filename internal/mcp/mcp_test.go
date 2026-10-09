@@ -61,11 +61,12 @@ func newFixture(t *testing.T, st *store.Store, o server.Options) *fixture {
 	must(t)(tok, err)
 	f := &fixture{t: t, srv: srv, url: ts.URL, ada: init.Token.Secret, bob: tok.JSON201.Secret}
 	must(t)(ada.SetWorkflowWithResponse(ctx, "WEB", &client.SetWorkflowParams{}, client.SetWorkflowBody{
-		Steps: []client.StepInput{{Name: "Plan", Skill: ptr("breakdown"), Position: 1}, {Name: "Build", Skill: ptr("build"), Position: 2},
-			{Name: "Retro", Skill: ptr("retro"), Position: 3}, {Name: "Skill review", Skill: ptr("skill-review"), Position: 4}},
-		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: 1}, {From: "Build", Name: "pass", Position: 1},
-			{From: "Retro", Name: "done", Position: 1}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: 2},
-			{From: "Skill review", Name: "publish", Position: 1}},
+		Workflows: []client.WorkflowInput{{Name: "Work", Position: ptr(int64(1))}},
+		Steps: []client.StepInput{{Workflow: "Work", Name: "Plan", Skill: ptr("breakdown"), Position: ptr(int64(1))}, {Workflow: "Work", Name: "Build", Skill: ptr("build"), Position: ptr(int64(2))},
+			{Workflow: "Work", Name: "Retro", Skill: ptr("retro"), Position: ptr(int64(3))}, {Workflow: "Work", Name: "Skill review", Skill: ptr("skill-review"), Position: ptr(int64(4))}},
+		Connectors: []client.ConnectorInput{{From: "Plan", Name: "done", Position: ptr(int64(1))}, {From: "Build", Name: "pass", Position: ptr(int64(1))},
+			{From: "Retro", Name: "done", Position: ptr(int64(1))}, {From: "Retro", To: ptr("Skill review"), Name: "propose", Position: ptr(int64(2))},
+			{From: "Skill review", Name: "publish", Position: ptr(int64(1))}},
 	}))
 	bob := dial(t, ts.URL, f.bob, "bob-seed")
 	must(t)(bob.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("WEB"), Title: "Search", Breakdown: ptr(true)}))
@@ -182,6 +183,15 @@ func TestToolsAndRules(t *testing.T) {
 			t.Errorf("no tool %s in %v", want, names)
 		}
 	}
+	described := map[string]string{
+		"workflow":  "Read a Project's Workflows: each Workflow's Steps in order, the Connectors out of each Step, and what is happening at each Step now",
+		"move_step": "a Step of any of its Project's Workflows",
+	}
+	for _, tl := range tools.Tools {
+		if want, ok := described[tl.Name]; ok && !strings.Contains(tl.Description, want) {
+			t.Errorf("%s says %q, not %q", tl.Name, tl.Description, want)
+		}
+	}
 	for _, gone := range []string{"handover", "set_status", "feature_show"} {
 		if slices.Contains(names, gone) {
 			t.Errorf("tool %s is still listed", gone)
@@ -280,15 +290,79 @@ func TestNextClaimComplete(t *testing.T) {
 			list.Steps[1].Name != "Build" || !slices.Equal(list.Steps[1].Outcomes, []string{"pass"}) || list.Steps[1].ProjectID != list.Items[0].ProjectID {
 			t.Fatalf("list_tasks: %+v", list)
 		}
-		var wf client.Workflow
+		for _, st := range list.Steps {
+			if st.Workflow != "Work" {
+				t.Fatalf("list_tasks puts %s in Workflow %q, want Work", st.Name, st.Workflow)
+			}
+		}
+		var wf client.Workflows
 		ok(t, cs, &wf, "workflow", map[string]any{"project": "WEB"})
-		if len(wf.Steps) != 4 || wf.Steps[2].Name != "Retro" || len(wf.Connectors) != 5 {
+		if len(wf.Workflows) != 1 || wf.Workflows[0].Name != "Work" || len(wf.Steps) != 4 || wf.Steps[2].Name != "Retro" || len(wf.Connectors) != 5 {
 			t.Fatalf("workflow: %+v", wf)
 		}
 		var page client.ActivityPage
 		ok(t, cs, &page, "activity", map[string]any{"after": 0})
 		if page.LastSeq == 0 || len(page.Items) == 0 {
 			t.Fatalf("activity: %+v", page)
+		}
+	})
+}
+
+// list_tasks takes a Workflow by name with project: the Tasks at its Steps, not those at another
+// Workflow's.
+func TestListTasksByWorkflow(t *testing.T) {
+	storetest.Each(t, func(t *testing.T, st *store.Store) {
+		f := newFixture(t, st, server.Options{})
+		ctx := t.Context()
+		ada := dial(t, f.url, f.ada, "ada-1")
+		empty := client.NewWorkflowEmpty
+		must(t)(ada.CreateProjectWithResponse(ctx, &client.CreateProjectParams{}, client.CreateProjectBody{Key: "OPS", Name: "Ops", Workflow: &empty,
+			Members: &[]string{"ada", "bob"}}))
+		must(t)(ada.SetWorkflowWithResponse(ctx, "OPS", &client.SetWorkflowParams{}, client.SetWorkflowBody{
+			Workflows: []client.WorkflowInput{{Name: "Triage", Position: ptr(int64(1))}, {Name: "Bugs", Position: ptr(int64(2))}},
+			Steps: []client.StepInput{{Workflow: "Triage", Name: "Triage", Skill: ptr("build"), Position: ptr(int64(1))},
+				{Workflow: "Bugs", Name: "Investigate", Skill: ptr("build"), Position: ptr(int64(1))}},
+			Connectors: []client.ConnectorInput{{From: "Triage", To: ptr("Investigate"), Name: "bug", Position: ptr(int64(1))},
+				{From: "Investigate", Name: "done", Position: ptr(int64(1))}},
+		}))
+		must(t)(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("OPS"), Title: "Sort me", Step: ptr("Triage")}))
+		must(t)(ada.FileTaskWithResponse(ctx, &client.FileTaskParams{}, client.FileTaskBody{Project: ptr("OPS"), Title: "Crash on save", Step: ptr("Investigate")}))
+		_, cs := f.connect("bob-mcp", Options{})
+
+		var list taskListOut
+		ok(t, cs, &list, "list_tasks", map[string]any{"workflow": "Bugs", "project": "OPS"})
+		if len(list.Items) != 1 || list.Items[0].Title != "Crash on save" {
+			t.Fatalf("list_tasks in Bugs: %+v", list.Items)
+		}
+		crash := list.Items[0].Key
+
+		// By id, without project; and a Task that ended at one of its Steps.
+		var wf client.Workflows
+		ok(t, cs, &wf, "workflow", map[string]any{"project": "OPS"})
+		bugs := ""
+		for _, w := range wf.Workflows {
+			if w.Name == "Bugs" {
+				bugs = w.ID
+			}
+		}
+		var d client.TaskDetail
+		ok(t, cs, &d, "claim", map[string]any{"task": crash, "heartbeat_timeout_seconds": 60})
+		var advanced client.Task
+		ok(t, cs, &advanced, "advance", map[string]any{"task": crash, "outcome": "done"})
+		if advanced.State != client.TaskStateDone {
+			t.Fatalf("%s after done: %+v", crash, advanced)
+		}
+		for _, args := range []map[string]any{{"workflow": bugs}, {"workflow": bugs, "state": "done"}, {"workflow": "Bugs", "project": "OPS", "state": "done"}} {
+			list = taskListOut{}
+			ok(t, cs, &list, "list_tasks", args)
+			if len(list.Items) != 1 || list.Items[0].Key != crash {
+				t.Fatalf("list_tasks %v: %+v", args, list.Items)
+			}
+		}
+		list = taskListOut{}
+		ok(t, cs, &list, "list_tasks", map[string]any{"workflow": bugs, "state": "open"})
+		if len(list.Items) != 0 {
+			t.Fatalf("list_tasks open in Bugs: %+v", list.Items)
 		}
 	})
 }

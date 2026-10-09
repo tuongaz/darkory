@@ -165,8 +165,11 @@ that opens the sidebar (Settings' nav, in Settings). Nothing may make the page s
 
 `src/test/fixtures.ts`: Members `ada` (admin), `bob`, `builder` (agent); Projects `ops` (OPS) and
 `web` (WEB); Skills `engineer`, `review`, and the builtin `breakdown`, `acceptance`, `retro`,
-`skillReview`; `workflow(project?)`, `init`'s default Workflow with its compact layout, its Step
-ids in `step` (`step.build` is `"st-build"`; another Project's are prefixed with its key); `label`,
+`skillReview`; `workflow(project?)`, `init`'s default Workflow with its compact layout, one
+Workflow `"wf-work"` named Work, its Step ids in `step` (`step.build` is `"st-build"`; another
+Project's are prefixed with its key); `workflowsFixture(project?)`, ADR 0019's five Workflows
+(Triage, Bugs, Features, Prototypes, Support) with Triage's outcomes crossing into the other four,
+their ids in `wfId` and their Steps' in `wfStep`, the Skills they add in `workflowsSkills`; `label`,
 `bug` (the Organisation's), `clientX` (WEB's); `task(n, extra)` (WEB-n waiting at Build),
 `parentTask(n, counts)`, `subtask(n, parent)`, `detail(task, extra)` (a `TaskDetail` with its Step
 and Connectors); `memberDetail(member, extra)` (in WEB, holding engineer); `skillVersion(skill, version?, body?)`;

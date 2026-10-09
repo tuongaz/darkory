@@ -59,7 +59,7 @@ export function TakenBy({
 
   // Where else the Member takes the Skill: other Steps here carrying it, and other Projects' Steps.
   const elsewhere = (m: Holder): string | undefined => {
-    const here = inOrder(draft.wf.steps)
+    const here = inOrder(draft.wf)
       .filter((s) => s.id !== stepId && s.skill_id === skill.id)
       .map((s) => s.name.trim() || "New Step");
     const projects = [...new Set((facts ? takeAwayReach(facts, m.id, skill) : []).filter((p) => p.project.key !== project.key).map((p) => p.project.name))];

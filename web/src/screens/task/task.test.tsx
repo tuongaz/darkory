@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Activity, Member, Task, TaskDetail } from "@/api/client";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
-import { ada, bob, builder, bug, clientX, detail, step } from "@/test/fixtures";
+import { ada, bob, builder, bug, clientX, detail, step, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { basket, cart, checkout, copy, liveClaimOf, payment, receipt, routes } from "../board/testData";
 
@@ -123,7 +123,11 @@ describe("a Task's page", () => {
     const dialog = await screen.findByRole("dialog", { name: "Move WEB-2" });
     expect(dialog).toHaveTextContent("Ends builder's Claim");
     await userEvent.click(within(dialog).getByRole("combobox", { name: "Step" }));
+    // Of one Workflow, the Steps alone: no group names a Workflow.
+    await screen.findAllByRole("option");
+    expect(screen.queryAllByRole("group")).toEqual([]);
     await userEvent.click(await screen.findByRole("option", { name: /Review/ }));
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent(/^Review$/);
     await userEvent.click(within(dialog).getByRole("button", { name: "Move" }));
     await waitFor(() => expect(posted(api, "/step")?.body).toEqual({ step: step.review }));
   });
@@ -151,6 +155,90 @@ describe("a Task's page", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Labels: client-x" }));
     await userEvent.click(await screen.findByRole("option", { name: /bug/ }));
     await waitFor(() => expect(posted(api, "/labels")?.body).toEqual({ labels: [clientX.id, bug.id] }));
+  });
+});
+
+describe("a Task in a Project of several Workflows (ADR 0019)", () => {
+  const five = { "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } };
+  const outOf = (stepId: string) => workflowsFixture().connectors.filter((c) => c.from_step_id === stepId);
+  // WEB-7, held by builder at Triage; WEB-8, at Investigate, came there from Triage along bug.
+  const sorting: Task = { ...cart, id: "t-sort", key: "WEB-7", title: "Sort the report", blocked: false, open_blockers: [], step_id: wfStep.triage, workflow_id: wfId.triage, claim: liveClaimOf(builder, "t-sort") };
+  const crashing: Task = { ...cart, id: "t-crash", key: "WEB-8", title: "Crash on save", blocked: false, open_blockers: [], step_id: wfStep.investigate, workflow_id: wfId.bugs, step_since: at(30), claim: undefined };
+  const crossed: Activity[] = [
+    { seq: 1, at: at(0), kind: "task.filed", subject_type: "task", subject_id: crashing.id, payload: { step_id: wfStep.triage } },
+    { seq: 2, at: at(30), kind: "task.advanced", subject_type: "task", subject_id: crashing.id, actor_id: builder.id, payload: { from: wfStep.triage, to: wfStep.investigate, outcome: "bug", since: Date.parse(at(0)) } },
+  ];
+  beforeEach(() => {
+    details["WEB-7"] = detail(sorting, { connectors: outOf(wfStep.triage), claims: [sorting.claim!] });
+    details["WEB-8"] = detail(crashing, { connectors: outOf(wfStep.investigate) });
+  });
+
+  it("Advance names the Workflow a crossing outcome leads into, its caret likewise, and the dialog where the Task waits", async () => {
+    mockApi(taskRoutes(five, builder));
+    renderApp("/tasks/WEB-7");
+    const primary = await (await bar()).findByRole("button", { name: "Advance · bug → Bugs › Investigate" });
+    await userEvent.click((await bar()).getByRole("button", { name: "More ways to end the Claim" }));
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+      "Advance · feature → Features › Build",
+      "Advance · prototype → Prototypes › Sketch",
+      "Advance · question → Support › Support",
+      "Release",
+    ]);
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(primary);
+    const dialog = await screen.findByRole("dialog", { name: "Advance WEB-7 · bug" });
+    await waitFor(() => expect(dialog).toHaveTextContent("Waits at Bugs › Investigate for engineer; your Claim ends"));
+  });
+
+  it("an outcome within the Task's own Workflow names its Step alone", async () => {
+    details["WEB-8"] = detail({ ...crashing, claim: liveClaimOf(builder, crashing.id) }, { connectors: outOf(wfStep.investigate), claims: [liveClaimOf(builder, crashing.id)] });
+    mockApi(taskRoutes(five, builder));
+    renderApp("/tasks/WEB-8");
+    await userEvent.click(await (await bar()).findByRole("button", { name: "Advance · fix" }));
+    const dialog = await screen.findByRole("dialog", { name: "Advance WEB-8 · fix" });
+    await waitFor(() => expect(dialog).toHaveTextContent("Waits at Fix for engineer; your Claim ends"));
+  });
+
+  it("Move offers the Steps under their Workflows, the Task's own first", async () => {
+    const api = mockApi(taskRoutes({ ...five, "POST /v1/tasks/:task/step": crashing }));
+    renderApp("/tasks/WEB-8");
+    await screen.findByRole("heading", { level: 1, name: "Crash on save" });
+    await userEvent.click((await bar()).getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Move to a Step" }));
+    const dialog = await screen.findByRole("dialog", { name: "Move WEB-8" });
+    await userEvent.click(within(dialog).getByRole("combobox", { name: "Step" }));
+    const groups = await screen.findAllByRole("group");
+    expect(groups.map((g) => g.firstChild?.textContent)).toEqual(["Bugs", "Triage", "Features", "Prototypes", "Support"]);
+    // Its own Step is not offered.
+    expect(within(groups[0]).getAllByRole("option").map((o) => o.textContent)).toEqual(["Fixengineer", "Reviewreview", "Verifyqa"]);
+    await userEvent.click(within(groups[3]).getByRole("option", { name: /Sketch/ }));
+    // The choice reads with its Workflow, not its Skill: the list's groups are gone once it closes.
+    expect(within(dialog).getByRole("combobox", { name: "Step" })).toHaveTextContent(/^Prototypes › Sketch$/);
+    await userEvent.click(within(dialog).getByRole("button", { name: "Move" }));
+    await waitFor(() => expect(posted(api, "/step")?.body).toEqual({ step: wfStep.sketch }));
+  });
+
+  it("its path names the Workflow it crossed into, before that Workflow's first Step", async () => {
+    mockApi(taskRoutes({ ...five, "GET /v1/activity": ({ query }) => ({ items: query.getAll("kind").includes("task.filed") ? crossed : [], last_seq: 2 }) }));
+    renderApp("/tasks/WEB-8");
+    const head = (await screen.findByRole("heading", { level: 1, name: "Crash on save" })).closest("header")!;
+    const stepper = await within(head).findByRole("list", { name: "Path through the Steps" });
+    // The crossing reads with the Step it reaches, in its item: no item of the path is not a Step or an outcome.
+    await waitFor(() => expect(within(stepper).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringMatching(/^Triage/), "bug", expect.stringMatching(/^Bugs ›Investigate/)]));
+  });
+
+  it("its line draws the Workflow it is in, lighting the entry it came in by", async () => {
+    mockApi(taskRoutes({ ...five, "GET /v1/activity": ({ query }) => ({ items: query.getAll("kind").includes("task.filed") ? crossed : [], last_seq: 2 }) }));
+    renderApp("/tasks/WEB-8");
+    const line = await screen.findByRole("region", { name: "WEB-8's way through the Workflow" });
+    await waitFor(() => expect([...line.querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"))).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]));
+    const came = await waitFor(() => {
+      const el = line.querySelector('[data-lit="true"]');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(came).toHaveTextContent("from Triage · bug");
   });
 });
 
@@ -230,6 +318,22 @@ describe("a Parent's page", () => {
     renderApp("/tasks/WEB-3");
     const third = await screen.findByRole("region", { name: "Subtasks" });
     expect(within(third).getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("of a Project of several Workflows, draws the Workflow of its first open Subtask and says where the others are", async () => {
+    // In ADR 0019's five Workflows Review is Bugs' and Build is Features': WEB-5 waits at Review,
+    // WEB-4 is worked at Build. Bugs comes first, so the line draws Bugs.
+    mockApi(taskRoutes({ "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } }));
+    renderApp("/tasks/WEB-3?view=line");
+    const section = await screen.findByRole("region", { name: "Subtasks" });
+    const line = await within(section).findByRole("region", { name: "Subtask line" });
+    await waitFor(() => expect(line.querySelector('button[data-task="WEB-5"]')).not.toBeNull());
+    expect([...line.querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"))).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
+    expect(line.querySelector('button[data-task="WEB-4"]')).toBeNull();
+    // WEB-4 does not vanish: the header says it is on Features' line.
+    expect(section.querySelector("[data-elsewhere]")).toHaveTextContent("· 1 in Features");
+    await userEvent.click(within(section).getByRole("button", { name: "List" }));
+    expect(section.querySelector("[data-elsewhere]")).toBeNull();
   });
 
   it("opens the Blocking among its Subtasks from the old graph's address", async () => {

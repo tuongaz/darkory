@@ -7,10 +7,12 @@ import { peekParam } from "@/app/peek";
 import { useNow } from "@/clock";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import { useCurrentMe } from "@/me";
 import type { GraphStep } from "../graph";
 import { BlockingBoard, type BandParent } from "./BlockingBoard";
-import { blockingTasks } from "./bind";
+import { blockingTasks, shownBy } from "./bind";
+import type { ShownWorkflow } from "@/components/pickedWorkflow";
 
 const dataOf = <T,>(results: { data?: T }[]) => results.map((r) => r.data);
 
@@ -20,7 +22,18 @@ const dataOf = <T,>(results: { data?: T }[]) => results.map((r) => r.data);
  * open Tasks, live with the record. A node's Open opens its Task's peek (`?task=`); Show on line
  * hands its id to `onShowOnLine`.
  */
-export function BlockingView({ project, scope, onShowOnLine }: { project: Project; scope?: string; onShowOnLine: (taskId: string) => void }) {
+export function BlockingView({
+  project,
+  scope,
+  shown,
+  onShowOnLine,
+}: {
+  project: Project;
+  scope?: string;
+  /** The Workflow the page shows, of a Project of several: only the Tasks its board shows are the view's own. */
+  shown?: ShownWorkflow;
+  onShowOnLine: (taskId: string) => void;
+}) {
   const open = useOpenTasks();
   const { members, projects, skills } = useDirectory();
   const runner = useRunnerSessions().data?.items;
@@ -33,6 +46,7 @@ export function BlockingView({ project, scope, onShowOnLine }: { project: Projec
   const takeableByMe = useMemo(() => new Set((takeable ?? []).map((t) => t.id)), [takeable]);
   const tasks = useMemo(() => blockingTasks(open.data ?? [], { members, now, sessions, takeableByMe }), [open.data, members, now, sessions, takeableByMe]);
   const byId = useMemo(() => new Map((open.data ?? []).map((t) => [t.id, t])), [open.data]);
+  const shows = useMemo(() => shownBy(shown, byId), [shown, byId]);
 
   // The Workflows of the Projects drawn: this one, and any a Blocking reaches into.
   const projectKeys = useMemo(() => {
@@ -58,12 +72,10 @@ export function BlockingView({ project, scope, onShowOnLine }: { project: Projec
       if (!wf) continue;
       out.set(
         wf.project_id,
-        [...wf.steps]
-          .sort((x, y) => x.position - y.position)
-          .map((s) => {
-            const skill = s.skill_id ? skills.get(s.skill_id) : undefined;
-            return { id: s.id, name: s.name, skill: s.skill_id ? { id: s.skill_id, name: skill?.name ?? "" } : undefined };
-          }),
+        [...wf.steps].sort(inProjectOrder(wf.workflows)).map((s) => {
+          const skill = s.skill_id ? skills.get(s.skill_id) : undefined;
+          return { id: s.id, name: s.name, workflowId: s.workflow_id, skill: s.skill_id ? { id: s.skill_id, name: skill?.name ?? "" } : undefined };
+        }),
       );
     }
     return out;
@@ -104,6 +116,7 @@ export function BlockingView({ project, scope, onShowOnLine }: { project: Projec
       tasks={tasks}
       projectId={project.id}
       scope={scope}
+      shows={shows}
       me={me}
       now={now}
       steps={steps}
