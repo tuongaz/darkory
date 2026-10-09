@@ -242,7 +242,10 @@ ren=$(member_id ren)
 for s in review security qa devops; do api PUT "/v1/members/$ren/skills/$s" >/dev/null; done
 T_REN=$(token "$ren")
 api POST /v1/projects "$(jq -nc --arg a "$admin" --arg m "$sol" --arg r "$ren" '{key: "SW", name: "Software", workflow: "empty", auto_complete: true, acceptance: true, members: [$a, $m, $r]}')" >/dev/null
-api PUT /v1/projects/SW/workflow '{
+# The Project starts with one empty Workflow, Work; the body carries its id, so it is renamed
+# Software rather than deleted and made again, as examples/workflows/software/setup.sh does.
+sw_workflow=$(api GET /v1/projects/SW/workflow | jq -r '.workflows[0].id')
+api PUT /v1/projects/SW/workflow "$(jq -c --arg id "$sw_workflow" '.workflows[0].id = $id' <<<'{
   "workflows": [{"name": "Software", "position": 1}],
   "steps": [
     {"workflow": "Software", "name": "Backlog", "position": 1},
@@ -286,7 +289,7 @@ api PUT /v1/projects/SW/workflow '{
     {"from": "Skill review", "name": "publish", "position": 1},
     {"from": "Skill review", "to": "Retro", "name": "needs changes", "position": 2}
   ]
-}' >/dev/null
+}')" >/dev/null
 
 # The Parent: triaged onto the design path, its Design Subtask approved, its slices spread over the line.
 keys=$(file '{"project":"SW","title":"Only callers with an API key can create short links"}')

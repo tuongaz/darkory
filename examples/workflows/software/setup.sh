@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Applies the software Workflow (docs/workflows/software.md) to an Install: its Skills, its
 # agents with their tokens for the Runner, a Project on the Workflow with its Labels, and the
-# Project's Workspace. Safe to run again: each step keeps what is already there, and the
-# Workflow keeps its Steps' ids, so Tasks in flight stay where they are.
+# Project's Workspace. Safe to run again: each step keeps what is already there, the Workflow
+# keeps its Steps' ids, so Tasks in flight stay where they are, and the Project's other Workflows
+# are left as they are.
 #
 # Needs DARKORY_URL and DARKORY_TOKEN (an admin's) and DATA (the Install's data directory, where
 # the Runner reads <DATA>/agents/<agent>.token). Optional: PROJECT (key, default SW),
@@ -81,17 +82,50 @@ while IFS=$'\t' read -r name model manager skills; do
   fi
 done
 
-# The Workflow, Software, keeping the id of each Step already there by its name; the open Tasks at
-# a Step this Workflow does not have wait in the Backlog. A Project with one Workflow keeps it,
-# renamed Software if it was not (a Project made empty, or one from before Workflows were named,
-# has one named Work), so a re-run never deletes and remakes it; with more, the one named
-# Software keeps its id.
+# The Workflow, Software. The body is the Project's whole graph, and a Workflow left out of it is
+# deleted with its Steps, so the preset owns Software alone and carries every other Workflow
+# across untouched.
+# - Software takes the id of the Workflow it becomes: the Project's only one (a Project made
+#   empty, or from before Workflows were named, has one named Work); else the one named Software,
+#   ignoring case; else the one holding a Step named Backlog or Triage; else none, and Software is
+#   new. So a re-run never deletes and remakes it.
+# - Software comes first, so its Backlog is where a Task filed without a Step starts; every other
+#   Workflow follows in its order, with its id, its Steps (ids, places, Skills) and the Connectors
+#   out of them, as they are. One of those leading into a Step of the old Software that the preset
+#   does not have leads into Backlog instead, where that Step's Tasks go.
+# - The preset's Steps keep the ids of the Steps of the same name, ignoring case, in the Workflow
+#   it becomes; a Step of that name in another Workflow is not taken, and the set is refused as
+#   two Steps sharing a name. Its other Steps are deleted, their open Tasks moved to Backlog.
+# - The preset's Connectors replace those out of its Steps, except one leading into another
+#   Workflow (such as bug → Bugs › Investigate), which is kept, after the preset's own.
 current=$($dk workflow show "$project" --body)
 jq --argjson cur "$current" '
-  (if ($cur.workflows | length) == 1 then .workflows[0] += {id: $cur.workflows[0].id} else . end)
-  | ($cur.steps | map({key: (.name | ascii_downcase), value: .id}) | from_entries) as $ids
-  | ([.steps[].name | ascii_downcase]) as $ours
-  | .steps |= map(if $ids[.name | ascii_downcase] then . + {id: $ids[.name | ascii_downcase]} else . end)
-  | .moves = ([$cur.steps[] | select((.name | ascii_downcase) as $n | $ours | index($n) | not) | {key: .id, value: "Backlog"}] | from_entries)
+  def lc: ascii_downcase;
+  ([.steps[].name | lc]) as $ours
+  | ($cur.workflows | sort_by(.position)) as $all
+  | (if ($all | length) == 1 then $all[0]
+     else (first($all[] | select(.name | lc == "software"))
+           // first(["backlog", "triage"][] as $n | $cur.steps[] | select(.name | lc == $n) | .workflow as $w | $all[] | select(.name == $w))
+           // null)
+     end) as $old
+  | ($old.name // null) as $oldName
+  | [$cur.steps[] | select(.workflow == $oldName)] as $oldSteps
+  | ($oldSteps | map({key: (.name | lc), value: .id}) | from_entries) as $ids
+  | [$cur.steps[] | select(.workflow != $oldName)] as $keptSteps
+  | ([$keptSteps[].name | lc]) as $kept
+  | (.steps | map({key: (.name | lc), value: .name}) | from_entries) as $ourName
+  | (reduce .connectors[] as $k ({}; .[$k.from | lc] += 1)) as $count
+  | .workflows = [.workflows[0] + (if $old then {id: $old.id} else {} end) + {position: 1}]
+      + [$all | map(select(.name != $oldName)) | to_entries[] | {id: .value.id, name: .value.name, position: (.key + 2)}]
+  | .steps = (.steps | map(if $ids[.name | lc] then . + {id: $ids[.name | lc]} else . end)) + $keptSteps
+  | .connectors += [$cur.connectors[] | select(.from | lc | IN($kept[]))
+      | if .to and ((.to | lc | IN($ours[], $kept[])) | not) then .to = "Backlog" else . end]
+  | .connectors as $preset
+  | .connectors += [$cur.connectors
+      | map(select((.from | lc | IN($ours[])) and .to and (.to | lc | IN($kept[])))
+          | (.from | lc) as $f | select(.name | lc | IN($preset[] | select(.from | lc == $f) | .name | lc) | not))
+      | group_by(.from | lc)[] | sort_by(.position) | to_entries[] | .key as $i | .value
+      | (.from | lc) as $f | . + {from: $ourName[$f], position: (($count[$f] // 0) + $i + 1)}]
+  | .moves = ([$oldSteps[] | select(.name | lc | IN($ours[]) | not) | {key: .id, value: "Backlog"}] | from_entries)
 ' "$here/workflow.json" | $dk workflow set "$project" --file - >/dev/null
 $dk workflow show "$project"

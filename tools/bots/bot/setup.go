@@ -351,11 +351,11 @@ func Setup(ctx context.Context, c *client.ClientWithResponses, o Options) (*Crew
 	return crew, nil
 }
 
-// setWorkflow gives the Project project the Workflows want, unless it has them already:
-// Workflows are kept by name, as the server keeps them when their ids are left out, and Steps by
-// name, so a Step keeps its id and its Tasks; a Workflow the Project has and want does not is
-// deleted, and a Step the Project has and want does not is deleted, its Tasks moved to the first
-// Step of want's first Workflow.
+// setWorkflow gives the Project project the Workflows want, unless it has them already. Each
+// wanted Workflow keeps the id of the Workflow it is (bindWorkflows), so a renamed one is never
+// deleted and remade, and each Step keeps the id of the Step of its name, so it keeps its Tasks; a
+// Workflow the Project has and want does not is deleted, and a Step the Project has and want does
+// not is deleted, its Tasks moved to the first Step of want's first Workflow.
 func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project string, want []WorkflowSpec) error {
 	res, err := c.GetWorkflowWithResponse(ctx, project)
 	if err := check(res, err, http.StatusOK); err != nil {
@@ -391,9 +391,14 @@ func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project str
 	}
 	body := client.SetWorkflowBody{Workflows: []client.WorkflowInput{}, Steps: []client.StepInput{}, Connectors: []client.ConnectorInput{}}
 	var wantSteps []StepSpec
+	bound := bindWorkflows(*have, want)
 	for i, w := range want {
 		wanted = append(wanted, fmt.Sprintf("workflow %d %s", i+1, w.Name))
-		body.Workflows = append(body.Workflows, client.WorkflowInput{Name: w.Name, Position: ptr(int64(i + 1))})
+		in := client.WorkflowInput{Name: w.Name, Position: ptr(int64(i + 1))}
+		if bound[i] != "" {
+			in.ID = ptr(bound[i])
+		}
+		body.Workflows = append(body.Workflows, in)
 	}
 	for _, w := range want {
 		for i, st := range w.Steps {
@@ -409,17 +414,20 @@ func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project str
 			body.Steps = append(body.Steps, in)
 		}
 	}
-	// The Connectors in the Project's order: by Workflow, then by the Step they lead out of.
+	// The Connectors grouped by the Step they lead out of, the Steps in the Project's order (by
+	// Workflow, then by Step), as the server lists them; each Step's numbered 1, 2, 3… in want's
+	// order.
 	position := map[string]int64{}
 	for _, st := range wantSteps {
 		for _, w := range want {
 			for _, k := range w.Connectors {
-				if k.From != st.Name {
+				if !strings.EqualFold(k.From, st.Name) {
 					continue
 				}
-				position[k.From]++
-				wanted = append(wanted, fmt.Sprintf("connector %s %s %s %d", k.From, k.To, k.Name, position[k.From]))
-				in := client.ConnectorInput{From: k.From, Name: k.Name, Position: ptr(position[k.From])}
+				from := strings.ToLower(k.From)
+				position[from]++
+				wanted = append(wanted, fmt.Sprintf("connector %s %s %s %d", st.Name, k.To, k.Name, position[from]))
+				in := client.ConnectorInput{From: st.Name, Name: k.Name, Position: ptr(position[from])}
 				if k.To != "" {
 					in.To = ptr(k.To)
 				}
@@ -444,6 +452,47 @@ func setWorkflow(ctx context.Context, c *client.ClientWithResponses, project str
 		return fmt.Errorf("setting %s's Workflow: %w", project, err)
 	}
 	return nil
+}
+
+// bindWorkflows gives each Workflow of want the id of the Project's Workflow it is, or "" for a new
+// one: the Project's only Workflow when want has one; else the Workflow holding most of its Steps
+// by name, ignoring case; else the one of its name, ignoring case. No two share one.
+func bindWorkflows(have client.Workflows, want []WorkflowSpec) []string {
+	bound := make([]string, len(want))
+	if len(have.Workflows) == 1 && len(want) == 1 {
+		bound[0] = have.Workflows[0].ID
+		return bound
+	}
+	taken := map[string]bool{}
+	for i, w := range want {
+		best, most := "", 0
+		for _, h := range have.Workflows {
+			if taken[h.ID] {
+				continue
+			}
+			n := 0
+			for _, st := range have.Steps {
+				if st.WorkflowID == h.ID && slices.ContainsFunc(w.Steps, func(s StepSpec) bool { return strings.EqualFold(s.Name, st.Name) }) {
+					n++
+				}
+			}
+			if n > most {
+				best, most = h.ID, n
+			}
+		}
+		if best == "" {
+			for _, h := range have.Workflows {
+				if !taken[h.ID] && strings.EqualFold(h.Name, w.Name) {
+					best = h.ID
+					break
+				}
+			}
+		}
+		if best != "" {
+			bound[i], taken[best] = best, true
+		}
+	}
+	return bound
 }
 
 func deref(s *string) string {

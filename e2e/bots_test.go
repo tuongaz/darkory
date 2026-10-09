@@ -560,12 +560,12 @@ func (a api) task(key string) client.TaskDetail {
 	return *res.JSON200
 }
 
-// workflow reads a Project's Workflow.
+// workflow reads a Project's Workflows.
 func (a api) workflow(project string) client.Workflows {
 	a.t.Helper()
 	res, err := a.c.GetWorkflowWithResponse(context.Background(), project)
 	if err != nil || res.JSON200 == nil {
-		a.t.Fatalf("reading %s's Workflow: %v %s", project, err, bodyOf(res))
+		a.t.Fatalf("reading %s's Workflows: %v %s", project, err, bodyOf(res))
 	}
 	return *res.JSON200
 }

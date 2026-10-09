@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -61,11 +62,21 @@ func TestWorkflows(t *testing.T) {
 	tri := in.agent("tri", []string{"ACC"}, []string{"triage"})
 	tri.ok("claim", key, "--timeout", "0")
 	tri.ok("advance", key, "bug")
-	if out := ada.ok("tasks", "--project", "ACC", "--workflow", "Bugs"); !strings.Contains(out, key) {
-		t.Fatalf("tasks --workflow Bugs:\n%s", out)
+	listed := func(args ...string) []string {
+		t.Helper()
+		var page client.TaskList
+		ada.json(&page, append([]string{"tasks", "--project", "ACC"}, args...)...)
+		var keys []string
+		for _, task := range page.Items {
+			keys = append(keys, task.Key)
+		}
+		return keys
 	}
-	if out := ada.ok("tasks", "--project", "ACC", "--workflow", "Triage"); strings.Contains(out, key) {
-		t.Fatalf("tasks --workflow Triage:\n%s", out)
+	if keys := listed("--workflow", "Bugs"); !slices.Equal(keys, []string{key}) {
+		t.Fatalf("tasks --workflow Bugs: %v, want [%s]", keys, key)
+	}
+	if keys := listed("--workflow", "Triage"); len(keys) != 0 {
+		t.Fatalf("tasks --workflow Triage: %v, want none", keys)
 	}
 	if out := ada.ok("show", key); !strings.Contains(out, "\n  Step       Investigate (engineer)") {
 		t.Fatalf("show %s after bug:\n%s", key, out)
@@ -81,8 +92,8 @@ func TestWorkflows(t *testing.T) {
 	if done.Task.State != client.TaskStateDone || done.Task.StepID != nil || deref(done.Task.LastStepID) != step["Fix"] {
 		t.Fatalf("%s done: state %s, Step %v, last Step %v; want done at no Step, last at Fix %s", key, done.Task.State, done.Task.StepID, done.Task.LastStepID, step["Fix"])
 	}
-	if out := ada.ok("tasks", "--project", "ACC", "--workflow", "Bugs", "--state", "done"); !strings.Contains(out, key) {
-		t.Fatalf("tasks --workflow Bugs --state done:\n%s", out)
+	if keys := listed("--workflow", "Bugs", "--state", "done"); !slices.Equal(keys, []string{key}) {
+		t.Fatalf("tasks --workflow Bugs --state done: %v, want [%s]", keys, key)
 	}
 
 	// The same body again, as a preset re-run sends it: each Step with its id, as a Step sent
@@ -129,6 +140,9 @@ func TestWorkflows(t *testing.T) {
 	ada.json(&done, "show", key)
 	if deref(done.Task.LastStepID) != step["Investigate"] {
 		t.Fatalf("%s's last Step after Fix was deleted: %v, want Investigate %s", key, done.Task.LastStepID, step["Investigate"])
+	}
+	if keys := listed("--workflow", "Bugs", "--state", "done"); !slices.Equal(keys, []string{key}) {
+		t.Fatalf("tasks --workflow Bugs --state done after Fix was deleted: %v, want [%s]", keys, key)
 	}
 
 	// A Step in a Workflow the body does not name is refused as invalid, which the CLI exits 1
