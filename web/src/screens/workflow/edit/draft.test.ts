@@ -88,6 +88,13 @@ describe("inserting a Step", () => {
     expect(body.steps[4]).toEqual({ workflow: "wf-work", name: "Security review", position: 5 });
     expect(body.connectors.filter((c) => c.from === "Security review")).toEqual([]);
   });
+
+  it("leaves a draft of no Workflow and no Step as it is: there is nowhere to put the Step", () => {
+    const d = fromRecord({ ...base(), workflows: [], steps: [], connectors: [] });
+    const r = insertStep(d, undefined, "main");
+    expect(r.id).toBe("");
+    expect(r.draft).toBe(d);
+  });
 });
 
 describe("making an outcome the main way on", () => {

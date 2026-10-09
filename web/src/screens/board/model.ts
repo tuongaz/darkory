@@ -25,7 +25,7 @@ export function useTasksModel(project: Project) {
 
   const lookups = useMemo(() => {
     const list = tasks.data ?? [];
-    const steps = stepsInOrder(workflow.data?.steps ?? []);
+    const steps = stepsInOrder({ workflows: workflow.data?.workflows ?? [], steps: workflow.data?.steps ?? [] });
     return {
       steps,
       stepById: new Map<string, WorkflowStep>(steps.map((s) => [s.id, s])),

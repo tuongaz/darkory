@@ -1,4 +1,5 @@
 import { countTasks } from "@/components/workflow/model";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import { same, type RecordStep, type WorkflowRecord } from "./bind";
 
 /*
@@ -9,7 +10,7 @@ import { same, type RecordStep, type WorkflowRecord } from "./bind";
 export const nameMax = 50;
 
 const stepById = (wf: WorkflowRecord, id: string) => wf.steps.find((s) => s.id === id);
-const inOrder = (steps: RecordStep[]) => [...steps].sort((a, b) => a.position - b.position);
+const inOrder = (wf: WorkflowRecord): RecordStep[] => [...wf.steps].sort(inProjectOrder(wf.workflows));
 
 /**
  * What `/v1` would refuse in `next`, in words, before anything is sent; undefined when nothing.
@@ -17,7 +18,7 @@ const inOrder = (steps: RecordStep[]) => [...steps].sort((a, b) => a.position - 
  * open Tasks need a Step in `moves`.
  */
 export function problem(next: WorkflowRecord, current: WorkflowRecord, moves: Record<string, string> = {}): string | undefined {
-  const steps = inOrder(next.steps);
+  const steps = inOrder(next);
   for (const s of steps) {
     if (!s.name.trim()) return "A Step needs a name.";
     if (s.name.trim().length > nameMax) return `A Step's name is at most ${nameMax} characters.`;

@@ -36,14 +36,28 @@ export const breakdownSkill = "breakdown";
 /** The Organisation's builtin Skills, by name: no Step carrying one is where a Project's own work starts. */
 export const builtinSkills: readonly string[] = [breakdownSkill, ...branchSkills];
 
+/** What the Project's order reads of a Step: its Workflow and its place there. */
+export type OrderedStep = { workflow_id: string; position: number };
+
 /**
- * The Project's Steps in its order: by their Workflow's position, then their own (the order the
- * server returns them in, and the one "the first Step" reads). A Step of no Workflow listed comes last.
+ * Compares two Steps in the Project's order: by their Workflow's position, then their own (the
+ * order the server returns them in, and the one "the first Step" reads). A Step of no Workflow
+ * listed comes last. Every list of a Project's Steps sorts with it.
  */
-function inPosition<S extends LineStep>(workflow: { workflows: readonly LineWorkflowName[]; steps: readonly S[] }): S[] {
-  const rank = new Map(workflow.workflows.map((w) => [w.id, w.position]));
-  const of = (s: LineStep) => rank.get(s.workflow_id) ?? Number.POSITIVE_INFINITY;
-  return [...workflow.steps].sort((a, b) => of(a) - of(b) || a.position - b.position);
+export function inProjectOrder(workflows: readonly Pick<LineWorkflowName, "id" | "position">[]): (a: OrderedStep, b: OrderedStep) => number {
+  const rank = new Map(workflows.map((w) => [w.id, w.position]));
+  const of = (s: OrderedStep) => rank.get(s.workflow_id) ?? Number.POSITIVE_INFINITY;
+  return (a, b) => {
+    const wa = of(a);
+    const wb = of(b);
+    // Two Steps of no listed Workflow tie on Infinity, whose difference is NaN.
+    return (wa === wb ? 0 : wa - wb) || a.position - b.position;
+  };
+}
+
+/** The Project's Steps in its order (`inProjectOrder`). */
+function inPosition<S extends OrderedStep>(workflow: { workflows: readonly Pick<LineWorkflowName, "id" | "position">[]; steps: readonly S[] }): S[] {
+  return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
 }
 
 /** One Workflow's Steps in its order; none for a Workflow the Project does not have. */

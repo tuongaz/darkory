@@ -128,14 +128,14 @@ export function AdvanceDialog({ detail, connector, open, onOpenChange }: DialogP
 /** Completes a Task aimed at its holder (at no Step), or a Parent by its Owner once every Subtask has ended. */
 export function CompleteDialog({ detail, open, onOpenChange }: DialogProps) {
   const { task } = detail;
-  const { steps } = useTaskWorkflow(detail.task.project_id);
+  const { workflows, steps } = useTaskWorkflow(detail.task.project_id);
   const skill = useSkillName();
   const [note, setNote] = useState("");
   const complete = useMutation({
     mutationFn: () => call(api.POST("/v1/tasks/{task}/complete", { params: { path: { task: task.id } }, body: { note: note.trim() || undefined } })),
     onSuccess: done(`${task.key} completed`, onOpenChange),
   });
-  const retro = isParent(task) ? stepWithSkill(steps, "retro", (id) => skill(id)) : undefined;
+  const retro = isParent(task) ? stepWithSkill({ workflows, steps }, "retro", (id) => skill(id)) : undefined;
   return (
     <FormDialog
       open={open}
@@ -307,7 +307,7 @@ export function DropTaskDialog({ detail, open, onOpenChange }: DialogProps) {
   const now = useNow();
   const claim = liveClaim(task, now);
   const name = useMemberName();
-  const { steps } = useTaskWorkflow(detail.task.project_id);
+  const { workflows, steps } = useTaskWorkflow(detail.task.project_id);
   const skill = useSkillName();
   const [reason, setReason] = useState("");
   const drop = useMutation({
@@ -315,7 +315,7 @@ export function DropTaskDialog({ detail, open, onOpenChange }: DialogProps) {
     onSuccess: done(`${task.key} dropped`, onOpenChange),
   });
   const openSubtasks = detail.subtasks.filter((s) => s.state === "open");
-  const retro = isParent(task) ? stepWithSkill(steps, "retro", (id) => skill(id)) : undefined;
+  const retro = isParent(task) ? stepWithSkill({ workflows, steps }, "retro", (id) => skill(id)) : undefined;
   const pending = detail.proposals.filter((p) => p.state === "pending");
   return (
     <FormDialog

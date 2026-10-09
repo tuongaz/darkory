@@ -140,7 +140,8 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
   const tasks = useProjectTasks(key);
   const workflow = useWorkflow(key || undefined);
   const labels = useLabels(key || undefined);
-  const steps = stepsInOrder(workflow.data?.steps ?? []);
+  const workflows = workflow.data?.workflows ?? [];
+  const steps = stepsInOrder({ workflows, steps: workflow.data?.steps ?? [] });
 
   const [title, setTitle] = useState(preset.title ?? "");
   const [description, setDescription] = useState("");
@@ -167,13 +168,13 @@ export function FileTaskDialog({ preset, onClose }: { preset: FileTaskPreset; on
   const parent = blocksKey ? (blocked?.parent_id ? all.find((t) => t.id === blocked.parent_id) : undefined) : parentKey ? byKey.get(parentKey) : undefined;
   const subtask = !!parent || !!parentKey;
   const question = !!aim || !!blocksKey;
-  const breakdownStep = stepWithSkill(steps, "breakdown", skillName);
-  const acceptanceStep = stepWithSkill(steps, "acceptance", skillName);
+  const breakdownStep = stepWithSkill({ workflows, steps }, "breakdown", skillName);
+  const acceptanceStep = stepWithSkill({ workflows, steps }, "acceptance", skillName);
   const canBreakDown = !!breakdownStep && !subtask && !question;
   // What it does as a Parent is asked of a Task that may become one: not a Subtask, not a question.
   const parentToBe = !subtask && !question;
   const breaking = canBreakDown && breakdown;
-  const fallback = defaultFileStep(steps, skillName);
+  const fallback = defaultFileStep({ workflows, steps }, skillName);
   const stepId = steps.some((s) => s.id === chosenStep) ? chosenStep! : fallback?.id;
   const workspaceIds = chosenWorkspaces ?? defaultWorkspaces(project, parent, workspaces);
   const parentHolder = parent && !blocksKey ? liveClaim(parent, now)?.holder_id : undefined;

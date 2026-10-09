@@ -1,7 +1,7 @@
 import { ArrowRightIcon } from "lucide-react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import type { LineData, LineTask } from "@/components/workflowLine";
-import { blockedBy, sideSteps, tokenState, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
+import { blockedBy, inProjectOrder, sideSteps, tokenState, tokenTime, type LineStepFacts } from "@/components/workflowLine/model";
 import { spanText } from "@/lib/time";
 import { breakdownSentence, ENTRY_LABEL, entryHint, holdSentence } from "@/components/workflowLine/words";
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * its peek.
  */
 export function LineText({ data, now, onTask }: { data: LineData; now: number; onTask: (key: string) => void }) {
-  const steps = [...data.facts.steps].sort((a, b) => a.position - b.position);
+  const steps = [...data.facts.steps].sort(inProjectOrder(data.facts.workflows));
   const at = new Map<string, LineTask[]>();
   for (const t of data.scoped.drawn) at.set(t.stepId!, [...(at.get(t.stepId!) ?? []), t]);
   for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));

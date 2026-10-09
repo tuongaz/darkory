@@ -134,13 +134,12 @@ describe("a Project of several Workflows", () => {
     steps: record.steps.map((s) => ({ id: s.id, workflow_id: s.workflow_id, name: s.name, position: s.position, ...(s.skill_id ? { skill: { name: skillName.get(s.skill_id)! } } : {}) })),
     connectors: record.connectors.map((c) => ({ id: c.id, from: c.from_step_id, to: c.to_step_id ?? null, name: c.name, position: c.position })),
   });
-  // Bugs first, Triage second: the Workflows' positions swapped, the Steps re-sorted as the server returns them.
+  // Bugs first, Triage second: only the Workflows' positions swapped. The Steps stay as they came,
+  // Triage's first, so nothing but the Workflows' order can put Investigate first.
   const bugsFirst = (): LineWorkflow => {
     const wf = line();
-    const position = (id: string) => (id === "wf-bugs" ? 1 : id === "wf-triage" ? 2 : wf.workflows.find((w) => w.id === id)!.position);
-    const workflows = wf.workflows.map((w) => ({ ...w, position: position(w.id) })).sort((a, b) => a.position - b.position);
-    const steps = [...wf.steps].sort((a, b) => position(a.workflow_id) - position(b.workflow_id) || a.position - b.position);
-    return { ...wf, workflows, steps };
+    const position = (id: string, was: number) => (id === "wf-bugs" ? 1 : id === "wf-triage" ? 2 : was);
+    return { ...wf, workflows: wf.workflows.map((w) => ({ ...w, position: position(w.id, w.position) })) };
   };
 
   it("starts a filed Task at the first work Step in the Project's order: Triage, then Investigate once Bugs comes first", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Activity, Task } from "@/api/client";
 import { claimTrails } from "@/components/filters/taskAxes";
-import { ada, bob, builder, bug, clientX, parentTask, skills, step, subtask, task, workflow } from "@/test/fixtures";
+import { ada, bob, builder, bug, clientX, parentTask, skills, step, subtask, task, wfId, workflow, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import {
   boardColumns,
   childrenOf,
@@ -16,6 +16,7 @@ import {
   placeOf,
   progressText,
   rankFinder,
+  stepsInOrder,
   stepWithSkill,
 } from "./derive";
 
@@ -44,16 +45,26 @@ function ctx(tasks: Task[]) {
 
 describe("filing", () => {
   it("starts at the first Step whose Skill is the Project's own work, then any Skill, then the first", () => {
-    expect(defaultFileStep(wf.steps, skillName)?.name).toBe("Build");
-    const own = wf.steps.filter((s) => ["Backlog", "Plan", "Retro"].includes(s.name));
-    expect(defaultFileStep(own, skillName)?.name).toBe("Plan");
-    expect(defaultFileStep(wf.steps.filter((s) => s.name === "Backlog"), skillName)?.name).toBe("Backlog");
-    expect(defaultFileStep([], skillName)).toBeUndefined();
+    const only = (names: string[]) => ({ ...wf, steps: wf.steps.filter((s) => names.includes(s.name)) });
+    expect(defaultFileStep(wf, skillName)?.name).toBe("Build");
+    expect(defaultFileStep(only(["Backlog", "Plan", "Retro"]), skillName)?.name).toBe("Plan");
+    expect(defaultFileStep(only(["Backlog"]), skillName)?.name).toBe("Backlog");
+    expect(defaultFileStep({ ...wf, steps: [] }, skillName)).toBeUndefined();
+  });
+
+  it("reads the Project's order: the first Workflow's first work Step, whatever the Steps' own positions", () => {
+    const five = workflowsFixture();
+    const name = (id: string) => workflowsSkills.find((s) => s.id === id)?.name;
+    expect(defaultFileStep(five, name)?.name).toBe("Triage");
+    // Bugs moved first; the Steps stay as they came, Triage's first.
+    const bugsFirst = { ...five, workflows: five.workflows.map((w) => ({ ...w, position: w.id === wfId.bugs ? 1 : w.id === wfId.triage ? 2 : w.position })) };
+    expect(defaultFileStep(bugsFirst, name)?.name).toBe("Investigate");
+    expect(stepsInOrder(bugsFirst).slice(0, 5).map((s) => s.name)).toEqual(["Investigate", "Fix", "Review", "Verify", "Triage"]);
   });
 
   it("finds the Steps carrying breakdown and acceptance", () => {
-    expect(stepWithSkill(wf.steps, "breakdown", skillName)?.id).toBe(step.plan);
-    expect(stepWithSkill(wf.steps, "acceptance", skillName)).toBeUndefined();
+    expect(stepWithSkill(wf, "breakdown", skillName)?.id).toBe(step.plan);
+    expect(stepWithSkill(wf, "acceptance", skillName)).toBeUndefined();
   });
 });
 

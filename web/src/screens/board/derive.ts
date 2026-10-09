@@ -2,43 +2,48 @@
 // (a Step, with a Member, or ended), the order and grouping of the list, the board's columns, the
 // marks a row or card carries, who may move a Task by hand and what a refused move says. Pure, so
 // Vitest checks them without rendering.
-import type { Connector, Label, Member, Project, Task, TaskBrief, WorkflowStep } from "@/api/client";
+import type { Connector, Label, Member, Project, Task, TaskBrief, Workflow as WorkflowName, WorkflowStep } from "@/api/client";
 import type { ClaimTrail } from "@/components/filters/taskAxes";
+import { inProjectOrder, startStep, type OrderedStep } from "@/components/workflowLine/model";
 import { isOnReportingLine } from "@/me";
 import { kindLabel, liveClaim } from "@/work";
 
-/** The builtin Skills Darkory files its own Subtasks at: never where a Task lands by default. */
-export const ownSubtaskSkills = ["breakdown", "acceptance", "retro", "skill-review"] as const;
+/** A Project's Workflows and Steps, as `GET …/workflow` serves them: what the Project's order reads. */
+export type StepsOf<S extends OrderedStep> = { workflows: readonly Pick<WorkflowName, "id" | "position">[]; steps: readonly S[] };
 
-export function stepsInOrder<S extends Pick<WorkflowStep, "position">>(steps: readonly S[]): S[] {
-  return [...steps].sort((a, b) => a.position - b.position);
+/** The Project's Steps in its order: by their Workflow's position, then their own (`inProjectOrder`). */
+export function stepsInOrder<S extends OrderedStep>(workflow: StepsOf<S>): S[] {
+  return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
 }
 
 /**
- * The Step a Task filed without one starts at, as `/v1` chooses it: the first Step carrying a
- * Skill other than those Darkory files its own Subtasks at (Build in the default Workflow); else
- * the first Step carrying any Skill; else the first Step. None in a Workflow with no Steps.
+ * The Step a Task filed without one starts at, as `/v1` chooses it: the line's `startStep`, the
+ * first Step in the Project's order carrying a Skill other than those Darkory files its own
+ * Subtasks at (Build in the default Workflow); else the first carrying any Skill; else the first
+ * Step. None in a Project with no Steps.
  */
-export function defaultFileStep<S extends Pick<WorkflowStep, "position" | "skill_id">>(
-  steps: readonly S[],
+export function defaultFileStep<S extends OrderedStep & Pick<WorkflowStep, "id" | "name" | "skill_id">>(
+  workflow: StepsOf<S>,
   skillName: (id: string) => string | undefined,
 ): S | undefined {
-  const ordered = stepsInOrder(steps);
-  const own: readonly string[] = ownSubtaskSkills;
-  return (
-    ordered.find((s) => s.skill_id && !own.includes(skillName(s.skill_id) ?? "")) ??
-    ordered.find((s) => s.skill_id) ??
-    ordered[0]
-  );
+  const steps = workflow.steps.map((s) => ({
+    id: s.id,
+    workflow_id: s.workflow_id,
+    name: s.name,
+    position: s.position,
+    ...(s.skill_id ? { skill: { name: skillName(s.skill_id) ?? "" } } : {}),
+  }));
+  const id = startStep({ workflows: workflow.workflows.map((w) => ({ id: w.id, name: "", position: w.position })), steps, connectors: [] });
+  return workflow.steps.find((s) => s.id === id);
 }
 
-/** The Step carrying the builtin Skill `name` (breakdown, acceptance, retro), if the Workflow has one. */
-export function stepWithSkill<S extends Pick<WorkflowStep, "position" | "skill_id">>(
-  steps: readonly S[],
+/** The first Step, in the Project's order, carrying the builtin Skill `name` (breakdown, acceptance, retro), if any. */
+export function stepWithSkill<S extends OrderedStep & Pick<WorkflowStep, "skill_id">>(
+  workflow: StepsOf<S>,
   name: string,
   skillName: (id: string) => string | undefined,
 ): S | undefined {
-  return stepsInOrder(steps).find((s) => s.skill_id && skillName(s.skill_id) === name);
+  return stepsInOrder(workflow).find((s) => s.skill_id && skillName(s.skill_id) === name);
 }
 
 /** Whether the Task has Subtasks: a Parent, at no Step, never claimed. */
@@ -155,6 +160,7 @@ export type Group =
   | { by: "none"; id: "all"; tasks: Task[] };
 
 export type GroupContext = {
+  /** The Project's Steps in its order (`stepsInOrder`). */
   steps: readonly WorkflowStep[];
   children: Map<string, Task[]>;
   members: Map<string, Member>;
@@ -189,10 +195,10 @@ const byName = (m: Map<string, { name: string }>, id: string) => m.get(id)?.name
 export function groupTasks(rows: readonly Task[], by: GroupBy, ctx: GroupContext): Group[] {
   if (by === "none") return rows.length ? [{ by, id: "all", tasks: [...rows] }] : [];
   if (by === "step") {
-    const position = new Map(ctx.steps.map((s) => [s.id, s.position]));
+    const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
     const places = bucket(rows, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
     const groups: Group[] = [];
-    for (const s of stepsInOrder(ctx.steps)) {
+    for (const s of ctx.steps) {
       const tasks = places.get(`step:${s.id}`);
       if (tasks) groups.push({ by: "step", id: s.id, step: s, tasks });
     }
@@ -256,10 +262,10 @@ export function boardColumns(
   tasks: readonly Task[],
   ctx: Pick<GroupContext, "steps" | "children" | "members"> & { display: Pick<Display, "showDone" | "showDropped" | "showParents"> },
 ): Column[] {
-  const position = new Map(ctx.steps.map((s) => [s.id, s.position]));
+  const position = new Map(ctx.steps.map((s, i) => [s.id, i]));
   const cards = tasks.filter((t) => !isParent(t) || ctx.display.showParents);
   const places = bucket(cards, (t) => placeKey(placeOf(t, { children: ctx.children, position })));
-  const columns: Column[] = stepsInOrder(ctx.steps).map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
+  const columns: Column[] = ctx.steps.map((s) => ({ kind: "step", id: s.id, step: s, tasks: places.get(`step:${s.id}`) ?? [] }));
   const withIds = [...places.keys()].filter((k) => k.startsWith("with:")).map((k) => k.slice(5));
   withIds.sort((a, b) => byName(ctx.members, a).localeCompare(byName(ctx.members, b)));
   for (const id of withIds) columns.push({ kind: "with", id: `with:${id}`, memberId: id, member: ctx.members.get(id), tasks: places.get(`with:${id}`)! });

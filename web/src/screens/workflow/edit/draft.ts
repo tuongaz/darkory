@@ -102,11 +102,14 @@ export function insertStep(d: Draft, after: string | undefined, group?: Group): 
   const order = inOrder(wf.steps);
   const index = after ? order.findIndex((s) => s.id === after) + 1 : order.length;
   const prev = after ? order[index - 1] : undefined;
+  // Into the Workflow of the Step it follows; with none, the Project's first. A draft of no
+  // Workflow has nowhere to put a Step: it is left as it is.
+  const into = prev?.workflow_id ?? [...wf.workflows].sort((a, b) => a.position - b.position)[0]?.id;
+  if (!into) return { draft: d, id: "" };
   const id = fresh();
   const step: RecordStep = {
     id,
-    // Into the Workflow of the Step it follows; with none, the Project's first.
-    workflow_id: prev?.workflow_id ?? [...wf.workflows].sort((a, b) => a.position - b.position)[0].id,
+    workflow_id: into,
     name: "",
     position: 0,
     x: prev ? prev.x : 0,

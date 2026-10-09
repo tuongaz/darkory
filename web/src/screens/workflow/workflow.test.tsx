@@ -13,12 +13,14 @@ type Body = Schemas["SetWorkflowBody"];
 
 /**
  * The record a PUT body makes of `wf`, as /v1 answers: a Workflow without an id keeps that of the
- * one named alike, ignoring case, else is new; new Steps and Connectors get ids; the facts stay.
+ * one named alike, ignoring case, unless another Workflow of the body already carries that id;
+ * else it is new. New Steps and Connectors get ids; the facts stay.
  */
 function answer(wf: Workflows, body: Body): Workflows {
   let n = 0;
+  const carried = new Set(body.workflows.flatMap((w) => (w.id ? [w.id] : [])));
   const workflows = body.workflows.map((w) => ({
-    id: w.id ?? wf.workflows.find((x) => x.name.toLowerCase() === w.name.toLowerCase())?.id ?? `wf-made-${++n}`,
+    id: w.id ?? wf.workflows.find((x) => x.name.toLowerCase() === w.name.toLowerCase() && !carried.has(x.id))?.id ?? `wf-made-${++n}`,
     name: w.name,
     position: w.position,
   }));

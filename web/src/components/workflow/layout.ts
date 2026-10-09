@@ -1,4 +1,5 @@
 import dagre from "@dagrejs/dagre";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import type { Point, Workflow } from "./model";
 
 /** A Step node's size on the canvas: Tidy up lays these out, so the node is drawn this size. */
@@ -29,7 +30,7 @@ const START = "\u0000start";
  * Done and Dropped itself. Positions are whole pixels from (0, 0).
  */
 export function tidy(workflow: Workflow): Record<string, Point> {
-  const steps = [...workflow.steps].sort((a, b) => a.position - b.position);
+  const steps = [...workflow.steps].sort(inProjectOrder(workflow.workflows));
   const order = new Map(steps.map((s, i) => [s.id, i]));
   const g = new dagre.graphlib.Graph({ multigraph: true });
   // One of Brandes-Köpf's alignments rather than their average, which leaves a chain of steps a

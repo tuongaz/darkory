@@ -26,6 +26,7 @@ import { MemberAvatar } from "@/components/MemberAvatar";
 import { ProjectMark } from "@/components/ProjectMark";
 import { WorkGlyph } from "@/components/WorkGlyph";
 import { liveClaim } from "@/work";
+import { inProjectOrder } from "@/components/workflowLine/model";
 import { passesDate } from "./dates";
 import { LabelDot } from "@/components/LabelPill";
 import type { FilterPill } from "./filterState";
@@ -323,7 +324,7 @@ export function stepOptions(projects: readonly Project[], workflows: ReadonlyMap
   const many = projects.length > 1;
   return projects.flatMap((p) =>
     [...(workflows.get(p.id)?.steps ?? [])]
-      .sort((a, b) => a.position - b.position)
+      .sort(inProjectOrder(workflows.get(p.id)?.workflows ?? []))
       .map((s) => ({
         value: s.id,
         label: s.name,

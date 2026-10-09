@@ -1,4 +1,5 @@
 import type { MemberKind, Working } from "@/lib/work";
+import { inProjectOrder } from "@/components/workflowLine/model";
 
 /**
  * A Project's Workflow as the canvas draws it (model v2, ADR 0016): its Steps and the Connectors
@@ -75,8 +76,9 @@ export function waitingAt(step: Step): number {
   return Math.max(0, step.tasks - step.working);
 }
 
+/** The Project's Steps in its order: by Workflow, then by Step (`inProjectOrder`). */
 export function stepsInOrder(workflow: Workflow): Step[] {
-  return [...workflow.steps].sort((a, b) => a.position - b.position);
+  return [...workflow.steps].sort(inProjectOrder(workflow.workflows));
 }
 
 /** The Connectors out of a Step, in their order: the outcomes its holder may name. */
