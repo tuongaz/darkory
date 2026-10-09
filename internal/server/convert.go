@@ -141,7 +141,8 @@ func taskBriefOut(b core.TaskBrief) gen.TaskBrief {
 func taskOut(t core.Task) gen.Task {
 	out := gen.Task{ID: shortid.Of(t.ID), Key: t.Key, ProjectID: shortid.Of(t.ProjectID), ParentID: shortid.OfPtr(t.ParentID), Kind: gen.TaskKind(t.Kind), Title: t.Title,
 		Description: t.Description, State: gen.TaskState(t.State), OwnerID: shortid.Of(t.OwnerID), Rank: t.Rank, StepID: shortid.OfPtr(t.StepID),
-		LastStepID: shortid.OfPtr(t.LastStepID), WorkflowID: shortid.OfPtr(t.WorkflowID), StepSince: t.StepSince, SkillID: shortid.OfPtr(t.SkillID), AimedAtID: shortid.OfPtr(t.AimedAtID), Labels: some(shortid.OfAll(t.Labels)), Breakdown: t.Breakdown,
+		LastStepID: shortid.OfPtr(t.LastStepID), WorkflowID: shortid.OfPtr(t.WorkflowID), StepSince: t.StepSince, SkillID: shortid.OfPtr(t.SkillID),
+		AimedAtID: shortid.OfPtr(t.AimedAtID), Labels: some(shortid.OfAll(t.Labels)), Breakdown: t.Breakdown,
 		AutoComplete: t.AutoComplete, Acceptance: t.Acceptance, FromRetrospectiveTaskID: shortid.OfPtr(t.FromRetrospectiveTaskID), Blocked: t.Blocked,
 		WorkspaceIds: some(shortid.OfAll(t.WorkspaceIDs)), FiledBy: shortid.OfPtr(t.FiledBy), WaitingSince: t.WaitingSince, CreatedAt: t.CreatedAt, EndedAt: t.EndedAt}
 	if t.Claim != nil {

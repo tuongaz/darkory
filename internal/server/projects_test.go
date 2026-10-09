@@ -289,6 +289,19 @@ func TestWorkflowAndTasksThroughTheClient(t *testing.T) {
 				t.Fatalf("%s is in Workflow %s, want %s", s.Name, s.WorkflowID, want)
 			}
 		}
+		// The Connector out of Build into Bugs reads back with the rest, in Step order.
+		var outs []string
+		for _, k := range set.Connectors {
+			to := "Done"
+			if k.ToStepID != nil {
+				to = *k.ToStepID
+			}
+			outs = append(outs, k.FromStepID+" "+k.Name+" "+to)
+		}
+		investigate, fix := stepID(set, "Investigate"), stepID(set, "Fix")
+		if want := []string{buildID + " pass Done", buildID + " bug " + investigate, investigate + " fix " + fix, fix + " done Done"}; !slices.Equal(outs, want) {
+			t.Fatalf("the Connectors read back as %q, want %q", outs, want)
+		}
 
 		// Sent back as read, its Workflows without their ids: they keep them, and nothing is
 		// written.

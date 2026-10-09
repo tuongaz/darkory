@@ -592,3 +592,4 @@ Defaults taken while writing `api/openapi.yaml` for model v2 (branch `m1-spec`),
 - **The CLI's `workflow show` prints a heading per Workflow only when the Project has two or more, and a crossing outcome as `bug → Bugs › Investigate`.** Why: one Workflow needs no heading; the target's Workflow is what the reader needs.
 - **A migrated Workflow's id is a UUIDv7 whose time part is its Project's `created_at`.** Why: invariant 3 says ids are UUIDv7, and a Project's Workflow is as old as the Project.
 - **`tasks.last_step_id` is indexed where not null.** Why: the FK's SET NULL and `moves` look Tasks up by it.
+- **A `position` left out or 0 reads as the item's place in its list; only a negative one is refused.** Why: a hand-written `workflow set` body lists its Steps in order and should not have to number them; the spec said so for Steps already, and now says it for Workflows and Connectors.

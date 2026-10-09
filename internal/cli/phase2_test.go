@@ -541,6 +541,14 @@ func TestWorkflowCommands(t *testing.T) {
 		if len(body.Steps) != 2 || deref(body.Steps[1].Skill) != "engineer" || body.Connectors[1].From != "Build" || body.Connectors[1].To != nil {
 			t.Fatalf("workflow show --body: %+v", body)
 		}
+		if len(body.Workflows) != 1 || deref(body.Workflows[0].ID) == "" {
+			t.Fatalf("workflow show --body's Workflows: %+v", body.Workflows)
+		}
+		for _, s := range body.Steps {
+			if s.Workflow != "Work" {
+				t.Fatalf("workflow show --body puts %s in %q, want Work", s.Name, s.Workflow)
+			}
+		}
 		for i := range body.Steps {
 			body.Steps[i].Position++
 		}
