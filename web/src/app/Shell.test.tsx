@@ -55,7 +55,7 @@ describe("the shell", () => {
     await waitFor(() => expect(current()).toHaveAccessibleName("Web"));
     expect(places("Web").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
       ["Tasks", "/projects/WEB/tasks"],
-      ["Workflow", "/projects/WEB/workflow"],
+      ["Workflows", "/projects/WEB/workflows"],
       ["Agents", "/projects/WEB/agents"],
       ["Activity", "/projects/WEB/activity"],
       ["Settings", "/settings/projects/WEB/general"],
@@ -122,7 +122,7 @@ describe("the Projects", () => {
     first.unmount();
 
     // An admin may open a Project they are not in: it shows while it is current.
-    renderApp("/projects/OPS/workflow");
+    renderApp("/projects/OPS/workflows");
     await waitFor(() => expect(current()).toHaveAccessibleName("Ops"));
     expect(within(projectsNav()).getAllByRole("button").map((b) => [b.textContent, b.getAttribute("aria-expanded")])).toEqual([
       ["OOps", "true"],
@@ -139,7 +139,7 @@ describe("the Projects", () => {
     expect(opsRow).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(opsRow);
     expect(opsRow).toHaveAttribute("aria-expanded", "true");
-    expect(places("Ops").map((l) => l.textContent)).toEqual(["Tasks", "Workflow", "Agents", "Activity", "Settings"]);
+    expect(places("Ops").map((l) => l.textContent)).toEqual(["Tasks", "Workflows", "Agents", "Activity", "Settings"]);
     // The current one folds too.
     await userEvent.click(within(projectsNav()).getByRole("button", { name: "Web" }));
     expect(within(projectsNav()).queryByRole("list", { name: "Web" })).not.toBeInTheDocument();
@@ -334,7 +334,7 @@ describe("the addresses before Projects", () => {
     ["/admin/members/m-bob", "Settings/Members/bob"],
     ["/admin/skills/engineer", "Settings/Skills/engineer"],
     ["/admin/teams/OPS", "Settings/Ops/General"],
-    ["/admin/workflow", "Settings/Web/Workflow"],
+    ["/admin/workflow", "Settings/Web/Workflows"],
     ["/admin/workspaces", "Settings/Web/Workspaces"],
     ["/account", "Settings/Account"],
     ["/teams/OPS/features", "Ops/Tasks"],
@@ -516,7 +516,7 @@ describe("keys", () => {
       "My work",
       "Web › Tasks",
       "Web › Tasks board",
-      "Web › Workflow",
+      "Web › Workflows",
       "Web › Agents",
       "Web › Activity",
       "Settings › Account",
@@ -531,7 +531,7 @@ describe("keys", () => {
 
   it("⌘K switches Project by its key, put first above the Tasks whose keys start with it", async () => {
     mockApi(records());
-    renderApp("/projects/WEB/workflow");
+    renderApp("/projects/WEB/workflows");
     await screen.findByRole("navigation", { name: "Main" });
     await userEvent.keyboard("{Meta>}k{/Meta}");
     const search = await screen.findByRole("dialog", { name: "Search" });
@@ -571,6 +571,26 @@ describe("keys", () => {
     await waitFor(() => expect(entry("Web › Support board")).toBeInTheDocument());
     expect(entry("Web › Support board").textContent).toMatch(/GB$/);
     expect(entry("Web › Triage board").textContent).toBe("Web › Triage board");
+  });
+
+  it("⌘K opens the Workflows with G W, and each Workflow's page by its name when there are two or more", async () => {
+    mockApi({ ...records(), "GET /v1/projects/:project/workflow": workflowsFixture(), "GET /v1/skills": { items: workflowsSkills } });
+    renderApp("/projects/WEB/tasks");
+    await screen.findByRole("navigation", { name: "Main" });
+    await userEvent.keyboard("{Meta>}k{/Meta}");
+    const search = await screen.findByRole("dialog", { name: "Search" });
+    const entry = (name: string) => within(search).getByRole("option", { name: new RegExp(`^${name}(G.)?$`) });
+    await waitFor(() => expect(entry("Web › Bugs")).toBeInTheDocument());
+    expect(entry("Web › Workflows").textContent).toMatch(/GW$/);
+    expect(within(search).getAllByRole("option", { name: /^Web › (Triage|Bugs|Features|Prototypes|Support)$/ }).map((o) => o.textContent)).toEqual([
+      "Web › Triage",
+      "Web › Bugs",
+      "Web › Features",
+      "Web › Prototypes",
+      "Web › Support",
+    ]);
+    await userEvent.click(entry("Web › Bugs"));
+    expect(await screen.findByRole("button", { name: "Workflow: Bugs" })).toBeInTheDocument();
   });
 
   it("⌘K offers no Organisation settings, no New Project and no human Members to a Member who is not an admin", async () => {
@@ -649,7 +669,7 @@ describe("keys", () => {
       "Go to My work",
       "Go to Tasks",
       "Go to the board",
-      "Go to Workflow",
+      "Go to Workflows",
       "Go to Agents",
       "Go to Settings",
       "Switch Organisation",
@@ -674,7 +694,7 @@ describe("Settings", () => {
 
   it("has its own nav, which leads Back to the page you came from", async () => {
     mockApi(signedIn());
-    renderApp("/projects/OPS/workflow");
+    renderApp("/projects/OPS/workflows");
     await waitFor(() => expect(crumbs()).toHaveTextContent("Ops/Workflow"));
     await userEvent.click(within(sidebar()).getByRole("link", { name: "Settings" }));
 
@@ -686,7 +706,7 @@ describe("Settings", () => {
     expect(within(organisation).getByRole("link", { name: "Members" })).toHaveAttribute("href", "/settings/organisation/members");
     // The Project in the address is unfolded onto its pages.
     const ops = within(nav()).getByRole("list", { name: "Ops" });
-    expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Workflow", "Members", "Labels", "Workspaces"]);
+    expect(within(ops).getAllByRole("link").map((l) => l.textContent)).toEqual(["General", "Workflows", "Members", "Labels", "Workspaces"]);
     expect(within(ops).getByRole("link", { name: "General" })).toHaveAttribute("aria-current", "page");
     expect(within(nav()).getByRole("button", { name: "New Project" })).toBeInTheDocument();
 

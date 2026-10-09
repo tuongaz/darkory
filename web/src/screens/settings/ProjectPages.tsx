@@ -245,10 +245,10 @@ function AcceptanceRow({ project, admin }: { project: Project; admin: boolean })
     workflow.data && acceptance && !hasStep ? (
       <>
         The{" "}
-        <Link to={projectSettingsPath(project, "workflow")} className="text-foreground underline-offset-2 hover:underline">
-          Workflow
+        <Link to={projectSettingsPath(project, "workflows")} className="text-foreground underline-offset-2 hover:underline">
+          Workflows
         </Link>{" "}
-        has no Step carrying acceptance, so no Acceptance is filed.
+        have no Step carrying acceptance, so no Acceptance is filed.
       </>
     ) : undefined;
   return (

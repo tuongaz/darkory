@@ -39,7 +39,7 @@ export function TaskLine({ detail }: { detail: TaskDetail }) {
         me={data.me}
       />
       {project && (
-        <Link to={workflowScopePath(project, task.id)} aria-label={`Workflow, at ${task.key}`} className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+        <Link to={workflowScopePath(project, task.id, task.workflow_id)} aria-label={`Workflow, at ${task.key}`} className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
           Workflow
           <ArrowRightIcon aria-hidden className="size-3" />
         </Link>

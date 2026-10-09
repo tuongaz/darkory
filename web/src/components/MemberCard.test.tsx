@@ -13,7 +13,7 @@ import { MemberAvatar } from "./MemberAvatar";
 function wrap(node: ReactNode) {
   return render(
     <Providers client={newQueryClient()} live={new LiveActivity()}>
-      <MemoryRouter initialEntries={["/projects/WEB/workflow"]}>{node}</MemoryRouter>
+      <MemoryRouter initialEntries={["/projects/WEB/workflows"]}>{node}</MemoryRouter>
     </Providers>,
   );
 }

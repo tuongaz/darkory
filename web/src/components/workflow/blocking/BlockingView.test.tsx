@@ -34,7 +34,7 @@ function show(scope?: string) {
   const onShowOnLine = vi.fn();
   render(
     <Providers client={newQueryClient()} live={new LiveActivity()}>
-      <MemoryRouter initialEntries={["/projects/WEB/workflow"]}>
+      <MemoryRouter initialEntries={["/projects/WEB/workflows"]}>
         <MeContext.Provider value={me(ada)}>
           <BlockingView project={web} scope={scope} onShowOnLine={onShowOnLine} />
           <Where />

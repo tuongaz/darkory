@@ -5,10 +5,10 @@ import { useProjects } from "@/api/queries";
 import { useCurrentMe } from "@/me";
 
 /** The places of a Project the sidebar lists under it, each at `/projects/:key/<area>`. */
-export type ProjectArea = "tasks" | "workflow" | "agents" | "activity";
+export type ProjectArea = "tasks" | "workflows" | "agents" | "activity";
 
 /** The pages of a Project's settings, each at `/settings/projects/:key/<page>`. */
-export type ProjectSettingsPage = "general" | "workflow" | "members" | "labels" | "workspaces";
+export type ProjectSettingsPage = "general" | "workflows" | "members" | "labels" | "workspaces";
 
 // The Project last shown, remembered by this browser, so the app reopens where you left it.
 const lastProjectKey = "darkory.project";
@@ -115,6 +115,27 @@ export function projectPath(project: Pick<Project, "key">, area: ProjectArea = "
 /** The address of a Project's settings, its General page unless another is named. */
 export function projectSettingsPath(project: Pick<Project, "key">, page: ProjectSettingsPage = "general"): string {
   return `/settings/projects/${encodeURIComponent(project.key)}/${page}`;
+}
+
+const withSearch = (path: string, params: Record<string, string>) => {
+  const search = new URLSearchParams(params).toString();
+  return `${path}${search ? `?${search}` : ""}`;
+};
+
+/**
+ * The address of a Project's Workflows (`/projects/:key/workflows`), or of one of them by its id
+ * (`/projects/:key/workflows/:workflow`), with what else the address says (`scope`, `step`…).
+ */
+export function workflowsPath(project: Pick<Project, "key">, workflow?: string, params: Record<string, string> = {}): string {
+  return withSearch(`${projectPath(project, "workflows")}${workflow ? `/${encodeURIComponent(workflow)}` : ""}`, params);
+}
+
+/**
+ * The address of a Project's Workflows in Settings (`/settings/projects/:key/workflows`), or of
+ * one Workflow's editor by its id, with what else the address says (`step`).
+ */
+export function workflowsSettingsPath(project: Pick<Project, "key">, workflow?: string, params: Record<string, string> = {}): string {
+  return withSearch(`${projectSettingsPath(project, "workflows")}${workflow ? `/${encodeURIComponent(workflow)}` : ""}`, params);
 }
 
 /** Which of a Project's places the address is in, if any. */

@@ -45,7 +45,7 @@ describe("what an entry says", () => {
       "ada set the Labels of WEB-3 Build the cart · +bug",
     );
     expect(words(entry(1, "workflow.changed", web.id, { actor_id: ada.id, payload: { steps: [1, 2, 3], tasks_moved: 2 } }))).toBe(
-      "ada changed the Workflow · 3 Steps · 2 Tasks moved",
+      "ada changed the Workflows · 3 Steps · 2 Tasks moved",
     );
     expect(words(entry(1, "label.created", bug.id, { actor_id: ada.id, payload: { name: "bug", color: "#d1453b" } }))).toBe(
       "ada created the Label bug · for every Project",
@@ -115,7 +115,7 @@ describe("a Project's Activity", () => {
     expect(advanced).toHaveTextContent(/builder advanced WEB-3 Build the cart along pass to Review/);
     expect(within(advanced).getByRole("link", { name: /WEB-3/ })).toHaveAttribute("href", "/projects/WEB/activity?task=WEB-3");
     expect(within(advanced).getByRole("link", { name: "Review" })).toHaveAttribute("href", `/projects/WEB/tasks?filter.tasks=${encodeURIComponent(`step:is:${step.review}`)}`);
-    expect(within(rows()[2]).getByRole("link", { name: "the Workflow" })).toHaveAttribute("href", "/projects/WEB/workflow");
+    expect(within(rows()[2]).getByRole("link", { name: "the Workflows" })).toHaveAttribute("href", "/projects/WEB/workflows");
 
     act(() => FakeEventSource.latest().emit("activity", entry(6, "task.moved", cart.id, { actor_id: ada.id, payload: { from: step.review, to: step.build }, at: minutes(0) }), 6));
     act(() => FakeEventSource.latest().emit("activity", entry(7, "task.moved", "k-ops", { actor_id: ada.id, payload: { to: "x" }, at: minutes(0) }), 7));

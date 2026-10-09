@@ -25,7 +25,7 @@ import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, C
 import { Kbd } from "@/components/ui/kbd";
 import { useCurrentMe } from "@/me";
 import { taskWorkGlyph } from "@/work";
-import { projectPath, projectSettingsPath, useCurrentProject, useProjectArea } from "./currentProject";
+import { projectPath, projectSettingsPath, useCurrentProject, useProjectArea, workflowsPath } from "./currentProject";
 import { sendIntent } from "./intents";
 import { orderGroups, rankRecords, type Hit } from "./search";
 
@@ -85,7 +85,11 @@ export function CommandMenu({ open, onOpenChange }: { open: boolean; onOpenChang
                 run: go(projectPath(project, "tasks", "board", { [workflowParam]: w.id })),
               }))
             : [{ id: "board", title: `${project.name} › Tasks board`, icon: <KanbanIcon />, keys: ["G", "B"], run: go(projectPath(project, "tasks", "board")) }]),
-          { id: "workflow", title: `${project.name} › Workflow`, icon: <WorkflowIcon />, keys: ["G", "W"], run: go(projectPath(project, "workflow")) },
+          { id: "workflows", title: `${project.name} › Workflows`, icon: <WorkflowIcon />, keys: ["G", "W"], run: go(projectPath(project, "workflows")) },
+          // With two or more, each Workflow's page by its name.
+          ...(workflows.length > 1
+            ? workflows.map((w) => ({ id: `workflow ${w.id}`, title: `${project.name} › ${w.name}`, icon: <WorkflowIcon />, run: go(workflowsPath(project, w.id)) }))
+            : []),
           { id: "agents", title: `${project.name} › Agents`, icon: <ZapIcon />, keys: ["G", "A"], run: go(projectPath(project, "agents")) },
           { id: "activity", title: `${project.name} › Activity`, icon: <ActivityIcon />, run: go(projectPath(project, "activity")) },
         ]

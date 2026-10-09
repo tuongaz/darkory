@@ -1,40 +1,44 @@
 import { useCallback } from "react";
-import { useSearchParams } from "react-router";
 import type { Project } from "@/api/client";
-import { usePickedWorkflow, workflowParam } from "@/components/pickedWorkflow";
+import { workflowsSettingsPath } from "@/app/currentProject";
 import { toShort } from "@/lib/shortid";
-import { isNew } from "../bind";
+import { useGoToWorkflow, useWorkflowSegment, workflowNamed } from "../routeWorkflow";
 import { stepParam } from "../StepPeek";
-import type { Draft } from "./draft";
+import type { RecordWorkflow, Draft } from "./draft";
+import type { WorkflowRecord } from "../bind";
 
 /**
- * The Workflow the editor shows, of the draft's: the one `?workflow=` names, else that of the
- * Step `?step=` names (Edit from a Step on the live page), else the one this browser last picked,
- * else the first (`usePickedWorkflow`). Picking another clears the picked Step, which is of the
- * Workflow left, unless a Step of the one picked is named with it; a Workflow not saved yet is not remembered, having no id the record knows.
+ * The Workflow the editor shows (`/settings/projects/:key/workflows/:workflow`): the segment read
+ * against the record as read (`base`), by id, long or short, or by name ignoring case; else, by
+ * its id, one only the draft has (a Step moved into a Workflow not saved yet). Read against the
+ * record, a rename in the draft never loses the address. `redirect` is the id when the segment
+ * said it otherwise (a name, a long id): the page goes there in place before drawing the editor.
+ * `id` is undefined until both are read, and when the segment names none. `pick` opens another's
+ * editor in place of the address, the draft kept: Back leaves the editor rather than walking the
+ * picks. The picked Step is cleared, being of the Workflow left, unless `step` names one of the
+ * Workflow picked (a Step moved into it).
  */
-export function useEditorWorkflow(project: Pick<Project, "key">, draft: Draft | undefined): { id: string | undefined; pick: (id: string, step?: string) => void } {
-  const [params] = useSearchParams();
-  const workflows = draft?.wf.workflows;
-  const picked = usePickedWorkflow(project, workflows);
-  const named = params.get(workflowParam);
-  const fromAddress = !!named && !!workflows?.some((w) => w.id === toShort(named));
-  const step = params.get(stepParam);
-  const ofStep = step ? draft?.wf.steps.find((s) => s.id === toShort(step))?.workflow_id : undefined;
-  const id = fromAddress ? picked.id : (ofStep ?? picked.id);
-  const set = picked.set;
+export function useEditorWorkflow(
+  project: Pick<Project, "key">,
+  draft: Draft | undefined,
+  base: Pick<WorkflowRecord, "workflows"> | undefined,
+): { id: string | undefined; workflow: RecordWorkflow | undefined; redirect: string | undefined; pick: (id: string, step?: string) => void } {
+  const segment = useWorkflowSegment();
+  const read = segment && base && draft ? workflowNamed(base.workflows, segment) : undefined;
+  const id = read?.id ?? (segment && draft ? draft.wf.workflows.find((w) => w.id === toShort(segment) || w.id === segment)?.id : undefined);
+  const workflow = id ? draft?.wf.workflows.find((w) => w.id === id) : undefined;
+  const redirect = read && segment !== read.id ? read.id : undefined;
+  const goTo = useGoToWorkflow((w) => workflowsSettingsPath(project, w), project, { remember: false });
   const pick = useCallback(
     (next: string, step?: string) =>
-      set(next, {
-        remember: !isNew(next),
-        // As a Step's pick: Back leaves the editor rather than walking the picks.
+      goTo(next, {
         replace: true,
         also: (p) => {
           if (step) p.set(stepParam, step);
           else if (next !== id) p.delete(stepParam);
         },
       }),
-    [set, id],
+    [goTo, id],
   );
-  return { id, pick };
+  return { id, workflow, redirect, pick };
 }

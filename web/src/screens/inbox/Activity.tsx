@@ -412,8 +412,8 @@ function Words({ s, project }: { s: Sentence; project: Project }) {
       {s.subject?.type === "text" && <>{s.subject.text} </>}
       {s.subject?.type === "workflow" && (
         <>
-          <Link to={projectPath(project, "workflow")} className="font-medium hover:underline">
-            the Workflow
+          <Link to={projectPath(project, "workflows")} className="font-medium hover:underline">
+            the Workflows
           </Link>{" "}
         </>
       )}

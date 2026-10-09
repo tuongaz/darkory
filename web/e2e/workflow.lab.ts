@@ -35,7 +35,7 @@ for (const scheme of ["light", "dark"] as const) {
       const tag = `${size.name}-${scheme}`;
 
       // Live: the line.
-      await page.goto("/projects/WEB/workflow");
+      await page.goto("/projects/WEB/workflows");
       const live = page.getByRole("region", { name: "Workflow", exact: true });
       await expect(live.locator('button[data-task="WEB-5"]')).toBeVisible();
       await expect(live.getByRole("img", { name: "builder-1 (agent), working" }).first()).toBeVisible();
@@ -53,7 +53,7 @@ for (const scheme of ["light", "dark"] as const) {
       await shot(page, `live-text-${tag}`);
 
       // Editing: the list beside the picked Step's panel, the line above (on a phone, the line behind its toggle).
-      await page.goto("/settings/projects/WEB/workflow");
+      await page.goto("/settings/projects/WEB/workflows/wf-work");
       await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
       await page.waitForTimeout(300);
       await noSidewaysScroll(page);
@@ -117,7 +117,7 @@ test("editing: nothing is sent until Save; then the new Skill, then one PUT", as
   await mockV1(page);
   const writes: string[] = [];
   page.on("request", (r) => r.method() !== "GET" && r.url().includes("/v1/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
-  await page.goto("/settings/projects/WEB/workflow?step=st-qa");
+  await page.goto("/settings/projects/WEB/workflows/wf-work?step=st-qa");
   const name = page.getByRole("textbox", { name: "Name of Step 4" });
   await expect(name).toBeFocused();
   await name.fill("Test");
@@ -177,7 +177,7 @@ for (const scheme of ["light", "dark"] as const) {
     const errors = watchErrors(page);
     const { tasks } = await mockV1(page);
     const task = (n: number) => tasks.find((t) => t.id === `k-${n}`)!;
-    await page.goto("/projects/WEB/workflow");
+    await page.goto("/projects/WEB/workflows");
     await expect(token(page, "WEB-5")).toHaveAttribute("aria-label", /^WEB-5 Normalise names on input, held by builder-1/);
     await page.waitForTimeout(400);
     await noSidewaysScroll(page);
@@ -227,7 +227,7 @@ test("live moments, phone: the line runs down the page and a pickup reads now", 
   const page = await context.newPage();
   const errors = watchErrors(page);
   const { tasks } = await mockV1(page);
-  await page.goto("/projects/WEB/workflow");
+  await page.goto("/projects/WEB/workflows");
   await expect(page.getByRole("region", { name: "Workflow", exact: true })).toHaveAttribute("data-orientation", "vertical");
   tasks.find((t) => t.id === "k-7")!.claim = claimOf(7, "m-builder-1");
   await emit(page, entryAt(60, "task.claimed", "k-7", "m-builder-1", { step_id: "st-build" }));
@@ -244,7 +244,7 @@ test("live moments, reduced motion: no token travels, the Task simply appears at
   const page = await context.newPage();
   const errors = watchErrors(page);
   const { tasks } = await mockV1(page);
-  await page.goto("/projects/WEB/workflow");
+  await page.goto("/projects/WEB/workflows");
   await expect(token(page, "WEB-9")).toBeVisible();
   Object.assign(tasks.find((t) => t.id === "k-9")!, { step_id: "st-review", claim: undefined });
   await emit(page, entryAt(61, "task.advanced", "k-9", "m-qa", { from: "st-qa", to: "st-review", outcome: "pass" }));

@@ -36,7 +36,7 @@ bin/darkory workflow show WEB          # each Workflow's Steps, who takes each, 
 | C | File a Task in the current Project |
 | G then P | Switch Project |
 | G then I, M | Go to the Inbox or My work |
-| G then T, B, W, A | Go to the current Project's Tasks, its board, its Workflow or its Agents |
+| G then T, B, W, A | Go to the current Project's Tasks, its board, its Workflows or its Agents |
 | J or ↓, K or ↑ | Where Tasks are listed (a Project's Tasks or board, the Inbox, My work, a Parent's Subtasks): move to the next or previous Task; with its peek open, show that Task in it |
 | Enter | Open the selected Task's peek |
 | Esc | Close the peek; the focus returns to its Task |
