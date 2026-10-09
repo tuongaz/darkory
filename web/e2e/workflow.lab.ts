@@ -53,7 +53,7 @@ for (const scheme of ["light", "dark"] as const) {
       await shot(page, `live-text-${tag}`);
 
       // Editing: the list beside the picked Step's panel, the line above (on a phone, the line behind its toggle).
-      await page.goto("/settings/projects/WEB/workflows");
+      await page.goto("/settings/projects/WEB/workflows/wf-work");
       await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
       await page.waitForTimeout(300);
       await noSidewaysScroll(page);
@@ -117,7 +117,7 @@ test("editing: nothing is sent until Save; then the new Skill, then one PUT", as
   await mockV1(page);
   const writes: string[] = [];
   page.on("request", (r) => r.method() !== "GET" && r.url().includes("/v1/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
-  await page.goto("/settings/projects/WEB/workflows?step=st-qa");
+  await page.goto("/settings/projects/WEB/workflows/wf-work?step=st-qa");
   const name = page.getByRole("textbox", { name: "Name of Step 4" });
   await expect(name).toBeFocused();
   await name.fill("Test");

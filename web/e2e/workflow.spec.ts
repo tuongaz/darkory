@@ -155,7 +155,9 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
   // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
+  // Settings › Workflows lists MAIN's one, Work; its row opens its editor.
   const { page, errors, ctx } = await open(browser, "/settings/projects/MAIN/workflows");
+  await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Work" }).click();
   const list = page.getByRole("list", { name: "Steps" });
   await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
   await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
@@ -237,7 +239,7 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(board.page.getByText("Build", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${shots}6-08-saved.png`, animations: "disabled" });
   const moved = (await v1("GET", "/v1/tasks?project=MAIN&state=open")) as { items: { title: string; step_id?: string }[] };
-  const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { steps: { id: string; name: string; skill_id?: string }[]; connectors: { from_step_id: string; to_step_id?: string; name: string }[] };
+  const wf = (await v1("GET", "/v1/projects/MAIN/workflow")) as { workflows: { id: string }[]; steps: { id: string; name: string; skill_id?: string }[]; connectors: { from_step_id: string; to_step_id?: string; name: string }[] };
   const madeStep = wf.steps.find((s) => s.name === "Make")!;
   const qaStep = wf.steps.find((s) => s.name === "QA")!;
   expect(moved.items.filter((t) => t.title.startsWith("Check the")).every((t) => t.step_id === madeStep.id)).toBe(true);
@@ -246,7 +248,8 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   expect(qaStep.skill_id).toBe(skillList.find((s) => s.name === "qa")!.id);
 
   // C3: QA's Skill exists now and nobody has it: its Owner takes it. A new agent for it, at once: its token shows once.
-  await page.goto(`${base}/settings/projects/MAIN/workflows?step=${qaStep.id}`);
+  const work = wf.workflows[0].id;
+  await page.goto(`${base}/settings/projects/MAIN/workflows/${work}?step=${qaStep.id}`);
   const takenBy = page.getByRole("region", { name: "Step 4: QA" }).getByRole("region", { name: "Taken by" });
   await expect(takenBy).toContainText("Nobody");
   await expect(list.getByRole("listitem", { name: "4. QA" })).toContainText("Owner takes it");
@@ -288,12 +291,12 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   expect([await has("ada"), await has("builder")]).toEqual([true, false]);
 
   // A removal cancelled is discarded: ada keeps engineer.
-  await page.goto(`${base}/settings/projects/MAIN/workflows?step=${madeStep.id}`);
+  await page.goto(`${base}/settings/projects/MAIN/workflows/${work}?step=${madeStep.id}`);
   await makeTakers.getByRole("button", { name: "Remove ada" }).click();
   await expect(makeTakers).toContainText("Nobody");
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("dialog", { name: "Discard 1 change?" }).getByRole("button", { name: "Discard" }).click();
-  await expect(page).toHaveURL(`${base}/projects/MAIN/workflows`);
+  await expect(page).toHaveURL(`${base}/settings/projects/MAIN/workflows`);
   expect(await has("ada")).toBe(true);
 
   expect(errors).toEqual([]);
