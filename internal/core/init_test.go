@@ -86,7 +86,7 @@ func TestFreshInit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := workflowText(skills, w.Workflow); got != defaultWorkflowText {
+			if got := workflowText(skills, w.Workflows); got != defaultWorkflowText {
 				t.Fatalf("MAIN's Workflow:\n%s", got)
 			}
 			places := map[string][2]int64{
@@ -154,7 +154,7 @@ func TestInitSeedsProjectMainWithoutTheRoster(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := workflowText(skills, w.Workflow); got != defaultWorkflowText {
+		if got := workflowText(skills, w.Workflows); got != defaultWorkflowText {
 			t.Fatalf("MAIN's Workflow:\n%s", got)
 		}
 		f.checkActivity()

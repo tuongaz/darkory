@@ -185,7 +185,7 @@ func TestProposingNeedsAWayToSkillReview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		in := core.WorkflowInput{}
+		in := core.WorkflowsInput{}
 		names := map[string]string{}
 		for _, s := range w.Steps {
 			names[s.ID] = s.Name

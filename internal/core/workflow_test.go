@@ -12,7 +12,7 @@ import (
 )
 
 // workflowText writes a Workflow as its Steps with their Skills, then its Connectors.
-func workflowText(skills []core.Skill, w core.Workflow) string {
+func workflowText(skills []core.Skill, w core.Workflows) string {
 	skill := map[string]string{}
 	for _, s := range skills {
 		skill[s.ID] = s.Name
@@ -52,7 +52,7 @@ func (f *fixture) workflowText(project string) string {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return workflowText(skills, w.Workflow)
+	return workflowText(skills, w.Workflows)
 }
 
 // A new Project starts with the default Workflow, laid out compact, unless its creator picks
@@ -193,7 +193,7 @@ func TestSetWorkflow(t *testing.T) {
 		// Build becomes Make; QA (qa) is new, between Make and Review, which is deleted; Make's
 		// connector keeps its id though sent without it. The lists are out of order, and the
 		// positions have gaps.
-		next := core.WorkflowInput{
+		next := core.WorkflowsInput{
 			Steps: []core.StepInput{
 				{ID: id["Retro"], Name: "Retro", Skill: ptrStr(core.SkillRetro), Position: 50},
 				{ID: id["Backlog"], Name: "Backlog", Position: 1}, {ID: id["Plan"], Name: "Plan", Skill: ptrStr(core.SkillBreakdown), Position: 2, X: ptrInt(240)},
@@ -216,32 +216,32 @@ func TestSetWorkflow(t *testing.T) {
 		}
 
 		// What the Workflow says on its own, and against the record.
-		for _, bad := range []func(w *core.WorkflowInput){
-			func(w *core.WorkflowInput) {
+		for _, bad := range []func(w *core.WorkflowsInput){
+			func(w *core.WorkflowsInput) {
 				w.Connectors = append(w.Connectors, core.ConnectorInput{From: "Nowhere", Name: "x"})
 			},
-			func(w *core.WorkflowInput) {
+			func(w *core.WorkflowsInput) {
 				w.Connectors = append(w.Connectors, core.ConnectorInput{From: "QA", To: ptrStr("Review"), Name: "x"})
 			},
-			func(w *core.WorkflowInput) {
+			func(w *core.WorkflowsInput) {
 				w.Connectors = append(w.Connectors, core.ConnectorInput{From: "QA", Name: "PASS"})
 			},
-			func(w *core.WorkflowInput) { w.Steps = append(w.Steps, core.StepInput{Name: "qa"}) },
-			func(w *core.WorkflowInput) { w.Steps = append(w.Steps, core.StepInput{Name: " "}) },
-			func(w *core.WorkflowInput) { w.Steps = append(w.Steps, core.StepInput{Name: id["Plan"]}) },
-			func(w *core.WorkflowInput) {
+			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Name: "qa"}) },
+			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Name: " "}) },
+			func(w *core.WorkflowsInput) { w.Steps = append(w.Steps, core.StepInput{Name: id["Plan"]}) },
+			func(w *core.WorkflowsInput) {
 				w.Steps = append(w.Steps, core.StepInput{ID: store.NewID(), Name: "Ghost"})
 			},
-			func(w *core.WorkflowInput) {
+			func(w *core.WorkflowsInput) {
 				w.Steps = append(w.Steps, core.StepInput{ID: id["Plan"], Name: "Plan again"})
 			},
-			func(w *core.WorkflowInput) { w.Connectors[0].ID = store.NewID() },
+			func(w *core.WorkflowsInput) { w.Connectors[0].ID = store.NewID() },
 			// Two Steps at one place; two Connectors out of QA at one place; a place below 1.
-			func(w *core.WorkflowInput) { w.Steps[1].Position = 50 },
-			func(w *core.WorkflowInput) { w.Connectors[2].Position = 3 },
-			func(w *core.WorkflowInput) { w.Steps[1].Position = -1 },
-			func(w *core.WorkflowInput) { w.Moves = map[string]string{id["Plan"]: "QA"} },
-			func(w *core.WorkflowInput) { w.Moves = map[string]string{id["Review"]: "Nowhere"} },
+			func(w *core.WorkflowsInput) { w.Steps[1].Position = 50 },
+			func(w *core.WorkflowsInput) { w.Connectors[2].Position = 3 },
+			func(w *core.WorkflowsInput) { w.Steps[1].Position = -1 },
+			func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Plan"]: "QA"} },
+			func(w *core.WorkflowsInput) { w.Moves = map[string]string{id["Review"]: "Nowhere"} },
 		} {
 			in := next
 			in.Steps = slices.Clone(next.Steps)
@@ -265,7 +265,7 @@ func TestSetWorkflow(t *testing.T) {
 		want := "Backlog · Plan (breakdown) · Make (engineer) · QA (qa) · Retro (retro) · Skill review (skill-review) | " +
 			"Plan -done-> Done · Make -pass-> QA · QA -pass-> Done · QA -fail-> Make · " +
 			"Retro -done-> Done · Retro -propose-> Skill review · Skill review -publish-> Done · Skill review -needs changes-> Retro"
-		if got := workflowText(skills, after.Workflow); got != want {
+		if got := workflowText(skills, after.Workflows); got != want {
 			t.Fatalf("the Workflow set:\n%s", got)
 		}
 		if after.Steps[2].ID != id["Build"] || after.Steps[2].Y != 40 || after.Connectors[1].ID != pass.ID {
@@ -310,7 +310,7 @@ func TestSetWorkflow(t *testing.T) {
 
 		// Put back as read, the Workflow is unchanged and writes nothing.
 		n := f.checkActivity()
-		var same core.WorkflowInput
+		var same core.WorkflowsInput
 		name := map[string]string{}
 		for _, s := range after.Steps {
 			name[s.ID] = s.Name
@@ -337,8 +337,8 @@ func TestSetWorkflow(t *testing.T) {
 }
 
 // asSet is a Workflow as SetWorkflow takes it, unchanged.
-func asSet(w core.Workflow) core.WorkflowInput {
-	var in core.WorkflowInput
+func asSet(w core.Workflows) core.WorkflowsInput {
+	var in core.WorkflowsInput
 	for _, s := range w.Steps {
 		in.Steps = append(in.Steps, core.StepInput{ID: s.ID, Name: s.Name, Skill: s.SkillID, Position: s.Position})
 	}
@@ -367,7 +367,7 @@ func TestSetWorkflowTakers(t *testing.T) {
 		has := func(member, skill string) bool {
 			return f.count(`SELECT COUNT(*) FROM member_skills WHERE member_id = $1 AND skill_id = $2`, member, f.skillID(skill)) > 0
 		}
-		in := func() core.WorkflowInput { return asSet(before.Workflow) }
+		in := func() core.WorkflowsInput { return asSet(before.Workflows) }
 
 		// Refused, nothing is made: Review is deleted with a Task at it and nowhere to go.
 		gone := in()
@@ -389,13 +389,13 @@ func TestSetWorkflowTakers(t *testing.T) {
 		}
 
 		// What is refused before anything is read.
-		for code, bad := range map[core.Code]func(w *core.WorkflowInput){
-			core.CodeInvalid: func(w *core.WorkflowInput) {
+		for code, bad := range map[core.Code]func(w *core.WorkflowsInput){
+			core.CodeInvalid: func(w *core.WorkflowsInput) {
 				w.Grants = []core.SkillGrant{{Member: "lead", Skill: "review"}}
 				w.Revokes = []core.SkillGrant{{Member: "lead", Skill: "review"}}
 			},
-			core.CodeNotFound: func(w *core.WorkflowInput) { w.Grants = []core.SkillGrant{{Member: "nobody", Skill: "review"}} },
-			core.CodeConflict: func(w *core.WorkflowInput) { w.Skills = []core.WorkflowSkill{{Name: core.SkillEngineer}} },
+			core.CodeNotFound: func(w *core.WorkflowsInput) { w.Grants = []core.SkillGrant{{Member: "nobody", Skill: "review"}} },
+			core.CodeConflict: func(w *core.WorkflowsInput) { w.Skills = []core.WorkflowSkill{{Name: core.SkillEngineer}} },
 		} {
 			w := in()
 			bad(&w)
@@ -449,7 +449,7 @@ func TestSetWorkflowTakers(t *testing.T) {
 		changed := len(f.activity("workflow.changed"))
 
 		// Only who takes changes: the Workflow records nothing, the revoke is made.
-		w = asSet(after.Workflow)
+		w = asSet(after.Workflows)
 		w.Revokes = []core.SkillGrant{{Member: "lead", Skill: "triage"}}
 		if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", w, core.Idem{}); err != nil {
 			t.Fatal(err)

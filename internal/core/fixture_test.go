@@ -74,9 +74,9 @@ func (f *fixture) project(key string) string {
 
 // chain replaces the Project's Workflow with steps, each a name and a Skill ("" for a hold), in
 // order, each leading to the next ("pass") and the last into Done ("pass").
-func (f *fixture) chain(project string, steps ...[2]string) core.Workflow {
+func (f *fixture) chain(project string, steps ...[2]string) core.Workflows {
 	f.t.Helper()
-	var in core.WorkflowInput
+	var in core.WorkflowsInput
 	for i, st := range steps {
 		si := core.StepInput{Name: st[0], Position: int64(i + 1)}
 		if st[1] != "" {
@@ -93,7 +93,7 @@ func (f *fixture) chain(project string, steps ...[2]string) core.Workflow {
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return w.Workflow
+	return w.Workflows
 }
 
 // step is the id of the Project's Step named name.

@@ -25,7 +25,7 @@ func TestHotPathWritesAreOneRoundTripOnPostgres(t *testing.T) {
 	if _, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "company", BaseSkill: ptrStr("qa"), Body: "v1"}, core.Idem{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", core.WorkflowInput{
+	if _, err := f.svc.SetWorkflow(ctx, f.admin, "WEB", core.WorkflowsInput{
 		Steps: []core.StepInput{{Name: "Plan", Skill: ptrStr(core.SkillBreakdown)}, {Name: "Build", Skill: ptrStr("build")},
 			{Name: "Acceptance", Skill: ptrStr(core.SkillAcceptance)}, {Name: "Retro", Skill: ptrStr(core.SkillRetro)},
 			{Name: "Skill review", Skill: ptrStr(core.SkillSkillReview)}},

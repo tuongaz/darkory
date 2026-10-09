@@ -64,7 +64,7 @@ func TestAdminOperationsNeedTheAdminMark(t *testing.T) {
 		_, forbidden["createMember"] = f.svc.CreateMember(ctx, bob, core.NewMember{Name: "eve", Kind: "agent"}, core.Idem{})
 		_, forbidden["createProject"] = f.svc.CreateProject(ctx, bob, core.NewProject{Key: "API", Name: "API"}, core.Idem{})
 		_, forbidden["updateProject"] = f.svc.UpdateProject(ctx, bob, "WEB", core.ProjectChange{AutoComplete: ptrBool(true)}, core.Idem{})
-		_, forbidden["setWorkflow"] = f.svc.SetWorkflow(ctx, bob, "WEB", core.WorkflowInput{}, core.Idem{})
+		_, forbidden["setWorkflow"] = f.svc.SetWorkflow(ctx, bob, "WEB", core.WorkflowsInput{}, core.Idem{})
 		_, forbidden["createSkill"] = f.svc.CreateSkill(ctx, bob, core.NewSkill{Name: "x", Kind: "generic"}, core.Idem{})
 		forbidden["grantSkill"] = f.svc.GrantSkill(ctx, bob, "bob", "qa", core.Idem{})
 		forbidden["addProjectMember"] = f.svc.AddProjectMember(ctx, bob, "WEB", "ada", core.Idem{})

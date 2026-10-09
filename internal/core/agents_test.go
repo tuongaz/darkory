@@ -436,8 +436,8 @@ func TestInitSeedsTheRoster(t *testing.T) {
 		// MAIN is on the default Workflow; filed in it with Break down, the Breakdown is at Plan
 		// and names the Workspace.
 		w, err := svc.GetWorkflow(ctx, ada, "MAIN")
-		if err != nil || workflowText(skills, w.Workflow) != defaultWorkflowText {
-			t.Fatalf("MAIN's Workflow %s (%v)", workflowText(skills, w.Workflow), err)
+		if err != nil || workflowText(skills, w.Workflows) != defaultWorkflowText {
+			t.Fatalf("MAIN's Workflow %s (%v)", workflowText(skills, w.Workflows), err)
 		}
 		d, err := svc.FileTask(ctx, ada, core.NewTask{Project: ptrStr("MAIN"), Title: "Cart", Breakdown: true}, core.Idem{})
 		if err != nil || !slices.Equal(d.Subtasks[0].WorkspaceIDs, []string{out.Workspace.ID}) {
