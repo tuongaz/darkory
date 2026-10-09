@@ -7,7 +7,7 @@ import type { Member, MemberDetail } from "@/api/client";
 import { useDirectory, useMember, useMemberSessions, useProjects, useRunnerSessions, useSkills, useTokens } from "@/api/queries";
 import { taskPath } from "@/screens/task/format";
 import { addProjectMember, removeProjectMember } from "@/api/writes";
-import type { Crumb } from "@/app/TopBar";
+import { BarAction, type Crumb } from "@/app/TopBar";
 import { PageHeader } from "@/components/PageHeader";
 import { Pill } from "@/components/Pill";
 import { ProjectMark } from "@/components/ProjectMark";
@@ -76,14 +76,7 @@ function MemberSettings({ detail, list }: { detail: MemberDetail; list: Crumb })
   return (
     <SettingsFrame
       crumbs={[list, { label: m.name }]}
-      primary={
-        active && (
-          <Button onClick={() => setDialog("token")}>
-            <KeyRoundIcon />
-            Issue token
-          </Button>
-        )
-      }
+      primary={active && <BarAction icon={<KeyRoundIcon />} label="Issue token" onClick={() => setDialog("token")} />}
     >
       <div className="max-w-[820px]">
         <PageHeader

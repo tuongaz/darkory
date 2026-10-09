@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
 import { LiveActivity } from "@/api/live";
 import { Providers, Root } from "@/App";
@@ -9,6 +9,7 @@ import type { Task, Workflows } from "@/api/client";
 import { ada, signedIn, task, web, wfId, wfStep, workflow, workflowsFixture } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { newQueryClient } from "@/queryClient";
+import { RouteProjectContext } from "./currentProject";
 import { FromWorkflow, ToProjectWorkflows } from "./routes";
 
 // The Workflow's old addresses lead to the Workflows' (named-workflows-plan.md, Round 2): a
@@ -40,8 +41,18 @@ function at(path: string, record: Workflows = workflowsFixture(web)) {
         <Routes>
           <Route path="/projects/:key/workflow" element={<FromWorkflow />} />
           <Route path="/settings/projects/:key/workflow" element={<FromWorkflow settings />} />
-          <Route path="/settings/projects/:key/workflows" element={<ToProjectWorkflows />} />
-          <Route path="/settings/projects/:key/workflows/:workflow" element={<ToProjectWorkflows edit />} />
+          {/* ProjectScope's part: the Project the key names, as the app gives it. */}
+          <Route
+            path="/settings/projects/:key"
+            element={
+              <RouteProjectContext value={web}>
+                <Outlet />
+              </RouteProjectContext>
+            }
+          >
+            <Route path="workflows" element={<ToProjectWorkflows />} />
+            <Route path="workflows/:workflow" element={<ToProjectWorkflows edit />} />
+          </Route>
           <Route path="*" element={<Address />} />
         </Routes>
       </MemoryRouter>
@@ -104,8 +115,14 @@ describe("the Workflow's old addresses", () => {
     expect(await address("/projects/WEB/workflow?filter.tasks=title%3Acontains%3Ax", workflow())).toBe("/projects/WEB/workflows/wf-work?filter.tasks=title%3Acontains%3Ax");
   });
 
-  it("lead Settings' old address of a Project of one with ?view= to the list, not the editor", async () => {
+  it("land Settings' old address of a Project of one with ?view= on the Workflow's page, through the list, not the editor", async () => {
+    // The redirect itself goes to the list (line parameters mean nothing in the editor) ...
     expect(await address("/settings/projects/WEB/workflow?view=text", workflow())).toBe("/projects/WEB/workflows?view=text");
+    cleanup();
+    // ... and the list, in the app, sends it on to its one Workflow's page.
+    appAt("/settings/projects/WEB/workflow?view=text", workflow());
+    await waitFor(() => expect(here()).toBe("/projects/WEB/workflows/wf-work?view=text"));
+    expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
   });
 });
 

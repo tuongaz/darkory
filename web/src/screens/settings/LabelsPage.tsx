@@ -6,7 +6,6 @@ import { useRouteProject } from "@/app/currentProject";
 import { LabelPill } from "@/components/LabelPill";
 import { Refusal } from "@/components/Refusal";
 import { BarAction } from "@/app/TopBar";
-import { Button } from "@/components/ui/button";
 import { useCurrentMe } from "@/me";
 import { SettingsFrame } from "./frame";
 import { LabelsEditor } from "./LabelsEditor";
@@ -20,12 +19,7 @@ export function OrganisationLabelsPage() {
     <SettingsFrame
       crumbs={[{ label: "Labels" }]}
       pad={false}
-      primary={
-        <Button onClick={() => setAdding(true)} disabled={adding}>
-          <PlusIcon />
-          New Label
-        </Button>
-      }
+      primary={<BarAction icon={<PlusIcon />} label="New Label" onClick={() => setAdding(true)} disabled={adding} />}
     >
       <Refusal error={labels.error} className="px-6 py-4" />
       <LabelsEditor

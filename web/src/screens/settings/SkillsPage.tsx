@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { ArrowRightIcon, BookOpenIcon, MessageSquareIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { BarAction } from "@/app/TopBar";
 import type { Skill, SkillDetail, SkillVersion } from "@/api/client";
 import { useDirectory, useSkills } from "@/api/queries";
 import { createSkill } from "@/api/writes";
@@ -41,12 +42,7 @@ export function SkillsPage() {
     <SettingsFrame
       crumbs={[{ label: "Skills" }]}
       pad={false}
-      primary={
-        <Button onClick={() => setOpen(true)}>
-          <PlusIcon />
-          New Skill
-        </Button>
-      }
+      primary={<BarAction icon={<PlusIcon />} label="New Skill" onClick={() => setOpen(true)} />}
     >
       <Loaded query={skills} loading={<Skeleton className="m-6 h-8" />}>
         {(list) => (

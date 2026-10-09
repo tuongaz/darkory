@@ -494,10 +494,10 @@ describe("Tasks of a Project of several Workflows", () => {
     mockApi(several());
     renderApp(`/projects/WEB/tasks?view=board&workflow=${wfId.bugs}`);
     await row(/WEB-2 Crash on save/);
-    const toolbar = screen.getByRole("group", { name: "Page" });
+    const group = screen.getByRole("group", { name: "Page" });
     expect(screen.queryByRole("button", { name: /^More/ })).not.toBeInTheDocument();
     for (const name of ["Views", "Filter", "Display", "File Task"]) {
-      const button = within(toolbar).getByRole("button", { name });
+      const button = within(group).getByRole("button", { name });
       expect(button).not.toHaveClass("max-sm:hidden");
       expect(narrowHidden(within(button).getByText(name))).toBe(true);
     }
@@ -506,7 +506,7 @@ describe("Tasks of a Project of several Workflows", () => {
       ["Filter", "Filters"],
       ["Display", "Display"],
     ]) {
-      await userEvent.click(within(toolbar).getByRole("button", { name }));
+      await userEvent.click(within(group).getByRole("button", { name }));
       expect(await screen.findByRole("dialog", { name: opens })).toBeInTheDocument();
       await userEvent.keyboard("{Escape}");
       await waitFor(() => expect(screen.queryByRole("dialog", { name: opens })).not.toBeInTheDocument());

@@ -119,19 +119,41 @@ export function BarAction({ icon, label, className, children, ...props }: { icon
   );
 }
 
-/** Whether an element's content runs past it, kept as its box and its content change. */
+/**
+ * Whether an element's content runs past its right edge, kept as its box, its content and its
+ * scroll change: true while there is more to scroll to, so the fade clears once scrolled to the end.
+ */
 function useOverflow<T extends HTMLElement>() {
   const [el, ref] = useState<T | null>(null);
   const [on, setOn] = useState(false);
   useLayoutEffect(() => {
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => setOn(el.scrollWidth > el.clientWidth);
-    const watch = new ResizeObserver(measure);
-    watch.observe(el);
-    for (const child of el.children) watch.observe(child);
+    if (!el) return;
+    // One pixel of slack: scrollLeft is fractional on a zoomed or high-density screen.
+    const measure = () => setOn(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    el.addEventListener("scroll", measure, { passive: true });
+    // The element's box and each child's: a chip whose label grows widens the content without
+    // resizing the element. Children come and go (the scope chip once the line loads), so a
+    // MutationObserver re-observes them as they change.
+    const sizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+    const observe = () => {
+      if (!sizes) return;
+      sizes.disconnect();
+      sizes.observe(el);
+      for (const child of el.children) sizes.observe(child);
+    };
+    const children = typeof MutationObserver === "undefined" ? undefined : new MutationObserver(() => {
+      observe();
+      measure();
+    });
+    children?.observe(el, { childList: true });
+    observe();
     measure();
-    return () => watch.disconnect();
-  });
+    return () => {
+      el.removeEventListener("scroll", measure);
+      sizes?.disconnect();
+      children?.disconnect();
+    };
+  }, [el]);
   return [ref, on] as const;
 }
 

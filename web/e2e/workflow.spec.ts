@@ -69,8 +69,10 @@ async function open(browser: Browser, path: string, size = { width: 1440, height
 
 /** The address of the one Workflow's page of a Project of one: its Workflows open on a list. */
 async function workflowPage(key: string): Promise<string> {
-  const { workflows } = (await v1("GET", `/v1/projects/${key}/workflow`)) as { workflows: { id: string }[] };
-  return `/projects/${key}/workflows/${workflows[0].id}`;
+  const { workflows } = (await v1("GET", `/v1/projects/${key}/workflow`)) as { workflows: { id: string; position: number }[] };
+  // The first by position, as `compare.mjs`'s firstWorkflow takes it.
+  const first = [...workflows].sort((a, b) => a.position - b.position)[0];
+  return `/projects/${key}/workflows/${first.id}`;
 }
 
 /** A fresh token for a roster agent, by name. */

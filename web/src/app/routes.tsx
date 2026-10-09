@@ -25,7 +25,7 @@ import {
 } from "@/screens/settings";
 import { TaskPage, TaskPeek } from "@/screens/task";
 import { WorkflowEditPage, WorkflowPage, WorkflowsPage } from "@/screens/workflow";
-import { projectSettingsPath, useRouteProject, type ProjectSettingsPage } from "./currentProject";
+import { projectSettingsPath, useRouteProject, workflowEditPath, workflowsPath, type ProjectSettingsPage } from "./currentProject";
 import { NotFound } from "./NotFound";
 import { ProjectScope, ToCurrentProject } from "./ProjectScope";
 import { SetupChecklist } from "./SetupChecklist";
@@ -167,10 +167,10 @@ function ToProjectSettings({ page }: { page: ProjectSettingsPage }) {
  * Workflow's editor there (`edit`), keeping what else the address says (`?step=`).
  */
 export function ToProjectWorkflows({ edit = false }: { edit?: boolean }) {
-  const { key = "", workflow = "" } = useParams();
+  const project = useRouteProject();
+  const { workflow = "" } = useParams();
   const { search } = useLocation();
-  const list = `/projects/${encodeURIComponent(key)}/workflows`;
-  return <Navigate to={{ pathname: edit ? `${list}/${encodeURIComponent(workflow)}/edit` : list, search }} replace />;
+  return <Navigate to={{ pathname: edit ? workflowEditPath(project, workflow) : workflowsPath(project), search }} replace />;
 }
 
 /**

@@ -74,7 +74,7 @@ export function WorkflowsPage() {
           )
         }
       />
-      <Content className="overflow-auto">
+      <Content>
         {query.isError ? (
           <Refusal error={query.error} className="m-6" />
         ) : !graph ? (
@@ -103,8 +103,9 @@ export function WorkflowsPage() {
  * /projects/:key/workflows/:workflow: one Workflow of the Project, live, as one line with its
  * panels. Of a Project of several, the chip in the breadcrumb says which and goes to another's
  * page, remembered as the board's pick; of a Project of one, the last crumb is its name. `?scope=`
- * narrows it to the Tasks with no Parent, a Parent's Subtasks or one Task, `?view=` swaps the line
- * for the Blocking among its Tasks or a list.
+ * (the scope chip, on the bar's second row after the view switch) narrows it to the Tasks with no
+ * Parent, a Parent's Subtasks or one Task, `?view=` swaps the line for the Blocking among its Tasks
+ * or a list.
  */
 export function WorkflowPage() {
   const project = useRouteProject();
@@ -143,13 +144,17 @@ export function WorkflowPage() {
           // The Workflow drawn, at every width: of several the chip, on a phone too the way to
           // another; of one its name.
           ...(several ? [{ label: <WorkflowChip workflows={workflows} picked={shown?.id} onPick={pick} />, whole: true }] : shown ? [{ label: shown.name }] : []),
-          ...(data ? [{ label: <ScopeChip data={data} onScope={setScope} />, wide: true }] : []),
         ]}
-        view={<LineViewSwitch view={view} onChange={setView} blocking={blocking} />}
+        view={
+          <>
+            <LineViewSwitch view={view} onChange={setView} blocking={blocking} />
+            {data && <ScopeChip data={data} onScope={setScope} />}
+          </>
+        }
         actions={
           <>
             {data && data.scoped.hiddenTotal > 0 && (
-              <span className="hidden text-xs text-muted-foreground tabular-nums lg:inline">{data.scoped.hiddenTotal} hidden</span>
+              <span className="hidden text-xs text-muted-foreground tabular-nums @2xl/page:inline">{data.scoped.hiddenTotal} hidden</span>
             )}
             {named && named.key !== "…" && (
               <Button asChild variant="outline" className="hidden @2xl/page:inline-flex">

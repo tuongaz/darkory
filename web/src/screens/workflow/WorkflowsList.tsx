@@ -17,12 +17,14 @@ import { workflowRows } from "./workflowRows";
 
 // Workflow · Steps · Waiting · Working · Done today, the figures right-aligned under their heads;
 // for an admin, from `sm` up, Order (‹ ›) and the acts (✎ 🗑), and below `sm` one ⋯ in their place.
+// A phone's figure columns are the same for every Member (measured so "Prototypes" reads whole
+// beside the admin's ⋯); the admin's grid only adds the ⋯.
 const cols = (admin: boolean) =>
   cn(
-    "grid px-4 sm:gap-3 sm:px-6",
+    "grid gap-1.5 px-4 sm:gap-3 sm:px-6",
     admin
-      ? "grid-cols-[minmax(0,1fr)_36px_48px_54px_68px_26px] gap-1.5 sm:grid-cols-[minmax(0,1fr)_80px_80px_80px_96px_64px_72px]"
-      : "grid-cols-[minmax(0,1fr)_40px_52px_56px_72px] gap-2 sm:grid-cols-[minmax(0,1fr)_80px_80px_80px_96px]",
+      ? "grid-cols-[minmax(0,1fr)_36px_48px_54px_68px_26px] sm:grid-cols-[minmax(0,1fr)_80px_80px_80px_96px_64px_72px]"
+      : "grid-cols-[minmax(0,1fr)_36px_48px_54px_68px] sm:grid-cols-[minmax(0,1fr)_80px_80px_80px_96px]",
   );
 const figure = "text-right tabular-nums";
 // The act cells sit over the row's link, so a click on them is theirs.

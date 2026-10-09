@@ -484,6 +484,11 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
     expect(await page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth)).toBe(true);
     await shot(page, `phone-board-${name.toLowerCase()}`);
   }
+  // The Filter's popover opens whole inside the phone.
+  await page.getByRole("group", { name: "Page" }).getByRole("button", { name: "Filter", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Filters" })).toBeInViewport({ ratio: 1 });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Filters" })).toHaveCount(0);
   await page.goto(`${base}/projects/ACC/workflows/${wf("Bugs")}`);
   await expect(page.getByRole("region", { name: "Workflow" })).toBeVisible();
   await chipReadsWhole(page, "Bugs");
@@ -491,9 +496,13 @@ test("9 · on a phone, every Workflow's board and page reads the chip whole; a l
   const toProject = page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Accounts", exact: true });
   await expect(toProject).toBeInViewport({ ratio: 1 });
   await expect(toProject).toHaveAttribute("href", "/projects/ACC/tasks");
-  // Line | Blocking | Text stays three segments on the bar's second row, nothing folded.
+  // Line | Blocking | Text stays three segments on the bar's second row, nothing folded; the scope
+  // chip follows it on that row, not among the crumbs.
   await expect(page.getByRole("button", { name: /^View: / })).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Page" }).getByRole("group", { name: "View" })).toBeInViewport({ ratio: 1 });
+  const pageRow = page.getByRole("group", { name: "Page" });
+  await expect(pageRow.getByRole("group", { name: "View" })).toBeInViewport({ ratio: 1 });
+  await expect(pageRow.getByRole("button", { name: /^Scope: / })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("button", { name: /^Scope: / })).toHaveCount(0);
   await shot(page, "phone-workflow-bugs");
 
   // A long name stops before the caret with an ellipsis; the caret stays in view.

@@ -1,10 +1,10 @@
 import { BotIcon, PlusIcon, UserIcon } from "lucide-react";
 import { Link } from "react-router";
+import { BarAction } from "@/app/TopBar";
 import type { Member, MemberDetail } from "@/api/client";
 import { useDirectory } from "@/api/queries";
 import { Pill } from "@/components/Pill";
 import { Refusal } from "@/components/Refusal";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useCurrentMe } from "@/me";
@@ -37,12 +37,7 @@ export function MembersPage() {
     <SettingsFrame
       crumbs={[{ label: "Members" }]}
       pad={false}
-      primary={
-        <Button onClick={() => setOpen(true)}>
-          <PlusIcon />
-          New Member
-        </Button>
-      }
+      primary={<BarAction icon={<PlusIcon />} label="New Member" onClick={() => setOpen(true)} />}
     >
       {members.isError ? (
         <Refusal error={members.error} className="px-6 py-4" />

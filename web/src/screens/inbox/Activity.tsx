@@ -126,29 +126,35 @@ export function ActivityPage() {
 
   return (
     <>
-      <TopBar crumbs={[projectCrumb(project), { label: "Activity" }]} actions={<StreamMark />} />
-      <div className="flex h-10 flex-none items-center gap-1.5 overflow-x-auto border-b px-4" role="toolbar" aria-label="Filters">
-        <FilterChip label="Member" value={memberRef && (member?.name ?? memberRef)} onClear={() => set("member", undefined)}>
-          <DropdownMenuRadioGroup value={member?.name ?? ""} onValueChange={(v) => set("member", v)}>
-            {dir.memberList
-              .filter((m) => !m.deactivated_at)
-              .map((m) => (
-                <DropdownMenuRadioItem key={m.id} value={m.name}>
-                  <MemberAvatar member={m} />
-                  {m.name}
-                </DropdownMenuRadioItem>
-              ))}
-          </DropdownMenuRadioGroup>
-        </FilterChip>
-        <FilterChip label="Kind" value={kindRef && kindName(kindRef)} onClear={() => set("kind", undefined)}>
-          <DropdownMenuRadioGroup value={kind ?? ""} onValueChange={(v) => set("kind", v)}>
-            {kindChoices.map((k, i) => (
-              <KindItem key={k.kind} choice={k} first={i === 0 || kindChoices[i - 1].group !== k.group} />
-            ))}
-          </DropdownMenuRadioGroup>
-        </FilterChip>
-        <TaskChip value={taskRef && (task?.key ?? taskRef)} tasks={taskList} onPick={(key) => set(aboutParam, key)} onClear={() => set(aboutParam, undefined)} />
-      </div>
+      <TopBar
+        crumbs={[projectCrumb(project), { label: "Activity" }]}
+        // The filter chips sit on the bar's second row, at its left; the Live mark at its right.
+        view={
+          <div role="group" aria-label="Filters" className="flex items-center gap-1.5">
+            <FilterChip label="Member" value={memberRef && (member?.name ?? memberRef)} onClear={() => set("member", undefined)}>
+              <DropdownMenuRadioGroup value={member?.name ?? ""} onValueChange={(v) => set("member", v)}>
+                {dir.memberList
+                  .filter((m) => !m.deactivated_at)
+                  .map((m) => (
+                    <DropdownMenuRadioItem key={m.id} value={m.name}>
+                      <MemberAvatar member={m} />
+                      {m.name}
+                    </DropdownMenuRadioItem>
+                  ))}
+              </DropdownMenuRadioGroup>
+            </FilterChip>
+            <FilterChip label="Kind" value={kindRef && kindName(kindRef)} onClear={() => set("kind", undefined)}>
+              <DropdownMenuRadioGroup value={kind ?? ""} onValueChange={(v) => set("kind", v)}>
+                {kindChoices.map((k, i) => (
+                  <KindItem key={k.kind} choice={k} first={i === 0 || kindChoices[i - 1].group !== k.group} />
+                ))}
+              </DropdownMenuRadioGroup>
+            </FilterChip>
+            <TaskChip value={taskRef && (task?.key ?? taskRef)} tasks={taskList} onPick={(key) => set(aboutParam, key)} onClear={() => set(aboutParam, undefined)} />
+          </div>
+        }
+        actions={<StreamMark />}
+      />
       <Content>
         <h1 className="sr-only">Activity</h1>
         {history.isError ? (

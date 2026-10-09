@@ -25,7 +25,7 @@ and so on. What their R3 phase added (`docs/build/agents-plan.md`) carries over 
 
 | Screen | Holds |
 |---|---|
-| Settings › a Project › Workspaces | Each Workspace: name, kind, path (cut in the middle so its folder shows), mode (Local or Pull request), default branch, the Projects it is the default of, the open Tasks naming it. |
+| A Project › Settings › Workspaces | Each Workspace: name, kind, path (cut in the middle so its folder shows), mode (Local or Pull request), default branch, the Projects it is the default of, the open Tasks naming it. |
 | Settings › Agents, an agent | The Agent card: command (its placeholders under it), arguments, model, environment, progress file, Paused, Unattended; each saved alone (`PATCH /v1/members/{member}/agent`). |
 | File a Task (`BoardDialogs`) | Workspaces (`MultiCombobox`, chips), starting at the Project's default (a Subtask: its Parent's); not shown while the Install has none. |
 | A Task's properties (`task/`) | The Task's Workspaces and branch (`taskBranch` in `@/lib/branch`, `main-7-support-emoji`, the plan's name until M3's Runner lands). |
@@ -46,7 +46,7 @@ and so on. What their R3 phase added (`docs/build/agents-plan.md`) carries over 
   the others disabled since /v1 has no switch; then, after a line, Account settings (`/settings/account`).
 - **Inbox, My work**, then **Projects**: the Projects the Member is in (`me.projects`), and the
   current Project when the Member is not in it, each a row (mark, name, chevron) unfolding onto
-  Tasks, Workflow, Agents (its live count), Activity, Settings. The current Project unfolds whenever
+  Tasks, Workflows, Agents (its live count), Activity, Settings. The current Project unfolds whenever
   it becomes current; what else is unfolded or folded is remembered by the browser
   (`darkory.sidebar.projects`). "+ New Project" ends the group for admins. The address decides the
   current Project; ⌘K lists every Project to switch to.
@@ -63,18 +63,28 @@ with the Project (`projectCrumb(project)` from `@/app/crumbs`):
   crumbs={[projectCrumb(project, false), { label: "Tasks" }]}
   view={<ListBoardSwitch />}            // the segmented switcher, at the left of the second row
   actions={<><FilterButton /><DisplayButton /></>}
-  primary={<Button><PlusIcon />File Task<Kbd>C</Kbd></Button>}   // the screen's one primary
+  primary={<BarAction icon={<PlusIcon />} label="File Task" />}   // the screen's one primary
 />
 <Content pad>…</Content>                 // scrolls; `pad` is the kit's 20px × 24px
 ```
 
 A Task's page: `[projectCrumb(project), { label: "Tasks", to: projectPath(project, "tasks"), wide: true }, { label: key }]`.
-Settings' pages: `[{ label: "Settings" }, { label: project.name }, { label: "Workflow" }]`.
+A Project's settings: `[projectCrumb(project), { label: "Settings" }]`, the pages as tabs on the second row.
+The Organisation's and the Account's settings pages: `[{ label: "Settings" }, { label: page }]`.
 
 The bar is one header of two rows. The first is where you are: the crumbs, and on a phone the
-button that opens the sidebar. The second, a row named "Page", comes when the page has any of it:
-the view switch and the scope at the left, the actions and the one primary at the right. A page
-with nothing for it has the first row alone.
+button that opens the sidebar. The second, `role="group"` named "Page", comes when the page has any
+of it: the view switch, the scope and the filter chips at the left (`view`), the actions and the
+one primary at the right. A page with nothing for it has the first row alone.
+
+What a new page puts on the second row follows the row's width, never the viewport's:
+
+- Every act there is a `BarAction` (`@/app/TopBar`): its icon, then its label once the row has
+  42rem; on a narrower row a 32px icon square, still named by its label.
+- A view too long for the row scrolls inside it under a fade at its right edge, which clears once
+  scrolled to the end; the acts stay at the right.
+- Nothing on the second row hides by a viewport breakpoint (`sm:`, `lg:`); what steps aside does so
+  by the row's container (`@2xl/page:`).
 
 The first crumb reads strong (the area), the rest muted. On a phone the TopBar carries the button
 that opens the sidebar (Settings' nav, in Settings). Nothing may make the page scroll sideways at

@@ -132,7 +132,7 @@ describe("a Project's Activity", () => {
     renderApp("/projects/WEB/activity?kind=task.claimed");
     await waitFor(() => expect(rows()).toHaveLength(3));
     expect(calls.some((c) => c.path === "/v1/activity" && c.query.getAll("kind").includes("task.claimed") && c.query.get("project") === "WEB")).toBe(true);
-    expect(screen.getByRole("toolbar", { name: "Filters" })).toHaveTextContent("Kind is Task claimed");
+    expect(screen.getByRole("group", { name: "Filters" })).toHaveTextContent("Kind is Task claimed");
 
     await userEvent.click(screen.getByRole("button", { name: /^Task/ }));
     await userEvent.click(await screen.findByRole("option", { name: /WEB-1/ }));

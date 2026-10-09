@@ -8,7 +8,7 @@ import { FakeEventSource } from "@/test/eventSource";
 import { renderApp } from "@/test/render";
 
 // The live Workflow page as the line draws it (Direction D): each open Task a token at its Step,
-// the panels under it, the toggle Line | Blocking (N) | Text, the scope in the breadcrumb, a
+// the panels under it, the toggle Line | Blocking (N) | Text, the scope after it on the bar's second row, a
 // selected token's chain, a pickup tagged "now" and a move carried along its Connector.
 
 const claim = (holder: string, started = new Date(Date.now() - 20 * 60_000).toISOString()) => ({ id: `c-${holder}`, task_id: "", holder_id: holder, session_id: "s", started_at: started });

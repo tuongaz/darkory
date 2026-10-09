@@ -1,5 +1,6 @@
 import { BotIcon, PlusIcon } from "lucide-react";
 import { Link } from "react-router";
+import { BarAction } from "@/app/TopBar";
 import type { Member, MemberDetail } from "@/api/client";
 import { EmptyState } from "@/components/EmptyState";
 import { Pill } from "@/components/Pill";
@@ -35,7 +36,7 @@ export function AgentsPage() {
   );
 
   return (
-    <SettingsFrame crumbs={[{ label: "Agents" }]} pad={false} primary={newAgent}>
+    <SettingsFrame crumbs={[{ label: "Agents" }]} pad={false} primary={<BarAction icon={<PlusIcon />} label="New agent" onClick={() => setOpen(true)} />}>
       {members.isError ? (
         <Refusal error={members.error} className="px-6 py-4" />
       ) : members.isPending ? (
