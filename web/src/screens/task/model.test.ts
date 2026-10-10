@@ -6,6 +6,7 @@ import { taskActions } from "./actions";
 import { taskRecord } from "./record";
 import { graphSteps, graphSubtasks } from "./graph";
 import { takersOf, waitsFor } from "./takers";
+import { sizeText } from "./format";
 
 const members = new Map([ada, bob, builder].map((m) => [m.id, m]));
 const now = Date.now();
@@ -250,5 +251,15 @@ describe("whom a Task waits for at its Step", () => {
     expect(waitsFor({ task: waiting, claims: [] }, { ...build, takers: [] }, open, members, now)).toBeUndefined();
     expect(waitsFor({ task: { ...waiting, blocked: true }, claims: [] }, build, open, members, now)).toBeUndefined();
     expect(waitsFor({ task: waiting, claims: [] }, build, open, members, now)).toBe(builder.id);
+  });
+});
+
+describe("a file's size", () => {
+  it("reads in decimal units, one decimal below 100", () => {
+    expect(sizeText(753)).toBe("753 B");
+    expect(sizeText(56_800)).toBe("56.8 kB");
+    expect(sizeText(228_900)).toBe("229 kB");
+    expect(sizeText(1_200_000)).toBe("1.2 MB");
+    expect(sizeText(340_000_000)).toBe("340 MB");
   });
 });

@@ -328,13 +328,6 @@ export function count(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** "70 B", "1.2 kB", "3.4 MB". */
-export function sizeText(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`;
-  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
-}
-
 /**
  * The Steps a Member takes in a Project, in its order, as the Agents page names them: `Bugs ›
  * Investigate` when the Project has two or more Workflows, else the Step's name.

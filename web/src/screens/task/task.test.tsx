@@ -495,7 +495,7 @@ describe("a Task's record", () => {
     const record = await screen.findByRole("list", { name: "Record" });
     const ended = within(record).getByText(/released it/).closest("li")!;
     const log = within(ended).getByRole("link", { name: /Shift log/ });
-    expect(log).toHaveTextContent("Shift log · 57 KB");
+    expect(log).toHaveTextContent("Shift log · 58.2 kB");
     expect(log).toHaveAttribute("href", "/v1/evidence/e-log/content");
     expect(within(record).getByRole("link", { name: /pw-all\.log/ })).toBeInTheDocument();
     expect(within(record).queryByText("shift-WEB-1-builder-101000.log")).not.toBeInTheDocument();

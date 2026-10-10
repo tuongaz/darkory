@@ -32,7 +32,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { aboutProject, count, groupByDay, matchesFilter, sizeText, type ActivityFilter } from "./derive";
+import { aboutProject, count, groupByDay, matchesFilter, type ActivityFilter } from "./derive";
+import { sizeText } from "@/screens/task/format";
 import { activityHistoryPage, useStepNames, useTaskMap } from "./queries";
 import { describe, isKnown, kindChoices, kindName, markWords, type Lookup, type Part, type Sentence } from "./wording";
 import { toShort } from "@/lib/shortid";
