@@ -2752,8 +2752,7 @@ type ListTasksParams struct {
 	// (Workspace id the Task names) · `model` (the live Claim's model label) · `filed_at` (when
 	// it was filed) · `completed_at` (when it ended done; a dropped Task has none) · `ended_at`
 	// (when it ended, done or dropped) · `q` (`contains`, ignoring case, over the key and the
-	// title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded; `is`
-	// and `not` only).
+	// title) · `pull_request` (`open`, `merged`, or `none`: no pull request recorded).
 	//
 	// Example: `filter=step:in:<id>,<id>&filter=holder:is:none&filter=filed_at:last:7d`. An
 	// unknown field, an operator the field does not take, the wrong number of values or a value
