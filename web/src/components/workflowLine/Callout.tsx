@@ -1,5 +1,6 @@
 import { ArrowRightIcon, ArrowUpRightIcon, XIcon } from "lucide-react";
 import { Fragment, type ReactNode, type Ref } from "react";
+import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import { Pill } from "@/components/Pill";
 import { cn } from "@/lib/utils";
@@ -148,8 +149,8 @@ export function ChainCallout({
  * A selected Task's way, in a strip above the line (vf-7): "DARK-21's way", its holder, key and
  * age, what it can do next ("next: pass → Review", each outcome open to it from its Step); when
  * its chain says something must end first, when it unblocks and the first move, with its button
- * (Answer, Claim) and the question waiting with a Member; when it blocks others, what it holds
- * up; and × that clears the selection. A region of its own; on a phone it stacks.
+ * (Answer, Claim) and the question waiting with a Member; when it blocks others, how many, which
+ * ones behind an ⓘ; and × that clears the selection. A region of its own; on a phone it stacks.
  */
 export function WayStrip({
   chain,
@@ -211,7 +212,11 @@ export function WayStrip({
           {up && (
             <>
               <span className="font-semibold">{up.count}</span>
-              {!blocked && <span className="text-muted-foreground">{up.when}</span>}
+              {!blocked && (
+                <InfoTip label={`${up.count}: ${up.when}`} className="-ml-1">
+                  {up.when}
+                </InfoTip>
+              )}
             </>
           )}
           {aimed?.aimedAt && (

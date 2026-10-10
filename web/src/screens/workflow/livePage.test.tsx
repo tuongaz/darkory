@@ -181,7 +181,9 @@ describe("the Workflow page", () => {
     await userEvent.click(within(await listAt("Build")).getByRole("button", { name: /^WEB-2 / }));
     const strip = within(line()).getByRole("region", { name: "WEB-2's way" });
     expect(strip).toHaveTextContent("Blocks 1 · 2 in chain");
-    expect(strip).toHaveTextContent("WEB-3 unblocks when WEB-2 ends; WEB-4 unblocks when WEB-3 ends");
+    // Which ones, and when each unblocks, behind an ⓘ.
+    expect(strip).not.toHaveTextContent("unblocks when");
+    expect(within(strip).getByRole("button", { name: "About Blocks 1 · 2 in chain: WEB-3 unblocks when WEB-2 ends; WEB-4 unblocks when WEB-3 ends" })).toBeInTheDocument();
     expect(strip).not.toHaveTextContent("First:");
   });
 
