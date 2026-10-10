@@ -748,8 +748,9 @@ type Activity struct {
 	// Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
 	// `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
 	// `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
-	// pull request's `number` and `url`. `skill.changed` carries `project_id`, null when the
-	// Skill became the Organisation's.
+	// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
+	// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
+	// `project_id`, null when the Skill became the Organisation's.
 	//
 	// `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 	// (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -784,8 +785,9 @@ type Activity struct {
 // Runner nudged the agent holding the Task, whose turn had ended with no decision: `claim_id`,
 // `holder_id` and `nudge`, 1 or 2. `task.evidence_attached` carries `evidence_id`,
 // `filename`, `size` and `kind`. `task.pull_request_opened` and `task.pull_request_merged` carry the
-// pull request's `number` and `url`. `skill.changed` carries `project_id`, null when the
-// Skill became the Organisation's.
+// pull request's `number` and `url`. `skill.created` carries `name`, `kind`, `builtin` and
+// `project_id`, null for a Skill of the whole Organisation; `skill.changed` carries
+// `project_id`, null when the Skill became the Organisation's.
 //
 // `workflow.changed` carries the Project's Workflows as they now stand: `workflows`
 // (`id`, `name`, `position` each), `steps` (`id`, `workflow_id`, `name`, `skill_id`,
@@ -1689,7 +1691,8 @@ type SetTaskPullRequestBody struct {
 	Number int64            `json:"number"`
 	State  PullRequestState `json:"state"`
 
-	// URL The pull request's `https` address on `github.com`, or on the host `GH_HOST` names.
+	// URL The pull request's own `https` address, `https://<host>/<owner>/<repo>/pull/<number>`,
+	// on `github.com` or on the host `GH_HOST` names.
 	URL string `json:"url"`
 }
 
