@@ -176,6 +176,23 @@ describe("the Tasks at a Step", () => {
     }
   });
 
+  it("pulses no count when Tasks reach it otherwise: a Filter or scope change, a refetch, a deselection", () => {
+    const line = (tasks: readonly LineTask[], selected?: string) => (
+      <MemoryRouter>
+        <WorkflowLine workflow={DARK("impl")} tasks={tasks} now={NOW} stepHref={href} selected={selected} onSelect={() => {}} />
+      </MemoryRouter>
+    );
+    // A Filter that let DARK-21 and a Review Task through, then cleared.
+    const { rerender } = render(line([BUSY[0], waiting(50, "review", 3)], "k-30"));
+    rerender(line(BUSY, "k-30"));
+    expect(count(station("build"))).toHaveTextContent("12 waiting");
+    expect(document.querySelector("[data-count][data-pulse]")).toBeNull();
+    // Deselected, DARK-30 drops into the count without a pulse.
+    rerender(line(BUSY));
+    expect(count(station("build"))).toHaveTextContent("13 waiting");
+    expect(document.querySelector("[data-count][data-pulse]")).toBeNull();
+  });
+
   it("selects a waiting Task from its row, and the selected Task stands as a chip at its Step", async () => {
     let picked: string | null = null;
     const { rerender } = draw(BUSY, undefined, (id) => (picked = id));

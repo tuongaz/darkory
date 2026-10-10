@@ -192,9 +192,10 @@ export function VerticalLine({
   for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
   for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
 
-  /** A waiting Task standing as a chip for now: its live moment plays (it arrived, it pulses, a tag names it) or it is selected. */
-  const standing = (task: LineTask) =>
-    flow.arrived.has(task.id) || flow.pulses.has(task.id) || selected === task.id || (!!task.stepId && !!flow.callouts.get(task.stepId)?.some((c) => c.taskId === task.id));
+  /** A Task whose live moment plays: it arrived, it pulses, a tag names it. */
+  const moment = (task: LineTask) => flow.arrived.has(task.id) || flow.pulses.has(task.id) || (!!task.stepId && !!flow.callouts.get(task.stepId)?.some((c) => c.taskId === task.id));
+  /** A waiting Task standing as a chip for now: its live moment plays or it is selected. */
+  const standing = (task: LineTask) => moment(task) || selected === task.id;
   /** A Step's Tasks split: its chips (held, at most three, and a waiting one while it stands) and the rest, counted. */
   const split = (id: string) => {
     const list = at.get(id) ?? [];
@@ -203,24 +204,27 @@ export function VerticalLine({
     return { held, chips: list.filter((x) => ids.has(x.id)), rest: list.filter((x) => !ids.has(x.id)) };
   };
 
-  // A count that grows pulses once, so a Task folding into it after its moment never goes unseen.
+  // A count pulses once when a Task folds into it: a waiting Task whose moment stood it as a chip
+  // drops into the count as the moment ends. Nothing else that changes a count (a Filter, a scope, a
+  // refetch, a deselection) pulses it.
+  const playing = JSON.stringify([...at].sort().map(([id, list]) => [id, list.filter((x) => !x.holder && moment(x)).map((x) => x.id)]));
   const counted = JSON.stringify([...at.keys()].sort().map((id) => [id, split(id).rest.map((x) => x.id)]));
-  const was = useRef<Map<string, string[]> | null>(null);
+  const was = useRef<{ playing: Map<string, string[]>; counted: Map<string, string[]> } | null>(null);
   const beats = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    const now = new Map<string, string[]>(JSON.parse(counted));
+    const now = { playing: new Map<string, string[]>(JSON.parse(playing)), counted: new Map<string, string[]>(JSON.parse(counted)) };
     const before = was.current;
     was.current = now;
     if (!before) return;
-    const grew = [...now].filter(([id, ids]) => ids.some((x) => !before.get(id)?.includes(x))).map(([id]) => id);
+    const grew = [...now.counted].filter(([id, ids]) => ids.some((x) => before.playing.get(id)?.includes(x) && !before.counted.get(id)?.includes(x))).map(([id]) => id);
     if (grew.length === 0) return;
     setFolded((f) => new Set([...f, ...grew]));
     for (const id of grew) {
       clearTimeout(beats.current.get(id));
       beats.current.set(id, setTimeout(() => setFolded((f) => new Set([...f].filter((x) => x !== id))), PULSE_MS));
     }
-  }, [counted]);
+  }, [playing, counted]);
   useEffect(() => {
     const timers = beats.current;
     return () => timers.forEach(clearTimeout);
