@@ -61,12 +61,15 @@ export function taskRecord(detail: TaskDetail, entries: readonly Activity[] = []
   for (const observation of detail.observations) out.push({ kind: "observation", at: observation.created_at, observation });
   // A Shift's log is its Claim's, not the Task's Evidence: it rides on the row that ends the Claim.
   const logs = new Map<string, Evidence[]>();
+  // Each log's Claim, found once: the end rows take them, and a log left over stands on its own.
+  const logClaims = new Map<string, Claim | undefined>();
   for (const evidence of detail.evidence) {
     if (evidence.kind !== "log") {
       out.push({ kind: "evidence", at: evidence.created_at, evidence });
       continue;
     }
     const claim = logClaim(evidence, claims);
+    logClaims.set(evidence.id, claim);
     if (claim) logs.set(claim.id, [...(logs.get(claim.id) ?? []), evidence]);
   }
   const placed = new Set<string>();
@@ -115,10 +118,10 @@ export function taskRecord(detail: TaskDetail, entries: readonly Activity[] = []
     else out.push({ kind: "ended", at: task.ended_at, state: task.state, by: end?.actor_id, ...logsOf(claims.find((c) => c.how_ended === "dropped")) });
   }
   // A log whose Claim has no row ending it (still held, or none found) stands on its own.
-  for (const evidence of detail.evidence) {
-    if (evidence.kind !== "log") continue;
-    const claim = logClaim(evidence, claims);
-    if (!claim || !placed.has(claim.id)) out.push({ kind: "log", at: evidence.created_at, evidence });
+  for (const [id, claim] of logClaims) {
+    if (claim && placed.has(claim.id)) continue;
+    const evidence = detail.evidence.find((e) => e.id === id)!;
+    out.push({ kind: "log", at: evidence.created_at, evidence });
   }
   // A stable sort on the instant keeps the insertion order above for ties.
   return out
