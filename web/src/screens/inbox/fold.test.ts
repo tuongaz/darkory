@@ -154,6 +154,52 @@ describe("Activity folds a Claim", () => {
     expect(said(rows)[0]).toMatch(new RegExp(`· the Shift that ended ${clock}$`));
   });
 
+  it("puts a log on the Claim end its entry names, however late it came", () => {
+    const log = (seq: number, min: number, claim?: string | null) =>
+      entry(seq, "task.evidence_attached", dark2.id, by(builder.id, min, { evidence_id: `e-${seq}`, filename: "shift-DARK-2-builder-101600.log", size: 56_800, kind: "log", ...(claim !== undefined ? { claim_id: claim } : {}) }));
+    const claims = [
+      entry(1, "task.claimed", dark2.id, by(builder.id, 0, { claim_id: "a" })),
+      entry(2, "task.released", dark2.id, by(builder.id, 1, { claim_id: "a" })),
+      entry(3, "task.claimed", dark2.id, by(builder.id, 2, { claim_id: "b" })),
+      entry(4, "task.released", dark2.id, by(builder.id, 3, { claim_id: "b" })),
+    ];
+    // Two hours late, naming the first of builder's two Claims.
+    expect(shape(foldActivity(newestFirst([...claims, log(5, 120, "a")])))).toEqual([
+      [4, []],
+      [3, []],
+      [2, [5]],
+      [1, []],
+    ]);
+    // Within b's grace, but naming a.
+    expect(shape(foldActivity(newestFirst([...claims, log(5, 4, "a")])))).toEqual([
+      [4, []],
+      [3, []],
+      [2, [5]],
+      [1, []],
+    ]);
+    // Naming none, two hours late: a row of its own, as before.
+    expect(shape(foldActivity(newestFirst([...claims, log(5, 120)])))[0]).toEqual([5, []]);
+    expect(shape(foldActivity(newestFirst([...claims, log(5, 120, null)])))[0]).toEqual([5, []]);
+  });
+
+  it("folds the holder's Evidence into the Claim end its entry names", () => {
+    const rows = foldActivity(
+      newestFirst([
+        entry(1, "task.claimed", dark2.id, by(builder.id, 0, { claim_id: "a" })),
+        entry(2, "task.released", dark2.id, by(builder.id, 1, { claim_id: "a" })),
+        entry(3, "task.claimed", dark2.id, by(builder.id, 2, { claim_id: "b" })),
+        entry(4, "task.evidence_attached", dark2.id, by(builder.id, 3, { evidence_id: "e-wc", filename: "wc.log", size: 753, kind: "evidence", claim_id: "b" })),
+        entry(5, "task.released", dark2.id, by(builder.id, 4, { claim_id: "b" })),
+      ]),
+    );
+    expect(shape(rows)).toEqual([
+      [5, [4]],
+      [3, []],
+      [2, []],
+      [1, []],
+    ]);
+  });
+
   it("folds nothing when a filter left only one kind", () => {
     const notes = dark2Run.filter((e) => e.kind === "task.note_added" || e.kind === "task.evidence_attached");
     expect(foldActivity(newestFirst(notes))).toHaveLength(notes.length);

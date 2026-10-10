@@ -214,6 +214,26 @@ describe("a Shift's log in the record", () => {
     ]);
   });
 
+  it("puts a log on the Claim it names, however late it came", () => {
+    const claims = [claim("a", builder.id, 0, 7), claim("b", builder.id, 10, 20)];
+    // Two hours after Claim a ended, naming it: it is a's, not b's (just ended) nor a row of its own.
+    const named = { ...evidence("log-a", builder.id, 127), claim_id: "a" };
+    const record = taskRecord(detail(t, { claims, evidence: [named] }));
+    expect(ends(record).map((e) => e.kind === "claim-ended" && [e.claim.id, e.logs?.map((l) => l.id)])).toEqual([
+      ["a", ["log-a"]],
+      ["b", undefined],
+    ]);
+    expect(record.some((e) => e.kind === "log")).toBe(false);
+    // Naming the first of two Claims of one holder, though it came within b's grace.
+    const early = { ...evidence("log-a2", builder.id, 21), claim_id: "a" };
+    expect(ends(taskRecord(detail(t, { claims, evidence: [early] })))[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log-a2" }] });
+  });
+
+  it("gives a log naming no Claim, two hours late, a row of its own as before", () => {
+    const record = taskRecord(detail(t, { claims: [claim("a", builder.id, 0, 7)], evidence: [evidence("log-a", builder.id, 127)] }));
+    expect(record.at(-1)).toMatchObject({ kind: "log", evidence: { id: "log-a" } });
+  });
+
   it("prefers the Claim that just ended to one the same holder holds now", () => {
     const claims = [claim("a", builder.id, 0, 7), claim("c", builder.id, 7.5)];
     const record = taskRecord(detail(t, { claims, evidence: [evidence("log-a", builder.id, 8)] }));
@@ -264,6 +284,13 @@ describe("Evidence in the record", () => {
   it("folds nothing attached outside any Claim of the attacher's", () => {
     const record = taskRecord(detail(t, { claims: [], evidence: [file("e1", ada.id, 5), file("e2", ada.id, 5)] }));
     expect(rows(record)).toEqual([["e1"], ["e2"]]);
+  });
+
+  it("folds Evidence by the Claim it names", () => {
+    // Attached after Claim a's span, but naming it: it folds with what a held.
+    const claims = [claim("a", builder.id, 0, 4)];
+    const evidence = [{ ...file("e1", builder.id, 3), claim_id: "a" }, { ...file("e2", builder.id, 3.5), claim_id: "a" }, { ...file("e3", builder.id, 3.6), claim_id: "b" }];
+    expect(rows(taskRecord(detail(t, { claims, evidence })))).toEqual([["e1", "e2"], ["e3"]]);
   });
 
   it("never folds across two Claims, another attacher or a row between", () => {

@@ -27,13 +27,15 @@ const time = (at: string) => Date.parse(at);
 export const logGrace = 30 * 60_000;
 
 /**
- * The Claim a Shift's log belongs to: one of the holder who attached it (the Runner attaches as
- * the agent), ended at most `logGrace` before it, the latest such; else the holder's Claim whose
- * span contains it. The Runner attaches the log after the Claim ends, sometimes minutes later
+ * The Claim a Shift's log belongs to: the one it names (`claim_id`, which the Runner writes),
+ * however late it came. A log from before Evidence named its Claim falls back on its time: one of
+ * the holder who attached it (the Runner attaches as the agent), ended at most `logGrace` before
+ * it, the latest such; else the holder's Claim whose span contains it. The Runner attaches the log after the Claim ends, sometimes minutes later
  * when the next holder already holds the Task or the same holder took it again, so a Claim that
  * just ended comes before one held now.
  */
-export function logClaim(log: Pick<Evidence, "attached_by" | "created_at">, claims: readonly Claim[]): Claim | undefined {
+export function logClaim(log: Pick<Evidence, "attached_by" | "created_at" | "claim_id">, claims: readonly Claim[]): Claim | undefined {
+  if (log.claim_id) return claims.find((c) => c.id === log.claim_id);
   const at = time(log.created_at);
   const mine = claims.filter((c) => c.holder_id === log.attached_by && time(c.started_at) <= at);
   const endedBefore = mine
@@ -132,8 +134,9 @@ export function taskRecord(detail: TaskDetail, entries: readonly Activity[] = []
   return foldEvidence(sorted, claims);
 }
 
-/** The Claim of the attacher's whose span holds the moment Evidence was attached, if any. */
+/** The Claim Evidence names; one from before Evidence named it, the attacher's Claim whose span holds the moment it was attached. */
 function heldClaim(e: Evidence, claims: readonly Claim[]): Claim | undefined {
+  if (e.claim_id) return claims.find((c) => c.id === e.claim_id);
   const at = time(e.created_at);
   return claims.find((c) => c.holder_id === e.attached_by && time(c.started_at) <= at && (!c.ended_at || at <= time(c.ended_at)));
 }
