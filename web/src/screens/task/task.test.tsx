@@ -447,7 +447,27 @@ describe("a Task's pull request", () => {
     const plain = { ...landed("open"), workspaces: [] };
     expect(mergeBase(plain, [])).toBe("main");
     expect(mergeBase(plain, [repo], repo.id)).toBe("trunk");
-    expect(mergeBase({ ...landed("open"), parent: { id: "k-9", key: "WEB-9", title: "Checkout" } }, [])).toBe("web-9-checkout");
+    // A Subtask lands on its Parent's branch, the Parent's key alone, as the Runner names it.
+    expect(mergeBase({ ...landed("open"), parent: { id: "k-9", key: "WEB-9", title: "Checkout" } }, [])).toBe("web-9");
+  });
+
+  it("names a Subtask's Merges into and a Parent's own branch by the Parent's key alone", async () => {
+    const sub = landed("open", { parent_id: "k-9" });
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": { ...sub, parent: { id: "k-9", key: "WEB-9", title: "Checkout" } }, ...runner(false) }));
+    renderApp("/tasks/WEB-1");
+    const rail = await screen.findByRole("complementary", { name: "Properties" });
+    const merges = await within(rail).findByText("Merges into");
+    expect(merges.closest("div")!.parentElement).toHaveTextContent("web-9");
+    expect(rail).not.toHaveTextContent("web-9-checkout");
+  });
+
+  it("names a Parent's own branch by its key alone", async () => {
+    const parent = { ...copy, state: "open" as const, ended_at: undefined, step_id: undefined, workspace_ids: [repo.id], subtask_counts: { open: 1, working: 0, done: 0, dropped: 0 } };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": detail(parent, { workspaces: [repo] }), ...runner(false) }));
+    renderApp("/tasks/WEB-1");
+    const rail = await screen.findByRole("complementary", { name: "Properties" });
+    const branch = await within(rail).findByText("Branch");
+    expect(branch.closest("div")!.parentElement).toHaveTextContent(/web-1(?!-)/);
   });
 });
 

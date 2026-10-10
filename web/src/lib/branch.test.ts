@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { slug, taskBranch } from "./branch";
+import { parentBranch, slug, taskBranch } from "./branch";
 
 describe("branch names", () => {
   // The cases of TestSlug in internal/runner/workspace_test.go: the web names the branch the Runner makes.
@@ -25,5 +25,13 @@ describe("branch names", () => {
 
   it("names a Task's branch by its key in lower case, then its slug", () => {
     expect(taskBranch("MAIN-7", "Support emoji")).toBe("main-7-support-emoji");
+  });
+});
+
+describe("a Parent's branch", () => {
+  // internal/branch.Parent: the key alone, lower case; its Subtasks start from it and merge into it.
+  it("is its key in lower case, never its title", () => {
+    expect(parentBranch("WEB-9")).toBe("web-9");
+    expect(taskBranch("WEB-9", "Checkout")).toBe("web-9-checkout");
   });
 });
