@@ -7,6 +7,7 @@ import type { Member, RunnerSession, Workflows } from "@/api/client";
 import { ada, bob, builder, engineer, ops, step, task, web, workflow, workflowsFixture } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { agentRows, claimHolder, claimsSince, queueOf } from "./derive";
+import { waitsFor } from "@/screens/task/takers";
 import { claim, entry, memberDetail, minutes, recordApi } from "./testing";
 
 const planner: Member = { id: "m-planner", name: "planner", kind: "agent", admin: false, created_at: minutes(-1000) };
@@ -97,6 +98,25 @@ describe("the queue behind a busy agent", () => {
     expect(queueOf({ agent: agentBuilder, held: [], open, workflow: wf, projectId: web.id, now })).toEqual([]);
     const two = { ...agentBuilder, agent: { ...agentBuilder.agent!, shifts: 2 } };
     expect(queueOf({ agent: two, held: [holding], open, workflow: wf, projectId: web.id, now })).toEqual([]);
+  });
+
+  it("agrees with the Task's strip: listed only while every taker of its Step is busy", () => {
+    const qa: Member = { ...agentBuilder, id: "m-qa", name: "qa" };
+    const takers = [agentBuilder, qa].map((m) => ({ id: m.id, name: m.name, kind: m.kind }));
+    const shared = workflow(web, { build: { takers } });
+    const build = shared.steps.find((s) => s.id === step.build)!;
+    const members = new Map([agentBuilder, qa].map((m) => [m.id, m]));
+    const cart = waiting(4);
+    const qaHolds = task(5, { claim: claim("k-5", qa.id, { expires_at: minutes(20) }) });
+    for (const [open, listed] of [
+      [[holding, cart], false],
+      [[holding, cart, qaHolds], true],
+    ] as const) {
+      const q = queueOf({ agent: agentBuilder, held: [holding], open, workflow: shared, projectId: web.id, now, members });
+      const strip = waitsFor({ task: cart, claims: [] }, build, open, members, now);
+      expect(q.map((t) => t.key)).toEqual(listed ? ["WEB-4"] : []);
+      expect(strip !== undefined).toBe(listed);
+    }
   });
 
   it("leaves out a Task the agent held under another Skill: no one judges their own work", () => {

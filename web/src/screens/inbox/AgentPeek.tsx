@@ -183,7 +183,7 @@ export function AgentPeek({ name, project, onClose }: { name: string; project: P
   const held = agentRows([agent], open.data ?? [], now)[0]?.held ?? [];
   // The ⋯ menu's Nudge and Stop name one Shift: the one on the Task first held, else the first; each Shift's own section has its acts.
   const runnerSession = runnerSessions.find((s) => s.task_id === held[0]?.id) ?? runnerSessions[0];
-  const queue = queueOf({ agent, held, open: open.data ?? [], workflow, projectId: project.id, now, history: history.entries });
+  const queue = queueOf({ agent, held, open: open.data ?? [], workflow, projectId: project.id, now, history: history.entries, members });
   const claims = withLive(claimsSince(history.entries, id, startOfDay(now)), held, now);
   const live = held[0] && liveClaim(held[0], now);
   const set = agent.agent?.model;
