@@ -42,6 +42,15 @@ for (const scheme of ["light", "dark"] as const) {
       await page.waitForTimeout(400);
       await noSidewaysScroll(page);
       await shot(page, `live-${tag}`);
+      if (size.name === "phone") {
+        // A phone reads the line first, then Needs you, then What's happening (vf-10).
+        const tops = await Promise.all([live, page.getByRole("region", { name: "Needs you" }), page.getByRole("region", { name: "What's happening" })].map((l) => l.evaluate((el) => el.getBoundingClientRect().top)));
+        expect(tops).toEqual([...tops].sort((a, b) => a - b));
+        // The line's foot and the panels under it.
+        await page.getByRole("region", { name: "Needs you" }).scrollIntoViewIfNeeded();
+        await shot(page, `live-${tag}-panels`);
+        await live.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      }
 
       // The rail and a return track say what they mean on hover: nothing drawn over them takes the pointer.
       // (A line is a zero-width box to Playwright, so the pointer goes to its middle by hand.)

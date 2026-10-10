@@ -86,18 +86,18 @@ export function LiveWorkflow({
     );
   }
   return (
-    // A phone reads it top to bottom: Needs you, the line, What's happening. Wider, the line sits
-    // on top and the panels side by side under it; when nothing has happened lately What's
-    // happening folds to one line over Needs you, which takes the full width. The line is never
-    // cut: when it leaves the panels less than their 280px, the page scrolls.
+    // A phone reads it top to bottom: the line, then Needs you, then What's happening (vf-10).
+    // Wider, the line sits on top and the panels side by side under it; when nothing has happened
+    // lately What's happening folds to one line over Needs you, which takes the full width. The
+    // line is never cut: when it leaves the panels less than their 280px, the page scrolls.
     <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:grid lg:grid-rows-[auto_minmax(280px,1fr)]">
-      <div className="order-2 flex-none px-2 pt-2 sm:px-5 lg:order-none lg:px-5">
+      <div className="flex-none px-2 pt-2 pb-2 sm:px-5 lg:px-5 lg:pb-0">
         <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} pills={pills} />
       </div>
       {/* One tree whether quiet or not, so neither panel remounts when What's happening folds. */}
       <div className={cn("contents lg:grid lg:min-h-0 lg:border-t", quiet ? "lg:grid-cols-1 lg:grid-rows-[auto_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_440px]")}>
-        <div className={cn("order-1 border-b lg:min-h-0 lg:border-b-0", quiet ? "lg:order-2" : "lg:order-none")}>{panels.needs}</div>
-        <div className={cn("order-3 border-t lg:min-h-0 lg:border-t-0", quiet ? "lg:order-1 lg:border-b" : "lg:order-none")}>{panels.stories}</div>
+        <div className={cn("border-t lg:min-h-0 lg:border-t-0", quiet && "lg:order-2")}>{panels.needs}</div>
+        <div className={cn("border-t lg:min-h-0 lg:border-t-0", quiet && "lg:order-1 lg:border-b")}>{panels.stories}</div>
       </div>
     </div>
   );

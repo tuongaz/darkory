@@ -127,6 +127,20 @@ describe("the Workflow page", () => {
     expect(screen.getByRole("link", { name: "Edit Work" })).toHaveAttribute("href", "/projects/WEB/workflows/wf-work/edit");
   });
 
+  it("on a phone reads the line first, then Needs you, then What's happening: the page's order, no phone reordering", async () => {
+    serve([task(2)]);
+    renderApp("/projects/WEB/workflows/wf-work");
+    const needs = await screen.findByRole("region", { name: "Needs you" });
+    const stories = screen.getByRole("region", { name: "What's happening" });
+    const line = screen.getByRole("region", { name: /^Workflow$/ });
+    expect(line.compareDocumentPosition(needs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(needs.compareDocumentPosition(stories) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Below lg nothing reorders them (lg's own order only folds a quiet What's happening over Needs you).
+    for (let el: HTMLElement | null = needs; el; el = el.parentElement) expect(el.className).not.toMatch(/(^|\s)order-/);
+    for (let el: HTMLElement | null = stories; el; el = el.parentElement) expect(el.className).not.toMatch(/(^|\s)order-/);
+    for (let el: HTMLElement | null = line; el; el = el.parentElement) expect(el.className).not.toMatch(/(^|\s)order-/);
+  });
+
   it("offers no Edit to a Member who is not an admin", async () => {
     serve([task(2)], bob);
     renderApp("/projects/WEB/workflows/wf-work");
