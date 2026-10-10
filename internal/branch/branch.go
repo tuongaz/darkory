@@ -2,7 +2,10 @@
 // and the server that asks it to merge one name them alike.
 package branch
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // Parent is the branch a Parent's Subtasks start from and merge into, and that merges into the
 // default branch when the Parent completes: its key in lower case, main-7.
@@ -44,4 +47,23 @@ func Slug(title string) string {
 		return "task"
 	}
 	return s
+}
+
+// keyAtStart is a Task key at the start of a branch's name, in any case.
+var keyAtStart = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9]*-[0-9]+)(-|$)`)
+
+// KeyOf is the key of the Task a branch belongs to, in upper case: the branch is the key exactly
+// (a Parent's, Parent) or starts with the key and a dash (a Task's, Prefix), the key matched in
+// any case. Any other branch belongs to no Task: "".
+func KeyOf(head string) string {
+	if m := keyAtStart.FindStringSubmatch(head); m != nil {
+		return strings.ToUpper(m[1])
+	}
+	return ""
+}
+
+// IsTasks says whether head is a branch of Task key's own, not its Parent's: it starts with the
+// key and a dash, in any case.
+func IsTasks(head, key string) bool {
+	return len(head) > len(Prefix(key)) && strings.EqualFold(head[:len(Prefix(key))], Prefix(key))
 }
