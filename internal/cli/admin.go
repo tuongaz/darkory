@@ -20,8 +20,8 @@ var adminCommands = []command{
 	{path: "member update", args: "<member> [--name n] [--email e] [--admin=true|false] [--avatar file-id | --no-avatar]", short: "change a Member (admin), or your own avatar", run: cmdMemberUpdate},
 	{path: "member deactivate", args: "<member>", short: "revoke a Member's tokens, close their Sessions, end their Claims, refuse them from now on (admin)", run: cmdMemberDeactivate},
 	{path: "member reactivate", args: "<member>", short: "let a deactivated Member sign in and be issued tokens again (admin)", run: cmdMemberReactivate},
-	{path: "skill create", args: "<name> --kind generic|company [--base skill] [--project p] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
-	{path: "skill set", args: `<skill> --project p|""`, short: "set the Project a company Skill belongs to; \"\" makes it the Organisation's (admin)", run: cmdSkillSet},
+	{path: "skill create", args: "<name> --kind generic|own [--base skill] [--project p] (--file path|- | --body text)", short: "create a Skill, publishing version 1 (admin)", run: cmdSkillCreate},
+	{path: "skill set", args: `<skill> --project p|""`, short: "set the Project an own Skill belongs to; \"\" makes it the Organisation's (admin)", run: cmdSkillSet},
 	{path: "skill list", args: "[--kind k]", short: "list Skills", run: cmdSkillList},
 	{path: "skill show", args: "<skill>", short: "show a Skill and its current version's text", run: cmdSkillShow},
 	{path: "skill versions", args: "<skill>", short: "list a Skill's published versions", run: cmdSkillVersions},
@@ -213,9 +213,9 @@ func cmdMemberReactivate(c *call) error {
 }
 
 func cmdSkillCreate(c *call) error {
-	kind := c.fs.String("kind", "", "generic or company")
-	base := c.fs.String("base", "", "the generic Skill a company Skill builds on")
-	project := c.fs.String("project", "", "the Project a company Skill belongs to (default: the whole Organisation)")
+	kind := c.fs.String("kind", "", "generic or own")
+	base := c.fs.String("base", "", "the generic Skill an own Skill builds on")
+	project := c.fs.String("project", "", "the Project an own Skill belongs to (default: the whole Organisation)")
 	file := c.fs.String("file", "", "the Skill's text; - reads standard input")
 	text := c.fs.String("body", "", "the Skill's text")
 	args, err := c.args(1, 1)
@@ -223,7 +223,7 @@ func cmdSkillCreate(c *call) error {
 		return err
 	}
 	if *kind == "" {
-		return usagef("needs --kind generic or --kind company")
+		return usagef("needs --kind generic or --kind own")
 	}
 	if (*file == "") == (*text == "") {
 		return usagef("give the Skill's text with --file or --body")
@@ -253,7 +253,7 @@ func cmdSkillCreate(c *call) error {
 
 func cmdSkillSet(c *call) error {
 	var project optString
-	c.fs.Var(&project, "project", `the Project the company Skill belongs to; "" makes it the whole Organisation's`)
+	c.fs.Var(&project, "project", `the Project the own Skill belongs to; "" makes it the whole Organisation's`)
 	args, err := c.args(1, 1)
 	if err != nil {
 		return err
@@ -273,7 +273,7 @@ func cmdSkillSet(c *call) error {
 }
 
 func cmdSkillList(c *call) error {
-	kind := c.fs.String("kind", "", "only generic or company Skills")
+	kind := c.fs.String("kind", "", "only generic or own Skills")
 	if _, err := c.args(0, 0); err != nil {
 		return err
 	}

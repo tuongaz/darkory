@@ -74,7 +74,7 @@ func (r *Runner) taskEnded(ctx context.Context, taskID string) {
 	r.RemoveCheckouts(ctx, d.Task.Key)
 }
 
-// isReview says whether a Skill is review, or a company Skill built on it: completing a Task under
+// isReview says whether a Skill is review, or an own Skill built on it: completing a Task under
 // it is the review a merge normally follows.
 func (r *Runner) isReview(ctx context.Context, rec Record, sk client.Skill) bool {
 	if sk.Name == "review" {

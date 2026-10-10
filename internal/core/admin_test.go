@@ -148,13 +148,13 @@ func TestMembersProjectsAndSkills(t *testing.T) {
 		}
 
 		qa := f.skillID("qa")
-		company, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "company", BaseSkill: ptrStr("qa"), Body: "Our QA"}, core.Idem{})
-		if err != nil || company.Skill.BaseSkillID == nil || *company.Skill.BaseSkillID != qa || company.Current.Version != 1 || company.Current.Body != "Our QA" {
-			t.Fatalf("company Skill %+v, %v", company, err)
+		own, err := f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-acme", Kind: "own", BaseSkill: ptrStr("qa"), Body: "Our QA"}, core.Idem{})
+		if err != nil || own.Skill.BaseSkillID == nil || *own.Skill.BaseSkillID != qa || own.Current.Version != 1 || own.Current.Body != "Our QA" {
+			t.Fatalf("own Skill %+v, %v", own, err)
 		}
-		_, err = f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-more", Kind: "company", BaseSkill: ptrStr("qa-acme"), Body: "x"}, core.Idem{})
-		wantCode(t, err, core.CodeInvalid) // builds on a company Skill
-		_, err = f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "lonely", Kind: "company", Body: "x"}, core.Idem{})
+		_, err = f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "qa-more", Kind: "own", BaseSkill: ptrStr("qa-acme"), Body: "x"}, core.Idem{})
+		wantCode(t, err, core.CodeInvalid) // builds on an own Skill
+		_, err = f.svc.CreateSkill(ctx, f.admin, core.NewSkill{Name: "lonely", Kind: "own", Body: "x"}, core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
 		if err := f.svc.GrantSkill(ctx, f.admin, "robert", "qa-acme", core.Idem{}); err != nil {
 			t.Fatal(err)

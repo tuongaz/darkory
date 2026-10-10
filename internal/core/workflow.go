@@ -1224,7 +1224,7 @@ func median(ds []int64) int64 {
 }
 
 // copiedSkill is the Skill a copied Step carries in a new Project: the one it carries, unless that
-// is a company Skill belonging to the Project copied, which no other Project's Step may carry;
+// is an own Skill belonging to the Project copied, which no other Project's Step may carry;
 // the copy then carries the generic Skill it builds on.
 func copiedSkill(t *tx, skillID *string) (*string, error) {
 	if skillID == nil {

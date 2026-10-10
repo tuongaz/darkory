@@ -11,7 +11,7 @@ import (
 
 var skillName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
-// NewSkill is a Skill to create. A company Skill names the generic Skill it builds on, and may
+// NewSkill is a Skill to create. An own Skill names the generic Skill it builds on, and may
 // name the Project it belongs to, by id or key; with none it is the whole Organisation's.
 type NewSkill struct {
 	Name      string
@@ -32,12 +32,12 @@ func (s *Service) CreateSkill(ctx context.Context, c *auth.Caller, ns NewSkill, 
 	switch {
 	case ns.Kind == "generic" && ns.BaseSkill != nil:
 		return SkillDetail{}, refuse(CodeInvalid, "a generic Skill builds on no other Skill")
-	case ns.Kind == "company" && ns.BaseSkill == nil:
-		return SkillDetail{}, refuse(CodeInvalid, "a company Skill names the generic Skill it builds on in base_skill")
-	case ns.Kind != "generic" && ns.Kind != "company":
-		return SkillDetail{}, refuse(CodeInvalid, "kind must be generic or company")
+	case ns.Kind == "own" && ns.BaseSkill == nil:
+		return SkillDetail{}, refuse(CodeInvalid, "an own Skill names the generic Skill it builds on in base_skill")
+	case ns.Kind != "generic" && ns.Kind != "own":
+		return SkillDetail{}, refuse(CodeInvalid, "kind must be generic or own")
 	case ns.Kind == "generic" && ns.Project != nil && *ns.Project != "":
-		return SkillDetail{}, refuse(CodeInvalid, "a generic Skill belongs to no Project; only a company Skill names one")
+		return SkillDetail{}, refuse(CodeInvalid, "a generic Skill belongs to no Project; only an own Skill names one")
 	}
 	res, err := s.write(ctx, c, idem, func(t *tx) (any, error) {
 		var base *string
@@ -51,7 +51,7 @@ func (s *Service) CreateSkill(ctx context.Context, c *auth.Caller, ns NewSkill, 
 				return nil, err
 			}
 			if b.Kind != "generic" {
-				return nil, refuse(CodeInvalid, "a company Skill builds on a generic Skill, and %s is not one", b.Name)
+				return nil, refuse(CodeInvalid, "an own Skill builds on a generic Skill, and %s is not one", b.Name)
 			}
 			base = &id
 		}
@@ -132,8 +132,8 @@ func (s *Service) ListSkillVersions(ctx context.Context, c *auth.Caller, ref str
 WHERE v.org_id = $1 AND v.skill_id = $2 ORDER BY v.version DESC`, c.OrgID, id)
 }
 
-// UpdateSkill sets the Project a company Skill belongs to, by id or key, or with "" makes it the
-// whole Organisation's (admin). A Step of one Project cannot carry another Project's company
+// UpdateSkill sets the Project an own Skill belongs to, by id or key, or with "" makes it the
+// whole Organisation's (admin). A Step of one Project cannot carry another Project's own
 // Skill, so a Skill some other Project's Step carries is refused invalid. Setting the Project it
 // already has changes nothing. Records skill.changed with project_id, null for the Organisation.
 func (s *Service) UpdateSkill(ctx context.Context, c *auth.Caller, ref string, project string, idem Idem) (SkillDetail, error) {
@@ -149,8 +149,8 @@ func (s *Service) UpdateSkill(ctx context.Context, c *auth.Caller, ref string, p
 		if err != nil {
 			return nil, err
 		}
-		if sk.Kind != "company" {
-			return nil, refuse(CodeInvalid, "%s is a generic Skill, which belongs to no Project; only a company Skill does", sk.Name)
+		if sk.Kind != "own" {
+			return nil, refuse(CodeInvalid, "%s is a generic Skill, which belongs to no Project; only an own Skill does", sk.Name)
 		}
 		var next *string
 		if project != "" {
@@ -171,7 +171,7 @@ WHERE st.org_id = $1 AND st.skill_id = $2 AND st.project_id <> $3 ORDER BY p.nam
 				return nil, err
 			}
 			if other.Valid {
-				return nil, refuse(CodeInvalid, "a Step of %s carries %s; a company Skill belongs to the one Project whose Steps carry it", other.String, sk.Name)
+				return nil, refuse(CodeInvalid, "a Step of %s carries %s; an own Skill belongs to the one Project whose Steps carry it", other.String, sk.Name)
 			}
 		}
 		if _, err := t.Exec(ctx, `UPDATE skills SET project_id = $1 WHERE org_id = $2 AND id = $3`, next, c.OrgID, id); err != nil {
@@ -192,7 +192,7 @@ WHERE st.org_id = $1 AND st.skill_id = $2 AND st.project_id <> $3 ORDER BY p.nam
 	return res.(SkillDetail), nil
 }
 
-// stepSkillFits refuses a Step of projectID carrying another Project's company Skill (ADR 0020).
+// stepSkillFits refuses a Step of projectID carrying another Project's own Skill (ADR 0020).
 func stepSkillFits(t *tx, projectID, skillID string) error {
 	sk, err := getSkill(t.ctx, t, t.caller.OrgID, skillID)
 	if err != nil {
@@ -205,5 +205,5 @@ func stepSkillFits(t *tx, projectID, skillID string) error {
 	if err != nil {
 		return err
 	}
-	return refuse(CodeInvalid, "%s is %s's company Skill", sk.Name, p.Name)
+	return refuse(CodeInvalid, "%s is %s's own Skill", sk.Name, p.Name)
 }

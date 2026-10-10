@@ -15,7 +15,7 @@ type Preset struct {
 	// Projects are the Projects Setup makes; the first is where the bots' Tasks go unless a
 	// template names another.
 	Projects []ProjectSpec
-	// Skills are made when missing, a generic Skill before a company Skill built on it. Darkory
+	// Skills are made when missing, a generic Skill before an own Skill built on it. Darkory
 	// has breakdown, acceptance, retro and skill-review built in, and init makes engineer and
 	// review.
 	Skills []client.CreateSkillBody
@@ -221,7 +221,7 @@ const (
 // back; a Retrospective proposes a Skill version for Skill review, which publishes it.
 var SoftwareWorkflow = WorkflowSpec{
 	Name: "Work",
-	Steps: []StepSpec{{StepBacklog, ""}, {StepPlan, SkillBreakdown}, {StepBuild, SkillCompany}, {StepDocs, SkillDocs}, {StepQA, SkillQA},
+	Steps: []StepSpec{{StepBacklog, ""}, {StepPlan, SkillBreakdown}, {StepBuild, SkillOwn}, {StepDocs, SkillDocs}, {StepQA, SkillQA},
 		{StepReview, SkillReview}, {StepTriage, SkillTriage}, {StepDeploy, SkillDeploy}, {StepRetro, SkillRetro}, {StepSkillReview, SkillSkillReview}},
 	Connectors: []ConnectorSpec{
 		{StepPlan, "", "done"},

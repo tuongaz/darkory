@@ -198,9 +198,9 @@ func TestPullRequestFilter(t *testing.T) {
 	})
 }
 
-// A company Skill belongs to a Project, or to the whole Organisation; a Step of one Project
+// An own Skill belongs to a Project, or to the whole Organisation; a Step of one Project
 // cannot carry another's, and a copy of a Project's Workflow carries the generic Skill instead.
-func TestCompanySkillProject(t *testing.T) {
+func TestOwnSkillProject(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
 		f := newFixture(t, st)
 		ctx := t.Context()
@@ -211,18 +211,18 @@ func TestCompanySkillProject(t *testing.T) {
 		create := func(ns core.NewSkill) (core.SkillDetail, error) {
 			return f.svc.CreateSkill(ctx, f.admin, ns, core.Idem{})
 		}
-		webQA, err := create(core.NewSkill{Name: "web-qa", Kind: "company", BaseSkill: ptrStr("qa"), Project: ptrStr("WEB"), Body: "WEB's QA"})
+		webQA, err := create(core.NewSkill{Name: "web-qa", Kind: "own", BaseSkill: ptrStr("qa"), Project: ptrStr("WEB"), Body: "WEB's QA"})
 		if err != nil || webQA.Skill.ProjectID == nil || *webQA.Skill.ProjectID != web {
-			t.Fatalf("a company Skill of WEB: %+v, %v", webQA.Skill, err)
+			t.Fatalf("an own Skill of WEB: %+v, %v", webQA.Skill, err)
 		}
-		orgQA, err := create(core.NewSkill{Name: "org-qa", Kind: "company", BaseSkill: ptrStr("qa"), Body: "Acme's QA"})
+		orgQA, err := create(core.NewSkill{Name: "org-qa", Kind: "own", BaseSkill: ptrStr("qa"), Body: "Acme's QA"})
 		if err != nil || orgQA.Skill.ProjectID != nil {
-			t.Fatalf("a company Skill of the Organisation: %+v, %v", orgQA.Skill, err)
+			t.Fatalf("an own Skill of the Organisation: %+v, %v", orgQA.Skill, err)
 		}
 		if _, err := create(core.NewSkill{Name: "g", Kind: "generic", Project: ptrStr("WEB"), Body: "x"}); codeOf(err) != core.CodeInvalid {
 			t.Errorf("a generic Skill naming a Project: %v", err)
 		}
-		if _, err := create(core.NewSkill{Name: "h", Kind: "company", BaseSkill: ptrStr("qa"), Project: ptrStr("NOPE"), Body: "x"}); codeOf(err) != core.CodeNotFound {
+		if _, err := create(core.NewSkill{Name: "h", Kind: "own", BaseSkill: ptrStr("qa"), Project: ptrStr("NOPE"), Body: "x"}); codeOf(err) != core.CodeNotFound {
 			t.Errorf("no such Project: %v", err)
 		}
 		if _, err := create(core.NewSkill{Name: "plain", Kind: "generic", Project: ptrStr(""), Body: "x"}); err != nil {
@@ -245,7 +245,7 @@ func TestCompanySkillProject(t *testing.T) {
 		_, err = f.svc.SetWorkflow(ctx, f.admin, "API", inWork(core.WorkflowsInput{Steps: []core.StepInput{{Name: "Verify", Position: 1, Skill: ptrStr("web-qa")}},
 			Connectors: []core.ConnectorInput{{From: "Verify", Name: "pass"}}}), core.Idem{})
 		wantCode(t, err, core.CodeInvalid)
-		if !strings.Contains(err.Error(), "web-qa is Project WEB's company Skill") {
+		if !strings.Contains(err.Error(), "web-qa is Project WEB's own Skill") {
 			t.Errorf("refused with %q", err)
 		}
 
@@ -268,7 +268,7 @@ func TestCompanySkillProject(t *testing.T) {
 			t.Errorf("the copy's Skills %v", skills)
 		}
 
-		// UpdateSkill: admins only, company Skills only, a Project whose Steps alone carry it.
+		// UpdateSkill: admins only, own Skills only, a Project whose Steps alone carry it.
 		if _, err := f.svc.UpdateSkill(ctx, lead, "web-qa", "", core.Idem{}); codeOf(err) != core.CodeForbidden {
 			t.Errorf("a Member: %v", err)
 		}

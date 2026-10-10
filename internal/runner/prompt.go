@@ -17,7 +17,7 @@ type Prompt struct {
 	Task           PromptTask
 	// Parent is the Task's Parent; nil when it has none.
 	Parent *PromptParent
-	// Skills are the texts of the Skill the Task needs: the company version first, then the
+	// Skills are the texts of the Skill the Task needs: the own version first, then the
 	// generic Skill it builds on.
 	Skills   []PromptSkill
 	Notes    []PromptNote
@@ -33,7 +33,7 @@ type Prompt struct {
 type PromptTask struct {
 	// Step is the name of the Step the Task is at; empty when it is at none (aimed at a Member).
 	Key, Title, Description, Step, Skill, Kind string
-	// Review says Skill is review, or a company Skill built on it.
+	// Review says Skill is review, or an own Skill built on it.
 	Review bool
 	// Outcomes are the Connectors out of the Task's Step, in order: the ways its holder ends it.
 	Outcomes []PromptOutcome
@@ -56,7 +56,7 @@ type PromptParent struct {
 type PromptSkill struct {
 	Name    string
 	Version int64
-	Company bool
+	Own     bool
 	Body    string
 }
 
@@ -91,8 +91,8 @@ func BuildPrompt(p Prompt) string {
 
 	for _, s := range p.Skills {
 		kind := "generic"
-		if s.Company {
-			kind = "this company's"
+		if s.Own {
+			kind = "own"
 		}
 		w("## Skill: %s (version %d, %s)\n\n%s\n\n", line(s.Name), s.Version, kind, strings.TrimSpace(remote.Clean(s.Body)))
 	}

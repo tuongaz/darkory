@@ -575,16 +575,16 @@ func (e SignInMode) Valid() bool {
 
 // Defines values for SkillKind.
 const (
-	Company SkillKind = "company"
 	Generic SkillKind = "generic"
+	Own     SkillKind = "own"
 )
 
 // Valid indicates whether the value is a known member of the SkillKind enum.
 func (e SkillKind) Valid() bool {
 	switch e {
-	case Company:
-		return true
 	case Generic:
+		return true
+	case Own:
 		return true
 	default:
 		return false
@@ -1007,15 +1007,18 @@ type CreateProjectBody struct {
 
 // CreateSkillBody defines model for CreateSkillBody.
 type CreateSkillBody struct {
-	// BaseSkill Required for a company Skill. Id or name of a generic Skill.
+	// BaseSkill Required for an own Skill. Id or name of a generic Skill.
 	BaseSkill *string `json:"base_skill,omitempty"`
 
 	// Body The Skill's text, published as version 1.
-	Body string    `json:"body"`
+	Body string `json:"body"`
+
+	// Kind `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+	// on a generic Skill.
 	Kind SkillKind `json:"kind"`
 	Name string    `json:"name"`
 
-	// Project Id or key of the Project the Skill belongs to; only for a company Skill.
+	// Project Id or key of the Project the Skill belongs to; only for an own Skill.
 	Project *string `json:"project,omitempty"`
 }
 
@@ -1533,7 +1536,7 @@ type ProposeSkillVersionBody struct {
 	BasedOnVersion int64  `json:"based_on_version"`
 	Body           string `json:"body"`
 
-	// Skill Id or name of a company Skill.
+	// Skill Id or name of an own Skill.
 	Skill string `json:"skill"`
 }
 
@@ -1743,7 +1746,7 @@ type SignInMode string
 
 // Skill defines model for Skill.
 type Skill struct {
-	// BaseSkillID The generic Skill a company Skill builds on.
+	// BaseSkillID The generic Skill an own Skill builds on.
 	BaseSkillID *string `json:"base_skill_id,omitempty"`
 
 	// Builtin True for `breakdown`, `acceptance`, `retro` and `skill-review`, which Darkory relies on.
@@ -1751,10 +1754,13 @@ type Skill struct {
 	CreatedAt      time.Time `json:"created_at"`
 	CurrentVersion int64     `json:"current_version"`
 	ID             string    `json:"id"`
-	Kind           SkillKind `json:"kind"`
-	Name           string    `json:"name"`
 
-	// ProjectID The Project a company Skill belongs to; absent for a generic Skill and for a company
+	// Kind `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+	// on a generic Skill.
+	Kind SkillKind `json:"kind"`
+	Name string    `json:"name"`
+
+	// ProjectID The Project an own Skill belongs to; absent for a generic Skill and for an own
 	// Skill of the whole Organisation.
 	ProjectID *string `json:"project_id,omitempty"`
 }
@@ -1774,7 +1780,8 @@ type SkillGrantInput struct {
 	Skill string `json:"skill"`
 }
 
-// SkillKind defines model for SkillKind.
+// SkillKind `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+// on a generic Skill.
 type SkillKind string
 
 // SkillList defines model for SkillList.
@@ -2152,7 +2159,7 @@ type UpdateProjectBody struct {
 
 // UpdateSkillBody defines model for UpdateSkillBody.
 type UpdateSkillBody struct {
-	// Project Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's.
+	// Project Id or key of the Project the own Skill belongs to; `""` makes it the Organisation's.
 	Project string `json:"project"`
 }
 
@@ -3936,9 +3943,9 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/skills (the `ListSkills` operationId).
 	ListSkills(ctx context.Context, params *ListSkillsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateSkillWithBody Create a generic or company Skill (admin)
+	// CreateSkillWithBody Create a generic or own Skill (admin)
 	//
-	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+	// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
@@ -3947,9 +3954,9 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/skills (the `CreateSkill` operationId).
 	CreateSkillWithBody(ctx context.Context, params *CreateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateSkill Create a generic or company Skill (admin)
+	// CreateSkill Create a generic or own Skill (admin)
 	//
-	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+	// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
@@ -3963,10 +3970,10 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/skills/{skill} (the `GetSkill` operationId).
 	GetSkill(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateSkillWithBody Set the Project a company Skill belongs to (admin)
+	// UpdateSkillWithBody Set the Project an own Skill belongs to (admin)
 	//
-	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's own Skill. Setting the Project it already has
 	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
 	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 	// `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -3976,10 +3983,10 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
 	UpdateSkillWithBody(ctx context.Context, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateSkill Set the Project a company Skill belongs to (admin)
+	// UpdateSkill Set the Project an own Skill belongs to (admin)
 	//
-	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's own Skill. Setting the Project it already has
 	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
 	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 	// `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -4676,34 +4683,34 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/release (the `ReleaseTask` operationId).
 	ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseTaskParams, body ReleaseTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Retrospective the caller holds
+	// ProposeSkillVersionWithBody Propose a new version of an own Skill from the Retrospective the caller holds
 	//
 	// Written against `based_on_version`, which must be the Skill's current version, for a
-	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-	// company Skill).
+	// own Skill).
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
+	// ProposeSkillVersion Propose a new version of an own Skill from the Retrospective the caller holds
 	//
 	// Written against `based_on_version`, which must be the Skill's current version, for a
-	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-	// company Skill).
+	// own Skill).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6290,9 +6297,9 @@ func (c *Client) ListSkills(ctx context.Context, params *ListSkillsParams, reqEd
 	return c.Client.Do(req)
 }
 
-// CreateSkillWithBody Create a generic or company Skill (admin)
+// CreateSkillWithBody Create a generic or own Skill (admin)
 //
-// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 // on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 // `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
@@ -6311,9 +6318,9 @@ func (c *Client) CreateSkillWithBody(ctx context.Context, params *CreateSkillPar
 	return c.Client.Do(req)
 }
 
-// CreateSkill Create a generic or company Skill (admin)
+// CreateSkill Create a generic or own Skill (admin)
 //
-// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 // on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 // `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
@@ -6347,10 +6354,10 @@ func (c *Client) GetSkill(ctx context.Context, skill SkillRef, reqEditors ...Req
 	return c.Client.Do(req)
 }
 
-// UpdateSkillWithBody Set the Project a company Skill belongs to (admin)
+// UpdateSkillWithBody Set the Project an own Skill belongs to (admin)
 //
-// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-// Project cannot carry another Project's company Skill. Setting the Project it already has
+// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's own Skill. Setting the Project it already has
 // changes nothing. Records `skill.changed` with `project_id`, null when it became the
 // Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 // `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -6370,10 +6377,10 @@ func (c *Client) UpdateSkillWithBody(ctx context.Context, skill SkillRef, params
 	return c.Client.Do(req)
 }
 
-// UpdateSkill Set the Project a company Skill belongs to (admin)
+// UpdateSkill Set the Project an own Skill belongs to (admin)
 //
-// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-// Project cannot carry another Project's company Skill. Setting the Project it already has
+// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's own Skill. Setting the Project it already has
 // changes nothing. Records `skill.changed` with `project_id`, null when it became the
 // Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 // `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -7460,17 +7467,17 @@ func (c *Client) ReleaseTask(ctx context.Context, task TaskRef, params *ReleaseT
 	return c.Client.Do(req)
 }
 
-// ProposeSkillVersionWithBody Propose a new version of a company Skill from the Retrospective the caller holds
+// ProposeSkillVersionWithBody Propose a new version of an own Skill from the Retrospective the caller holds
 //
 // Written against `based_on_version`, which must be the Skill's current version, for a
-// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 // from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-// company Skill).
+// own Skill).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7487,17 +7494,17 @@ func (c *Client) ProposeSkillVersionWithBody(ctx context.Context, task TaskRef, 
 	return c.Client.Do(req)
 }
 
-// ProposeSkillVersion Propose a new version of a company Skill from the Retrospective the caller holds
+// ProposeSkillVersion Propose a new version of an own Skill from the Retrospective the caller holds
 //
 // Written against `based_on_version`, which must be the Skill's current version, for a
-// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 // from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-// company Skill).
+// own Skill).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13751,9 +13758,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/skills (the `ListSkills` operationId).
 	ListSkillsWithResponse(ctx context.Context, params *ListSkillsParams, reqEditors ...RequestEditorFn) (*ListSkillsResponse, error)
 
-	// CreateSkillWithBodyWithResponse Create a generic or company Skill (admin)
+	// CreateSkillWithBodyWithResponse Create a generic or own Skill (admin)
 	//
-	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+	// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
@@ -13762,9 +13769,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/skills (the `CreateSkill` operationId).
 	CreateSkillWithBodyWithResponse(ctx context.Context, params *CreateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateSkillResponse, error)
 
-	// CreateSkillWithResponse Create a generic or company Skill (admin)
+	// CreateSkillWithResponse Create a generic or own Skill (admin)
 	//
-	// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+	// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 	// on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 	// `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 	//
@@ -13780,10 +13787,10 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/skills/{skill} (the `GetSkill` operationId).
 	GetSkillWithResponse(ctx context.Context, skill SkillRef, reqEditors ...RequestEditorFn) (*GetSkillResponse, error)
 
-	// UpdateSkillWithBodyWithResponse Set the Project a company Skill belongs to (admin)
+	// UpdateSkillWithBodyWithResponse Set the Project an own Skill belongs to (admin)
 	//
-	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's own Skill. Setting the Project it already has
 	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
 	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 	// `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -13793,10 +13800,10 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/skills/{skill} (the `UpdateSkill` operationId).
 	UpdateSkillWithBodyWithResponse(ctx context.Context, skill SkillRef, params *UpdateSkillParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateSkillResponse, error)
 
-	// UpdateSkillWithResponse Set the Project a company Skill belongs to (admin)
+	// UpdateSkillWithResponse Set the Project an own Skill belongs to (admin)
 	//
-	// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-	// Project cannot carry another Project's company Skill. Setting the Project it already has
+	// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+	// Project cannot carry another Project's own Skill. Setting the Project it already has
 	// changes nothing. Records `skill.changed` with `project_id`, null when it became the
 	// Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 	// `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -14511,34 +14518,34 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/tasks/{task}/release (the `ReleaseTask` operationId).
 	ReleaseTaskWithResponse(ctx context.Context, task TaskRef, params *ReleaseTaskParams, body ReleaseTaskJSONRequestBody, reqEditors ...RequestEditorFn) (*ReleaseTaskResponse, error)
 
-	// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
+	// ProposeSkillVersionWithBodyWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 	//
 	// Written against `based_on_version`, which must be the Skill's current version, for a
-	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-	// company Skill).
+	// own Skill).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/tasks/{task}/skill-proposals (the `ProposeSkillVersion` operationId).
 	ProposeSkillVersionWithBodyWithResponse(ctx context.Context, task TaskRef, params *ProposeSkillVersionParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ProposeSkillVersionResponse, error)
 
-	// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
+	// ProposeSkillVersionWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 	//
 	// Written against `based_on_version`, which must be the Skill's current version, for a
-	// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+	// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 	// Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 	// Member with `skill-review`, other than the author, publishes the proposals by advancing
 	// it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 	// supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 	// Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 	// from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-	// company Skill).
+	// own Skill).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -20236,9 +20243,9 @@ func (c *ClientWithResponses) ListSkillsWithResponse(ctx context.Context, params
 	return ParseListSkillsResponse(rsp)
 }
 
-// CreateSkillWithBodyWithResponse Create a generic or company Skill (admin)
+// CreateSkillWithBodyWithResponse Create a generic or own Skill (admin)
 //
-// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 // on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 // `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
@@ -20253,9 +20260,9 @@ func (c *ClientWithResponses) CreateSkillWithBodyWithResponse(ctx context.Contex
 	return ParseCreateSkillResponse(rsp)
 }
 
-// CreateSkillWithResponse Create a generic or company Skill (admin)
+// CreateSkillWithResponse Create a generic or own Skill (admin)
 //
-// Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+// Publishes version 1 with the given body. An own Skill names the generic Skill it builds
 // on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
 // `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
 //
@@ -20283,10 +20290,10 @@ func (c *ClientWithResponses) GetSkillWithResponse(ctx context.Context, skill Sk
 	return ParseGetSkillResponse(rsp)
 }
 
-// UpdateSkillWithBodyWithResponse Set the Project a company Skill belongs to (admin)
+// UpdateSkillWithBodyWithResponse Set the Project an own Skill belongs to (admin)
 //
-// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-// Project cannot carry another Project's company Skill. Setting the Project it already has
+// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's own Skill. Setting the Project it already has
 // changes nothing. Records `skill.changed` with `project_id`, null when it became the
 // Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 // `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -20302,10 +20309,10 @@ func (c *ClientWithResponses) UpdateSkillWithBodyWithResponse(ctx context.Contex
 	return ParseUpdateSkillResponse(rsp)
 }
 
-// UpdateSkillWithResponse Set the Project a company Skill belongs to (admin)
+// UpdateSkillWithResponse Set the Project an own Skill belongs to (admin)
 //
-// A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-// Project cannot carry another Project's company Skill. Setting the Project it already has
+// An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+// Project cannot carry another Project's own Skill. Setting the Project it already has
 // changes nothing. Records `skill.changed` with `project_id`, null when it became the
 // Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
 // `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -21254,17 +21261,17 @@ func (c *ClientWithResponses) ReleaseTaskWithResponse(ctx context.Context, task 
 	return ParseReleaseTaskResponse(rsp)
 }
 
-// ProposeSkillVersionWithBodyWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
+// ProposeSkillVersionWithBodyWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 //
 // Written against `based_on_version`, which must be the Skill's current version, for a
-// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 // from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-// company Skill).
+// own Skill).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21277,17 +21284,17 @@ func (c *ClientWithResponses) ProposeSkillVersionWithBodyWithResponse(ctx contex
 	return ParseProposeSkillVersionResponse(rsp)
 }
 
-// ProposeSkillVersionWithResponse Propose a new version of a company Skill from the Retrospective the caller holds
+// ProposeSkillVersionWithResponse Propose a new version of an own Skill from the Retrospective the caller holds
 //
 // Written against `based_on_version`, which must be the Skill's current version, for a
-// company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+// own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
 // Step carrying `skill-review`. The caller then advances the Retrospective along it; a
 // Member with `skill-review`, other than the author, publishes the proposals by advancing
 // it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
 // supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
 // Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
 // from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-// company Skill).
+// own Skill).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

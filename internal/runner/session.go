@@ -379,15 +379,15 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 		}
 		p.Task.Skill, p.Task.Review = sk.Skill.Name, s.r.isReview(ctx, s.rec, sk.Skill)
 		texts := []*client.SkillDetail{sk}
-		if sk.Skill.Kind == client.Company && sk.Skill.BaseSkillID != nil {
+		if sk.Skill.Kind == client.Own && sk.Skill.BaseSkillID != nil {
 			if base, err := s.rec.Skill(ctx, *sk.Skill.BaseSkillID); err == nil {
 				texts = append(texts, base)
 			}
 		} else {
-			// The company's version of a generic Skill, when the agent has one, comes first: one of
-			// the Organisation's or of the Task's Project, never another Project's (ADR 0020).
+			// The Task's Project's or the Organisation's own version of a generic Skill, when the
+			// agent holds one, comes first; never another Project's (ADR 0020).
 			for _, own := range s.a.me.Skills {
-				if own.Kind == client.Company && own.BaseSkillID != nil && *own.BaseSkillID == sk.Skill.ID &&
+				if own.Kind == client.Own && own.BaseSkillID != nil && *own.BaseSkillID == sk.Skill.ID &&
 					(own.ProjectID == nil || *own.ProjectID == d.Task.ProjectID) {
 					if c, err := s.rec.Skill(ctx, own.ID); err == nil {
 						texts = append([]*client.SkillDetail{c}, texts...)
@@ -396,7 +396,7 @@ func (s *session) prompt(ctx context.Context, parent *ParentInfo, checkouts []Ch
 			}
 		}
 		for _, t := range texts {
-			p.Skills = append(p.Skills, PromptSkill{Name: t.Skill.Name, Version: t.Current.Version, Company: t.Skill.Kind == client.Company, Body: t.Current.Body})
+			p.Skills = append(p.Skills, PromptSkill{Name: t.Skill.Name, Version: t.Current.Version, Own: t.Skill.Kind == client.Own, Body: t.Current.Body})
 		}
 	}
 	for _, n := range d.Notes {

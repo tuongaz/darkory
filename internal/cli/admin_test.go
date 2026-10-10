@@ -73,9 +73,9 @@ func TestAdminCommands(t *testing.T) {
 			t.Fatalf("skill create: %+v", sk)
 		}
 		ada.stdin = "Test it the Acme way.\n"
-		ada.json(&sk, "skill", "create", "qa-acme", "--kind", "company", "--base", "qa", "--file", "-")
+		ada.json(&sk, "skill", "create", "qa-acme", "--kind", "own", "--base", "qa", "--file", "-")
 		ada.stdin = ""
-		if sk.Skill.Kind != client.Company || sk.Current.Body != "Test it the Acme way." || sk.Current.Version != 1 {
+		if sk.Skill.Kind != client.Own || sk.Current.Body != "Test it the Acme way." || sk.Current.Version != 1 {
 			t.Fatalf("skill create: %+v", sk)
 		}
 		if out := ada.ok("skill", "show", "qa-acme"); !strings.Contains(out, "Test it the Acme way.") || !strings.Contains(out, "on qa") {
@@ -87,9 +87,9 @@ func TestAdminCommands(t *testing.T) {
 			t.Fatalf("skill versions: %+v", versions)
 		}
 		var skills client.SkillList
-		ada.json(&skills, "skill", "list", "--kind", "company")
+		ada.json(&skills, "skill", "list", "--kind", "own")
 		if len(skills.Items) != 1 || skills.Items[0].Name != "qa-acme" {
-			t.Fatalf("skill list --kind company: %+v", skills)
+			t.Fatalf("skill list --kind own: %+v", skills)
 		}
 
 		ada.ok("grant", "daniel", "qa")

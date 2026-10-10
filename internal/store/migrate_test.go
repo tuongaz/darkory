@@ -317,6 +317,7 @@ VALUES ('sub', 'o', 'p', 't', 'WEB-2', 'acceptance', 'A', 'open', 'st', 'm', 0, 
 				`UPDATE projects SET color = -1 WHERE id = 'p'`,
 				`UPDATE tasks SET pull_request_state = 'closed' WHERE id = 't'`,
 				`UPDATE skills SET project_id = 'nope' WHERE id = 'sk'`,
+				`UPDATE skills SET kind = 'company' WHERE id = 'sk'`,
 				`INSERT INTO evidence (id, org_id, task_id, kind, filename, content_type, size, sha256, blob_key, attached_by, created_at) VALUES ('e', 'o', 't', 'report', 'a.txt', 'text/plain', 1, 'x', 'k', 'm', 0)`,
 			} {
 				if err := exec(q); err == nil {
@@ -578,7 +579,7 @@ func TestMigration0007KeysSubtasksByOrganisation(t *testing.T) {
 	}
 }
 
-// Migration 0008 gives Tasks a pull request, company Skills a Project and Evidence a kind; the
+// Migration 0008 gives Tasks a pull request, company (now own) Skills a Project and Evidence a kind; the
 // Shift logs the Runner attached before it are kinds of log, by the name it gave them.
 func TestMigration0008MarksTheShiftLogs(t *testing.T) {
 	before := fstest.MapFS{}
@@ -646,6 +647,87 @@ VALUES ($1, 'o', 't', $2, 'text/plain', 1, 'x', $1, 'm', 0)`, id, name); err != 
 			var noClaim int
 			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM evidence WHERE claim_id IS NULL`).Scan(&noClaim); err != nil || noClaim != 4 {
 				t.Fatalf("Evidence under no Claim: %d, %v", noClaim, err)
+			}
+		})
+	}
+}
+
+// Migration 0009 renames the Skill kind company to own: a company Skill already here is an own
+// Skill, keeping its generic Skill, its Project and its versions; a generic Skill stays generic.
+func TestMigration0009MakesTheCompanySkillsOwn(t *testing.T) {
+	before := fstest.MapFS{}
+	for _, name := range []string{"0001_init.sql", "0002_project_seen.sql", "0003_files.sql", "0004_sessions_by_member.sql",
+		"0005_project_color.sql", "0006_workflows.sqlite.sql", "0006_workflows.postgres.sql", "0007_tasks_by_parent.sql",
+		"0008_followups.sql"} {
+		data, err := os.ReadFile("migrations/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[name] = &fstest.MapFile{Data: data}
+	}
+	for _, e := range storetest.Engines() {
+		t.Run(string(e), func(t *testing.T) {
+			ctx := t.Context()
+			s := storetest.OpenUnmigrated(t, e)
+			if _, err := s.MigrateFS(ctx, before, now); err != nil {
+				t.Fatal(err)
+			}
+			err := s.WriteNoSeq(ctx, func(tx store.Tx) error {
+				for _, q := range []string{
+					`INSERT INTO organisations (id, name, created_at) VALUES ('o', 'Acme', 0)`,
+					`INSERT INTO members (id, org_id, name, kind, created_at, updated_at) VALUES ('m', 'o', 'ada', 'human', 0, 0)`,
+					`INSERT INTO projects (id, org_id, key_prefix, name, created_at) VALUES ('p', 'o', 'X', 'X', 0)`,
+					`INSERT INTO skills (id, org_id, name, kind, builtin, current_version, created_at) VALUES ('qa', 'o', 'qa', 'generic', TRUE, 1, 0)`,
+					`INSERT INTO skills (id, org_id, name, kind, base_skill_id, project_id, current_version, created_by, created_at)
+VALUES ('x-qa', 'o', 'x-qa', 'company', 'qa', 'p', 2, 'm', 5)`,
+					`INSERT INTO skills (id, org_id, name, kind, base_skill_id, current_version, created_at) VALUES ('org-qa', 'o', 'org-qa', 'company', 'qa', 1, 6)`,
+					`INSERT INTO member_skills (org_id, member_id, skill_id, granted_at) VALUES ('o', 'm', 'x-qa', 0)`,
+				} {
+					if _, err := tx.Exec(ctx, q); err != nil {
+						return fmt.Errorf("%s: %w", q, err)
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.Migrate(ctx); err != nil {
+				t.Fatal(err)
+			}
+			rows, err := s.Query(ctx, `SELECT id, kind, COALESCE(base_skill_id, '-'), COALESCE(project_id, '-'), builtin, current_version,
+COALESCE(created_by, '-'), created_at FROM skills ORDER BY id`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rows.Close()
+			var got []string
+			for rows.Next() {
+				var id, kind, base, project, by string
+				var builtin bool
+				var version, created int64
+				if err := rows.Scan(&id, &kind, &base, &project, &builtin, &version, &by, &created); err != nil {
+					t.Fatal(err)
+				}
+				got = append(got, fmt.Sprint(id, " ", kind, " ", base, " ", project, " ", builtin, " ", version, " ", by, " ", created))
+			}
+			if err := rows.Err(); err != nil {
+				t.Fatal(err)
+			}
+			want := "[org-qa own qa - false 1 - 6 qa generic - - true 1 - 0 x-qa own qa p false 2 m 5]"
+			if fmt.Sprint(got) != want {
+				t.Fatalf("skills %v, want %s", got, want)
+			}
+			var granted int
+			if err := s.QueryRow(ctx, `SELECT COUNT(*) FROM member_skills WHERE skill_id = 'x-qa'`).Scan(&granted); err != nil || granted != 1 {
+				t.Fatalf("x-qa granted to %d, %v", granted, err)
+			}
+			err = s.WriteNoSeq(ctx, func(tx store.Tx) error {
+				_, err := tx.Exec(ctx, `INSERT INTO skills (id, org_id, name, kind, current_version, created_at) VALUES ('dup', 'o', 'x-qa', 'own', 1, 0)`)
+				return err
+			})
+			if err == nil {
+				t.Fatal("a second Skill named x-qa was accepted: the name stays unique in its Organisation")
 			}
 		})
 	}

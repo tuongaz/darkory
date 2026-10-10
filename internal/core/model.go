@@ -98,8 +98,8 @@ type Skill struct {
 	Name        string
 	Kind        string
 	BaseSkillID *string
-	// ProjectID is the Project a company Skill belongs to; nil for a generic Skill and for a
-	// company Skill of the whole Organisation.
+	// ProjectID is the Project an own Skill belongs to; nil for a generic Skill and for an
+	// own Skill of the whole Organisation.
 	ProjectID      *string
 	Builtin        bool
 	CurrentVersion int64

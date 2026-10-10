@@ -671,8 +671,8 @@ export interface paths {
         get: operations["listSkills"];
         put?: never;
         /**
-         * Create a generic or company Skill (admin)
-         * @description Publishes version 1 with the given body. A company Skill names the generic Skill it builds
+         * Create a generic or own Skill (admin)
+         * @description Publishes version 1 with the given body. An own Skill names the generic Skill it builds
          *     on, and may name the Project it belongs to. Errors: `forbidden`, `conflict` (name taken),
          *     `not_found` (no such Project), `invalid` (a Project named for a generic Skill).
          */
@@ -698,9 +698,9 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Set the Project a company Skill belongs to (admin)
-         * @description A company Skill belongs to one Project, or to the whole Organisation; a Step of one
-         *     Project cannot carry another Project's company Skill. Setting the Project it already has
+         * Set the Project an own Skill belongs to (admin)
+         * @description An own Skill belongs to one Project, or to the whole Organisation; a Step of one
+         *     Project cannot carry another Project's own Skill. Setting the Project it already has
          *     changes nothing. Records `skill.changed` with `project_id`, null when it became the
          *     Organisation's. Errors: `forbidden` (not an admin), `not_found` (no such Project),
          *     `invalid` (a generic Skill, or a Step of another Project carries it).
@@ -1434,16 +1434,16 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Propose a new version of a company Skill from the Retrospective the caller holds
+         * Propose a new version of an own Skill from the Retrospective the caller holds
          * @description Written against `based_on_version`, which must be the Skill's current version, for a
-         *     company Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
+         *     own Skill, on a Retrospective the caller holds whose Step has a Connector leading to a
          *     Step carrying `skill-review`. The caller then advances the Retrospective along it; a
          *     Member with `skill-review`, other than the author, publishes the proposals by advancing
          *     it into Done. A Task carries one pending proposal per Skill: a new one for the same Skill
          *     supersedes it, and one for another Skill stands beside it. Records `task.skill_proposed`.
          *     Errors: `not_holder`, `forbidden` (not a Retrospective), `no_step` (no Connector leads
          *     from its Step to a Step carrying `skill-review`), `proposal_stale`, `invalid` (not a
-         *     company Skill).
+         *     own Skill).
          */
         post: operations["proposeSkillVersion"];
         delete?: never;
@@ -2493,12 +2493,12 @@ export interface components {
             kind: components["schemas"]["SkillKind"];
             /**
              * Format: id
-             * @description The generic Skill a company Skill builds on.
+             * @description The generic Skill an own Skill builds on.
              */
             base_skill_id?: string;
             /**
              * Format: id
-             * @description The Project a company Skill belongs to; absent for a generic Skill and for a company
+             * @description The Project an own Skill belongs to; absent for a generic Skill and for an own
              *     Skill of the whole Organisation.
              */
             project_id?: string;
@@ -2509,8 +2509,12 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
-        /** @enum {string} */
-        SkillKind: "generic" | "company";
+        /**
+         * @description `generic`: what a Member arrives with. `own`: ours, a Project's or the Organisation's, built
+         *     on a generic Skill.
+         * @enum {string}
+         */
+        SkillKind: "generic" | "own";
         SkillVersion: {
             /** Format: id */
             skill_id: string;
@@ -2543,15 +2547,15 @@ export interface components {
         CreateSkillBody: {
             name: string;
             kind: components["schemas"]["SkillKind"];
-            /** @description Required for a company Skill. Id or name of a generic Skill. */
+            /** @description Required for an own Skill. Id or name of a generic Skill. */
             base_skill?: string;
-            /** @description Id or key of the Project the Skill belongs to; only for a company Skill. */
+            /** @description Id or key of the Project the Skill belongs to; only for an own Skill. */
             project?: string;
             /** @description The Skill's text, published as version 1. */
             body: string;
         };
         UpdateSkillBody: {
-            /** @description Id or key of the Project the company Skill belongs to; `""` makes it the Organisation's. */
+            /** @description Id or key of the Project the own Skill belongs to; `""` makes it the Organisation's. */
             project: string;
         };
         SkillProposal: {
@@ -2588,7 +2592,7 @@ export interface components {
          */
         ProposalState: "pending" | "published" | "superseded";
         ProposeSkillVersionBody: {
-            /** @description Id or name of a company Skill. */
+            /** @description Id or name of an own Skill. */
             skill: string;
             /** Format: int64 */
             based_on_version: number;

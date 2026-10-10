@@ -15,7 +15,7 @@ import (
 	"github.com/tuongaz/darkory/internal/store/storetest"
 )
 
-// pr set and pr merge, attach --kind, a company Skill's Project (skill create --project, skill
+// pr set and pr merge, attach --kind, an own Skill's Project (skill create --project, skill
 // set, member show) and agent set --shifts.
 func TestFollowupCommands(t *testing.T) {
 	storetest.Each(t, func(t *testing.T, st *store.Store) {
@@ -95,8 +95,8 @@ func TestFollowupCommands(t *testing.T) {
 			t.Fatalf("show lists one Shift log:\n%s", out)
 		}
 
-		// A company Skill's Project.
-		out = ada.ok("skill", "create", "web-qa", "--kind", "company", "--base", "qa", "--project", "WEB", "--body", "QA here.")
+		// An own Skill's Project.
+		out = ada.ok("skill", "create", "web-qa", "--kind", "own", "--base", "qa", "--project", "WEB", "--body", "QA here.")
 		if !strings.Contains(out, "on qa, Project WEB") {
 			t.Fatalf("skill create --project:\n%s", out)
 		}

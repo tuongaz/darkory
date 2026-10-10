@@ -13,7 +13,7 @@ import (
 	"github.com/tuongaz/darkory/internal/wake"
 )
 
-// A fresh Install: an empty database takes the migrations, 0001 to 0008, and `darkory init` (the
+// A fresh Install: an empty database takes the migrations, 0001 to 0009, and `darkory init` (the
 // roster on) yields the Organisation, its first Member an admin, the builtin Skills breakdown,
 // retro, skill-review and acceptance, the generic engineer, review, triage and qa, the roster's
 // five agents, and Project MAIN on the default Workflows, Implementation then Bug triage, each
@@ -24,7 +24,7 @@ func TestFreshInit(t *testing.T) {
 			st := storetest.OpenUnmigrated(t, engine)
 			ctx := t.Context()
 			res, err := st.Migrate(ctx)
-			if err != nil || !slices.Equal(res.Applied, []int{1, 2, 3, 4, 5, 6, 7, 8}) {
+			if err != nil || !slices.Equal(res.Applied, []int{1, 2, 3, 4, 5, 6, 7, 8, 9}) {
 				t.Fatalf("migrated a fresh database: %+v, %v", res, err)
 			}
 			f := &fixture{t: t, st: st, clock: clockAt(epoch), secrets: map[string]string{}}
