@@ -5,7 +5,8 @@ import { cn } from "@/lib/utils";
 import { blockedWords, PICKUP_MS, tokenLabel, tokenState, tokenTime, type LineTask, type TokenState } from "./model";
 
 /**
- * A Task at its Step: its holder's mark (ringed while it works) or a ring in its state's colour,
+ * A Task at its Step, as vf-4 draws it: a bordered chip, its holder's mark (ringed while it works;
+ * the mark says held, so no fill) or a ring in its state's colour,
  * its key, its time there, and when blocked who it waits on, in red, held or not. Just picked up it reads "now" with a
  * halo; a live moment pulses it in that moment's colour.
  */
@@ -83,7 +84,7 @@ export function Token({
         onMouseEnter={onHover && (() => onHover(true))}
         onMouseLeave={onHover && (() => onHover(false))}
         className={cn(
-          "wl-token inline-flex h-[30px] items-center gap-1.5 rounded-full border-[1.5px] bg-background pr-2.5 pl-1.5 text-xs whitespace-nowrap data-[past]:border-dashed data-[state=hold]:border-dashed data-[state=idle]:border-dashed",
+          "wl-token inline-flex min-h-7 items-center gap-1.5 rounded-[6px] border bg-background pr-2 pl-1 text-xs whitespace-nowrap data-[past]:border-dashed data-[state=hold]:border-dashed data-[state=idle]:border-dashed",
           "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
           !onClick && "cursor-default",
         )}
@@ -93,7 +94,7 @@ export function Token({
         {!compact && time && (
           <span className={cn("tabular-nums", picked && !past ? "font-medium text-state-claimed" : "text-muted-foreground")}>{time}</span>
         )}
-        {by && <span className="text-[10.5px] font-semibold text-state-blocked">{by}</span>}
+        {by && <span className="text-[11px] font-medium text-state-blocked">{by}</span>}
       </button>
     </span>
   );
@@ -102,7 +103,7 @@ export function Token({
 /** A Subtask still to come on a Parent's line: a dashed ghost saying when it will be filed. */
 export function GhostToken({ text, label }: { text: string; label: string }) {
   return (
-    <span data-ghost aria-label={`${label} ${text}`} className="wl-token inline-flex h-[24px] items-center rounded-full border-[1.5px] border-dashed px-2.5 text-xs whitespace-nowrap">
+    <span data-ghost aria-label={`${label} ${text}`} className="wl-token inline-flex h-6 items-center rounded-[6px] border border-dashed px-2 text-xs whitespace-nowrap">
       {text}
     </span>
   );

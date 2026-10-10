@@ -619,16 +619,18 @@
     }
   }
 
-  /* The Workflow line (components/workflowLine). A token's colour by how its Task stands. */
-  .wl-token { --tone: var(--state-waiting); border-color: var(--tone); }
+  /* The Workflow line (components/workflowLine). A token is a bordered chip (vf-4): its holder's
+     mark says it is held, so no fill; a ring in its state's colour stands for no holder; blocked is red. */
+  .wl-token { --tone: var(--state-waiting); border-color: var(--border); }
   .wl-token[data-state="held"],
-  .wl-token[data-state="idle"] { --tone: var(--state-claimed); background: var(--state-claimed-bg); }
-  .wl-token[data-state="idle"] { border-style: dashed; }
+  .wl-token[data-state="idle"] { --tone: var(--state-claimed); }
+  .wl-token[data-state="idle"] { border-style: dashed; border-color: var(--muted-foreground); }
   .wl-token[data-state="blocked"] { --tone: var(--state-blocked); }
-  .wl-token[data-state="hold"] { --tone: var(--muted-foreground); border-style: dashed; }
+  .wl-token[data-blocked] { border-color: var(--danger-border); background: var(--state-blocked-bg); }
+  .wl-token[data-state="hold"] { --tone: var(--muted-foreground); border-style: dashed; border-color: var(--muted-foreground); }
   .wl-token[data-state="done"] { --tone: var(--state-done); background: var(--state-done-bg); }
   .wl-token[data-ghost] { --tone: var(--border); border-style: dashed; background: transparent; color: var(--muted-foreground); }
-  .wl-token[data-past] { --tone: var(--state-claimed); border-style: dashed; background: transparent; }
+  .wl-token[data-past] { --tone: var(--state-claimed); border-style: dashed; border-color: var(--state-claimed); background: transparent; }
   /* Just picked up: a halo in the holder's colour while it reads "now"; it pulses as it happens. */
   .wl-token[data-now] { box-shadow: 0 0 0 4px var(--state-claimed-bg), 0 0 0 5.5px var(--state-claimed); }
   .wl-token[data-pulse] { --moment: var(--state-claimed); animation: chip-pulse 1.2s ease-in-out 2; }
