@@ -219,6 +219,7 @@ type taskRecord struct {
 	wss      map[string][]Workspace // by Task id
 
 	mu      sync.Mutex
+	reads   map[string]int // Task reads, by the ref asked
 	writes  []string
 	refuse  map[string]client.ErrorCode // by Task key: the code a write is refused with
 	setHook func(task string, pr client.PullRequest) error
@@ -236,6 +237,10 @@ func (f *taskRecord) find(ref string) *client.TaskDetail {
 func (f *taskRecord) Task(_ context.Context, ref string) (*client.TaskDetail, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.reads == nil {
+		f.reads = map[string]int{}
+	}
+	f.reads[ref]++
 	if d := f.find(ref); d != nil {
 		c := *d
 		return &c, nil
@@ -658,7 +663,8 @@ func TestShiftEndReadsTheTasksPullRequest(t *testing.T) {
 	}
 }
 
-// A pull request whose branch names a Task not filed yet is written once the Task is.
+// A pull request whose branch names a Task not filed yet is written once the Task is: the Runner
+// reads the Task again once the Activity stream says a Task was filed, and not every Poll before.
 func TestPollerWaitsForTheTask(t *testing.T) {
 	rec := mergeFixture()
 	later := rec.tasks[0]
@@ -668,10 +674,21 @@ func TestPollerWaitsForTheTask(t *testing.T) {
 	rec.wss["t-5"] = rec.wss["t-3"]
 	r := pollRunner(t, rec, gh)
 	seen := map[string]bool{}
+	gh.open(PullRequest{Number: 8, HeadRefName: "fix-123-foo", BaseRefName: "main", URL: "https://github.com/acme/web/pull/8"})
+	r.pollOnce(t.Context(), seen)
 	r.pollOnce(t.Context(), seen)
 	rec.mu.Lock()
+	reads := rec.reads["FIX-123"] + rec.reads["DARK-3"]
 	rec.tasks = append(rec.tasks, later)
 	rec.mu.Unlock()
+	if reads != 2 {
+		t.Fatalf("the Tasks no branch names were read %d times in two Polls", reads)
+	}
+	r.pollOnce(t.Context(), seen)
+	if got := rec.written(); len(got) != 0 {
+		t.Fatalf("written before a Task was filed: %v", got)
+	}
+	r.dispatch(client.Activity{Kind: client.ActivityKindTaskFiled, SubjectID: later.Task.ID})
 	r.pollOnce(t.Context(), seen)
 	if got := rec.written(); !slices.Equal(got, []string{"reader DARK-3 #7 open"}) {
 		t.Fatalf("written %v", got)
@@ -753,5 +770,24 @@ func TestShiftsLogNamesItsClaim(t *testing.T) {
 	r.attachKeptOnce(t.Context())
 	if got := rec.written(); len(got) != 2 || got[1] != "builder attached shift-DARK-3-builder-101500.log to DARK-3 as log under c-1" {
 		t.Fatalf("attached %v", got)
+	}
+}
+
+// A pull request into another base is not the Task's landing this Poll; retargeted on GitHub to the
+// branch's own base, it is the next.
+func TestPollerSeesARetargetedPullRequest(t *testing.T) {
+	rec := mergeFixture()
+	gh := &recordingGitHub{}
+	r := pollRunner(t, rec, gh)
+	seen := map[string]bool{}
+	gh.open(PullRequest{Number: 8, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "develop", URL: "https://github.com/acme/web/pull/8"})
+	r.pollOnce(t.Context(), seen)
+	if got := rec.written(); len(got) != 0 {
+		t.Fatalf("written %v", got)
+	}
+	gh.open(PullRequest{Number: 8, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/8"})
+	r.pollOnce(t.Context(), seen)
+	if got := rec.written(); !slices.Equal(got, []string{"reader DARK-3 #8 open"}) {
+		t.Fatalf("written %v", got)
 	}
 }

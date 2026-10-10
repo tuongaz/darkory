@@ -547,9 +547,10 @@ func (r *Runner) pollPullRequests(ctx context.Context) {
 }
 
 // pollOnce reads each Workspace's pull requests once. seen holds what needs no more looking at:
-// "<repo>#<n>:<state>" for a pull request written on its Task in that state (or never to be),
-// "<repo>#<n>:skipped" for one said once not to be a Task's landing, and "<repo>#<n>" for a merged
-// one whose review needs nothing more (completeByPR).
+// "<repo>#<n>:<state>" for a pull request written on its Task in that state (or never to be), and
+// "<repo>#<n>" for a merged one whose review needs nothing more (completeByPR); "<repo>#<n>:said"
+// marks one the log has said is not a Task's landing, which is looked at again every Poll (it may
+// be retargeted).
 func (r *Runner) pollOnce(ctx context.Context, seen map[string]bool) {
 	all, err := r.reader.AllWorkspaces(ctx)
 	if err != nil {
@@ -634,19 +635,18 @@ func (r *Runner) recordPullRequests(ctx context.Context, ws Workspace, prs []Pul
 	}
 	for _, key := range keys {
 		log := r.log.With("workspace", ws.Name, "task", key)
-		var fresh []PullRequest
-		for _, pr := range byTask[key] {
-			if !seen[fmt.Sprintf("%s#%d:%s", ws.Path, pr.Number, strings.ToLower(pr.State))] && !seen[fmt.Sprintf("%s#%d:skipped", ws.Path, pr.Number)] {
-				fresh = append(fresh, pr)
-			}
-		}
-		if len(fresh) == 0 {
+		fresh := slices.ContainsFunc(byTask[key], func(pr PullRequest) bool {
+			return !seen[fmt.Sprintf("%s#%d:%s", ws.Path, pr.Number, strings.ToLower(pr.State))]
+		})
+		if !fresh || r.isMissing(key) {
 			continue
 		}
 		d, err := r.reader.Task(ctx, key)
 		if err != nil {
-			// A branch named for no Task (yet: it may be filed later) is looked at again next Poll.
-			if !refusedBy(err, client.ErrorCodeNotFound) && ctx.Err() == nil {
+			// A branch named for no Task is read again once a Task is filed: it may be that one.
+			if refusedBy(err, client.ErrorCodeNotFound) {
+				r.markMissing(key)
+			} else if ctx.Err() == nil {
 				log.Warn("reading a Task whose pull request GitHub has", "err", err)
 			}
 			continue
@@ -654,7 +654,7 @@ func (r *Runner) recordPullRequests(ctx context.Context, ws Workspace, prs []Pul
 		var landing []PullRequest
 		for _, pr := range byTask[key] {
 			if why := r.notLanding(ctx, d, ws, pr); why != "" {
-				if id := fmt.Sprintf("%s#%d:skipped", ws.Path, pr.Number); !seen[id] {
+				if id := fmt.Sprintf("%s#%d:said", ws.Path, pr.Number); !seen[id] {
 					log.Info(why, "pr", pr.Number, "branch", pr.HeadRefName, "base", pr.BaseRefName, "fork", pr.HeadRepositoryOwner.Login)
 					seen[id] = true
 				}
@@ -679,6 +679,26 @@ func (r *Runner) recordPullRequests(ctx context.Context, ws Workspace, prs []Pul
 			seen[id] = true
 		}
 	}
+}
+
+// maxMissing bounds the keys the poller remembers no Task has.
+const maxMissing = 1000
+
+// isMissing says the poller read no Task of key since the last Task was filed.
+func (r *Runner) isMissing(key string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.missing[key]
+}
+
+// markMissing remembers that no Task has key, until a Task is filed.
+func (r *Runner) markMissing(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.missing) >= maxMissing {
+		clear(r.missing)
+	}
+	r.missing[key] = true
 }
 
 // writerFor is the Record a Task's pull request is written as, so the entry names who it is

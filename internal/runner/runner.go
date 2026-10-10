@@ -176,6 +176,9 @@ type Runner struct {
 	repos map[string]*sync.Mutex
 	// tried are the Tasks whose branches the merger has tried to merge, by key, merged or not.
 	tried map[string]bool
+	// missing are the keys pull request branches name that no Task has, as the poller last read
+	// them; a Task filed clears it, so a key read missing is read again only then.
+	missing map[string]bool
 }
 
 // New returns a Runner; nothing runs until Run.
@@ -203,7 +206,7 @@ func New(cfg Config) (*Runner, error) {
 	r := &Runner{cfg: cfg, t: cfg.Timings, log: cfg.Log.With("component", "runner"), host: cfg.Host, gh: cfg.GitHub,
 		ledger: &ledger{path: TaskDir(cfg.Data, "branches.json")}, bin: cfg.Darkory,
 		sessions: map[string]*session{}, ready: make(chan struct{}), merges: make(chan client.Activity, 1024), kept: make(chan struct{}, 1), skills: map[string]client.Skill{},
-		repos: map[string]*sync.Mutex{}, tried: map[string]bool{}}
+		repos: map[string]*sync.Mutex{}, tried: map[string]bool{}, missing: map[string]bool{}}
 	if r.host == nil {
 		switch cfg.Tmux {
 		case "", "auto":
@@ -390,6 +393,11 @@ func (r *Runner) dispatch(a client.Activity) {
 		}
 		r.mu.Unlock()
 		r.wakeKept()
+	}
+	if a.Kind == client.ActivityKindTaskFiled {
+		r.mu.Lock()
+		clear(r.missing) // a branch may name the Task just filed
+		r.mu.Unlock()
 	}
 	switch a.Kind {
 	case client.ActivityKindTaskCompleted, client.ActivityKindTaskDropped:
