@@ -168,7 +168,7 @@ function WorkflowColumn({
   last: boolean;
 }) {
   const w = column.workflow;
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: w.id, disabled: !acts });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: w.id, disabled: !acts || acts.busy || !acts.skillMap });
   const s = column.scoped;
   return (
     <li
@@ -178,7 +178,7 @@ function WorkflowColumn({
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         transition,
       }}
-      className={cn("min-w-0", isDragging && "relative z-20 rounded-md bg-background shadow-soft")}
+      className={cn("@container/col min-w-0", isDragging && "relative z-20 rounded-md bg-background shadow-soft")}
     >
       <div className="mb-2 flex h-7 min-w-0 items-center gap-2.5">
         {acts && (
@@ -196,7 +196,7 @@ function WorkflowColumn({
         <Link to={workflowsPath(project, w.id)} className="min-w-0 truncate text-[15px] font-semibold outline-none hover:underline focus-visible:underline">
           {w.name}
         </Link>
-        <span className="flex-none text-[13px] whitespace-nowrap text-muted-foreground tabular-nums">{openTasks(column.open)}</span>
+        <span className="min-w-0 shrink-[100] truncate text-[13px] whitespace-nowrap text-muted-foreground tabular-nums">{openTasks(column.open)}</span>
         {acts && <HeadActs project={project} workflow={w} acts={acts} earlier={earlier} later={later} last={last} />}
       </div>
       <WorkflowLine
@@ -250,9 +250,10 @@ function Grip({
         role={undefined}
         aria-roledescription={undefined}
         aria-label={`Drag to order ${name}, or ← and →`}
-        disabled={disabled}
+        // Off while a write is on its way, it keeps the focus: a moved column's grip stays where the keys left it.
+        aria-disabled={disabled || undefined}
         onKeyDown={onKeyDown}
-        className="-ml-1 flex h-6 w-4 flex-none cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
+        className="-ml-1 flex h-6 w-4 flex-none cursor-grab touch-none items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-disabled:cursor-default aria-disabled:opacity-40"
       >
         <GripVerticalIcon aria-hidden className="size-3.5" />
       </button>
@@ -267,12 +268,15 @@ function HeadActs({ project, workflow: w, acts, earlier, later, last }: { projec
   const keep = last ? "The last Workflow stays" : acts.busy ? "Saving…" : undefined;
   return (
     <span className="ml-auto flex flex-none items-center gap-1.5">
-      <Button asChild variant="outline" size="xs">
-        <Link to={workflowEditPath(project, w.id)} aria-label={`Edit ${w.name}`}>
-          <PencilIcon aria-hidden />
-          Edit
-        </Link>
-      </Button>
+      <Tip label={`Edit ${w.name}`}>
+        <Button asChild variant="outline" size="xs">
+          <Link to={workflowEditPath(project, w.id)} aria-label={`Edit ${w.name}`}>
+            <PencilIcon aria-hidden />
+            {/* A narrow column keeps its name whole: Edit is its pencil alone. */}
+            <span className="@max-[300px]/col:hidden">Edit</span>
+          </Link>
+        </Button>
+      </Tip>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon-xs" aria-label={`More for ${w.name}`}>

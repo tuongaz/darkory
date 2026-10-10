@@ -274,7 +274,7 @@ describe("the Workflows page of a Project of several", () => {
     const { puts } = serve([]);
     renderApp("/projects/WEB/workflows");
     const grip = (await column("Features")).getByRole("button", { name: /^Drag to order Features/ });
-    await waitFor(() => expect(grip).toBeEnabled());
+    await waitFor(() => expect(grip).not.toHaveAttribute("aria-disabled"));
     grip.focus();
     await userEvent.keyboard("{ArrowLeft}");
     await waitFor(() => expect(puts).toHaveLength(1));
@@ -286,7 +286,7 @@ describe("the Workflows page of a Project of several", () => {
     const { puts } = serve([]);
     renderApp("/projects/WEB/workflows");
     const grip = (await column("Features")).getByRole("button", { name: /^Drag to order Features/ });
-    await waitFor(() => expect(grip).toBeEnabled());
+    await waitFor(() => expect(grip).not.toHaveAttribute("aria-disabled"));
     // Both in one moment: React draws nothing between them.
     act(() => {
       grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
