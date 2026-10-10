@@ -302,9 +302,16 @@ test("Evidence shows itself: the holder's screenshots fold into one row of thumb
     writeFileSync(join(dir, "triage-log.md"), "# Triage log, the delete\n\n| Where | Width | Delete |\n");
     darkory(as.builder, "attach", key, join(dir, "triage-log.md"));
     await v1(as.builder, "POST", `/v1/tasks/${filed.task.id}/release`, {});
-    const log = join(dir, `shift-${key}-tsk-builder-101600.log`);
-    writeFileSync(log, "$ make web-check\n".repeat(400));
-    darkory(as.builder, "attach", key, log, "--kind", "log");
+    // The Runner attaches the Shift's log once the Session has exited, naming the Claim it ran under.
+    const claimId = (await v1<{ claims: { id: string }[] }>(as.ada, "GET", `/v1/tasks/${key}`)).claims.at(-1)!.id;
+    const filename = `shift-${key}-tsk-builder-101600.log`;
+    const res = await fetch(`${base()}/v1/tasks/${key}/evidence?${new URLSearchParams({ filename, kind: "log", claim: claimId })}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${as.builder.token}`, "Darkory-Session": `${as.builder.session}-runner`, "Idempotency-Key": randomUUID(), "Content-Type": "text/plain" },
+      body: "$ make web-check\n".repeat(400),
+    });
+    expect(res.status, await res.clone().text()).toBeLessThan(300);
+    expect(((await res.json()) as { claim_id?: string }).claim_id).toBe(claimId);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
