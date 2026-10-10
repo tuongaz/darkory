@@ -20,12 +20,9 @@ export type LineConnector = { id: string; from: string; to: string | null; name:
 /**
  * A Project's Workflows, every Step of them and every Connector, one into another Workflow's Step
  * too; and the Workflow the line draws (`drawn`, by id): its Steps on the line, another Workflow's
- * only where a Connector crosses (an exit, an entry). Every Step when unsaid.
- */
-/**
- * `placed`: Steps an editor keeps where it put them though nothing joins them yet (a new hold): on
- * the main line ("main"), or "after", among the Steps a Parent's end files into; never parked
- * beside the start.
+ * only where a Connector crosses (an exit, an entry). Every Step when unsaid. `placed`: Steps an
+ * editor keeps where it put them though nothing joins them yet (a new hold): on the main line
+ * ("main"), or "after", among the Steps a Parent's end files into; never parked beside the start.
  */
 export type LineWorkflow = {
   workflows: readonly LineWorkflowName[];
