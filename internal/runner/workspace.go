@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tuongaz/darkory/internal/branch"
 )
 
 // A session works in <data>/workspaces/<TASK-KEY>, which holds one git worktree per Workspace the
@@ -35,47 +37,17 @@ type Checkout struct {
 	Base string
 }
 
-// ParentBranch is the branch a Parent's Subtasks start from and merge into, and that merges into
-// the default branch when the Parent completes: its key in lower case, main-7.
-func ParentBranch(parent string) string { return strings.ToLower(parent) }
+// ParentBranch is the branch a Parent's Subtasks start from and merge into (branch.Parent).
+func ParentBranch(parent string) string { return branch.Parent(parent) }
 
-// TaskBranch is the branch a Task works on: its key in lower case, then its title made short and
-// plain, main-7-support-emoji.
-func TaskBranch(key, title string) string { return taskPrefix(key) + Slug(title) }
+// TaskBranch is the branch a Task works on (branch.Task).
+func TaskBranch(key, title string) string { return branch.Task(key, title) }
 
-// taskPrefix starts the name of every branch of a Task, whatever its title said then: main-7-.
-// No Parent's branch starts with it, since a Parent's is its key alone.
-func taskPrefix(key string) string { return strings.ToLower(key) + "-" }
+// taskPrefix starts the name of every branch of a Task (branch.Prefix).
+func taskPrefix(key string) string { return branch.Prefix(key) }
 
-// Slug is title in lower case, with every run of other characters than letters and digits made
-// one '-', cut at 40 characters on a word boundary; "task" when nothing is left.
-func Slug(title string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range strings.ToLower(title) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
-			if dash && b.Len() > 0 {
-				b.WriteByte('-')
-			}
-			b.WriteRune(r)
-			dash = false
-			continue
-		}
-		dash = true
-	}
-	s := b.String()
-	if len(s) > 40 {
-		s = s[:40]
-		if i := strings.LastIndexByte(s, '-'); i > 20 {
-			s = s[:i]
-		}
-		s = strings.TrimRight(s, "-")
-	}
-	if s == "" {
-		return "task"
-	}
-	return s
-}
+// Slug is title made short and plain for a branch (branch.Slug).
+func Slug(title string) string { return branch.Slug(title) }
 
 // dirName is a Workspace's name as a directory name.
 func dirName(name string) string {
