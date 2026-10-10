@@ -12,7 +12,8 @@ export type RecordEntry = { at: string } & (
   | { kind: "became-parent"; by?: string }
   | { kind: "note"; note: Note }
   | { kind: "observation"; observation: Observation }
-  | { kind: "evidence"; evidence: Evidence }
+  /** Evidence one attacher attached in a row inside one Claim, in the order attached: one row. */
+  | { kind: "evidence"; evidence: Evidence[] }
   /** A Shift's log whose Claim the record cannot find: a row of its own at its time. */
   | { kind: "log"; evidence: Evidence }
   | { kind: "question"; question: Task }
@@ -63,7 +64,7 @@ export function taskRecord(detail: TaskDetail, entries: readonly Activity[] = []
   const logs = new Map<string, Evidence[]>();
   for (const evidence of detail.evidence) {
     if (evidence.kind !== "log") {
-      out.push({ kind: "evidence", at: evidence.created_at, evidence });
+      out.push({ kind: "evidence", at: evidence.created_at, evidence: [evidence] });
       continue;
     }
     const claim = logClaim(evidence, claims);
@@ -121,10 +122,37 @@ export function taskRecord(detail: TaskDetail, entries: readonly Activity[] = []
     if (!claim || !placed.has(claim.id)) out.push({ kind: "log", at: evidence.created_at, evidence });
   }
   // A stable sort on the instant keeps the insertion order above for ties.
-  return out
+  const sorted = out
     .map((e, i) => [e, i] as const)
     .sort(([a, i], [b, j]) => time(a.at) - time(b.at) || i - j)
     .map(([e]) => e);
+  return foldEvidence(sorted, claims);
+}
+
+/** The Claim of the attacher's whose span holds the moment Evidence was attached, if any. */
+function heldClaim(e: Evidence, claims: readonly Claim[]): Claim | undefined {
+  const at = time(e.created_at);
+  return claims.find((c) => c.holder_id === e.attached_by && time(c.started_at) <= at && (!c.ended_at || at <= time(c.ended_at)));
+}
+
+/**
+ * Evidence rows next to each other, by one attacher, inside one Claim (or both outside any of
+ * theirs), become one row at the first one's time.
+ */
+function foldEvidence(entries: RecordEntry[], claims: readonly Claim[]): RecordEntry[] {
+  const out: RecordEntry[] = [];
+  for (const e of entries) {
+    const last = out.at(-1);
+    if (e.kind === "evidence" && last?.kind === "evidence") {
+      const [a, b] = [last.evidence[0], e.evidence[0]];
+      if (a.attached_by === b.attached_by && heldClaim(a, claims)?.id === heldClaim(b, claims)?.id) {
+        out[out.length - 1] = { ...last, evidence: [...last.evidence, ...e.evidence] };
+        continue;
+      }
+    }
+    out.push(e);
+  }
+  return out;
 }
 
 /** The last Claim's end when it lapsed and nobody holds the Task since: the reason a row is dimmed. */

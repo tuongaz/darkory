@@ -12,6 +12,7 @@ import { durationText } from "@/lib/time";
 import { Avatar, TaskLink } from "./parts";
 import { taskRecord, type RecordEntry } from "./record";
 import { Markdown } from "@/components/Markdown";
+import { EvidenceFiles, FileLink } from "./EvidenceFiles";
 
 /** A Task's record, oldest first, grouped by day when it spans more than today. */
 export function TaskRecord({ detail, path, steps }: { detail: TaskDetail; path: readonly Activity[]; steps: readonly WorkflowStep[] }) {
@@ -139,17 +140,23 @@ function Entry({ entry, detail, stepName }: { entry: RecordEntry; detail: TaskDe
       );
     }
     case "evidence": {
-      const e = entry.evidence;
+      const files = entry.evidence;
+      const by = files[0].attached_by;
       return row(
-        e.attached_by,
-        <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
-          <b>{name(e.attached_by)}</b> attached
-          <a href={evidenceURL(e.id)} download={e.filename} className="inline-flex min-w-0 items-center gap-1 hover:underline">
-            <PaperclipIcon className="size-3 flex-none text-muted-foreground" aria-hidden />
-            <span className="truncate">{e.filename}</span>
-          </a>
-          <span className="text-muted-foreground">{sizeText(e.size)}</span>
-        </span>,
+        by,
+        <>
+          {files.length === 1 ? (
+            <span className="inline-flex min-w-0 flex-wrap items-center gap-1.5">
+              <b>{name(by)}</b> attached
+              <FileLink file={files[0]} />
+            </span>
+          ) : (
+            <>
+              <b>{name(by)}</b> attached {files.length} Evidence
+            </>
+          )}
+          <EvidenceFiles files={files} plain={files.length > 1} />
+        </>,
       );
     }
     case "log":

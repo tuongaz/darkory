@@ -501,6 +501,74 @@ describe("a Task's record", () => {
   });
 });
 
+describe("Evidence in a Task's record", () => {
+  const evidence = (id: string, filename: string, content_type: string, size: number, min: number) => ({
+    id,
+    task_id: copy.id,
+    kind: "evidence" as const,
+    filename,
+    content_type,
+    size,
+    sha256: "x",
+    attached_by: builder.id,
+    created_at: at(min),
+  });
+  const claim = { id: "c-1", task_id: copy.id, holder_id: builder.id, session_id: "s-1", started_at: at(10), ended_at: at(20), how_ended: "released" as const };
+
+  it("folds a holder's Evidence into one row that shows each: a thumbnail, the first lines of a text file, a plain row for the rest", async () => {
+    const d = detail(copy, {
+      claims: [claim],
+      evidence: [
+        evidence("e-log", "triage-log.md", "text/markdown; charset=utf-8", 3_700, 12),
+        evidence("e-png", "03-workflow-page.png", "image/png", 39_800, 12),
+        evidence("e-zip", "trace.zip", "application/zip", 900_000, 12),
+      ],
+    });
+    mockApi(
+      taskRoutes({
+        "GET /v1/tasks/:task": d,
+        "GET /v1/evidence/:id/content": () => new Response("# Triage log, WEB-1\n\n| Where | Width |", { headers: { "Content-Type": "text/markdown" } }),
+      }),
+    );
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const row = within(record).getByText(/attached 3 Evidence/).closest("li")!;
+    expect(row).toHaveTextContent("builder attached 3 Evidence");
+
+    // An image: a lazy thumbnail, cover from the top, its name and size under it, the whole a link to the file.
+    const img = within(row).getByRole("img", { name: "03-workflow-page.png" });
+    expect(img).toHaveAttribute("src", "/v1/evidence/e-png/content");
+    expect(img).toHaveAttribute("loading", "lazy");
+    expect(img).toHaveClass("object-cover", "object-top", "h-[92px]", "w-[148px]");
+    const thumb = img.closest("a")!;
+    expect(thumb).toHaveAttribute("href", "/v1/evidence/e-png/content");
+    expect(thumb).toHaveTextContent("03-workflow-page.png39 KB");
+
+    // A small text file: its first lines in a box, open at the right.
+    const box = within(row).getByRole("figure", { name: "triage-log.md" });
+    expect(await within(box).findByText(/# Triage log, WEB-1/)).toBeInTheDocument();
+    expect(box).toHaveTextContent("4 KB");
+    expect(within(box).getByRole("link", { name: "open ↗" })).toHaveAttribute("href", "/v1/evidence/e-log/content");
+
+    // Anything else: name · size · open, as one Evidence reads today.
+    const zip = within(row).getByRole("link", { name: /trace\.zip/ });
+    expect(zip).toHaveAttribute("href", "/v1/evidence/e-zip/content");
+    expect(row.contains(zip)).toBe(true);
+    expect(within(row).queryByRole("img", { name: "trace.zip" })).toBeNull();
+  });
+
+  it("keeps one Evidence's row with its name, and fetches no text file over 20 KB", async () => {
+    const d = detail(copy, { claims: [claim], evidence: [evidence("e-big", "pw-all.log", "text/plain", 58_163, 12)] });
+    const api = mockApi(taskRoutes({ "GET /v1/tasks/:task": d }));
+    renderApp("/tasks/WEB-1");
+    const record = await screen.findByRole("list", { name: "Record" });
+    const row = within(record).getByRole("link", { name: /pw-all\.log/ }).closest("li")!;
+    expect(row).toHaveTextContent("builder attachedpw-all.log57 KB");
+    expect(within(row).queryByRole("figure")).toBeNull();
+    expect(api.calls.some((c) => c.path.startsWith("/v1/evidence/"))).toBe(false);
+  });
+});
+
 describe("a Subtask's peek", () => {
   it("links its Parent and reports its Project", async () => {
     mockApi(taskRoutes());

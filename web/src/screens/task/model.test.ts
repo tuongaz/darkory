@@ -195,7 +195,7 @@ describe("a Shift's log in the record", () => {
   it("hangs the log on its Claim's end row and lists only the holder's Evidence as Evidence", () => {
     const claims = [claim("a", builder.id, 0, 7)];
     const record = taskRecord(detail(t, { claims, evidence: [evidence("pw", builder.id, 6, "evidence"), evidence("log", builder.id, 7)] }));
-    expect(record.filter((e) => e.kind === "evidence").map((e) => e.kind === "evidence" && e.evidence.id)).toEqual(["pw"]);
+    expect(record.filter((e) => e.kind === "evidence").map((e) => e.kind === "evidence" && e.evidence.map((x) => x.id))).toEqual([["pw"]]);
     expect(ends(record)[0]).toMatchObject({ claim: { id: "a" }, logs: [{ id: "log" }] });
     expect(record.some((e) => e.kind === "log")).toBe(false);
   });
@@ -223,5 +223,44 @@ describe("a Shift's log in the record", () => {
     const record = taskRecord(detail(dropped, { claims, evidence: [evidence("log-a", builder.id, 8), evidence("stray", bob.id, 9)] }), trail);
     expect(record.find((e) => e.kind === "ended")).toMatchObject({ state: "dropped", logs: [{ id: "log-a" }] });
     expect(record.at(-1)).toMatchObject({ kind: "log", evidence: { id: "stray" } });
+  });
+});
+
+describe("Evidence in the record", () => {
+  const t0 = Date.parse("2026-10-10T10:00:00Z");
+  const iso = (min: number) => new Date(t0 + min * 60_000).toISOString();
+  const claim = (id: string, holder: string, from: number, to?: number): Claim => ({
+    id,
+    task_id: "k-1",
+    holder_id: holder,
+    session_id: `s-${id}`,
+    started_at: iso(from),
+    ...(to !== undefined ? { ended_at: iso(to), how_ended: "released" as const } : {}),
+  });
+  const file = (id: string, by: string, min: number): Evidence => ({
+    id,
+    task_id: "k-1",
+    kind: "evidence",
+    filename: `${id}.png`,
+    content_type: "image/png",
+    size: 40_000,
+    sha256: "x",
+    attached_by: by,
+    created_at: iso(min),
+  });
+  const t = task(1, { created_at: iso(-1) });
+  const rows = (r: ReturnType<typeof taskRecord>) => r.flatMap((e) => (e.kind === "evidence" ? [e.evidence.map((x) => x.id)] : []));
+
+  it("folds Evidence one holder attached in a row inside one Claim into one row", () => {
+    const record = taskRecord(detail(t, { claims: [claim("a", builder.id, 0, 9)], evidence: [file("e1", builder.id, 5), file("e2", builder.id, 5), file("e3", builder.id, 6)] }));
+    expect(rows(record)).toEqual([["e1", "e2", "e3"]]);
+    expect(record.find((e) => e.kind === "evidence")!.at).toBe(iso(5));
+  });
+
+  it("never folds across two Claims, another attacher or a row between", () => {
+    const claims = [claim("a", builder.id, 0, 4), claim("b", builder.id, 4, 9)];
+    const notes = [{ id: "n-1", task_id: "k-1", author_id: builder.id, body: "x", created_at: iso(6.5) }];
+    const evidence = [file("e1", builder.id, 3), file("e2", builder.id, 5), file("e3", ada.id, 5.5), file("e4", builder.id, 6), file("e5", builder.id, 7)];
+    expect(rows(taskRecord(detail(t, { claims, notes, evidence })))).toEqual([["e1"], ["e2"], ["e3"], ["e4"], ["e5"]]);
   });
 });
