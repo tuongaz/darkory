@@ -4549,9 +4549,12 @@ type ClientInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key and a dash,
-	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-	// `number` and `url` (the host
-	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
@@ -4560,8 +4563,9 @@ type ClientInterface interface {
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
 	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-	// such pull request in the Task's Workspaces; GitHub could not be asked).
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4581,9 +4585,12 @@ type ClientInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key and a dash,
-	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-	// `number` and `url` (the host
-	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
@@ -4592,8 +4599,9 @@ type ClientInterface interface {
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
 	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-	// such pull request in the Task's Workspaces; GitHub could not be asked).
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -7251,9 +7259,12 @@ func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOw
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key and a dash,
-// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-// `number` and `url` (the host
-// compared without regard to case). A bad address is refused before GitHub is asked. A
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
@@ -7262,8 +7273,9 @@ func (c *Client) PassOwnership(ctx context.Context, task TaskRef, params *PassOw
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
 // Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-// such pull request in the Task's Workspaces; GitHub could not be asked).
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
 //
 // Takes any type of body and a specified content type.
 //
@@ -7293,9 +7305,12 @@ func (c *Client) SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, p
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key and a dash,
-// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-// `number` and `url` (the host
-// compared without regard to case). A bad address is refused before GitHub is asked. A
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
@@ -7304,8 +7319,9 @@ func (c *Client) SetTaskPullRequestWithBody(ctx context.Context, task TaskRef, p
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
 // Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-// such pull request in the Task's Workspaces; GitHub could not be asked).
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -14358,9 +14374,12 @@ type ClientWithResponsesInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key and a dash,
-	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-	// `number` and `url` (the host
-	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
@@ -14369,8 +14388,9 @@ type ClientWithResponsesInterface interface {
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
 	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-	// such pull request in the Task's Workspaces; GitHub could not be asked).
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14390,9 +14410,12 @@ type ClientWithResponsesInterface interface {
 	// digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 	// checked on GitHub through the Runner beside this server, when one is attached: the pull
 	// request must be merged there, its head branch must start with the Task's key and a dash,
-	// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-	// `number` and `url` (the host
-	// compared without regard to case). A bad address is refused before GitHub is asked. A
+	// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+	// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+	// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+	// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+	// Workspace whose pull request has that address. A bad address is refused before GitHub is
+	// asked. A
 	// human's write, a write of `open`, a write of what the Task already carries, and any write
 	// with no Runner attached are not checked.
 	// Writing the values the Task already carries changes nothing and records nothing. Records
@@ -14401,8 +14424,9 @@ type ClientWithResponsesInterface interface {
 	// pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 	// own Workspaces or else its Project's default; the pull request's branch is not the
 	// Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-	// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-	// such pull request in the Task's Workspaces; GitHub could not be asked).
+	// a pull request already merged; GitHub has the pull request open, not merged; it is not
+	// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+	// not be asked).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -21047,9 +21071,12 @@ func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, tas
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key and a dash,
-// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-// `number` and `url` (the host
-// compared without regard to case). A bad address is refused before GitHub is asked. A
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
@@ -21058,8 +21085,9 @@ func (c *ClientWithResponses) PassOwnershipWithResponse(ctx context.Context, tas
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
 // Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-// such pull request in the Task's Workspaces; GitHub could not be asked).
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -21085,9 +21113,12 @@ func (c *ClientWithResponses) SetTaskPullRequestWithBodyWithResponse(ctx context
 // digits, dots, hyphens and underscores, never `.` or `..`. An agent's write of `merged` is
 // checked on GitHub through the Runner beside this server, when one is attached: the pull
 // request must be merged there, its head branch must start with the Task's key and a dash,
-// in any case, as the Runner decides a branch is the Task's, and GitHub must give it
-// `number` and `url` (the host
-// compared without regard to case). A bad address is refused before GitHub is asked. A
+// in any case, as the Runner decides a branch is the Task's, it must be the Task's landing
+// (its base is that branch's own base, the Parent's branch for a Subtask or else the
+// Workspace's default branch, and it is not from a fork), and GitHub must give it `number`
+// and `url` (the host compared without regard to case); the Runner reads it in the Task's
+// Workspace whose pull request has that address. A bad address is refused before GitHub is
+// asked. A
 // human's write, a write of `open`, a write of what the Task already carries, and any write
 // with no Runner attached are not checked.
 // Writing the values the Task already carries changes nothing and records nothing. Records
@@ -21096,8 +21127,9 @@ func (c *ClientWithResponses) SetTaskPullRequestWithBodyWithResponse(ctx context
 // pull request `number`'s; the Task names no Workspace in `pull_request` mode, through its
 // own Workspaces or else its Project's default; the pull request's branch is not the
 // Task's; the address written is not the one GitHub gives), `conflict` (`open` written over
-// a pull request already merged; GitHub has the pull request open, not merged; GitHub has no
-// such pull request in the Task's Workspaces; GitHub could not be asked).
+// a pull request already merged; GitHub has the pull request open, not merged; it is not
+// the Task's landing; GitHub has no such pull request in the Task's Workspaces; GitHub could
+// not be asked).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
