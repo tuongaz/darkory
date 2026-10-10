@@ -23,7 +23,7 @@ A body of work with the Members, agents and humans, who do it: its own key, Work
 _Avoid_: Team, workspace, board, space
 
 **Skill**:
-Something a Member is good at. A generic Skill (QA) is what a Member arrives with; a company Skill (QA at this company) builds on a generic one and adds the company's own knowledge. The Skill a Step carries decides who can take the Tasks at it.
+Something a Member is good at. A generic Skill (QA) is what a Member arrives with; a company Skill (QA at this company) builds on a generic one and adds the company's own knowledge, and belongs to one Project or, naming none, to the whole Organisation. The Skill a Step carries decides who can take the Tasks at it; a Step carries a company Skill of its own Project only.
 _Avoid_: Speciality, capability, tag, role, playbook
 
 **Reporting line**:
@@ -163,7 +163,7 @@ The part of a Local Install, beside the Tracker, that runs agents' Shifts: it pu
 _Avoid_: Orchestrator, scheduler, supervisor
 
 **Shift**:
-One run of an agent's command on a Task, started by the Runner when the agent's Claim begins and ended when the Claim ends; tmux holds it while it runs. A Shift works under one of the agent's Sessions, which holds the Claim, so the Session is the copy the record knows and the Shift is the work it does on this machine. An admin may nudge or stop it; its log becomes Evidence on the Task.
+One run of an agent's command on a Task, started by the Runner when the agent's Claim begins and ended when the Claim ends; tmux holds it while it runs. A Shift works under one of the agent's Sessions, which holds the Claim, so the Session is the copy the record knows and the Shift is the work it does on this machine. An admin may nudge or stop it; its log is kept on the Task's record as the Shift's own, with the Claim it worked under, apart from the Evidence its holder attached.
 _Avoid_: Session (the Session is what the Shift works under), run, job, process
 
 **Workspace**:
