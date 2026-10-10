@@ -170,7 +170,7 @@ test("7 · the board: drag between Steps; a held card is refused for bob and mov
   expect(other.errors).toEqual([]);
 });
 
-test("8 · the Subtasks on the line: each at its Step, a Blocking mark, the chain on selection, a ring on the worked token", async ({ browser }) => {
+test("8 · the Subtasks on the line: held ones as chips, waiting ones in their Step's list, a Blocking mark, the way on selection, a ring on the worked token", async ({ browser }) => {
   const parent = await v1<Detail>(as.ada, "POST", "/v1/tasks", { project: "TSK", title: "Refunds" });
   const a = await v1<Detail>(as.ada, "POST", "/v1/tasks", { parent: parent.task.key, title: "Refund API" });
   const b = await v1<Detail>(as.ada, "POST", "/v1/tasks", { parent: parent.task.key, title: "Refund button" });
@@ -185,14 +185,18 @@ test("8 · the Subtasks on the line: each at its Step, a Blocking mark, the chai
   const token = (key: string) => line.locator(`button[data-task="${key}"]`);
   await expect(token(a.task.key)).toHaveAttribute("aria-label", `${a.task.key} Refund API, held by tsk-builder (agent)`);
   await expect(token(a.task.key).getByRole("img", { name: /tsk-builder \(agent\), working/ })).toBeVisible();
-  await expect(token(b.task.key)).toContainText(`by ${a.task.key}`);
+  // The waiting Subtasks are their Step's count, which opens the Step's list in place.
+  await line.getByRole("button", { name: "Review: 1 Task waiting" }).click();
   await expect(token(c.task.key)).toHaveAttribute("aria-label", `${c.task.key} Refund email, waiting`);
+  await line.getByRole("button", { name: "Build: 1 Task waiting" }).click();
+  await expect(token(b.task.key)).toContainText(`by ${a.task.key}`);
   await shot(page, "8-line");
+  // Picked from the list, its way stands over the line: what it waits on, and its key opens it.
   await token(b.task.key).click();
-  const callout = page.getByRole("dialog", { name: `${b.task.key} Blocking` });
-  await expect(callout).toContainText(`Unblocks when ${a.task.key} ends`);
+  const way = page.getByRole("region", { name: `${b.task.key}'s way` });
+  await expect(way).toContainText(`Unblocks when ${a.task.key} ends`);
   await shot(page, "8-line-chain");
-  await callout.getByRole("button", { name: new RegExp(`Open ${b.task.key}`) }).click();
+  await way.getByRole("button", { name: `Open ${b.task.key}` }).click();
   await expect(page.getByRole("dialog", { name: `Task ${b.task.key}` })).toBeVisible();
   await shot(page, "8-line-peek");
   expect(errors).toEqual([]);

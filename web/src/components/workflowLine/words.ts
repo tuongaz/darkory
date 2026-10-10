@@ -2,12 +2,22 @@ import type { LineConnector } from "./model";
 
 /*
  * What every line on the Workflow line says, in words: the labels drawn on it and the sentence its
- * hover shows. The horizontal line, the phone and the Text view all read them from here, so they
- * never say different things.
+ * hover shows. The line, its editor and the Text view all read them from here, so they never say
+ * different things.
  */
 
-/** The label on the entry arrow, and the mark on a start Step the arrow cannot reach. */
+/** What the Text view says by the Step New Tasks start at. */
 export const ENTRY_LABEL = "New Tasks start here";
+/** The word over the line's first station, where Tasks come onto it. */
+export const START_LABEL = "Start";
+/** The group beside the start of the Steps a Task can also start at, off the line. */
+export const ALSO_LABEL = "Also starts here";
+/** The pill on a hold's name. */
+export const HOLD_PILL = "hold";
+/** A Step's Skill tag, on hover. */
+export const SKILL_HINT = "the Skill a Member needs to take Tasks here";
+/** A Step's median, on hover. */
+export const MEDIAN_HINT = "median time a Task spends here";
 /**
  * The label on the arrow from the breakdown Step into the entry. It names no Step: the Breakdown's
  * holder files each Subtask at the Step they name, which the Workflow cannot know (the software
@@ -16,10 +26,6 @@ export const ENTRY_LABEL = "New Tasks start here";
 export const FILES_LABEL = "files Subtasks";
 /** The label on every line along which a human, not a Connector, moves a Task. */
 export const HAND_LABEL = "by hand";
-/** The branch the breakdown Step sits on. */
-export const BREAKDOWN_BRANCH = "Break down";
-/** What a hold says under its name. */
-export const HOLD_NOTE = "hold · moved on by hand";
 
 type Name = (id: string | null) => string;
 
@@ -44,9 +50,19 @@ export function gapHint(from: string, to: string): string {
   return `${from} → ${to}: no outcome of ${from} leads to ${to}, so nothing moves along here; a Task reaches ${to} when it is filed there, or moved there by hand`;
 }
 
-/** The entry arrow, or the mark on the start Step. */
+/** Start's hover: where New Tasks start. */
 export function entryHint(start: string): string {
   return `New Tasks start at ${start}, unless the filer names another Step`;
+}
+
+/** The start of a line no New Task starts on: a Task comes onto it only when its filer names its first Step. */
+export function arriveHint(step: string): string {
+  return `A Task arrives here when its filer names ${step}`;
+}
+
+/** The chip at Done on a Workflow that does not hold the Project's retro Step: where a Parent's Retrospective goes. */
+export function retroHint(at: string): string {
+  return `When a Parent ends, Darkory files its Retrospective at ${at}`;
 }
 
 /** A hold off the line, and its arrow into the line. */
@@ -71,6 +87,8 @@ export function breakdownOutcomeHint(c: LineConnector, name: Name, start: string
 
 /** The branch where Darkory files a Parent's own Subtasks. */
 export const AFTER_BRANCH = "After a Parent";
+/** The quiet row under the line that holds the branch's Steps. */
+export const AFTER_LABEL = "When a Parent ends";
 
 /** The branch "After a Parent". */
 export const AFTER_HINT = "After a Parent: once a Parent's Subtasks end, Darkory files its own Subtasks about the Parent as a whole at these Steps";

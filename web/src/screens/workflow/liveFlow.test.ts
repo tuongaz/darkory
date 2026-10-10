@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Activity, ActivityKind, RunnerSession } from "@/api/client";
 import { sampleWorkflow } from "@/components/workflow/samples";
 import { FIVE } from "@/components/workflowLine/fixtures";
-import { handRoute, horizontal, leaveRoute, lineTopology } from "@/components/workflowLine/layout";
+import { lineTopology } from "@/components/workflowLine/layout";
 import { task, wfId, wfStep } from "@/test/fixtures";
 import { chipsAt } from "./bind";
 import { effectOf, lineText, storyVerb, trailLine, type FlowContext } from "./flowEvents";
@@ -213,28 +213,19 @@ describe("a Task crossing between Workflows, on the line of one (ADR 0019)", () 
     const moving = flowState([{ effect: e, at: 0 }], 500, false);
     expect([...moving.transit]).toEqual(["k-2"]);
     expect([...moving.lit]).toEqual([bug.id]);
-    // The route it travels is the exit's: down Triage's leg into its chip.
-    const h = horizontal(lineTopology(FIVE(wfId.triage)), { width: 1160, column: 66 });
-    const x = h.at.get(wfStep.triage)!.x;
-    expect(h.routes.get(bug.id)).toMatch(new RegExp(`^M${x} ${h.lineY} V[\\d.]+ H[\\d.]+$`));
-    expect(h.exits.map((l) => l.connectorId)).toContain(bug.id);
+    // The Connector it travels is Triage's exit, the chip by Triage.
+    expect(lineTopology(FIVE(wfId.triage)).exits.map((x) => [x.stepId, x.connector.id])).toContainEqual([wfStep.triage, bug.id]);
   });
 
-  it("arrives on Bugs' line along its entry, the arrow into Investigate", () => {
+  it("arrives on Bugs' line along its entry into Investigate", () => {
     const e = effectOf(advance, on(wfId.bugs))!;
     expect(e.travel).toEqual({ from: wfStep.triage, to: wfStep.investigate, connectorId: bug.id });
-    const h = horizontal(lineTopology(FIVE(wfId.bugs)), { width: 1160, column: 66 });
-    expect(h.entry?.arrow?.connectorIds).toEqual([bug.id]);
-    expect(h.routes.get(bug.id)).toBe(`M${h.entry!.arrow!.line[0][0]} ${h.lineY} H${h.at.get(wfStep.investigate)!.x}`);
+    expect(lineTopology(FIVE(wfId.bugs)).entries.map((x) => [x.stepId, x.connector.id])).toEqual([[wfStep.investigate, bug.id]]);
   });
 
-  it("moved by hand into another Workflow's Step it leaves too, straight down off the line; moved in from one, it appears", () => {
+  it("moved by hand into another Workflow's Step it leaves too, along no Connector; moved in from one, it appears", () => {
     const out = effectOf(entry("task.moved", { from: wfStep.triage, to: wfStep.support }, "m-ada", "k-2"), on(wfId.triage))!;
     expect(out.travel).toEqual({ from: wfStep.triage, to: wfStep.support, connectorId: undefined });
-    const h = horizontal(lineTopology(FIVE(wfId.triage)), { width: 1160, column: 66 });
-    const at = h.at.get(wfStep.triage)!;
-    expect(handRoute(h, wfStep.triage, wfStep.support)).toBeUndefined();
-    expect(leaveRoute(h, wfStep.triage)).toBe(`M${at.x} ${at.y} V${at.y + 30}`);
     const into = effectOf(entry("task.moved", { from: wfStep.investigate, to: wfStep.support }, "m-ada", "k-2"), on(wfId.support))!;
     expect(into.travel).toBeUndefined();
     expect(into.arrive).toBe(wfStep.support);

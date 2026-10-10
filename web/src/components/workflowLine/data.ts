@@ -1,8 +1,10 @@
 import type { Activity, Claim, Task } from "@/api/client";
+import type { FilterPill } from "@/components/filters/filterState";
+import { nobody } from "@/components/filters/taskAxes";
 import { workingOf, type MemberKind, type SessionState } from "@/lib/work";
 import { taskPath } from "@/screens/task/path";
 import { liveClaim } from "@/work";
-import { DONE_STATION, drawnSteps, type LineBrief, type LineMember, type LineTask, type LineWorkflow } from "./model";
+import { drawnSteps, type LineBrief, type LineMember, type LineTask, type LineWorkflow } from "./model";
 
 /*
  * The facts the line draws, from the records: each open Task as a token, the scope that narrows
@@ -48,6 +50,13 @@ export function lineTasks(tasks: readonly Task[], ctx: { member: MemberOf; sessi
 
 /** What the line shows: every open Task, those with no Parent, one Parent's Subtasks, or one Task. */
 export type LineScope = { kind: "all" } | { kind: "none" } | { kind: "parent"; id: string } | { kind: "task"; id: string };
+
+/** The Filter a scope stands for on the Tasks list: a Parent's Subtasks, or the Tasks with no Parent. */
+export function scopePills(scope: LineScope): FilterPill[] {
+  if (scope.kind === "parent") return [{ field: "parent", op: "is", values: [scope.id] }];
+  if (scope.kind === "none") return [{ field: "parent", op: "is", values: [nobody] }];
+  return [];
+}
 
 /** The scope `?scope=` names: `none`, or a Task's id (a Parent's narrows to its Subtasks). */
 export function scopeOf(param: string | null, isParent: (id: string) => boolean | undefined): LineScope {
@@ -254,6 +263,8 @@ export type TraceStay = {
 
 /** A Task's way through the Workflow: its stays, the Connectors it took, and the outcomes open to it now. */
 export type Trace = {
+  /** The Task whose path it is. */
+  taskId: string;
   stays: TraceStay[];
   traversed: string[];
   next: string[];
@@ -302,8 +313,5 @@ export function traceOf(
   });
   const current = task.state === "open" && task.step_id ? task.step_id : undefined;
   const next = current ? workflow.connectors.filter((c) => c.from === current).sort((a, b) => a.position - b.position).map((c) => c.id) : [];
-  return { stays: out, traversed, next, current, end: end?.kind };
+  return { taskId: task.id, stays: out, traversed, next, current, end: end?.kind };
 }
-
-/** Where a Connector leads, as a station: a Step's id, or Done. */
-export const stationOf = (to: string | null) => to ?? DONE_STATION;

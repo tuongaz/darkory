@@ -10,7 +10,7 @@ import { projectCrumb } from "@/app/crumbs";
 import { usePeekLink } from "@/app/peek";
 import { Content, TopBar } from "@/app/TopBar";
 import { useNow } from "@/clock";
-import { serializeFilter } from "@/components/filters/filterState";
+import { stepFilterSearch } from "@/components/filters/filterState";
 import { EmptyState } from "@/components/EmptyState";
 import { Key } from "@/components/Key";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -390,7 +390,7 @@ const markTones = { lapsed: "dropped", taken_back: "claimed" } as const;
 
 /** The Tasks at a Step: the Project's list filtered by it. */
 function stepLink(project: Project, step: string): string {
-  return `${projectPath(project, "tasks")}?filter.tasks=${encodeURIComponent(serializeFilter({ field: "step", op: "is", values: [step] }))}`;
+  return `${projectPath(project, "tasks")}?${stepFilterSearch(step)}`;
 }
 
 function AfterPart({ part, project }: { part: Part; project: Project }) {

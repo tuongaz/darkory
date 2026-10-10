@@ -592,7 +592,7 @@ export function countChanges(server: WorkflowRecord, draft: WorkflowRecord): num
  * the fewest, those off the longest run kept in order. A Step moved into another Workflow is not
  * one of them; that move is a change of its own.
  */
-function reordered(server: WorkflowRecord, draft: WorkflowRecord): Set<string> {
+export function reordered(server: WorkflowRecord, draft: WorkflowRecord): Set<string> {
   const out = new Set<string>();
   for (const w of draft.workflows) for (const id of reorderedIn(server, draft, w.id)) out.add(id);
   return out;

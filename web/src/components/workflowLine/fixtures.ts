@@ -135,10 +135,6 @@ export const DEFAULT = workflow(
   ],
 );
 
-/** The line's own width on the Workflow page at each window width (the sidebar and padding off), and in a Parent's card. */
-export const PAGE = { 1024: 744, 1280: 1000, 1440: 1160, 1920: 1640 } as const;
-export const PARENT = { 1024: 506, 1280: 762, 1440: 786, 1920: 786 } as const;
-
 /** Every fixture by name, for the proofs that hold of them all. */
 export const FIXTURES = { MAIN, SACCA, DEFAULT, BIG, SOFTWARE } as const;
 
@@ -192,8 +188,8 @@ export function WRAP(drawn: "work" | "wrap"): LineWorkflow {
 
 /**
  * Tasks reach Build from Support (along `outcome`, `bug` unless said) as well as being filed there. With `backlog`, Build is
- * not the line's first Step (a Backlog joined to it by `ready` stands before it), so both say so
- * over Build's head: where New Tasks start, and the entry from Support.
+ * not the line's first Step (a Backlog joined to it by `ready` stands before it); either way the
+ * entry from Support is a chip beside Start.
  */
 export function MARKS(backlog: boolean, outcome = "bug"): LineWorkflow {
   return several(
@@ -207,8 +203,8 @@ export function MARKS(backlog: boolean, outcome = "bug"): LineWorkflow {
 }
 
 /**
- * MAIN with an Ops Workflow QA escalates into twice: QA stands inside the arc needs changes runs
- * under, so its two exits' chips cannot hang on legs under it and go under everything instead.
+ * MAIN with an Ops Workflow QA escalates into twice: QA stands inside the track needs changes
+ * returns along, its two exits chips by QA.
  */
 export function ESCALATE(): LineWorkflow {
   return {
@@ -225,10 +221,8 @@ export function ESCALATE(): LineWorkflow {
 }
 
 /**
- * BIG with an Ops Workflow QA sends Tasks into once ("esc → Ops › Fix", short enough to stand
- * clear between QA and Security review on a wide line). QA drops onto the return track into
- * Build (its fail), so the exit's leg down from QA would run along that drop: its chip goes under
- * everything instead.
+ * BIG with an Ops Workflow QA sends Tasks into once ("esc → Ops › Fix"). QA's fail returns along
+ * the track into Build, the exit a chip by QA beside it.
  */
 export function HOTFIX(): LineWorkflow {
   return {
@@ -238,3 +232,54 @@ export function HOTFIX(): LineWorkflow {
     drawn: "work",
   };
 }
+
+/**
+ * DARK on the final design's g2 (wf-round fixture.json): Implementation (Backlog · Plan · Build ·
+ * Review), Bug triage (Triage · Fix · Code review · Verify, its feature into Implementation's
+ * Build) and Retrospective (Retro · Skill review), drawing `drawn`.
+ */
+export function DARK(drawn: "impl" | "bugs" | "retros"): LineWorkflow {
+  return several(
+    [
+      ["impl", "Implementation", [["backlog", "Backlog", null], ["plan", "Plan", "breakdown"], ["build", "Build", "engineer"], ["review", "Review", "review"]]],
+      ["bugs", "Bug triage", [["triage", "Triage", "triage"], ["fix", "Fix", "engineer"], ["creview", "Code review", "review"], ["verify", "Verify", "qa"]]],
+      ["retros", "Retrospective", [["retro", "Retro", "retro"], ["skillreview", "Skill review", "skill-review"]]],
+    ],
+    [
+      ["plan", "done", null],
+      ["build", "pass", "review"],
+      ["review", "pass", null],
+      ["review", "needs changes", "build"],
+      ["triage", "bug", "fix"],
+      ["triage", "not a bug", null],
+      ["triage", "feature", "build"],
+      ["fix", "ready", "creview"],
+      ["creview", "pass", "verify"],
+      ["creview", "needs changes", "fix"],
+      ["verify", "pass", null],
+      ["verify", "fail", "fix"],
+      ["retro", "done", null],
+      ["retro", "propose", "skillreview"],
+      ["skillreview", "publish", null],
+      ["skillreview", "needs changes", "retro"],
+    ],
+    drawn,
+  );
+}
+
+/** NEWS's Editorial (fixture.json): Legal a hold on the line, moved on to Publish by hand. */
+export const NEWS = workflow(
+  [
+    ["draft", "Draft", "writer"],
+    ["edit", "Edit", "editor"],
+    ["legal", "Legal", null],
+    ["publish", "Publish", "publisher"],
+  ],
+  [
+    ["draft", "ready", "edit"],
+    ["edit", "approved", "legal"],
+    ["edit", "needs changes", "draft"],
+    ["publish", "published", null],
+    ["publish", "broken link", "draft"],
+  ],
+);

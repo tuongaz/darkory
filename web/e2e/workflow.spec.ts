@@ -6,7 +6,7 @@ import { startInstall } from "./server";
 // Scenarios 6 and 9 of docs/build/model-v2-plan.md against the real binary, on an Install of
 // their own (init's MAIN with the default Workflows, Implementation and Bug triage, and the roster's
 // agents; the scenarios edit Implementation):
-//   6. Workflow editing in the list and panel: rename a Step, add one between two with a new Skill
+//   6. Workflow editing on the line (vf-9): rename a Step, add one between two with a new Skill
 //      and wire it, delete one with Tasks (asked where they go and where the outcome into it
 //      leads), the changes listed, all saved in one go; the open board's columns follow; then who
 //      takes a Step: a new agent, at once; a Member added and one removed, saved with the Workflow;
@@ -90,11 +90,9 @@ test("live: a Task filed shows at Build on the line, its pickup reads now, it tr
   await page.screenshot({ path: `${liveShots}0-open.png` });
   const token = (key: string) => line.locator(`button[data-task="${key}"]`);
   const tag = (key: string) => token(key).locator("xpath=..").locator("[data-tag]");
-  /** Whether the Task's token stands in its Step's column. */
-  const at = async (key: string, step: string) => {
-    const [t, h] = [await token(key).boundingBox(), await line.locator(`[data-head="${step}"]`).boundingBox()];
-    return !!t && !!h && Math.abs(t.x + t.width / 2 - (h.x + h.width / 2)) < 8;
-  };
+  /** Whether the Task's token stands in its Step's row on the line, and nowhere else. */
+  const at = async (key: string, step: string) =>
+    (await line.locator(`[data-station][data-head="${step}"] button[data-task="${key}"]`).count()) === 1 && (await token(key).count()) === 1;
 
   // Filed through /v1: its token appears at Build, tagged with who filed it.
   const filed = ((await v1("POST", "/v1/tasks", { project: "MAIN", title: "Count the ledger", step: "Build" })) as { task: { key: string } }).task;
@@ -135,7 +133,8 @@ test("live: a Task filed shows at Build on the line, its pickup reads now, it tr
   await page.waitForTimeout(350);
   await page.screenshot({ path: `${liveShots}5-into-done.png` });
   await expect(token(filed.key)).toHaveCount(0, { timeout: 4_000 });
-  await expect(line.locator('[data-head="Done"]')).toContainText("1 today");
+  // The main line's Done, first; "When a Parent ends" under it has a Done of its own.
+  await expect(line.locator('[data-head="Done"]').first()).toContainText("1 today");
   await page.waitForTimeout(1_500);
   await page.screenshot({ path: `${liveShots}6-done.png` });
 
@@ -155,7 +154,7 @@ test("live: a Task filed shows at Build on the line, its pickup reads now, it tr
   await ctx.close();
 });
 
-test("scenario 6: rename a Step while the board is open, add one between two, delete one with Tasks, then who takes each Step, all from the panel", async ({ browser }) => {
+test("scenario 6: rename a Step while the board is open, add one between two, delete one with Tasks, then who takes each Step, all on the line", async ({ browser }) => {
   // Two Tasks at Review, to be moved when it is deleted.
   for (const title of ["Check the ledger", "Check the totals"]) await v1("POST", "/v1/tasks", { project: "MAIN", title, step: "Review" });
 
@@ -163,41 +162,34 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await expect(board.page.getByText("Build", { exact: true }).first()).toBeVisible();
   await board.page.screenshot({ path: `${shots}6-01-board-before.png`, animations: "disabled" });
 
-  // C1: the Steps as text, none open until one is picked; then Build, where New Tasks start.
-  // MAIN's Workflows list Implementation and Bug triage; Implementation's pencil opens its editor.
+  // C1: the draft on the line, its fields in place (vf-9). MAIN's Workflows list Implementation and
+  // Bug triage; Implementation's pencil opens its editor.
   const { page, errors, ctx } = await open(browser, "/projects/MAIN/workflows");
-  await page.getByRole("table", { name: "Workflows" }).getByRole("link", { name: "Edit Implementation" }).click();
-  const list = page.getByRole("list", { name: "Steps" });
-  await expect(page.getByRole("note", { name: "No Step picked" })).toBeVisible();
-  await expect(list.getByRole("listitem", { name: "3. Build" })).toContainText("New Tasks start here");
-  await list.getByRole("button", { name: "3. Build" }).click();
-  await expect(list.getByRole("button", { name: "3. Build" })).toHaveAttribute("aria-current", "true");
+  await page.getByRole("list", { name: "Workflows" }).getByRole("link", { name: "Edit Implementation" }).click();
+  const rail = page.getByRole("list", { name: "Steps on the line" });
+  const onRail = () => rail.locator(":scope > li").evaluateAll((els) => els.map((el) => el.getAttribute("data-head")));
+  await expect.poll(onRail).toEqual(["Build", "Review", "Done"]);
+  await expect(page.getByRole("region", { name: "Also starts here" }).getByRole("textbox", { name: "Name of Backlog" })).toBeVisible();
   await page.screenshot({ path: `${shots}6-02-editing.png`, animations: "disabled" });
 
   // Rename Build to Make: nothing is sent yet, the board keeps Build.
-  await page.getByRole("textbox", { name: "Name of Step 3" }).fill("Make");
-  await expect(page.getByRole("button", { name: "Editing · 1 change: list them" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Name of Build" }).fill("Make");
+  await expect(page.getByRole("button", { name: "1 change: list them" })).toBeVisible();
   await page.screenshot({ path: `${shots}6-03-renamed.png`, animations: "disabled" });
 
-  // C2: the band between Make and Review adds a Step there: a hold with no outcome, its name in focus.
-  // Hovering it changes only its colour: it and every row under it stay where they were.
-  const make = list.getByRole("listitem", { name: "3. Make" });
-  const band = page.getByRole("button", { name: "Add a Step after Make" });
-  const below = list.getByRole("listitem", { name: "4. Review" });
-  const last = list.getByRole("listitem", { name: "6. Skill review" });
-  const rest = [await band.boundingBox(), await below.boundingBox(), await last.boundingBox()];
-  await expect(band).toHaveCSS("opacity", "0");
-  const box = (await make.boundingBox())!;
-  await page.mouse.move(box.x + 120, box.y + box.height + 2);
-  await band.hover();
-  await expect(band).toHaveCSS("opacity", "1");
-  await expect(band).toHaveText("Add Step");
-  expect([await band.boundingBox(), await below.boundingBox(), await last.boundingBox()]).toEqual(rest);
-  await page.screenshot({ path: `${shots}6-04-add-band.png`, animations: "disabled" });
-  await band.click();
-  await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toBeFocused();
-  await expect(page.getByRole("region", { name: "Step 4: New Step" })).toContainText("By hand");
-  await page.getByRole("textbox", { name: "Name of Step 4" }).fill("QA");
+  // C2: Make's ⋯ adds a Step after it: a hold with no outcome, on the line, its name in focus.
+  // Hovering a Step's controls moves nothing on the line.
+  const more = page.getByRole("button", { name: "More for Make" });
+  const below = page.getByRole("textbox", { name: "Name of Review" });
+  const rest = [await below.boundingBox(), await rail.boundingBox()];
+  await more.hover();
+  expect([await below.boundingBox(), await rail.boundingBox()]).toEqual(rest);
+  await more.click();
+  await page.getByRole("menuitem", { name: "Add Step after Make" }).click();
+  await expect(page.getByRole("textbox", { name: "Name of the new Step" })).toBeFocused();
+  await expect.poll(onRail).toEqual(["Make", "New Step", "Review", "Done"]);
+  await page.screenshot({ path: `${shots}6-04-added-step.png`, animations: "disabled" });
+  await page.getByRole("textbox", { name: "Name of the new Step" }).fill("QA");
   // Its Skill, new, created on Save (usability: init seeds qa, which tester holds); then its way
   // on, and Make's main outcome into it.
   await page.getByRole("combobox", { name: "Skill of QA" }).click();
@@ -206,19 +198,19 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   const skillDialog = page.getByRole("dialog", { name: "New Skill “usability”" });
   await skillDialog.getByRole("textbox", { name: "Text" }).fill("Try it as a user would.");
   await skillDialog.getByRole("button", { name: "Use this Skill" }).click();
-  await expect(page.getByRole("region", { name: "Outcomes" }).getByText("No way out", { exact: true })).toBeVisible();
+  await expect(rail.locator("li", { has: page.getByRole("textbox", { name: "Name of QA" }) }).getByText("No way out", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Add an outcome out of QA" }).click();
   await page.getByRole("textbox", { name: "Outcome out of QA" }).fill("pass");
   await page.getByRole("combobox", { name: "Where pass out of QA leads" }).click();
   await page.getByRole("option", { name: "Review", exact: true }).click();
-  await list.getByRole("button", { name: "3. Make" }).click();
   await page.getByRole("combobox", { name: "Where pass out of Make leads" }).click();
   await page.getByRole("option", { name: "QA", exact: true }).click();
+  await page.mouse.move(0, 0);
   await page.screenshot({ path: `${shots}6-05-added.png`, animations: "disabled" });
 
   // C4: delete Review. Its two Tasks must go somewhere; QA's pass into it is removed unless led on: into Done.
-  await list.getByRole("button", { name: "5. Review" }).click();
-  await page.getByRole("button", { name: "Delete Review" }).click();
+  await page.getByRole("button", { name: "More for Review" }).click();
+  await page.getByRole("menuitem", { name: "Delete Review" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete Review" });
   await expect(dialog.getByRole("heading", { name: "2 Tasks at Review" })).toBeVisible();
   await expect(dialog.getByRole("combobox", { name: "Where pass out of QA leads instead" })).toHaveText("Remove this outcome");
@@ -229,11 +221,10 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.getByRole("option", { name: "Done", exact: true }).click();
   await page.screenshot({ path: `${shots}6-06-delete-asks.png`, animations: "disabled" });
   await dialog.getByRole("button", { name: "Delete Review" }).click();
-  await expect(list.getByRole("listitem", { name: /Review$/ })).toHaveCount(0);
-  // Review was the last Step on the line: the panel moves to QA above it, not to Retro after a Parent.
-  await expect(page.getByRole("textbox", { name: "Name of Step 4" })).toHaveValue("QA");
-  // The changes, listed from the header.
-  const chip = page.getByRole("button", { name: /^Editing · \d+ changes: list them$/ });
+  await expect.poll(onRail).toEqual(["Make", "QA", "Done"]);
+  await expect(page.getByRole("textbox", { name: "Name of QA" })).toHaveValue("QA");
+  // The changes, listed from the bar.
+  const chip = page.getByRole("button", { name: /^\d+ changes: list them$/ });
   await chip.click();
   const changes = page.getByRole("list", { name: "Changes" });
   await expect(changes).toContainText("Build → Make");
@@ -267,10 +258,11 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   // C3: QA's Skill exists now and nobody has it: its Owner takes it. A new agent for it, at once: its token shows once.
   const work = wf.workflows.find((w) => w.name === "Implementation")!.id;
   await page.goto(`${base}/projects/MAIN/workflows/${work}/edit?step=${qaStep.id}`);
-  const takenBy = page.getByRole("region", { name: "Step 4: QA" }).getByRole("region", { name: "Taken by" });
-  await expect(takenBy).toContainText("Nobody");
-  await expect(list.getByRole("listitem", { name: "4. QA" })).toContainText("Owner takes it");
+  await expect(page.getByRole("textbox", { name: "Name of QA" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Who takes QA" })).toHaveText("Nobody");
   await page.screenshot({ path: `${shots}6-09-unstaffed.png`, animations: "disabled" });
+  await page.getByRole("button", { name: "Who takes QA" }).click();
+  const takenBy = page.getByRole("region", { name: "Taken by" });
   await takenBy.getByRole("button", { name: "New agent" }).click();
   const agentDialog = page.getByRole("dialog", { name: "New agent" });
   await agentDialog.getByRole("textbox", { name: "Name" }).fill("qa-bot");
@@ -279,24 +271,27 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
   await page.screenshot({ path: `${shots}6-10-agent-token-once.png`, animations: "disabled" });
   await page.getByRole("button", { name: "Done" }).click();
   await expect(takenBy.getByRole("list", { name: "Members with usability" })).toContainText("qa-bot");
+  await page.keyboard.press("Escape");
+  await expect(takenBy).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Who takes QA" })).toContainText("qa-bot");
 
-  // ada takes Make's Tasks, added from its panel; builder no longer does, removed by its ×. Both
+  // ada takes Make's Tasks, added from its avatars; builder no longer does, removed by its ×. Both
   // are the draft's: listed, sent on Save with the Workflow.
-  await list.getByRole("button", { name: "3. Make" }).click();
-  const makeTakers = page.getByRole("region", { name: "Step 3: Make" }).getByRole("region", { name: "Taken by" });
-  const engineers = makeTakers.getByRole("list", { name: "Members with engineer" });
-  await makeTakers.getByRole("button", { name: "Add a Member" }).click();
+  await page.getByRole("button", { name: "Who takes Make" }).click();
+  const engineers = takenBy.getByRole("list", { name: "Members with engineer" });
+  await takenBy.getByRole("button", { name: "Add a Member" }).click();
   await page.getByRole("option", { name: /^ada/ }).click();
   await expect(engineers).toContainText("ada");
-  await makeTakers.getByRole("button", { name: "Remove builder" }).hover();
+  await takenBy.getByRole("button", { name: "Remove builder" }).hover();
   await page.screenshot({ path: `${shots}6-11-remove-hover.png`, animations: "disabled" });
-  await makeTakers.getByRole("button", { name: "Remove builder" }).click();
+  await takenBy.getByRole("button", { name: "Remove builder" }).click();
   // builder takes engineer at Bug triage's Fix too: removing it asks first, naming that Step.
   const removeBuilder = page.getByRole("dialog", { name: "Remove builder from engineer?" });
   await expect(removeBuilder).toContainText("builder also takes engineer at Fix.");
   await removeBuilder.getByRole("button", { name: "Remove" }).click();
   await expect(engineers).not.toContainText("builder");
-  await page.getByRole("button", { name: "Editing · 2 changes: list them" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "2 changes: list them" }).click();
   await expect(page.getByRole("list", { name: "Changes" })).toContainText("Addedada to engineer");
   await expect(page.getByRole("list", { name: "Changes" })).toContainText("Removedbuilder from engineer");
   await page.screenshot({ path: `${shots}6-12-edited.png`, animations: "disabled" });
@@ -313,11 +308,13 @@ test("scenario 6: rename a Step while the board is open, add one between two, de
 
   // A removal cancelled is discarded: ada keeps engineer.
   await page.goto(`${base}/projects/MAIN/workflows/${work}/edit?step=${madeStep.id}`);
-  await makeTakers.getByRole("button", { name: "Remove ada" }).click();
+  await page.getByRole("button", { name: "Who takes Make" }).click();
+  await takenBy.getByRole("button", { name: "Remove ada" }).click();
   const removeAda = page.getByRole("dialog", { name: "Remove ada from engineer?" });
   await expect(removeAda).toContainText("ada also takes engineer at Fix.");
   await removeAda.getByRole("button", { name: "Remove" }).click();
-  await expect(makeTakers).toContainText("Nobody");
+  await expect(takenBy).toContainText("Nobody");
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("dialog", { name: "Discard 1 change?" }).getByRole("button", { name: "Discard" }).click();
   await expect(page).toHaveURL(`${base}/projects/MAIN/workflows/${work}`);
@@ -341,7 +338,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   const { page, errors, ctx } = await open(browser, await workflowPage("MAIN"));
   const line = page.getByRole("region", { name: "Workflow", exact: true });
   // The taker's mark under QA's name, ringed while it works there; the Task's token carries it too.
-  const mark = line.locator('[data-head="QA"]').getByRole("img", { name: "qa-bot (agent), working" });
+  const mark = line.locator('[data-head="QA"] [data-takers]').getByRole("img", { name: "qa-bot (agent), working" });
   await expect(mark).toHaveAttribute("data-working", "running");
   await expect(mark).toHaveAttribute("data-kind", "agent");
   await expect(line.locator(`button[data-task="${filed.key}"]`)).toHaveAttribute("aria-label", `${filed.key} Test the ledger, held by qa-bot (agent)`);
@@ -351,7 +348,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   expect(await spin()).not.toBe(first);
 
   // ada, a human not working there: a plain ring, still.
-  const ada = line.locator('[data-head="Make"]').getByRole("img", { name: "ada" });
+  const ada = line.locator('[data-head="Make"] [data-takers]').getByRole("img", { name: "ada" });
   await expect(ada).toHaveAttribute("data-kind", "human");
   await expect(ada).not.toHaveAttribute("data-working");
   await page.screenshot({ path: `${shots}9-01-marks.png`, animations: "disabled" });
@@ -377,7 +374,7 @@ test("scenario 9: an agent's mark turns while its Claim is live; a human's is a 
   await ctx.close();
 });
 
-test("the software Workflow at 1440×900: its line and the whole Loops list show as the page opens, nothing cut by the panels", async ({ browser }) => {
+test("the software Workflow at 1440×900: its seven returns are drawn, each labelled at its Step on a track, none cut by the panels", async ({ browser }) => {
   // The preset's 14 Steps and 7 loops back (examples/workflows/software), its Skills made first.
   const workflow = JSON.parse(readFileSync(fileURLToPath(new URL("../../examples/workflows/software/workflow.json", import.meta.url)), "utf8")) as { steps: { skill?: string }[] };
   const have = new Set(((await v1("GET", "/v1/skills")) as { items: { name: string }[] }).items.map((x) => x.name));
@@ -388,34 +385,39 @@ test("the software Workflow at 1440×900: its line and the whole Loops list show
   await v1("PUT", "/v1/projects/SWL/workflow", workflow);
 
   const { page, errors, ctx } = await open(browser, await workflowPage("SWL"));
-  const loops = page.getByRole("region", { name: "Loops" });
-  await expect(loops).toContainText("Loops 7");
-  const rows = loops.getByRole("listitem");
-  await expect(rows).toHaveCount(7);
-  // Every row is on screen and on top where it is drawn: no pane above it cuts it off.
-  for (const row of await rows.all()) {
-    const seen = await row.evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      return r.top >= 0 && r.bottom <= innerHeight && el.contains(document.elementFromPoint(r.left + 12, r.top + r.height / 2));
-    });
-    expect(seen, await row.innerText()).toBe(true);
+  const line = page.getByRole("region", { name: "Workflow", exact: true });
+  // A return is labelled "↩ outcome → Step" at the Step it leaves, and drawn as a track into the Step it reaches.
+  const labels = line.locator("[data-return]").filter({ hasText: "↩" });
+  await expect(labels).toHaveCount(7);
+  for (const label of await labels.all()) {
+    const id = (await label.getAttribute("data-return"))!;
+    await expect(line.locator(`g[data-track] [data-connectors*="${id}"]`).first(), id).toBeAttached();
   }
-  await page.screenshot({ path: `${liveShots}software-loops-1440.png`, animations: "disabled" });
+  // Every label is on top where it is drawn once scrolled to: no pane over the line cuts it off.
+  for (const label of await labels.all()) {
+    await label.scrollIntoViewIfNeeded();
+    const seen = await label.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return r.top >= 0 && r.bottom <= innerHeight && el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    });
+    expect(seen, await label.innerText()).toBe(true);
+  }
+  await page.screenshot({ path: `${liveShots}software-returns-1440.png`, animations: "disabled" });
   expect(errors).toEqual([]);
   await ctx.close();
 });
 
-test("the software Workflow down a phone and a 1024 window: every loop back's track keeps the gutter at the line's left edge", async ({ browser }) => {
+test("the software Workflow down a phone and a 1024 window: every return's track keeps the gutter at the line's left edge", async ({ browser }) => {
   for (const size of [{ width: 390, height: 844 }, { width: 1024, height: 900 }]) {
     const { page, errors, ctx } = await open(browser, await workflowPage("SWL"), size);
     const line = page.getByRole("region", { name: "Workflow" });
-    await expect(line).toHaveAttribute("data-orientation", "vertical");
-    const tracks = line.locator("path[data-track]");
+    await expect(line).toBeVisible();
+    const tracks = line.locator("g[data-track] path");
     await expect(tracks.first()).toBeAttached();
     // Each track's left edge, from the line's own left edge, in the page as drawn.
     const gaps = await line.evaluate((el) => {
       const left = el.getBoundingClientRect().left;
-      return [...el.querySelectorAll("path[data-track]")].map((p) => Math.round(p.getBoundingClientRect().left - left));
+      return [...el.querySelectorAll("g[data-track]")].filter((g) => g.childElementCount > 0).map((g) => Math.round(g.getBoundingClientRect().left - left));
     });
     expect(Math.min(...gaps), `${size.width}: ${gaps}`).toBeGreaterThanOrEqual(12);
     await page.screenshot({ path: `${liveShots}software-tracks-${size.width}.png`, animations: "disabled" });

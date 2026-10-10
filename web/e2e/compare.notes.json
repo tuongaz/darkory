@@ -1,50 +1,65 @@
 {
-  "page": [
-    "Kept: keys read SAM-n and times are seconds-to-minutes old, because the seed ran just now; the mockup's clock is 10:42:05 with yesterday's work.",
-    "Kept: Done reads '3 today' (the Card vault Subtask, the Breakdown, and the done Parent itself, all completed by the seed); the fixture has 1.",
-    "Kept: the agent row under Needs you is absent: with --runner=off no Runner session exists, so no session waits on SAM-4 (the fixture's reviewer nudged at 10:40).",
-    "Kept: the line band is about 30px taller than the mockup's, so the panels get about 300px instead of 334 and scroll inside.",
-    "Kept: medians read in seconds (the seed's Tasks left their Steps within seconds).",
-    "Fixed: medians read 'median now' for spans under 15s; a span that has ended now reads in seconds, never 'now'.",
-    "Fixed: the admin showed as a taker at every Step, because the seed granted them Big's Skills; Big's Tasks are now held by a human of Big alone.",
-    "Fixed: an Acceptance appeared under the Parent the moment its Breakdown ended (it was its only Subtask then); the seed now files the Subtasks first, as the fixture's story has it."
+  "vf-1": [
+    "Seed: Build reads 13 waiting where vf-1 has 1: DARK is the busy afternoon (vf-4's state), since one Install holds one DARK; DARKG1 carries the 1 waiting (DARK-23).",
+    "Seed: DARK-22 is a plain Subtask of DARK-20 at Plan titled 'Break down: …', not the Breakdown kind: a Breakdown takes the key after its Parent's, so it would read DARK-21.",
+    "Seed: medians are the seed's seconds (1s), Plan has none (no Task has left it yet), ages read 1m–2m; the fixture's clock cannot be set.",
+    "Decided (Task 1, log row 4): Plan's mark reads '● done → Done' where vf-1 draws '● Done': every mark reads outcome → target, as vf-2's own quiet '● done → Done' does.",
+    "Decided (plan, Tasks at a Step): a blocked held chip keeps the red 'blocked by DARK-27' line on the vf-4 chip, not vf-1's red-filled chip with a 'blocked' pill.",
+    "Left for the lead: row 1 keeps the shipped Filter · Edit · Delete (Delete spelled, off on a last Workflow with its reason); vf-1 draws Filter · Edit · an unlabelled ⋯.",
+    "Shipped: Needs you and What's happening sit under the line at 1440; the frame draws them as a cut line."
   ],
-  "selected": [
-    "Kept: SAM-12 reads 'Waiting', not 'Takeable': in this Install the admin has no review Skill, so Review's Tasks are not theirs to take (the fixture made tuongaz able to).",
-    "Kept: the callout sits under Review's tokens and over the line's right half, as in the mockup; it is narrower because the pills are tighter."
+  "vf-2": [
+    "Fixed 4e74ad1: the quiet row says each Step's Skill, median and takers (Retro ⌖ retro · RT), its marks without their fill, as vf-2.",
+    "Seed: the Project is DARKG1 'Darkory g1' (today's seed) with the same story under DARKG1-n keys; vf-2 draws it as Darkory."
   ],
-  "blocking": [
-    "Fixed: the Blocking view had no page padding inside the Workflow page (its own lab supplies one); the page now pads it.",
-    "Kept: the Blocking view is the Blocking builder's (DEP-2); the comparison of its inner layout is theirs to report."
+  "vf-3": [
+    "Decided (Task 1, log row 2): the '↗ Retrospective › Retro' chip at Done shows on Bug triage too (vf-3 was drawn on g1, where Implementation holds Retro).",
+    "Shipped: row 2 has no Blocking tab while nothing in the scope is blocked; vf-3 draws it."
   ],
-  "big-line": [
-    "Kept: the Loops list sits under the line, not in the right panel as d-11 draws it, because the right panel is What's happening now.",
-    "Kept: Big's Workflow has a Connector Backlog pass → Triage (the brief's list gives every Step a pass), so Backlog's segment is solid, not dotted."
+  "vf-4": [
+    "Decided (Task 2, log row 1): the list is oldest first; the seed filed DARK-28 first, so it heads the list as in vf-4, for the other reason. Ages are the seed's (1m each)."
   ],
-  "big-blocking": [
-    "Kept: as for the Sample Blocking view."
+  "vf-5": [
+    "Seed: ACME's Tasks carry made-up titles (the fixture names none); Plan's and Acceptance's are plain Tasks filed at those Steps.",
+    "Decided (plan, Tasks at a Step: one rule on every line): a held Task is a chip (holder · key · age); vf-5 draws 'TR 1 working' because the fixture names no ACME Task. Build's two chips and its count wrap in the 300px column.",
+    "Shipped: a Project of one Workflow names it in the crumb as text (Platform), with no picker chip; Delete is off with 'The last Workflow stays'."
   ],
-  "scope-menu": [
-    "Kept: Parents list SAM-1 (done, its Retrospective open) and SAM-7 with their open counts; Find a Task… lists Tasks only while typing."
+  "vf-6": [
+    "Seed: What's happening lists NEWS-1 … NEWS-36 dropped under the fixture's six: the seed files and drops them so NEWS-37 … NEWS-42 take the fixture's keys (likewise DARK-1 … 11, 23 to 25).",
+    "Seed: Legal shows a median (1s) because the seed moved Tasks through it; the fixture's Legal has none."
   ],
-  "parent-line": [
-    "Fixed: a branch Step's chip ('done → Done') ran past the box's left edge when the row was pushed left; it now drops below its Step when it cannot fit.",
-    "Kept: 1/6 done (the Breakdown) where the fixture says 1/5, because the seed also files 'Reaction analytics' under the Parent (the deps round's MAIN-18)."
+  "vf-7": [
+    "Fixed 4e74ad1: the station the selected Task is at is ringed (vf-7's Build).",
+    "Seed: Build's count reads 13 waiting where vf-7 has 1 (see vf-1).",
+    "Decided (plan, vf-7: 'the Connector hover is the shipped popover'): the hover is the line's one-sentence tip, 'Review → Build: when the holder says needs changes', not vf-7's two-line card; the hovered label is not outlined."
   ],
-  "subtask-peek": [
-    "Kept: the past token at Build reads seconds worked, the seed's real time."
+  "vf-8": [
+    "Seed: Implementation's Build reads 13 waiting where vf-8 has 1 (see vf-1), so its head reads 19 Tasks.",
+    "Decided (Task 4, log rows 1 and 4): Edit and ⋯ in each head; no scope chip or Filter on row 2.",
+    "Shipped: Retrospective's Done reads '0 today'; vf-8 draws a bare Done.",
+    "Shipped: Backlog's '⇢ Build' wraps under its row in the 300px column (the pills read a little wider than the frame's); nothing is cut."
   ],
-  "standalone": [
-    "Kept: the Acceptance pill on the standalone Task is the Project's default (Sample files Tasks with Acceptance on)."
+  "vf-9": [
+    "Fixed b86cb58 and 8e95b12: the Skill select carries the tag glyph (⌖ qa ⌄) and a name field is as wide as its name.",
+    "Decided (plan, Editing: 'the Changes chip's count … stays'): 4 changes, the draft model's count: QA added, Review · pass re-pointed to QA, QA · pass → Done added, QA · fail → Build added; vf-9's 3 was drawn without the model.",
+    "Decided (Task 5, log rows 1, 2, 3, 5, 7): the rail's outcome edited as fields under its station (pass → Review ⌄ ×, with 'Done undo' on a re-pointed one), the main-way dot beside each outcome of a Step with two or more, each Step's ⋯, Hold ⌄ for a Step without a Skill, the Workflow's name as a field above the line.",
+    "Shipped: while editing, the crumb names the Workflow as text, not vf-9's picker chip."
   ],
-  "editor": [
-    "Kept: the preview draws the line with Steps by name only; the mockup's dashed new Station appears only while a Step is being added."
+  "vf-10": [
+    "Seed: Build reads 13 waiting where vf-10 has 1 (see vf-1).",
+    "Fixed 16d396f: the scope chip reads 'All' on a phone where it read 'All …'; vf-10 draws no scope chip, and row 2 keeps it."
   ],
-  "inbox": [
-    "No mockup. Reads as expected for this data: the question with its Answer, the paused retro's Retrospective, Big's held Backlog Tasks."
+  "own-page": [
+    "The owner's MAIN shape (OWN, seeded): Build's, QA's and Review's tracks nest without a crossing; Acceptance stands in When a Parent ends as its own station, pass → Done and fail → Build as marks (Task 1, log row 3); no console error.",
+    "Fixed 4f6b31d (found on a live pickup, shot separately as own-live.png): a pickup's 'tester picked up · now' tag lay over the count beside its chip; it now stands in the row's flow and the next chip wraps."
   ],
-  "phone": [
-    "Fixed: the Line | Blocking | Text switch squeezed the breadcrumb to 'M / Wo…'; on a phone it is now one compact menu ('Line ▾').",
-    "Kept: '+1 more · SAM-3' where the mockup has '+2 more · MAIN-5, MAIN-14 · 1 agent waiting': no hold Task, no Runner session in this data."
+  "own-list": [
+    "One column, as wide as the page; its line is the page's own. Nothing overlaps or is cut."
+  ],
+  "own-page-phone": [
+    "Narrow: each Step's facts on their own row under its name; Review's two labels keep their targets ('↩ needs changes → Build', '↩ needs QA → QA') so they read apart, Build's lone '↪ no UI change' leaves it to its track (7997f9b); '⇢ Build' wraps under Backlog; the three tracks stay beside the rail. Nothing is cut."
+  ],
+  "own-list-phone": [
+    "The head reads grip · Implementation · 8 Tasks · Edit · ⋯ on one line; '+ Workflow' is its icon on row 2. Nothing is cut."
   ]
 }

@@ -34,11 +34,7 @@ export function TaskLine({ detail }: { detail: TaskDetail }) {
         all={data.all}
         hidden={data.scoped.hidden}
         trace={waits ? { ...data.trace, waitsFor: waits } : data.trace}
-        compactHeads
-        density="tokens"
-        verticalBelow={440}
         noBranch={!onBranch}
-        noLoops
         now={now}
         me={data.me}
       />

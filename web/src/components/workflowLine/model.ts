@@ -20,9 +20,17 @@ export type LineConnector = { id: string; from: string; to: string | null; name:
 /**
  * A Project's Workflows, every Step of them and every Connector, one into another Workflow's Step
  * too; and the Workflow the line draws (`drawn`, by id): its Steps on the line, another Workflow's
- * only where a Connector crosses (an exit, an entry). Every Step when unsaid.
+ * only where a Connector crosses (an exit, an entry). Every Step when unsaid. `placed`: Steps an
+ * editor keeps where it put them though nothing joins them yet (a new hold): on the main line
+ * ("main"), or "after", among the Steps a Parent's end files into; never parked beside the start.
  */
-export type LineWorkflow = { workflows: readonly LineWorkflowName[]; steps: readonly LineStep[]; connectors: readonly LineConnector[]; drawn?: string };
+export type LineWorkflow = {
+  workflows: readonly LineWorkflowName[];
+  steps: readonly LineStep[];
+  connectors: readonly LineConnector[];
+  drawn?: string;
+  placed?: ReadonlyMap<string, "main" | "after">;
+};
 
 /**
  * The Skills of the Steps where Darkory files what a Parent needs once its Subtasks end: they sit
@@ -73,7 +81,7 @@ export function stepsOf<S extends LineStep>(workflow: { workflows: readonly Line
 /**
  * The Workflow a line of the Project draws: of a Project of several, the one picked, else the
  * first by position; of a Project of one, none, picked or not, so it draws every Step as it always
- * has (the path the pinned layouts hold).
+ * has.
  */
 export function drawnWorkflow(workflow: { workflows: readonly LineWorkflowName[] }, picked?: string): string | undefined {
   if (workflow.workflows.length < 2) return undefined;
@@ -135,7 +143,8 @@ export function sideSteps(workflow: LineWorkflow): Sides {
   // Darkory files every Breakdown at the first Step carrying breakdown; any other is a Step like the rest.
   const first = inPosition(workflow).find((s) => s.skill?.name === breakdownSkill);
   const before = new Set(first && first.id !== start ? [first.id] : []);
-  const after = new Set(steps.filter((s) => !!s.skill && branchSkills.includes(s.skill.name)).map((s) => s.id));
+  const placed = workflow.placed ?? new Map<string, "main" | "after">();
+  const after = new Set(steps.filter((s) => (!!s.skill && branchSkills.includes(s.skill.name)) || placed.get(s.id) === "after").map((s) => s.id));
   const side = (id: string) => before.has(id) || after.has(id);
   for (let changed = true; changed; ) {
     changed = false;
@@ -148,7 +157,7 @@ export function sideSteps(workflow: LineWorkflow): Sides {
     }
   }
   const joined = new Set(workflow.connectors.flatMap((c) => (c.to === null ? [c.from] : [c.from, c.to])));
-  const holds = new Set(steps.filter((s) => isHoldStep(s) && !joined.has(s.id)).map((s) => s.id));
+  const holds = new Set(steps.filter((s) => isHoldStep(s) && !joined.has(s.id) && !placed.has(s.id)).map((s) => s.id));
   return { start, before, after, holds };
 }
 
@@ -236,3 +245,28 @@ export function blockedBy(t: LineTask): string | undefined {
   return t.blockers.length === 1 ? `by ${t.blockers[0].key}` : `by ${t.blockers.length}`;
 }
 
+/** "blocked by DARK-27", "blocked by 2": a chip's red words, held or not. */
+export function blockedWords(t: LineTask): string | undefined {
+  if (t.blockers.length === 0 || t.done) return undefined;
+  return t.blockers.length === 1 ? `blocked by ${t.blockers[0].key}` : `blocked by ${t.blockers.length}`;
+}
+
+/** The Skill whose Step a Parent's end files its Retrospective at. */
+const RETRO_SKILL = "retro";
+
+/**
+ * Where a Parent's end files its Retrospective ("Retrospective › Retro"), drawn at Done, when the
+ * Workflow drawn (`drawn`, of a Project of several) does not hold the Project's retro Step itself.
+ */
+export function retroAt<S extends { workflow_id: string; name: string }>(
+  steps: readonly S[],
+  drawn: string | undefined,
+  skillOf: (s: S) => string | undefined,
+  workflowName: (id: string) => string | undefined,
+): string | undefined {
+  const isRetro = (s: S) => skillOf(s) === RETRO_SKILL;
+  if (drawn === undefined || steps.some((s) => s.workflow_id === drawn && isRetro(s))) return undefined;
+  const s = steps.find(isRetro);
+  const w = s && workflowName(s.workflow_id);
+  return s && w ? `${w} › ${s.name}` : undefined;
+}

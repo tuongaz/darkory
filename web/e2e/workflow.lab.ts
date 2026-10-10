@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { emit, mockV1 } from "./workflowMock";
+import { emit, mockV1, threeWorkflows } from "./workflowMock";
 
 // The Workflow screens under `vite dev` with a mocked /v1 (`npm run lab`): the live canvas and a
 // Step's peek, the text view, and the list editor (F5a–c of frag-d), at desktop and phone sizes in
@@ -42,29 +42,48 @@ for (const scheme of ["light", "dark"] as const) {
       await page.waitForTimeout(400);
       await noSidewaysScroll(page);
       await shot(page, `live-${tag}`);
+      if (size.name === "phone") {
+        // A phone reads the line first, then Needs you, then What's happening (vf-10).
+        const tops = await Promise.all([live, page.getByRole("region", { name: "Needs you" }), page.getByRole("region", { name: "What's happening" })].map((l) => l.evaluate((el) => el.getBoundingClientRect().top)));
+        expect(tops).toEqual([...tops].sort((a, b) => a - b));
+        // The line's foot and the panels under it.
+        await page.getByRole("region", { name: "Needs you" }).scrollIntoViewIfNeeded();
+        await shot(page, `live-${tag}-panels`);
+        await live.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      }
+
+      // The rail and a return track say what they mean on hover: nothing drawn over them takes the pointer.
+      // (A line is a zero-width box to Playwright, so the pointer goes to its middle by hand.)
+      const pointAt = async (selector: string) => {
+        const b = await live.locator(selector).first().evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        });
+        await page.mouse.move(b.x, b.y);
+      };
+      await pointAt('svg path[data-hint^="Build → QA"]');
+      await expect(page.getByRole("tooltip")).toHaveText("Build → QA: when the holder says pass");
+      await pointAt('svg path[data-connectors][data-hint*="when the holder says needs changes"]');
+      await expect(page.getByRole("tooltip")).toContainText("when the holder says needs changes");
+      await page.mouse.move(0, 0);
 
       // Text view: the same switch at every size.
       await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Text" }).click();
-      await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+      await expect(page.getByRole("list", { name: "Steps", exact: true })).toBeVisible();
       await noSidewaysScroll(page);
       await shot(page, `live-text-${tag}`);
 
-      // Editing: the list beside the picked Step's panel, the line above (on a phone, the line behind its toggle).
+      // Editing: the draft on the line, its fields in place (vf-9).
       await page.goto("/projects/WEB/workflows/wf-work/edit");
-      await expect(page.getByRole("list", { name: "Steps" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "The line, editing" })).toBeVisible();
       await page.waitForTimeout(300);
       await noSidewaysScroll(page);
       await shot(page, `edit-${tag}`);
-      if (size.name === "phone") {
-        await page.getByRole("button", { name: "Show the line" }).click();
-        await shot(page, `edit-line-${tag}`);
-      }
 
-      // F5a: a Step added after Review from its panel's menu, named, its Skill picker open on a Skill that does not exist.
-      await page.getByRole("list", { name: "Steps" }).getByRole("button", { name: /^\d+\. Review$/ }).click();
+      // F5a: a Step added after Review from its menu, named, its Skill picker open on a Skill that does not exist.
       await page.getByRole("button", { name: "More for Review" }).click();
       await page.getByRole("menuitem", { name: "Add Step after Review" }).click();
-      await page.getByRole("textbox", { name: "Name of Step 6" }).fill("Security review");
+      await page.getByRole("textbox", { name: "Name of the new Step" }).fill("Security review");
       await page.getByRole("combobox", { name: "Skill of Security review" }).click();
       await page.getByPlaceholder("Find or name a Skill").fill("security");
       await page.waitForTimeout(200);
@@ -108,6 +127,38 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
+// The Workflows list (vf-8): each Workflow its own line, side by side; three to a row at 1184,
+// stacked on a phone, with no sideways scroll; the strip of a selected Task in its own column.
+for (const size of [{ name: "1184", width: 1184, height: 900 }, { name: "1440", width: 1440, height: 900 }, { name: "phone", width: 390, height: 844 }] as const) {
+  test(`the Workflows list, ${size.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await mockV1(page, "ada", { workflow: threeWorkflows });
+    await page.goto("/projects/WEB/workflows");
+    const list = page.getByRole("list", { name: "Workflows", exact: true });
+    await expect(list.locator(":scope > li")).toHaveCount(3);
+    await expect(list.locator(':scope > li[aria-label="Implementation"] button[data-task="WEB-5"]')).toBeVisible();
+    await page.waitForTimeout(300);
+    await noSidewaysScroll(page);
+    const boxes = await list.locator(":scope > li").evaluateAll((lis) => lis.map((li) => li.getBoundingClientRect().toJSON() as DOMRect));
+    if (size.name === "phone") expect(boxes.every((b) => b.x === boxes[0].x)).toBe(true);
+    else expect(boxes.every((b) => b.y === boxes[0].y)).toBe(true);
+    // A name is never cut: "Retrospective" whole, its count under it when both do not fit.
+    for (const n of ["Implementation", "Bug triage", "Retrospective"]) {
+      const name = list.locator(`:scope > li[aria-label="${n}"]`).getByRole("link", { name: n, exact: true });
+      expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth), n).toBe(true);
+    }
+    await shot(page, `list-${size.name}`);
+    await list.locator(':scope > li[aria-label="Implementation"] button[data-task="WEB-5"]').click();
+    await expect(page.getByRole("region", { name: "WEB-5's way" })).toHaveCount(1);
+    await noSidewaysScroll(page);
+    await shot(page, `list-selected-${size.name}`);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
 test("editing: nothing is sent until Save; then the new Skill, then one PUT", async ({ page }) => {
   const errors = watchErrors(page);
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -115,33 +166,66 @@ test("editing: nothing is sent until Save; then the new Skill, then one PUT", as
   const writes: string[] = [];
   page.on("request", (r) => r.method() !== "GET" && r.url().includes("/v1/") && writes.push(`${r.method()} ${new URL(r.url()).pathname}`));
   await page.goto("/projects/WEB/workflows/wf-work/edit?step=st-qa");
-  const name = page.getByRole("textbox", { name: "Name of Step 4" });
+  const name = page.getByRole("textbox", { name: "Name of QA" });
   await expect(name).toBeFocused();
   await name.fill("Test");
-  await expect(page.getByText("Editing · 1 change")).toBeVisible();
-  // Alt+↓ on its row moves it after Review, and keeps the focus.
-  await page.getByRole("button", { name: "4. Test" }).press("Alt+ArrowDown");
-  await expect(page.getByRole("listitem", { name: "5. Test" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "5. Test" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "1 change: list them" })).toBeVisible();
+  const rail = page.getByRole("list", { name: "Steps on the line" });
+  const order = () => rail.locator(":scope > li").evaluateAll((els) => els.map((el) => el.getAttribute("data-head")));
+  // Alt+↓ on its grip moves it after Review, and keeps the focus.
+  await page.getByRole("button", { name: /^Move Test/ }).press("Alt+ArrowDown");
+  await expect.poll(order).toEqual(["Build", "Review", "Test", "Done"]);
+  await expect(page.getByRole("button", { name: /^Move Test/ })).toBeFocused();
   await page.getByRole("combobox", { name: "Skill of Test" }).click();
   await page.getByPlaceholder("Find or name a Skill").fill("testing");
   await page.getByRole("option", { name: /New Skill “testing”/ }).click();
   await page.getByRole("dialog").getByRole("textbox", { name: "Text" }).fill("Test it.");
   await page.getByRole("dialog").getByRole("button", { name: "Use this Skill" }).click();
   // Its grip dragged onto Build's row: it lands in Build's place.
-  await page.getByRole("listitem", { name: "5. Test" }).hover();
-  const grip = await page.getByRole("button", { name: /^Reorder Test/ }).boundingBox();
-  const build = await page.getByRole("listitem", { name: "3. Build" }).boundingBox();
+  const grip = await page.getByRole("button", { name: /^Move Test/ }).boundingBox();
+  const build = await page.getByRole("textbox", { name: "Name of Build" }).boundingBox();
   await page.mouse.move(grip!.x + grip!.width / 2, grip!.y + grip!.height / 2);
   await page.mouse.down();
   await page.mouse.move(grip!.x + 4, grip!.y - 10, { steps: 4 });
   await page.mouse.move(grip!.x + 4, build!.y + 6, { steps: 12 });
   await page.mouse.up();
-  await expect(page.getByRole("listitem", { name: "3. Test" })).toBeVisible();
-  await expect(page.getByRole("listitem", { name: "4. Build" })).toBeVisible();
+  await expect.poll(order).toEqual(["Test", "Build", "Review", "Done"]);
   expect(writes).toEqual([]);
   await page.getByRole("button", { name: "Save" }).click();
-  await expect.poll(() => writes).toEqual(["POST /v1/skills", "PUT /v1/projects/WEB/workflow"]);
+  // The new Skill rides in the Workflow's one PUT (since dfaecb4): no POST /v1/skills.
+  await expect.poll(() => writes).toEqual(["PUT /v1/projects/WEB/workflow"]);
+  expect(errors).toEqual([]);
+});
+
+// vf-9: a Step added after Review on the line, its Skill picked, its way back to Build, Review's
+// pass led into it; the changes in the changed colour, the name in focus.
+test("editing on the line, vf-9", async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await mockV1(page);
+  await page.goto("/projects/WEB/workflows/wf-work/edit");
+  await page.getByRole("button", { name: "Add a Step at the end of the line" }).click();
+  await page.getByRole("textbox", { name: "Name of the new Step" }).fill("Verify");
+  await page.getByRole("combobox", { name: "Skill of Verify" }).click();
+  await page.getByRole("option", { name: /^qa/ }).click();
+  await page.getByRole("button", { name: "Add an outcome out of Verify" }).click();
+  await page.getByRole("textbox", { name: "Outcome out of Verify" }).fill("fail");
+  await page.getByRole("combobox", { name: "Where fail out of Verify leads" }).click();
+  await page.getByRole("option", { name: "Build", exact: true }).click();
+  await page.getByRole("combobox", { name: "Where pass out of Review leads" }).click();
+  await page.getByRole("option", { name: "Verify", exact: true }).click();
+  // The editor's line says what a track means on hover, as the live line does.
+  const track = await page.locator('[data-line-root] svg path[data-connectors][data-hint*="when the holder says fail"]').first().evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(track.x, track.y);
+  await expect(page.getByRole("tooltip")).toContainText("when the holder says fail");
+  await page.mouse.move(0, 0);
+  await page.getByRole("textbox", { name: "Name of Verify" }).focus();
+  await page.waitForTimeout(300);
+  await noSidewaysScroll(page);
+  await shot(page, "edit-vf9");
   expect(errors).toEqual([]);
 });
 
@@ -161,6 +245,72 @@ const claimOf = (n: number, holder: string) => ({
   session_id: `sess-live-${n}`,
   started_at: new Date().toISOString(),
 });
+
+// A busy Build (vf-4, fixture.json's projects.DARK.busy): one held chip and "13 waiting ›"; a
+// click opens Build's list in place, oldest first, five, then "8 more Tasks"; Escape closes it.
+for (const size of sizes) {
+  test(`a busy Step, ${size.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await mockV1(page, "ada", { busy: true });
+    await page.goto("/projects/WEB/workflows/wf-work");
+    const live = page.getByRole("region", { name: "Workflow", exact: true });
+    const build = live.locator('li[data-station="st-build"]');
+    const count = live.getByRole("button", { name: "Build: 13 Tasks waiting" });
+    await expect(count).toHaveText("13 waiting›");
+    await expect(build.locator("[data-tasks] button[data-task]")).toHaveCount(1);
+    await page.waitForTimeout(300);
+    await shot(page, `busy-closed-${size.name}`);
+    const qa = await live.locator('li[data-station="st-qa"]').boundingBox();
+    await count.click();
+    const list = live.getByRole("group", { name: "Build · 13 waiting" });
+    await expect(list.getByRole("button")).toHaveCount(5);
+    await expect(list.getByRole("button").first()).toContainText("WEB-40");
+    await expect(list.getByRole("link", { name: "8 more Tasks" })).toHaveAttribute("href", "/projects/WEB/tasks?filter.tasks=step%3Ais%3Ast-build");
+    // A click moves the rows below down, and the rail follows them.
+    const moved = await live.locator('li[data-station="st-qa"]').boundingBox();
+    expect(moved!.y).toBeGreaterThan(qa!.y + 100);
+    await page.waitForTimeout(300);
+    const dot = await live.locator('circle[data-dot="st-qa"]').boundingBox();
+    expect(Math.abs(dot!.y + dot!.height / 2 - (moved!.y + 21))).toBeLessThan(8);
+    await noSidewaysScroll(page);
+    await shot(page, `busy-open-${size.name}`);
+    await page.keyboard.press("Escape");
+    await expect(list).toHaveCount(0);
+    await expect(count).toBeFocused();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
+// A selected Task (vf-7): a click on builder-1's WEB-5 puts its way in a strip above the line and
+// takes the focus there; the other Tasks and the counts fade; × clears it and the focus is back on
+// the chip. On a phone the strip stacks.
+for (const size of sizes) {
+  test(`a selected Task, ${size.name}`, async ({ browser }) => {
+    const context = await browser.newContext({ viewport: { width: size.width, height: size.height }, deviceScaleFactor: 2 });
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await mockV1(page);
+    await page.goto("/projects/WEB/workflows/wf-work");
+    const live = page.getByRole("region", { name: "Workflow", exact: true });
+    const chip = live.locator('[data-box="token"][data-task="WEB-5"]');
+    await chip.click();
+    const strip = live.getByRole("region", { name: "WEB-5's way" });
+    await expect(strip).toContainText("next: pass → QA");
+    await expect(strip.getByRole("button", { name: "Open WEB-5" })).toBeFocused();
+    await expect(live.locator('[data-box="token"][data-task="WEB-6"]').locator("xpath=..")).toHaveAttribute("data-dim", "");
+    await page.waitForTimeout(300);
+    await noSidewaysScroll(page);
+    await shot(page, `selected-${size.name}`);
+    await strip.getByRole("button", { name: "Clear" }).click();
+    await expect(strip).toHaveCount(0);
+    await expect(chip).toBeFocused();
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
 
 // The live line as things happen: a pickup reads "now" with its tag, a Task travels its Connector
 // (shot mid-way) and lands, a lapse is tagged; in light and dark, at a phone's size, and with
@@ -210,7 +360,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     // The text view lists each Step's Tasks.
     await page.getByRole("button", { name: "Text" }).click();
-    const steps = page.getByRole("list", { name: "Steps" });
+    const steps = page.getByRole("list", { name: "Steps", exact: true });
     await expect(steps.getByRole("list", { name: "Tasks at Build" })).toContainText("WEB-7");
     await shot(page, `live-moments-7-text-${scheme}`);
 
@@ -219,13 +369,13 @@ for (const scheme of ["light", "dark"] as const) {
   });
 }
 
-test("live moments, phone: the line runs down the page and a pickup reads now", async ({ browser }) => {
+test("live moments, phone: the line fits 390 and a pickup reads now", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const page = await context.newPage();
   const errors = watchErrors(page);
   const { tasks } = await mockV1(page);
   await page.goto("/projects/WEB/workflows/wf-work");
-  await expect(page.getByRole("region", { name: "Workflow", exact: true })).toHaveAttribute("data-orientation", "vertical");
+  await expect(page.getByRole("region", { name: "Workflow", exact: true })).toBeVisible();
   tasks.find((t) => t.id === "k-7")!.claim = claimOf(7, "m-builder-1");
   await emit(page, entryAt(60, "task.claimed", "k-7", "m-builder-1", { step_id: "st-build" }));
   await expect(token(page, "WEB-7")).toContainText("now");

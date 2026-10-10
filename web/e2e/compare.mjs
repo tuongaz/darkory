@@ -1,22 +1,43 @@
-// Shoots a seeded Install (scripts/seed-sample.sh) screen by screen and lays each shot beside the
-// approved mockup it was built from, in one page: e2e/screenshots/compare/index.html.
+// Shoots a seeded Install (scripts/seed-fixture.mjs) frame by frame and lays each shot beside the
+// final design's frame it answers (vf-1 … vf-10), in one page: e2e/screenshots/compare/index.html.
 //
-//   DARKORY_URL=http://127.0.0.1:7791 DARKORY_TOKEN=dk_... node e2e/compare.mjs
+// The runbook, from the worktree's root (never the owner's .dev, never port 7357):
 //
-// The token is the seeding admin's; the shots are taken signed in as them. Mockups are read from
-// MOCKUPS (default: ../../mock-workflow/shots beside this worktree). What differs and why stays is
-// written under each pair from NOTES below, which a reviewer keeps up to date.
+//   (cd web && npm run build)                        # the app the binary embeds (web/embed.go)
+//   go build -o bin/darkory ./cmd/darkory            # always -o: never a binary at the root
+//   S=<scratchpad>/compare-install && rm -rf "$S"
+//   bin/darkory init --data "$S" --org Sacca --name "Tuong Le" --no-agents > "$S.init.txt"
+//   export DARKORY_TOKEN=$(awk '/^Token for/{getline; print $1}' "$S.init.txt")
+//   PORT=$(python3 -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+//   bin/darkory serve --data "$S" --listen 127.0.0.1:$PORT --runner=off --no-browser --no-update-check &
+//   export DARKORY_URL=http://127.0.0.1:$PORT
+//   node scripts/seed-fixture.mjs                    # prints each Project's counts per Step and the keys it filed
+//   (cd web && MOCKUPS=<the wf-round>/dir-e node e2e/compare.mjs)   # writes e2e/screenshots/compare/index.html
+//
+// The token is the seeding admin's; the shots are taken signed in as them (it writes a login link,
+// so it refuses port 7357 and an Install with Projects the seed did not make, as the seed does).
+// Mockups are read from MOCKUPS, the folder holding the final design's vf-1.png … vf-10.png
+// (the wf-round's dir-e), which must be set. What differs and why it stays
+// is written under each pair from compare.notes.json, keyed by frame, which a reviewer keeps up to
+// date.
 import { chromium } from "@playwright/test";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, "screenshots", "compare");
-const mockups = process.env.MOCKUPS ?? join(here, "..", "..", "..", "mock-workflow", "shots");
+/** Stops with one line saying why. */
+function refuse(why) {
+  console.error(`compare.mjs: ${why}`);
+  process.exit(1);
+}
+const mockups = process.env.MOCKUPS ?? "";
+if (!mockups || !existsSync(join(mockups, "vf-1.png"))) refuse("set MOCKUPS to the mockup folder holding vf-1.png … vf-10.png (the wf-round's dir-e)");
 const base = (process.env.DARKORY_URL ?? "").replace(/\/$/, "");
 const token = process.env.DARKORY_TOKEN ?? "";
-if (!base || !token) throw new Error("set DARKORY_URL and DARKORY_TOKEN");
+if (!base || !token) refuse("set DARKORY_URL and DARKORY_TOKEN");
+if (new URL(base).port === "7357") refuse("7357 is the owner's make dev; shoot a scratch Install on another port");
 
 async function v1(method, path, body) {
   const res = await fetch(`${base}${path}`, {
@@ -29,55 +50,83 @@ async function v1(method, path, body) {
 }
 
 const me = (await v1("GET", "/v1/me")).member;
-const open = (await v1("GET", "/v1/tasks?project=SAM&state=open")).items;
-const byTitle = (t) => open.find((x) => x.title === t)?.key;
-const keys = {
-  exportReactions: byTitle("Export reactions"),
-  emoji: byTitle("Emoji reactions on support messages"),
-  picker: byTitle("Reaction picker on a message"),
-  abn: byTitle("Invoice PDF shows the wrong ABN"),
-};
+// The Projects scripts/seed-fixture.mjs makes: anything else is a real Install, never written to.
+const ours = ["MAIN", "DARK", "DARKG1", "NEWS", "ACME", "OWN"];
+const foreign = ((await v1("GET", "/v1/projects")).items ?? []).filter((p) => !ours.includes(p.key)).map((p) => p.key);
+if (foreign.length) refuse(`this Install has Projects the seed did not make (${foreign.join(", ")}); shoot a freshly seeded one`);
 
-/** A Project's first Workflow's page (`/projects/:key/workflows/:id`): the line is one Workflow's, the list's address only lists them. */
-async function firstWorkflow(key) {
+/** A Workflow's page (`/projects/:key/workflows/:id`), by the Workflow's name. */
+async function workflow(key, name) {
   const { workflows } = await v1("GET", `/v1/projects/${key}/workflow`);
-  const first = [...workflows].sort((a, b) => a.position - b.position)[0];
-  if (!first) throw new Error(`${key} has no Workflow`);
-  return `/projects/${key}/workflows/${first.id}`;
+  const w = workflows.find((x) => x.name === name);
+  if (!w) throw new Error(`${key} has no Workflow ${name}`);
+  return `/projects/${key}/workflows/${w.id}`;
 }
-const sam = await firstWorkflow("SAM");
-const big = await firstWorkflow("BIG");
+const dark = await workflow("DARK", "Implementation");
+const darkG1 = await workflow("DARKG1", "Implementation");
+const bugs = await workflow("DARK", "Bug triage");
+const acme = await workflow("ACME", "Platform");
+const news = await workflow("NEWS", "Editorial");
+const own = await workflow("OWN", "Implementation");
 
-/** Each screen: its name, the mockup it answers, the size, how to reach it, and what stays different. */
+/** Each frame: its mockup (vf-N.png), the size, how to reach it. */
 const screens = [
-  { name: "page", mock: "r2-final-1.png", size: "desktop", go: sam },
+  { name: "vf-1", size: "desktop", go: dark },
+  { name: "vf-2", size: "desktop", go: darkG1 },
+  { name: "vf-3", size: "desktop", go: bugs },
   {
-    name: "selected",
-    mock: "r2-final-2.png",
+    name: "vf-4",
     size: "desktop",
-    go: sam,
-    act: async (page) => page.locator(`button[data-task="${keys.exportReactions}"]`).click(),
+    go: dark,
+    // Build's count, a control that opens the Step's list in place.
+    act: async (page) => page.getByRole("button", { name: "Build: 13 Tasks waiting" }).click(),
   },
-  { name: "blocking", mock: "r2-deps-6.png", size: "desktop", go: `${sam}?view=blocking` },
-  { name: "big-line", mock: "d-11.png", size: "desktop", go: big },
-  { name: "big-blocking", mock: "r2-deps-8.png", size: "desktop", go: `${big}?view=blocking` },
+  { name: "vf-5", size: "desktop", go: acme },
+  { name: "vf-6", size: "desktop", go: news },
   {
-    name: "scope-menu",
-    mock: "r2-scope-6.png",
+    name: "vf-7",
     size: "desktop",
-    go: sam,
+    go: dark,
+    // DARK-21's held chip; the strip "DARK-21's way" comes above the line.
     act: async (page) => {
-      // The ScopeChip's button, named "Scope: <what the line shows>".
-      await page.getByRole("button", { name: /^Scope: / }).click();
-      await page.getByRole("option", { name: new RegExp(keys.emoji) }).hover();
+      await page.locator('button[data-task="DARK-21"]').first().click();
+      await page.getByText("DARK-21's way").waitFor();
+      // The Connector hover, as vf-7 draws it on Review's needs changes.
+      await page.locator("[data-return]", { hasText: "needs changes" }).first().hover();
     },
   },
-  { name: "parent-line", mock: "r2-scope-3.png", size: "desktop", go: `/tasks/${keys.emoji}?view=line` },
-  { name: "subtask-peek", mock: "r2-scope-4.png", size: "desktop", go: `/projects/SAM/tasks?view=board&task=${keys.picker}` },
-  { name: "standalone", mock: "r2-scope-5.png", size: "desktop", go: `/tasks/${keys.abn}` },
-  { name: "editor", mock: "d-6.png", size: "desktop", go: `${sam}/edit` },
-  { name: "inbox", mock: null, size: "desktop", go: "/inbox" },
-  { name: "phone", mock: "r2-final-5.png", size: "phone", go: sam },
+  { name: "vf-8", size: "desktop", go: "/projects/DARK/workflows" },
+  {
+    name: "vf-9",
+    size: "desktop",
+    go: `${dark}/edit`,
+    // QA added after Review, unsaved: Review's pass → QA; QA pass → Done, fail → Build.
+    act: async (page) => {
+      await page.getByRole("button", { name: "More for Review" }).click();
+      await page.getByRole("menuitem", { name: "Add Step after Review" }).click();
+      await page.getByRole("textbox", { name: "Name of the new Step" }).fill("QA");
+      await page.getByRole("combobox", { name: "Skill of QA" }).click();
+      await page.getByPlaceholder("Find or name a Skill").fill("qa");
+      await page.getByRole("option", { name: /^qa/ }).click();
+      const lead = async (outcome, from, to) => {
+        await page.getByRole("combobox", { name: `Where ${outcome} out of ${from} leads` }).click();
+        await page.getByRole("option", { name: to, exact: true }).click();
+      };
+      await lead("pass", "Review", "QA");
+      for (const [outcome, to] of [["pass", "Done"], ["fail", "Build"]]) {
+        await page.getByRole("button", { name: "Add an outcome out of QA" }).click();
+        await page.getByRole("textbox", { name: "Outcome out of QA" }).fill(outcome);
+        await lead(outcome, "QA", to);
+      }
+      await page.mouse.move(0, 0);
+    },
+  },
+  { name: "vf-10", size: "phone", go: dark },
+  // No frame: the owner's own MAIN shape (8 Steps, QA's and Acceptance's loops), read for breakage.
+  { name: "own-page", size: "desktop", go: own },
+  { name: "own-list", size: "desktop", go: "/projects/OWN/workflows" },
+  { name: "own-page-phone", size: "phone", go: own },
+  { name: "own-list-phone", size: "phone", go: "/projects/OWN/workflows" },
 ];
 
 const sizes = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
@@ -85,7 +134,7 @@ mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();
 const shots = [];
 for (const size of ["desktop", "phone"]) {
-  const ctx = await browser.newContext({ viewport: sizes[size], deviceScaleFactor: 2, colorScheme: "light" });
+  const ctx = await browser.newContext({ viewport: sizes[size], deviceScaleFactor: 1, colorScheme: "light" });
   const page = await ctx.newPage();
   const errors = [];
   page.on("console", (m) => m.type() === "error" && !m.text().startsWith("WebSocket connection") && errors.push(m.text()));
@@ -102,17 +151,21 @@ for (const size of ["desktop", "phone"]) {
       await page.waitForTimeout(500);
     }
     await page.screenshot({ path: join(out, `${s.name}.png`) });
-    if (s.mock && existsSync(join(mockups, s.mock))) copyFileSync(join(mockups, s.mock), join(out, `mock-${s.mock}`));
-    shots.push({ ...s, errors: [...errors] });
+    const mock = `${s.name}.png`;
+    const hasMock = existsSync(join(mockups, mock));
+    if (hasMock) copyFileSync(join(mockups, mock), join(out, `mock-${mock}`));
+    shots.push({ ...s, mock: hasMock ? mock : null, errors: [...errors] });
     errors.length = 0;
   }
   await ctx.close();
 }
 await browser.close();
+shots.sort((a, b) => screens.indexOf(screens.find((x) => x.name === a.name)) - screens.indexOf(screens.find((x) => x.name === b.name)));
 
-const NOTES = existsSync(join(here, "compare.notes.json")) ? JSON.parse((await import("node:fs")).readFileSync(join(here, "compare.notes.json"), "utf8")) : {};
+const notesFile = join(here, "compare.notes.json");
+const NOTES = existsSync(notesFile) ? JSON.parse(readFileSync(notesFile, "utf8")) : {};
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-const html = `<!doctype html><meta charset="utf-8"><title>Workflow line vs mockups</title>
+const html = `<!doctype html><meta charset="utf-8"><title>Workflow page vs vf frames</title>
 <style>
   body{font:14px/1.5 system-ui,sans-serif;margin:24px;color:#222;background:#fafafa}
   h1{font-size:20px} h2{font-size:16px;margin:36px 0 8px}
@@ -122,17 +175,17 @@ const html = `<!doctype html><meta charset="utf-8"><title>Workflow line vs mocku
   figcaption{font-size:12px;color:#666;margin-top:4px}
   ul{margin:8px 0 0 18px} .err{color:#b00}
 </style>
-<h1>The Workflow line against the approved mockups</h1>
-<p>Left: the seeded Install (scripts/seed-sample.sh), ${esc(new Date().toISOString())}. Right: the mockup. Keys read SAM-n where the fixture has MAIN-n; times are relative to when the seed ran.</p>
+<h1>The Workflow page against the final design (vf-1 … vf-10)</h1>
+<p>Left: the seeded Install (scripts/seed-fixture.mjs from e2e/fixture/workflow-reads.json), ${esc(new Date().toISOString())}. Right: the frame. Ages and medians are the seed's own seconds; the fixture's clock (Fri 10 Oct 14:30 AEDT) cannot be set.</p>
 ${shots
   .map(
-    (s) => `<h2>${esc(s.name)}${s.mock ? ` · ${esc(s.mock)}` : ""}</h2>
+    (s) => `<h2>${esc(s.name)}</h2>
 <div class="pair ${s.size}">
   <figure><img src="${esc(s.name)}.png"><figcaption>Real, ${esc(s.size)}</figcaption></figure>
-  ${s.mock ? `<figure><img src="mock-${esc(s.mock)}"><figcaption>Mockup</figcaption></figure>` : "<figure><figcaption>No mockup: the shipped Inbox, for its words about this data.</figcaption></figure>"}
+  ${s.mock ? `<figure><img src="mock-${esc(s.mock)}"><figcaption>Mockup</figcaption></figure>` : `<figure><figcaption>No frame draws this one.</figcaption></figure>`}
 </div>
 ${s.errors.length ? `<p class="err">Console errors: ${esc(s.errors.join(" | "))}</p>` : ""}
-${NOTES[s.name] ? `<ul>${NOTES[s.name].map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}`,
+${NOTES[s.name]?.length ? `<ul>${NOTES[s.name].map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}`,
   )
   .join("\n")}`;
 writeFileSync(join(out, "index.html"), html);

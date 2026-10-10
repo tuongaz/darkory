@@ -1,19 +1,19 @@
-import { useCallback, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useMemo, useState } from "react";
 import type { Project, Task } from "@/api/client";
 import { useLiveEntries } from "@/api/live";
 import { useMembers } from "@/api/queries";
-import { peekParam } from "@/app/peek";
+import { projectPath } from "@/app/currentProject";
+import { stepFilterSearch, type FilterPill } from "@/components/filters/filterState";
 import { Refusal } from "@/components/Refusal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { BlockingView } from "@/components/workflow/blocking";
-import { useLineData, WorkflowLine, type Chain, type LineData } from "@/components/workflowLine";
+import { scopePills, useLineData, WorkflowLine, type LineData } from "@/components/workflowLine";
 import { branchSkills } from "@/components/workflowLine/model";
 import { useNow } from "@/clock";
-import { AnswerButton, ClaimButton } from "@/screens/inbox/parts";
 import { lineText, onDrawnLine, trailLine, type FlowContext } from "./flowEvents";
 import { LineText } from "./LineText";
+import { useFirstMove, useOpenTask } from "./lineMoves";
 import type { LineView } from "./lineView";
 import { NeedsYouPanel, StoriesPanel, useStoriesQuiet } from "./panels";
 import { useLiveFlow, useReducedMotion } from "./useLiveFlow";
@@ -32,6 +32,7 @@ export function LiveWorkflow({
   scope,
   onView,
   filter,
+  pills,
 }: {
   project: Project;
   /** The Workflow drawn, of a Project of several (`usePickedWorkflow`); the first when unsaid. */
@@ -41,21 +42,14 @@ export function LiveWorkflow({
   onView?: (v: LineView) => void;
   /** The Filter bar's test: Tasks it leaves out leave the line, counted into their Step's "+N". */
   filter?: (task: Task) => boolean;
+  /** The Filter's pills `filter` applies: what a Step's list link carries on to the Tasks list. */
+  pills?: readonly FilterPill[];
 }) {
   const { data, error } = useLineData(project.key, workflowId, scope, filter);
   // Of a Project of several Workflows the page is the drawn one's: its panels list its Tasks.
   const shown = data?.shown;
   const now = useNow();
-  const [, setParams] = useSearchParams();
-  const openTask = useCallback(
-    (key: string) =>
-      setParams((p) => {
-        const next = new URLSearchParams(p);
-        next.set(peekParam, key);
-        return next;
-      }),
-    [setParams],
-  );
+  const openTask = useOpenTask();
   const [selected, setSelected] = useState<string | null>(null);
   const [ringed, setRinged] = useState<string | null>(null);
   const quiet = useStoriesQuiet(project, shown);
@@ -92,18 +86,18 @@ export function LiveWorkflow({
     );
   }
   return (
-    // A phone reads it top to bottom: Needs you, the line, What's happening. Wider, the line sits
-    // on top and the panels side by side under it; when nothing has happened lately What's
-    // happening folds to one line over Needs you, which takes the full width. The line is never
-    // cut: when it and its Loops list leave the panels less than their 280px, the page scrolls.
+    // A phone reads it top to bottom: the line, then Needs you, then What's happening (vf-10).
+    // Wider, the line sits on top and the panels side by side under it; when nothing has happened
+    // lately What's happening folds to one line over Needs you, which takes the full width. The
+    // line is never cut: when it leaves the panels less than their 280px, the page scrolls.
     <div className="flex min-h-0 flex-1 flex-col overflow-auto lg:grid lg:grid-rows-[auto_minmax(280px,1fr)]">
-      <div className="order-2 flex-none px-2 pt-2 sm:px-5 lg:order-none lg:px-5">
-        <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} />
+      <div className="flex-none px-2 pt-2 pb-2 sm:px-5 lg:px-5 lg:pb-0">
+        <LiveLine project={project} data={data} now={now} selected={selected} onSelect={setSelected} ringed={ringed} onOpenTask={openTask} pills={pills} />
       </div>
       {/* One tree whether quiet or not, so neither panel remounts when What's happening folds. */}
       <div className={cn("contents lg:grid lg:min-h-0 lg:border-t", quiet ? "lg:grid-cols-1 lg:grid-rows-[auto_minmax(0,1fr)]" : "lg:grid-cols-[minmax(0,1fr)_440px]")}>
-        <div className={cn("order-1 border-b lg:min-h-0 lg:border-b-0", quiet ? "lg:order-2" : "lg:order-none")}>{panels.needs}</div>
-        <div className={cn("order-3 border-t lg:min-h-0 lg:border-t-0", quiet ? "lg:order-1 lg:border-b" : "lg:order-none")}>{panels.stories}</div>
+        <div className={cn("border-t lg:min-h-0 lg:border-t-0", quiet && "lg:order-2")}>{panels.needs}</div>
+        <div className={cn("border-t lg:min-h-0 lg:border-t-0", quiet && "lg:order-1 lg:border-b")}>{panels.stories}</div>
       </div>
     </div>
   );
@@ -118,6 +112,7 @@ function LiveLine({
   onSelect,
   ringed,
   onOpenTask,
+  pills,
 }: {
   project: Project;
   data: LineData;
@@ -126,6 +121,7 @@ function LiveLine({
   onSelect: (id: string | null) => void;
   ringed: string | null;
   onOpenTask: (key: string) => void;
+  pills?: readonly FilterPill[];
 }) {
   const members = useMembers();
   const reduced = useReducedMotion();
@@ -136,14 +132,11 @@ function LiveLine({
   }, [project.id, data.facts, data.drawnSteps, data.records, members.data]);
   const flow = useLiveFlow(ctx, reduced);
   const announced = useAnnouncement(ctx);
-  const recordOf = useMemo(() => new Map<string, Task>(data.records.map((t) => [t.id, t])), [data.records]);
-  const actionFor = (first: Chain["first"]) => {
-    if (first.kind === "none") return null;
-    const task = recordOf.get(first.task.id);
-    if (!task) return null;
-    return first.kind === "answer" ? <AnswerButton task={task} /> : <ClaimButton task={task} />;
-  };
+  const actionFor = useFirstMove(data.records);
   const s = data.scoped;
+  // A Step's list links to the Tasks list at the Step, under the scope and Filter its count was made
+  // under: one pill per field, the scope's Parent over a Filter's.
+  const narrowed = [...scopePills(data.scope), ...(pills ?? [])];
   return (
     <>
       <WorkflowLine
@@ -155,10 +148,8 @@ function LiveLine({
         done={s.done}
         ghosts={s.ghosts}
         branchLabel={s.branchLabel}
-        fold={s.fold}
         doneToday={data.doneToday}
         trace={data.trace}
-        compactHeads={!!data.trace}
         noBranch={!!data.trace && !data.trace.stays.some((st) => data.facts.steps.some((x) => x.id === st.stepId && branchSkills.includes(x.skill?.name ?? "")))}
         flow={flow}
         now={now}
@@ -168,6 +159,7 @@ function LiveLine({
         onOpenTask={onOpenTask}
         me={data.me}
         actionFor={actionFor}
+        stepHref={(stepId) => `${projectPath(project, "tasks")}?${stepFilterSearch(stepId, narrowed)}`}
       />
       {/* The tags are drawn for the eye; a screen reader hears each move as it arrives. */}
       <p role="status" className="sr-only">

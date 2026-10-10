@@ -1,4 +1,4 @@
-import { ChevronDownIcon, PlusIcon } from "lucide-react";
+import { ChevronDownIcon, PlusIcon, TagIcon } from "lucide-react";
 import { useState } from "react";
 import type { Skill } from "@/api/client";
 import { FormDialog, FormRow, FormRows } from "@/components/FormDialog";
@@ -80,6 +80,7 @@ export function SkillPicker({
               className,
             )}
           >
+            {current && <TagIcon aria-hidden className="size-[11px] flex-none text-muted-foreground" />}
             <span className="min-w-0 truncate">{current ? current.name : "Hold"}</span>
             {current?.fresh && <span className="flex-none font-sans text-[10.5px] text-state-claimed">new</span>}
             <ChevronDownIcon aria-hidden className="size-3 flex-none text-muted-foreground" />

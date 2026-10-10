@@ -108,15 +108,18 @@ test("scenario 11: a fresh init's record, its printed link, and the checklist to
     await page.goto(`${install.base}/projects/MAIN/tasks?view=board`);
     await expect(page.getByRole("region", { name: "Build", exact: true }).locator("[data-task=MAIN-1]")).toContainText("Write the README");
     await shot(page, "04-first-task-on-the-board");
-    // MAIN's Workflows list its two, Implementation first; its row opens its page, the line.
+    // MAIN's Workflows list its two as columns, Implementation first; its column's name opens its page, the line.
     await page.goto(`${install.base}/projects/MAIN/workflows`);
-    const rows = page.getByRole("table", { name: "Workflows" }).getByRole("row");
-    await expect(rows).toHaveCount(3);
-    await expect(rows.nth(1).getByRole("link").first()).toHaveText("Implementation");
-    await expect(rows.nth(2).getByRole("link").first()).toHaveText("Bug triage");
-    await rows.nth(1).getByRole("link").first().click();
+    const columns = page.getByRole("list", { name: "Workflows", exact: true }).locator(":scope > li");
+    await expect(columns).toHaveCount(2);
+    await expect(columns.nth(0)).toHaveAttribute("aria-label", "Implementation");
+    await expect(columns.nth(1)).toHaveAttribute("aria-label", "Bug triage");
+    await columns.nth(0).getByRole("link", { name: "Implementation", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`^${install.base}/projects/MAIN/workflows/[^/?]+$`));
-    await expect(page.getByRole("region", { name: "Workflow", exact: true }).locator('button[data-task="MAIN-1"]')).toBeVisible();
+    // MAIN-1 waits at Build: Build's count, whose list holds it.
+    const line = page.getByRole("region", { name: "Workflow", exact: true });
+    await line.getByRole("button", { name: "Build: 1 Task waiting" }).click();
+    await expect(line.locator('button[data-task="MAIN-1"]')).toBeVisible();
     await shot(page, "05-default-workflow");
   });
 

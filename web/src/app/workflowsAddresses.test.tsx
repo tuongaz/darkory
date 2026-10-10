@@ -122,7 +122,7 @@ describe("the Workflow's old addresses", () => {
     // ... and the list, in the app, sends it on to its one Workflow's page.
     appAt("/settings/projects/WEB/workflow?view=text", workflow());
     await waitFor(() => expect(here()).toBe("/projects/WEB/workflows/wf-work?view=text"));
-    expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Workflows" })).toBeNull();
   });
 });
 
@@ -150,24 +150,24 @@ describe("the Workflows list's address of round 2", () => {
   it("is the one Workflow's page of a Project of one when it says the line's ?view=", async () => {
     appAt("/projects/WEB/workflows?view=text", workflow());
     await waitFor(() => expect(here()).toBe("/projects/WEB/workflows/wf-work?view=text"));
-    expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Workflows" })).toBeNull();
   });
 
   it("is the one Workflow's page of a Project of one when it says the filter's older ?skill=", async () => {
     appAt("/projects/WEB/workflows?skill=s-engineer", workflow());
     await waitFor(() => expect(here()).toBe("/projects/WEB/workflows/wf-work?skill=s-engineer"));
-    expect(screen.queryByRole("table", { name: "Workflows" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "Workflows" })).toBeNull();
   });
 
   it("stays the list of a Project of several, ?view= and all", async () => {
     appAt("/projects/WEB/workflows?view=text", workflowsFixture(web));
-    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Workflows" })).toBeInTheDocument();
     expect(here()).toBe("/projects/WEB/workflows?view=text");
   });
 
   it("stays the list of a Project of one when it says nothing of the line", async () => {
     appAt("/projects/WEB/workflows", workflow());
-    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Workflows" })).toBeInTheDocument();
     expect(here()).toBe("/projects/WEB/workflows");
   });
 });
@@ -184,7 +184,7 @@ describe("Settings' Workflows pages", () => {
   it("lead /admin/workflow to the current Project's list", async () => {
     mockApi({ ...signedIn(ada), "GET /v1/activity": { items: [], last_seq: 0 } });
     renderApp("/admin/workflow");
-    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Workflows" })).toBeInTheDocument();
   });
 });
 
@@ -192,7 +192,7 @@ describe("the word", () => {
   it("is Workflows in the sidebar, the page's crumb and the list; the Edit button names the Workflow", async () => {
     mockApi({ ...signedIn(ada), "GET /v1/tasks": { items: [] }, "GET /v1/activity": { items: [], last_seq: 0 }, "GET /v1/runner/sessions": { items: [], runner: false } });
     const first = renderApp("/projects/WEB/workflows");
-    expect(await screen.findByRole("table", { name: "Workflows" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Workflows" })).toBeInTheDocument();
     expect(within(screen.getByRole("navigation", { name: "Breadcrumb" })).getByText("Workflows")).toBeInTheDocument();
     const sidebar = screen.getAllByRole("link", { name: "Workflows" });
     expect(sidebar.some((l) => l.getAttribute("href") === "/projects/WEB/workflows")).toBe(true);

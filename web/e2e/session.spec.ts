@@ -420,6 +420,8 @@ test.describe("the Session panel with no Runner", () => {
     await expect(panel).toBeVisible();
     await expect(panel).toContainText(`darkory join ${taskKey}`);
     await expect(panel).toContainText("Running");
+    // Under the Task's vertical line the terminal starts below the fold, and xterm draws only what is in view.
+    await panel.locator(".xterm").scrollIntoViewIfNeeded();
     await expect(panel.locator(".xterm-rows")).toContainText("builder is running the tests");
     await expect(panel.getByRole("status")).toHaveText("Read-only · Join to type");
     expect(sockets[0].url).toMatch(new RegExp(`/v1/runner/sessions/${taskKey}/terminal\\?readonly=1$`));

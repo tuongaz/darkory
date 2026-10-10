@@ -1,21 +1,160 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { TagIcon } from "lucide-react";
+import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
-import type { FlowState } from "@/components/workflow/live";
+import { DONE, DROPPED, type FlowState, type Token as FlowToken } from "@/components/workflow/live";
+import { spanText } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import type { Ghost, Trace } from "./data";
-import { arrowhead } from "./draw";
-import { BRACKET_OFF, bracketX, brackets, chipsAt, railX, type Chip, type LineTopology } from "./layout";
-import { DONE_STATION, isHoldStep, type LineFacts, type LineTask } from "./model";
-import { spanText } from "@/lib/time";
-import { GhostToken, HiddenCount, Token } from "./Token";
-import { BREAKDOWN_BRANCH, breakdownOutcomeHint, entryHint, ENTRY_LABEL, FILES_LABEL, filesHint, HAND_LABEL, holdHint, HOLD_NOTE } from "./words";
+import { chipsAt, type LaneTrack, type LineTopology } from "./layout";
+import { DONE_STATION, isHoldStep, PICKUP_MS, retroAt, tokenTime, type LineConnector, type LineFacts, type LineStepFacts, type LineTask } from "./model";
+import { AlsoStartsHere, EntryChip, Mark, StartRow, type MarkKind } from "./parts";
+import { railParts, type Seg } from "./rails";
+import { StepList } from "./StepList";
+import { Count, GhostToken, HiddenCount, Token } from "./Token";
+import {
+  AFTER_BRANCH,
+  AFTER_HINT,
+  AFTER_LABEL,
+  arriveHint,
+  breakdownOutcomeHint,
+  entryHint,
+  FILES_LABEL,
+  filesHint,
+  gapHint,
+  HAND_LABEL,
+  handHint,
+  holdHint,
+  HOLD_PILL,
+  MEDIAN_HINT,
+  outcomeHint,
+  outcomesHint,
+  retroHint,
+  SKILL_HINT,
+} from "./words";
+
+/*
+ * The Workflow line, top to bottom at every width (the final design, vf-1 … vf-6): the rail down
+ * the card's left from Start, the start Step's station filled; each Step a row (name · Skill tag ·
+ * median · takers | its Tasks | what leaves the line); between two stations the outcome's name and
+ * an arrowhead; returns and skips as tracks in lanes beside the rail, one per Step reached; marks
+ * only for what leaves the line. "Also starts here" stands beside the start Step's row (under it
+ * in a narrow card), the Steps carrying the branch's Skills a quiet line of their own under a
+ * divider, "When a Parent ends".
+ */
+
+/** How long a count pulses when a Task folds into it: chip-pulse's two beats. */
+const PULSE_MS = 2_400;
+
+/** The most held Tasks a Step draws as chips; the rest are in its count. */
+const HELD_CHIPS = 3;
 
 /**
- * The line turned to run down a phone: stations as rows, a Step's tokens wrapping beside its name,
- * loops back as brackets left of the rail, forward skips and side exits as chips; the branch
- * "After a Parent" as rows of its own below. Above the rail, where Tasks enter: the branch
- * "Break down", the parked holds, and "New Tasks start here" into the start Step.
+ * The line's width below which it reads as a column (a list column, a phone). It is Tailwind's
+ * `@3xl` container width (48rem = 768px), the breakpoint the classes use where "Also starts here"
+ * follows the start Step and a row's three cells stack: change one, change the other.
  */
+const NARROW_PX = 768;
+
+/** The rail's x: the centre of its 22px column. */
+const RAIL = 11;
+/** How wide the lanes' column runs past its tracks, and how far apart lanes run. */
+const LANE0 = 10;
+const LANE = 12;
+/** How far above or below a station's centre a track's stub meets it. */
+const STUB = 5;
+
+type Hover = (text: string | undefined, opts?: { focus?: boolean }) => Record<string, unknown>;
+type Describe = (texts: readonly string[]) => Record<string, unknown>;
+/** A hover sentence and where it shows, in the line root's box. */
+export type Tip = { x: number; y: number; w: number; text: string };
+
+/**
+ * The hover sentences of one drawing: each carrier shows its sentence while the pointer is on it
+ * or it has the focus (it takes the focus unless it is a line in the drawing, whose sentence its
+ * label carries too), and is described by it for a screen reader. `describe` makes one carrier the
+ * keyboard's stop for several words' sentences (a Step's name, for its Skill tag and median), shown
+ * together on focus. `pool` renders the sentences the carriers point at; it is rendered after them.
+ */
+function hints(base: string, onTip: (tip: Tip | null) => void): { hover: Hover; describe: Describe; pool: () => ReactNode } {
+  const ids = new Map<string, string>();
+  const at = (el: Element, x?: number, y?: number) => {
+    const r = el.closest("[data-line-root]")?.getBoundingClientRect();
+    if (!r) return undefined;
+    const b = el.getBoundingClientRect();
+    return { x: (x ?? b.left) - r.left, y: (y ?? b.bottom - 12) - r.top, w: r.width };
+  };
+  const idOf = (text: string) => {
+    if (!ids.has(text)) ids.set(text, `${base}-${ids.size}`);
+    return ids.get(text)!;
+  };
+  const hover: Hover = (text, opts) => {
+    if (!text) return {};
+    const focus = opts?.focus ?? true;
+    if (focus) idOf(text);
+    return {
+      "data-hint": text,
+      onMouseEnter: (e: MouseEvent) => {
+        const p = at(e.currentTarget as Element, e.clientX, e.clientY);
+        if (p) onTip({ ...p, text });
+      },
+      onMouseLeave: () => onTip(null),
+      ...(focus
+        ? {
+            tabIndex: 0,
+            "aria-describedby": ids.get(text),
+            onFocus: (e: FocusEvent) => {
+              const p = at(e.currentTarget as Element);
+              if (p) onTip({ ...p, text });
+            },
+            onBlur: () => onTip(null),
+          }
+        : {}),
+    };
+  };
+  const describe: Describe = (texts) => {
+    if (texts.length === 0) return {};
+    const text = texts.join(" · ");
+    return {
+      tabIndex: 0,
+      "aria-describedby": texts.map(idOf).join(" "),
+      onFocus: (e: FocusEvent) => {
+        const p = at(e.currentTarget as Element);
+        if (p) onTip({ ...p, text });
+      },
+      onBlur: () => onTip(null),
+    };
+  };
+  // A component, so it reads the sentences when it renders: after the rails, whose rows say theirs as they render.
+  const pool = () => <HintPool ids={ids} />;
+  return { hover, describe, pool };
+}
+
+function HintPool({ ids }: { ids: ReadonlyMap<string, string> }) {
+  return (
+    <div hidden>
+      {[...ids].map(([text, id]) => (
+        <span key={id} id={id}>
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** How a Connector reads: on a traced Task's way, one of its next moves, carrying a token now, changed by an edit (the editor's rails alone, in the waiting blue), or as it is. */
+export type Tone = "trace" | "next" | "lit" | "changed" | "plain";
+
+
+
+/**
+ * A selected Task's way on the line (vf-7): the Task, its Blocking chain (ringed, in full ink), the
+ * Step it is at, and how it came: the entry it crossed in by, or the Step its way starts at. The
+ * line, its Steps and outcomes stay; the other Tasks, the counts, the entries it did not come by
+ * and "Also starts here" (unless its way runs there) fade.
+ */
+export type Way = { stepId?: string; chain: ReadonlySet<string>; entered?: string; from?: string };
+
 export function VerticalLine({
   topology: t,
   facts,
@@ -31,10 +170,11 @@ export function VerticalLine({
   selected,
   onSelect,
   ringed,
+  way,
   onOpenTask,
-  compactHeads,
   noBranch,
   footer,
+  stepHref,
 }: {
   topology: LineTopology;
   facts: LineFacts;
@@ -50,18 +190,662 @@ export function VerticalLine({
   selected?: string | null;
   onSelect?: (id: string | null) => void;
   ringed?: ReadonlySet<string>;
+  way?: Way;
   onOpenTask?: (key: string) => void;
-  compactHeads?: boolean;
   noBranch?: boolean;
   footer?: ReactNode;
+  stepHref?: (stepId: string) => string;
 }) {
   const steps = useMemo(() => new Map(facts.steps.map((s) => [s.id, s])), [facts.steps]);
-  const rail = useMemo(() => railX(t), [t]);
+  const [root, narrow] = useNarrow();
+  const { side, rail, mainTracks, mainSegs, carried, quietStations, quietTracks, quietSegs, lastRow } = useMemo(() => railParts(t), [t]);
+
+  // What a line or a word means, in a sentence, while the pointer is on it or it has the focus.
+  const [tip, setTip] = useState<Tip | null>(null);
+  const { hover, describe, pool } = hints(useId(), setTip);
+
+  // The one Step whose list is open under its count: a second click closes it, and Escape with the
+  // focus on the count or in the list, which then goes no further (the selection stays).
+  const [open, setOpen] = useState<string | null>(null);
+  const listId = useId();
+  const counts = useRef(new Map<string, HTMLButtonElement>());
+  const closeOnEscape = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || e.defaultPrevented || !open) return;
+    e.preventDefault();
+    e.stopPropagation();
+    counts.current.get(open)?.focus();
+    setOpen(null);
+  };
+
+  const at = new Map<string, LineTask[]>();
+  for (const task of tasks) {
+    if (!task.stepId || flow.transit.has(task.id)) continue;
+    const list = at.get(task.stepId);
+    if (list) list.push(task);
+    else at.set(task.stepId, [task]);
+  }
+  for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
+
+  /** A Task whose live moment plays: it arrived, it pulses, a tag names it. */
+  const moment = (task: LineTask) => flow.arrived.has(task.id) || flow.pulses.has(task.id) || (!!task.stepId && !!flow.callouts.get(task.stepId)?.some((c) => c.taskId === task.id));
+  /** A waiting Task standing as a chip for now: its live moment plays or it is selected. */
+  const standing = (task: LineTask) => moment(task) || selected === task.id;
+  /** A Step's Tasks split: its chips (held, at most three, and a waiting one while it stands) and the rest, counted. */
+  const splits = new Map(
+    [...at].map(([id, list]) => {
+      const held = list.filter((x) => x.holder);
+      const ids = new Set([...held.slice(0, HELD_CHIPS), ...list.filter((x) => !x.holder && standing(x))].map((x) => x.id));
+      return [id, { held, chips: list.filter((x) => ids.has(x.id)), rest: list.filter((x) => !ids.has(x.id)) }];
+    }),
+  );
+  const nothing = { held: [], chips: [], rest: [] };
+  const split = (id: string) => splits.get(id) ?? nothing;
+
+  // A count pulses once when a Task folds into it: a waiting Task whose moment stood it as a chip
+  // drops into the count as the moment ends. Nothing else that changes a count (a Filter, a scope, a
+  // refetch, a deselection) pulses it.
+  const byId = <V,>(a: [string, V], b: [string, V]) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  const playing = JSON.stringify([...at].sort(byId).map(([id, list]) => [id, list.filter((x) => !x.holder && moment(x)).map((x) => x.id)]));
+  const counted = JSON.stringify([...splits].sort(byId).map(([id, x]) => [id, x.rest.map((r) => r.id)]));
+  const was = useRef<{ playing: Map<string, string[]>; counted: Map<string, string[]> } | null>(null);
+  const beats = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const [folded, setFolded] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const now = { playing: new Map<string, string[]>(JSON.parse(playing)), counted: new Map<string, string[]>(JSON.parse(counted)) };
+    const before = was.current;
+    was.current = now;
+    if (!before) return;
+    const grew = [...now.counted].filter(([id, ids]) => ids.some((x) => before.playing.get(id)?.includes(x) && !before.counted.get(id)?.includes(x))).map(([id]) => id);
+    if (grew.length === 0) return;
+    setFolded((f) => new Set([...f, ...grew]));
+    for (const id of grew) {
+      clearTimeout(beats.current.get(id));
+      beats.current.set(id, setTimeout(() => setFolded((f) => new Set([...f].filter((x) => x !== id))), PULSE_MS));
+    }
+  }, [playing, counted]);
+  useEffect(() => {
+    const timers = beats.current;
+    return () => timers.forEach(clearTimeout);
+  }, []);
+  // A list whose count has emptied closes, so it never opens again on its own when a Task returns.
+  if (open !== null && split(open).rest.length === 0) setOpen(null);
+
+  const traversed = new Set(trace?.traversed ?? []);
+  const next = new Set(trace?.next ?? []);
+  const name = (id: string | null) => (id === null || id === DONE_STATION ? "Done" : (steps.get(id)?.name ?? t.others.get(id) ?? "a Step"));
+  const fullName = (id: string | null) => (id !== null && t.others.has(id) ? t.others.get(id)! : name(id));
+  const tone = (ids: readonly string[]): Tone =>
+    ids.some((id) => traversed.has(id)) ? "trace" : ids.some((id) => next.has(id)) ? "next" : ids.some((id) => flow.lit.has(id)) ? "lit" : "plain";
+  const stays = new Map((trace?.stays ?? []).filter((s) => s.until !== undefined).map((s) => [s.stepId, s]));
+  const start = t.start !== undefined ? name(t.start) : undefined;
+
+  const tagFor = (task: LineTask): ReactNode => {
+    if (task.holder && task.heldSince !== undefined && now - task.heldSince < PICKUP_MS) {
+      const waited = task.since !== undefined ? task.heldSince - task.since : undefined;
+      return (
+        <>
+          <span className="rounded-full bg-foreground px-1.5 text-[11px] leading-[18px] text-background">now</span>
+          <span>{task.holder.name} picked up</span>
+          {waited !== undefined && waited > 60_000 && <span className="text-muted-foreground">· waited {tokenTime(waited)}</span>}
+          <span aria-hidden className="h-[1.5px] w-3 bg-state-claimed" />
+        </>
+      );
+    }
+    const said = task.stepId ? flow.callouts.get(task.stepId)?.find((c) => c.taskId === task.id) : undefined;
+    if (said && said.tone !== "agent" && said.tone !== "human") {
+      return (
+        <>
+          <span className="rounded-full border bg-background px-1.5 text-[11px] leading-[18px]">{said.text.replace(` ${task.key}`, "")}</span>
+          <span aria-hidden className="h-[1.5px] w-3 bg-border" />
+        </>
+      );
+    }
+    return undefined;
+  };
+
+  const token = (task: LineTask) => {
+    const s = task.stepId ? steps.get(task.stepId) : undefined;
+    return (
+      <Token
+        key={task.id}
+        task={task}
+        hold={!!s && isHoldStep(s)}
+        now={now}
+        selected={selected === task.id}
+        ringed={!!ringed?.has(task.id)}
+        dim={!!way && !way.chain.has(task.id)}
+        pulse={flow.pulses.get(task.id)}
+        arrived={flow.arrived.has(task.id)}
+        tag={trace ? undefined : tagFor(task)}
+        onClick={onSelect ? () => onSelect(selected === task.id ? null : task.id) : onOpenTask && (() => onOpenTask(task.key))}
+        noKey={!!trace}
+      />
+    );
+  };
+
+  /** A mark; on the quiet line (When a Parent ends) without its fill, in muted ink. */
+  const mark = (kind: MarkKind, key: string, text: string, hint: string | undefined, extra: Record<string, unknown> = {}, quiet = false) => (
+    <Mark key={key} kind={kind} text={text} quiet={quiet} {...extra} {...hover(hint)} />
+  );
+  /** Every mark reads outcome → target: "done → Done", "pass → Triage". */
+  const said = (c: LineConnector, target: string) => `${c.name} → ${target}`;
+
+  // A crossing in, beside the Step it reaches (beside Start, where that is the first): "Bug triage · feature ↙".
+  const entryChips = (id: string) =>
+    t.entries
+      .filter((e) => e.stepId === id)
+      .map((e) => (
+        <EntryChip
+          key={e.connector.id}
+          text={e.text}
+          lit={traversed.has(e.connector.id)}
+          data-arrival={id}
+          data-connector={e.connector.id}
+          data-lit={traversed.has(e.connector.id) ? "true" : undefined}
+          data-dim={way && way.entered !== e.connector.id ? "" : undefined}
+          {...hover(e.hint)}
+        />
+      ));
+
+  // A Step's Connectors that leave its line: Done (not along the rail), another Workflow, a Step off the rail.
+  const leaves = (id: string, carried: ReadonlySet<string>): ReactNode[] => {
+    const out: ReactNode[] = [];
+    for (const c of t.connectors.values()) {
+      if (c.from !== id || carried.has(c.id)) continue;
+      if (c.to === null) out.push(mark("done", c.id, said(c, "Done"), outcomeHint(c, fullName), { "data-connector": c.id }));
+      else out.push(mark("chip", c.id, said(c, fullName(c.to)), outcomeHint(c, fullName), { "data-connector": c.id, "data-chip": "chip" }));
+    }
+    for (const e of t.exits.filter((x) => x.stepId === id)) {
+      out.push(mark("exit", e.connector.id, said(e.connector, fullName(e.connector.to)), e.hint, { "data-connector": e.connector.id, "data-chip": "exit", "data-exit": e.connector.id }));
+    }
+    return out;
+  };
+
+  /** A Step's name: the keyboard's one stop for its facts, described by their sentences together. */
+  const named = (s: LineStepFacts | undefined) => describe(s ? [...(s.skill ? [SKILL_HINT] : []), ...(s.medianMs !== undefined ? [MEDIAN_HINT] : [])] : []);
+
+  const facts1 = (s: LineStepFacts | undefined, small = false, inline = false) => {
+    if (!s) return null;
+    const takers = s.takers ?? [];
+    const paused = takers.length > 0 && takers.every((m) => m.paused);
+    if (!s.skill && s.medianMs === undefined && !paused && takers.length === 0) return null;
+    return (
+      // Narrow, a row of its own under the name (vf-10); wide, and in "Also starts here", beside it.
+      <span data-facts className={narrow && !inline ? "flex basis-full flex-wrap items-center gap-x-2.5 gap-y-1" : "contents"}>
+        {s.skill && (
+          <span {...hover(SKILL_HINT, { focus: false })} className="inline-flex items-center gap-[3px] font-mono text-[11px] font-normal text-muted-foreground">
+            <TagIcon aria-hidden className="size-[11px]" />
+            {s.skill.name}
+          </span>
+        )}
+        {s.medianMs !== undefined && (
+          <span {...hover(MEDIAN_HINT, { focus: false })} className="text-xs font-normal text-muted-foreground tabular-nums">
+            {spanText(s.medianMs)}
+          </span>
+        )}
+        {paused ? (
+          <span className="rounded-full border px-1.5 text-[10.5px] leading-4 font-normal text-muted-foreground">paused</span>
+        ) : (
+          takers.length > 0 && (
+            <span data-takers className={cn("inline-flex items-center", small && "scale-95")}>
+              {takers.map((m, i) => (
+                <MemberAvatar key={m.id} member={m} working={m.working} className={cn(i > 0 && "-ml-0.5")} />
+              ))}
+            </span>
+          )
+        )}
+      </span>
+    );
+  };
+
+  const holdPill = (stepName: string) => (
+    <>
+      <span className="rounded-full border px-1.5 text-[11px] leading-[18px] font-medium">{HOLD_PILL}</span>
+      <InfoTip label={stepName} className="-ml-1">
+        {holdHint(stepName)}
+      </InfoTip>
+    </>
+  );
+
+  /**
+   * A Step's Tasks at rest (vf-4): its held Tasks as chips, at most three, and a waiting one while
+   * its moment plays; one count for the rest, "N waiting", or "N more" when held Tasks are among
+   * them, which opens the Step's list in place; then the faint count of those outside the scope.
+   */
+  const atStep = (id: string) => {
+    const s = steps.get(id);
+    const { held, chips, rest } = split(id);
+    const n = hidden?.get(id) ?? 0;
+    const hold = !!s && isHoldStep(s);
+    const more = held.length > HELD_CHIPS;
+    const text = `${rest.length} ${more ? "more" : "waiting"}`;
+    const tasksWord = rest.length === 1 ? "Task" : "Tasks";
+    const shown = open === id && rest.length > 0;
+    const controls = `${listId}-${id}`;
+    return (
+      <>
+        {chips.map(token)}
+        {rest.length > 0 && (
+          <Count
+            stepId={id}
+            text={text}
+            label={`${name(id)}: ${rest.length} ${more ? `more ${tasksWord}` : `${tasksWord} waiting`}`}
+            hold={hold}
+            open={shown}
+            controls={controls}
+            ringed={rest.some((x) => ringed?.has(x.id))}
+            dim={!!way && !rest.some((x) => way.chain.has(x.id))}
+            pulse={folded.has(id)}
+            onToggle={() => setOpen(shown ? null : id)}
+            onKeyDown={closeOnEscape}
+            buttonRef={(el) => {
+              if (el) counts.current.set(id, el);
+              else counts.current.delete(id);
+            }}
+          />
+        )}
+        {n > 0 && <HiddenCount n={n} dim={!!way} />}
+        {shown && (
+          <StepList
+            id={controls}
+            title={`${name(id)} · ${text}`}
+            tasks={rest}
+            hold={hold}
+            now={now}
+            href={stepHref?.(id)}
+            onPick={onSelect ? (task) => onSelect(task.id) : onOpenTask && ((task) => onOpenTask(task.key))}
+            onKeyDown={closeOnEscape}
+          />
+        )}
+      </>
+    );
+  };
+
+  /** A Step's Tasks: its chips and count, the faint count of those outside the scope, Subtasks still to come. */
+  const tasksAt = (id: string) => {
+    const list = at.get(id) ?? [];
+    const n = hidden?.get(id) ?? 0;
+    const g = (ghosts ?? []).filter((x) => x.stepId === id);
+    const past = stays.get(id);
+    if (trace) {
+      const current = trace.current === id;
+      const last = trace.stays.at(-1);
+      return (
+        <>
+          {past && (
+            <span className="flex flex-col items-start gap-0.5">
+              <Token task={{ id: `stay:${id}`, key: name(id), title: `worked ${spanText(past.worked)}`, kind: "work", holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanText(past.worked) }} noKey />
+              {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(past.waited)}</span>}
+            </span>
+          )}
+          {current && list[0] && (
+            <span className="flex flex-col items-start gap-0.5">
+              {token(list[0])}
+              {last && last.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(last.waited)}</span>}
+              {trace.waitsFor && (
+                <span aria-hidden className="text-[11px] whitespace-nowrap text-muted-foreground">
+                  {trace.waitsFor}
+                </span>
+              )}
+            </span>
+          )}
+          {n > 0 && <span className="text-[11px] text-muted-foreground">+{n}</span>}
+        </>
+      );
+    }
+    return (
+      <>
+        {atStep(id)}
+        {id === DONE_STATION && done?.map((d) => <Token key={d.id} task={{ id: d.id, key: d.key, title: d.title, kind: "work", blockers: [], done: true }} hold={false} now={now} dim={!!way} />)}
+        {g.map((x) => (
+          <GhostToken key={x.label} text={x.text} label={x.label} dim={!!way} />
+        ))}
+      </>
+    );
+  };
+
+  /** What a traced Task can do next from where it is: "pass ↓ Review · fail ↩ Build". */
+  const nextWords = (id: string, line: readonly string[]) =>
+    trace?.current === id && trace.next.length > 0 ? (
+      <div className="text-[11px] font-semibold text-state-claimed">
+        {trace.next
+          .map((cid) => facts.connectors.find((c) => c.id === cid))
+          .filter((c): c is LineConnector => !!c)
+          .map((c) => {
+            const back = c.to !== null && line.indexOf(c.to) >= 0 && line.indexOf(c.to) < line.indexOf(id);
+            return `${c.name} ${back ? "↩" : "↓"} ${name(c.to)}`;
+          })
+          .join(" · ")}
+      </div>
+    ) : null;
+
+  // ---- Also starts here: the Steps before the start, the breakdown Step, the parked holds.
+  const sideIds = facts.steps.filter((s) => side.has(s.id)).map((s) => s.id);
+  const sideMarks = (id: string): ReactNode[] => {
+    const s = steps.get(id);
+    if (!s) return [];
+    if (id === t.before) {
+      return [
+        ...chipsAt(t, id)
+          .filter((c) => c.kind === "chip")
+          .map((c) => mark(c.connector.to === null ? "done" : "chip", c.connector.id, said(c.connector, name(c.connector.to)), breakdownOutcomeHint(c.connector, name, start), { "data-connector": c.connector.id })),
+        ...t.exits.filter((e) => e.stepId === id).map((e) => mark("exit", e.connector.id, said(e.connector, fullName(e.connector.to)), e.hint, { "data-connector": e.connector.id, "data-chip": "exit", "data-exit": e.connector.id })),
+        mark("files", "files", start ?? FILES_LABEL, filesHint(s.name, start)),
+      ];
+    }
+    if (t.holds.includes(id)) return [mark("hand", "hand", start ?? HAND_LABEL, holdHint(s.name))];
+    // A Step before the start: its outcomes in words, a hold's moved on by hand.
+    const out: ReactNode[] = [];
+    for (const c of t.connectors.values()) {
+      if (c.from !== id) continue;
+      const kind: MarkKind = c.to === null ? "done" : isHoldStep(s) ? "hand" : "chip";
+      // A hold's Connector names where a move by hand lands by default (D5): its hover is the hold's.
+      out.push(mark(kind, c.id, said(c, name(c.to)), kind === "hand" ? holdHint(s.name) : outcomeHint(c, fullName), { "data-connector": c.id }));
+    }
+    for (const e of t.exits.filter((x) => x.stepId === id)) out.push(mark("exit", e.connector.id, said(e.connector, fullName(e.connector.to)), e.hint, { "data-connector": e.connector.id, "data-chip": "exit", "data-exit": e.connector.id }));
+    return out;
+  };
+  // A selected Task's way runs through a group of Steps (Also starts here, When a Parent ends) when it, or a Task of its chain, is there.
+  const onWay = (ids: readonly string[]) => !way || (!!way.stepId && ids.includes(way.stepId)) || tasks.some((x) => way.chain.has(x.id) && !!x.stepId && ids.includes(x.stepId));
+  const sideLit = onWay(sideIds);
+  const group = sideIds.length > 0 && (
+    <AlsoStartsHere dim={!sideLit}>
+      {sideIds.map((id) => {
+        const s = steps.get(id)!;
+        const hold = isHoldStep(s);
+        const list = at.get(id) ?? [];
+        const n = hidden?.get(id) ?? 0;
+        const tasksHere = trace ? (
+          <>
+            {trace.current === id && list.map(token)}
+            {n > 0 && <HiddenCount n={n} dim={!!way} />}
+          </>
+        ) : (
+          atStep(id)
+        );
+        return (
+          <div key={id} data-side={id} data-head={s.name} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span {...(hold ? hover(holdHint(s.name)) : named(s))} className="text-[13px] font-medium">
+              {s.name}
+            </span>
+            {hold ? (
+              holdPill(s.name)
+            ) : id === t.before ? (
+              <InfoTip label={s.name} className="-ml-1">
+                {filesHint(s.name, start)}
+              </InfoTip>
+            ) : null}
+            {!hold && facts1(s, true, true)}
+            {tasksHere}
+            {entryChips(id)}
+            {sideMarks(id)}
+          </div>
+        );
+      })}
+    </AlsoStartsHere>
+  );
+
+  // ---- The main rail.
+  const first = rail[0];
+  // A Workflow of only branch Steps starts where a Parent's end files its own Subtasks: headed so, its sentence behind the ⓘ.
+  const heading = branchLabel === AFTER_BRANCH ? AFTER_LABEL : branchLabel;
+  const startHint = first === DONE_STATION || t.afterOnly ? undefined : t.start === first ? entryHint(name(first)) : arriveHint(name(first));
+  const startRow = first !== DONE_STATION && (
+    <StartRow heading={t.afterOnly ? heading : undefined} label={{ "data-dim": way && (way.entered || way.from !== first) ? "" : undefined, ...hover(startHint) }}>
+      {entryChips(first)}
+    </StartRow>
+  );
+
+  const retro = retroAt(facts.steps, facts.drawn, (s) => s.skill?.name, (id) => facts.workflows.find((w) => w.id === id)?.name);
+
+  const returns = (id: string, list: readonly LaneTrack[], line: readonly string[]) => {
+    // Narrow, beside the name, a lone label leaves its target to its track (vf-8's columns); two or more keep theirs, to read apart.
+    const short = narrow && list.flatMap((k) => k.connectors).filter((c) => c.from === id).length === 1;
+    return list.flatMap((k) =>
+      k.connectors
+        .filter((c) => c.from === id)
+        .map((c) => {
+          const back = line.indexOf(k.target) < line.indexOf(id);
+          const lit = tone([c.id]);
+          return (
+            <span
+              key={c.id}
+              data-return={c.id}
+              data-connector={c.id}
+              data-lit={lit === "lit" || lit === "trace" ? "true" : undefined}
+              {...hover(outcomeHint(c, fullName))}
+              className={cn("px-0.5 py-1 text-xs whitespace-nowrap", (lit === "trace" || lit === "lit") && "font-semibold text-state-claimed")}
+            >
+              <span aria-hidden className="mr-[3px] font-semibold text-muted-foreground">
+                {back ? "↩" : "↪"}
+              </span>{" "}
+              {short ? c.name : `${c.name} → ${name(k.target)}`}
+            </span>
+          );
+        }),
+    );
+  };
+
+  const mainRow = (id: string, i: number) => {
+    const terminal = id === DONE_STATION;
+    const s = steps.get(id);
+    return {
+      name: terminal ? (
+        <>
+          <span className="text-sm font-semibold">Done</span>
+          {!trace && doneToday !== undefined && (
+            <span data-today className={cn("text-xs text-muted-foreground", narrow && "basis-full")}>
+              {doneToday} today
+            </span>
+          )}
+        </>
+      ) : (
+        <>
+          <span {...named(s)} className="text-sm font-semibold">
+            {s?.name}
+          </span>
+          {s && isHoldStep(s) && holdPill(s.name)}
+          {narrow && returns(id, mainTracks, rail)}
+          {facts1(s)}
+        </>
+      ),
+      tasks: tasksAt(id),
+      marks: (
+        <>
+          {i > 0 && entryChips(id)}
+          {!narrow && returns(id, mainTracks, rail)}
+          {!terminal && leaves(id, carried)}
+          {!trace && terminal && retro && mark("exit", "retro", retro, retroHint(retro), { "data-retro": true })}
+          {nextWords(id, rail)}
+          {i === 0 && group}
+        </>
+      ),
+    };
+  };
+
+  // ---- When a Parent ends: the branch's Steps as a quiet line of their own.
+  const quietRow = (id: string) => {
+    const terminal = id === DONE_STATION;
+    const s = steps.get(id);
+    const row = t.rows.find((r) => r.stations.includes(id));
+    // An exit into Done of a row the quiet line does not end on: a mark.
+    const exit = row && row !== lastRow && row.exit;
+    return {
+      name: (
+        <>
+          <span {...(terminal ? {} : named(s))} className="text-[13px] font-medium text-muted-foreground">
+            {terminal ? "Done" : s?.name}
+          </span>
+          {!terminal && narrow && returns(id, quietTracks, quietStations)}
+          {!terminal && facts1(s, true)}
+        </>
+      ),
+      tasks: terminal ? null : tasksAt(id),
+      marks: terminal ? null : (
+        <>
+          {entryChips(id)}
+          {!narrow && returns(id, quietTracks, quietStations)}
+          {chipsAt(t, id).filter((c) => c.kind !== "entry").map((c) => mark(c.kind === "exit" ? "exit" : c.connector.to === null ? "done" : rail.includes(c.connector.to) ? "return" : "chip", c.connector.id, said(c.connector, fullName(c.connector.to)), c.hint, { "data-connector": c.connector.id, "data-chip": c.kind, "data-exit": c.kind === "exit" ? c.connector.id : undefined }, true))}
+          {exit && mark("done", exit.id, said(exit, "Done"), outcomeHint(exit, fullName), { "data-connector": exit.id }, true)}
+          {nextWords(id, quietStations)}
+        </>
+      ),
+    };
+  };
+  const branch = !noBranch && t.rows.length > 0 && (
+    <section aria-label={heading} data-dim={onWay(quietStations) ? undefined : ""} className="mt-3 border-t pt-2">
+      <div className="mb-1 flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+        {heading}
+        <InfoTip label={heading}>{AFTER_HINT}</InfoTip>
+      </div>
+      <RailLine
+        label={heading}
+        quiet
+        stations={quietStations}
+        segs={quietSegs}
+        tracks={quietTracks}
+        row={quietRow}
+        onTip={setTip}
+        name={name}
+        tone={tone}
+        holdAt={() => false}
+        isStart={() => false}
+        picked={(id) => way?.stepId === id}
+        travelling={flow.tokens}
+        outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
+        measureKey={[tasks, t, trace, open, narrow]}
+      />
+    </section>
+  );
+
+  return (
+    <div ref={root} data-line-root className="@container relative flex min-w-0 flex-col">
+      <RailLine
+        label="Steps on the line"
+        stations={rail}
+        segs={mainSegs}
+        tracks={mainTracks}
+        before={startRow}
+        row={mainRow}
+        onTip={setTip}
+        name={name}
+        tone={tone}
+        holdAt={(id) => {
+          const s = steps.get(id);
+          return !!s && isHoldStep(s);
+        }}
+        isStart={(id) => id === first && id !== DONE_STATION}
+        picked={(id) => way?.stepId === id}
+        visited={(id) => !!trace?.stays.some((x) => x.stepId === id)}
+        travelling={flow.tokens}
+        besides={side}
+        outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
+        measureKey={[tasks, t, trace, done, ghosts, hidden, open, narrow]}
+      />
+      {branch}
+      {footer}
+      {pool()}
+      <LineTip tip={tip} />
+    </div>
+  );
+}
+
+/**
+ * A ref for the line's root and whether it is narrower than `NARROW_PX`, measured as it resizes.
+ * Unmeasured (no layout yet, or none at all) it reads wide.
+ */
+function useNarrow(): [(el: HTMLDivElement | null) => void, boolean] {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    if (!el) return;
+    const measure = () => {
+      const w = el.getBoundingClientRect().width;
+      setNarrow(w > 0 && w < NARROW_PX);
+    };
+    measure();
+    const ro = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [el]);
+  return [setEl, narrow];
+}
+
+/** The sentence a line's hover shows, under the pointer, inside the line root (`data-line-root`). */
+export function LineTip({ tip }: { tip: Tip | null }) {
+  if (!tip) return null;
+  return (
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute z-30 w-max max-w-[320px] rounded-md border bg-popover px-2.5 py-1.5 text-xs leading-[18px] text-popover-foreground shadow-pop"
+      style={{ left: Math.max(8, Math.min(tip.x + 12, tip.w - 330)), top: tip.y + 16 }}
+    >
+      {tip.text}
+    </div>
+  );
+}
+
+/**
+ * One rail and its rows: the stations in order (Done last), a segment between each pair with its
+ * outcome's name under the station it leaves and an arrowhead into the next, tracks in lanes
+ * between the rail and the rows. Drawn in SVG from where each row's station is measured to stand.
+ */
+export function RailLine({
+  label,
+  quiet,
+  stations,
+  segs,
+  tracks,
+  before,
+  row,
+  onTip,
+  name,
+  tone,
+  holdAt,
+  isStart,
+  visited,
+  travelling,
+  besides,
+  outcomeOf,
+  measureKey,
+  segment,
+  changed,
+  wide,
+  picked,
+}: {
+  label: string;
+  quiet?: boolean;
+  stations: readonly string[];
+  segs: readonly Seg[];
+  tracks: readonly LaneTrack[];
+  before?: ReactNode;
+  row: (id: string, i: number) => { name: ReactNode; tasks: ReactNode; marks: ReactNode };
+  onTip: (tip: Tip | null) => void;
+  name: (id: string | null) => string;
+  tone: (ids: readonly string[]) => Tone;
+  holdAt: (id: string) => boolean;
+  isStart: (id: string) => boolean;
+  visited?: (id: string) => boolean;
+  /** The tokens travelling now, carried along this rail: by their Connector, by hand along it, or off it. */
+  travelling?: readonly FlowToken[];
+  /** The Steps standing beside the rail's top ("Also starts here"): a token leaving one enters the rail there. */
+  besides?: ReadonlySet<string>;
+  outcomeOf?: (connectorId: string) => string | undefined;
+  measureKey: unknown[];
+  /** What a segment carries under the station it leaves, in place of its outcome's name (an editor's fields). */
+  segment?: (s: NonNullable<Seg>) => ReactNode;
+  /** A station drawn in the changed colour: a Step an edit added or changed. */
+  changed?: (id: string) => boolean;
+  /** A wider first column, for a row of fields. */
+  wide?: boolean;
+  /** The station a selected Task is at: ringed (vf-7). */
+  picked?: (id: string) => boolean;
+}) {
+  const { hover, pool } = hints(useId(), onTip);
   const box = useRef<HTMLDivElement>(null);
   const dots = useRef(new Map<string, HTMLElement>());
   const [ys, setYs] = useState<Map<string, number>>(new Map());
   const [height, setHeight] = useState(0);
-
   useLayoutEffect(() => {
     const measure = () => {
       if (!box.current) return;
@@ -71,301 +855,214 @@ export function VerticalLine({
         const r = el.getBoundingClientRect();
         m.set(id, r.top - top + r.height / 2);
       }
-      setYs(m);
+      setYs((was) => (was.size === m.size && [...m].every(([k, v]) => was.get(k) === v) ? was : m));
       setHeight(box.current.getBoundingClientRect().height);
     };
     measure();
     const ro = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
     if (box.current) ro?.observe(box.current);
     return () => ro?.disconnect();
-  }, [tasks, t, trace]);
+  }, measureKey); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const at = new Map<string, LineTask[]>();
-  for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
-  for (const list of at.values()) list.sort((a, b) => Number(!!b.holder) - Number(!!a.holder) || (a.since ?? 0) - (b.since ?? 0));
-
-  const traversed = new Set(trace?.traversed ?? []);
-  const name = (id: string | null) => (id === null ? "Done" : (steps.get(id)?.name ?? "a Step"));
-  const tagsAt = (id: string): { key: string; text: string; kind?: Chip["kind"]; connectorId?: string; hint?: string }[] => [
-    ...t.over.filter((a) => !a.back && a.connector.from === id).map((a) => ({ key: a.connector.id, text: `${a.connector.name} → ${name(a.connector.to)}`, connectorId: a.connector.id })),
-    // The Connectors it cannot route, and its outcomes into other Workflows, as across.
-    ...chipsAt(t, id)
-      .filter((c) => c.kind !== "entry")
-      .map((c) => ({ key: c.connector.id, text: c.text, kind: c.kind, connectorId: c.connector.id, hint: c.hint })),
-    // Neighbours no Connector joins, where the first has no outcome on: a human moves a Task on.
-    // Where its outcomes lead elsewhere nothing moves between them, and nothing is said.
-    ...t.segments.filter((s) => s.from === id && s.hand).map((s) => ({ key: `hand:${s.from}`, text: `${HAND_LABEL} → ${name(s.to === DONE_STATION ? null : s.to)}` })),
-  ];
-  const entry = t.start !== undefined && t.main[0] === t.start;
-  // Where Tasks arrive from other Workflows: a mark on each Step they reach.
-  // On a Task's way (a trace), only the one it came in by, lit: where it came from.
-  const arrivalsAt = (id: string) => chipsAt(t, id).filter((c) => c.kind === "entry" && (!trace || traversed.has(c.connector.id)));
-  const chipTags = (list: ReturnType<typeof tagsAt>) =>
-    list.map((c) => (
-      <span key={c.key} data-chip={c.kind} data-exit={c.kind === "exit" ? c.connectorId : undefined} data-connector={c.connectorId} title={c.hint} className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">
-        {c.text}
-      </span>
-    ));
-  const arrivalTags = (id: string) =>
-    arrivalsAt(id).map((e) => (
-      <span
-        key={e.connector.id}
-        title={e.hint}
-        data-chip="entry"
-        data-arrival={id}
-        data-connector={e.connector.id}
-        data-lit={traversed.has(e.connector.id) ? "true" : undefined}
-        className={cn("inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium", traversed.has(e.connector.id) && "border-state-claimed font-semibold text-state-claimed")}
-      >
-        {e.text}
-      </span>
-    ));
-  const stays = new Map((trace?.stays ?? []).filter((s) => s.until !== undefined).map((s) => [s.stepId, s]));
-
-  const token = (task: LineTask) => (
-    <Token
-      key={task.id}
-      task={task}
-      hold={!!task.stepId && !!steps.get(task.stepId) && isHoldStep(steps.get(task.stepId)!)}
-      now={now}
-      selected={selected === task.id}
-      ringed={!!ringed?.has(task.id)}
-      pulse={flow.pulses.get(task.id)}
-      arrived={flow.arrived.has(task.id)}
-      onClick={onSelect ? () => onSelect(selected === task.id ? null : task.id) : onOpenTask && (() => onOpenTask(task.key))}
-      noKey={!!trace}
-    />
-  );
-
-  const row = (id: string, i: number) => {
-    const s = steps.get(id);
-    const terminal = id === DONE_STATION;
-    const list = at.get(id) ?? [];
-    const n = hidden?.get(id) ?? 0;
-    const past = stays.get(id);
-    const chips = trace ? [] : tagsAt(id);
-    const current = trace?.current === id;
-    const right = terminal ? (doneToday !== undefined ? `${doneToday} today` : "") : !s ? "" : isHoldStep(s) ? "hold" : s.medianMs !== undefined ? `median ${spanText(s.medianMs)}` : "";
-    return (
-      <li key={id} className="relative pr-0.5 pb-3" style={{ paddingLeft: rail + 10 }}>
-        <span
-          aria-hidden
-          ref={(el) => {
-            if (el) dots.current.set(id, el);
-            else dots.current.delete(id);
-          }}
-          className="absolute top-[3px] size-[14px]"
-          style={{ left: rail - 7 }}
-        />
-        <div className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate font-semibold">{terminal ? "Done" : s?.name}</span>
-          {s?.skill && <span className="truncate font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
-          {(compactHeads || !!trace) && n > 0 && <span className="text-[11px] text-muted-foreground">+{n}</span>}
-          {!trace && right && <span className="ml-auto flex-none text-[11px] text-muted-foreground">{right}</span>}
-          {past && (
-            <span className="ml-auto flex flex-none flex-col items-end gap-0.5">
-              <Token task={{ ...(tasks[0] ?? { id: "p", key: "", title: "", kind: "work", blockers: [] }), holder: past.holder, blockers: [] }} hold={false} now={now} past={{ text: spanText(past.worked) }} noKey />
-              {past.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(past.waited)}</span>}
-            </span>
-          )}
-          {current && list[0] && (
-            <span className="ml-auto flex flex-none flex-col items-end gap-0.5">
-              {token(list[0])}
-              {trace?.stays.at(-1) && trace.stays.at(-1)!.waited > 60_000 && <span className="text-[11px] text-muted-foreground">waited {spanText(trace.stays.at(-1)!.waited)}</span>}
-              {trace?.waitsFor && (
-                <span aria-hidden className="text-[11px] whitespace-nowrap text-muted-foreground">
-                  {trace.waitsFor}
-                </span>
-              )}
-            </span>
-          )}
-        </div>
-        {!trace && !entry && id === t.start && (
-          <span title={entryHint(s?.name ?? "")} data-entry-mark className="mt-1 inline-flex rounded-full border px-1.5 text-[10.5px] leading-4 font-medium">
-            New Tasks start here, at {s?.name}
-          </span>
-        )}
-        {arrivalsAt(id).length > 0 && <div className="mt-1 flex flex-wrap gap-1">{arrivalTags(id)}</div>}
-        {!trace && (list.length > 0 || n > 0 || (terminal && (done?.length ?? 0) > 0)) && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {list.map(token)}
-            {terminal && done?.map((d) => <Token key={d.id} task={{ id: d.id, key: d.key, title: d.title, kind: "work", blockers: [], done: true }} hold={false} now={now} />)}
-            {!compactHeads && n > 0 && <HiddenCount n={n} />}
-          </div>
-        )}
-        {chips.length > 0 && <div className="mt-1 flex flex-wrap gap-1">{chipTags(chips)}</div>}
-        {current && trace && trace.next.length > 0 && (
-          <div className="mt-1 text-[11px] font-semibold text-state-claimed">
-            {trace.next
-              .map((cid) => facts.connectors.find((c) => c.id === cid))
-              .filter((c): c is NonNullable<typeof c> => !!c)
-              .map((c) => {
-                const back = c.to !== null && t.main.indexOf(c.to) >= 0 && t.main.indexOf(c.to) < i;
-                return `${c.name} ${back ? "↩" : "↓"} ${name(c.to)}`;
-              })
-              .join(" · ")}
-          </div>
-        )}
-      </li>
-    );
-  };
-
-  // The rail and its brackets, once the rows are measured.
+  const lanes = tracks.length;
+  const lanesW = lanes ? LANE0 + lanes * LANE : 0;
+  const bodyLeft = 22 + lanesW + 8;
+  const laneX = (lane: number) => 22 + 4 + lane * LANE;
+  const ink = quiet ? "var(--muted-foreground)" : "var(--foreground)";
+  const weight = quiet ? 1.5 : 2;
+  const radius = (id: string) => (isStart(id) ? 9 : quiet ? 4.5 : id === DONE_STATION ? 6 : 5.5);
   const y = (id: string) => ys.get(id);
-  const segs = t.segments.map((s) => {
+  const stroke = (t: Tone, plain = ink) => (t === "trace" || t === "next" || t === "lit" ? "var(--state-claimed)" : t === "changed" ? "var(--state-waiting)" : plain);
+
+  const svgRail = segs.map((s) => {
+    if (!s) return null;
     const [a, b] = [y(s.from), y(s.to)];
     if (a === undefined || b === undefined) return null;
-    const tone = s.connector && traversed.has(s.connector.id) ? "trace" : trace && s.connector && trace.next.includes(s.connector.id) ? "next" : "plain";
+    const ids = s.connector ? [s.connector.id] : [];
+    const tn = tone(ids);
+    const top = a + radius(s.from) + 1;
+    const tip = b - radius(s.to) - 1;
+    const gap = !s.connector && !s.hand;
+    const col = gap ? "var(--border)" : s.hand ? "var(--muted-foreground)" : stroke(tn);
+    const hint = s.connector ? undefined : s.hand ? handHint(name(s.from), name(s.to)) : gapHint(name(s.from), name(s.to));
     return (
-      <line
-        key={s.from}
-        x1={rail}
-        y1={a}
-        x2={rail}
-        y2={b}
-        data-gap={!s.connector && !s.hand ? "true" : undefined}
-        stroke={!s.connector ? (s.hand ? "var(--muted-foreground)" : "var(--border)") : tone === "plain" ? "var(--foreground)" : "var(--state-claimed)"}
-        strokeWidth={!s.connector ? 1.5 : tone === "trace" ? 4 : 3}
-        strokeDasharray={!s.connector ? "2 5" : tone === "next" ? "5 4" : undefined}
-      />
-    );
-  });
-  const marks = brackets(t).map((b) => {
-    const [lo, hi] = [y(t.main[b.lo]), y(t.main[b.hi])];
-    if (lo === undefined || hi === undefined) return null;
-    const x = bracketX(rail, b.depth);
-    const tone = traversed.has(b.connector.id) ? "trace" : trace?.next.includes(b.connector.id) ? "next" : trace ? "dim" : "plain";
-    const col = tone === "trace" || tone === "next" ? "var(--state-claimed)" : "var(--muted-foreground)";
-    return (
-      <g key={b.connector.id} className={cn(tone === "dim" && "opacity-40")}>
-        <path data-track={x} d={`M${rail - 6} ${hi - 3} H${x + 4} Q${x} ${hi - 3} ${x} ${hi - 7} V${lo + 7} Q${x} ${lo + 3} ${x + 4} ${lo + 3} H${rail - BRACKET_OFF}`} fill="none" stroke={col} strokeWidth={1.4} strokeDasharray={tone === "next" ? "3 3" : undefined} />
-        <path d={arrowhead(rail - BRACKET_OFF, lo + 3, "right")} fill="none" stroke={col} strokeWidth={1.4} />
+      <g key={s.from}>
+        <path data-rail={s.from} data-gap={gap ? "true" : undefined} d={`M${RAIL} ${top} V${tip - (gap ? 0 : 6)}`} stroke={col} strokeWidth={tn === "trace" ? 4 : weight} strokeDasharray={gap ? "2 5" : s.hand ? "3 3" : tn === "next" ? "5 4" : undefined} fill="none" />
+        {!gap && <path data-arrow={s.from} d={`M${RAIL - 4.5} ${tip - 7} L${RAIL} ${tip} L${RAIL + 4.5} ${tip - 7} Z`} fill={col} />}
+        <path
+          {...hover(s.connector ? outcomeHint(s.connector, name) : hint, { focus: false })}
+          data-connector={s.connector?.id}
+          d={`M${RAIL} ${top} V${tip}`}
+          stroke="transparent"
+          strokeWidth={12}
+          fill="none"
+          style={{ pointerEvents: "stroke" }}
+        />
       </g>
     );
   });
 
-  const branch = !noBranch && t.rows.length > 0 && (
-    <section aria-label={branchLabel} className="mt-1 border-t px-3.5 pt-2.5 pb-1">
-      <div className="mb-1.5 text-[11px] text-muted-foreground">{branchLabel}</div>
-      <ul className="flex flex-col">
-        {t.rows.flatMap((r) => r.stations).map((id) => {
-          const s = steps.get(id);
-          if (!s) return null;
-          const list = at.get(id) ?? [];
-          const takers = s.takers ?? [];
-          const paused = takers.length > 0 && takers.every((m) => m.paused);
-          const g = (ghosts ?? []).filter((x) => x.stepId === id);
-          const chips = trace ? [] : tagsAt(id);
+  const svgTracks = tracks.map((k) => {
+    const pts = k.ends.map((e) => {
+      const v = y(stations[e.at]);
+      return v === undefined ? undefined : v + e.dy * STUB;
+    });
+    if (pts.some((p) => p === undefined)) return <g key={k.target} data-track={k.target} data-lane={k.lane} />;
+    const x = laneX(k.lane);
+    const tn = tone(k.connectors.map((c) => c.id));
+    const col = stroke(tn);
+    const lo = Math.min(...(pts as number[]));
+    const hi = Math.max(...(pts as number[]));
+    return (
+      <g key={k.target} data-track={k.target} data-lane={k.lane}>
+        <path d={`M${x} ${lo} V${hi}`} stroke={col} strokeWidth={1.5} fill="none" strokeDasharray={tn === "next" ? "3 3" : undefined} />
+        {k.ends.map((e, i) => {
+          const v = pts[i]!;
+          const edge = RAIL + radius(stations[e.at]) + 1;
+          const into = e.connectors.length === 0;
           return (
-            <li key={id} className="flex min-h-8 flex-wrap items-center gap-1.5 py-0.5">
-              <span aria-hidden className="size-3.5 rounded-full border-[1.5px] border-foreground" />
-              <b className="font-semibold">{s.name}</b>
-              {paused ? <span className="rounded-full border px-1.5 text-[10.5px] leading-4 text-muted-foreground">paused</span> : s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
-              {!paused && takers.slice(0, 1).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
-              <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-                {list.length === 0 && g.length === 0 && <span className="text-[11px] text-muted-foreground">0 Tasks</span>}
-                {list.map(token)}
-                {g.map((x) => (
-                  <GhostToken key={x.label} text={x.text} label={x.label} />
-                ))}
-              </span>
-              {/* Its Connectors the rows do not draw, and those into or out of other Workflows. */}
-              {!trace && (chips.length > 0 || arrivalsAt(id).length > 0) && (
-                <span className="flex basis-full flex-wrap gap-1 pl-5">
-                  {arrivalTags(id)}
-                  {chipTags(chips)}
-                </span>
-              )}
-            </li>
+            <g key={`${e.at}:${i}`}>
+              <path d={`M${into ? edge + 6 : edge} ${v} H${x}`} stroke={col} strokeWidth={1.5} fill="none" />
+              {into && <path data-arrow-in={k.target} d={`M${edge + 7} ${v - 4.5} L${edge} ${v} L${edge + 7} ${v + 4.5} Z`} fill={col} />}
+              <path
+                {...hover(into ? outcomesHint(k.connectors, name) : outcomesHint(e.connectors, name), { focus: false })}
+                data-connectors={JSON.stringify((into ? k.connectors : e.connectors).map((c) => c.id))}
+                d={`M${edge} ${v} H${x}`}
+                stroke="transparent"
+                strokeWidth={10}
+                fill="none"
+                style={{ pointerEvents: "stroke" }}
+              />
+            </g>
           );
         })}
-      </ul>
-    </section>
-  );
-
-  // Where Tasks enter, above the rail: the branch Break down, the parked holds, and the entry into the start Step.
-  const sideRow = (id: string, hold: boolean) => {
-    const s = steps.get(id);
-    if (!s) return null;
-    const list = at.get(id) ?? [];
-    const takers = s.takers ?? [];
-    const n = hidden?.get(id) ?? 0;
-    return (
-      <li key={id} title={hold ? holdHint(s.name) : undefined} className="flex min-h-8 flex-wrap items-center gap-1.5 py-0.5">
-        <span aria-hidden className={cn("size-3.5 rounded-full border-[1.5px] border-foreground", hold && "border-dashed")} />
-        <b className="font-semibold">{s.name}</b>
-        {hold ? <span className="text-[11px] text-muted-foreground">{HOLD_NOTE}</span> : s.skill && <span className="font-mono text-[11px] text-muted-foreground">{s.skill.name}</span>}
-        {!hold && takers.slice(0, 1).map((m) => <MemberAvatar key={m.id} member={m} working={m.working} />)}
-        <span className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-          {!trace && list.map(token)}
-          {!compactHeads && n > 0 && <HiddenCount n={n} />}
-        </span>
-      </li>
+      </g>
     );
+  });
+
+  const svgDots = stations.map((id) => {
+    const v = y(id);
+    if (v === undefined) return null;
+    const terminal = id === DONE_STATION;
+    const start = isStart(id);
+    const hold = holdAt(id);
+    const dot = (
+      <circle
+        key={id}
+        data-dot={id}
+        data-start={start ? "" : undefined}
+        cx={RAIL}
+        cy={v}
+        r={radius(id)}
+        fill={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : start ? (quiet ? "var(--background)" : ink) : "var(--background)"}
+        stroke={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : visited?.(id) ? "var(--state-claimed)" : changed?.(id) ? "var(--state-waiting)" : hold ? "var(--muted-foreground)" : ink}
+        data-changed={changed?.(id) ? "" : undefined}
+        strokeWidth={terminal || (start && !changed?.(id)) ? 0 : weight}
+        strokeDasharray={hold ? "3 2.5" : undefined}
+      />
+    );
+    if (!picked?.(id)) return dot;
+    // A gap of the background, then a ring of ink.
+    return (
+      <g key={id}>
+        <circle cx={RAIL} cy={v} r={radius(id) + 1.5} stroke="var(--background)" strokeWidth={3} fill="none" />
+        {dot}
+        <circle data-picked={id} cx={RAIL} cy={v} r={radius(id) + 4} stroke="var(--foreground)" strokeWidth={2} fill="none" />
+      </g>
+    );
+  });
+
+  // A move along the rail: its segment, its track, straight down by hand, or off the line to the
+  // right; from a Step beside the rail's top, down the rail from its top.
+  const routeOf = (tk: FlowToken): string | undefined => {
+    if (tk.travel.to === DROPPED) return undefined;
+    const to = tk.travel.to === DONE ? DONE_STATION : tk.travel.to;
+    const [a, b] = [y(tk.travel.from) ?? (besides?.has(tk.travel.from) ? 0 : undefined), y(to)];
+    if (a === undefined) return undefined;
+    const id = tk.travel.connectorId;
+    const track = id ? tracks.find((k) => k.connectors.some((c) => c.id === id)) : undefined;
+    if (track && b !== undefined) {
+      const from = track.ends.find((e) => e.connectors.some((c) => c.id === id))!;
+      const into = track.ends.find((e) => e.connectors.length === 0)!;
+      return `M${RAIL} ${a + from.dy * STUB} H${laneX(track.lane)} V${b + into.dy * STUB} H${RAIL}`;
+    }
+    if (b !== undefined) return `M${RAIL} ${a} V${b}`;
+    return `M${RAIL} ${a} H${bodyLeft + 160}`;
   };
-  const before = t.before;
-  const start = t.start !== undefined ? name(t.start) : undefined;
-  const enter = (before || t.holds.length > 0 || entry) && (
-    <section aria-label="Where Tasks enter" className="flex flex-col gap-1 border-b px-3.5 pt-2 pb-2.5">
-      {before && (
-        <div>
-          <div className="text-[11px] text-muted-foreground">{BREAKDOWN_BRANCH}</div>
-          <ul className="flex flex-col">{sideRow(before, false)}</ul>
-          <div title={filesHint(name(before), start)} className="flex flex-wrap gap-1 pl-5">
-            {start && <span className="rounded-full border border-dashed px-1.5 text-[10.5px] leading-4 text-muted-foreground">{FILES_LABEL}</span>}
-            {arrivalTags(before)}
-            {/* Its own outcomes say, as across, where the Subtasks it filed start. */}
-            {chipTags(tagsAt(before).map((c) => {
-              const k = c.kind === "chip" && t.chips.find((x) => x.connector.id === c.connectorId);
-              return k ? { ...c, hint: breakdownOutcomeHint(k.connector, name, start) } : c;
-            }))}
-          </div>
-        </div>
-      )}
-      {t.holds.length > 0 && <ul className="flex flex-col">{t.holds.map((id) => sideRow(id, true))}</ul>}
-      {entry && start && (
-        <div title={entryHint(start)} data-entry className="flex items-center gap-1.5 pt-0.5 text-[11.5px] font-medium">
-          {ENTRY_LABEL}
-          <span aria-hidden className="text-muted-foreground">↓</span>
-          <span className="text-muted-foreground">{start}</span>
-        </div>
-      )}
-    </section>
-  );
+  const moving = (travelling ?? [])
+    .map((tk) => {
+      const route = routeOf(tk);
+      return route ? { tk, route, outcome: tk.travel.connectorId ? outcomeOf?.(tk.travel.connectorId) : HAND_LABEL } : undefined;
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x);
 
   return (
     <div className="flex flex-col">
-      {enter}
-      <div ref={box} className="relative pt-3">
-        <svg aria-hidden className="pointer-events-none absolute top-0 left-0 overflow-visible" width={1} height={Math.max(1, height)}>
-          {segs}
-          {marks}
-          {t.main.map((id) => {
-            const v = y(id);
-            if (v === undefined) return null;
-            const s = steps.get(id);
-            const terminal = id === DONE_STATION;
-            const visited = trace?.stays.some((x) => x.stepId === id);
+      {before && <div style={{ paddingLeft: bodyLeft }}>{before}</div>}
+      <div ref={box} className="relative">
+        <svg aria-hidden className="pointer-events-none absolute top-0 left-0 z-[1] overflow-visible" width={bodyLeft} height={Math.max(1, height)}>
+          {svgRail}
+          {svgTracks}
+          {svgDots}
+        </svg>
+        <ol aria-label={label} className="relative flex flex-col">
+          {stations.map((id, i) => {
+            const r = row(id, i);
+            const s = segs[i];
+            const hold = holdAt(id);
             return (
-              <circle
-                key={id}
-                cx={rail}
-                cy={v}
-                r={terminal ? 7 : 6}
-                fill={terminal ? "var(--state-done)" : "var(--background)"}
-                stroke={terminal ? "var(--state-done)" : visited ? "var(--state-claimed)" : "var(--foreground)"}
-                strokeWidth={2.5}
-                strokeDasharray={s && isHoldStep(s) ? "3 3" : undefined}
-              />
+              <li key={id} data-station={id} data-head={name(id)} data-start={isStart(id) ? "" : undefined} data-hold={hold ? "" : undefined} className="relative" style={{ paddingLeft: bodyLeft }}>
+                <span
+                  aria-hidden
+                  ref={(el) => {
+                    if (el) dots.current.set(id, el);
+                    else dots.current.delete(id);
+                  }}
+                  className="absolute top-[7px] left-0 h-[14px] w-[22px]"
+                />
+                <div
+                  className={cn(
+                    "grid min-w-0 grid-cols-1 items-start gap-x-6 gap-y-1",
+                    wide ? "@3xl:grid-cols-[minmax(0,360px)_minmax(0,180px)_minmax(0,1fr)]" : "@3xl:grid-cols-[minmax(0,300px)_minmax(0,300px)_minmax(0,1fr)]",
+                  )}
+                >
+                  <div className="flex min-h-7 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">{r.name}</div>
+                  <div data-tasks className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden @3xl:empty:flex">
+                    {r.tasks}
+                  </div>
+                  <div className="flex min-w-0 flex-wrap items-center gap-1 empty:hidden">{r.marks}</div>
+                </div>
+                {s && segment ? (
+                  <div data-segment={s.from} data-connector={s.connector?.id} className="flex min-h-5 w-max max-w-full flex-wrap items-center gap-1.5 pt-1 pb-2 text-xs text-muted-foreground">
+                    {segment(s)}
+                  </div>
+                ) : s ? (
+                  <div
+                    data-segment={s.from}
+                    data-connector={s.connector?.id}
+                    data-lit={s.connector && ["lit", "trace"].includes(tone([s.connector.id])) ? "true" : undefined}
+                    {...hover(s.connector ? outcomeHint(s.connector, name) : s.hand ? handHint(name(s.from), name(s.to)) : undefined)}
+                    className={cn("w-max pt-1 pb-2 text-xs text-muted-foreground", !s.connector && !s.hand && "h-5", ["trace", "lit"].includes(tone(s.connector ? [s.connector.id] : [])) && "font-semibold text-state-claimed")}
+                  >
+                    {s.connector ? s.connector.name : s.hand ? HAND_LABEL : ""}
+                  </div>
+                ) : (
+                  i < stations.length - 1 && <div className="h-4" />
+                )}
+              </li>
             );
           })}
-        </svg>
-        <ol aria-label="Steps on the line" className="relative flex flex-col">
-          {t.main.map(row)}
         </ol>
+        {moving.map(({ tk, route, outcome }) => (
+          <div key={tk.id} className="wl-travel pointer-events-none absolute top-0 left-0 z-10" style={{ offsetPath: `path("${route}")` }} data-travel={tk.key}>
+            <span className={cn("wl-token inline-flex h-[26px] items-center gap-1.5 rounded-full border-[1.5px] bg-background px-2.5 text-xs whitespace-nowrap shadow-pop", !tk.travel.connectorId && "border-dashed")} data-state="waiting">
+              <span className="font-mono text-[11.5px]">{tk.key}</span>
+              {outcome && <span className="text-muted-foreground">{outcome}</span>}
+            </span>
+          </div>
+        ))}
       </div>
-      {branch}
-      {footer}
+      {pool()}
     </div>
   );
 }

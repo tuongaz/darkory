@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity, Member, Task, TaskDetail } from "@/api/client";
 import { mergeBase } from "./pullRequest";
 import { mockApi, refuse, type Call, type Handler } from "@/test/api";
-import { ada, bob, builder, bug, clientX, detail, step, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
+import { ada, bob, builder, bug, clientX, detail, step, subtask, wfId, wfStep, workflowsFixture, workflowsSkills } from "@/test/fixtures";
 import { renderApp } from "@/test/render";
 import { basket, cart, checkout, copy, liveClaimOf, payment, projectTasks, receipt, routes } from "../board/testData";
 
@@ -239,7 +239,7 @@ describe("a Task in a Project of several Workflows (ADR 0019)", () => {
       expect(el).not.toBeNull();
       return el!;
     });
-    expect(came).toHaveTextContent("from Triage · bug");
+    expect(came).toHaveTextContent("Triage · bug");
   });
 });
 
@@ -335,6 +335,23 @@ describe("a Parent's page", () => {
     expect(within(third).getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("links a Step's list on the Subtask line to the Tasks list at the Step, the Parent's Subtasks only", async () => {
+    const more = [20, 21, 22, 23, 24, 25].map((n) => subtask(n, checkout, { title: `Subtask ${n}`, step_id: step.review, skill_id: "s-review" }));
+    mockApi(
+      taskRoutes({
+        "GET /v1/tasks": { items: [...projectTasks, ...more] },
+        "GET /v1/tasks/:task": ({ params }) =>
+          params.task === "WEB-3" || params.task === checkout.id ? detail(checkout, { subtasks: [payment, receipt, basket, ...more] }) : (details[params.task] ?? refuse(404, "not_found", "No such Task")),
+      }),
+    );
+    renderApp("/tasks/WEB-3?view=line");
+    const line = await within(await screen.findByRole("region", { name: "Subtasks" })).findByRole("region", { name: "Subtask line" });
+    await userEvent.click(await within(line).findByRole("button", { name: "Review: 7 Tasks waiting" }));
+    const href = within(within(line).getByRole("group", { name: "Review · 7 waiting" })).getByRole("link", { name: "2 more Tasks" }).getAttribute("href")!;
+    expect(href.startsWith("/projects/WEB/tasks?")).toBe(true);
+    expect(new URLSearchParams(href.split("?")[1]).getAll("filter.tasks")).toEqual([`step:is:${step.review}`, `parent:is:${checkout.id}`]);
+  });
+
   it("of a Project of several Workflows, draws the Workflow of its first open Subtask and says where the others are", async () => {
     // In ADR 0019's five Workflows Review is Bugs' and Build is Features': WEB-5 waits at Review,
     // WEB-4 is worked at Build. Bugs comes first, so the line draws Bugs.
@@ -342,7 +359,8 @@ describe("a Parent's page", () => {
     renderApp("/tasks/WEB-3?view=line");
     const section = await screen.findByRole("region", { name: "Subtasks" });
     const line = await within(section).findByRole("region", { name: "Subtask line" });
-    await waitFor(() => expect(line.querySelector('button[data-task="WEB-5"]')).not.toBeNull());
+    // WEB-5 waits at Review: counted there.
+    expect(await within(line).findByRole("button", { name: "Review: 1 Task waiting" })).toBeInTheDocument();
     expect([...line.querySelectorAll("[data-head]")].map((e) => e.getAttribute("data-head"))).toEqual(["Investigate", "Fix", "Review", "Verify", "Done"]);
     expect(line.querySelector('button[data-task="WEB-4"]')).toBeNull();
     // WEB-4 does not vanish: the header says it is on Features' line.
