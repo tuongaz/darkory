@@ -38,7 +38,7 @@ import { TakenBy, type StepSkill } from "./TakenBy";
  * tracks and groups the live line draws, each Step a row of fields (a grip, its name, its Skill, who
  * takes it, a ⋯ menu), each outcome editable where the line draws it (the one the rail carries
  * under its station, the rest beside it), "+ Outcome" last under each Step. What an edit added or
- * changed is drawn in the changed colour (--ring). No Task is drawn. Every edit is the draft's.
+ * changed is drawn in the waiting blue (vf-9; no Task is drawn while editing, so the hue means one thing here). No Task is drawn. Every edit is the draft's.
  */
 
 const DONE = "@done";
@@ -536,7 +536,7 @@ function StepHead({
         className={cn(
           "h-7 max-w-[200px] min-w-0 rounded-md border border-input bg-background px-2 text-sm font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground",
           "focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30",
-          changed && "border-ring",
+          changed && "border-state-waiting text-state-waiting",
         )}
       />
       {clash && (
@@ -739,7 +739,7 @@ function OutcomeField({
   const was = wasTarget(base, c);
   const wasName = was && ((was.to && (wf.steps.find((s) => s.id === was.to) ?? base.steps.find((s) => s.id === was.to))?.name.trim()) || (was.to ? "New Step" : "Done"));
   return (
-    <span data-outcome={c.id} data-changed={changed ? "" : undefined} className={cn("inline-flex max-w-full flex-wrap items-center gap-1 rounded-md px-0.5 text-xs", changed && "ring-1 ring-ring")}>
+    <span data-outcome={c.id} data-changed={changed ? "" : undefined} className={cn("inline-flex max-w-full flex-wrap items-center gap-1 rounded-md px-0.5 text-xs", changed && "text-state-waiting ring-1 ring-state-waiting")}>
       {main !== undefined && (
         <Tip label={main ? "Main: the line follows it" : "Make it the main way on"}>
           <button
@@ -754,7 +754,7 @@ function OutcomeField({
         </Tip>
       )}
       {glyph && (
-        <span aria-hidden className="font-semibold text-muted-foreground">
+        <span aria-hidden className={cn("font-semibold", !changed && "text-muted-foreground")}>
           {glyph}
         </span>
       )}

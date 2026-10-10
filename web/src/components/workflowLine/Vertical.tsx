@@ -311,7 +311,7 @@ export function VerticalLine({
       className={cn(
         "inline-flex max-w-full items-center gap-1 rounded-[5px] px-[7px] py-0.5 text-xs leading-[1.4]",
         kind === "done" ? "bg-state-done-bg" : kind === "hand" ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
-        !!extra["data-connector"] && highlight?.has(extra["data-connector"] as string) && "ring-1 ring-ring",
+        !!extra["data-connector"] && highlight?.has(extra["data-connector"] as string) && "ring-1 ring-state-waiting",
       )}
     >
       <span aria-hidden className={cn("font-semibold", kind === "done" ? "text-state-done" : "text-muted-foreground")}>
@@ -628,7 +628,7 @@ export function VerticalLine({
               data-connector={c.id}
               data-lit={lit === "lit" || lit === "trace" ? "true" : undefined}
               {...hover(outcomeHint(c, fullName))}
-              className={cn("px-0.5 py-1 text-xs whitespace-nowrap", (lit === "trace" || lit === "lit") && "font-semibold text-state-claimed", lit === "changed" && "font-medium text-ring")}
+              className={cn("px-0.5 py-1 text-xs whitespace-nowrap", (lit === "trace" || lit === "lit") && "font-semibold text-state-claimed", lit === "changed" && "font-medium text-state-waiting")}
             >
               <span aria-hidden className="mr-[3px] font-semibold text-muted-foreground">
                 {back ? "↩" : "↪"}
@@ -832,7 +832,7 @@ export function RailLine({
   const weight = quiet ? 1.5 : 2;
   const radius = (id: string) => (isStart(id) ? 9 : quiet ? 4.5 : id === DONE_STATION ? 6 : 5.5);
   const y = (id: string) => ys.get(id);
-  const stroke = (t: Tone, plain = ink) => (t === "trace" || t === "next" || t === "lit" ? "var(--state-claimed)" : t === "changed" ? "var(--ring)" : plain);
+  const stroke = (t: Tone, plain = ink) => (t === "trace" || t === "next" || t === "lit" ? "var(--state-claimed)" : t === "changed" ? "var(--state-waiting)" : plain);
 
   const svgRail = segs.map((s) => {
     if (!s) return null;
@@ -915,7 +915,7 @@ export function RailLine({
         cy={v}
         r={radius(id)}
         fill={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : start ? (quiet ? "var(--background)" : ink) : "var(--background)"}
-        stroke={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : visited?.(id) ? "var(--state-claimed)" : changed?.(id) ? "var(--ring)" : hold ? "var(--muted-foreground)" : ink}
+        stroke={terminal ? (quiet ? "var(--muted-foreground)" : "var(--state-done)") : visited?.(id) ? "var(--state-claimed)" : changed?.(id) ? "var(--state-waiting)" : hold ? "var(--muted-foreground)" : ink}
         data-changed={changed?.(id) ? "" : undefined}
         strokeWidth={terminal || (start && !changed?.(id)) ? 0 : weight}
         strokeDasharray={hold ? "3 2.5" : undefined}
