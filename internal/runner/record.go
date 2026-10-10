@@ -308,7 +308,7 @@ func (r *conn) File(ctx context.Context, body client.FileTaskBody) (*client.Task
 }
 
 func (r *conn) Attach(ctx context.Context, task, filename string, content []byte) error {
-	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), content)
+	_, _, err := r.c.Attach(ctx, task, filename, contentType(filename, content), client.EvidenceKindEvidence, content)
 	return err
 }
 

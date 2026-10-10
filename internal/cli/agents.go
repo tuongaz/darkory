@@ -16,7 +16,7 @@ var agentCommands = []command{
 	{path: "workspace list", short: "list the Install's Workspaces", run: cmdWorkspaceList},
 	{path: "workspace set", args: "<workspace> [--name n] [--path dir] [--mode m] [--default-branch b]", short: "change a Workspace (admin)", run: cmdWorkspaceSet},
 	{path: "workspace remove", args: "<workspace>", short: "remove a Workspace no Task names (admin)", run: cmdWorkspaceRemove},
-	{path: "agent set", args: "<member> [--command c] [--arg a]… [--model m] [--env K=V]… [--paused] [--unattended] [--progress-file f]", short: "set how the Runner starts an agent's Shifts (admin)", run: cmdAgentSet},
+	{path: "agent set", args: "<member> [--command c] [--arg a]… [--model m] [--env K=V]… [--paused] [--unattended] [--shifts n] [--progress-file f]", short: "set how the Runner starts an agent's Shifts (admin)", run: cmdAgentSet},
 	{path: "agent clear", args: "<member>", short: "clear an agent's settings, so the Runner starts no Shift for it (admin)", run: cmdAgentClear},
 	{path: "agent list", short: "list the agents and how the Runner starts them", run: cmdAgentList},
 	{path: "shifts", short: "list the Shifts the Runner runs now", run: cmdShifts},
@@ -200,6 +200,7 @@ func cmdAgentSet(c *call) error {
 	var paused, unattended optBool
 	c.fs.Var(&paused, "paused", "start no new Shift for the agent (--paused=false resumes)")
 	c.fs.Var(&unattended, "unattended", "run Shifts with the agent's permission checks skipped")
+	shifts := c.fs.Int("shifts", 0, "how many Shifts the Runner runs for the agent at once, 1 to 8")
 	var progress optString
 	c.fs.Var(&progress, "progress-file", `the file whose changes show a Shift's progress, for a command other than Claude Code; "" for none`)
 	pos, err := c.args(1, 1)
@@ -210,6 +211,12 @@ func cmdAgentSet(c *call) error {
 		ProgressFile: progress.v}
 	if args.set {
 		body.Args = &args.v
+	}
+	if *shifts != 0 {
+		if *shifts < 1 || *shifts > 8 {
+			return usagef("--shifts is 1 to 8")
+		}
+		body.Shifts = shifts
 	}
 	if env.set {
 		vars := map[string]string{}
@@ -250,6 +257,9 @@ func (c *call) printAgent(w io.Writer, m client.Member) {
 	extra := ""
 	if !a.Unattended {
 		extra = ", attended"
+	}
+	if a.Shifts > 1 {
+		extra += fmt.Sprintf(", %d Shifts at once", a.Shifts)
 	}
 	fmt.Fprintf(w, "%-16s %-11s %-20s %s %s%s\n", one(m.Name), state, one(a.Model), one(a.Command), one(strings.Join(a.Args, " ")), extra)
 	for _, k := range sortedKeys(a.Env) {

@@ -21,6 +21,8 @@ import (
 type oneSession struct {
 	session runnerapi.Session
 	nudged  []string
+	// merge answers Merge; nil finds no pull request.
+	merge func(task, by string) error
 }
 
 func (o *oneSession) Sessions() []runnerapi.Session { return []runnerapi.Session{o.session} }
@@ -29,6 +31,12 @@ func (o *oneSession) Nudge(task string) error {
 	return nil
 }
 func (o *oneSession) Stop(string) error { return nil }
+func (o *oneSession) Merge(_ context.Context, task, by string) error {
+	if o.merge == nil {
+		return runnerapi.ErrNoPullRequest
+	}
+	return o.merge(task, by)
+}
 func (o *oneSession) Attach(context.Context, string, bool, *websocket.Conn) error {
 	return nil
 }

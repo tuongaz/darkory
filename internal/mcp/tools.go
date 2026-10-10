@@ -308,7 +308,7 @@ func (s *Server) addTools() {
 			if ct == "" {
 				ct = remote.ContentType(name, content)
 			}
-			ev, _, err := c.Attach(ctx, in.Target, name, ct, content)
+			ev, _, err := c.Attach(ctx, in.Target, name, ct, client.EvidenceKindEvidence, content)
 			return ev, err
 		})
 	tool(s, "file_task", "File a Task in a Project; with parent, a Subtask of that Task (filing one under the Task you hold splits it, ending your Claim); "+
