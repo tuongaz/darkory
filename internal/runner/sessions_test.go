@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -77,4 +78,80 @@ func TestTheIdleLimitOutlastsTheRunnersHeartbeatTimeout(t *testing.T) {
 	if DefaultTimings.Wait >= time.Minute || DefaultTimings.Tick >= time.Minute {
 		t.Fatalf("a runner Session can be quiet for a minute or more: %+v", DefaultTimings)
 	}
+}
+
+// runningTasks are the keys of the Tasks the runner works now, sorted.
+func runningTasks(r *Runner) []string {
+	var keys []string
+	for _, s := range r.Running() {
+		keys = append(keys, s.Task)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// holds checks for d that r never runs more than n Shifts at once.
+func holds(t *testing.T, r *Runner, n int, d time.Duration) {
+	t.Helper()
+	for end := time.Now().Add(d); time.Now().Before(end); time.Sleep(50 * time.Millisecond) {
+		if got := runningTasks(r); len(got) > n {
+			t.Fatalf("%d Shifts at once (%v), at most %d", len(got), got, n)
+		}
+	}
+}
+
+// An agent runs as many Shifts at once as its settings say, one Session and one Claim each, on
+// Tasks of its own; the next Task waits for one of them. A count lowered while two run takes
+// effect as a Shift ends: the second loop takes no new Task.
+func TestRunnerRunsAnAgentsShifts(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "busy", "engineer")
+	f.ok("ada", "agent", "set", "builder", "--shifts", "2")
+	for _, title := range []string{"Cart page", "Totals", "Receipt"} {
+		f.ok("ada", "file", "--project", "WEB", "--title", title)
+	}
+	r := f.run("builder")
+
+	eventually(t, 20*time.Second, "two Shifts at once", func() bool { return len(r.Running()) == 2 })
+	holds(t, r, 2, 3*time.Second)
+	running := runningTasks(r)
+	sessions := map[string]bool{}
+	for _, s := range r.Running() {
+		sessions[s.SessionID] = true
+	}
+	if len(sessions) != 2 {
+		t.Fatalf("two Shifts in %d Sessions", len(sessions))
+	}
+	waiting := ""
+	for _, k := range []string{"WEB-1", "WEB-2", "WEB-3"} {
+		if !slices.Contains(running, k) {
+			waiting = k
+		}
+	}
+	if d := f.task(waiting); d.Task.Claim != nil {
+		t.Fatalf("%s, the third Task, is held while two Shifts run", waiting)
+	}
+
+	f.ok("ada", "agent", "set", "builder", "--shifts", "1")
+	for _, k := range running {
+		if err := r.Stop(k); err != nil {
+			t.Fatal(err)
+		}
+	}
+	eventually(t, 20*time.Second, "one Shift once both ended", func() bool { return len(r.Running()) == 1 })
+	holds(t, r, 1, 3*time.Second)
+}
+
+// With one Shift, as unless set, an agent works one Task at a time.
+func TestRunnerRunsOneShiftUnlessSet(t *testing.T) {
+	f := newFixture(t, storetest.Open(t, store.SQLite))
+	f.workflow(buildOnly)
+	f.agent("builder", "busy", "engineer")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Cart page")
+	f.ok("ada", "file", "--project", "WEB", "--title", "Totals")
+	r := f.run("builder")
+
+	eventually(t, 20*time.Second, "one Shift", func() bool { return len(r.Running()) == 1 })
+	holds(t, r, 1, 3*time.Second)
 }
