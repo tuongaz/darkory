@@ -417,6 +417,19 @@ func TestRunnerMerge(t *testing.T) {
 		}
 	})
 
+	// The record names an address no Workspace's #7 has: no pull request, never another
+	// Workspace's #7 of the Task's branch.
+	t.Run("an address no Workspace has", func(t *testing.T) {
+		rec := mergeFixture()
+		rec.tasks[0].Task.PullRequest = &client.PullRequest{Number: 7, URL: "https://github.com/acme/other/pull/7", State: client.PullRequestOpen}
+		gh := &recordingGitHub{}
+		gh.open(PullRequest{Number: 7, HeadRefName: "dark-3-fix-the-cart", BaseRefName: "main", URL: "https://github.com/acme/web/pull/7", HeadRefOid: "w"})
+		r := mergeRunner(t, rec, gh)
+		if err := r.Merge(t.Context(), "t-3", 7); !errors.Is(err, runnerapi.ErrNoPullRequest) || len(gh.merges) != 0 {
+			t.Fatalf("Merge: %v, merged %v", err, gh.merges)
+		}
+	})
+
 	// A number no Workspace of the Task has: no pull request.
 	r := mergeRunner(t, mergeFixture(), &recordingGitHub{})
 	if err := r.Merge(t.Context(), "t-3", 8); !errors.Is(err, runnerapi.ErrNoPullRequest) {
@@ -478,6 +491,15 @@ func TestRunnerPullRequest(t *testing.T) {
 	} {
 		if pr, err := r.PullRequest(ctx, "t-3", 7, url); err != nil || pr != want {
 			t.Fatalf("PullRequest at %s: %+v, %v; want %+v", url, pr, err, want)
+		}
+	}
+	// The address is compared as the server compares it: the host in any case, the path exactly.
+	if pr, err := r.PullRequest(ctx, "t-3", 7, "https://GitHub.com/acme/web/pull/7"); err != nil || pr.URL != "https://github.com/acme/web/pull/7" {
+		t.Fatalf("PullRequest at an address with the host in capitals: %+v, %v", pr, err)
+	}
+	for _, url := range []string{"https://github.com/acme/other/pull/7", "https://github.com/Acme/web/pull/7"} {
+		if pr, err := r.PullRequest(ctx, "t-3", 7, url); !errors.Is(err, runnerapi.ErrNoPullRequest) {
+			t.Fatalf("PullRequest at %s, which no Workspace has: %+v, %v", url, pr, err)
 		}
 	}
 	if _, err := r.PullRequest(ctx, "t-3", 9, ""); !errors.Is(err, runnerapi.ErrNoPullRequest) {

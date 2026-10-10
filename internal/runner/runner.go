@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -546,6 +547,20 @@ func (r *Runner) PullRequest(ctx context.Context, taskID string, number int64, u
 		Landing: r.notLanding(ctx, d, ws, pr) == ""}, nil
 }
 
+// sameAddress reports whether two https addresses name the same page: the host compared without
+// regard to case, as hosts are, and everything else exactly, as the server compares them
+// (internal/server sameAddress).
+func sameAddress(a, b string) bool {
+	ua, errA := neturl.Parse(a)
+	ub, errB := neturl.Parse(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return ua.Scheme == ub.Scheme && ua.User == nil && ub.User == nil && strings.EqualFold(ua.Host, ub.Host) &&
+		ua.EscapedPath() == ub.EscapedPath() && ua.RawQuery == ub.RawQuery && ua.ForceQuery == ub.ForceQuery &&
+		ua.Fragment == ub.Fragment
+}
+
 // ghMissing says gh found no pull request of that number in the repository. It matches the
 // English text GitHub's API gives on gh's stderr ("Could not resolve to a PullRequest with the
 // number of 7."), the only sign gh gives; a gh that said it otherwise would read as GitHub not
@@ -556,8 +571,8 @@ func ghMissing(err error) bool {
 
 // findPullRequest reads pull request number in each Workspace of the Task in pull_request mode:
 // the one whose address is url, when url is given (with recorded, the address the Task's record
-// carries) and a Workspace has it; else the first whose head is a branch of the Task; else the
-// first that has the number at all. One from a fork is never the Task's, whatever its branch is
+// carries), and none when no Workspace's has that address; without an address, the first whose
+// head is a branch of the Task, else the first that has the number at all. One from a fork is never the Task's, whatever its branch is
 // called. It is ErrNoPullRequest when none has it, or gh's error when it could not tell.
 func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int64, url string, recorded bool) (*client.TaskDetail, Workspace, PullRequest, error) {
 	select {
@@ -596,8 +611,10 @@ func (r *Runner) findPullRequest(ctx context.Context, taskID string, number int6
 			r.log.Info("a pull request from a fork is not a Task's", "task", d.Task.Key, "workspace", ws.Name, "pr", number,
 				"fork", pr.HeadRepositoryOwner.Login)
 			continue
-		case url != "" && pr.URL == url:
+		case url != "" && sameAddress(pr.URL, url):
 			return d, ws, pr, nil
+		case url != "":
+			continue // the address names the pull request: another Workspace's #n is not it
 		case branch.IsTasks(pr.HeadRefName, d.Task.Key) && tasks == nil:
 			tasks, tasksWS = &pr, ws
 		case first == nil:
