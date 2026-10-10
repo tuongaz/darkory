@@ -33,6 +33,7 @@ import { TaskLine } from "./TaskLine";
 import { useTaskActionsUI, type TaskActionsUI } from "./TaskActions";
 import { Branch, ParentLink, Standing, TaskProperties } from "./TaskProperties";
 import { TaskRecord } from "./TaskRecord";
+import { Markdown } from "@/components/Markdown";
 
 /** /tasks/:task: the Task's record in the main column, its Claim and Blocking in the 320px rail. */
 export function TaskPage() {
@@ -239,7 +240,7 @@ function TaskHeader({ detail, ui, heading, steps, path }: { detail: TaskDetail; 
           <TaskLine detail={detail} />
         </>
       )}
-      {task.description && <p className="mt-1 whitespace-pre-wrap">{task.description}</p>}
+      {task.description && <Markdown text={task.description} className="mt-1" />}
     </header>
   );
 }

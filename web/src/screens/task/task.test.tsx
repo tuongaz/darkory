@@ -273,6 +273,20 @@ describe("a Parent's page", () => {
     expect(await screen.findByRole("region", { name: "Subtasks" })).toHaveTextContent("1/3 done");
   });
 
+  it("renders its description and its Notes as Markdown, links to the web only", async () => {
+    const note = { id: "n-1", task_id: copy.id, author_id: builder.id, body: "Ran `make check`.\n- [the PR](https://github.com/o/r/pull/7)\n- [x](javascript:alert(1))", created_at: at(20) };
+    mockApi(taskRoutes({ "GET /v1/tasks/:task": () => detail({ ...copy, description: "## Goal\nShip **the copy**" }, { notes: [note] }) }));
+    renderApp("/tasks/WEB-1");
+    const head = (await screen.findByRole("heading", { level: 1, name: "Draft the launch copy" })).closest("header")!;
+    expect(within(head).getByText("the copy").tagName).toBe("STRONG");
+    expect(within(head).getByText("Goal").tagName).toBe("P");
+    const body = await screen.findByRole("article", { name: "Note by builder" });
+    expect(within(body).getByText("make check").tagName).toBe("CODE");
+    expect(within(body).getByRole("link", { name: "the PR" })).toHaveAttribute("target", "_blank");
+    expect(within(body).getAllByRole("link")).toHaveLength(1);
+    expect(within(body).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["the PR", "x"]);
+  });
+
   it("says why nobody holds a Parent or an ended Task, so its Properties are never empty", async () => {
     mockApi(taskRoutes());
     const parent = renderApp("/tasks/WEB-3");
