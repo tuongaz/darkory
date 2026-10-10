@@ -70,7 +70,8 @@ export function WorkflowLine(props: WorkflowLineProps) {
   const { onSelect, selected } = props;
   useEffect(() => {
     if (!selected || !onSelect) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onSelect(null);
+    // An Escape something on the page already took (a Step's list closing) leaves the selection alone.
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && onSelect(null);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, onSelect]);

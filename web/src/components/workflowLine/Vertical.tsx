@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { TagIcon } from "lucide-react";
 import { InfoTip } from "@/components/InfoTip";
 import { MemberAvatar } from "@/components/MemberAvatar";
@@ -175,20 +175,18 @@ export function VerticalLine({
   const [tip, setTip] = useState<Tip | null>(null);
   const { hover, pool } = hints(useId(), setTip);
 
-  // The one Step whose list is open under its count: a second click or Escape closes it.
+  // The one Step whose list is open under its count: a second click closes it, and Escape with the
+  // focus on the count or in the list, which then goes no further (the selection stays).
   const [open, setOpen] = useState<string | null>(null);
   const listId = useId();
   const counts = useRef(new Map<string, HTMLButtonElement>());
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      counts.current.get(open)?.focus();
-      setOpen(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  const closeOnEscape = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || e.defaultPrevented || !open) return;
+    e.preventDefault();
+    e.stopPropagation();
+    counts.current.get(open)?.focus();
+    setOpen(null);
+  };
 
   const at = new Map<string, LineTask[]>();
   for (const task of tasks) if (task.stepId && !flow.transit.has(task.id)) at.set(task.stepId, [...(at.get(task.stepId) ?? []), task]);
@@ -406,6 +404,7 @@ export function VerticalLine({
             ringed={rest.some((x) => ringed?.has(x.id))}
             pulse={folded.has(id)}
             onToggle={() => setOpen(shown ? null : id)}
+            onKeyDown={closeOnEscape}
             buttonRef={(el) => {
               if (el) counts.current.set(id, el);
               else counts.current.delete(id);
@@ -422,6 +421,7 @@ export function VerticalLine({
             now={now}
             href={stepHref?.(id)}
             onPick={(task) => (onSelect ? onSelect(task.id) : onOpenTask?.(task.key))}
+            onKeyDown={closeOnEscape}
           />
         )}
       </>

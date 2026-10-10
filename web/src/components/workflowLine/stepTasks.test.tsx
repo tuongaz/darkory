@@ -91,6 +91,28 @@ describe("the Tasks at a Step", () => {
     expect(pill).toHaveFocus();
   });
 
+  it("closes the list on Escape only from the count or the list, and leaves the selection alone", async () => {
+    const calls: (string | null)[] = [];
+    render(
+      <MemoryRouter>
+        <WorkflowLine workflow={DARK("impl")} tasks={BUSY} now={NOW} stepHref={href} selected="k-21" onSelect={(id) => calls.push(id)} />
+        <input aria-label="elsewhere" />
+      </MemoryRouter>,
+    );
+    await userEvent.click(count(station("build"))!);
+    // An Escape typed elsewhere on the page is not the list's.
+    screen.getByRole("textbox", { name: "elsewhere" }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.getByRole("group", { name: "Build · 13 waiting" })).toBeInTheDocument();
+    // (There it clears the selection, as it always has.) From a row: the list closes, the selection stays.
+    calls.length = 0;
+    within(screen.getByRole("group", { name: "Build · 13 waiting" })).getAllByRole("button")[0].focus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("group", { name: /^Build · / })).toBeNull();
+    expect(count(station("build"))).toHaveFocus();
+    expect(calls).toEqual([]);
+  });
+
   it("keeps one list open on a line: opening another Step's closes the first, in 'Also starts here' too", async () => {
     draw([...BUSY, waiting(50, "backlog", 60), waiting(51, "backlog", 30)]);
     const backlog = document.querySelector<HTMLElement>('[data-side="backlog"]')!;

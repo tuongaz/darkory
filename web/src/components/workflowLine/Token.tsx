@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { KeyboardEventHandler, ReactNode, Ref } from "react";
 import { MemberAvatar } from "@/components/MemberAvatar";
 import type { Tone } from "@/components/workflow/live";
 import { cn } from "@/lib/utils";
@@ -152,6 +152,7 @@ export function Count({
   ringed,
   pulse,
   onToggle,
+  onKeyDown,
   buttonRef,
 }: {
   stepId: string;
@@ -164,6 +165,7 @@ export function Count({
   /** A Task just folded into it: one brief pulse. */
   pulse?: boolean;
   onToggle: () => void;
+  onKeyDown?: KeyboardEventHandler<HTMLButtonElement>;
   buttonRef?: Ref<HTMLButtonElement>;
 }) {
   return (
@@ -177,6 +179,7 @@ export function Count({
       aria-expanded={open}
       aria-controls={open ? controls : undefined}
       onClick={onToggle}
+      onKeyDown={onKeyDown}
       className={cn(
         "wl-count inline-flex h-[26px] items-center gap-1.5 rounded-full border bg-background pr-[9px] pl-1.5 text-xs font-medium whitespace-nowrap hover:bg-accent",
         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",

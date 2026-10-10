@@ -1,3 +1,4 @@
+import type { KeyboardEventHandler } from "react";
 import { Link } from "react-router";
 import { tokenLabel, tokenState, tokenTime, type LineTask } from "./model";
 import { Glyph } from "./Token";
@@ -18,6 +19,7 @@ export function StepList({
   now,
   href,
   onPick,
+  onKeyDown,
 }: {
   id: string;
   title: string;
@@ -27,11 +29,12 @@ export function StepList({
   /** The Tasks list at this Step; without it the rest are only counted. */
   href?: string;
   onPick?: (task: LineTask) => void;
+  onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
 }) {
   const more = tasks.length - LIST_ROWS;
   const rest = more > 0 ? `${more} more ${more === 1 ? "Task" : "Tasks"}` : undefined;
   return (
-    <div id={id} role="group" aria-label={title} data-step-list className="mt-0.5 w-full max-w-[300px] basis-full rounded-lg border bg-popover px-1 py-1.5 text-xs text-popover-foreground shadow-pop">
+    <div id={id} role="group" aria-label={title} data-step-list onKeyDown={onKeyDown} className="mt-0.5 w-full max-w-[300px] basis-full rounded-lg border bg-popover px-1 py-1.5 text-xs text-popover-foreground shadow-pop">
       <div className="px-2 pt-0.5 pb-1.5 font-semibold">{title}</div>
       <ul className="flex flex-col">
         {tasks.slice(0, LIST_ROWS).map((t) => {
