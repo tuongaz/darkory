@@ -24,7 +24,7 @@ export type RecordEntry = { at: string } & (
 const time = (at: string) => Date.parse(at);
 
 /** How long after its Claim ends a Shift's log may still arrive and be its own: the Runner attaches it once the Session has exited. */
-const logGrace = 30 * 60_000;
+export const logGrace = 30 * 60_000;
 
 /**
  * The Claim a Shift's log belongs to: one of the holder who attached it (the Runner attaches as

@@ -1,4 +1,6 @@
 import type { Activity } from "@/api/client";
+// The same grace the Task's record gives a Shift's log after its Claim ends.
+import { logGrace } from "@/screens/task/record";
 
 /**
  * One row of the Activity: an entry, with what its actor wrote on the Task inside the Claim it
@@ -7,8 +9,6 @@ import type { Activity } from "@/api/client";
  */
 export type ActivityRow = { entry: Activity; folded: Activity[]; shiftEnded?: string };
 
-/** How long after its Claim ends a Shift's log may still arrive and be its own, as the Task's record matches it. */
-const logGrace = 30 * 60_000;
 
 /** The entries that end a Claim and say so; each carries the Claim's id. */
 const ends = new Set<string>(["task.released", "task.advanced", "task.completed", "task.split", "task.lapsed", "task.taken_back", "task.claim_ended"]);
