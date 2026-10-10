@@ -300,7 +300,8 @@ export function VerticalLine({
     );
   };
 
-  const mark = (kind: MarkKind, key: string, text: string, hint: string | undefined, extra: Record<string, unknown> = {}) => (
+  /** A mark; on the quiet line (When a Parent ends) without its fill, in muted ink. */
+  const mark = (kind: MarkKind, key: string, text: string, hint: string | undefined, extra: Record<string, unknown> = {}, quiet = false) => (
     <span
       key={key}
       data-mark={kind}
@@ -308,7 +309,7 @@ export function VerticalLine({
       {...hover(hint)}
       className={cn(
         "inline-flex max-w-full items-center gap-1 rounded-[5px] px-[7px] py-0.5 text-xs leading-[1.4]",
-        kind === "done" ? "bg-state-done-bg" : kind === "hand" ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
+        quiet ? "pl-0 text-muted-foreground" : kind === "done" ? "bg-state-done-bg" : kind === "hand" ? "border border-dashed border-muted-foreground px-1.5 py-px text-muted-foreground" : "bg-muted",
       )}
     >
       <span aria-hidden className={cn("font-semibold", kind === "done" ? "text-state-done" : "text-muted-foreground")}>
@@ -674,14 +675,19 @@ export function VerticalLine({
     // An exit into Done of a row the quiet line does not end on: a mark.
     const exit = row && row !== lastRow && row.exit;
     return {
-      name: <span className="text-[13px] font-medium text-muted-foreground">{terminal ? "Done" : s?.name}</span>,
+      name: (
+        <>
+          <span className="text-[13px] font-medium text-muted-foreground">{terminal ? "Done" : s?.name}</span>
+          {!terminal && facts1(s, true)}
+        </>
+      ),
       tasks: terminal ? null : tasksAt(id),
       marks: terminal ? null : (
         <>
           {entryChips(id)}
           {returns(id, quietTracks, quietStations)}
-          {chipsAt(t, id).filter((c) => c.kind !== "entry").map((c) => mark(c.kind === "exit" ? "exit" : c.connector.to === null ? "done" : rail.includes(c.connector.to) ? "return" : "chip", c.connector.id, said(c.connector, fullName(c.connector.to)), c.hint, { "data-connector": c.connector.id, "data-chip": c.kind, "data-exit": c.kind === "exit" ? c.connector.id : undefined }))}
-          {exit && mark("done", exit.id, said(exit, "Done"), outcomeHint(exit, fullName), { "data-connector": exit.id })}
+          {chipsAt(t, id).filter((c) => c.kind !== "entry").map((c) => mark(c.kind === "exit" ? "exit" : c.connector.to === null ? "done" : rail.includes(c.connector.to) ? "return" : "chip", c.connector.id, said(c.connector, fullName(c.connector.to)), c.hint, { "data-connector": c.connector.id, "data-chip": c.kind, "data-exit": c.kind === "exit" ? c.connector.id : undefined }, true))}
+          {exit && mark("done", exit.id, said(exit, "Done"), outcomeHint(exit, fullName), { "data-connector": exit.id }, true)}
           {nextWords(id, quietStations)}
         </>
       ),
@@ -727,6 +733,7 @@ export function VerticalLine({
           return !!s && isHoldStep(s);
         }}
         isStart={(id) => id === first && id !== DONE_STATION}
+        picked={(id) => way?.stepId === id}
         visited={(id) => !!trace?.stays.some((x) => x.stepId === id)}
         travelling={flow.tokens}
         outcomeOf={(id) => facts.connectors.find((c) => c.id === id)?.name}
@@ -779,6 +786,7 @@ export function RailLine({
   segment,
   changed,
   wide,
+  picked,
 }: {
   label: string;
   quiet?: boolean;
@@ -803,6 +811,8 @@ export function RailLine({
   changed?: (id: string) => boolean;
   /** A wider first column, for a row of fields. */
   wide?: boolean;
+  /** The station a selected Task is at: ringed (vf-7). */
+  picked?: (id: string) => boolean;
 }) {
   const { hover, pool } = hints(useId(), onTip);
   const box = useRef<HTMLDivElement>(null);
@@ -909,7 +919,7 @@ export function RailLine({
     const terminal = id === DONE_STATION;
     const start = isStart(id);
     const hold = holdAt(id);
-    return (
+    const dot = (
       <circle
         key={id}
         data-dot={id}
@@ -923,6 +933,15 @@ export function RailLine({
         strokeWidth={terminal || (start && !changed?.(id)) ? 0 : weight}
         strokeDasharray={hold ? "3 2.5" : undefined}
       />
+    );
+    if (!picked?.(id)) return dot;
+    // A gap of the background, then a ring of ink.
+    return (
+      <g key={id}>
+        <circle cx={RAIL} cy={v} r={radius(id) + 1.5} stroke="var(--background)" strokeWidth={3} fill="none" />
+        {dot}
+        <circle data-picked={id} cx={RAIL} cy={v} r={radius(id) + 4} stroke="var(--foreground)" strokeWidth={2} fill="none" />
+      </g>
     );
   });
 

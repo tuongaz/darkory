@@ -172,6 +172,9 @@ describe("When a Parent ends", () => {
     expect(line.querySelector('[data-connector="retro:done"]')).toHaveTextContent("● done → Done");
     expect(line.querySelector('[data-connector="acceptance:fail"]')).toHaveTextContent("↩ fail → Build");
     expect(line.querySelector('[data-connector="acceptance:fail"]')).toHaveAttribute("data-mark", "return");
+    // Quiet, yet each Step says its Skill (vf-2: Retro ⌖ retro), its marks without their fill.
+    expect(line.querySelector('li[data-station="retro"]')).toHaveTextContent(/^Retro\s*retro/);
+    expect(line.querySelector('[data-connector="retro:done"]')).not.toHaveClass("bg-state-done-bg");
     // No Connector of the branch is drawn on the main rail.
     for (const id of ["retro:done", "retro:propose", "skillreview:publish", "skillreview:needs changes", "acceptance:pass"]) expect(mainRail.querySelector(`[data-connector="${id}"]`), id).toBeNull();
   });
@@ -310,6 +313,8 @@ describe("the selected Task's strip (vf-7)", () => {
     expect(s).toHaveTextContent("18m");
     expect(s).toHaveTextContent("next: pass → Review");
     expect(within(s).getByRole("button", { name: "Clear" })).toBeInTheDocument();
+    // The station it is at is ringed; no other is.
+    expect([...document.querySelectorAll("[data-picked]")].map((c) => c.getAttribute("data-picked"))).toEqual(["build"]);
     // Nothing must end first: no "First:" and no button.
     expect(s).not.toHaveTextContent("First:");
     expect(within(s).queryByRole("button", { name: /^Claim/ })).toBeNull();
