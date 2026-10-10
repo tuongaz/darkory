@@ -505,7 +505,8 @@ test("a Workspace, a Project's default, an agent's model and Paused", async ({ b
       ["/projects/WEB/settings/workspaces", () => page.getByRole("row", { name: "shop" })],
       ["/projects/WEB/settings/general", () => page.getByRole("group", { name: "General settings of Web" })],
       ["/projects/WEB/settings/members", () => page.getByRole("table", { name: "Members of Web" })],
-      ["/projects/WEB/settings/labels", () => page.getByRole("button", { name: "New Label" })],
+      // With no Labels yet the empty state offers New Label beside the bar's: the bar's is the page's act.
+      ["/projects/WEB/settings/labels", () => page.getByRole("group", { name: "Page" }).getByRole("button", { name: "New Label" })],
       ["/settings/organisation/members", () => page.getByRole("table", { name: "Members" })],
       ["/settings/organisation/agents", () => page.getByRole("table", { name: "Agents" })],
       ["/settings/account", () => page.getByRole("row", { name: "This browser" })],
