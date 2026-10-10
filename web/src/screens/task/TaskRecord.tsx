@@ -276,7 +276,7 @@ function ClaimEnded({ entry, when, stepName }: { entry: Extract<RecordEntry, { k
   );
 }
 
-/** " · 📎 Shift log 57 KB" after the words that end a Claim: its Shift's log, opened in a new tab. */
+/** " · 📎 Shift log 56.8 kB" after the words that end a Claim: its Shift's log, opened in a new tab. */
 function ShiftLogs({ logs }: { logs?: Evidence[] }) {
   if (!logs?.length) return null;
   return (
@@ -293,7 +293,7 @@ function ShiftLogs({ logs }: { logs?: Evidence[] }) {
   );
 }
 
-/** A Shift's log as a chip: "Shift log · 57 KB", a link to the file. */
+/** A Shift's log as a chip: "Shift log · 56.8 kB", a link to the file. */
 function ShiftLog({ log }: { log: Evidence }) {
   return (
     <a

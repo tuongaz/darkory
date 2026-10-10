@@ -481,7 +481,7 @@ function Words({ s, project }: { s: Sentence; project: Project }) {
   );
 }
 
-/** A file a row links, as a chip: "📎 wc.log 753 B", "📎 Shift log · 57 KB". */
+/** A file a row links, as a chip: "📎 wc.log 753 B", "📎 Shift log · 56.8 kB". */
 function FileLink({ chip: c }: { chip: FileChip }) {
   return (
     <a

@@ -49,7 +49,7 @@ export function EvidenceFiles({ files, plain = true }: { files: readonly Evidenc
   );
 }
 
-/** "📎 trace.zip 879 KB": the file's name, a download, and its size. */
+/** "📎 trace.zip 900 kB": the file's name, a download, and its size. */
 export function FileLink({ file }: { file: Evidence }) {
   return (
     <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">

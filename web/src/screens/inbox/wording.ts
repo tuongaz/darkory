@@ -41,13 +41,13 @@ export type Sentence = {
   details: string[];
   outcome?: "worked" | "didnt_work";
   evidence?: { id: string; filename: string; size?: number };
-  /** A Shift's log on a row of its own: "builder · Shift log · 57 KB on DARK-2". */
+  /** A Shift's log on a row of its own: "builder · Shift log · 56.8 kB on DARK-2". */
   log?: { id: string; size?: number };
   /** What a Claim's end carries after its details: the Evidence attached inside it, the Shift's log last. */
   files?: FileChip[];
 };
 
-/** A file a row links: Evidence by its name and size, a Shift's log as "Shift log · 57 KB". */
+/** A file a row links: Evidence by its name and size, a Shift's log as "Shift log · 56.8 kB". */
 export type FileChip = { id: string; filename: string; size?: number; log?: boolean };
 
 type KindWords = { group: string; label: string; verb: string };
@@ -424,7 +424,7 @@ export function rowSentence(row: ActivityRow, l: Lookup): Sentence | null {
   return s;
 }
 
-/** A chip's words: "wc.log 753 B", "Shift log · 57 KB". */
+/** A chip's words: "wc.log 753 B", "Shift log · 56.8 kB". */
 export function chipText(c: FileChip): string {
   const size = c.size !== undefined ? sizeText(c.size) : undefined;
   if (c.log) return size ? `Shift log · ${size}` : "Shift log";
